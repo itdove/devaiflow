@@ -1,0 +1,664 @@
+"""Tests for daf jira create command module (jira_create_commands.py)."""
+
+import pytest
+from unittest.mock import Mock, MagicMock, patch, mock_open
+from pathlib import Path
+
+from devflow.cli.commands.jira_create_commands import (
+    _ensure_field_mappings,
+    _get_workstream,
+    _get_project,
+    _get_affected_version,
+    _get_description,
+    create_issue,
+    create_bug,
+    create_story,
+    create_task,
+    BUG_TEMPLATE,
+    STORY_TEMPLATE,
+    TASK_TEMPLATE,
+    EPIC_TEMPLATE,
+)
+from devflow.config.models import Config, JiraConfig
+from devflow.jira.field_mapper import JiraFieldMapper
+from devflow.jira.exceptions import JiraValidationError, JiraAuthError, JiraApiError
+
+
+@pytest.fixture
+def mock_config():
+    """Create a mock config object."""
+    config = Mock(spec=Config)
+    config.jira = Mock(spec=JiraConfig)
+    config.jira.url = "https://jira.example.com"
+    config.jira.project = "PROJ"
+    config.jira.workstream = "Platform"
+    config.jira.affected_version = "v1.0.0"
+    config.jira.field_mappings = {}
+    config.jira.field_cache_timestamp = None
+    return config
+
+
+@pytest.fixture
+def mock_config_loader(mock_config):
+    """Create a mock config loader."""
+    loader = Mock()
+    loader.load_config.return_value = mock_config
+    loader.save_config = Mock()
+    return loader
+
+
+@pytest.fixture
+def mock_field_mapper():
+    """Create a mock field mapper."""
+    mapper = MagicMock(spec=JiraFieldMapper)
+    mapper.is_cache_stale.return_value = False
+    mapper.discover_fields.return_value = {"workstream": {"id": "customfield_12319275"}}
+    mapper.get_field_id.return_value = "customfield_12319275"
+    mapper.get_workstream_with_prompt.return_value = "Platform"
+    return mapper
+
+
+@pytest.fixture
+def mock_jira_client():
+    """Create a mock JIRA client."""
+    client = Mock()
+    client.create_bug.return_value = "PROJ-12345"
+    client.create_story.return_value = "PROJ-12346"
+    client.create_task.return_value = "PROJ-12347"
+    client.create_epic.return_value = "PROJ-12348"
+    client.create_spike.return_value = "PROJ-12349"
+    client.get_ticket.return_value = {"status": "New"}
+    client.link_issues = Mock()
+    return client
+
+
+class TestEnsureFieldMappings:
+    """Tests for _ensure_field_mappings function."""
+
+    def test_use_cached_mappings_when_fresh(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that cached field mappings are used when fresh."""
+        from datetime import datetime
+
+        # Set up cached mappings
+        mock_config.jira.field_mappings = {"workstream": {"id": "customfield_12319275"}}
+        mock_config.jira.field_cache_timestamp = datetime.now().isoformat()
+
+        with patch('devflow.cli.commands.jira_create_commands.JiraClient'):
+            with patch('devflow.cli.commands.jira_create_commands.JiraFieldMapper') as mock_mapper_class:
+                mock_mapper = Mock()
+                mock_mapper.is_cache_stale.return_value = False
+                mock_mapper_class.return_value = mock_mapper
+
+                result = _ensure_field_mappings(mock_config, mock_config_loader)
+
+                assert result == mock_mapper
+                mock_mapper.is_cache_stale.assert_called_once()
+
+    def test_discover_fields_when_no_cache(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that fields are discovered when cache doesn't exist."""
+        from datetime import datetime
+
+        # No cached mappings
+        mock_config.jira.field_mappings = None
+        mock_config.jira.field_cache_timestamp = None
+
+        with patch('devflow.cli.commands.jira_create_commands.JiraClient') as mock_client_class:
+            with patch('devflow.cli.commands.jira_create_commands.JiraFieldMapper') as mock_mapper_class:
+                mock_mapper = Mock()
+                mock_mapper.discover_fields.return_value = {"test": {"id": "field_123"}}
+                mock_mapper_class.return_value = mock_mapper
+
+                result = _ensure_field_mappings(mock_config, mock_config_loader)
+
+                mock_mapper.discover_fields.assert_called_once_with(mock_config.jira.project)
+                mock_config_loader.save_config.assert_called_once()
+                assert mock_config.jira.field_mappings == {"test": {"id": "field_123"}}
+
+    def test_discover_fields_when_cache_stale(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that fields are discovered when cache is stale."""
+        from datetime import datetime, timedelta
+
+        # Stale cache
+        old_timestamp = (datetime.now() - timedelta(days=10)).isoformat()
+        mock_config.jira.field_mappings = {"old": {"id": "field_old"}}
+        mock_config.jira.field_cache_timestamp = old_timestamp
+
+        with patch('devflow.cli.commands.jira_create_commands.JiraClient'):
+            with patch('devflow.cli.commands.jira_create_commands.JiraFieldMapper') as mock_mapper_class:
+                mock_mapper = Mock()
+                mock_mapper.is_cache_stale.return_value = True
+                mock_mapper.discover_fields.return_value = {"new": {"id": "field_new"}}
+                mock_mapper_class.return_value = mock_mapper
+
+                result = _ensure_field_mappings(mock_config, mock_config_loader)
+
+                mock_mapper.discover_fields.assert_called_once()
+                assert mock_config.jira.field_mappings == {"new": {"id": "field_new"}}
+
+    def test_handles_discovery_exception(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that discovery exceptions are handled gracefully."""
+        mock_config.jira.field_mappings = None
+
+        with patch('devflow.cli.commands.jira_create_commands.JiraClient'):
+            with patch('devflow.cli.commands.jira_create_commands.JiraFieldMapper') as mock_mapper_class:
+                mock_mapper = Mock()
+                mock_mapper.discover_fields.side_effect = Exception("Discovery failed")
+                mock_mapper_class.return_value = mock_mapper
+
+                result = _ensure_field_mappings(mock_config, mock_config_loader)
+
+                # Should return mapper with empty cache instead of failing
+                assert result is not None
+
+
+class TestGetWorkstream:
+    """Tests for _get_workstream function."""
+
+    def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test that flag value is used when provided."""
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
+
+        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, "Platform")
+
+        assert result == "Platform"
+
+    def test_use_config_value_when_no_flag(self, mock_config, mock_config_loader, mock_field_mapper):
+        """Test that config value is used when no flag provided."""
+        mock_config.jira.workstream = "Platform"
+
+        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        assert result == "Platform"
+
+    def test_prompt_user_when_no_flag_or_config(self, mock_config, mock_config_loader, mock_field_mapper):
+        """Test that user is prompted when no flag or config value."""
+        mock_config.jira.workstream = None
+        mock_field_mapper.get_workstream_with_prompt.return_value = "NewWorkstream"
+
+        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        assert result == "NewWorkstream"
+        mock_field_mapper.get_workstream_with_prompt.assert_called_once()
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_save_config_when_flag_differs_from_config(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test that config is updated when flag value differs."""
+        mock_config.jira.workstream = "OldWorkstream"
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Confirm.ask', lambda *args, **kwargs: True)
+
+        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, "Platform")
+
+        assert result == "Platform"
+        assert mock_config.jira.workstream == "Platform"
+        mock_config_loader.save_config.assert_called_once()
+
+
+class TestGetProject:
+    """Tests for _get_project function."""
+
+    def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that flag value is used when provided."""
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
+
+        result = _get_project(mock_config, mock_config_loader, "PROJ")
+
+        assert result == "PROJ"
+
+    def test_use_config_value_when_no_flag(self, mock_config, mock_config_loader):
+        """Test that config value is used when no flag provided."""
+        mock_config.jira.project = "PROJ"
+
+        result = _get_project(mock_config, mock_config_loader, None)
+
+        assert result == "PROJ"
+
+    def test_prompt_user_when_no_flag_or_config(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that user is prompted when no flag or config value."""
+        mock_config.jira.project = None
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args: "NEWPROJ")
+
+        result = _get_project(mock_config, mock_config_loader, None)
+
+        assert result == "NEWPROJ"
+        assert mock_config.jira.project == "NEWPROJ"
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_return_none_when_user_cancels_prompt(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that None is returned when user provides empty input."""
+        mock_config.jira.project = None
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args: "")
+
+        result = _get_project(mock_config, mock_config_loader, None)
+
+        assert result is None
+
+
+class TestGetAffectedVersion:
+    """Tests for _get_affected_version function."""
+
+    def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that flag value is used when provided."""
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
+
+        result = _get_affected_version(mock_config, mock_config_loader, "custom-version")
+
+        assert result == "custom-version"
+
+    def test_use_config_value_when_no_flag(self, mock_config, mock_config_loader):
+        """Test that config value is used when no flag provided."""
+        mock_config.jira.affected_version = "v1.0.0"
+
+        result = _get_affected_version(mock_config, mock_config_loader, None)
+
+        assert result == "v1.0.0"
+
+    def test_use_default_when_no_flag_or_config(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that default is used when no flag or config value."""
+        mock_config.jira.affected_version = None
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
+
+        result = _get_affected_version(mock_config, mock_config_loader, None)
+
+        assert result == "v1.0.0"
+
+
+class TestGetDescription:
+    """Tests for _get_description function."""
+
+    def test_use_description_from_file(self, tmp_path):
+        """Test reading description from file."""
+        desc_file = tmp_path / "desc.txt"
+        desc_file.write_text("Description from file")
+
+        result = _get_description(None, str(desc_file), BUG_TEMPLATE, False)
+
+        assert result == "Description from file"
+
+    def test_use_description_from_argument(self):
+        """Test using description from argument."""
+        result = _get_description("Direct description", None, BUG_TEMPLATE, False)
+
+        assert result == "Direct description"
+
+    def test_use_template_when_no_input(self):
+        """Test using template when no input provided."""
+        result = _get_description(None, None, BUG_TEMPLATE, False)
+
+        assert result == BUG_TEMPLATE
+
+    def test_file_read_error_exits(self, tmp_path):
+        """Test that file read error causes exit."""
+        nonexistent_file = tmp_path / "nonexistent.txt"
+
+        with pytest.raises(SystemExit):
+            _get_description(None, str(nonexistent_file), BUG_TEMPLATE, False)
+
+    def test_interactive_mode_reads_stdin(self, monkeypatch):
+        """Test interactive mode reads from stdin."""
+        lines = ["Line 1", "Line 2", "Line 3"]
+        line_iter = iter(lines)
+
+        def mock_input():
+            try:
+                return next(line_iter)
+            except StopIteration:
+                raise EOFError()
+
+        monkeypatch.setattr('builtins.input', mock_input)
+
+        result = _get_description(None, None, BUG_TEMPLATE, True)
+
+        assert result == "Line 1\nLine 2\nLine 3"
+
+
+class TestCreateIssue:
+    """Tests for create_issue function."""
+
+    def test_create_bug_successfully(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test successful bug creation."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="v1.0.0"):
+                                with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
+                                    mock_mapper = Mock()
+                                    mock_ensure.return_value = mock_mapper
+
+                                    create_issue(
+                                        issue_type="bug",
+                                        summary="Test bug",
+                                        priority="Major",
+                                        project="PROJ",
+                                        workstream="Platform",
+                                        parent="PROJ-100",
+                                        affected_version="v1.0.0",
+                                        description="Bug description",
+                                        description_file=None,
+                                        interactive=False,
+                                        create_session=False,
+                                    )
+
+                                    mock_jira_client.create_bug.assert_called_once()
+
+    def test_create_story_successfully(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test successful story creation."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
+                                mock_mapper = Mock()
+                                mock_ensure.return_value = mock_mapper
+
+                                create_issue(
+                                    issue_type="story",
+                                    summary="Test story",
+                                    priority="Major",
+                                    project="PROJ",
+                                    workstream="Platform",
+                                    parent="PROJ-100",
+                                    affected_version="",
+                                    description="Story description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                )
+
+                                mock_jira_client.create_story.assert_called_once()
+
+    def test_create_task_successfully(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test successful task creation."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
+                                mock_mapper = Mock()
+                                mock_ensure.return_value = mock_mapper
+
+                                create_issue(
+                                    issue_type="task",
+                                    summary="Test task",
+                                    priority="Major",
+                                    project="PROJ",
+                                    workstream="Platform",
+                                    parent="PROJ-100",
+                                    affected_version="",
+                                    description="Task description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                )
+
+                                mock_jira_client.create_task.assert_called_once()
+
+    def test_invalid_issue_type_exits(self, mock_config, mock_config_loader):
+        """Test that invalid issue type causes exit."""
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with pytest.raises(SystemExit):
+                create_issue(
+                    issue_type="invalid_type",
+                    summary="Test",
+                    priority="Major",
+                    project="PROJ",
+                    workstream="Platform",
+                    parent=None,
+                    affected_version="",
+                    description="Test",
+                    description_file=None,
+                    interactive=False,
+                    create_session=False,
+                )
+
+    def test_missing_config_exits(self, monkeypatch):
+        """Test that missing config causes exit."""
+        mock_loader = Mock()
+        mock_loader.load_config.return_value = None
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_loader):
+            with pytest.raises(SystemExit):
+                create_issue(
+                    issue_type="bug",
+                    summary="Test",
+                    priority="Major",
+                    project="PROJ",
+                    workstream="Platform",
+                    parent=None,
+                    affected_version="",
+                    description="Test",
+                    description_file=None,
+                    interactive=False,
+                    create_session=False,
+                )
+
+    def test_validates_parent_ticket(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test that parent ticket is validated."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            with patch('devflow.jira.utils.validate_jira_ticket') as mock_validate:
+                                mock_mapper = Mock()
+                                mock_ensure.return_value = mock_mapper
+                                mock_validate.return_value = {"key": "PROJ-100"}
+
+                                create_issue(
+                                    issue_type="story",
+                                    summary="Test story",
+                                    priority="Major",
+                                    project="PROJ",
+                                    workstream="Platform",
+                                    parent="PROJ-100",
+                                    affected_version="",
+                                    description="Story description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                )
+
+                                mock_validate.assert_called_once_with("PROJ-100", client=None)
+
+    def test_invalid_parent_exits(self, mock_config, mock_config_loader, monkeypatch):
+        """Test that invalid parent causes exit."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings'):
+                with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                    with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                        with patch('devflow.jira.utils.validate_jira_ticket', return_value=None):
+                            with pytest.raises(SystemExit):
+                                create_issue(
+                                    issue_type="story",
+                                    summary="Test story",
+                                    priority="Major",
+                                    project="PROJ",
+                                    workstream="Platform",
+                                    parent="INVALID-100",
+                                    affected_version="",
+                                    description="Story description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                )
+
+    def test_links_issues_when_requested(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test that issues are linked when --linked-issue and --issue provided."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            with patch('devflow.jira.utils.validate_jira_ticket') as mock_validate:
+                                mock_mapper = Mock()
+                                mock_ensure.return_value = mock_mapper
+                                # Return valid response for both parent and linked issue validation
+                                mock_validate.side_effect = [{"key": "PROJ-100"}, {"key": "PROJ-999"}]
+
+                                create_issue(
+                                    issue_type="story",
+                                    summary="Test story",
+                                    priority="Major",
+                                    project="PROJ",
+                                    workstream="Platform",
+                                    parent="PROJ-100",
+                                    affected_version="",
+                                    description="Story description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                    linked_issue="blocks",
+                                    issue="PROJ-999",
+                                )
+
+                                mock_jira_client.link_issues.assert_called_once()
+
+    def test_json_output_mode(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test JSON output mode."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            with patch('devflow.cli.commands.jira_create_commands.json_output') as mock_json_out:
+                                with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
+                                    mock_mapper = Mock()
+                                    mock_ensure.return_value = mock_mapper
+
+                                    create_issue(
+                                        issue_type="story",
+                                        summary="Test story",
+                                        priority="Major",
+                                        project="PROJ",
+                                        workstream="Platform",
+                                        parent="PROJ-100",
+                                        affected_version="",
+                                        description="Story description",
+                                        description_file=None,
+                                        interactive=False,
+                                        create_session=False,
+                                        output_json=True,
+                                    )
+
+                                    mock_json_out.assert_called_once()
+                                    call_args = mock_json_out.call_args
+                                    assert call_args[1]['success'] is True
+                                    assert 'issue_key' in call_args[1]['data']
+
+
+class TestCreateBug:
+    """Tests for create_bug function."""
+
+    def test_create_bug_prompts_for_summary(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test that create_bug prompts for summary when not provided."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args: "Prompted bug summary")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            mock_mapper = Mock()
+                            mock_ensure.return_value = mock_mapper
+
+                            create_bug(
+                                summary=None,
+                                priority="Major",
+                                workstream="Platform",
+                                parent=None,
+                                affected_version="v1.0.0",
+                                description="Bug description",
+                                description_file=None,
+                                interactive=False,
+                                create_session=False,
+                            )
+
+                            # Verify bug was created with prompted summary
+                            call_args = mock_jira_client.create_bug.call_args
+                            assert call_args[1]['summary'] == "Prompted bug summary"
+
+
+class TestCreateStory:
+    """Tests for create_story function."""
+
+    def test_create_story_with_epic(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test creating a story linked to an epic."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            mock_mapper = Mock()
+                            mock_ensure.return_value = mock_mapper
+
+                            create_story(
+                                summary="Test story",
+                                priority="Major",
+                                workstream="Platform",
+                                parent="PROJ-100",
+                                description="Story description",
+                                description_file=None,
+                                interactive=False,
+                                create_session=False,
+                            )
+
+                            call_args = mock_jira_client.create_story.call_args
+                            assert call_args[1]['parent'] == "PROJ-100"
+
+
+class TestCreateTask:
+    """Tests for create_task function."""
+
+    def test_create_task_handles_validation_error(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test that create_task handles validation errors properly."""
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        # Make create_task raise a validation error
+        mock_jira_client.create_task.side_effect = JiraValidationError(
+            "Validation failed",
+            field_errors={"summary": "Summary is required"},
+            error_messages=["Invalid data"]
+        )
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            mock_mapper = Mock()
+                            mock_ensure.return_value = mock_mapper
+
+                            with pytest.raises(SystemExit):
+                                create_task(
+                                    summary="Test task",
+                                    priority="Major",
+                                    workstream="Platform",
+                                    parent=None,
+                                    description="Task description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                )

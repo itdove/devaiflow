@@ -1,0 +1,23 @@
+{
+  "_comment": "Organization-wide JIRA configuration",
+  "jira_project": "TODO: YOUR_PROJECT_KEY",
+  "_jira_project_comment": "Your JIRA project key (e.g., 'PROJ', 'MYAPP', 'ENG'). Required for ticket creation.",
+  "jira_affected_version": null,
+  "_jira_affected_version_comment": "Optional: Default affected version for bugs (e.g., 'v1.0', 'production')",
+  "jira_acceptance_criteria_field": null,
+  "_jira_acceptance_criteria_field_comment": "Optional: Field alias for acceptance criteria (auto-discovered if null). Set to field name if you want to enforce.",
+  "jira_workstream_field": null,
+  "_jira_workstream_field_comment": "Optional: Field alias for workstream/component/team field (auto-discovered if null)",
+  "jira_epic_link_field": null,
+  "_jira_epic_link_field_comment": "Optional: Field alias for epic link (auto-discovered if null). Usually 'Epic Link' or 'Parent'.",
+  "sync_filters": {
+    "sync": {
+      "status": ["To Do", "In Progress"],
+      "_status_comment": "TODO: Customize which JIRA statuses to sync when running 'daf sync'",
+      "required_fields": [],
+      "_required_fields_comment": "Optional: Fields required for ticket creation (e.g., ['sprint', 'story_points', 'acceptance_criteria'])",
+      "assignee": "currentUser()",
+      "_assignee_comment": "Filter tickets by assignee: 'currentUser()' (only your tickets) | specific username | null (all tickets)"
+    }
+  }
+}

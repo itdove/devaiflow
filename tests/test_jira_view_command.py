@@ -1,0 +1,888 @@
+"""Tests for daf jira view command."""
+
+import json
+import pytest
+from devflow.jira.client import JiraClient
+from devflow.jira.exceptions import JiraNotFoundError
+from devflow.cli.commands.jira_view_command import (
+    format_ticket_for_claude,
+    format_changelog_for_claude,
+    format_child_issues_for_claude,
+    view_jira_ticket,
+)
+
+
+def test_format_ticket_basic_fields():
+    """Test formatting a ticket with basic fields."""
+    ticket_data = {
+        "key": "PROJ-12345",
+        "summary": "Test ticket summary",
+        "type": "Story",
+        "status": "In Progress",
+        "priority": "Major",
+        "assignee": "John Doe",
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Key: PROJ-12345" in result
+    assert "Summary: Test ticket summary" in result
+    assert "Type: Story" in result
+    assert "Status: In Progress" in result
+    assert "Priority: Major" in result
+    assert "Assignee: John Doe" in result
+
+
+def test_format_ticket_with_description():
+    """Test formatting a ticket with description."""
+    ticket_data = {
+        "key": "PROJ-12345",
+        "summary": "Test ticket",
+        "type": "Bug",
+        "status": "New",
+        "description": "This is a test bug description\nwith multiple lines",
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Description:" in result
+    assert "This is a test bug description" in result
+    assert "with multiple lines" in result
+
+
+def test_format_ticket_with_acceptance_criteria():
+    """Test formatting a ticket with acceptance criteria."""
+    ticket_data = {
+        "key": "PROJ-12345",
+        "summary": "Feature implementation",
+        "type": "Story",
+        "status": "New",
+        "acceptance_criteria": "- Criterion 1\n- Criterion 2\n- Criterion 3",
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Acceptance Criteria:" in result
+    assert "- Criterion 1" in result
+    assert "- Criterion 2" in result
+    assert "- Criterion 3" in result
+
+
+def test_format_ticket_with_sprint_and_points():
+    """Test formatting a ticket with sprint and story points."""
+    ticket_data = {
+        "key": "PROJ-12345",
+        "summary": "Sprint task",
+        "type": "Story",
+        "status": "In Progress",
+        "sprint": "Sprint 42",
+        "points": 5,
+        "epic": "PROJ-10000",
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Sprint: Sprint 42" in result
+    assert "Story Points: 5" in result
+    assert "Epic: PROJ-10000" in result
+
+
+def test_format_ticket_complete_example():
+    """Test formatting a ticket with all fields."""
+    ticket_data = {
+        "key": "PROJ-59207",
+        "summary": "Add daf jira view command for reliable issue tracker ticket reading",
+        "type": "Story",
+        "status": "In Progress",
+        "priority": "Major",
+        "assignee": "Dominique Vernier",
+        "reporter": "Dominique Vernier",
+        "epic": "PROJ-59038",
+        "sprint": "Platform Sprint 2025-47",
+        "points": 2,
+        "description": "As a developer using Claude Code within a daf session, I want a reliable way to read issue tracker ticket information using a simple daf command, so that Claude can consistently access ticket details without authentication or curl formatting issues.",
+        "acceptance_criteria": "- daf jira view command implemented using JiraClient\n- Command outputs issue tracker ticket in Claude-friendly format\n- Initial prompt updated to use daf jira view instead of curl\n- More reliable than curl with proper error handling\n- Consistent authentication handling via JiraClient",
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    # Verify all fields are present
+    assert "Key: PROJ-59207" in result
+    assert "Summary: Add daf jira view command for reliable issue tracker ticket reading" in result
+    assert "Type: Story" in result
+    assert "Status: In Progress" in result
+    assert "Priority: Major" in result
+    assert "Assignee: Dominique Vernier" in result
+    assert "Reporter: Dominique Vernier" in result
+    assert "Epic: PROJ-59038" in result
+    assert "Sprint: Platform Sprint 2025-47" in result
+    assert "Story Points: 2" in result
+    assert "Description:" in result
+    assert "As a developer using Claude Code" in result
+    assert "Acceptance Criteria:" in result
+    assert "daf jira view command implemented using JiraClient" in result
+
+
+def test_format_ticket_minimal_fields():
+    """Test formatting a ticket with only required fields."""
+    ticket_data = {
+        "key": "PROJ-12345",
+        "summary": "Minimal ticket",
+        "type": "Task",
+        "status": "New",
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    # Required fields should be present
+    assert "Key: PROJ-12345" in result
+    assert "Summary: Minimal ticket" in result
+    assert "Type: Task" in result
+    assert "Status: New" in result
+
+    # Optional fields should not be present
+    assert "Priority:" not in result
+    assert "Assignee:" not in result
+    assert "Epic:" not in result
+    assert "Sprint:" not in result
+    assert "Story Points:" not in result
+
+
+def test_get_ticket_detailed_with_description(mock_jira_cli):
+    """Test fetching a detailed ticket with description."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket with description",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "This is the ticket description",
+            "priority": {"name": "Major"},
+            "customfield_12315940": "- Acceptance criterion 1\n- Acceptance criterion 2",
+        }
+    })
+
+    # Provide field_mappings so that acceptance_criteria can be resolved
+    field_mappings = {
+        "acceptance_criteria": {
+            "id": "customfield_12315940"
+        }
+    }
+
+    client = JiraClient()
+    ticket = client.get_ticket_detailed("PROJ-12345", field_mappings=field_mappings)
+
+    assert ticket is not None
+    assert ticket["key"] == "PROJ-12345"
+    assert ticket["summary"] == "Test ticket with description"
+    assert ticket["description"] == "This is the ticket description"
+    assert ticket["priority"] == "Major"
+    assert ticket["acceptance_criteria"] == "- Acceptance criterion 1\n- Acceptance criterion 2"
+
+
+def test_get_ticket_detailed_not_found(mock_jira_cli):
+    """Test fetching a non-existent ticket raises JiraNotFoundError."""
+    client = JiraClient()
+
+    with pytest.raises(JiraNotFoundError) as exc_info:
+        client.get_ticket_detailed("PROJ-99999")
+
+    assert exc_info.value.resource_id == "PROJ-99999"
+
+
+def test_get_ticket_detailed_with_all_fields(mock_jira_cli):
+    """Test fetching a ticket with all supported fields."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Complete ticket",
+            "status": {"name": "Code Review"},
+            "issuetype": {"name": "Story"},
+            "description": "Full description",
+            "priority": {"name": "Critical"},
+            "assignee": {"displayName": "Jane Smith"},
+            "reporter": {"displayName": "John Doe"},
+            "customfield_12310243": 8,  # Story points
+            "customfield_12310940": ["com.atlassian.greenhopper.service.sprint.Sprint@123[id=123,name=Sprint 45,state=ACTIVE]"],
+            "customfield_12311140": "PROJ-10000",  # Epic
+            "customfield_12315940": "- Criterion A\n- Criterion B",  # Acceptance criteria
+        }
+    })
+
+    # Provide field_mappings for all custom fields
+    field_mappings = {
+        "acceptance_criteria": {
+            "id": "customfield_12315940"
+        },
+        "story_points": {
+            "id": "customfield_12310243"
+        },
+        "sprint": {
+            "id": "customfield_12310940"
+        },
+        "epic_link": {
+            "id": "customfield_12311140"
+        }
+    }
+
+    client = JiraClient()
+    ticket = client.get_ticket_detailed("PROJ-12345", field_mappings=field_mappings)
+
+    assert ticket is not None
+    assert ticket["key"] == "PROJ-12345"
+    assert ticket["summary"] == "Complete ticket"
+    assert ticket["status"] == "Code Review"
+    assert ticket["type"] == "Story"
+    assert ticket["description"] == "Full description"
+    assert ticket["priority"] == "Critical"
+    assert ticket["assignee"] == "Jane Smith"
+    assert ticket["reporter"] == "John Doe"
+    assert ticket["points"] == 8
+    assert ticket["sprint"] == "Sprint 45"
+    assert ticket["epic"] == "PROJ-10000"
+    assert ticket["acceptance_criteria"] == "- Criterion A\n- Criterion B"
+
+
+def test_view_jira_ticket_success(mock_jira_cli, capsys):
+    """Test viewing a issue tracker ticket using the command."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+            "priority": {"name": "Major"},
+        }
+    })
+
+    view_jira_ticket("PROJ-12345")
+
+    captured = capsys.readouterr()
+    assert "Key: PROJ-12345" in captured.out
+    assert "Summary: Test ticket" in captured.out
+    assert "Status: New" in captured.out
+    assert "Type: Story" in captured.out
+    assert "Priority: Major" in captured.out
+    assert "Description:" in captured.out
+    assert "Test description" in captured.out
+
+
+def test_view_jira_ticket_not_found(mock_jira_cli, capsys):
+    """Test viewing a non-existent issue tracker ticket."""
+    with pytest.raises(SystemExit) as exc_info:
+        view_jira_ticket("PROJ-99999")
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "issue tracker ticket PROJ-99999 not found" in captured.out
+
+
+def test_format_changelog_basic():
+    """Test formatting changelog with basic entries."""
+    changelog = {
+        "total": 3,
+        "histories": [
+            {
+                "id": "12345",
+                "created": "2025-12-05T20:13:45.380+0000",
+                "author": {
+                    "displayName": "John Doe"
+                },
+                "items": [
+                    {
+                        "field": "status",
+                        "fromString": "New",
+                        "toString": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12346",
+                "created": "2025-12-05T20:14:00.401+0000",
+                "author": {
+                    "displayName": "Jane Smith"
+                },
+                "items": [
+                    {
+                        "field": "assignee",
+                        "fromString": None,
+                        "toString": "Jane Smith"
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = format_changelog_for_claude(changelog)
+
+    assert "Changelog/History:" in result
+    assert "2025-12-05 20:13:45" in result
+    assert "John Doe" in result
+    assert "status: New → In Progress" in result
+    assert "2025-12-05 20:14:00" in result
+    assert "Jane Smith" in result
+    assert "assignee: (empty) → Jane Smith" in result
+
+
+def test_format_changelog_empty():
+    """Test formatting empty changelog."""
+    changelog = {
+        "total": 0,
+        "histories": []
+    }
+
+    result = format_changelog_for_claude(changelog)
+
+    assert result == ""
+
+
+def test_format_changelog_limits_to_15():
+    """Test that changelog is limited to last 15 entries."""
+    # Create 20 history entries
+    histories = []
+    for i in range(20):
+        histories.append({
+            "id": str(i),
+            "created": f"2025-12-{i+1:02d}T10:00:00.000+0000",
+            "author": {
+                "displayName": f"User {i}"
+            },
+            "items": [
+                {
+                    "field": "status",
+                    "fromString": "New",
+                    "toString": "In Progress"
+                }
+            ]
+        })
+
+    changelog = {
+        "total": 20,
+        "histories": histories
+    }
+
+    result = format_changelog_for_claude(changelog)
+
+    # Should only show last 15 entries (entries 5-19, which are days 6-20)
+    assert "2025-12-06" in result  # Entry 5
+    assert "2025-12-20" in result  # Entry 19
+    assert "2025-12-01" not in result  # Entry 0 should not be shown
+    assert "2025-12-05" not in result  # Entry 4 should not be shown
+
+
+def test_format_changelog_multiple_items():
+    """Test formatting changelog with multiple items in one history entry."""
+    changelog = {
+        "total": 1,
+        "histories": [
+            {
+                "id": "12345",
+                "created": "2025-12-05T20:13:45.380+0000",
+                "author": {
+                    "displayName": "John Doe"
+                },
+                "items": [
+                    {
+                        "field": "status",
+                        "fromString": "New",
+                        "toString": "In Progress"
+                    },
+                    {
+                        "field": "priority",
+                        "fromString": "Normal",
+                        "toString": "Major"
+                    },
+                    {
+                        "field": "Story Points",
+                        "fromString": None,
+                        "toString": "5"
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = format_changelog_for_claude(changelog)
+
+    assert "status: New → In Progress" in result
+    assert "priority: Normal → Major" in result
+    assert "Story Points: (empty) → 5" in result
+    # All items should have the same timestamp and author
+    assert result.count("2025-12-05 20:13:45") == 3
+    assert result.count("John Doe") == 3
+
+
+def test_get_ticket_detailed_with_changelog(mock_jira_cli):
+    """Test fetching a ticket with changelog included."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+        },
+        "changelog": {
+            "total": 2,
+            "histories": [
+                {
+                    "id": "1",
+                    "created": "2025-12-05T20:13:45.380+0000",
+                    "author": {
+                        "displayName": "John Doe"
+                    },
+                    "items": [
+                        {
+                            "field": "status",
+                            "fromString": "New",
+                            "toString": "In Progress"
+                        }
+                    ]
+                }
+            ]
+        }
+    }, expand_changelog=True)
+
+    client = JiraClient()
+    ticket = client.get_ticket_detailed("PROJ-12345", include_changelog=True)
+
+    assert ticket is not None
+    assert "changelog" in ticket
+    assert ticket["changelog"]["total"] == 2
+    assert len(ticket["changelog"]["histories"]) == 1
+
+
+def test_view_jira_ticket_with_history(mock_jira_cli, capsys):
+    """Test viewing a issue tracker ticket with changelog history."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "In Progress"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+            "priority": {"name": "Major"},
+        },
+        "changelog": {
+            "total": 2,
+            "histories": [
+                {
+                    "id": "1",
+                    "created": "2025-12-05T20:13:45.380+0000",
+                    "author": {
+                        "displayName": "John Doe"
+                    },
+                    "items": [
+                        {
+                            "field": "status",
+                            "fromString": "New",
+                            "toString": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "2",
+                    "created": "2025-12-05T20:14:00.000+0000",
+                    "author": {
+                        "displayName": "Jane Smith"
+                    },
+                    "items": [
+                        {
+                            "field": "priority",
+                            "fromString": "Normal",
+                            "toString": "Major"
+                        }
+                    ]
+                }
+            ]
+        }
+    }, expand_changelog=True)
+
+    view_jira_ticket("PROJ-12345", show_history=True)
+
+    captured = capsys.readouterr()
+    # Check ticket info is present
+    assert "Key: PROJ-12345" in captured.out
+    assert "Summary: Test ticket" in captured.out
+
+    # Check changelog is present
+    assert "Changelog/History:" in captured.out
+    assert "2025-12-05 20:13:45" in captured.out
+    assert "John Doe" in captured.out
+    assert "status: New → In Progress" in captured.out
+    assert "2025-12-05 20:14:00" in captured.out
+    assert "Jane Smith" in captured.out
+    assert "priority: Normal → Major" in captured.out
+
+
+def test_view_jira_ticket_without_history(mock_jira_cli, capsys):
+    """Test that changelog is not shown when show_history=False."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+        }
+    })
+
+    view_jira_ticket("PROJ-12345", show_history=False)
+
+    captured = capsys.readouterr()
+    # Check ticket info is present
+    assert "Key: PROJ-12345" in captured.out
+    assert "Summary: Test ticket" in captured.out
+
+    # Check changelog is NOT present
+    assert "Changelog/History:" not in captured.out
+
+
+def test_get_child_issues_with_subtasks_and_epic_children(mock_jira_cli):
+    """Test fetching child issues including subtasks and epic children."""
+    # Set up JQL search response
+    mock_jira_cli.set_search_results({
+        "jql": 'parent = PROJ-12345 OR "Epic Link" = PROJ-12345 ORDER BY key ASC',
+        "issues": [
+            {
+                "key": "PROJ-12346",
+                "fields": {
+                    "summary": "Subtask 1",
+                    "status": {"name": "In Progress"},
+                    "issuetype": {"name": "Sub-task"},
+                    "assignee": {"displayName": "John Doe"},
+                }
+            },
+            {
+                "key": "PROJ-12347",
+                "fields": {
+                    "summary": "Story 1",
+                    "status": {"name": "New"},
+                    "issuetype": {"name": "Story"},
+                    "assignee": {"displayName": "Jane Smith"},
+                }
+            },
+            {
+                "key": "PROJ-12348",
+                "fields": {
+                    "summary": "Task 1",
+                    "status": {"name": "Done"},
+                    "issuetype": {"name": "Task"},
+                    "assignee": None,
+                }
+            }
+        ]
+    })
+
+    # Provide field_mappings for epic_link
+    field_mappings = {
+        "epic_link": {
+            "id": "customfield_12311140"
+        }
+    }
+
+    client = JiraClient()
+    children = client.get_child_issues("PROJ-12345", field_mappings=field_mappings)
+
+    assert len(children) == 3
+    assert children[0]["key"] == "PROJ-12346"
+    assert children[0]["type"] == "Sub-task"
+    assert children[0]["status"] == "In Progress"
+    assert children[0]["summary"] == "Subtask 1"
+    assert children[0]["assignee"] == "John Doe"
+
+    assert children[1]["key"] == "PROJ-12347"
+    assert children[1]["type"] == "Story"
+    assert children[1]["status"] == "New"
+
+    assert children[2]["key"] == "PROJ-12348"
+    assert children[2]["assignee"] is None
+
+
+def test_get_child_issues_no_children(mock_jira_cli):
+    """Test fetching child issues when there are none."""
+    # Set up empty JQL search response
+    mock_jira_cli.set_search_results({
+        "jql": 'parent = PROJ-12345 OR "Epic Link" = PROJ-12345 ORDER BY key ASC',
+        "issues": []
+    })
+
+    # Provide field_mappings for epic_link
+    field_mappings = {
+        "epic_link": {
+            "id": "customfield_12311140"
+        }
+    }
+
+    client = JiraClient()
+    children = client.get_child_issues("PROJ-12345", field_mappings=field_mappings)
+
+    assert len(children) == 0
+
+
+def test_get_child_issues_without_epic_link_mapping(mock_jira_cli):
+    """Test fetching child issues when epic_link field mapping is not configured."""
+    # Set up JQL search response
+    mock_jira_cli.set_search_results({
+        "jql": "parent = PROJ-12345 ORDER BY key ASC",
+        "issues": [
+            {
+                "key": "PROJ-12346",
+                "fields": {
+                    "summary": "Subtask 1",
+                    "status": {"name": "In Progress"},
+                    "issuetype": {"name": "Sub-task"},
+                    "assignee": None,
+                }
+            }
+        ]
+    })
+
+    client = JiraClient()
+    children = client.get_child_issues("PROJ-12345", field_mappings=None)
+
+    assert len(children) == 1
+    assert children[0]["key"] == "PROJ-12346"
+
+
+def test_format_child_issues_basic():
+    """Test formatting child issues with basic data."""
+    children = [
+        {
+            "key": "PROJ-12346",
+            "type": "Sub-task",
+            "status": "In Progress",
+            "summary": "Implement API endpoint",
+            "assignee": "John Doe",
+        },
+        {
+            "key": "PROJ-12347",
+            "type": "Story",
+            "status": "New",
+            "summary": "Add frontend component",
+            "assignee": "Jane Smith",
+        },
+        {
+            "key": "PROJ-12348",
+            "type": "Task",
+            "status": "Done",
+            "summary": "Update documentation",
+            "assignee": None,
+        }
+    ]
+
+    result = format_child_issues_for_claude(children)
+
+    assert "Child Issues:" in result
+    assert "PROJ-12346 | Sub-task | In Progress | Implement API endpoint | Assignee: John Doe" in result
+    assert "PROJ-12347 | Story | New | Add frontend component | Assignee: Jane Smith" in result
+    assert "PROJ-12348 | Task | Done | Update documentation" in result
+    # PROJ-12348 should not have "Assignee:" since it's None
+    assert result.count("Assignee:") == 2
+
+
+def test_format_child_issues_empty():
+    """Test formatting empty child issues list."""
+    children = []
+
+    result = format_child_issues_for_claude(children)
+
+    assert result == "\nNo child issues found"
+
+
+def test_view_jira_ticket_with_children(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test viewing a issue tracker ticket with child issues."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    # Create minimal config.json (required for new format detection)
+    config_data = {
+        "backend_config_source": "local",
+        "repos": {},
+        "time_tracking": {},
+        "session_summary": {},
+        "templates": {},
+        "context_files": {},
+        "prompts": {},
+        "pr_template_url": None,
+        "mock_services": False,
+        "gcp_vertex_region": None,
+        "update_checker_timeout": 5
+    }
+    with open(temp_daf_home / "config.json", "w") as f:
+        json.dump(config_data, f)
+
+    # Set up jira.json config with field_mappings including epic_link
+    backends_dir = temp_daf_home / "backends"
+    backends_dir.mkdir(parents=True, exist_ok=True)
+
+    jira_config = {
+        "url": "https://test.jira.com",
+        "user": "test_user",
+        "transitions": {},
+        "field_mappings": {
+            "epic_link": {
+                "id": "customfield_12311140",
+                "name": "Epic Link"
+            }
+        }
+    }
+
+    with open(backends_dir / "jira.json", "w") as f:
+        json.dump(jira_config, f)
+
+    # Create minimal organization.json and team.json
+    with open(temp_daf_home / "organization.json", "w") as f:
+        json.dump({"jira_project": "TEST", "sync_filters": {}}, f)
+
+    with open(temp_daf_home / "team.json", "w") as f:
+        json.dump({"jira_workstream": None}, f)
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Epic ticket",
+            "status": {"name": "In Progress"},
+            "issuetype": {"name": "Epic"},
+            "description": "Epic description",
+            "priority": {"name": "Major"},
+        }
+    })
+
+    # Set up child issues
+    # With epic_link field mapping, the JQL includes "Epic Link"
+    mock_jira_cli.set_search_results({
+        "jql": 'parent = PROJ-12345 OR "Epic Link" = PROJ-12345 ORDER BY key ASC',
+        "issues": [
+            {
+                "key": "PROJ-12346",
+                "fields": {
+                    "summary": "Child story 1",
+                    "status": {"name": "New"},
+                    "issuetype": {"name": "Story"},
+                    "assignee": {"displayName": "John Doe"},
+                }
+            },
+            {
+                "key": "PROJ-12347",
+                "fields": {
+                    "summary": "Child story 2",
+                    "status": {"name": "Done"},
+                    "issuetype": {"name": "Story"},
+                    "assignee": None,
+                }
+            }
+        ]
+    })
+
+    view_jira_ticket("PROJ-12345", show_children=True)
+
+    captured = capsys.readouterr()
+    # Check ticket info is present
+    assert "Key: PROJ-12345" in captured.out
+    assert "Summary: Epic ticket" in captured.out
+
+    # Check child issues are present
+    assert "Child Issues:" in captured.out
+    assert "PROJ-12346 | Story | New | Child story 1 | Assignee: John Doe" in captured.out
+    assert "PROJ-12347 | Story | Done | Child story 2" in captured.out
+
+
+def test_view_jira_ticket_with_children_no_children(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test viewing a issue tracker ticket with no child issues."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    # Create minimal config.json (required for new format detection)
+    config_data = {
+        "backend_config_source": "local",
+        "repos": {},
+        "time_tracking": {},
+        "session_summary": {},
+        "templates": {},
+        "context_files": {},
+        "prompts": {},
+        "pr_template_url": None,
+        "mock_services": False,
+        "gcp_vertex_region": None,
+        "update_checker_timeout": 5
+    }
+    with open(temp_daf_home / "config.json", "w") as f:
+        json.dump(config_data, f)
+
+    # Set up jira.json config with field_mappings including epic_link
+    backends_dir = temp_daf_home / "backends"
+    backends_dir.mkdir(parents=True, exist_ok=True)
+
+    jira_config = {
+        "url": "https://test.jira.com",
+        "user": "test_user",
+        "transitions": {},
+        "field_mappings": {
+            "epic_link": {
+                "id": "customfield_12311140",
+                "name": "Epic Link"
+            }
+        }
+    }
+
+    with open(backends_dir / "jira.json", "w") as f:
+        json.dump(jira_config, f)
+
+    # Create minimal organization.json and team.json
+    with open(temp_daf_home / "organization.json", "w") as f:
+        json.dump({"jira_project": "TEST", "sync_filters": {}}, f)
+
+    with open(temp_daf_home / "team.json", "w") as f:
+        json.dump({"jira_workstream": None}, f)
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Epic ticket",
+            "status": {"name": "In Progress"},
+            "issuetype": {"name": "Epic"},
+            "description": "Epic description",
+        }
+    })
+
+    # Set up empty child issues
+    # With epic_link field mapping, the JQL includes "Epic Link"
+    mock_jira_cli.set_search_results({
+        "jql": 'parent = PROJ-12345 OR "Epic Link" = PROJ-12345 ORDER BY key ASC',
+        "issues": []
+    })
+
+    view_jira_ticket("PROJ-12345", show_children=True)
+
+    captured = capsys.readouterr()
+    # Check ticket info is present
+    assert "Key: PROJ-12345" in captured.out
+
+    # Check no child issues message
+    assert "No child issues found" in captured.out
+
+
+def test_view_jira_ticket_without_children(mock_jira_cli, capsys):
+    """Test that child issues are not shown when show_children=False."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+        }
+    })
+
+    view_jira_ticket("PROJ-12345", show_children=False)
+
+    captured = capsys.readouterr()
+    # Check ticket info is present
+    assert "Key: PROJ-12345" in captured.out
+    assert "Summary: Test ticket" in captured.out
+
+    # Check child issues are NOT present
+    assert "Child Issues:" not in captured.out
+    assert "No child issues found" not in captured.out

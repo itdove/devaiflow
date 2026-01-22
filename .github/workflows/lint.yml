@@ -1,0 +1,86 @@
+# GitHub Actions CI/CD - Lint Workflow
+# Runs code quality checks on pull requests
+
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pylint:
+    name: Pylint Code Quality
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Allow workflow to succeed even if pylint fails
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pylint
+
+      - name: Run pylint
+        run: |
+          pylint devflow/ --exit-zero --output-format=text
+        continue-on-error: true
+
+  black:
+    name: Black Code Formatting
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install black
+        run: |
+          python -m pip install --upgrade pip
+          pip install black
+
+      - name: Check formatting with black
+        run: |
+          black --check devflow/ tests/
+        continue-on-error: true
+
+  ruff:
+    name: Ruff Linting
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run ruff
+        run: |
+          ruff check devflow/ tests/
+        continue-on-error: true

@@ -1,0 +1,734 @@
+{
+  "$defs": {
+    "ContextFile": {
+      "description": "Configuration for a single context file to include in initial prompts.",
+      "properties": {
+        "path": {
+          "description": "File path (local) or URL (GitHub/GitLab)",
+          "title": "Path",
+          "type": "string"
+        },
+        "description": {
+          "description": "Human-readable description of the context file",
+          "title": "Description",
+          "type": "string"
+        },
+        "hidden": {
+          "default": false,
+          "description": "Hide from TUI (used for auto-managed files like skills)",
+          "title": "Hidden",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "description"
+      ],
+      "title": "ContextFile",
+      "type": "object"
+    },
+    "ContextFilesConfig": {
+      "description": "Configuration for context files in initial prompts.",
+      "properties": {
+        "files": {
+          "description": "Additional context files to include (beyond AGENTS.md and CLAUDE.md)",
+          "items": {
+            "$ref": "#/$defs/ContextFile"
+          },
+          "title": "Files",
+          "type": "array"
+        }
+      },
+      "title": "ContextFilesConfig",
+      "type": "object"
+    },
+    "JiraConfig": {
+      "description": "JIRA integration configuration (merged view from backend/org/team configs).\n\nThis is the unified configuration model that combines data from:\n- JiraBackendConfig (backends/jira.json)\n- OrganizationConfig (organization.json)\n- TeamConfig (team.json)\n\nUsed for backward compatibility with existing code.",
+      "properties": {
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "user": {
+          "title": "User",
+          "type": "string"
+        },
+        "transitions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JiraTransitionConfig"
+          },
+          "title": "Transitions",
+          "type": "object"
+        },
+        "time_tracking": {
+          "default": true,
+          "title": "Time Tracking",
+          "type": "boolean"
+        },
+        "filters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JiraFiltersConfig"
+          },
+          "title": "Filters",
+          "type": "object"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project"
+        },
+        "workstream": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workstream"
+        },
+        "affected_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Affected Version"
+        },
+        "acceptance_criteria_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acceptance Criteria Field"
+        },
+        "workstream_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workstream Field"
+        },
+        "epic_link_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Epic Link Field"
+        },
+        "field_mappings": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Mappings"
+        },
+        "field_cache_timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Cache Timestamp"
+        },
+        "field_cache_auto_refresh": {
+          "default": true,
+          "title": "Field Cache Auto Refresh",
+          "type": "boolean"
+        },
+        "field_cache_max_age_hours": {
+          "default": 24,
+          "title": "Field Cache Max Age Hours",
+          "type": "integer"
+        },
+        "comment_visibility_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment Visibility Type"
+        },
+        "comment_visibility_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment Visibility Value"
+        },
+        "parent_field_mapping": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Field Mapping"
+        }
+      },
+      "required": [
+        "url",
+        "user",
+        "transitions"
+      ],
+      "title": "JiraConfig",
+      "type": "object"
+    },
+    "JiraFiltersConfig": {
+      "description": "Configuration for issue tracker ticket filters.",
+      "properties": {
+        "status": {
+          "default": [
+            "New",
+            "To Do",
+            "In Progress"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Status",
+          "type": "array"
+        },
+        "required_fields": {
+          "default": [
+            "sprint",
+            "story-points"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Fields",
+          "type": "array"
+        },
+        "assignee": {
+          "default": "currentUser()",
+          "title": "Assignee",
+          "type": "string"
+        }
+      },
+      "title": "JiraFiltersConfig",
+      "type": "object"
+    },
+    "JiraTransitionConfig": {
+      "description": "Configuration for issue tracker ticket transitions.",
+      "properties": {
+        "from": {
+          "default": [
+            "New",
+            "To Do"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "From",
+          "type": "array"
+        },
+        "to": {
+          "default": "",
+          "title": "To",
+          "type": "string"
+        },
+        "prompt": {
+          "default": false,
+          "title": "Prompt",
+          "type": "boolean"
+        },
+        "on_fail": {
+          "default": "warn",
+          "title": "On Fail",
+          "type": "string"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options"
+        }
+      },
+      "title": "JiraTransitionConfig",
+      "type": "object"
+    },
+    "MockServicesConfig": {
+      "description": "Mock services configuration model (reserved for future use).\n\nNote: Mock mode is currently activated via the DAF_MOCK_MODE=1 environment variable\nand does not require configuration. This class is reserved for potential future\nconfiguration options.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "data_file": {
+          "description": "Path to persistent mock data file",
+          "title": "Data File",
+          "type": "string"
+        },
+        "services": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "Map of service name to enabled status (jira, github, gitlab, claude)",
+          "title": "Services",
+          "type": "object"
+        }
+      },
+      "required": [
+        "data_file"
+      ],
+      "title": "MockServicesConfig",
+      "type": "object"
+    },
+    "PromptsConfig": {
+      "description": "User prompt preferences configuration.\n\nAllows users to configure automatic answers for common prompts\nto skip repetitive questions in daf new/open/complete commands.",
+      "properties": {
+        "auto_commit_on_complete": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Commit On Complete"
+        },
+        "auto_accept_ai_commit_message": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Accept Ai Commit Message"
+        },
+        "auto_create_pr_on_complete": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Create Pr On Complete"
+        },
+        "auto_create_pr_status": {
+          "default": "prompt",
+          "title": "Auto Create Pr Status",
+          "type": "string"
+        },
+        "auto_add_issue_summary": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Add Issue Summary"
+        },
+        "auto_update_jira_pr_url": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Update Jira Pr Url"
+        },
+        "auto_push_to_remote": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Push To Remote"
+        },
+        "auto_launch_claude": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Launch Claude"
+        },
+        "auto_launch_agent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Launch Agent"
+        },
+        "auto_checkout_branch": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Checkout Branch"
+        },
+        "auto_sync_with_base": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Sync With Base"
+        },
+        "auto_complete_on_exit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Complete On Exit"
+        },
+        "default_branch_strategy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Branch Strategy"
+        },
+        "remember_last_repo_per_project": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Remember Last Repo Per Project",
+          "type": "object"
+        },
+        "show_prompt_unit_tests": {
+          "default": true,
+          "title": "Show Prompt Unit Tests",
+          "type": "boolean"
+        },
+        "auto_load_related_conversations": {
+          "default": false,
+          "title": "Auto Load Related Conversations",
+          "type": "boolean"
+        }
+      },
+      "title": "PromptsConfig",
+      "type": "object"
+    },
+    "RepoConfig": {
+      "description": "Repository configuration.",
+      "properties": {
+        "workspace": {
+          "title": "Workspace",
+          "type": "string"
+        },
+        "detection": {
+          "$ref": "#/$defs/RepoDetectionConfig"
+        },
+        "keywords": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Keywords",
+          "type": "object"
+        }
+      },
+      "required": [
+        "workspace"
+      ],
+      "title": "RepoConfig",
+      "type": "object"
+    },
+    "RepoDetectionConfig": {
+      "description": "Repository detection configuration.",
+      "properties": {
+        "method": {
+          "default": "keyword_match",
+          "title": "Method",
+          "type": "string"
+        },
+        "fallback": {
+          "default": "prompt",
+          "title": "Fallback",
+          "type": "string"
+        }
+      },
+      "title": "RepoDetectionConfig",
+      "type": "object"
+    },
+    "SessionSummaryConfig": {
+      "description": "Session summary configuration.",
+      "properties": {
+        "mode": {
+          "default": "local",
+          "title": "Mode",
+          "type": "string"
+        },
+        "api_key_env": {
+          "default": "ANTHROPIC_API_KEY",
+          "title": "Api Key Env",
+          "type": "string"
+        }
+      },
+      "title": "SessionSummaryConfig",
+      "type": "object"
+    },
+    "StorageConfig": {
+      "description": "Storage backend configuration.\n\nControls which storage backend to use for session persistence.",
+      "properties": {
+        "backend": {
+          "default": "file",
+          "title": "Backend",
+          "type": "string"
+        }
+      },
+      "title": "StorageConfig",
+      "type": "object"
+    },
+    "TemplateConfig": {
+      "description": "Template auto-creation and auto-use configuration.",
+      "properties": {
+        "auto_create": {
+          "default": true,
+          "description": "Automatically create templates when creating sessions in new directories",
+          "title": "Auto Create",
+          "type": "boolean"
+        },
+        "auto_use": {
+          "default": true,
+          "description": "Automatically use matching templates when creating sessions",
+          "title": "Auto Use",
+          "type": "boolean"
+        }
+      },
+      "title": "TemplateConfig",
+      "type": "object"
+    },
+    "TimeTrackingConfig": {
+      "description": "Time tracking configuration.",
+      "properties": {
+        "auto_start": {
+          "default": true,
+          "title": "Auto Start",
+          "type": "boolean"
+        },
+        "auto_pause_after": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "30m",
+          "title": "Auto Pause After"
+        },
+        "reminder_interval": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "2h",
+          "title": "Reminder Interval"
+        }
+      },
+      "title": "TimeTrackingConfig",
+      "type": "object"
+    }
+  },
+  "description": "Main configuration for DevAIFlow (merged view from all config files).\n\nThis is the unified configuration model used throughout the application.\nIn the new format, it combines data from:\n- config.json (user preferences)\n- backends/jira.json (backend settings)\n- organization.json (org settings)\n- team.json (team settings)\n\nFor backward compatibility, it can also load from the old single config.json format.",
+  "properties": {
+    "jira": {
+      "$ref": "#/$defs/JiraConfig"
+    },
+    "repos": {
+      "$ref": "#/$defs/RepoConfig"
+    },
+    "time_tracking": {
+      "$ref": "#/$defs/TimeTrackingConfig"
+    },
+    "session_summary": {
+      "$ref": "#/$defs/SessionSummaryConfig"
+    },
+    "templates": {
+      "$ref": "#/$defs/TemplateConfig"
+    },
+    "context_files": {
+      "$ref": "#/$defs/ContextFilesConfig"
+    },
+    "prompts": {
+      "$ref": "#/$defs/PromptsConfig"
+    },
+    "pr_template_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pr Template Url"
+    },
+    "storage": {
+      "$ref": "#/$defs/StorageConfig"
+    },
+    "backend_config_source": {
+      "default": "local",
+      "title": "Backend Config Source",
+      "type": "string"
+    },
+    "issue_tracker_backend": {
+      "default": "jira",
+      "title": "Issue Tracker Backend",
+      "type": "string"
+    },
+    "agent_backend": {
+      "default": "claude",
+      "title": "Agent Backend",
+      "type": "string"
+    },
+    "mock_services": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockServicesConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "gcp_vertex_region": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Gcp Vertex Region"
+    },
+    "update_checker_timeout": {
+      "default": 10,
+      "title": "Update Checker Timeout",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "jira",
+    "repos"
+  ],
+  "title": "Config",
+  "type": "object"
+}
