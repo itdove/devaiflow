@@ -40,7 +40,14 @@ daf open PROJ-12345 --new-conversation
 
 # JSON output for automation/CI-CD
 daf open PROJ-12345 --json
+```
 
+**Key features:**
+- `--json` - Non-interactive mode with JSON output. Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Returns session data in JSON format suitable for automation, CI/CD pipelines, and integration tests.
+- `--path` - Specify repository path for multi-conversation sessions
+- `--new-conversation` - Archive current conversation and start fresh
+
+```bash
 # Show current status
 daf status
 

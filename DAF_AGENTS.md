@@ -49,6 +49,7 @@ daf new --name "feature-name" --goal "Description"
 daf open <session-name-or-jira-key>
 daf open <session-name> --path <repo-path>  # Multi-conversation: auto-select repo
 daf open <session-name> --new-conversation  # Archive current, start fresh
+daf open <session-name> --json  # Non-interactive mode for automation/CI-CD
 daf complete <session-name>
 
 # JIRA Operations

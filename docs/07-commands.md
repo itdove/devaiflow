@@ -415,7 +415,7 @@ daf open <NAME-or-JIRA> [OPTIONS]
 
 **Options:**
 - `--new-conversation` - Archive current Claude Code conversation and start fresh with a new one
-- `--json` - Return JSON output (non-interactive mode, bypasses prompts)
+- `--json` - Return JSON output (non-interactive mode). Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Suitable for automation, CI/CD pipelines, and integration tests.
 
 **Examples:**
 ```bash
