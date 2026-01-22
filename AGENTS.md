@@ -242,7 +242,7 @@ For complete documentation, refer to DAF_AGENTS.md.
 - Release: `daf release --dry-run`, `daf release --suggest`, `daf release <M.m.p> approve --dry-run` (read-only modes)
 
 **Implementation**:
-All blocked commands use the `@require_outside_claude` decorator from `devflow/cli/utils.py`. This decorator checks for the `DEVFLOW_IN_SESSION` environment variable and provides a clear error message if the command is run inside an AI agent session (Claude Code, Cursor, GitHub Copilot, Windsurf, etc.).
+All blocked commands use the `@require_outside_claude` decorator from `devflow/cli/utils.py`. This decorator checks for the `DEVAIFLOW_IN_SESSION` environment variable and provides a clear error message if the command is run inside an AI agent session (Claude Code, Cursor, GitHub Copilot, Windsurf, etc.).
 
 **Why this matters**:
 Running metadata-modifying commands inside Claude Code can cause:
@@ -488,7 +488,7 @@ except JiraAuthError as e:
 
 ### Testing Guidelines
 
-**Integration Tests**: Can be run from inside AI agent sessions using the test runner script `./run_all_integration_tests.sh`, which uses environment isolation (unsets `DEVFLOW_IN_SESSION` and `AI_AGENT_SESSION_ID`, sets temporary `DEVFLOW_HOME`) to avoid conflicts. Individual test scripts still require running outside AI agent sessions unless you manually set up the isolated environment.
+**Integration Tests**: Can be run from inside AI agent sessions using the test runner script `./run_all_integration_tests.sh`, which uses environment isolation (unsets `DEVAIFLOW_IN_SESSION` and `AI_AGENT_SESSION_ID`, sets temporary `DEVAIFLOW_HOME`) to avoid conflicts. Individual test scripts still require running outside AI agent sessions unless you manually set up the isolated environment.
 
 **Debug Mode for Integration Tests**: All integration test scripts support a `--debug` flag that enables verbose bash output (`set -x`) for easier troubleshooting:
 ```bash
@@ -537,9 +537,9 @@ When `--debug` is used with the test runner, it automatically propagates to all 
      - Output saved to `/tmp/daf_integration_tests_YYYYMMDD_HHMMSS.log`
      - Fails fast (exits on first test failure)
    - **Environment isolation**: The test runner automatically:
-     - Unsets `DEVFLOW_IN_SESSION` to bypass safety guards
+     - Unsets `DEVAIFLOW_IN_SESSION` to bypass safety guards
      - Unsets `AI_AGENT_SESSION_ID` to isolate from parent session
-     - Sets `DEVFLOW_HOME` to `/tmp/daf-integration-tests-$$` for data isolation
+     - Sets `DEVAIFLOW_HOME` to `/tmp/daf-integration-tests-$$` for data isolation
      - Restores original environment variables on exit
      - Cleans up temporary data directory
      - This ensures integration tests don't interfere with your actual session

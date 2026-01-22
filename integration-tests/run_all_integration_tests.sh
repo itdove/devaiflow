@@ -4,9 +4,9 @@
 # Outputs to /tmp for easy analysis
 #
 # Can be run from inside AI agent sessions - uses isolated environment:
-#   - Unsets DEVFLOW_IN_SESSION to bypass safety guards
+#   - Unsets DEVAIFLOW_IN_SESSION to bypass safety guards
 #   - Unsets AI_AGENT_SESSION_ID to isolate from parent session
-#   - Sets DEVFLOW_HOME to /tmp for data isolation
+#   - Sets DEVAIFLOW_HOME to /tmp for data isolation
 #
 # Usage:
 #   ./run_all_integration_tests.sh           # Normal mode
@@ -22,11 +22,11 @@ if [ "$1" = "--debug" ]; then
 fi
 
 # Save original environment variables
-ORIGINAL_DEVFLOW_IN_SESSION="${DEVFLOW_IN_SESSION:-}"
+ORIGINAL_DEVAIFLOW_IN_SESSION="${DEVAIFLOW_IN_SESSION:-}"
 ORIGINAL_AI_AGENT_SESSION_ID="${AI_AGENT_SESSION_ID:-}"
-ORIGINAL_DEVFLOW_HOME="${DEVFLOW_HOME:-}"
+ORIGINAL_DEVAIFLOW_HOME="${DEVAIFLOW_HOME:-}"
 
-# Unset DEVFLOW_IN_SESSION to bypass safety guards
+# Unset DEVAIFLOW_IN_SESSION to bypass safety guards
 # (Integration tests need to call blocked commands like daf new, daf note, etc.)
 #
 # Note: AI_AGENT_SESSION_ID is also used by 'daf active' to detect the active conversation.
@@ -34,19 +34,19 @@ ORIGINAL_DEVFLOW_HOME="${DEVFLOW_HOME:-}"
 #   - Integration tests create their own test sessions in mock mode
 #   - test_readonly_commands.sh explicitly sets its own AI_AGENT_SESSION_ID for testing
 #   - No tests rely on preserving the original session ID from parent session
-unset DEVFLOW_IN_SESSION
+unset DEVAIFLOW_IN_SESSION
 unset AI_AGENT_SESSION_ID
 
-# Set temporary DEVFLOW_HOME for complete data isolation
+# Set temporary DEVAIFLOW_HOME for complete data isolation
 # This ensures integration tests don't interfere with actual sessions
-TEMP_DEVFLOW_HOME="/tmp/daf-integration-tests-$$"
-export DEVFLOW_HOME="$TEMP_DEVFLOW_HOME"
+TEMP_DEVAIFLOW_HOME="/tmp/daf-integration-tests-$$"
+export DEVAIFLOW_HOME="$TEMP_DEVAIFLOW_HOME"
 
 # Cleanup function to restore environment
 cleanup_environment() {
-    # Restore original DEVFLOW_IN_SESSION if it existed
-    if [ -n "$ORIGINAL_DEVFLOW_IN_SESSION" ]; then
-        export DEVFLOW_IN_SESSION="$ORIGINAL_DEVFLOW_IN_SESSION"
+    # Restore original DEVAIFLOW_IN_SESSION if it existed
+    if [ -n "$ORIGINAL_DEVAIFLOW_IN_SESSION" ]; then
+        export DEVAIFLOW_IN_SESSION="$ORIGINAL_DEVAIFLOW_IN_SESSION"
     fi
 
     # Restore original AI_AGENT_SESSION_ID if it existed
@@ -54,16 +54,16 @@ cleanup_environment() {
         export AI_AGENT_SESSION_ID="$ORIGINAL_AI_AGENT_SESSION_ID"
     fi
 
-    # Restore original DEVFLOW_HOME if it existed
-    if [ -n "$ORIGINAL_DEVFLOW_HOME" ]; then
-        export DEVFLOW_HOME="$ORIGINAL_DEVFLOW_HOME"
+    # Restore original DEVAIFLOW_HOME if it existed
+    if [ -n "$ORIGINAL_DEVAIFLOW_HOME" ]; then
+        export DEVAIFLOW_HOME="$ORIGINAL_DEVAIFLOW_HOME"
     else
-        unset DEVFLOW_HOME
+        unset DEVAIFLOW_HOME
     fi
 
     # Clean up temporary directory
-    if [ -d "$TEMP_DEVFLOW_HOME" ]; then
-        rm -rf "$TEMP_DEVFLOW_HOME"
+    if [ -d "$TEMP_DEVAIFLOW_HOME" ]; then
+        rm -rf "$TEMP_DEVAIFLOW_HOME"
     fi
 }
 
@@ -168,11 +168,11 @@ run_test() {
     echo "Fail fast: ENABLED (will exit on first failure)"
     echo ""
     echo -e "${CYAN}Environment Isolation:${NC}"
-    echo "  DEVFLOW_IN_SESSION: unset (bypassing safety guards)"
+    echo "  DEVAIFLOW_IN_SESSION: unset (bypassing safety guards)"
     echo "  AI_AGENT_SESSION_ID: unset (isolated from parent session)"
-    echo "  DEVFLOW_HOME: ${DEVFLOW_HOME}"
+    echo "  DEVAIFLOW_HOME: ${DEVAIFLOW_HOME}"
     echo "  Data directory: isolated (will be cleaned up on exit)"
-    if [ -n "$ORIGINAL_DEVFLOW_IN_SESSION" ]; then
+    if [ -n "$ORIGINAL_DEVAIFLOW_IN_SESSION" ]; then
         echo "  Running inside AI agent: YES (original session will be restored)"
     else
         echo "  Running inside AI agent: NO"

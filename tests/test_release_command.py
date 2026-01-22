@@ -252,8 +252,8 @@ class TestCreateReleaseClaudeGuard:
         This prevents integration tests from running forbidden commands (daf export,
         daf import, daf open, daf complete) when inside a Claude Code session.
         """
-        # Set DEVFLOW_IN_SESSION to simulate running inside an AI agent session
-        monkeypatch.setenv("DEVFLOW_IN_SESSION", "1")
+        # Set DEVAIFLOW_IN_SESSION to simulate running inside an AI agent session
+        monkeypatch.setenv("DEVAIFLOW_IN_SESSION", "1")
 
         # Attempt to run create_release without dry-run flag
         # Should exit with code 1

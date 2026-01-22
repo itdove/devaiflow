@@ -592,10 +592,10 @@ def open_session(
 
     try:
         # Set environment variables for the AI agent process
-        # DEVFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
+        # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
         # AI_AGENT_SESSION_ID: Generic session ID (works with any AI agent)
         env = os.environ.copy()
-        env["DEVFLOW_IN_SESSION"] = "1"
+        env["DEVAIFLOW_IN_SESSION"] = "1"
         if active_conv and active_conv.ai_agent_session_id:
             env["AI_AGENT_SESSION_ID"] = active_conv.ai_agent_session_id
 

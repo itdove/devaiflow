@@ -9,6 +9,20 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def unset_ai_session_env_vars(monkeypatch):
+    """Automatically unset AI session environment variables for all tests.
+
+    This allows tests to run inside Claude Code without triggering the
+    safety guards that prevent commands like 'daf open', 'daf new', etc.
+    from running inside an AI agent session.
+
+    This is an autouse fixture, so it applies to all tests automatically.
+    """
+    monkeypatch.delenv("DEVAIFLOW_IN_SESSION", raising=False)
+    monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+
 @pytest.fixture
 def mock_jira_cli(monkeypatch):
     """Mock the JIRA REST API and CLI calls.

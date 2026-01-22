@@ -294,8 +294,8 @@ def test_cleanup_sessions_skips_sessions_without_conversation(monkeypatch, temp_
 
 def test_cleanup_sessions_blocked_inside_claude(monkeypatch, temp_daf_home):
     """Test cleanup_sessions is blocked when running inside Claude Code."""
-    # Set DEVFLOW_IN_SESSION to simulate running inside an AI agent session
-    monkeypatch.setenv('DEVFLOW_IN_SESSION', '1')
+    # Set DEVAIFLOW_IN_SESSION to simulate running inside an AI agent session
+    monkeypatch.setenv('DEVAIFLOW_IN_SESSION', '1')
 
     with patch('devflow.cli.commands.cleanup_sessions_command.SessionManager') as mock_sm:
         # Should raise SystemExit due to @require_outside_claude decorator

@@ -793,10 +793,10 @@ def create_new_session(
             cmd.extend(["--add-dir", skills_dir])
 
         # Set environment variables for the AI agent process
-        # DEVFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
+        # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
         # AI_AGENT_SESSION_ID: Generic session ID (works with any AI agent)
         env = os.environ.copy()
-        env["DEVFLOW_IN_SESSION"] = "1"
+        env["DEVAIFLOW_IN_SESSION"] = "1"
         env["AI_AGENT_SESSION_ID"] = session_id
 
         # Set GCP Vertex AI region if configured

@@ -30,9 +30,9 @@ This directory contains end-to-end integration tests for DevAIFlow. These tests 
 **Yes!** The test runner script (`run_all_integration_tests.sh`) can be run from inside Claude Code sessions.
 
 **How it works:**
-- Automatically unsets `DEVFLOW_IN_SESSION` to bypass safety guards
+- Automatically unsets `DEVAIFLOW_IN_SESSION` to bypass safety guards
 - Automatically unsets `AI_AGENT_SESSION_ID` to isolate from parent session
-- Sets `DEVFLOW_HOME` to `/tmp/daf-integration-tests-$$` for data isolation
+- Sets `DEVAIFLOW_HOME` to `/tmp/daf-integration-tests-$$` for data isolation
 - Restores original environment variables on exit
 - Cleans up temporary data directory
 
@@ -73,29 +73,29 @@ If you want to run individual test scripts inside an AI agent session:
 
 ```bash
 # Save original environment
-ORIGINAL_DEVFLOW_IN_SESSION="${DEVFLOW_IN_SESSION:-}"
+ORIGINAL_DEVAIFLOW_IN_SESSION="${DEVAIFLOW_IN_SESSION:-}"
 ORIGINAL_AI_AGENT_SESSION_ID="${AI_AGENT_SESSION_ID:-}"
-ORIGINAL_DEVFLOW_HOME="${DEVFLOW_HOME:-}"
+ORIGINAL_DEVAIFLOW_HOME="${DEVAIFLOW_HOME:-}"
 
 # Set up isolation
-unset DEVFLOW_IN_SESSION
+unset DEVAIFLOW_IN_SESSION
 unset AI_AGENT_SESSION_ID
-export DEVFLOW_HOME="/tmp/daf-test-$$"
+export DEVAIFLOW_HOME="/tmp/daf-test-$$"
 
 # Run individual test
 ./test_jira_green_path.sh
 
 # Restore environment
-if [ -n "$ORIGINAL_DEVFLOW_IN_SESSION" ]; then
-    export DEVFLOW_IN_SESSION="$ORIGINAL_DEVFLOW_IN_SESSION"
+if [ -n "$ORIGINAL_DEVAIFLOW_IN_SESSION" ]; then
+    export DEVAIFLOW_IN_SESSION="$ORIGINAL_DEVAIFLOW_IN_SESSION"
 fi
 if [ -n "$ORIGINAL_AI_AGENT_SESSION_ID" ]; then
     export AI_AGENT_SESSION_ID="$ORIGINAL_AI_AGENT_SESSION_ID"
 fi
-if [ -n "$ORIGINAL_DEVFLOW_HOME" ]; then
-    export DEVFLOW_HOME="$ORIGINAL_DEVFLOW_HOME"
+if [ -n "$ORIGINAL_DEVAIFLOW_HOME" ]; then
+    export DEVAIFLOW_HOME="$ORIGINAL_DEVAIFLOW_HOME"
 else
-    unset DEVFLOW_HOME
+    unset DEVAIFLOW_HOME
 fi
 
 # Clean up
@@ -196,7 +196,7 @@ cat $(ls -t /tmp/daf_integration_tests_*.log | head -1)
 All tests use:
 - **Mock mode** (`DAF_MOCK_MODE=1`) for isolated testing without external dependencies
 - **Temporary directories** for security and isolation
-- **Separate DEVFLOW_HOME** to avoid interfering with actual sessions
+- **Separate DEVAIFLOW_HOME** to avoid interfering with actual sessions
 - **Automatic cleanup** to remove all test data after completion
 
 ## Contributing

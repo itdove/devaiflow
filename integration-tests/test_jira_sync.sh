@@ -17,12 +17,12 @@ set -e  # Exit on first error
 
 # Environment isolation (for running standalone or inside AI sessions)
 # Save original environment
-ORIGINAL_DEVFLOW_IN_SESSION="${DEVFLOW_IN_SESSION:-}"
+ORIGINAL_DEVAIFLOW_IN_SESSION="${DEVAIFLOW_IN_SESSION:-}"
 ORIGINAL_AI_AGENT_SESSION_ID="${AI_AGENT_SESSION_ID:-}"
 ORIGINAL_DEVAIFLOW_HOME="${DEVAIFLOW_HOME:-}"
 
 # Unset session variables to bypass safety guards
-unset DEVFLOW_IN_SESSION
+unset DEVAIFLOW_IN_SESSION
 unset AI_AGENT_SESSION_ID
 
 # Use temporary DEVAIFLOW_HOME if not already set by runner
@@ -34,11 +34,31 @@ else
     CLEANUP_TEMP_DIR=false
 fi
 
+# Create temporary git repository
+TEMP_GIT_REPO="/tmp/daf-test-git-repo-jira_sync-$$"
+mkdir -p "$TEMP_GIT_REPO"
+
+# Initialize git repository (in a subshell to avoid changing parent shell's directory)
+(
+    cd "$TEMP_GIT_REPO"
+    git init > /dev/null 2>&1
+    git config user.name "Test User" > /dev/null 2>&1
+    git config user.email "test@example.com" > /dev/null 2>&1
+    echo "# Test Repository" > README.md
+    git add README.md > /dev/null 2>&1
+    git commit -m "Initial commit" > /dev/null 2>&1
+)
+
 # Cleanup function
 cleanup_test_environment() {
+    # Clean up temporary git repository
+    if [ -d "$TEMP_GIT_REPO" ]; then
+        rm -rf "$TEMP_GIT_REPO"
+    fi
+
     # Restore original environment
-    if [ -n "$ORIGINAL_DEVFLOW_IN_SESSION" ]; then
-        export DEVFLOW_IN_SESSION="$ORIGINAL_DEVFLOW_IN_SESSION"
+    if [ -n "$ORIGINAL_DEVAIFLOW_IN_SESSION" ]; then
+        export DEVAIFLOW_IN_SESSION="$ORIGINAL_DEVAIFLOW_IN_SESSION"
     fi
     if [ -n "$ORIGINAL_AI_AGENT_SESSION_ID" ]; then
         export AI_AGENT_SESSION_ID="$ORIGINAL_AI_AGENT_SESSION_ID"
@@ -107,7 +127,10 @@ verify_success() {
     fi
 }
 
-# Main test execution
+# Main test execution (run in subshell to isolate directory changes)
+(
+cd "$TEMP_GIT_REPO"
+
 print_section "JIRA Sync Integration Test"
 echo "This script tests the JIRA sync features:"
 echo "  1. Sync sprint tickets (daf sync --sprint)"
@@ -403,3 +426,7 @@ else
     echo ""
     exit 1
 fi
+)
+
+# Capture subshell exit code and exit with same code
+exit $?

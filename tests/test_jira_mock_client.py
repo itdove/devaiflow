@@ -263,7 +263,7 @@ def test_get_ticket_detailed(mock_jira):
     )
 
     # Get detailed ticket
-    ticket = mock_jira.get_ticket_detailed("PROJ-1")
+    ticket = mock_jira.get_ticket_detailed("PROJ-1", include_changelog=True)
 
     assert ticket is not None
     assert ticket["key"] == "PROJ-1"

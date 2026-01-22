@@ -657,9 +657,9 @@ def test_require_outside_claude_decorator_allows_when_not_in_claude(monkeypatch)
 
 
 def test_require_outside_claude_decorator_blocks_when_in_claude(monkeypatch):
-    """Test require_outside_claude decorator blocks execution when DEVFLOW_IN_SESSION is set."""
-    # Set DEVFLOW_IN_SESSION to simulate running inside an AI agent session
-    monkeypatch.setenv("DEVFLOW_IN_SESSION", "1")
+    """Test require_outside_claude decorator blocks execution when DEVAIFLOW_IN_SESSION is set."""
+    # Set DEVAIFLOW_IN_SESSION to simulate running inside an AI agent session
+    monkeypatch.setenv("DEVAIFLOW_IN_SESSION", "1")
 
     # Create a test function with the decorator
     @require_outside_claude

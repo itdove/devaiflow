@@ -17,12 +17,12 @@ set -e  # Exit on first error
 
 # Environment isolation (for running standalone or inside AI sessions)
 # Save original environment
-ORIGINAL_DEVFLOW_IN_SESSION="${DEVFLOW_IN_SESSION:-}"
+ORIGINAL_DEVAIFLOW_IN_SESSION="${DEVAIFLOW_IN_SESSION:-}"
 ORIGINAL_AI_AGENT_SESSION_ID="${AI_AGENT_SESSION_ID:-}"
 ORIGINAL_DEVAIFLOW_HOME="${DEVAIFLOW_HOME:-}"
 
 # Unset session variables to bypass safety guards
-unset DEVFLOW_IN_SESSION
+unset DEVAIFLOW_IN_SESSION
 unset AI_AGENT_SESSION_ID
 
 # Use temporary DEVAIFLOW_HOME if not already set by runner
@@ -37,8 +37,8 @@ fi
 # Cleanup function
 cleanup_test_environment() {
     # Restore original environment
-    if [ -n "$ORIGINAL_DEVFLOW_IN_SESSION" ]; then
-        export DEVFLOW_IN_SESSION="$ORIGINAL_DEVFLOW_IN_SESSION"
+    if [ -n "$ORIGINAL_DEVAIFLOW_IN_SESSION" ]; then
+        export DEVAIFLOW_IN_SESSION="$ORIGINAL_DEVAIFLOW_IN_SESSION"
     fi
     if [ -n "$ORIGINAL_AI_AGENT_SESSION_ID" ]; then
         export AI_AGENT_SESSION_ID="$ORIGINAL_AI_AGENT_SESSION_ID"

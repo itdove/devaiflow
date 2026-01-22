@@ -130,8 +130,8 @@ def test_create_backup_shows_warning_message(monkeypatch, temp_daf_home):
 
 def test_create_backup_blocked_inside_claude(monkeypatch, temp_daf_home):
     """Test create_backup is blocked when running inside Claude Code."""
-    # Set DEVFLOW_IN_SESSION to simulate running inside an AI agent session
-    monkeypatch.setenv('DEVFLOW_IN_SESSION', '1')
+    # Set DEVAIFLOW_IN_SESSION to simulate running inside an AI agent session
+    monkeypatch.setenv('DEVAIFLOW_IN_SESSION', '1')
 
     with patch('devflow.cli.commands.backup_command.BackupManager') as mock_bm_class:
         with patch('devflow.cli.commands.backup_command.console') as mock_console:

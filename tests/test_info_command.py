@@ -270,7 +270,7 @@ def test_session_info_with_time_tracking(temp_daf_home, capsys):
     captured = capsys.readouterr()
 
     # Should show time tracking
-    assert "Time Tracked:" in captured.out
+    assert "Time Tracking:" in captured.out
     # Total should be 3h 45m
     assert "3h 45m" in captured.out
 
