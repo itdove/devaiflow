@@ -90,7 +90,7 @@ TESTS=(
     "test_templates.sh"
     "test_jira_sync.sh"
     "test_readonly_commands.sh"
-    # "test_multi_repo.sh"  # COMMENTED OUT: Blocked by AAP-63884 (daf open --json prompts for input)
+    "test_multi_repo.sh"
     "test_session_lifecycle.sh"
     "test_investigation.sh"
     "test_error_handling.sh"

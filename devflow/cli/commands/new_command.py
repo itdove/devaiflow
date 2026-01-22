@@ -12,7 +12,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from devflow.cli.utils import check_concurrent_session, get_status_display, output_json as json_output, require_outside_claude, serialize_session, should_launch_claude_code
+from devflow.cli.utils import check_concurrent_session, console_print, get_status_display, is_json_mode, output_json as json_output, require_outside_claude, serialize_session, should_launch_claude_code
 from devflow.config.loader import ConfigLoader
 from devflow.git.utils import GitUtils
 from devflow.jira import JiraClient
@@ -1079,6 +1079,10 @@ def _handle_branch_conflict(path: Path, suggested_branch: str) -> Optional[str]:
     Returns:
         Branch name to use, or None to skip branch creation
     """
+    # In JSON mode, default to using existing branch (option 2) without prompting
+    if is_json_mode():
+        return suggested_branch
+
     console.print("\n[bold]Options:[/bold]")
     console.print("1. Add suffix to branch name (e.g., aap-12345-fix-bug-v2)")
     console.print("2. Use existing branch (switch to it)")
@@ -1171,25 +1175,32 @@ def _handle_branch_creation(
     if not GitUtils.is_git_repository(path):
         return None
 
-    console.print("\n[cyan]✓[/cyan] Detected git repository")
+    console_print("\n[cyan]✓[/cyan] Detected git repository")
 
     # Load config if not provided
     if config is None:
         config_loader = ConfigLoader()
         config = config_loader.load_config()
 
-    # Ask if user wants to create a branch (unless auto mode)
+    # Ask if user wants to create a branch (unless auto mode or JSON mode)
     if not auto_from_default:
-        if not Confirm.ask("Create git branch for this session?", default=True):
+        # In JSON mode, use default value (True) without prompting
+        if is_json_mode():
+            # Default to creating branch in JSON mode
+            should_create = True
+        else:
+            should_create = Confirm.ask("Create git branch for this session?", default=True)
+
+        if not should_create:
             return None
 
     # Generate default branch name
     suggested_branch = GitUtils.generate_branch_name(issue_key, goal)
-    console.print(f"\n[dim]Suggested branch name: {suggested_branch}[/dim]")
+    console_print(f"\n[dim]Suggested branch name: {suggested_branch}[/dim]")
 
     # Check if suggested branch already exists
     if GitUtils.branch_exists(path, suggested_branch):
-        console.print(f"\n[yellow]⚠ Branch '{suggested_branch}' already exists[/yellow]")
+        console_print(f"\n[yellow]⚠ Branch '{suggested_branch}' already exists[/yellow]")
 
         # Handle branch conflict
         branch_name = _handle_branch_conflict(path, suggested_branch)
@@ -1216,10 +1227,14 @@ def _handle_branch_creation(
                 console.print("[cyan]Using configured strategy: from current branch[/cyan]")
         else:
             # Interactive mode: ask for branch creation strategy
-            console.print("\n[bold]Branch creation strategy:[/bold]")
-            console.print("1. From current state (stay on current branch)")
-            console.print("2. From default branch (checkout main/master first)")
-            strategy = Prompt.ask("Select", choices=["1", "2"], default="2")
+            # In JSON mode, use default strategy (option 2) without prompting
+            if is_json_mode():
+                strategy = "2"  # Default to from default branch
+            else:
+                console.print("\n[bold]Branch creation strategy:[/bold]")
+                console.print("1. From current state (stay on current branch)")
+                console.print("2. From default branch (checkout main/master first)")
+                strategy = Prompt.ask("Select", choices=["1", "2"], default="2")
 
     try:
         # If user chose to use existing branch, just checkout to it
