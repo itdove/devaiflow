@@ -88,6 +88,13 @@ class SessionManager:
                 workspace=workspace,
             )
 
+        # Auto-start time tracking if configured
+        config = self.config_loader.load_config()
+        if config and hasattr(config, 'time_tracking') and config.time_tracking and hasattr(config.time_tracking, 'auto_start') and config.time_tracking.auto_start:
+            from devflow.config.models import WorkSession
+            session.work_sessions.append(WorkSession(start=datetime.now()))
+            session.time_tracking_state = "running"
+
         self.index.add_session(session)
         self._mark_modified(session)
         self._save_index()

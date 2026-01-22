@@ -373,6 +373,70 @@ This is expected behavior. Select the session number you want to work on.
    - Update environment variable
    - Reload shell: `source ~/.zshrc`
 
+### JIRA Personal Access Token Expired
+
+**Problem:** JIRA commands suddenly fail with `Authentication failed for issue tracker ticket` even though they were working before
+
+**Example Error:**
+```
+✗ Authentication failed for issue tracker ticket AAP-12345
+```
+
+**Cause:** JIRA Personal Access Tokens (PAT) have an expiration date. Once expired, all JIRA API calls will fail with 401 errors.
+
+**How to Diagnose:**
+
+1. **Check if token recently stopped working:**
+   - Was working yesterday/last week
+   - Suddenly all JIRA commands fail
+   - Error message is "Authentication failed"
+
+2. **Check token expiration in JIRA:**
+   - Go to JIRA → Profile (top right) → Personal Access Tokens
+   - Look for your token in the list
+   - Check "Expiry date" and "Last authenticated" columns
+   - If status shows "Expired", this is the issue
+
+**Solutions:**
+
+1. **Create a new Personal Access Token:**
+   ```
+   1. Go to JIRA → Profile → Personal Access Tokens
+   2. Click "Create token"
+   3. Set a name (e.g., "Laptop - 2026")
+   4. Choose expiration date (default is 90 days)
+   5. Click "Create"
+   6. Copy the token immediately (won't be shown again)
+   ```
+
+2. **Update your environment variable:**
+   ```bash
+   # Update the token in your shell
+   export JIRA_API_TOKEN="your_new_token_here"
+
+   # Add to your shell profile to persist across sessions
+   echo 'export JIRA_API_TOKEN="your_new_token_here"' >> ~/.zshrc
+
+   # Reload your shell
+   source ~/.zshrc
+   ```
+
+3. **Verify the fix:**
+   ```bash
+   # Test JIRA authentication
+   daf jira view AAP-12345
+
+   # Should now work successfully
+   ```
+
+**Prevention:**
+
+- **Set calendar reminders** before token expiration
+- **Use longer expiration periods** (90 days, 180 days, or 1 year depending on your organization's policy)
+- **Keep track of expiration dates** in a password manager
+
+**Note:** After updating `JIRA_API_TOKEN`, you may need to restart any open terminals or IDE sessions to pick up the new environment variable.
+
 ### JIRA Ticket Not Found
 
 **Problem:** `JIRA ticket PROJ-12345 not found`

@@ -24,8 +24,9 @@ console = Console()
 def check_outside_ai_session() -> None:
     """Check if running inside an AI agent session and exit with error if so.
 
-    This function checks for the DEVFLOW_IN_SESSION environment variable and
-    exits with a clear error message if the command is run inside an AI agent session.
+    This function checks for the DEVFLOW_IN_SESSION or AI_AGENT_SESSION_ID environment
+    variables and exits with a clear error message if the command is run inside an AI
+    agent session.
 
     This prevents data integrity issues from:
     - Nested session creation
@@ -38,7 +39,7 @@ def check_outside_ai_session() -> None:
     Raises:
         SystemExit: If running inside an AI agent session (exits with code 1)
     """
-    if os.environ.get("DEVFLOW_IN_SESSION"):
+    if os.environ.get("DEVFLOW_IN_SESSION") or os.environ.get("AI_AGENT_SESSION_ID"):
         console.print("[red]Error: Cannot run this command while inside an AI agent session[/red]")
         console.print()
         console.print("[yellow]Why this fails:[/yellow]")

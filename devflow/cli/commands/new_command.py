@@ -475,9 +475,10 @@ def create_new_session(
             console.print("\n[dim]List templates with: daf template list[/dim]")
             sys.exit(1)
 
-        console.print(f"\n[cyan]Using template:[/cyan] [bold]{template.name}[/bold]")
-        if template.description:
-            console.print(f"[dim]{template.description}[/dim]")
+        if not output_json:
+            console.print(f"\n[cyan]Using template:[/cyan] [bold]{template.name}[/bold]")
+            if template.description:
+                console.print(f"[dim]{template.description}[/dim]")
     else:
         # Auto-detect template based on current directory (if auto_use is enabled)
         config = config_loader.load_config()
@@ -487,9 +488,10 @@ def create_new_session(
             template = template_manager.find_matching_template(current_dir)
             if template:
                 auto_detected_template = True
-                console.print(f"\n[cyan]✓ Auto-detected template:[/cyan] [bold]{template.name}[/bold]")
-                if template.description:
-                    console.print(f"[dim]{template.description}[/dim]")
+                if not output_json:
+                    console.print(f"\n[cyan]✓ Auto-detected template:[/cyan] [bold]{template.name}[/bold]")
+                    if template.description:
+                        console.print(f"[dim]{template.description}[/dim]")
 
     # Use template values as defaults (can be overridden by explicit arguments)
     # Note: Do NOT use template.issue_key as issue_key - it's a project prefix (e.g., "PROJ")
@@ -575,8 +577,9 @@ def create_new_session(
                 description=f"Auto-created template for {project_path_obj.name}",
                 default_jira_project=issue_key.split('-')[0] if issue_key and '-' in issue_key else None,
             )
-            console.print(f"\n[cyan]✓ Auto-created template:[/cyan] [bold]{template.name}[/bold]")
-            console.print(f"[dim]Template will be automatically used for future sessions in this directory[/dim]")
+            if not output_json:
+                console.print(f"\n[cyan]✓ Auto-created template:[/cyan] [bold]{template.name}[/bold]")
+                console.print(f"[dim]Template will be automatically used for future sessions in this directory[/dim]")
 
     # Update template usage if a template was used
     if template:
@@ -729,17 +732,19 @@ def create_new_session(
         )
         return
 
-    # Display message
-    display_name = f"{name} ({issue_key})" if issue_key else name
-    console.print(f"\n[green]✓[/green] Created session for [bold]{display_name}[/bold] (session )")
+    # Display message (only in non-JSON mode)
+    if not output_json:
+        display_name = f"{name} ({issue_key})" if issue_key else name
+        console.print(f"\n[green]✓[/green] Created session for [bold]{display_name}[/bold] (session )")
 
-    # Display session context - use session.goal which now contains the concatenated value
-    jira_url = config.jira.url if config and config.jira else None
-    _display_session_banner(name, session.goal, working_directory, branch, project_path, session_id, issue_key, jira_url)
+        # Display session context - use session.goal which now contains the concatenated value
+        jira_url = config.jira.url if config and config.jira else None
+        _display_session_banner(name, session.goal, working_directory, branch, project_path, session_id, issue_key, jira_url)
 
     # Check if we should launch Claude Code
     if not should_launch_claude_code(config=config, mock_mode=True):
-        console.print(f"\n[dim]Start later with: daf open {name}[/dim]")
+        if not output_json:
+            console.print(f"\n[dim]Start later with: daf open {name}[/dim]")
         return
 
     # Change to project directory and launch Claude Code

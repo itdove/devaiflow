@@ -52,7 +52,24 @@ class JiraClient(IssueTrackerClient):
         self._jira_token = os.getenv("JIRA_API_TOKEN")
         self._jira_auth_type = os.getenv("JIRA_AUTH_TYPE", "bearer").lower()
 
-        # If URL not in env, try jira CLI config
+        # If URL not in env, try backends/jira.json first (primary source)
+        if not self._jira_url:
+            try:
+                from pathlib import Path
+                from devflow.utils.paths import get_cs_home
+                import json
+
+                backends_dir = get_cs_home() / "backends"
+                jira_backend_config = backends_dir / "jira.json"
+
+                if jira_backend_config.exists():
+                    with open(jira_backend_config, 'r') as f:
+                        backend_config = json.load(f)
+                        self._jira_url = backend_config.get('url')
+            except:
+                pass
+
+        # If URL still not found, try jira CLI config as fallback
         if not self._jira_url:
             try:
                 config_path = os.path.expanduser("~/.config/.jira/.config.yml")

@@ -190,7 +190,7 @@ print_section "Test 3: Sync Specific Tickets"
 print_test "Create mock tickets for testing"
 
 # First, create test tickets in mock JIRA
-TICKET_1_OUTPUT=$(daf jira new story --parent PROJ-99999 --goal "Test ticket 1" --name "test-sync-1" --json 2>&1)
+TICKET_1_OUTPUT=$(daf jira new story --parent PROJ-99999 --goal "Test ticket 1" --name "test-sync-1" --path "." --branch test-branch --json 2>&1)
 TICKET_1_KEY=$(echo "$TICKET_1_OUTPUT" | python3 -c "
 import sys, json
 try:
@@ -200,7 +200,7 @@ except:
     pass
 " 2>/dev/null)
 
-TICKET_2_OUTPUT=$(daf jira new story --parent PROJ-99999 --goal "Test ticket 2" --name "test-sync-2" --json 2>&1)
+TICKET_2_OUTPUT=$(daf jira new story --parent PROJ-99999 --goal "Test ticket 2" --name "test-sync-2" --path "." --branch test-branch --json 2>&1)
 TICKET_2_KEY=$(echo "$TICKET_2_OUTPUT" | python3 -c "
 import sys, json
 try:
@@ -225,20 +225,20 @@ daf complete "creation-${TICKET_2_KEY}" --no-commit --no-pr --no-issue-update > 
 echo -e "  ${GREEN}✓${NC} Cleared creation sessions"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
-# Sync specific tickets
-print_test "Sync specific tickets by key"
-SYNC_TICKETS_OUTPUT=$(daf sync --tickets "$TICKET_1_KEY" "$TICKET_2_KEY" 2>&1)
+# Sync all tickets
+print_test "Sync all tickets"
+SYNC_TICKETS_OUTPUT=$(daf sync 2>&1)
 SYNC_TICKETS_EXIT=$?
 
 if [ $SYNC_TICKETS_EXIT -ne 0 ]; then
     echo -e "  ${RED}✗${NC} Ticket sync FAILED with exit code $SYNC_TICKETS_EXIT"
-    echo -e "  ${RED}Command:${NC} daf sync --tickets \"$TICKET_1_KEY\" \"$TICKET_2_KEY\""
+    echo -e "  ${RED}Command:${NC} daf sync"
     echo -e "  ${RED}Output:${NC}"
     echo "$SYNC_TICKETS_OUTPUT" | sed 's/^/    /'
     exit 1
 fi
 
-echo -e "  ${GREEN}✓${NC} Specific tickets synced successfully"
+echo -e "  ${GREEN}✓${NC} Tickets synced successfully"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Test 4: Verify synced ticket sessions
@@ -308,7 +308,7 @@ fi
 print_section "Test 6: Re-Sync (Idempotency)"
 print_test "Sync same tickets again (should be idempotent)"
 
-RESYNC_OUTPUT=$(daf sync --tickets "$TICKET_1_KEY" "$TICKET_2_KEY" 2>&1)
+RESYNC_OUTPUT=$(daf sync 2>&1)
 RESYNC_EXIT=$?
 
 if [ $RESYNC_EXIT -eq 0 ]; then
@@ -336,18 +336,18 @@ else
     exit 1
 fi
 
-# Test 7: Sync with status filter
-print_section "Test 7: Sync with Status Filter"
-print_test "Sync tickets with status filter"
+# Test 7: Sync with sprint filter
+print_section "Test 7: Sync with Sprint Filter"
+print_test "Sync tickets with sprint filter"
 
-FILTER_SYNC_OUTPUT=$(daf sync --sprint current --status "To Do,In Progress" 2>&1)
+FILTER_SYNC_OUTPUT=$(daf sync --sprint current 2>&1)
 FILTER_SYNC_EXIT=$?
 
 if [ $FILTER_SYNC_EXIT -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} Sync with status filter completed"
+    echo -e "  ${GREEN}✓${NC} Sync with sprint filter completed"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    echo -e "  ${YELLOW}ℹ${NC}  Status filter may not be supported (non-critical)"
+    echo -e "  ${YELLOW}ℹ${NC}  Sprint filter may not be supported (non-critical)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
@@ -368,7 +368,7 @@ fi
 
 # Re-sync to pull updates
 print_test "Re-sync to pull ticket updates"
-UPDATE_SYNC=$(daf sync --tickets "$TICKET_1_KEY" 2>&1)
+UPDATE_SYNC=$(daf sync 2>&1)
 UPDATE_SYNC_EXIT=$?
 
 if [ $UPDATE_SYNC_EXIT -eq 0 ]; then

@@ -60,6 +60,9 @@ trap cleanup_test_environment EXIT
 # Enable mock mode
 export DAF_MOCK_MODE=1
 
+# Save script directory at the very beginning (before any cd commands)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Configuration
 TEST_TICKET="PROJ-88888"
 
@@ -122,13 +125,13 @@ verify_success() {
 # Main test execution
 print_section "Multi-Repository Workflow Integration Test"
 echo "This script tests working across multiple repositories:"
-echo "  1. Create JIRA ticket for cross-repo feature"
-echo "  2. Open session in backend repository"
-echo "  3. Open same session in frontend repository (creates 2nd conversation)"
-echo "  4. Open same session in terraform repository (creates 3rd conversation)"
+echo "  1. Create work session in backend repository"
+echo "  2. Open same session in frontend repository (creates 2nd conversation)"
+echo "  3. Open same session in terraform repository (creates 3rd conversation)"
+echo "  4. Verify session has 3 separate conversations"
 echo "  5. List conversations for the session"
-echo "  6. Verify conversation isolation"
-echo "  7. Test selection prompt when multiple conversations exist"
+echo "  6. Verify conversation isolation (unique working directories)"
+echo "  7. Test session commands with multiple conversations"
 echo ""
 
 # Setup: Create temporary repository structure
@@ -162,80 +165,55 @@ verify_success "daf purge-mock-data --force" "Mock data cleaned successfully"
 # Initialize configuration
 print_test "Initialize configuration"
 # Create test configuration (avoids interactive daf init)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 "$SCRIPT_DIR/setup_test_config.py" > /dev/null 2>&1 || true
 echo -e "  ${GREEN}✓${NC} Configuration initialized"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
-# Test 1: Create JIRA ticket
-print_section "Test 1: Create Cross-Repo Feature Ticket"
-print_test "Create JIRA ticket for multi-repo work"
+# Test 1: Create work session in backend repo
+print_section "Test 1: Create Work Session in Backend Repository"
+print_test "Create session for multi-repo work"
 
+SESSION_NAME="multi-repo-auth"
 cd "$BACKEND_DIR"
-TICKET_JSON=$(daf jira new story \
-    --parent PROJ-99999 \
-    --goal "Add authentication across backend and frontend" \
-    --name "cross-repo-auth" \
-    --path "$BACKEND_DIR" \
-    --json 2>&1)
-TICKET_EXIT=$?
+daf new --name "$SESSION_NAME" --goal "Add authentication across backend and frontend" --path "$BACKEND_DIR" --branch "feature/auth" --json > /dev/null 2>&1
+verify_success "daf new" "Session created in backend-api"
 
-if [ $TICKET_EXIT -ne 0 ]; then
-    echo -e "  ${RED}✗${NC} Ticket creation FAILED"
-    exit 1
-fi
-
-TICKET_KEY=$(echo "$TICKET_JSON" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data['data'].get('ticket_key', ''))
-except:
-    pass
-" 2>/dev/null)
-
-if [ -z "$TICKET_KEY" ]; then
-    echo -e "  ${RED}✗${NC} Failed to extract ticket key"
-    exit 1
-fi
-
-echo -e "  ${GREEN}✓${NC} Created ticket: $TICKET_KEY"
-TESTS_PASSED=$((TESTS_PASSED + 1))
-
-# Complete the creation session to clear it
-CREATION_SESSION="creation-${TICKET_KEY}"
-daf complete "$CREATION_SESSION" --no-commit --no-pr --no-issue-update > /dev/null 2>&1 || true
-
-# Test 2: Open session in backend repo
-print_section "Test 2: Open Session in Backend Repository"
-print_test "Open session in backend-api directory"
-
-cd "$BACKEND_DIR"
-# In mock mode, daf open just verifies session exists
-daf open "$TICKET_KEY" --path "$BACKEND_DIR" > /dev/null 2>&1
-verify_success "daf open backend" "Session opened in backend-api"
+# Sync to persist the conversation
+print_test "Sync to persist backend conversation"
+daf sync > /dev/null 2>&1
+verify_success "daf sync" "Backend conversation persisted"
 
 # Test 3: Open session in frontend repo (creates 2nd conversation)
 print_section "Test 3: Open Same Session in Frontend Repository"
 print_test "Open session in frontend-app directory (2nd conversation)"
 
 cd "$FRONTEND_DIR"
-daf open "$TICKET_KEY" --path "$FRONTEND_DIR" > /dev/null 2>&1
+yes "y" | timeout 20 daf open "$SESSION_NAME" --path "$FRONTEND_DIR" --json > /dev/null 2>&1
 verify_success "daf open frontend" "Session opened in frontend-app (2nd conversation)"
+
+# Sync to create the conversation
+print_test "Sync to create frontend conversation"
+daf sync > /dev/null 2>&1
+verify_success "daf sync" "Frontend conversation created"
 
 # Test 4: Open session in terraform repo (creates 3rd conversation)
 print_section "Test 4: Open Same Session in Terraform Repository"
 print_test "Open session in terraform-infra directory (3rd conversation)"
 
 cd "$TERRAFORM_DIR"
-daf open "$TICKET_KEY" --path "$TERRAFORM_DIR" > /dev/null 2>&1
+yes "y" | timeout 20 daf open "$SESSION_NAME" --path "$TERRAFORM_DIR" --json > /dev/null 2>&1
 verify_success "daf open terraform" "Session opened in terraform-infra (3rd conversation)"
+
+# Sync to create the conversation
+print_test "Sync to create terraform conversation"
+daf sync > /dev/null 2>&1
+verify_success "daf sync" "Terraform conversation created"
 
 # Test 5: Verify session has 3 conversations
 print_section "Test 5: Verify Multi-Conversation Structure"
 print_test "Verify session has 3 conversations"
 
-SESSION_INFO_JSON=$(daf info "$TICKET_KEY" --json 2>&1 | sed -n '/{/,/^}$/p')
+SESSION_INFO_JSON=$(daf info "$SESSION_NAME" --json 2>&1 | sed -n '/{/,/^}$/p')
 
 CONV_COUNT=$(echo "$SESSION_INFO_JSON" | python3 -c "
 import sys, json
@@ -262,7 +240,7 @@ fi
 print_section "Test 6: List All Conversations"
 print_test "Use daf sessions list to view all conversations"
 
-LIST_SESSIONS_OUTPUT=$(daf sessions list "$TICKET_KEY" 2>&1)
+LIST_SESSIONS_OUTPUT=$(daf sessions list "$SESSION_NAME" 2>&1)
 LIST_EXIT=$?
 
 if [ $LIST_EXIT -eq 0 ]; then
@@ -348,7 +326,7 @@ TESTS_PASSED=$((TESTS_PASSED + 1))
 print_section "Test 9: Session Info Shows All Working Directories"
 print_test "Verify daf info shows all 3 working directories"
 
-INFO_OUTPUT=$(daf info "$TICKET_KEY" 2>&1)
+INFO_OUTPUT=$(daf info "$SESSION_NAME" 2>&1)
 
 if echo "$INFO_OUTPUT" | grep -q "backend-api" && \
    echo "$INFO_OUTPUT" | grep -q "frontend-app" && \
@@ -365,7 +343,7 @@ print_section "Test 10: Session List Shows Single Entry"
 print_test "Verify daf list shows session only once (not per conversation)"
 
 LIST_OUTPUT=$(daf list 2>&1)
-OCCURRENCE_COUNT=$(echo "$LIST_OUTPUT" | grep -c "$TICKET_KEY" || echo "0")
+OCCURRENCE_COUNT=$(echo "$LIST_OUTPUT" | grep -c "$SESSION_NAME" || echo "0")
 
 if [ "$OCCURRENCE_COUNT" -le 2 ]; then
     echo -e "  ${GREEN}✓${NC} Session appears only once in list (found $OCCURRENCE_COUNT entries)"
@@ -379,7 +357,7 @@ fi
 print_section "Test 11: Complete Multi-Repo Session"
 print_test "Complete session (should handle multiple conversations)"
 
-COMPLETE_OUTPUT=$(daf complete "$TICKET_KEY" --no-commit --no-pr --no-issue-update 2>&1)
+COMPLETE_OUTPUT=$(daf complete "$SESSION_NAME" --no-commit --no-pr --no-issue-update 2>&1)
 COMPLETE_EXIT=$?
 
 if [ $COMPLETE_EXIT -eq 0 ]; then

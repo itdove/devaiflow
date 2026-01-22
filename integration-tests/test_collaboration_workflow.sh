@@ -260,6 +260,7 @@ EOF
         --parent PROJ-99999 \
         --goal "Test collaboration workflow" \
         --path "$TEST_REPO_DIR" \
+        --branch test-collab-branch \
         --json 2>&1)
 
     # Extract both ticket key and session name
@@ -481,8 +482,11 @@ except:
 
     # Export manually (daf complete would need interactive input)
     # Provide "n" to skip pushing branch to remote prompt
+    # Temporarily disable set -e to capture export errors
+    set +e
     EXPORT_OUTPUT=$(echo "n" | daf export "$SESSION_NAME" --output "/tmp/${SESSION_NAME}-session-export.tar.gz" 2>&1)
     EXPORT_STATUS=$?
+    set -e
 
     if [ $EXPORT_STATUS -ne 0 ]; then
         print_error "Failed to export session"
@@ -583,11 +587,20 @@ EOF
 
     # Verify session is visible
     print_step "Verifying session is visible in Developer B's environment"
-    daf list 2>&1 | grep -q "$SESSION_NAME" || {
+
+    # Use daf info to check for session existence (more reliable than grepping formatted output)
+    if daf info "$SESSION_NAME" >/dev/null 2>&1; then
+        print_success "Session $SESSION_NAME is visible"
+    else
         print_error "Session $SESSION_NAME not found after import"
+        echo "Debug: daf list output:"
+        daf list 2>&1
+        echo "Debug: Checking sessions directory..."
+        ls -la "$DEVAIFLOW_HOME/sessions/" 2>&1 || echo "Sessions directory doesn't exist"
+        echo "Debug: Checking mocks directory..."
+        ls -la "$DEVAIFLOW_HOME/mocks/" 2>&1 || echo "Mocks directory doesn't exist"
         exit 1
-    }
-    print_success "Session $SESSION_NAME is visible"
+    fi
 
     # Verify notes are preserved in export/import
     print_step "Verifying session notes are preserved after import"

@@ -153,7 +153,8 @@ class ExportManager(ArchiveManagerBase):
             # between different DEVAIFLOW_HOME environments
             from devflow.utils import is_mock_mode
             if is_mock_mode():
-                mocks_dir = self.config_loader.get_data_dir() / "mocks"
+                from devflow.utils.paths import get_cs_home
+                mocks_dir = get_cs_home() / "mocks"
                 if mocks_dir.exists():
                     tar.add(mocks_dir, arcname="mocks")
 
@@ -404,7 +405,8 @@ class ExportManager(ArchiveManagerBase):
             if mocks_dir.exists():
                 from devflow.utils import is_mock_mode
                 if is_mock_mode():
-                    target_mocks_dir = self.config_loader.get_data_dir() / "mocks"
+                    from devflow.utils.paths import get_cs_home
+                    target_mocks_dir = get_cs_home() / "mocks"
                     if target_mocks_dir.exists() and not merge:
                         shutil.rmtree(target_mocks_dir)
                     shutil.copytree(mocks_dir, target_mocks_dir, dirs_exist_ok=True)

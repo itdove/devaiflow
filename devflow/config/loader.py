@@ -638,15 +638,22 @@ class ConfigLoader:
         """
         from datetime import datetime
         import shutil
+        import sys
 
         # Check if in JSON mode - suppress output if so
         show_output = True
-        try:
-            from devflow.cli.utils import is_json_mode
-            if is_json_mode():
-                show_output = False
-        except ImportError:
-            pass
+
+        # Check for --json flag in sys.argv first (most reliable)
+        if "--json" in sys.argv:
+            show_output = False
+        else:
+            # Also try is_json_mode() as a backup
+            try:
+                from devflow.cli.utils import is_json_mode
+                if is_json_mode():
+                    show_output = False
+            except ImportError:
+                pass
 
         if show_output:
             console.print("\n[cyan]━━━ Configuration Migration ━━━[/cyan]")

@@ -65,12 +65,24 @@ class JiraFieldMapper:
         except RuntimeError as e:
             # If createmeta fails, use fallback method
             # Don't print note in JSON mode (corrupts JSON output)
-            try:
-                from devflow.cli.utils import is_json_mode
-                if not is_json_mode():
-                    console.print(f"[dim]Note: Using fallback field discovery (createmeta unavailable)[/dim]")
-            except ImportError:
+            import sys
+            should_print = True
+
+            # Check for --json flag in sys.argv first (most reliable)
+            if "--json" in sys.argv:
+                should_print = False
+            else:
+                # Also try is_json_mode() as a backup
+                try:
+                    from devflow.cli.utils import is_json_mode
+                    if is_json_mode():
+                        should_print = False
+                except ImportError:
+                    pass
+
+            if should_print:
                 console.print(f"[dim]Note: Using fallback field discovery (createmeta unavailable)[/dim]")
+
             field_mappings = self._parse_field_metadata_fallback(all_fields)
 
         # Note: Required field fallbacks are now handled via config patches

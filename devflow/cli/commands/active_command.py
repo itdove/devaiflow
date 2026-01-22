@@ -21,6 +21,7 @@ def show_active(output_json: bool = False) -> None:
         output_json: Output in JSON format (default: False)
     """
     config_loader = ConfigLoader()
+    config = config_loader.load_config()
     session_manager = SessionManager(config_loader)
 
     # Get active conversation
@@ -57,7 +58,7 @@ def show_active(output_json: bool = False) -> None:
     current_work_time = f"{hours}h {minutes}m"
 
     # Format project path display
-    workspace = config_loader.config.repos.workspace if config_loader.config else None
+    workspace = config.repos.workspace if config else None
     project_path = conversation.get_project_path(workspace)
 
     # JSON output mode

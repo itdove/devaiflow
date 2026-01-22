@@ -311,7 +311,10 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
     if goal:
         goal = resolve_goal_input(goal)
 
-    create_new_session(name, goal, working_directory, path, branch, jira, template, new_session)
+    # Get output_json flag from context
+    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+
+    create_new_session(name, goal, working_directory, path, branch, jira, template, new_session, output_json)
 
 
 @cli.command()
@@ -469,6 +472,10 @@ def note(ctx: click.Context, identifier: str, note: str, sync_to_jira: bool, lat
     (requires session to have a issue key).
     """
     from devflow.cli.commands.note_command import add_note
+    from devflow.cli.utils import check_outside_ai_session
+
+    # Block this command inside AI agent sessions
+    check_outside_ai_session()
 
     add_note(identifier, note, sync_to_jira=sync_to_jira, latest=latest)
 
@@ -576,6 +583,36 @@ def time(ctx: click.Context, identifier: str, latest: bool) -> None:
     from devflow.cli.commands.time_command import show_time
 
     show_time(identifier, latest=latest)
+
+
+@cli.command()
+@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
+@click.option("--latest", is_flag=True, help="Use the most recently active session")
+@json_option
+def pause(ctx: click.Context, identifier: str, latest: bool) -> None:
+    """Pause time tracking for a session.
+
+    IDENTIFIER can be either a session group name or issue tracker key.
+    If not provided or --latest is specified, uses the most recently active session.
+    """
+    from devflow.cli.commands.pause_command import pause_time_tracking
+
+    pause_time_tracking(identifier, latest=latest)
+
+
+@cli.command()
+@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
+@click.option("--latest", is_flag=True, help="Use the most recently active session")
+@json_option
+def resume(ctx: click.Context, identifier: str, latest: bool) -> None:
+    """Resume time tracking for a session.
+
+    IDENTIFIER can be either a session group name or issue tracker key.
+    If not provided or --latest is specified, uses the most recently active session.
+    """
+    from devflow.cli.commands.resume_command import resume_time_tracking
+
+    resume_time_tracking(identifier, latest=latest)
 
 
 @cli.command()

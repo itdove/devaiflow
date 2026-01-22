@@ -405,8 +405,14 @@ def _display_time_tracking(session: Session) -> None:
     Args:
         session: Session object
     """
+    # Display time tracking state
+    if session.time_tracking_state == "running":
+        console.print("[bold]Time Tracking:[/bold] [green]running[/green]")
+    else:
+        console.print("[bold]Time Tracking:[/bold] [yellow]paused[/yellow]")
+
     if not session.work_sessions:
-        console.print("[dim]No time tracked[/dim]")
+        console.print("[dim]No time tracked yet[/dim]")
         return
 
     # Calculate total time by user
@@ -414,13 +420,13 @@ def _display_time_tracking(session: Session) -> None:
     total_seconds = session.total_time_seconds()
 
     if total_seconds == 0:
-        console.print("[dim]No time tracked[/dim]")
+        console.print("[dim]No time tracked yet[/dim]")
         return
 
     hours = int(total_seconds // 3600)
     minutes = int((total_seconds % 3600) // 60)
 
-    console.print(f"[bold]Time Tracked:[/bold] {hours}h {minutes}m")
+    console.print(f"[bold]Total Time:[/bold] {hours}h {minutes}m")
 
     # Show per-user breakdown if multiple users
     if len(time_by_user) > 1:
