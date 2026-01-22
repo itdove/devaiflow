@@ -1,5 +1,6 @@
 """Tests for daf link and unlink commands with JIRA validation."""
 
+import json
 import pytest
 from click.testing import CliRunner
 
@@ -195,3 +196,176 @@ def test_link_updates_goal_with_issue_info(mock_jira_cli, temp_daf_home):
     assert sessions[0].issue_key == "PROJ-59070"
     # Goal should be updated to: "{ISSUE_KEY}: {JIRA_TITLE}"
     assert sessions[0].goal == "PROJ-59070: Store concatenated goal in session.goal field"
+
+
+def test_link_with_force_flag_replaces_without_prompt(mock_jira_cli, temp_daf_home):
+    """Test that --force flag skips confirmation when replacing existing link (AAP-63885)."""
+    # Setup: Configure mock issue tracker tickets
+    mock_jira_cli.set_ticket("PROJ-1", {
+        "key": "PROJ-1",
+        "fields": {
+            "summary": "First ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+    mock_jira_cli.set_ticket("PROJ-2", {
+        "key": "PROJ-2",
+        "fields": {
+            "summary": "Second ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+
+    runner = CliRunner()
+
+    # Step 1: Create a session and link to PROJ-1
+    result = runner.invoke(cli, [
+        "new",
+        "--name", "test-session",
+        "--goal", "Test",
+        "--jira", "PROJ-1",
+        "--path", str(temp_daf_home / "test-project")
+    ], input="n\n")  # Don't launch Claude
+    assert result.exit_code == 0
+
+    # Step 2: Link to PROJ-2 with --force (should not prompt)
+    result = runner.invoke(cli, [
+        "link",
+        "test-session",
+        "--jira", "PROJ-2",
+        "--force"
+    ])
+
+    # Verify: Command succeeded without prompting
+    assert result.exit_code == 0
+    assert "PROJ-2" in result.output
+
+    # Verify: Session now has PROJ-2
+    config_loader = ConfigLoader()
+    sessions_index = config_loader.load_sessions()
+    sessions = sessions_index.get_sessions("test-session")
+    assert sessions is not None
+    assert len(sessions) > 0
+    assert sessions[0].issue_key == "PROJ-2"
+    assert sessions[0].goal == "PROJ-2: Second ticket"
+
+
+def test_link_with_json_flag_non_interactive(mock_jira_cli, temp_daf_home):
+    """Test that --json flag returns valid JSON without prompting (AAP-63885)."""
+    # Setup: Configure mock issue tracker tickets
+    mock_jira_cli.set_ticket("PROJ-1", {
+        "key": "PROJ-1",
+        "fields": {
+            "summary": "First ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+    mock_jira_cli.set_ticket("PROJ-2", {
+        "key": "PROJ-2",
+        "fields": {
+            "summary": "Second ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+
+    runner = CliRunner()
+
+    # Step 1: Create a session and link to PROJ-1
+    result = runner.invoke(cli, [
+        "new",
+        "--name", "test-session",
+        "--goal", "Test",
+        "--jira", "PROJ-1",
+        "--path", str(temp_daf_home / "test-project")
+    ], input="n\n")  # Don't launch Claude
+    assert result.exit_code == 0
+
+    # Step 2: Link to PROJ-2 with --json (should not prompt, auto-replace)
+    result = runner.invoke(cli, [
+        "link",
+        "test-session",
+        "--jira", "PROJ-2",
+        "--json"
+    ])
+
+    # Verify: Command succeeded
+    assert result.exit_code == 0
+
+    # Verify: Output is valid JSON
+    output_data = json.loads(result.output)
+    assert output_data["success"] is True
+    assert output_data["data"]["issue_key"] == "PROJ-2"
+    assert output_data["data"]["session_group"] == "test-session"
+    assert output_data["data"]["replaced"] == "PROJ-1"
+
+    # Verify: Session now has PROJ-2
+    config_loader = ConfigLoader()
+    sessions_index = config_loader.load_sessions()
+    sessions = sessions_index.get_sessions("test-session")
+    assert sessions is not None
+    assert len(sessions) > 0
+    assert sessions[0].issue_key == "PROJ-2"
+
+
+def test_link_json_error_for_invalid_session(mock_jira_cli, temp_daf_home):
+    """Test that --json flag returns valid JSON error for invalid session (AAP-63885)."""
+    # Setup: Configure mock issue tracker ticket
+    mock_jira_cli.set_ticket("PROJ-1", {
+        "key": "PROJ-1",
+        "fields": {"summary": "Test", "status": {"name": "New"}}
+    })
+
+    runner = CliRunner()
+
+    # Try to link to non-existent session with --json
+    result = runner.invoke(cli, [
+        "link",
+        "nonexistent-session",
+        "--jira", "PROJ-1",
+        "--json"
+    ])
+
+    # Verify: Command failed
+    assert result.exit_code != 0
+
+    # Verify: Output is valid JSON error
+    output_data = json.loads(result.output)
+    assert output_data["success"] is False
+    assert "error" in output_data
+    assert output_data["error"]["code"] == "NOT_FOUND"
+    assert "not found" in output_data["error"]["message"].lower()
+
+
+def test_link_json_error_for_invalid_jira(mock_jira_cli, temp_daf_home):
+    """Test that --json flag returns valid JSON error for invalid JIRA ticket (AAP-63885)."""
+    runner = CliRunner()
+
+    # Step 1: Create a session
+    result = runner.invoke(cli, [
+        "new",
+        "--name", "test-session",
+        "--goal", "Test",
+        "--path", str(temp_daf_home / "test-project")
+    ], input="n\n")  # Don't launch Claude
+    assert result.exit_code == 0
+
+    # Step 2: Try to link to non-existent JIRA ticket with --json
+    result = runner.invoke(cli, [
+        "link",
+        "test-session",
+        "--jira", "PROJ-99999",
+        "--json"
+    ])
+
+    # Verify: Command failed
+    assert result.exit_code != 0
+
+    # Verify: Output is valid JSON error
+    output_data = json.loads(result.output)
+    assert output_data["success"] is False
+    assert "error" in output_data
+    assert output_data["error"]["code"] == "VALIDATION_ERROR"

@@ -7,7 +7,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Confirm
 
-from devflow.cli.utils import require_outside_claude
+from devflow.cli.utils import require_outside_claude, is_json_mode, console_print, output_json
 from devflow.config.loader import ConfigLoader
 from devflow.jira import JiraClient
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
@@ -52,31 +52,39 @@ def _fetch_issue_metadata_dict(issue_key: str) -> Optional[dict]:
 def link_jira(
     name: str,
     issue_key: str,
+    force: bool = False,
 ) -> None:
     """Link a issue tracker ticket to a session group.
 
     Args:
         name: Session group name
         issue_key: issue tracker key to link
+        force: Skip confirmation prompts
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
     # Fetch JIRA metadata (validates ticket exists)
     try:
-        console.print(f"\n[cyan]Fetching issue tracker ticket {issue_key}...[/cyan]")
+        console_print(f"\n[cyan]Fetching issue tracker ticket {issue_key}...[/cyan]")
         issue_metadata_dict = _fetch_issue_metadata_dict(issue_key)
-        console.print(f"[green]✓[/green] issue tracker ticket {issue_key} exists")
-        console.print(f"[dim]Status: {issue_metadata_dict.get('status')}, Type: {issue_metadata_dict.get('type')}[/dim]")
+        console_print(f"[green]✓[/green] issue tracker ticket {issue_key} exists")
+        console_print(f"[dim]Status: {issue_metadata_dict.get('status')}, Type: {issue_metadata_dict.get('type')}[/dim]")
     except RuntimeError as e:
-        console.print(f"[red]✗[/red] {e}")
+        if is_json_mode():
+            output_json(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)})
+        else:
+            console.print(f"[red]✗[/red] {e}")
         sys.exit(1)
 
     # Get all sessions in the group
     sessions = session_manager.index.get_sessions(name)
 
     if not sessions:
-        console.print(f"[red]✗[/red] Session group '{name}' not found")
+        if is_json_mode():
+            output_json(success=False, error={"code": "NOT_FOUND", "message": f"Session group '{name}' not found"})
+        else:
+            console.print(f"[red]✗[/red] Session group '{name}' not found")
         sys.exit(1)
 
     # Check if any session already has a issue key
@@ -87,10 +95,17 @@ def link_jira(
             break
 
     if existing_jira:
-        console.print(f"[yellow]⚠[/yellow] Session group '{name}' is already linked to {existing_jira}")
-        if not Confirm.ask(f"Replace {existing_jira} with {issue_key}?", default=False):
-            console.print("[dim]Link operation cancelled[/dim]")
-            sys.exit(0)
+        # In JSON mode or with --force, automatically replace without prompting
+        if not force and not is_json_mode():
+            console.print(f"[yellow]⚠[/yellow] Session group '{name}' is already linked to {existing_jira}")
+            if not Confirm.ask(f"Replace {existing_jira} with {issue_key}?", default=False):
+                console.print("[dim]Link operation cancelled[/dim]")
+                if is_json_mode():
+                    output_json(success=False, error={"code": "CANCELLED", "message": "Link operation cancelled by user"})
+                sys.exit(0)
+        else:
+            console_print(f"[yellow]⚠[/yellow] Replacing existing link {existing_jira} with {issue_key}")
+
 
     # Update all sessions in the group
     for session in sessions:
@@ -116,12 +131,24 @@ def link_jira(
 
         session_manager.update_session(session)
 
-    console.print(f"[green]✓[/green] Linked session group '{name}' to {issue_key}")
-    console.print(f"[dim]All {len(sessions)} session(s) in group now associated with {issue_key}[/dim]")
-    console.print()
-    console.print(f"[dim]You can now use either identifier:[/dim]")
-    console.print(f"  daf open {name}")
-    console.print(f"  daf open {issue_key}")
+    if is_json_mode():
+        output_json(
+            success=True,
+            data={
+                "session_group": name,
+                "issue_key": issue_key,
+                "sessions_updated": len(sessions),
+                "replaced": existing_jira,
+                "metadata": issue_metadata_dict
+            }
+        )
+    else:
+        console.print(f"[green]✓[/green] Linked session group '{name}' to {issue_key}")
+        console.print(f"[dim]All {len(sessions)} session(s) in group now associated with {issue_key}[/dim]")
+        console.print()
+        console.print(f"[dim]You can now use either identifier:[/dim]")
+        console.print(f"  daf open {name}")
+        console.print(f"  daf open {issue_key}")
 
 
 @require_outside_claude

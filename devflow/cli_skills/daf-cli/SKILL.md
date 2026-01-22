@@ -38,6 +38,9 @@ daf open PROJ-12345 --path repo-name
 # Start fresh conversation (archive current, create new)
 daf open PROJ-12345 --new-conversation
 
+# JSON output for automation/CI-CD
+daf open PROJ-12345 --json
+
 # Show current status
 daf status
 
@@ -77,6 +80,27 @@ daf complete --latest
 # Attach session export to JIRA
 daf complete PROJ-12345 --attach-to-jira
 ```
+
+### Linking JIRA to Sessions
+
+```bash
+# Link JIRA ticket to existing session
+daf link session-name --jira PROJ-12345
+
+# Replace existing link without confirmation (automation)
+daf link session-name --jira PROJ-67890 --force
+
+# JSON output for automation/CI-CD
+daf link session-name --jira PROJ-12345 --json
+
+# Unlink JIRA from session
+daf unlink session-name
+```
+
+**Key features:**
+- `--force` - Skip confirmation prompts when replacing existing JIRA links
+- `--json` - Non-interactive mode with JSON output (auto-replaces existing links)
+- Both flags enable automation in CI/CD pipelines and scripts
 
 ## JIRA Integration
 

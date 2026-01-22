@@ -415,6 +415,7 @@ daf open <NAME-or-JIRA> [OPTIONS]
 
 **Options:**
 - `--new-conversation` - Archive current Claude Code conversation and start fresh with a new one
+- `--json` - Return JSON output (non-interactive mode, bypasses prompts)
 
 **Examples:**
 ```bash
@@ -429,6 +430,9 @@ daf open
 
 # Start fresh conversation (archive current, create new)
 daf open PROJ-12345 --new-conversation
+
+# JSON output for automation
+daf open PROJ-12345 --json
 ```
 
 **What happens:**
@@ -1006,19 +1010,35 @@ daf new --name PROJ-59815 --goal "Fresh approach" --jira PROJ-59815
 Link a JIRA ticket to an existing session.
 
 ```bash
-daf link <NAME> --jira <JIRA-KEY>
+daf link <NAME> --jira <JIRA-KEY> [--force] [--json]
 ```
+
+**Options:**
+- `--force` - Skip confirmation prompts (auto-replace existing links)
+- `--json` - Return JSON output (non-interactive, auto-replace existing links)
 
 **Example:**
 ```bash
+# Basic usage
 daf link redis-test --jira PROJ-12345
+
+# Replace existing link without confirmation
+daf link redis-test --jira PROJ-67890 --force
+
+# JSON output for automation
+daf link redis-test --jira PROJ-12345 --json
 ```
 
 **What it does:**
 1. Validates JIRA ticket exists
 2. Fetches ticket metadata (title, status, sprint)
-3. Links ticket to session group
+3. Links ticket to session group (prompts if already linked, unless --force or --json is used)
 4. Updates all sessions in the group
+
+**Automation support:**
+- `--force` flag skips interactive prompts, automatically replacing existing links
+- `--json` flag returns machine-readable JSON output and bypasses all prompts
+- Both flags enable non-interactive usage in CI/CD pipelines and scripts
 
 ---
 
