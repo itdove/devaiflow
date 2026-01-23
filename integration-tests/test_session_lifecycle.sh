@@ -288,7 +288,7 @@ fi
 print_section "Test 5: Unlink Session from JIRA"
 print_test "Unlink session from JIRA ticket"
 
-UNLINK_OUTPUT=$(daf unlink "$TEST_SESSION_1" 2>&1)
+UNLINK_OUTPUT=$(daf unlink "$TEST_SESSION_1" --force 2>&1)
 UNLINK_EXIT=$?
 
 if [ $UNLINK_EXIT -ne 0 ]; then
