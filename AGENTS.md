@@ -1415,6 +1415,17 @@ class Session(BaseModel):
   - Comprehensive test coverage (14 tests in test_workspace.py)
   - All 67 core tests pass (config + session manager + workspace)
   - Enables VSCode workspace-style multi-branch development workflows
+- ✓ Exclude workspace_name from session export/import for portable team handoffs (AAP-63987)
+  - Export excludes workspace_name field using model_dump(exclude={'workspace_name'})
+  - Imported sessions have workspace_name=None for portability across team members
+  - Workspace selection on first open uses standard priority (flag > default > prompt)
+  - Session remembers workspace choice after first open for future reopens
+  - Prevents workspace conflicts when teammates have different workspace configurations
+  - Session model already supports optional workspace_name field (no migration needed)
+  - Comprehensive test coverage (2 new tests: export exclusion + import handling)
+  - All 2062 tests pass (3 skipped)
+  - Documentation updated in docs/07-commands.md (export + import sections)
+  - Enables flexible team collaboration with machine-specific workspace preferences
 
 ## Release Management
 

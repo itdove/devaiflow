@@ -463,7 +463,7 @@ class ExportManager(ArchiveManagerBase):
                 "includes_conversations": True,  # Always True for team handoff
             },
             "sessions": {
-                session_name: session.model_dump(mode='json')
+                session_name: session.model_dump(mode='json', exclude={'workspace_name'})
                 for session_name, session in sessions.items()
             }
         }
