@@ -274,9 +274,10 @@ def cli(ctx: click.Context) -> None:
 @click.option("--path", help="Project path (defaults to current directory)")
 @click.option("--branch", help="Git branch name (optional)")
 @click.option("--template", help="Template name to use for session configuration")
+@click.option("-w", "--workspace", help="Workspace name to use (overrides session default and config default)")
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, new_session: bool) -> None:
+def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, new_session: bool) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -314,16 +315,17 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
     # Get output_json flag from context
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
 
-    create_new_session(name, goal, working_directory, path, branch, jira, template, new_session, output_json)
+    create_new_session(name, goal, working_directory, path, branch, jira, template, workspace, new_session, output_json)
 
 
 @cli.command()
 @click.argument("identifier", shell_complete=complete_session_identifiers)
 @click.option("--path", help="Project path (auto-detects conversation in multi-conversation sessions)")
+@click.option("-w", "--workspace", help="Workspace name to use (overrides session stored workspace)")
 @click.option("--new-conversation", is_flag=True, help="Create a new conversation (archive current and start fresh)")
 @click.option("--conversation-id", help="Resume a specific archived conversation by its UUID")
 @json_option
-def open(ctx: click.Context, identifier: str, path: str, new_conversation: bool, conversation_id: str) -> None:
+def open(ctx: click.Context, identifier: str, path: str, workspace: str, new_conversation: bool, conversation_id: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -346,6 +348,7 @@ def open(ctx: click.Context, identifier: str, path: str, new_conversation: bool,
         identifier,
         output_json=ctx.obj.get('output_json', False),
         path=path,
+        workspace=workspace,
         new_conversation=new_conversation,
         conversation_id=conversation_id,
     )
@@ -1863,6 +1866,118 @@ def template_delete(ctx: click.Context, template_name: str, force: bool) -> None
     from devflow.cli.commands.template_commands import delete_template
 
     delete_template(template_name, force)
+
+
+# Workspace management commands (AAP-63377)
+@cli.group()
+@json_option
+def workspace(ctx: click.Context) -> None:
+    """Manage multiple named workspaces for concurrent development."""
+    pass
+
+
+@workspace.command(name="list")
+@json_option
+def workspace_list(ctx: click.Context) -> None:
+    """List all configured workspaces.
+
+    Shows workspace name, path, and default status.
+
+    Example:
+        daf workspace list
+    """
+    from devflow.cli.commands.workspace_commands import list_workspaces
+
+    list_workspaces()
+
+
+@workspace.command(name="add")
+@json_option
+@click.argument("name", required=False)
+@click.argument("path", required=False)
+@click.option("--default", "set_default", is_flag=True, help="Set as default workspace")
+def workspace_add(ctx: click.Context, name: str, path: str, set_default: bool) -> None:
+    """Add a new workspace.
+
+    NAME is a unique workspace identifier (e.g., 'primary', 'product-a', 'feat-caching').
+    PATH is the directory path for the workspace (supports ~ expansion).
+
+    If only PATH is provided (looks like a path with /), the workspace name
+    will be auto-derived from the last directory component.
+
+    If not provided, will prompt for input.
+
+    Examples:
+        daf workspace add primary ~/development --default
+        daf workspace add product-a ~/repos/product-a
+        daf workspace add ~/development/my-project        # Auto-derives name: my-project
+        daf workspace add                                  # Interactive mode
+    """
+    from devflow.cli.commands.workspace_commands import add_workspace
+
+    add_workspace(name, path, set_default)
+
+
+@workspace.command(name="remove")
+@json_option
+@click.argument("name", required=False)
+def workspace_remove(ctx: click.Context, name: str) -> None:
+    """Remove a workspace.
+
+    NAME is the workspace to remove.
+    If not provided, will show a list and prompt for selection.
+
+    Examples:
+        daf workspace remove feat-caching
+        daf workspace remove          # Interactive mode
+    """
+    from devflow.cli.commands.workspace_commands import remove_workspace
+
+    remove_workspace(name)
+
+
+@workspace.command(name="set-default")
+@json_option
+@click.argument("name", required=False)
+def workspace_set_default(ctx: click.Context, name: str) -> None:
+    """Set a workspace as the default.
+
+    NAME is the workspace to set as default.
+    If not provided, will show a list and prompt for selection.
+
+    The default workspace is used when no --workspace flag is provided
+    and the session doesn't have a stored workspace preference.
+
+    Examples:
+        daf workspace set-default primary
+        daf workspace set-default          # Interactive mode
+    """
+    from devflow.cli.commands.workspace_commands import set_default_workspace
+
+    set_default_workspace(name)
+
+
+@workspace.command(name="rename")
+@json_option
+@click.argument("old_name", required=False)
+@click.argument("new_name", required=False)
+def workspace_rename(ctx: click.Context, old_name: str, new_name: str) -> None:
+    """Rename a workspace.
+
+    OLD_NAME is the current workspace name.
+    NEW_NAME is the new workspace name.
+    If not provided, will prompt for input.
+
+    This command also updates all sessions that use the old workspace name
+    to use the new name automatically.
+
+    Examples:
+        daf workspace rename old-name new-name
+        daf workspace rename                   # Interactive mode
+    """
+    from devflow.cli.commands.workspace_commands import rename_workspace
+
+    rename_workspace(old_name, new_name)
 
 
 @cli.command()

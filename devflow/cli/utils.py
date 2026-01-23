@@ -650,37 +650,49 @@ def check_concurrent_session(
     session_manager: SessionManager,
     project_path: str,
     current_session_name: str,
+    workspace_name: Optional[str] = None,
     action: str = "create"
 ) -> bool:
-    """Check for concurrent active sessions in the same project.
+    """Check for concurrent active sessions in the same project and workspace.
 
-    This utility prevents branch switching conflicts by ensuring only one session
-    is active in a project at a time. Called BEFORE any git operations.
+    AAP-63377: Updated to use (project_path, workspace_name) tuple for checking.
+    This allows concurrent sessions on the same project in different workspaces
+    while preventing branch switching conflicts within the same workspace.
 
     Args:
         session_manager: SessionManager instance
         project_path: Absolute path to the project directory
         current_session_name: Name of the session being created/opened
+        workspace_name: Optional workspace name for the session (AAP-63377)
         action: Action being performed ("create" or "open") - used in error message
 
     Returns:
         True if no conflicts (safe to proceed), False if another session is active
 
     Examples:
-        >>> # Before creating a new session
-        >>> if not check_concurrent_session(mgr, "/path/to/repo", "session-a", "create"):
-        ...     return  # Exit, another session is active
-        >>> # Safe to proceed with git operations
+        >>> # Different workspaces - both allowed
+        >>> check_concurrent_session(mgr, "/path/to/repo", "session-a", "feat-caching")
+        True
+        >>> check_concurrent_session(mgr, "/path/to/repo", "session-b", "product-a")
+        True
 
-        >>> # Before opening a session
-        >>> if not check_concurrent_session(mgr, "/path/to/repo", "session-b", "open"):
-        ...     return  # Exit, another session is active
+        >>> # Same workspace - second blocked
+        >>> check_concurrent_session(mgr, "/path/to/repo", "session-a", "feat-caching")
+        True
+        >>> check_concurrent_session(mgr, "/path/to/repo", "session-b", "feat-caching")
+        False
     """
-    active_session = session_manager.get_active_session_for_project(project_path)
+    active_session = session_manager.get_active_session_for_project(
+        project_path,
+        workspace_name=workspace_name
+    )
 
     if active_session and active_session.name != current_session_name:
-        console.print(f"\n[red]Error: Cannot {action} session - another session is already active in this project[/red]")
+        workspace_info = f" in workspace '{workspace_name}'" if workspace_name else ""
+        console.print(f"\n[red]Error: Cannot {action} session - another session is already active in this project{workspace_info}[/red]")
         console.print(f"\n[yellow]Active session:[/yellow] {active_session.name}")
+        if active_session.workspace_name:
+            console.print(f"[yellow]Workspace:[/yellow] {active_session.workspace_name}")
         active_conv = active_session.active_conversation
         if active_conv and active_conv.branch:
             console.print(f"[yellow]Branch:[/yellow] {active_conv.branch}")
@@ -688,7 +700,9 @@ def check_concurrent_session(
         console.print(f"  1. Resume the active session: [bold]daf open {active_session.name}[/bold]")
         console.print(f"  2. Complete it: [bold]daf complete {active_session.name}[/bold]")
         console.print(f"  3. Or pause it manually (exit Claude Code if running)")
-        console.print(f"\n[dim]This prevents branch switching conflicts and mixed changes.[/dim]")
+        if not workspace_name:
+            console.print(f"  4. Or use a different workspace: [bold]daf {action} --workspace <other-workspace>[/bold]")
+        console.print(f"\n[dim]This prevents branch switching conflicts and mixed changes within a workspace.[/dim]")
         return False
 
     return True
@@ -760,3 +774,140 @@ def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool =
         return True
 
     return Confirm.ask("\nLaunch Claude Code?", default=True)
+
+
+def select_workspace(
+    config: Config,
+    workspace_flag: Optional[str] = None,
+    session: Optional[Session] = None,
+    skip_prompt: bool = False
+) -> Optional[str]:
+    """Select a workspace using priority resolution logic.
+
+    Priority order (AAP-63377):
+    1. workspace_flag (--workspace parameter)
+    2. session.workspace_name (previously selected workspace)
+    3. default workspace (is_default=True)
+    4. prompt user (if not skip_prompt)
+
+    Args:
+        config: Config object with workspace definitions
+        workspace_flag: Optional workspace name from --workspace flag
+        session: Optional Session object with stored workspace_name
+        skip_prompt: If True, don't prompt user (return None instead)
+
+    Returns:
+        Selected workspace name or None if no selection made
+
+    Examples:
+        >>> # Use --workspace flag
+        >>> select_workspace(config, workspace_flag="product-a")
+        'product-a'
+
+        >>> # Use session's remembered workspace
+        >>> session.workspace_name = "feat-caching"
+        >>> select_workspace(config, session=session)
+        'feat-caching'
+
+        >>> # Use default workspace
+        >>> select_workspace(config)
+        'default'
+
+        >>> # Prompt user (interactive)
+        >>> select_workspace(config)  # Shows menu
+        'product-a'
+    """
+    from devflow.config.models import WorkspaceDefinition
+    from rich.prompt import Prompt
+
+    # Handle None config or missing repos config
+    if not config or not config.repos:
+        # Gracefully handle missing config - return None to use legacy behavior
+        return None
+
+    # Handle old single-workspace configuration (backward compatibility)
+    # If repos.workspace is set but workspaces list is empty, not using new workspace feature
+    if not config.repos.workspaces or len(config.repos.workspaces) == 0:
+        # Old single-workspace config or no workspaces configured - return None
+        return None
+
+    # Priority 1: --workspace flag
+    if workspace_flag:
+        workspace = config.repos.get_workspace_by_name(workspace_flag)
+        if workspace:
+            console_print(f"[dim]Using workspace from flag: {workspace_flag}[/dim]")
+            return workspace_flag
+        else:
+            console.print(f"[red]Error: Workspace '{workspace_flag}' not found in config[/red]")
+            console.print(f"[dim]Available workspaces: {', '.join(w.name for w in config.repos.workspaces)}[/dim]")
+            sys.exit(1)
+
+    # Priority 2: session.workspace_name (previously selected)
+    if session and session.workspace_name:
+        workspace = config.repos.get_workspace_by_name(session.workspace_name)
+        if workspace:
+            console_print(f"[dim]Using workspace from session: {session.workspace_name}[/dim]")
+            return session.workspace_name
+        else:
+            # Workspace was deleted from config - fall through to next priority
+            console.print(f"[yellow]Warning: Session workspace '{session.workspace_name}' not found in config[/yellow]")
+
+    # Priority 3: default workspace
+    default_workspace = config.repos.get_default_workspace()
+    if default_workspace:
+        if not skip_prompt:
+            console_print(f"[dim]Using default workspace: {default_workspace.name}[/dim]")
+        return default_workspace.name
+
+    # Priority 4: prompt user (if not skipped)
+    if skip_prompt:
+        return None
+
+    # Show workspace selection menu
+    if not config.repos.workspaces:
+        console.print("[red]Error: No workspaces configured[/red]")
+        console.print("[dim]Configure workspaces with: daf workspace add <name> <path>[/dim]")
+        sys.exit(1)
+
+    console.print("\n[cyan]Select workspace:[/cyan]")
+    for idx, workspace in enumerate(config.repos.workspaces, start=1):
+        default_marker = " [default]" if workspace.is_default else ""
+        console.print(f"  {idx}. {workspace.name} ({workspace.path}){default_marker}")
+
+    # Get user selection
+    while True:
+        try:
+            choice = IntPrompt.ask("\nWorkspace", default=1)
+            if 1 <= choice <= len(config.repos.workspaces):
+                selected = config.repos.workspaces[choice - 1]
+                console.print(f"[green]✓[/green] Selected workspace: {selected.name}")
+                return selected.name
+            else:
+                console.print(f"[red]Invalid selection. Please choose 1-{len(config.repos.workspaces)}[/red]")
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Workspace selection cancelled[/yellow]")
+            sys.exit(1)
+
+
+def get_workspace_path(config: Config, workspace_name: Optional[str]) -> Optional[str]:
+    """Get the path for a workspace by name.
+
+    Args:
+        config: Config object with workspace definitions
+        workspace_name: Workspace name to lookup
+
+    Returns:
+        Workspace path or None if not found
+
+    Examples:
+        >>> get_workspace_path(config, "product-a")
+        '/Users/john/repos/product-a'
+
+        >>> get_workspace_path(config, None)
+        None
+    """
+    if not workspace_name:
+        return None
+
+    workspace = config.repos.get_workspace_by_name(workspace_name)
+    return workspace.path if workspace else None

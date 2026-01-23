@@ -350,7 +350,7 @@ print_section "Test 10: Session List Shows Single Entry"
 print_test "Verify daf list shows session only once (not per conversation)"
 
 LIST_OUTPUT=$(daf list 2>&1)
-OCCURRENCE_COUNT=$(echo "$LIST_OUTPUT" | grep -c "$SESSION_NAME" || echo "0")
+OCCURRENCE_COUNT=$(echo "$LIST_OUTPUT" | grep -c "$SESSION_NAME" || true)
 
 if [ "$OCCURRENCE_COUNT" -le 2 ]; then
     echo -e "  ${GREEN}✓${NC} Session appears only once in list (found $OCCURRENCE_COUNT entries)"

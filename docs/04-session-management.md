@@ -10,6 +10,7 @@ A **session** represents one focused piece of work (typically one JIRA ticket) w
 - Session name and ID
 - Goal/description
 - JIRA ticket link (optional)
+- **Workspace** (named workspace location - enables concurrent sessions)
 - Time tracking data (shared across all conversations)
 - Progress notes
 - Status (created, in_progress, paused, complete)
@@ -48,6 +49,86 @@ Status values (as displayed in `daf list` and other commands):
 - **complete** - Work finished, session archived
 
 **Note:** Status values are shown as-is in all outputs and match the filter values used with `--status` flag.
+
+## Workspaces: Concurrent Multi-Branch Development
+
+**Workspaces** enable you to work on the same project with different branches in parallel without conflicts. Each workspace is a named location (like VSCode workspaces) that can have its own active sessions.
+
+### What are Workspaces?
+
+A workspace is a named directory where you organize repositories. Examples:
+- `primary` - Your main development workspace (e.g., `~/development`)
+- `product-a`, `product-b` - Organize repositories by product (e.g., `~/development/product-a`, `~/development/product-b`)
+- `feat-caching` - Experimental caching feature branch (e.g., `~/work/caching`)
+- `client-acme`, `client-globex` - Separate client codebases
+
+### Why Use Workspaces?
+
+**Concurrent Sessions on Same Project:**
+Without workspaces, you can only have ONE active session per project directory at a time. With workspaces, you can work on the same project in different workspaces simultaneously:
+
+```bash
+# Terminal 1: Main development in primary workspace
+daf new --name PROJ-123 -w primary --path ~/development/myproject
+# Working on main branch with one conversation
+
+# Terminal 2: Experimental work in different workspace
+daf new --name PROJ-123 -w experiments --path ~/experiments/myproject
+# Working on experimental branch with separate conversation
+# No conflict! They're in different workspaces.
+```
+
+**Key Benefits:**
+- Work on main branch + experimental feature branch in parallel
+- Organize repos by product, team, or workflow
+- Sessions remember their workspace automatically
+- No conflicts between concurrent sessions
+
+### Workspace Selection Priority
+
+When creating or opening sessions, workspace is resolved in this order:
+
+1. **`-w, --workspace` flag** - Explicit workspace (highest priority)
+2. **Session stored workspace** - Workspace from session creation
+3. **Default workspace** - Workspace marked as default in config
+4. **Interactive prompt** - Select from available workspaces
+
+**Examples:**
+
+```bash
+# Priority 1: -w flag overrides everything
+daf new --name "api-work" -w product-a     # Uses product-a workspace
+daf open api-work -w primary               # Override to primary
+
+# Priority 2: Session remembers workspace
+daf new --name "feature" -w feat-caching   # Creates in feat-caching
+daf open feature                           # Uses feat-caching (remembered)
+
+# Priority 3: Default workspace (no -w, no stored workspace)
+daf new --name "new-work"                  # Uses default workspace
+```
+
+### Managing Workspaces
+
+```bash
+# List all workspaces (can run in Claude sessions)
+daf workspace list
+
+# Add workspace (run OUTSIDE Claude sessions)
+daf workspace add product-a ~/repos/product-a
+daf workspace add primary ~/development --default
+
+# Remove workspace (run OUTSIDE Claude sessions)
+daf workspace remove old-workspace
+
+# Set default (run OUTSIDE Claude sessions)
+# NOTE: For switching, use -w flag instead!
+daf workspace set-default primary
+```
+
+**Important:** Use `-w` flag for switching between workspaces per-session. The `set-default` command is for permanent configuration changes, not for frequent switching.
+
+See [Configuration Guide - Workspaces](06-configuration.md#workspaces-multiple-named-workspaces) for detailed workspace configuration.
 
 ## Working Across Multiple Repositories
 
@@ -302,6 +383,21 @@ daf new --name "api-test" --goal "Test new endpoint" --path /Users/you/projects/
 
 Override automatic repository detection.
 
+### Session in Specific Workspace
+
+```bash
+# Create in named workspace
+daf new --name "feature-work" --goal "Implement caching" -w feat-caching
+
+# Create in product workspace
+daf new --name "api-update" --goal "Update API" -w product-a
+
+# Uses default workspace if -w not specified
+daf new --name "regular-work" --goal "Regular development"
+```
+
+The `-w` (or `--workspace`) flag selects which workspace to use. Sessions remember their workspace for automatic reuse on reopen.
+
 ### Session from Template
 
 ```bash
@@ -319,6 +415,7 @@ Each session stores:
 - **session_id** - Unique numeric ID within the session
 - **goal** - What you're trying to accomplish
 - **status** - created, in_progress, or complete
+- **workspace_name** - Workspace where this session runs (enables concurrent sessions)
 - **working_directory** - Repository name (e.g., "backend-api")
 - **project_path** - Full path to repository
 - **branch** - Git branch name
@@ -357,6 +454,18 @@ daf open redis-test
 ```bash
 daf open PROJ-12345
 ```
+
+### Open with Workspace Override
+
+```bash
+# Override session's stored workspace
+daf open PROJ-12345 -w primary
+
+# Switch to different workspace temporarily
+daf open feature-work -w experiments
+```
+
+The `-w` flag overrides the workspace stored in the session. Sessions remember their workspace from creation, but you can override it when opening.
 
 ### What Happens When Opening
 

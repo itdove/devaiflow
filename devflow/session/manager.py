@@ -230,18 +230,45 @@ class SessionManager:
         )
         return self.storage.list_sessions(self.index, filters)
 
-    def get_active_session_for_project(self, project_path: str) -> Optional[Session]:
-        """Check if there's an active session (status=in_progress) for the given project.
+    def get_active_session_for_project(
+        self,
+        project_path: str,
+        workspace_name: Optional[str] = None
+    ) -> Optional[Session]:
+        """Check if there's an active session for the given project and workspace.
+
+        AAP-63377: Updated to support workspace-aware concurrent session checking.
+        This allows concurrent sessions on the same project in different workspaces
+        while preventing conflicts within the same workspace.
 
         Args:
             project_path: Full path to the project directory
+            workspace_name: Optional workspace name to check (AAP-63377)
 
         Returns:
             Active Session object if found, None otherwise
+
+        Examples:
+            >>> # Check for any active session in project (workspace-agnostic)
+            >>> mgr.get_active_session_for_project("/path/to/repo")
+            <Session name='session-a' workspace_name=None>
+
+            >>> # Check for active session in specific workspace
+            >>> mgr.get_active_session_for_project("/path/to/repo", "feat-caching")
+            <Session name='session-a' workspace_name='feat-caching'>
+
+            >>> # Different workspace - returns None (no conflict)
+            >>> mgr.get_active_session_for_project("/path/to/repo", "product-a")
+            None
         """
-        # Iterate through all sessions to find active ones with matching project_path
+        # Iterate through all sessions to find active ones with matching criteria
         for session in self.index.sessions.values():
             if session.status == "in_progress":
+                # AAP-63377: Check workspace match (if workspace_name is provided)
+                if workspace_name is not None and session.workspace_name != workspace_name:
+                    # Different workspace - skip this session (no conflict)
+                    continue
+
                 # Check if any conversation in this session matches the project_path
                 for conversation in session.conversations.values():
                     # Check all sessions (active + archived) in this Conversation

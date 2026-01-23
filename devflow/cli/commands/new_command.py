@@ -441,6 +441,7 @@ def create_new_session(
     branch: Optional[str] = None,
     issue_key: Optional[str] = None,
     template_name: Optional[str] = None,
+    workspace_name: Optional[str] = None,
     force_new_session: bool = False,
     output_json: bool = False,
 ) -> None:
@@ -454,11 +455,13 @@ def create_new_session(
         branch: Git branch name
         issue_key: Optional issue tracker key
         template_name: Optional template to use for session configuration
+        workspace_name: Optional workspace name (AAP-63377)
         force_new_session: If True, always create new session instead of adding conversation
         output_json: If True, output JSON instead of human-readable text
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
+    config = config_loader.load_config()
 
     # Load or auto-detect template
     from devflow.templates.manager import TemplateManager
@@ -562,8 +565,26 @@ def create_new_session(
     if working_directory is None:
         working_directory = Path(project_path).name
 
+    # AAP-63377: Workspace selection
+    # Check if session already exists to get stored workspace preference
+    existing_session = session_manager.get_session(name)
+
+    # Select workspace using priority resolution
+    from devflow.cli.utils import select_workspace
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag=workspace_name,
+        session=existing_session,
+        skip_prompt=output_json
+    )
+
+    # Get workspace path (will be None if using old single workspace config)
+    workspace_path = None
+    if selected_workspace_name:
+        from devflow.cli.utils import get_workspace_path
+        workspace_path = get_workspace_path(config, selected_workspace_name)
+
     # Auto-create template if enabled and no template was used
-    config = config_loader.load_config()
 
     if config and config.templates.auto_create and not template:
         # Check if template already exists for this directory
@@ -586,7 +607,8 @@ def create_new_session(
         template_manager.update_usage(template.name)
 
     # Check for concurrent active sessions in the same project BEFORE any git operations
-    if not check_concurrent_session(session_manager, project_path, name, action="create"):
+    # AAP-63377: Pass workspace_name to enable workspace-aware concurrent session checking
+    if not check_concurrent_session(session_manager, project_path, name, selected_workspace_name, action="create"):
         return
 
     # Handle git branch creation if this is a git repository
@@ -682,17 +704,21 @@ def create_new_session(
                     return
 
                 console.print(f"\n[cyan]Adding conversation to session [/cyan]")
-                config = config_loader.load_config()
-                workspace = config.repos.workspace if config else None
 
+                # AAP-63377: Use selected workspace path
                 session.add_conversation(
                     working_dir=working_directory,
                     ai_agent_session_id=session_id,
                     project_path=project_path,
                     branch=branch or "",  # branch is required, use empty string if None
-                    workspace=workspace,
+                    workspace=workspace_path,
                 )
                 session.working_directory = working_directory
+
+                # AAP-63377: Update session's workspace if not already set
+                if not session.workspace_name and selected_workspace_name:
+                    session.workspace_name = selected_workspace_name
+
                 session_manager.update_session(session)
 
     # Create session if we didn't add to an existing one
@@ -706,6 +732,11 @@ def create_new_session(
             branch=branch,
             ai_agent_session_id=session_id,
         )
+
+        # AAP-63377: Store selected workspace in session
+        if selected_workspace_name:
+            session.workspace_name = selected_workspace_name
+            session_manager.update_session(session)
 
     # Populate JIRA metadata if available
     if issue_metadata_dict:

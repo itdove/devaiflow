@@ -111,6 +111,7 @@ def open_session(
     output_json: bool = False,
     skip_jira_transition: bool = False,
     path: Optional[str] = None,
+    workspace: Optional[str] = None,
     new_conversation: bool = False,
     conversation_id: Optional[str] = None,
 ) -> None:
@@ -121,11 +122,13 @@ def open_session(
         output_json: If True, output results in JSON format
         skip_jira_transition: If True, skip JIRA status transition (used by daf jira open)
         path: Optional project path to auto-select conversation in multi-conversation sessions
+        workspace: Optional workspace name to override session's stored workspace (AAP-63377)
         new_conversation: If True, create a new conversation (archive current and start fresh) - PROJ-63490
         conversation_id: Optional Claude session UUID to resume specific archived conversation - PROJ-63490
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
+    config = config_loader.load_config()
 
     # Get session using common utility (handles multi-session selection)
     session = get_session_with_prompt(session_manager, identifier, error_if_not_found=False)
@@ -191,6 +194,21 @@ def open_session(
             )
             sys.exit(1)
 
+    # AAP-63377: Workspace selection
+    # Select workspace using priority resolution (--workspace flag > session.workspace_name > default > prompt)
+    from devflow.cli.utils import select_workspace, get_workspace_path
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag=workspace,
+        session=session,
+        skip_prompt=output_json
+    )
+
+    # Get workspace path (will be None if using old single workspace config)
+    workspace_path = None
+    if selected_workspace_name:
+        workspace_path = get_workspace_path(config, selected_workspace_name)
+
     # Handle --conversation-id flag
     # This allows resuming a specific archived conversation
     if conversation_id:
@@ -219,10 +237,7 @@ def open_session(
             console.print(f"[red]✗[/red] No working directory set")
             return
 
-        # Load config for workspace
-        config = config_loader.load_config()
-        workspace = config.repos.workspace if config else None
-
+        # AAP-63377: Use selected workspace path
         # Create new conversation (this archives the current one)
         console.print(f"[yellow]Archiving current conversation ({active_conv.message_count} messages)[/yellow]")
         new_conv = session.create_new_conversation(
@@ -231,7 +246,7 @@ def open_session(
             branch=active_conv.branch,
             base_branch=active_conv.base_branch,
             remote_url=active_conv.remote_url,
-            workspace=workspace,
+            workspace=workspace_path,
         )
 
         console.print(f"[green]✓[/green] Created new conversation with fresh Claude session")
@@ -415,8 +430,9 @@ def open_session(
 
     # Check for concurrent active sessions in the same project BEFORE any git operations
     # This prevents branch switching before warning user about concurrent sessions
+    # AAP-63377: Pass workspace_name to enable workspace-aware concurrent session checking
     if active_conv and active_conv.project_path:
-        if not check_concurrent_session(session_manager, active_conv.project_path, session.name, action="open"):
+        if not check_concurrent_session(session_manager, active_conv.project_path, session.name, selected_workspace_name, action="open"):
             return
 
     # Handle missing branch (can happen with synced sessions on first launch)
@@ -1227,7 +1243,7 @@ def _handle_conversation_selection_without_detection(
 
         # Get workspace for path display
         config = config_loader.load_config()
-        workspace = config.repos.workspace if config else None
+        workspace = config.repos.workspace if config and config.repos else None
         project_path = active.get_project_path(workspace)
 
         # Format last active time
@@ -1471,7 +1487,7 @@ def _create_conversation_from_workspace_selection(
     new_session_id = str(uuid.uuid4())
 
     # Get workspace for portable paths
-    workspace_path = config.repos.workspace if config else None
+    workspace_path = config.repos.workspace if config and config.repos else None
 
     # Create the conversation
     try:
@@ -1540,7 +1556,7 @@ def _create_conversation_for_path(
 
     # Get workspace for portable paths
     config = config_loader.load_config()
-    workspace = config.repos.workspace if config else None
+    workspace = config.repos.workspace if config and config.repos else None
 
     # Create the conversation
     try:
@@ -1623,7 +1639,7 @@ def _create_conversation_for_current_directory(
 
     # Get workspace for portable paths
     config = config_loader.load_config()
-    workspace = config.repos.workspace if config else None
+    workspace = config.repos.workspace if config and config.repos else None
 
     # Create the conversation
     try:
@@ -1793,7 +1809,7 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
 
         # Get workspace for portable paths
         config = config_loader.load_config()
-        workspace = config.repos.workspace if config else None
+        workspace = config.repos.workspace if config and config.repos else None
 
         session.add_conversation(
             working_dir=project_path.name,

@@ -60,6 +60,17 @@ daf jira update PROJ-12345 --description "..."
 # Configuration
 daf config tui  # Set Project Key to PROJ
 daf config tui  # Set Workstream to WORK
+
+# Workspace Management (AAP-63377)
+daf workspace list                              # List all workspaces (CAN run in sessions)
+daf new -w <name>                               # Create session in specific workspace (quick switch)
+daf open <session> -w <name>                    # Override session workspace (quick switch)
+# Config commands (RESTRICTED - run outside sessions):
+daf workspace add <name> <path> --default       # Add workspace to config
+daf workspace add <path>                        # Auto-derive name from path (e.g., ~/dev/my-project → my-project)
+daf workspace remove <name>                     # Remove workspace from config
+daf workspace rename <old-name> <new-name>      # Rename workspace (updates all sessions)
+daf workspace set-default <name>                # Change global default (NOT for switching!)
 ```
 
 **Multi-Conversation Sessions:**
@@ -72,6 +83,37 @@ daf open PROJ-12345 --path repo-name  # Repository name from workspace
 # Without --path, you'll be prompted to select which conversation to open
 daf open PROJ-12345  # Shows interactive conversation selection menu
 ```
+
+**Workspaces (AAP-63377):**
+Workspaces enable concurrent multi-branch development by organizing repositories into named locations (similar to VSCode workspaces):
+
+- **Use Case**: Work on the same project in different workspaces simultaneously without conflicts
+- **Example**: `primary` workspace for main development, `feat-caching` for experimental branch, `product-a` for specific product
+- **Session Memory**: Sessions remember their workspace and automatically use it on reopen
+- **Concurrent Sessions**: You can have active sessions in different workspaces on the same project
+- **Priority**: `--workspace` flag > session stored workspace > default workspace > interactive prompt
+
+```bash
+# View workspaces (can run inside sessions)
+daf workspace list
+
+# Switch workspace per-session with -w flag (RECOMMENDED)
+daf new --name AAP-123 -w feat-caching    # Create in feat-caching
+daf new --name AAP-456 -w product-a       # Create in product-a
+daf open AAP-123 -w primary               # Override to primary temporarily
+
+# Sessions remember workspace automatically
+daf open AAP-123  # Uses feat-caching (remembered from creation)
+daf open AAP-456  # Uses product-a (remembered from creation)
+
+# set-default changes GLOBAL default (not for switching per-session)
+# Only use this for permanent config changes, not for switching workspaces
+daf workspace set-default primary  # (RESTRICTED - run outside sessions)
+```
+
+**Important**: Use the `-w` (or `--workspace`) flag to switch workspaces per-session. Don't use `set-default` for switching - it changes the global default for all new sessions.
+
+**Note**: Workspace management commands (`add`, `remove`, `rename`, `set-default`) are **RESTRICTED** and must be run outside Claude Code sessions. Only `daf workspace list` can run inside sessions.
 
 For detailed usage, workflow examples, and troubleshooting, refer to the **daf-cli skill**.
 

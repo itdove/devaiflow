@@ -185,17 +185,15 @@ INFO_OUTPUT=$(daf info "$TEST_SESSION_1" 2>&1)
 
 if echo "$INFO_OUTPUT" | grep -q "Issue Key:.*None\|No JIRA"; then
     echo -e "  ${GREEN}✓${NC} Session has no JIRA association (as expected)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     # Check if JIRA key field is present but empty
     if ! echo "$INFO_OUTPUT" | grep -E "PROJ-[0-9]+"; then
         echo -e "  ${GREEN}✓${NC} Session has no JIRA association"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "  ${YELLOW}ℹ${NC}  Cannot verify no JIRA association (format may vary)"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
     fi
 fi
+TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Test 2: Create JIRA ticket to link to
 print_section "Test 2: Create JIRA Ticket for Linking"
@@ -268,7 +266,6 @@ INFO_BY_KEY_EXIT=$?
 
 if [ $INFO_BY_KEY_EXIT -eq 0 ]; then
     echo -e "  ${GREEN}✓${NC} Can find session by JIRA key"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${RED}✗${NC} Cannot find session by JIRA key"
     exit 1
@@ -277,11 +274,11 @@ fi
 # Verify it's the same session
 if echo "$INFO_BY_KEY" | grep -q "$TEST_SESSION_1"; then
     echo -e "  ${GREEN}✓${NC} Found correct session"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${RED}✗${NC} Found different session"
     exit 1
 fi
+TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Test 5: Unlink session from JIRA
 print_section "Test 5: Unlink Session from JIRA"
@@ -306,11 +303,10 @@ INFO_AFTER_UNLINK=$(daf info "$TEST_SESSION_1" 2>&1)
 
 if ! echo "$INFO_AFTER_UNLINK" | grep -q "$TICKET_KEY"; then
     echo -e "  ${GREEN}✓${NC} JIRA key removed from session"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${YELLOW}ℹ${NC}  JIRA key may still appear in history (non-critical)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
+TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Test 6: Cannot find session by old JIRA key
 print_test "Verify cannot find session by old JIRA key"
@@ -323,15 +319,13 @@ if [ $INFO_BY_OLD_KEY_EXIT -eq 0 ]; then
     # Check if it's a different session or the synced one
     if ! echo "$INFO_BY_OLD_KEY" | grep -q "$TEST_SESSION_1"; then
         echo -e "  ${GREEN}✓${NC} Our test session no longer found by JIRA key"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "  ${YELLOW}ℹ${NC}  Session still found by old key (caching may occur)"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
     fi
 else
     echo -e "  ${GREEN}✓${NC} No session found for old JIRA key"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
+TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Test 7: Delete session without force (should prompt or require confirmation)
 print_section "Test 7: Delete Session (With Confirmation)"
@@ -371,14 +365,13 @@ set -e  # Re-enable exit on error
 
 if [ $INFO_DELETED_EXIT -eq 124 ]; then
     echo -e "  ${YELLOW}ℹ${NC}  daf info timed out (non-critical)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 elif [ $INFO_DELETED_EXIT -ne 0 ]; then
     echo -e "  ${GREEN}✓${NC} Session not found (correctly deleted)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${RED}✗${NC} Session still exists after deletion"
     exit 1
 fi
+TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Verify session not in list
 print_test "Verify deleted session not in session list"
@@ -407,11 +400,10 @@ FINAL_LIST=$(daf list 2>&1)
 
 if ! echo "$FINAL_LIST" | grep -E "($TEST_SESSION_1|$TEST_SESSION_2)"; then
     echo -e "  ${GREEN}✓${NC} All test sessions cleaned up"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${YELLOW}ℹ${NC}  Some sessions may remain (non-critical)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
+TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Final summary
 print_section "Test Summary"

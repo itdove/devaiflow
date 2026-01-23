@@ -641,13 +641,93 @@ daf config tui
 
 ## Repository Configuration
 
-### repos.workspace
+### repos.workspaces (AAP-63377)
+
+**Type:** array of WorkspaceDefinition objects
+**Required:** No
+**Description:** Multiple named workspaces for concurrent multi-branch development
+
+Workspaces enable you to organize repositories into named locations (similar to VSCode workspaces), allowing concurrent sessions on the same project in different workspaces without conflicts.
+
+**WorkspaceDefinition Fields:**
+- **name** (string, required) - Unique workspace identifier
+- **path** (string, required) - Directory path (supports ~ expansion)
+- **is_default** (boolean, optional) - Whether this is the default workspace
+
+**Example:**
+```json
+{
+  "repos": {
+    "workspaces": [
+      {
+        "name": "primary",
+        "path": "/Users/username/development",
+        "is_default": true
+      },
+      {
+        "name": "product-a",
+        "path": "/Users/username/repos/product-a",
+        "is_default": false
+      },
+      {
+        "name": "feat-caching",
+        "path": "/Users/username/workspaces/caching",
+        "is_default": false
+      }
+    ]
+  }
+}
+```
+
+**CLI Commands:**
+```bash
+# List all workspaces
+daf workspace list
+
+# Add a workspace
+daf workspace add primary ~/development --default
+daf workspace add product-a ~/repos/product-a
+
+# Set default workspace
+daf workspace set-default primary
+
+# Remove a workspace
+daf workspace remove feat-caching
+```
+
+**Using Workspaces:**
+```bash
+# Create session in specific workspace (recommended)
+daf new --name AAP-123 -w feat-caching
+
+# Override workspace when reopening
+daf open AAP-123 -w product-a
+
+# Sessions remember their workspace automatically
+daf open AAP-123  # Uses remembered workspace
+```
+
+**Workspace Selection Priority:**
+1. `-w`/`--workspace` flag (highest priority)
+2. Session's stored workspace_name
+3. Default workspace (is_default=true)
+4. Interactive prompt
+
+**Use Cases:**
+- Work on same project in different workspaces simultaneously
+- Separate experimental branches from main development
+- Group repositories by product or feature
+- Enable concurrent multi-branch development
+
+### repos.workspace (Deprecated)
 
 **Type:** string
 **Required:** No
-**Description:** Root directory containing your repositories
+**Description:** Single workspace directory (deprecated in favor of repos.workspaces)
 
-**Example:**
+**Note:** If you have an existing single `workspace` string in your config, it will be automatically migrated to `workspaces` list with name "default" on first load.
+
+**Example (old format):**
 ```json
 {
   "repos": {
@@ -656,20 +736,19 @@ daf config tui
 }
 ```
 
-When set, the tool can auto-detect repositories in this directory.
-
-**CLI Command:**
-```bash
-daf config tui <path>
-```
-
-**Example:**
-```bash
-# Set workspace to a specific directory
-daf config tui /Users/username/development/myorg
-
-# Or use interactive prompt
-daf config tui
+**Automatically migrates to:**
+```json
+{
+  "repos": {
+    "workspaces": [
+      {
+        "name": "default",
+        "path": "/Users/your-username/development/myorg",
+        "is_default": true
+      }
+    ]
+  }
+}
 ```
 
 ### repos.detection
