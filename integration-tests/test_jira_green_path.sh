@@ -151,6 +151,9 @@ json_get() {
     echo "$json" | python3 -c "import sys, json; data=json.load(sys.stdin); print($path)" 2>/dev/null || echo ""
 }
 
+# Get the directory of this script before changing directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Main test execution (run in subshell to isolate directory changes)
 (
 cd "$TEMP_GIT_REPO"
@@ -172,8 +175,14 @@ verify_success "daf purge-mock-data --force" "Mock data cleaned successfully"
 # Initialize configuration
 print_test "Initialize configuration"
 # Create test configuration (avoids interactive daf init)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-python3 "$SCRIPT_DIR/setup_test_config.py" > /dev/null 2>&1 || true
+CONFIG_OUTPUT=$(python3 "$SCRIPT_DIR/setup_test_config.py" 2>&1)
+CONFIG_EXIT_CODE=$?
+if [ $CONFIG_EXIT_CODE -ne 0 ]; then
+    echo -e "  ${RED}✗${NC} Configuration setup failed"
+    echo -e "  ${RED}Output:${NC}"
+    echo "$CONFIG_OUTPUT" | sed 's/^/    /'
+    exit 1
+fi
 echo -e "  ${GREEN}✓${NC} Configuration initialized"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
