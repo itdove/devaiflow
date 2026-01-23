@@ -521,6 +521,10 @@ Which conversation? [1-3] (1):
 
 This allows you to easily switch between repositories in a multi-repo session. The selection happens EVERY time you run `daf open` with a multi-conversation session, ensuring you always know which conversation you're opening.
 
+**Exit Codes:**
+- `0` - Session opened successfully
+- `1` - Session not found or cannot be opened
+
 ---
 
 ### daf list - List Sessions
@@ -1000,6 +1004,10 @@ daf sync
 # Or create a new session manually (old notes preserved in session directory)
 daf new --name PROJ-59815 --goal "Fresh approach" --jira PROJ-59815
 ```
+
+**Exit Codes:**
+- `0` - Session deleted successfully
+- `1` - Session not found or no identifier provided
 
 ---
 
@@ -2015,6 +2023,10 @@ daf note --latest "Fixed validation bug"
 | Visibility control | Uses default | Configurable + `--public` |
 | Input methods | Argument only | Argument, file, stdin |
 
+**Exit Codes:**
+- `0` - Note added successfully
+- `1` - Session not found or empty note text
+
 ---
 
 ### daf notes - View Session Notes
@@ -2049,6 +2061,10 @@ daf notes --latest
 - Shows JIRA key if associated
 - Notes are organized by session ID
 - Chronological order from oldest to newest
+
+**Exit Codes:**
+- `0` - Notes displayed successfully (or no notes found for existing session)
+- `1` - Session not found
 
 ---
 
@@ -2224,6 +2240,10 @@ daf info PROJ-60039
 # Get UUID of specific conversation
 daf info PROJ-60039 --conversation-id 2 --uuid-only
 ```
+
+**Exit Codes:**
+- `0` - Session information displayed successfully
+- `1` - Session not found or invalid conversation ID
 
 ---
 

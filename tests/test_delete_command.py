@@ -1,5 +1,6 @@
 """Tests for delete command."""
 
+import pytest
 import shutil
 from pathlib import Path
 from unittest.mock import patch
@@ -11,7 +12,9 @@ from devflow.session.manager import SessionManager
 
 def test_delete_session_no_identifier_no_all(temp_daf_home, capsys):
     """Test delete command with no identifier and no --all flag."""
-    delete_session()
+    with pytest.raises(SystemExit) as exc_info:
+        delete_session()
+    assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "Session identifier required" in captured.out
 
@@ -299,9 +302,11 @@ def test_delete_session_not_found(temp_daf_home, capsys):
     # get_session_with_delete_all_option will handle the not found case
     # and return None for session, which should be handled gracefully
     with patch("devflow.cli.utils.get_session_with_delete_all_option", return_value=(None, False)):
-        delete_session(identifier="nonexistent")
+        with pytest.raises(SystemExit) as exc_info:
+            delete_session(identifier="nonexistent")
+        assert exc_info.value.code == 1
 
-    # Should return early without error
+    # Should return early with error code
     captured = capsys.readouterr()
     # No error should be printed, just return silently
 

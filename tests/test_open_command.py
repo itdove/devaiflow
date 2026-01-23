@@ -20,7 +20,7 @@ def test_open_nonexistent_session(temp_daf_home):
     runner = CliRunner()
     result = runner.invoke(cli, ["open", "nonexistent"])
 
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "not found" in result.output.lower() or "No sessions found" in result.output
 
 
@@ -1713,5 +1713,5 @@ def test_jira_open_uses_full_session_name_to_avoid_loop(temp_daf_home):
     assert "daf sync" in result.output
     # Should NOT try to create a new session
     assert "issue tracker ticket validated" not in result.output
-    # Should exit cleanly
-    assert result.exit_code == 0
+    # Should exit with error code (session not found)
+    assert result.exit_code == 1

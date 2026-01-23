@@ -48,7 +48,8 @@ def session_info(
             else:
                 console.print("[yellow]No sessions found[/yellow]")
                 console.print("[dim]Use 'daf new' or 'daf sync' to create sessions[/dim]")
-            return
+            import sys
+            sys.exit(1)
         session = max(sessions, key=lambda s: s.last_active or s.created)
     else:
         session = session_manager.get_session(identifier)
@@ -61,7 +62,8 @@ def session_info(
             )
         else:
             console.print(f"[red]Session '{identifier}' not found[/red]")
-        return
+        import sys
+        sys.exit(1)
 
     # JSON output mode
     if output_json:
@@ -94,7 +96,8 @@ def _output_json_session_info(
                     success=False,
                     error={"message": "No conversations found in this session", "code": "NO_CONVERSATIONS"}
                 )
-                return
+                import sys
+                sys.exit(1)
 
             # Flatten all conversations into a single list
             all_conversations = []
@@ -109,7 +112,8 @@ def _output_json_session_info(
                         "code": "INVALID_CONVERSATION_ID"
                     }
                 )
-                return
+                import sys
+                sys.exit(1)
 
             conv = all_conversations[conversation_id - 1]
             json_output(success=True, data={"uuid": conv.ai_agent_session_id})
@@ -125,6 +129,8 @@ def _output_json_session_info(
                     success=False,
                     error={"message": "No conversations found in this session", "code": "NO_CONVERSATIONS"}
                 )
+                import sys
+                sys.exit(1)
     else:
         # Full session info mode
         session_data = serialize_session(session)
@@ -182,7 +188,7 @@ def _output_json_session_info(
         else:
             session_data["notes"] = None
 
-        # Filter to specific conversation if requested 
+        # Filter to specific conversation if requested
         if conversation_id is not None:
             # Count total conversations across all repositories
             total_convs = sum(len(conv_list) for conv_list in session.conversations.values())
@@ -194,7 +200,8 @@ def _output_json_session_info(
                         "code": "INVALID_CONVERSATION_ID"
                     }
                 )
-                return
+                import sys
+                sys.exit(1)
             # Filter conversations_detail to just the requested one
             session_data["conversations_detail"] = [session_data["conversations_detail"][conversation_id - 1]]
 
@@ -209,10 +216,11 @@ def _print_uuid_only(session: Session, conversation_id: Optional[int]) -> None:
         conversation_id: Optional conversation number (1, 2, 3...)
     """
     if conversation_id is not None:
-        # Get specific conversation by index 
+        # Get specific conversation by index
         if not session.conversations:
             console.print("[red]No conversations found in this session[/red]", err=True)
-            return
+            import sys
+            sys.exit(1)
 
         # Flatten all conversations into a single list
         all_conversations = []
@@ -224,7 +232,8 @@ def _print_uuid_only(session: Session, conversation_id: Optional[int]) -> None:
                 f"[red]Invalid conversation ID. Session has {len(all_conversations)} conversation(s)[/red]",
                 err=True,
             )
-            return
+            import sys
+            sys.exit(1)
 
         conv = all_conversations[conversation_id - 1]
         console.print(conv.ai_agent_session_id)
@@ -272,9 +281,10 @@ def _display_full_session_info(
     # Conversations section
     if not session.conversations:
         console.print("[yellow]No conversations found in this session[/yellow]")
-        return
+        import sys
+        sys.exit(1)
 
-    # Filter conversations if conversation_id specified 
+    # Filter conversations if conversation_id specified
     if conversation_id is not None:
         # Flatten all conversations into a single list with their working_dir
         all_conversations = []
@@ -287,7 +297,8 @@ def _display_full_session_info(
             console.print(
                 f"[red]Invalid conversation ID. Session has {len(all_conversations)} conversation(s)[/red]"
             )
-            return
+            import sys
+            sys.exit(1)
         working_dir, conv = all_conversations[conversation_id - 1]
         _display_conversation(working_dir, conv, conversation_id, session, config_loader)
     else:

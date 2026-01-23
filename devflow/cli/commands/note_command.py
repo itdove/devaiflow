@@ -32,7 +32,8 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
         all_sessions = session_manager.list_sessions()
         if not all_sessions:
             console.print("[red]No sessions found[/red]")
-            return
+            import sys
+            sys.exit(1)
 
         # Use the name of the most recent session
         identifier = all_sessions[0].name
@@ -42,14 +43,16 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
     # Get session using common utility (handles multi-session selection)
     session = get_session_with_prompt(session_manager, identifier)
     if not session:
-        return
+        import sys
+        sys.exit(1)
 
     # Get note text if not provided
     if not note:
         note = Prompt.ask("Enter note")
         if not note or not note.strip():
             console.print("[red]✗[/red] Note cannot be empty")
-            return
+            import sys
+            sys.exit(1)
         note = note.strip()
 
     # Add note locally (always)
@@ -59,7 +62,8 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
         console.print(f"[green]✓[/green] Note added to '{session.name}'{issue_display}")
     except ValueError as e:
         console.print(f"[red]{e}[/red]")
-        return
+        import sys
+        sys.exit(1)
 
     # Optionally sync to JIRA (only if session has issue key)
     if sync_to_jira:
@@ -89,7 +93,8 @@ def view_notes(identifier: Optional[str] = None, latest: bool = False) -> None:
         all_sessions = session_manager.list_sessions()
         if not all_sessions:
             console.print("[red]No sessions found[/red]")
-            return
+            import sys
+            sys.exit(1)
 
         # Use the name of the most recent session
         identifier = all_sessions[0].name
@@ -99,7 +104,8 @@ def view_notes(identifier: Optional[str] = None, latest: bool = False) -> None:
     # Get session using common utility (handles multi-session selection)
     session = get_session_with_prompt(session_manager, identifier)
     if not session:
-        return
+        import sys
+        sys.exit(1)
 
     # Use session name for directory (not issue key, which might be None)
     session_dir = config_loader.get_session_dir(session.name)

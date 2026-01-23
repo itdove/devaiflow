@@ -32,7 +32,9 @@ def test_add_note_with_identifier(temp_daf_home):
 
 def test_add_note_no_sessions(temp_daf_home):
     """Test adding note when no sessions exist."""
-    add_note(identifier=None, note="Test note")
+    with pytest.raises(SystemExit) as exc_info:
+        add_note(identifier=None, note="Test note")
+    assert exc_info.value.code == 1
     # Should display error message
 
 
@@ -154,8 +156,10 @@ def test_add_note_handles_no_session_found(mock_get_session, temp_daf_home):
     # Mock get_session_with_prompt to return None
     mock_get_session.return_value = None
 
-    add_note(identifier="nonexistent", note="Test note")
-    # Should return early without error
+    with pytest.raises(SystemExit) as exc_info:
+        add_note(identifier="nonexistent", note="Test note")
+    assert exc_info.value.code == 1
+    # Should return early with error code
 
 
 def test_add_note_to_session_with_multiple_in_group(temp_daf_home):
@@ -234,7 +238,9 @@ def test_view_notes_no_notes_file(temp_daf_home):
 
 def test_view_notes_no_sessions(temp_daf_home):
     """Test viewing notes when no sessions exist."""
-    view_notes(identifier=None)
+    with pytest.raises(SystemExit) as exc_info:
+        view_notes(identifier=None)
+    assert exc_info.value.code == 1
     # Should display error message
 
 
@@ -353,8 +359,10 @@ def test_view_notes_handles_no_session_found(mock_get_session, temp_daf_home):
     # Mock get_session_with_prompt to return None
     mock_get_session.return_value = None
 
-    view_notes(identifier="nonexistent")
-    # Should return early without error
+    with pytest.raises(SystemExit) as exc_info:
+        view_notes(identifier="nonexistent")
+    assert exc_info.value.code == 1
+    # Should return early with error code
 
 
 def test_view_notes_displays_chronological_order(temp_daf_home):

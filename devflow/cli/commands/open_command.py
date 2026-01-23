@@ -154,7 +154,8 @@ def open_session(
             # If we found a ticket_creation session, don't try to create a new one
             if ticket_creation_session:
                 # Session creation analysis already exists - user should use daf sync
-                return
+                # Error message already printed above in ticket_creation_session check
+                sys.exit(1)
 
             console.print(f"[dim]Identifier looks like issue key, checking if ticket exists...[/dim]")
 
@@ -174,21 +175,21 @@ def open_session(
                     return
                 else:
                     # Invalid ticket or error - message already displayed by validate_jira_ticket
-                    return
+                    sys.exit(1)
             except Exception as e:
                 console.print(f"[yellow]⚠[/yellow] Could not validate issue tracker ticket: {e}")
                 console.print(f"[red]No sessions found for '{identifier}'[/red]")
                 console.print(
                     f"[dim]Use 'daf new --name {identifier} --goal \"...\"' to create a session[/dim]"
                 )
-                return
+                sys.exit(1)
         else:
             # Not a issue key pattern - show standard error
             console.print(f"[red]No sessions found for '{identifier}'[/red]")
             console.print(
                 f"[dim]Use 'daf new --name {identifier} --goal \"...\"' to create a session[/dim]"
             )
-            return
+            sys.exit(1)
 
     # Handle --conversation-id flag
     # This allows resuming a specific archived conversation

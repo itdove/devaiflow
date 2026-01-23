@@ -37,7 +37,8 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
         sessions = session_manager.list_sessions()
         if not sessions:
             console.print("[red]No sessions found[/red]")
-            return
+            import sys
+            sys.exit(1)
         # Get most recent session
         most_recent = max(sessions, key=lambda s: s.last_active or s.created)
         identifier = most_recent.name
@@ -48,7 +49,8 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
     if not identifier:
         console.print("[red]Error: Session identifier required (or use --all to delete all sessions)[/red]")
         console.print("[dim]Usage: daf delete <NAME-or-JIRA-KEY> or daf delete --all or daf delete --latest[/dim]")
-        return
+        import sys
+        sys.exit(1)
 
     # Get session using special delete utility (handles multi-session with "delete all" option)
     session, delete_all_in_group = get_session_with_delete_all_option(session_manager, identifier)
@@ -79,7 +81,8 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
         return
 
     if not session:
-        return
+        import sys
+        sys.exit(1)
 
     # Show session info
     console.print(f"\n[bold]Session to delete:[/bold]")

@@ -1,5 +1,6 @@
 """Tests for info command."""
 
+import pytest
 from datetime import datetime, timedelta
 from io import StringIO
 from unittest.mock import patch
@@ -12,7 +13,9 @@ from devflow.session.manager import SessionManager
 
 def test_session_info_no_sessions(temp_daf_home, capsys):
     """Test info command with no sessions."""
-    session_info(identifier=None, uuid_only=False, conversation_id=None)
+    with pytest.raises(SystemExit) as exc_info:
+        session_info(identifier=None, uuid_only=False, conversation_id=None)
+    assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "No sessions found" in captured.out
 
@@ -116,7 +119,9 @@ def test_session_info_latest_session(temp_daf_home, capsys):
 
 def test_session_info_nonexistent_session(temp_daf_home, capsys):
     """Test info command with non-existent session."""
-    session_info(identifier="nonexistent", uuid_only=False, conversation_id=None)
+    with pytest.raises(SystemExit) as exc_info:
+        session_info(identifier="nonexistent", uuid_only=False, conversation_id=None)
+    assert exc_info.value.code == 1
     captured = capsys.readouterr()
 
     assert "not found" in captured.out.lower()
@@ -289,7 +294,9 @@ def test_session_info_invalid_conversation_id(temp_daf_home, capsys):
     )
 
     # Try to access conversation #2 when only #1 exists
-    session_info(identifier="single-conv", uuid_only=False, conversation_id=2)
+    with pytest.raises(SystemExit) as exc_info:
+        session_info(identifier="single-conv", uuid_only=False, conversation_id=2)
+    assert exc_info.value.code == 1
     captured = capsys.readouterr()
 
     assert "Invalid conversation ID" in captured.out
@@ -309,7 +316,9 @@ def test_session_info_no_conversations(temp_daf_home, capsys):
         ai_agent_session_id=None,
     )
 
-    session_info(identifier="empty-conv", uuid_only=False, conversation_id=None)
+    with pytest.raises(SystemExit) as exc_info:
+        session_info(identifier="empty-conv", uuid_only=False, conversation_id=None)
+    assert exc_info.value.code == 1
     captured = capsys.readouterr()
 
     assert "No conversations found" in captured.out
