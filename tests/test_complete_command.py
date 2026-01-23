@@ -2837,8 +2837,292 @@ def test_update_jira_pr_field_failure(temp_daf_home, monkeypatch, capsys):
 
     # Verify error message is displayed
     captured = capsys.readouterr()
-    assert "Failed to update issue tracker ticket" in captured.out
+    assert "Failed to update JIRA Git Pull Request field" in captured.out
     assert "✓ Updated JIRA Git Pull Request field" not in captured.out
+
+
+def test_update_jira_pr_field_validation_error_with_field_errors(temp_daf_home, monkeypatch, capsys):
+    """Test JiraValidationError handling with field-level errors."""
+    from devflow.cli.commands.complete_command import _update_jira_pr_field
+    from devflow.jira.client import JiraClient
+    from devflow.jira.exceptions import JiraValidationError
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Config, JiraConfig, PromptsConfig
+
+    # Mock config
+    mock_config = Mock(spec=Config)
+    mock_config.jira = Mock(spec=JiraConfig)
+    mock_config.jira.field_mappings = {
+        "git_pull_request": {
+            "id": "customfield_12345",
+            "name": "Git Pull Request"
+        }
+    }
+    mock_config.prompts = Mock(spec=PromptsConfig)
+    mock_config.prompts.auto_update_jira_pr_url = True
+
+    mock_config_loader = Mock(spec=ConfigLoader)
+    mock_config_loader.load_config.return_value = mock_config
+
+    # Mock JiraClient to raise JiraValidationError with field errors
+    mock_client = Mock(spec=JiraClient)
+    mock_client.get_ticket_pr_links.return_value = None
+    mock_client.update_ticket_field.side_effect = JiraValidationError(
+        "Validation failed",
+        field_errors={
+            "customfield_12345": "Invalid URL format",
+            "summary": "Required field missing"
+        },
+        error_messages=["URL must be accessible"]
+    )
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.ConfigLoader", lambda: mock_config_loader)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.JiraClient", lambda: mock_client)
+
+    # Call the function
+    _update_jira_pr_field(
+        issue_key="PROJ-12345",
+        pr_url="https://github.com/org/repo/pull/123",
+        no_issue_update=False
+    )
+
+    # Verify detailed error messages
+    captured = capsys.readouterr()
+    assert "Failed to update JIRA Git Pull Request field" in captured.out
+    assert "Field errors:" in captured.out
+    assert "customfield_12345: Invalid URL format" in captured.out
+    assert "summary: Required field missing" in captured.out
+    assert "Error messages:" in captured.out
+    assert "URL must be accessible" in captured.out
+    assert "Suggestion: Verify that the PR/MR URL is accessible and properly formatted" in captured.out
+
+
+def test_update_jira_pr_field_validation_error_with_error_messages_only(temp_daf_home, monkeypatch, capsys):
+    """Test JiraValidationError handling with only error messages (no field errors)."""
+    from devflow.cli.commands.complete_command import _update_jira_pr_field
+    from devflow.jira.client import JiraClient
+    from devflow.jira.exceptions import JiraValidationError
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Config, JiraConfig, PromptsConfig
+
+    mock_config = Mock(spec=Config)
+    mock_config.jira = Mock(spec=JiraConfig)
+    mock_config.jira.field_mappings = {
+        "git_pull_request": {
+            "id": "customfield_12345",
+            "name": "Git Pull Request"
+        }
+    }
+    mock_config.prompts = Mock(spec=PromptsConfig)
+    mock_config.prompts.auto_update_jira_pr_url = True
+
+    mock_config_loader = Mock(spec=ConfigLoader)
+    mock_config_loader.load_config.return_value = mock_config
+
+    mock_client = Mock(spec=JiraClient)
+    mock_client.get_ticket_pr_links.return_value = None
+    mock_client.update_ticket_field.side_effect = JiraValidationError(
+        "Validation failed",
+        error_messages=["The issue is closed and cannot be edited", "Workflow transition not allowed"]
+    )
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.ConfigLoader", lambda: mock_config_loader)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.JiraClient", lambda: mock_client)
+
+    _update_jira_pr_field(
+        issue_key="PROJ-12345",
+        pr_url="https://github.com/org/repo/pull/123",
+        no_issue_update=False
+    )
+
+    captured = capsys.readouterr()
+    assert "Failed to update JIRA Git Pull Request field" in captured.out
+    assert "Error messages:" in captured.out
+    assert "The issue is closed and cannot be edited" in captured.out
+    assert "Workflow transition not allowed" in captured.out
+
+
+def test_update_jira_pr_field_not_found_error(temp_daf_home, monkeypatch, capsys):
+    """Test JiraNotFoundError handling with resource details."""
+    from devflow.cli.commands.complete_command import _update_jira_pr_field
+    from devflow.jira.client import JiraClient
+    from devflow.jira.exceptions import JiraNotFoundError
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Config, JiraConfig, PromptsConfig
+
+    mock_config = Mock(spec=Config)
+    mock_config.jira = Mock(spec=JiraConfig)
+    mock_config.jira.field_mappings = {
+        "git_pull_request": {
+            "id": "customfield_12345",
+            "name": "Git Pull Request"
+        }
+    }
+    mock_config.prompts = Mock(spec=PromptsConfig)
+    mock_config.prompts.auto_update_jira_pr_url = True
+
+    mock_config_loader = Mock(spec=ConfigLoader)
+    mock_config_loader.load_config.return_value = mock_config
+
+    mock_client = Mock(spec=JiraClient)
+    mock_client.get_ticket_pr_links.return_value = None
+    mock_client.update_ticket_field.side_effect = JiraNotFoundError(
+        "Issue not found",
+        resource_type="issue",
+        resource_id="PROJ-12345"
+    )
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.ConfigLoader", lambda: mock_config_loader)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.JiraClient", lambda: mock_client)
+
+    _update_jira_pr_field(
+        issue_key="PROJ-12345",
+        pr_url="https://github.com/org/repo/pull/123",
+        no_issue_update=False
+    )
+
+    captured = capsys.readouterr()
+    assert "Failed to update JIRA Git Pull Request field" in captured.out
+    assert "Resource not found: issue PROJ-12345" in captured.out
+    assert "Suggestion: Verify that the JIRA ticket PROJ-12345 exists and is accessible" in captured.out
+
+
+def test_update_jira_pr_field_auth_error(temp_daf_home, monkeypatch, capsys):
+    """Test JiraAuthError handling."""
+    from devflow.cli.commands.complete_command import _update_jira_pr_field
+    from devflow.jira.client import JiraClient
+    from devflow.jira.exceptions import JiraAuthError
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Config, JiraConfig, PromptsConfig
+
+    mock_config = Mock(spec=Config)
+    mock_config.jira = Mock(spec=JiraConfig)
+    mock_config.jira.field_mappings = {
+        "git_pull_request": {
+            "id": "customfield_12345",
+            "name": "Git Pull Request"
+        }
+    }
+    mock_config.prompts = Mock(spec=PromptsConfig)
+    mock_config.prompts.auto_update_jira_pr_url = True
+
+    mock_config_loader = Mock(spec=ConfigLoader)
+    mock_config_loader.load_config.return_value = mock_config
+
+    mock_client = Mock(spec=JiraClient)
+    mock_client.get_ticket_pr_links.return_value = None
+    mock_client.update_ticket_field.side_effect = JiraAuthError(
+        "Invalid API token or insufficient permissions"
+    )
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.ConfigLoader", lambda: mock_config_loader)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.JiraClient", lambda: mock_client)
+
+    _update_jira_pr_field(
+        issue_key="PROJ-12345",
+        pr_url="https://github.com/org/repo/pull/123",
+        no_issue_update=False
+    )
+
+    captured = capsys.readouterr()
+    assert "Failed to update JIRA Git Pull Request field" in captured.out
+    assert "Authentication error: Invalid API token or insufficient permissions" in captured.out
+    assert "Suggestion: Check your JIRA API token and permissions" in captured.out
+
+
+def test_update_jira_pr_field_api_error_with_status_code(temp_daf_home, monkeypatch, capsys):
+    """Test JiraApiError handling with HTTP status code and detailed errors."""
+    from devflow.cli.commands.complete_command import _update_jira_pr_field
+    from devflow.jira.client import JiraClient
+    from devflow.jira.exceptions import JiraApiError
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Config, JiraConfig, PromptsConfig
+
+    mock_config = Mock(spec=Config)
+    mock_config.jira = Mock(spec=JiraConfig)
+    mock_config.jira.field_mappings = {
+        "git_pull_request": {
+            "id": "customfield_12345",
+            "name": "Git Pull Request"
+        }
+    }
+    mock_config.prompts = Mock(spec=PromptsConfig)
+    mock_config.prompts.auto_update_jira_pr_url = True
+
+    mock_config_loader = Mock(spec=ConfigLoader)
+    mock_config_loader.load_config.return_value = mock_config
+
+    mock_client = Mock(spec=JiraClient)
+    mock_client.get_ticket_pr_links.return_value = None
+    mock_client.update_ticket_field.side_effect = JiraApiError(
+        "Field update failed",
+        status_code=400,
+        response_text='{"errorMessages": ["Operation failed"], "errors": {"customfield_12345": "Invalid value"}}',
+        error_messages=["Operation failed"],
+        field_errors={"customfield_12345": "Invalid value"}
+    )
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.ConfigLoader", lambda: mock_config_loader)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.JiraClient", lambda: mock_client)
+
+    _update_jira_pr_field(
+        issue_key="PROJ-12345",
+        pr_url="https://github.com/org/repo/pull/123",
+        no_issue_update=False
+    )
+
+    captured = capsys.readouterr()
+    assert "Failed to update JIRA Git Pull Request field" in captured.out
+    assert "HTTP status code: 400" in captured.out
+    assert "Error messages:" in captured.out
+    assert "Operation failed" in captured.out
+    assert "Field errors:" in captured.out
+    assert "customfield_12345: Invalid value" in captured.out
+    assert "Suggestion: Review the error details above and check JIRA field configuration" in captured.out
+
+
+def test_update_jira_pr_field_connection_error(temp_daf_home, monkeypatch, capsys):
+    """Test JiraConnectionError handling."""
+    from devflow.cli.commands.complete_command import _update_jira_pr_field
+    from devflow.jira.client import JiraClient
+    from devflow.jira.exceptions import JiraConnectionError
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Config, JiraConfig, PromptsConfig
+
+    mock_config = Mock(spec=Config)
+    mock_config.jira = Mock(spec=JiraConfig)
+    mock_config.jira.field_mappings = {
+        "git_pull_request": {
+            "id": "customfield_12345",
+            "name": "Git Pull Request"
+        }
+    }
+    mock_config.prompts = Mock(spec=PromptsConfig)
+    mock_config.prompts.auto_update_jira_pr_url = True
+
+    mock_config_loader = Mock(spec=ConfigLoader)
+    mock_config_loader.load_config.return_value = mock_config
+
+    mock_client = Mock(spec=JiraClient)
+    mock_client.get_ticket_pr_links.return_value = None
+    mock_client.update_ticket_field.side_effect = JiraConnectionError(
+        "Failed to connect to https://jira.example.com: Connection timeout"
+    )
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.ConfigLoader", lambda: mock_config_loader)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.JiraClient", lambda: mock_client)
+
+    _update_jira_pr_field(
+        issue_key="PROJ-12345",
+        pr_url="https://github.com/org/repo/pull/123",
+        no_issue_update=False
+    )
+
+    captured = capsys.readouterr()
+    assert "Failed to update JIRA Git Pull Request field" in captured.out
+    assert "Connection error: Failed to connect to https://jira.example.com" in captured.out
+    assert "timeout" in captured.out
+    assert "Suggestion: Check your network connection and JIRA URL configuration" in captured.out
 
 
 def test_complete_pushes_commits_after_committing_with_auto_config(temp_daf_home, tmp_path, monkeypatch, capsys):

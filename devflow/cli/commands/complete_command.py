@@ -2285,13 +2285,53 @@ def _update_jira_pr_field(issue_key: str, pr_url: str, no_issue_update: bool = F
         try:
             client.update_ticket_field(issue_key, git_pr_field, updated_pr_urls)
             console.print(f"[green]✓[/green] Updated JIRA Git Pull Request field")
-        except Exception as update_error:
-            console.print(f"[yellow]⚠[/yellow] Failed to update issue tracker ticket: {update_error}")
+        except JiraValidationError as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to update JIRA Git Pull Request field")
+            if e.field_errors:
+                console.print("  [yellow]Field errors:[/yellow]")
+                for field, msg in e.field_errors.items():
+                    console.print(f"    [yellow]• {field}: {msg}[/yellow]")
+            if e.error_messages:
+                console.print("  [yellow]Error messages:[/yellow]")
+                for msg in e.error_messages:
+                    console.print(f"    [yellow]• {msg}[/yellow]")
+            console.print(f"[dim]Suggestion: Verify that the PR/MR URL is accessible and properly formatted[/dim]")
+        except JiraNotFoundError as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to update JIRA Git Pull Request field")
+            console.print(f"  [yellow]Resource not found: {e.resource_type or 'unknown'} {e.resource_id or ''}[/yellow]")
+            console.print(f"[dim]Suggestion: Verify that the JIRA ticket {issue_key} exists and is accessible[/dim]")
+        except JiraAuthError as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to update JIRA Git Pull Request field")
+            console.print(f"  [yellow]Authentication error: {e}[/yellow]")
+            console.print(f"[dim]Suggestion: Check your JIRA API token and permissions[/dim]")
+        except JiraApiError as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to update JIRA Git Pull Request field")
+            if e.status_code:
+                console.print(f"  [yellow]HTTP status code: {e.status_code}[/yellow]")
+            if e.error_messages:
+                console.print("  [yellow]Error messages:[/yellow]")
+                for msg in e.error_messages:
+                    console.print(f"    [yellow]• {msg}[/yellow]")
+            if e.field_errors:
+                console.print("  [yellow]Field errors:[/yellow]")
+                for field, msg in e.field_errors.items():
+                    console.print(f"    [yellow]• {field}: {msg}[/yellow]")
+            console.print(f"[dim]Suggestion: Review the error details above and check JIRA field configuration[/dim]")
+        except JiraConnectionError as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to update JIRA Git Pull Request field")
+            console.print(f"  [yellow]Connection error: {e}[/yellow]")
+            console.print(f"[dim]Suggestion: Check your network connection and JIRA URL configuration[/dim]")
 
-    except RuntimeError as e:
-        console.print(f"[yellow]⚠[/yellow] JIRA API error: {e}")
+    except JiraAuthError as e:
+        console.print(f"[yellow]⚠[/yellow] JIRA authentication error: {e}")
+        console.print(f"[dim]Check your JIRA API token and permissions[/dim]")
+    except JiraConnectionError as e:
+        console.print(f"[yellow]⚠[/yellow] JIRA connection error: {e}")
+        console.print(f"[dim]Check your network connection and JIRA URL configuration[/dim]")
+    except JiraError as e:
+        console.print(f"[yellow]⚠[/yellow] JIRA error: {e}")
     except Exception as e:
-        console.print(f"[yellow]⚠[/yellow] Failed to update JIRA: {e}")
+        console.print(f"[yellow]⚠[/yellow] Unexpected error updating JIRA: {e}")
 
 
 def _cleanup_temp_directory(temp_dir: Optional[str]) -> None:
