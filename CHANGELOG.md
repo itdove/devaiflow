@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-01-23
+
+
 ### Added
 - Core session management functionality for AI coding assistants
 - Support for multiple AI assistants (Claude Code, GitHub Copilot, Cursor, Windsurf)
@@ -33,3 +36,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project path encoding for conversation files
 
 [unreleased]: https://github.com/itdove/devaiflow/compare/v1.0.0...HEAD
+
+[1.0.0]: https://github.com/itdove/devaiflow/tags/v1.0.0
