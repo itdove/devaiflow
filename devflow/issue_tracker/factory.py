@@ -75,7 +75,16 @@ def get_backend_from_config() -> str:
     Note:
         Falls back to "jira" if config cannot be loaded or field is not set.
         This ensures backward compatibility with existing installations.
+
+        If DAF_MOCK_MODE=1 environment variable is set, always returns "mock"
+        regardless of configuration. This enables integration testing.
     """
+    import os
+
+    # Check for mock mode environment variable first
+    if os.getenv("DAF_MOCK_MODE") == "1":
+        return "mock"
+
     try:
         from devflow.config.loader import ConfigLoader
         config_loader = ConfigLoader()

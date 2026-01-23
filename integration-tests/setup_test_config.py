@@ -30,6 +30,9 @@ def create_test_config():
 
     config_path = config_dir / 'config.json'
 
+    # Detect mock mode from environment
+    is_mock_mode = os.environ.get('DAF_MOCK_MODE') == '1'
+
     # Minimal configuration for testing
     config = {
         "jira": {
@@ -83,7 +86,7 @@ def create_test_config():
             "backend": "file"
         },
         "backend_config_source": "local",
-        "issue_tracker_backend": "jira",
+        "issue_tracker_backend": "mock" if is_mock_mode else "jira",
         "agent_backend": "claude",
         "update_checker_timeout": 10
     }

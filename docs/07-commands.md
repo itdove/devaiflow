@@ -1049,8 +1049,11 @@ daf link redis-test --jira PROJ-12345 --json
 Remove JIRA association from a session.
 
 ```bash
-daf unlink <NAME-or-JIRA>
+daf unlink <NAME-or-JIRA> [--force]
 ```
+
+**Options:**
+- `--force` - Skip confirmation prompt (useful for scripts and automation)
 
 **Example:**
 ```bash

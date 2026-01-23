@@ -2,19 +2,23 @@
 
 This module provides a simple mock implementation that can be used
 for testing without requiring actual JIRA/GitHub/GitLab connections.
+
+Uses persistent storage via MockDataStore to maintain tickets across
+command invocations during integration testing.
 """
 
 from typing import Dict, List, Optional
 
 from devflow.issue_tracker.interface import IssueTrackerClient
 from devflow.jira.exceptions import JiraNotFoundError
+from devflow.mocks.persistence import MockDataStore
 
 
 class MockIssueTrackerClient(IssueTrackerClient):
     """Mock implementation of IssueTrackerClient for testing.
 
-    Provides in-memory storage of tickets without requiring external services.
-    Useful for unit tests and development.
+    Uses persistent storage to maintain tickets across command invocations.
+    Useful for integration tests and development without external services.
     """
 
     def __init__(self, timeout: int = 30):
@@ -24,18 +28,18 @@ class MockIssueTrackerClient(IssueTrackerClient):
             timeout: Ignored for mock implementation
         """
         self.timeout = timeout
-        self._tickets: Dict[str, Dict] = {}
-        self._next_id = 1
+        self.store = MockDataStore()
 
     def get_ticket(self, issue_key: str, field_mappings: Optional[Dict] = None) -> Dict:
         """Fetch a ticket by its key."""
-        if issue_key not in self._tickets:
+        ticket = self.store.get_jira_ticket(issue_key)
+        if not ticket:
             raise JiraNotFoundError(
                 f"Ticket {issue_key} not found",
                 resource_type="issue",
                 resource_id=issue_key
             )
-        return self._tickets[issue_key].copy()
+        return ticket.copy()
 
     def get_ticket_detailed(
         self, issue_key: str, field_mappings: Optional[Dict] = None, include_changelog: bool = False
@@ -59,8 +63,9 @@ class MockIssueTrackerClient(IssueTrackerClient):
         field_mappings: Optional[Dict] = None,
     ) -> List[Dict]:
         """List tickets matching criteria."""
+        all_tickets = self.store.list_jira_tickets()
         results = []
-        for ticket in self._tickets.values():
+        for ticket in all_tickets:
             # Simple filtering
             if project and ticket.get("project") != project:
                 continue
@@ -155,8 +160,10 @@ class MockIssueTrackerClient(IssueTrackerClient):
         **extra_fields,
     ) -> str:
         """Internal helper to create a ticket."""
-        key = f"{project}-{self._next_id}"
-        self._next_id += 1
+        # Get next ticket number (global counter across all projects)
+        all_tickets = self.store.list_jira_tickets()
+        ticket_num = len(all_tickets) + 1
+        key = f"{project}-{ticket_num}"
 
         ticket = {
             "key": key,
@@ -175,33 +182,38 @@ class MockIssueTrackerClient(IssueTrackerClient):
             "acceptance_criteria": acceptance_criteria,
             "workstream": workstream,
         }
-        self._tickets[key] = ticket
+        self.store.set_jira_ticket(key, ticket)
         return key
 
     def update_issue(self, issue_key: str, payload: Dict) -> None:
         """Update an issue."""
-        if issue_key not in self._tickets:
+        ticket = self.store.get_jira_ticket(issue_key)
+        if not ticket:
             raise JiraNotFoundError(
                 f"Ticket {issue_key} not found",
                 resource_type="issue",
                 resource_id=issue_key
             )
         # Simple update - merge payload into ticket
-        self._tickets[issue_key].update(payload)
+        ticket.update(payload)
+        self.store.set_jira_ticket(issue_key, ticket)
 
     def update_ticket_field(self, issue_key: str, field_name: str, value: str) -> None:
         """Update a single field."""
-        if issue_key not in self._tickets:
+        ticket = self.store.get_jira_ticket(issue_key)
+        if not ticket:
             raise JiraNotFoundError(
                 f"Ticket {issue_key} not found",
                 resource_type="issue",
                 resource_id=issue_key
             )
-        self._tickets[issue_key][field_name] = value
+        ticket[field_name] = value
+        self.store.set_jira_ticket(issue_key, ticket)
 
     def add_comment(self, issue_key: str, comment: str, public: bool = False) -> None:
         """Add a comment to a ticket."""
-        if issue_key not in self._tickets:
+        ticket = self.store.get_jira_ticket(issue_key)
+        if not ticket:
             raise JiraNotFoundError(
                 f"Ticket {issue_key} not found",
                 resource_type="issue",
@@ -212,17 +224,20 @@ class MockIssueTrackerClient(IssueTrackerClient):
 
     def transition_ticket(self, issue_key: str, status: str) -> None:
         """Transition a ticket to a new status."""
-        if issue_key not in self._tickets:
+        ticket = self.store.get_jira_ticket(issue_key)
+        if not ticket:
             raise JiraNotFoundError(
                 f"Ticket {issue_key} not found",
                 resource_type="issue",
                 resource_id=issue_key
             )
-        self._tickets[issue_key]["status"] = status
+        ticket["status"] = status
+        self.store.set_jira_ticket(issue_key, ticket)
 
     def attach_file(self, issue_key: str, file_path: str) -> None:
         """Attach a file to a ticket."""
-        if issue_key not in self._tickets:
+        ticket = self.store.get_jira_ticket(issue_key)
+        if not ticket:
             raise JiraNotFoundError(
                 f"Ticket {issue_key} not found",
                 resource_type="issue",
@@ -243,14 +258,16 @@ class MockIssueTrackerClient(IssueTrackerClient):
         field_mappings: Optional[Dict] = None,
     ) -> List[Dict]:
         """Get child issues."""
-        if parent_key not in self._tickets:
+        parent_ticket = self.store.get_jira_ticket(parent_key)
+        if not parent_ticket:
             raise JiraNotFoundError(
                 f"Ticket {parent_key} not found",
                 resource_type="issue",
                 resource_id=parent_key
             )
         results = []
-        for ticket in self._tickets.values():
+        all_tickets = self.store.list_jira_tickets()
+        for ticket in all_tickets:
             if ticket.get("epic") == parent_key:
                 if issue_types is None or ticket.get("type") in issue_types:
                     results.append(ticket.copy())
@@ -268,13 +285,15 @@ class MockIssueTrackerClient(IssueTrackerClient):
         self, issue_key: str, link_type: str, linked_issue_key: str, comment: Optional[str] = None
     ) -> None:
         """Create a link between two issues."""
-        if issue_key not in self._tickets:
+        ticket = self.store.get_jira_ticket(issue_key)
+        if not ticket:
             raise JiraNotFoundError(
                 f"Ticket {issue_key} not found",
                 resource_type="issue",
                 resource_id=issue_key
             )
-        if linked_issue_key not in self._tickets:
+        linked_ticket = self.store.get_jira_ticket(linked_issue_key)
+        if not linked_ticket:
             raise JiraNotFoundError(
                 f"Ticket {linked_issue_key} not found",
                 resource_type="issue",

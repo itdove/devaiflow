@@ -81,6 +81,12 @@ class TestIssueTrackerFactory:
 class TestMockIssueTrackerClient:
     """Tests for mock issue tracker client."""
 
+    def setup_method(self):
+        """Clear mock data before each test."""
+        from devflow.mocks.persistence import MockDataStore
+        store = MockDataStore()
+        store.clear_service("jira")
+
     def test_create_and_get_bug(self):
         """Test creating and retrieving a bug."""
         client = MockIssueTrackerClient()

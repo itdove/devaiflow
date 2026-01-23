@@ -864,8 +864,9 @@ def link(ctx: click.Context, name: str, issue_key: str, force: bool) -> None:
 
 @cli.command()
 @click.argument("name", shell_complete=complete_session_identifiers)
+@click.option("--force", is_flag=True, help="Skip confirmation prompts")
 @json_option
-def unlink(ctx: click.Context, name: str) -> None:
+def unlink(ctx: click.Context, name: str, force: bool) -> None:
     """Remove JIRA association from a session group.
 
     Removes the issue tracker ticket link from all sessions in the specified group.
@@ -873,7 +874,7 @@ def unlink(ctx: click.Context, name: str) -> None:
     """
     from devflow.cli.commands.link_command import unlink_jira
 
-    unlink_jira(name)
+    unlink_jira(name, force)
 
 
 @cli.command(name="cleanup-sessions")

@@ -9,7 +9,7 @@ from rich.prompt import Confirm
 
 from devflow.cli.utils import require_outside_claude, is_json_mode, console_print, output_json
 from devflow.config.loader import ConfigLoader
-from devflow.jira import JiraClient
+from devflow.issue_tracker.factory import create_issue_tracker_client
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.session.manager import SessionManager
 
@@ -17,7 +17,7 @@ console = Console()
 
 
 def _fetch_issue_metadata_dict(issue_key: str) -> Optional[dict]:
-    """Fetch issue tracker ticket metadata using jira CLI.
+    """Fetch issue tracker ticket metadata using issue tracker client.
 
     Args:
         issue_key: issue tracker key (e.g., PROJ-52470)
@@ -26,12 +26,12 @@ def _fetch_issue_metadata_dict(issue_key: str) -> Optional[dict]:
         issue tracker ticket metadata dictionary if successful, None if not found
 
     Raises:
-        RuntimeError: If jira CLI is not installed or ticket validation fails
-        FileNotFoundError: If jira CLI is not installed
+        RuntimeError: If ticket validation fails
+        FileNotFoundError: If issue tracker client is not available
     """
     try:
-        jira_client = JiraClient(timeout=10)
-        ticket = jira_client.get_ticket(issue_key)
+        issue_tracker_client = create_issue_tracker_client(timeout=10)
+        ticket = issue_tracker_client.get_ticket(issue_key)
         return ticket
 
     except JiraNotFoundError as e:
@@ -152,11 +152,12 @@ def link_jira(
 
 
 @require_outside_claude
-def unlink_jira(name: str) -> None:
+def unlink_jira(name: str, force: bool = False) -> None:
     """Remove JIRA association from a session group.
 
     Args:
         name: Session group name or issue key
+        force: Skip confirmation prompts
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -165,23 +166,33 @@ def unlink_jira(name: str) -> None:
     sessions = session_manager.index.get_sessions(name)
 
     if not sessions:
-        console.print(f"[red]✗[/red] Session group '{name}' not found")
+        if is_json_mode():
+            output_json(success=False, error={"code": "NOT_FOUND", "message": f"Session group '{name}' not found"})
+        else:
+            console.print(f"[red]✗[/red] Session group '{name}' not found")
         sys.exit(1)
 
     # Check if any session has a issue key
     has_jira = any(session.issue_key for session in sessions)
 
     if not has_jira:
-        console.print(f"[yellow]⚠[/yellow] Session group '{sessions[0].name}' has no JIRA association")
+        if is_json_mode():
+            output_json(success=False, error={"code": "NO_JIRA", "message": f"Session group '{sessions[0].name}' has no JIRA association"})
+        else:
+            console.print(f"[yellow]⚠[/yellow] Session group '{sessions[0].name}' has no JIRA association")
         sys.exit(0)
 
     issue_key= sessions[0].issue_key
     group_name = sessions[0].name
 
-    # Confirm removal
-    if not Confirm.ask(f"Remove JIRA association ({issue_key}) from '{group_name}'?", default=True):
-        console.print("[dim]Unlink operation cancelled[/dim]")
-        sys.exit(0)
+    # Confirm removal (skip if force or JSON mode)
+    if not force and not is_json_mode():
+        if not Confirm.ask(f"Remove JIRA association ({issue_key}) from '{group_name}'?", default=True):
+            if is_json_mode():
+                output_json(success=False, error={"code": "CANCELLED", "message": "Unlink operation cancelled by user"})
+            else:
+                console.print("[dim]Unlink operation cancelled[/dim]")
+            sys.exit(0)
 
     # Update all sessions in the group
     for session in sessions:
@@ -190,8 +201,18 @@ def unlink_jira(name: str) -> None:
         session.issue_metadata = {}
         session_manager.update_session(session)
 
-    console.print(f"[green]✓[/green] Removed JIRA association from session group '{group_name}'")
-    console.print(f"[dim]All {len(sessions)} session(s) in group are now JIRA-free[/dim]")
-    console.print()
-    console.print(f"[dim]Access with:[/dim]")
-    console.print(f"  daf open {group_name}")
+    if is_json_mode():
+        output_json(
+            success=True,
+            data={
+                "session_group": group_name,
+                "previous_issue_key": issue_key,
+                "sessions_updated": len(sessions)
+            }
+        )
+    else:
+        console.print(f"[green]✓[/green] Removed JIRA association from session group '{group_name}'")
+        console.print(f"[dim]All {len(sessions)} session(s) in group are now JIRA-free[/dim]")
+        console.print()
+        console.print(f"[dim]Access with:[/dim]")
+        console.print(f"  daf open {group_name}")
