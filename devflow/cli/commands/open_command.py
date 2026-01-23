@@ -499,6 +499,7 @@ def open_session(
             active_conv.project_path,
             active_conv.branch,
             base_branch,
+            identifier,
             config
         )
 
@@ -1828,13 +1829,14 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
     return True
 
 
-def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch: str, config: Optional[any] = None) -> bool:
+def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch: str, identifier: str, config: Optional[any] = None) -> bool:
     """Check if branch is behind base branch and prompt to sync.
 
     Args:
         project_path: Project directory path
         branch: Current branch name
         base_branch: Base branch to check against (e.g., 'main')
+        identifier: Session identifier (session name or JIRA key) for resume command
         config: Configuration object (optional)
 
     Returns:
@@ -1902,7 +1904,7 @@ def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch
             console.print(f"  1. Resolve conflicts in your editor")
             console.print(f"  2. Run: git add <resolved-files>")
             console.print(f"  3. Run: git commit")
-            console.print(f"  4. Run: daf open {branch} (to resume session after resolving conflicts)")
+            console.print(f"  4. Run: daf open {identifier} (to resume session after resolving conflicts)")
             return False
     else:
         console.print(f"\n[cyan]Rebasing {branch} onto {base_branch}...[/cyan]")
@@ -1916,7 +1918,7 @@ def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch
             console.print(f"  1. Resolve conflicts in your editor")
             console.print(f"  2. Run: git add <resolved-files>")
             console.print(f"  3. Run: git rebase --continue")
-            console.print(f"  4. Run: daf open {branch} (to resume session after resolving conflicts)")
+            console.print(f"  4. Run: daf open {identifier} (to resume session after resolving conflicts)")
             return False
 
 
