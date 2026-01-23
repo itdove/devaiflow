@@ -160,9 +160,9 @@ class MockIssueTrackerClient(IssueTrackerClient):
         **extra_fields,
     ) -> str:
         """Internal helper to create a ticket."""
-        # Get next ticket number for this project
+        # Get next ticket number (global counter across all projects)
         all_tickets = self.store.list_jira_tickets()
-        ticket_num = len([t for t in all_tickets if t.get("key", "").startswith(f"{project}-")]) + 1
+        ticket_num = len(all_tickets) + 1
         key = f"{project}-{ticket_num}"
 
         ticket = {
@@ -182,7 +182,7 @@ class MockIssueTrackerClient(IssueTrackerClient):
             "acceptance_criteria": acceptance_criteria,
             "workstream": workstream,
         }
-        self.store.save_jira_ticket(key, ticket)
+        self.store.set_jira_ticket(key, ticket)
         return key
 
     def update_issue(self, issue_key: str, payload: Dict) -> None:
@@ -196,7 +196,7 @@ class MockIssueTrackerClient(IssueTrackerClient):
             )
         # Simple update - merge payload into ticket
         ticket.update(payload)
-        self.store.save_jira_ticket(issue_key, ticket)
+        self.store.set_jira_ticket(issue_key, ticket)
 
     def update_ticket_field(self, issue_key: str, field_name: str, value: str) -> None:
         """Update a single field."""
@@ -208,7 +208,7 @@ class MockIssueTrackerClient(IssueTrackerClient):
                 resource_id=issue_key
             )
         ticket[field_name] = value
-        self.store.save_jira_ticket(issue_key, ticket)
+        self.store.set_jira_ticket(issue_key, ticket)
 
     def add_comment(self, issue_key: str, comment: str, public: bool = False) -> None:
         """Add a comment to a ticket."""
@@ -232,7 +232,7 @@ class MockIssueTrackerClient(IssueTrackerClient):
                 resource_id=issue_key
             )
         ticket["status"] = status
-        self.store.save_jira_ticket(issue_key, ticket)
+        self.store.set_jira_ticket(issue_key, ticket)
 
     def attach_file(self, issue_key: str, file_path: str) -> None:
         """Attach a file to a ticket."""
