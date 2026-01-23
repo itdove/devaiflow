@@ -436,6 +436,9 @@ This:
 3. Links ticket to session
 4. Updates all conversations in the session
 
+**Options:**
+- `--force` - Skip confirmation prompt when replacing existing link (useful for scripts and automation)
+
 ### Unlink JIRA
 
 ```bash
@@ -443,6 +446,9 @@ daf unlink redis-test
 ```
 
 Removes JIRA association but keeps all session data.
+
+**Options:**
+- `--force` - Skip confirmation prompt (useful for scripts and automation)
 
 ## Syncing JIRA Tickets
 
