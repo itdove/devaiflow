@@ -516,7 +516,7 @@ def test_check_and_sync_with_base_branch_not_git(tmp_path):
     from devflow.cli.commands.open_command import _check_and_sync_with_base_branch
 
     # Should handle gracefully and not fail
-    _check_and_sync_with_base_branch(str(tmp_path), "feature", "main")
+    _check_and_sync_with_base_branch(str(tmp_path), "feature", "main", "test-session")
 
 
 @pytest.mark.skipif(
@@ -544,7 +544,7 @@ def test_check_and_sync_with_base_branch_up_to_date(tmp_path):
          patch.object(GitUtils, 'commits_behind', return_value=0):
 
         # Should complete without prompting
-        _check_and_sync_with_base_branch(str(tmp_path), current_branch, current_branch)
+        _check_and_sync_with_base_branch(str(tmp_path), current_branch, current_branch, "test-session")
 
 
 @pytest.mark.skipif(
@@ -574,7 +574,7 @@ def test_check_and_sync_with_base_branch_user_declines(tmp_path):
          patch.object(GitUtils, 'merge_branch') as mock_merge, \
          patch.object(GitUtils, 'rebase_branch') as mock_rebase:
 
-        _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main")
+        _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
 
         # Should not attempt merge or rebase
         mock_merge.assert_not_called()
@@ -608,7 +608,7 @@ def test_check_and_sync_with_base_branch_merge_success(tmp_path):
          patch('rich.prompt.Prompt.ask', return_value='m'), \
          patch.object(GitUtils, 'merge_branch', return_value=True) as mock_merge:
 
-        _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main")
+        _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
 
         # Should call merge with origin/main
         mock_merge.assert_called_once_with(tmp_path, "origin/main")
@@ -641,7 +641,7 @@ def test_check_and_sync_with_base_branch_rebase_success(tmp_path):
          patch('rich.prompt.Prompt.ask', return_value='r'), \
          patch.object(GitUtils, 'rebase_branch', return_value=True) as mock_rebase:
 
-        _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main")
+        _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
 
         # Should call rebase with origin/main
         mock_rebase.assert_called_once_with(tmp_path, "origin/main")
@@ -675,7 +675,7 @@ def test_check_and_sync_with_base_branch_merge_conflict(tmp_path):
          patch.object(GitUtils, 'merge_branch', return_value=False) as mock_merge:
 
         # PROJ-60408: Should return False on merge conflict
-        result = _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main")
+        result = _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
 
         assert result is False, "Should return False when merge fails"
         mock_merge.assert_called_once()
@@ -709,7 +709,7 @@ def test_check_and_sync_with_base_branch_rebase_conflict(tmp_path):
          patch.object(GitUtils, 'rebase_branch', return_value=False) as mock_rebase:
 
         # PROJ-60408: Should return False on rebase conflict
-        result = _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main")
+        result = _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
 
         assert result is False, "Should return False when rebase fails"
         mock_rebase.assert_called_once()
@@ -730,7 +730,7 @@ def test_check_and_sync_with_base_branch_fetch_fails(tmp_path):
     with patch.object(GitUtils, 'fetch_origin', return_value=False), \
          patch.object(GitUtils, 'commits_behind') as mock_commits:
 
-        _check_and_sync_with_base_branch(str(tmp_path), "feature", "main")
+        _check_and_sync_with_base_branch(str(tmp_path), "feature", "main", "test-session")
 
         # Should skip check if fetch fails
         mock_commits.assert_not_called()
