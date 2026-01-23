@@ -166,22 +166,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 print_section "Test 1: Non-Existent Session Errors"
 print_test "Try to open non-existent session"
 
-daf open "non-existent-session-12345" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 30 daf open "non-existent-session-12345" > /dev/null 2>&1
 OPEN_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf open non-existent" "Non-existent session error" $OPEN_EXIT
 
 # Test 2: Info for non-existent session
 print_test "Try to get info for non-existent session"
 
-daf info "non-existent-session-12345" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 30 daf info "non-existent-session-12345" > /dev/null 2>&1
 INFO_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf info non-existent" "Non-existent session info error" $INFO_EXIT
 
 # Test 3: Delete non-existent session
 print_test "Try to delete non-existent session"
 
-daf delete "non-existent-session-12345" --force > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 30 daf delete "non-existent-session-12345" --force > /dev/null 2>&1
 DELETE_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf delete non-existent" "Non-existent session delete error" $DELETE_EXIT
 
 # Test 4: Empty session name

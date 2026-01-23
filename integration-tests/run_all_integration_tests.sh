@@ -217,6 +217,12 @@ run_test() {
         run_test "${TESTS[$i]}" "${TEST_DESCRIPTIONS[$i]}" "$test_number"
 
         echo ""
+
+        # Add delay between tests to allow for cleanup and resource finalization
+        # This prevents intermittent hanging issues when tests run in rapid succession
+        if [ $test_number -lt $TOTAL_TESTS ]; then
+            sleep 2
+        fi
     done
 
     END_TIME=$(date +%s)
