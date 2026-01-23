@@ -91,11 +91,11 @@ Each session is an **isolated workspace** with its own:
 ## Quick Start
 
 ```bash
-# Install
-pip install .
+# Install from PyPI
+pip install devaiflow
 
 # Export environment variables for issue tracker (JIRA example)
-export JIRA_URL=  # Currently supports JIRA only"https://jira.example.com"
+export JIRA_URL="https://jira.example.com"  # Currently supports JIRA only
 export JIRA_API_TOKEN=<YOUR_JIRA_PAT>
 
 # Initialization
@@ -266,12 +266,24 @@ See the [Installation Guide](docs/02-installation.md) for detailed setup instruc
 
 See `docs/config-templates/` for complete templates with detailed comments and examples.
 
-## Development
+## Installation
+
+### From PyPI (Recommended)
+
+```bash
+pip install devaiflow
+```
+
+### From Source (Development)
 
 For developers working on the DevAIFlow codebase:
 
 ```bash
-# Setup
+# Clone the repository
+git clone https://github.com/itdove/devaiflow.git
+cd devaiflow
+
+# Install in editable mode with dev dependencies
 pip install -e ".[dev]"
 
 # Run unit tests

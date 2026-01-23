@@ -53,13 +53,12 @@ DevAIFlow officially supports:
 
 ## Installation Methods
 
-### Method 1: pip (Recommended)
+### Method 1: From PyPI (Recommended)
 
-Install using pip for a straightforward installation:
+Install the latest stable release from PyPI:
 
 ```bash
-cd ~/development/workspace/devaiflow
-pip install .
+pip install devaiflow
 ```
 
 **Verify installation:**
@@ -75,7 +74,7 @@ daf check
 
 This will verify all required and optional tools are installed. See [Verifying Dependencies](#verifying-dependencies) below.
 
-### Method 2: Development Installation
+### Method 2: From Source (Development)
 
 For development or contributing:
 
