@@ -46,7 +46,7 @@ class StorageBackend(ABC):
         """Load session metadata from storage.
 
         Args:
-            session_name: Session group name
+            session_name: Session name
 
         Returns:
             Dictionary of session metadata or None if not found
@@ -73,7 +73,7 @@ class StorageBackend(ABC):
         """Delete all data for a session.
 
         Args:
-            session_name: Session group name
+            session_name: Session name
 
         Raises:
             Exception: If deletion fails
@@ -85,7 +85,7 @@ class StorageBackend(ABC):
         """Get the directory path for session data.
 
         Args:
-            session_name: Session group name
+            session_name: Session name
 
         Returns:
             Path to session directory

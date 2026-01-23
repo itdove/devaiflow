@@ -294,14 +294,14 @@ EOF
 **Solution:**
 Just select the appropriate working directory when prompted. It will be saved for future use.
 
-### Multiple Sessions When Opening
+### Multiple Conversations When Opening
 
-**Problem:** `daf open PROJ-12345` shows multiple sessions to choose from.
+**Problem:** `daf open PROJ-12345` shows multiple conversations to choose from.
 
-**Cause:** You created multiple sessions in the same session group (e.g., working across multiple repos).
+**Cause:** You created multiple conversations in the same session (e.g., working across multiple repos).
 
 **Solution:**
-This is expected behavior. Select the session number you want to work on.
+This is expected behavior. Select the conversation you want to work on.
 
 ### Session Not Found
 
@@ -1157,7 +1157,7 @@ If you can't resolve the issue:
 
 **Solution:** Exit Claude Code and run the command from a regular terminal
 
-### "Session group already exists"
+### "Session already exists"
 
 **Meaning:** Session name already used
 

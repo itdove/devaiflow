@@ -379,9 +379,9 @@ This means the help output is customized for each specific issue, showing only f
 daf new --jira PROJ-12345 --goal "Implement backup feature"
 ```
 
-Prompts for session group name:
+Prompts for session name:
 ```
-Session group name [PROJ-12345]:
+Session name [PROJ-12345]:
 ```
 
 Press Enter to use JIRA key, or type a custom name.
@@ -433,8 +433,8 @@ daf link redis-test --jira PROJ-12346
 This:
 1. Validates ticket exists
 2. Fetches ticket metadata
-3. Links ticket to session group
-4. Updates all sessions in the group
+3. Links ticket to session
+4. Updates all conversations in the session
 
 ### Unlink JIRA
 
@@ -894,9 +894,9 @@ JIRA Status: In Progress
 Sprint: 2025-01
 ```
 
-### Time Across Session Groups
+### Time Across Multiple Conversations
 
-When you have multiple sessions for one JIRA ticket (multi-repo work), time is tracked separately per session but can be viewed together.
+When you have multiple conversations in one session for one JIRA ticket (multi-repo work), time is tracked at the session level across all conversations.
 
 ## Multi-Repository JIRA Workflows
 

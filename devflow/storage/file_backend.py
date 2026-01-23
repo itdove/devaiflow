@@ -106,7 +106,7 @@ class FileBackend(StorageBackend):
         """Load session metadata from session directory.
 
         Args:
-            session_name: Session group name
+            session_name: Session name
 
         Returns:
             Dictionary of session metadata or None if not found

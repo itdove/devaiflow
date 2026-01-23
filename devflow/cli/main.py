@@ -267,7 +267,7 @@ def cli(ctx: click.Context) -> None:
 
 
 @cli.command()
-@click.option("--name", help="Session group name (will prompt if not provided)")
+@click.option("--name", help="Session name (will prompt if not provided)")
 @click.option("--goal", help="Session goal/description (supports file:// paths and http(s):// URLs)")
 @click.option("--jira", help="issue tracker key (optional, e.g., PROJ-12345)")
 @click.option("--working-directory", help="Working directory name (defaults to directory name)")

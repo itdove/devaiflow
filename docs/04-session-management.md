@@ -285,9 +285,9 @@ If you need to manually create a JIRA-linked session (less common):
 daf new --jira PROJ-12345 --goal "Implement backup feature"
 ```
 
-You'll be prompted for the session group name:
+You'll be prompted for the session name:
 ```
-Session group name [PROJ-12345]:
+Session name [PROJ-12345]:
 ```
 
 Press Enter to use the JIRA key, or type a custom name.
@@ -315,8 +315,8 @@ Reuse configuration from a saved template.
 Each session stores:
 
 ### Core Metadata
-- **name** - Session group name (identifier)
-- **session_id** - Unique numeric ID within the group
+- **name** - Session name (identifier)
+- **session_id** - Unique numeric ID within the session
 - **goal** - What you're trying to accomplish
 - **status** - created, in_progress, or complete
 - **working_directory** - Repository name (e.g., "backend-api")
@@ -728,8 +728,8 @@ daf link backup --jira PROJ-12345
 This:
 1. Validates JIRA ticket exists
 2. Fetches ticket metadata
-3. Links ticket to session group
-4. Updates all sessions in the group
+3. Links ticket to session
+4. Updates all conversations in the session
 
 ### Unlink JIRA
 
@@ -855,11 +855,11 @@ Don't leave sessions in `in_progress` forever:
 daf complete user-auth-api
 ```
 
-### 4. Use Session Groups for Multi-Repo Work
+### 4. Use Multi-Conversation Sessions for Multi-Repo Work
 
 Keep related work organized:
 ```bash
-# All sessions named "backup" for one JIRA ticket
+# All conversations in one session for one JIRA ticket
 daf new --name "backup" --jira PROJ-12345 --goal "Backend API"
 daf new --name "backup" --jira PROJ-12345 --goal "Frontend UI"
 daf new --name "backup" --jira PROJ-12345 --goal "Infrastructure"
@@ -918,11 +918,11 @@ daf open session-name
 
 ### Multiple Sessions When Opening
 
-**Problem**: Prompted to select from multiple sessions
+**Problem**: Prompted to select from multiple conversations
 
-**Cause**: Session group has multiple sessions (by design)
+**Cause**: Session has multiple conversations (by design for multi-repo work)
 
-**Solution**: Select the one you want to work on, or use specific session ID:
+**Solution**: Select the one you want to work on, or use specific conversation:
 ```bash
 daf open session-name  # Interactive selection
 ```

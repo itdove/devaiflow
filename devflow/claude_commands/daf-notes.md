@@ -22,7 +22,7 @@ daf notes --latest        # Most recently active session
 - All notes in chronological order (oldest to newest)
 - Timestamp for each note
 - JIRA key association (if present)
-- Session ID for multi-session groups
+- Conversation context for multi-conversation sessions
 
 **Example output:**
 ```
