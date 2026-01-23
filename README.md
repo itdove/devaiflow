@@ -49,6 +49,8 @@ Each session is an **isolated workspace** with its own:
 - Progress notes
 - Optional JIRA link
 
+**Named workspaces** enable concurrent multi-branch development - work on the same project in different workspaces (e.g., main branch + experimental feature) without conflicts.
+
 ### Why Use This Tool?
 
 **🎯 Stay Focused**
@@ -76,6 +78,7 @@ Each session is an **isolated workspace** with its own:
 **Key Features:**
 - 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf
 - 📂 **Multi-Conversation Sessions** - Organize related work across multiple repositories
+- 🏢 **Named Workspaces** - Multiple workspaces for concurrent multi-branch development
 - 🎫 **Optional Issue Tracker** - Link issue tracker tickets (JIRA supported), or never (your choice)
 - ⏱️ **Time Tracking** - Automatic tracking with pause/resume
 - 🔄 **Context Loading** - Automatically reads AGENTS.md, CLAUDE.md, and issue tracker tickets
@@ -117,6 +120,26 @@ daf complete PROJ-12345
 daf new --name "fix-login-bug" --goal "Fix login timeout issue"
 daf open fix-login-bug
 daf complete fix-login-bug
+```
+
+**Workspaces:** Organize projects by product or work on same project with different branches:
+```bash
+# Configure workspaces - organize by product
+daf workspace add ~/development/product-a          # Auto-derives name: product-a
+daf workspace add ~/development/product-b          # Auto-derives name: product-b
+daf workspace add primary ~/development --default
+
+# Or organize for concurrent multi-branch work
+daf workspace add experiments ~/experiments
+
+# Work on different products
+daf new --name PROJ-123 -w product-a --path ~/development/product-a/backend
+
+# Work on experimental branch (no conflict with main workspace!)
+daf new --name PROJ-456 -w experiments --path ~/experiments/myproject
+
+# Sessions remember their workspace
+daf open PROJ-123  # Prompts to select which workspace if ambiguous
 ```
 
 **Configuration:** Use the interactive TUI for easy configuration:

@@ -5,6 +5,7 @@ Complete reference for all CLI commands with examples.
 ## Table of Contents
 
 - [Core Session Commands](#core-session-commands)
+- [Workspace Management](#workspace-management)
 - [JIRA Integration Commands](#jira-integration-commands)
 - [Notes and Progress](#notes-and-progress)
 - [Time Tracking](#time-tracking)
@@ -81,6 +82,7 @@ daf new --name <NAME> --goal "..." [OPTIONS]
 - `--path` - Project path (auto-detected if not specified)
 - `--branch` - Git branch name (optional)
 - `--template` - Template name to use (optional)
+- `-w, --workspace` - Workspace name to use (overrides session default and config default)
 
 **Goal Input Formats:**
 - **Plain text**: Any multi-word text is treated as plain text
@@ -408,6 +410,7 @@ daf open <NAME-or-JIRA> [OPTIONS]
 ```
 
 **Options:**
+- `-w, --workspace` - Workspace name to use (overrides session stored workspace)
 - `--new-conversation` - Archive current Claude Code conversation and start fresh with a new one
 - `--json` - Return JSON output (non-interactive mode). Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Suitable for automation, CI/CD pipelines, and integration tests.
 
@@ -1002,6 +1005,316 @@ daf new --name PROJ-59815 --goal "Fresh approach" --jira PROJ-59815
 **Exit Codes:**
 - `0` - Session deleted successfully
 - `1` - Session not found or no identifier provided
+
+---
+
+## Workspace Management
+
+### What are Workspaces?
+
+Workspaces enable concurrent multi-branch development by organizing repositories into named locations (similar to VSCode workspaces). Each workspace can have active sessions without conflicts, allowing you to work on the same project in different workspaces simultaneously.
+
+**Key Benefits:**
+- Work on the same project with different branches in parallel (e.g., main development + experimental feature)
+- Organize repositories by product, team, or workflow
+- Sessions remember their workspace and automatically reuse it on reopen
+- No conflicts between concurrent sessions in different workspaces
+
+**Use Cases:**
+- **Concurrent multi-branch development**: `primary` workspace for main development + `feat-caching` for experimental branch
+- **Product organization**: `product-a` workspace for Product A repos + `product-b` for Product B repos + `product-c` for Product C repos
+- **Team vs personal work**: `personal` workspace for experiments + `team` for production work
+- **Client projects**: `client-acme` workspace + `client-globex` workspace for different client codebases
+
+---
+
+### daf workspace list - List Workspaces
+
+View all configured workspaces and their paths.
+
+```bash
+daf workspace list
+```
+
+**What it shows:**
+- Workspace name (used with -w flag)
+- Full path to workspace directory
+- Default workspace marker (✓)
+
+**Output:**
+```
+                Configured Workspaces
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┓
+┃ Name        ┃ Path                        ┃ Default ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━┩
+│ primary     │ /Users/john/development     │ ✓       │
+│ product-a   │ /Users/john/repos/product-a │         │
+│ feat-cache  │ /Users/john/work/caching    │         │
+└─────────────┴─────────────────────────────┴─────────┘
+```
+
+**When to use:**
+- See available workspaces before creating a session
+- Check which workspace is set as default
+- Verify workspace paths are correct
+- Find workspace names to use with `-w` flag
+
+**Notes:**
+- This command CAN run inside Claude Code sessions (read-only)
+- The default workspace is used when no `-w` flag is provided
+- Sessions remember their workspace for automatic reuse
+
+---
+
+### daf workspace add - Add Workspace
+
+**⚠️ RESTRICTED**: This command must be run OUTSIDE Claude Code sessions.
+
+Add a new named workspace to your configuration.
+
+```bash
+daf workspace add <NAME> <PATH> [--default]
+daf workspace add <PATH> [--default]     # Auto-derive name from path
+```
+
+**Arguments:**
+- `<NAME>` - Unique workspace name (alphanumeric, hyphens allowed) - optional if path provided
+- `<PATH>` - Absolute or home-relative path to workspace directory
+
+**Options:**
+- `--default` - Set this workspace as the default for new sessions
+
+**Auto-Derive Name from Path:**
+When only a path is provided (contains `/`), the workspace name is automatically derived from the last directory component.
+
+**Examples:**
+```bash
+# Explicit name and path
+daf workspace add product-a ~/repos/product-a
+
+# Add workspace and set as default
+daf workspace add primary ~/development --default
+
+# Auto-derive name from path (name becomes "my-project")
+daf workspace add ~/development/my-project
+
+# Auto-derive with --default flag (name becomes "experiments")
+daf workspace add ~/repos/experiments --default
+
+# Interactive mode (prompts for name and path)
+daf workspace add
+```
+
+**What it does:**
+1. Auto-derives workspace name from path if only path provided
+2. Validates workspace name (unique, valid format)
+3. Expands and validates path (creates directory if missing)
+4. Adds workspace to config.json
+5. Optionally sets as default workspace
+6. Shows confirmation with workspace details
+
+**Validation:**
+- Workspace name must be unique
+- Path must be valid (will be created if missing)
+- Only one workspace can be default (automatically updates previous default)
+
+**When to use:**
+- Setting up workspaces for the first time
+- Adding a new product or project workspace
+- Creating workspace for experimental branches
+- Quickly adding workspaces without thinking of a name
+
+---
+
+### daf workspace remove - Remove Workspace
+
+**⚠️ RESTRICTED**: This command must be run OUTSIDE Claude Code sessions.
+
+Remove a workspace from configuration.
+
+```bash
+daf workspace remove <NAME> [--force]
+```
+
+**Arguments:**
+- `<NAME>` - Workspace name to remove
+
+**Options:**
+- `--force` - Skip confirmation prompt
+
+**Examples:**
+```bash
+# Remove workspace (with confirmation)
+daf workspace remove old-project
+
+# Remove without confirmation
+daf workspace remove temp-workspace --force
+```
+
+**What it does:**
+1. Checks if workspace exists
+2. Warns if workspace is the default
+3. Prompts for confirmation (unless --force)
+4. Removes workspace from config.json
+5. Shows confirmation
+
+**Safety:**
+- Prompts for confirmation before removal (unless --force)
+- Warns if removing the default workspace
+- Does NOT delete files on disk (only removes from configuration)
+- Cannot remove if it's the only workspace
+
+**When to use:**
+- Cleaning up workspaces no longer in use
+- Removing temporary experimental workspaces
+- Reorganizing workspace configuration
+
+**Important:** This only removes the workspace from configuration. Files on disk are NOT deleted.
+
+---
+
+### daf workspace set-default - Set Default Workspace
+
+**⚠️ RESTRICTED**: This command must be run OUTSIDE Claude Code sessions.
+
+Set a workspace as the default for new sessions.
+
+```bash
+daf workspace set-default <NAME>
+```
+
+**Arguments:**
+- `<NAME>` - Workspace name to set as default
+
+**Examples:**
+```bash
+# Set primary as default
+daf workspace set-default primary
+
+# Switch default to product workspace
+daf workspace set-default product-a
+```
+
+**What it does:**
+1. Validates workspace exists
+2. Updates previous default to non-default
+3. Sets specified workspace as default
+4. Saves changes to config.json
+5. Shows confirmation
+
+**When to use:**
+- Changing your default workspace permanently
+- Setting up initial workspace configuration
+
+**Important - When NOT to use:**
+- ❌ **NOT for switching between workspaces per-session**
+- ❌ **NOT for going back and forth between workspaces**
+
+**For switching workspaces, use the `-w` flag instead:**
+```bash
+# Switch per-session with -w flag (RECOMMENDED)
+daf new --name AAP-123 -w feat-caching    # Create in feat-caching
+daf open AAP-123 -w primary               # Override to primary
+
+# Sessions remember workspace automatically
+daf open AAP-123  # Uses feat-caching (remembered from creation)
+```
+
+**Why?** The `-w` flag provides per-session workspace selection, while `set-default` changes the global default for ALL new sessions. Use `set-default` only for permanent configuration changes.
+
+---
+
+### daf workspace rename - Rename Workspace
+
+**⚠️ RESTRICTED**: This command must be run OUTSIDE Claude Code sessions.
+
+Rename an existing workspace. This command automatically updates all sessions that use the old workspace name.
+
+```bash
+daf workspace rename <OLD_NAME> <NEW_NAME>
+daf workspace rename                        # Interactive mode
+```
+
+**Arguments:**
+- `<OLD_NAME>` - Current workspace name
+- `<NEW_NAME>` - New workspace name
+
+**Examples:**
+```bash
+# Rename workspace
+daf workspace rename old-name new-name
+
+# Rename with better naming
+daf workspace rename temp-workspace product-b
+
+# Interactive mode (prompts for selection and new name)
+daf workspace rename
+```
+
+**What it does:**
+1. Validates old workspace exists
+2. Validates new name is unique
+3. Renames workspace in config.json
+4. **Automatically updates all sessions** that use the old workspace name
+5. Shows confirmation with number of sessions updated
+
+**Example output:**
+```
+✓ Renamed workspace: temp-workspace → product-b
+Updated 3 session(s) to use new workspace name
+```
+
+**When to use:**
+- Reorganizing workspace naming conventions
+- Fixing typos in workspace names
+- Better categorizing workspaces
+
+**Important:** All sessions using the old workspace name are automatically updated to use the new name, so you don't lose any session associations.
+
+---
+
+### Workspace Selection Priority
+
+When opening or creating a session, workspace is resolved in this order:
+
+1. **`-w, --workspace` flag** - Explicit workspace selection (highest priority)
+2. **Session stored workspace** - Workspace remembered from session creation
+3. **Default workspace** - Workspace marked as default in config
+4. **Interactive prompt** - User selects from available workspaces
+
+**Examples:**
+
+```bash
+# Priority 1: -w flag overrides everything
+daf new --name AAP-123 -w product-a      # Uses product-a
+daf open AAP-123 -w primary              # Uses primary (overrides stored workspace)
+
+# Priority 2: Session remembers workspace
+daf new --name AAP-456 -w feat-caching   # Creates in feat-caching
+daf open AAP-456                         # Uses feat-caching (remembered)
+
+# Priority 3: Default workspace (no -w flag, no stored workspace)
+daf new --name AAP-789                   # Uses default workspace
+
+# Priority 4: Interactive prompt (no default configured)
+daf new --name AAP-999                   # Prompts user to select workspace
+```
+
+**Concurrent Sessions:**
+
+You can have active sessions for the same project in different workspaces:
+
+```bash
+# Terminal 1: Work on main branch in primary workspace
+daf new --name PROJ-123 -w primary --path ~/development/myproject
+# Active session in primary/myproject
+
+# Terminal 2: Work on experimental branch in different workspace
+daf new --name PROJ-123 -w experiments --path ~/experiments/myproject
+# Active session in experiments/myproject (no conflict!)
+```
+
+The tool uses `(project_path, workspace_name)` tuple for concurrent session checking, allowing parallel work in different workspaces.
 
 ---
 

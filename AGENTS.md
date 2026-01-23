@@ -1399,6 +1399,22 @@ class Session(BaseModel):
   - All 2039 tests pass (3 skipped)
   - Feature support matrix documented with known limitations
   - Ready for community testing and feedback
+- ✓ Multiple named workspaces for concurrent multi-branch development (AAP-63377)
+  - WorkspaceDefinition model with name, path, is_default fields
+  - RepoConfig supports List[WorkspaceDefinition] with backward compatibility
+  - Automatic migration from single workspace string to workspaces list
+  - Session model includes workspace_name field for persistence
+  - Workspace selection with priority resolution (flag > session > default > prompt)
+  - Updated AAP-60431 check to use (project_path, workspace_name) tuple
+  - Allows concurrent sessions on same project in different workspaces
+  - Continues blocking concurrent sessions within same workspace
+  - daf workspace command group (add, remove, list, set-default)
+  - --workspace flag added to daf new and daf open commands
+  - Session remembers workspace for automatic reuse on reopen
+  - daf list and daf info display workspace information
+  - Comprehensive test coverage (14 tests in test_workspace.py)
+  - All 67 core tests pass (config + session manager + workspace)
+  - Enables VSCode workspace-style multi-branch development workflows
 
 ## Release Management
 

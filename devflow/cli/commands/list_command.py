@@ -47,6 +47,7 @@ def _display_page(
     table = Table(title="Your Sessions", show_header=True, header_style="bold magenta")
     table.add_column("Status")
     table.add_column("Name", style="bold")
+    table.add_column("Workspace", style="cyan")
     table.add_column("JIRA")
     table.add_column("Summary")
     table.add_column("Conversations", style="dim")
@@ -105,10 +106,14 @@ def _display_page(
             # Fallback for old sessions without conversations dict
             conversations_display = session.working_directory or "-"
 
+        # AAP-63377: Display workspace name
+        workspace_display = session.workspace_name or "-"
+
         # Add row
         table.add_row(
             status_display,
             name_display,
+            workspace_display,
             issue_display,
             session.issue_metadata.get("summary") if session.issue_metadata else session.goal or "",
             conversations_display,

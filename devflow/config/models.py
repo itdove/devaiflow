@@ -111,12 +111,88 @@ class RepoDetectionConfig(BaseModel):
     fallback: str = "prompt"
 
 
+class WorkspaceDefinition(BaseModel):
+    """Definition for a named workspace directory.
+
+    Workspaces allow managing multiple repository locations for concurrent
+    multi-branch development or product/feature grouping (like VSCode workspaces).
+    """
+
+    name: str = Field(description="Unique workspace name (e.g., 'primary', 'product-a', 'feat-caching')")
+    path: str = Field(description="Absolute or home-relative path to workspace directory")
+    is_default: bool = Field(default=False, description="Whether this is the default workspace")
+
+    @field_validator('path')
+    @classmethod
+    def expand_path(cls, v: str) -> str:
+        """Expand ~ and environment variables in path."""
+        from pathlib import Path
+        return str(Path(v).expanduser())
+
+
 class RepoConfig(BaseModel):
     """Repository configuration."""
 
-    workspace: str
+    workspace: Optional[str] = None  # Deprecated - use workspaces instead (backward compatibility)
+    workspaces: List[WorkspaceDefinition] = Field(default_factory=list)
     detection: RepoDetectionConfig = Field(default_factory=RepoDetectionConfig)
     keywords: Dict[str, List[str]] = Field(default_factory=dict)
+
+    @model_validator(mode='after')
+    def migrate_workspace_to_workspaces(self) -> 'RepoConfig':
+        """Auto-migrate single workspace string to workspaces list.
+
+        For backward compatibility: if workspace is set but workspaces is empty,
+        create a workspace entry named 'default' with is_default=True.
+        """
+        if self.workspace and not self.workspaces:
+            # Migrate single workspace to workspaces list
+            self.workspaces = [
+                WorkspaceDefinition(
+                    name="default",
+                    path=self.workspace,
+                    is_default=True
+                )
+            ]
+
+        # Ensure at most one default workspace
+        default_count = sum(1 for w in self.workspaces if w.is_default)
+        if default_count > 1:
+            # Keep only the first default, unset others
+            found_default = False
+            for workspace in self.workspaces:
+                if workspace.is_default:
+                    if found_default:
+                        workspace.is_default = False
+                    else:
+                        found_default = True
+
+        return self
+
+    def get_default_workspace(self) -> Optional[WorkspaceDefinition]:
+        """Get the default workspace.
+
+        Returns:
+            Default WorkspaceDefinition or None if no default is set
+        """
+        for workspace in self.workspaces:
+            if workspace.is_default:
+                return workspace
+        return None
+
+    def get_workspace_by_name(self, name: str) -> Optional[WorkspaceDefinition]:
+        """Get a workspace by name.
+
+        Args:
+            name: Workspace name to find
+
+        Returns:
+            WorkspaceDefinition or None if not found
+        """
+        for workspace in self.workspaces:
+            if workspace.name == name:
+                return workspace
+        return None
 
 
 class TimeTrackingConfig(BaseModel):
@@ -492,6 +568,11 @@ class Session(BaseModel):
     - Each Conversation has active_session + archived_sessions list
     - Direct access to active session (no looping), simple swapping
     - Old single-conversation sessions are auto-migrated on load
+
+    Workspace Support (AAP-63377):
+    - workspace_name: Optional[str] - Selected workspace for this session
+    - Enables concurrent sessions on same project in different workspaces
+    - Session remembers workspace selection for automatic use on reopen
     """
 
     name: str  # Session name (primary identifier, must be unique)
@@ -506,11 +587,14 @@ class Session(BaseModel):
     tags: List[str] = Field(default_factory=list)
     related_sessions: List[str] = Field(default_factory=list)
 
-    # Multi-conversation support 
+    # Multi-conversation support
     # Dict maps working_dir to Conversation (contains active + archived sessions)
     # During deserialization, accepts both old format (ConversationContext) and new format (Conversation)
     conversations: Dict[str, Union[ConversationContext, Conversation]] = Field(default_factory=dict)
     working_directory: Optional[str] = None  # Tracks active conversation
+
+    # Workspace support (AAP-63377)
+    workspace_name: Optional[str] = None  # Selected workspace name for this session
 
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure

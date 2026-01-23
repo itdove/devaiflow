@@ -274,6 +274,9 @@ def _display_full_session_info(
             console.print(f"[bold]JIRA Status:[/bold] {issue_status}")
     status_text, status_color = get_status_display(session.status)
     console.print(f"[bold]Status:[/bold] [{status_color}]{status_text}[/{status_color}]")
+    # AAP-63377: Display workspace
+    if session.workspace_name:
+        console.print(f"[bold]Workspace:[/bold] [cyan]{session.workspace_name}[/cyan]")
     if session.goal:
         console.print(f"[bold]Goal:[/bold] {session.goal}")
     console.print()

@@ -38,7 +38,8 @@ def test_list_single_session(temp_daf_home):
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
-    assert "PROJ-12345" in result.output
+    # JIRA key may be truncated in table display (e.g., "PROJ-123…")
+    assert "PROJ-123" in result.output
     assert "test-dir" in result.output
     assert "Your Sessions" in result.output
 
@@ -136,8 +137,9 @@ def test_list_filter_by_working_directory(temp_daf_home):
     result = runner.invoke(cli, ["list", "--working-directory", "backend-service"])
 
     assert result.exit_code == 0
-    assert "backend-service" in result.output
-    assert "frontend-app" not in result.output
+    # Working directory may be truncated in table display (e.g., "backend-serv…")
+    assert "backend" in result.output
+    assert "frontend" not in result.output
 
 
 def test_list_with_work_sessions(temp_daf_home):
@@ -210,8 +212,8 @@ def test_list_displays_status_colors(temp_daf_home):
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
-    # Check for status indicators (output will be styled)
-    assert "In Progress" in result.output or "in_progress" in result.output
+    # Check for status indicators (output may be truncated in table, e.g., "in_progre…")
+    assert "in_progre" in result.output or "In Progre" in result.output
 
 
 def test_list_shows_session_summary(temp_daf_home):
@@ -261,7 +263,8 @@ def test_list_with_jira_summary(temp_daf_home):
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
-    assert "PROJ-12345" in result.output
+    # JIRA key may be truncated in table display (e.g., "PROJ-123…")
+    assert "PROJ-123" in result.output
     # Check for text that may wrap across lines in table
     assert "Implement" in result.output and "backup" in result.output
 
