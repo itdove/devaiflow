@@ -281,3 +281,91 @@ def test_workspace_persistence_in_session():
 
     # Cleanup
     manager.delete_session("test-workspace-persist")
+
+
+def test_last_used_workspace_initialized_from_is_default():
+    """Test that last_used_workspace is initialized from is_default workspace."""
+    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
+
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            user="test@example.com",
+            transitions={},
+        ),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path="/path/primary", is_default=False),
+                WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=True),
+                WorkspaceDefinition(name="feat-caching", path="/path/feat-caching", is_default=False),
+            ]
+        ),
+        prompts=PromptsConfig(),
+    )
+
+    # Config validator should auto-initialize last_used_workspace from is_default
+    assert config.prompts.last_used_workspace == "product-a"
+
+
+def test_last_used_workspace_initialized_to_first_workspace():
+    """Test that last_used_workspace is initialized to first workspace if no is_default."""
+    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
+
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            user="test@example.com",
+            transitions={},
+        ),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path="/path/primary", is_default=False),
+                WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=False),
+            ]
+        ),
+        prompts=PromptsConfig(),
+    )
+
+    # Should auto-initialize to first workspace
+    assert config.prompts.last_used_workspace == "primary"
+
+
+def test_last_used_workspace_not_overwritten_if_set():
+    """Test that existing last_used_workspace is not overwritten."""
+    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
+
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            user="test@example.com",
+            transitions={},
+        ),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path="/path/primary", is_default=True),
+                WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=False),
+            ]
+        ),
+        prompts=PromptsConfig(last_used_workspace="product-a"),
+    )
+
+    # Should keep existing last_used_workspace value
+    assert config.prompts.last_used_workspace == "product-a"
+
+
+def test_last_used_workspace_none_when_no_workspaces():
+    """Test that last_used_workspace remains None when no workspaces configured."""
+    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
+
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            user="test@example.com",
+            transitions={},
+        ),
+        repos=RepoConfig(workspaces=[]),
+        prompts=PromptsConfig(),
+    )
+
+    # Should remain None when no workspaces
+    assert config.prompts.last_used_workspace is None

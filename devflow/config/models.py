@@ -258,6 +258,7 @@ class PromptsConfig(BaseModel):
     remember_last_repo_per_project: Dict[str, str] = Field(default_factory=dict)  # Map: {"PROJ": "backend-api"}
     show_prompt_unit_tests: bool = True  # Show testing instructions in initial prompt for development sessions
     auto_load_related_conversations: bool = False  # Auto-prompt AI agent to read other conversations in multi-project sessions
+    last_used_workspace: Optional[str] = None  # Last workspace selected by user (replaces is_default as dynamic default)
 
     @field_validator('auto_create_pr_status', mode='before')
     @classmethod
@@ -346,6 +347,30 @@ class Config(BaseModel):
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use (mock mode uses DAF_MOCK_MODE env var)
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4")
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests (default: 10)
+
+    @model_validator(mode='after')
+    def initialize_last_used_workspace(self) -> 'Config':
+        """Auto-initialize last_used_workspace for better UX.
+
+        - Migrates is_default=True to last_used_workspace (backward compatibility)
+        - Auto-sets last_used_workspace to first workspace if not set
+        """
+        # Skip if no workspaces configured
+        if not self.repos.workspaces:
+            return self
+
+        # Migration: If any workspace has is_default=True, use it as last_used_workspace
+        if not self.prompts.last_used_workspace:
+            for workspace in self.repos.workspaces:
+                if workspace.is_default:
+                    self.prompts.last_used_workspace = workspace.name
+                    break
+
+        # Auto-initialize: If still not set, use first workspace
+        if not self.prompts.last_used_workspace:
+            self.prompts.last_used_workspace = self.repos.workspaces[0].name
+
+        return self
 
     class Config:
         populate_by_name = True

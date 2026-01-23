@@ -780,14 +780,15 @@ def select_workspace(
     config: Config,
     workspace_flag: Optional[str] = None,
     session: Optional[Session] = None,
-    skip_prompt: bool = False
+    skip_prompt: bool = False,
+    save_last_used: bool = True
 ) -> Optional[str]:
     """Select a workspace using priority resolution logic.
 
-    Priority order (AAP-63377):
+    Priority order (AAP-63945):
     1. workspace_flag (--workspace parameter)
-    2. session.workspace_name (previously selected workspace)
-    3. default workspace (is_default=True)
+    2. session.workspace_name (previously selected workspace for this session)
+    3. last-used workspace (prompts.last_used_workspace - global preference)
     4. prompt user (if not skip_prompt)
 
     Args:
@@ -795,6 +796,7 @@ def select_workspace(
         workspace_flag: Optional workspace name from --workspace flag
         session: Optional Session object with stored workspace_name
         skip_prompt: If True, don't prompt user (return None instead)
+        save_last_used: If True, update last_used_workspace when selection is made
 
     Returns:
         Selected workspace name or None if no selection made
@@ -809,12 +811,13 @@ def select_workspace(
         >>> select_workspace(config, session=session)
         'feat-caching'
 
-        >>> # Use default workspace
+        >>> # Use last-used workspace
+        >>> config.prompts.last_used_workspace = "primary"
         >>> select_workspace(config)
-        'default'
+        'primary'
 
         >>> # Prompt user (interactive)
-        >>> select_workspace(config)  # Shows menu
+        >>> select_workspace(config)  # Shows menu with ⭐ for last-used
         'product-a'
     """
     from devflow.config.models import WorkspaceDefinition
@@ -852,12 +855,16 @@ def select_workspace(
             # Workspace was deleted from config - fall through to next priority
             console.print(f"[yellow]Warning: Session workspace '{session.workspace_name}' not found in config[/yellow]")
 
-    # Priority 3: default workspace
-    default_workspace = config.repos.get_default_workspace()
-    if default_workspace:
-        if not skip_prompt:
-            console_print(f"[dim]Using default workspace: {default_workspace.name}[/dim]")
-        return default_workspace.name
+    # Priority 3: last-used workspace (global preference)
+    if config.prompts.last_used_workspace:
+        workspace = config.repos.get_workspace_by_name(config.prompts.last_used_workspace)
+        if workspace:
+            if not skip_prompt:
+                console_print(f"[dim]Using last-used workspace: {workspace.name}[/dim]")
+            return workspace.name
+        else:
+            # Last-used workspace was deleted - fall through to prompt
+            console.print(f"[yellow]Warning: Last-used workspace '{config.prompts.last_used_workspace}' not found in config[/yellow]")
 
     # Priority 4: prompt user (if not skipped)
     if skip_prompt:
@@ -870,17 +877,37 @@ def select_workspace(
         sys.exit(1)
 
     console.print("\n[cyan]Select workspace:[/cyan]")
+    last_used = config.prompts.last_used_workspace
+    default_idx = 1
     for idx, workspace in enumerate(config.repos.workspaces, start=1):
-        default_marker = " [default]" if workspace.is_default else ""
-        console.print(f"  {idx}. {workspace.name} ({workspace.path}){default_marker}")
+        # Show ⭐ for last-used workspace
+        if workspace.name == last_used:
+            marker = " [yellow]⭐ Last Used[/yellow]"
+            default_idx = idx  # Set as default selection
+        else:
+            marker = ""
+        console.print(f"  {idx}. {workspace.name} ({workspace.path}){marker}")
 
     # Get user selection
     while True:
         try:
-            choice = IntPrompt.ask("\nWorkspace", default=1)
+            choice = IntPrompt.ask("\nWorkspace", default=default_idx)
             if 1 <= choice <= len(config.repos.workspaces):
                 selected = config.repos.workspaces[choice - 1]
                 console.print(f"[green]✓[/green] Selected workspace: {selected.name}")
+
+                # Save as last-used workspace for future sessions
+                if save_last_used:
+                    config.prompts.last_used_workspace = selected.name
+                    # Save config to persist the last_used_workspace
+                    try:
+                        from devflow.config.loader import ConfigLoader
+                        config_loader = ConfigLoader()
+                        config_loader.save_config(config)
+                    except Exception as e:
+                        # Don't fail if save fails, just warn
+                        console.print(f"[dim yellow]Warning: Could not save last-used workspace preference: {e}[/dim yellow]")
+
                 return selected.name
             else:
                 console.print(f"[red]Invalid selection. Please choose 1-{len(config.repos.workspaces)}[/red]")

@@ -42,7 +42,7 @@ from rich.console import Console
 from rich.text import Text
 
 from devflow.config.loader import ConfigLoader
-from devflow.config.models import Config, JiraTransitionConfig, ContextFile
+from devflow.config.models import Config, JiraTransitionConfig, ContextFile, WorkspaceDefinition
 from devflow.jira.client import JiraClient
 
 
@@ -485,6 +485,112 @@ class ContextFileEntry(Container):
             self.post_message(self.RemovePressed(self.index))
 
 
+class WorkspaceEntry(Container):
+    """Widget for displaying a single workspace entry with edit/remove/set-as-last-used buttons."""
+
+    DEFAULT_CSS = """
+    WorkspaceEntry {
+        height: auto;
+        margin: 0 0 1 0;
+        border: solid $primary;
+        padding: 1;
+    }
+
+    WorkspaceEntry .ws-header {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+
+    WorkspaceEntry .ws-name {
+        color: $accent;
+    }
+
+    WorkspaceEntry .ws-badge {
+        color: $warning;
+        margin: 0 0 0 1;
+    }
+
+    WorkspaceEntry .ws-path {
+        width: 100%;
+        color: $text-muted;
+        margin: 0 0 1 0;
+    }
+
+    WorkspaceEntry .button-row {
+        width: 100%;
+        height: auto;
+        align: right middle;
+    }
+
+    WorkspaceEntry Button {
+        margin: 0 0 0 1;
+    }
+    """
+
+    class EditPressed(Message):
+        """Message sent when edit button is pressed."""
+
+        def __init__(self, index: int, workspace: WorkspaceDefinition):
+            super().__init__()
+            self.index = index
+            self.workspace = workspace
+
+    class RemovePressed(Message):
+        """Message sent when remove button is pressed."""
+
+        def __init__(self, index: int):
+            super().__init__()
+            self.index = index
+
+    class SetAsLastUsedPressed(Message):
+        """Message sent when set as last used button is pressed."""
+
+        def __init__(self, workspace_name: str):
+            super().__init__()
+            self.workspace_name = workspace_name
+
+    def __init__(self, index: int, workspace: WorkspaceDefinition, is_last_used: bool = False, **kwargs):
+        """Initialize workspace entry.
+
+        Args:
+            index: Index of this workspace in the list
+            workspace: The workspace to display
+            is_last_used: Whether this is the last used workspace
+        """
+        super().__init__(**kwargs)
+        self.index = index
+        self.workspace = workspace
+        self.is_last_used = is_last_used
+
+    def compose(self) -> ComposeResult:
+        """Compose the workspace entry widgets."""
+        # Header with name and badge
+        name_text = f"[bold]{self.workspace.name}[/bold]"
+        if self.is_last_used:
+            name_text += " [yellow]⭐ Last Used[/yellow]"
+        yield Static(name_text, classes="ws-header")
+
+        # Path
+        yield Static(f"Path: {self.workspace.path}", classes="ws-path")
+
+        # Buttons
+        with Horizontal(classes="button-row"):
+            if not self.is_last_used:
+                yield Button("Use This", variant="success", id=f"use_{self.index}", classes="compact")
+            yield Button("Edit", variant="primary", id=f"edit_{self.index}", classes="compact")
+            yield Button("Remove", variant="error", id=f"remove_{self.index}", classes="compact")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        event.stop()  # Prevent event bubbling
+        if event.button.id.startswith("edit_"):
+            self.post_message(self.EditPressed(self.index, self.workspace))
+        elif event.button.id.startswith("remove_"):
+            self.post_message(self.RemovePressed(self.index))
+        elif event.button.id.startswith("use_"):
+            self.post_message(self.SetAsLastUsedPressed(self.workspace.name))
+
+
 # ============================================================================
 # Modal Screens
 # ============================================================================
@@ -652,6 +758,118 @@ class AddContextFileScreen(ModalScreen):
             # Return the new/updated context file
             ctx_file = ContextFile(path=path, description=description)
             self.dismiss((ctx_file, self.index))
+        else:
+            self.dismiss(None)
+
+
+class AddEditWorkspaceScreen(ModalScreen):
+    """Modal screen for adding/editing a workspace."""
+
+    DEFAULT_CSS = """
+    AddEditWorkspaceScreen {
+        align: center middle;
+    }
+
+    AddEditWorkspaceScreen > Container {
+        width: 80;
+        height: auto;
+        background: $surface;
+        border: thick $primary;
+        padding: 1 2;
+    }
+
+    AddEditWorkspaceScreen Input {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+
+    AddEditWorkspaceScreen .button-row {
+        width: 100%;
+        height: auto;
+        margin: 1 0 0 0;
+        align: center middle;
+    }
+
+    AddEditWorkspaceScreen Button {
+        margin: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Cancel"),
+    ]
+
+    def __init__(self, existing_workspace: Optional[WorkspaceDefinition] = None, index: Optional[int] = None):
+        """Initialize add/edit workspace screen.
+
+        Args:
+            existing_workspace: If provided, edit mode (otherwise add mode)
+            index: Index of workspace being edited
+        """
+        super().__init__()
+        self.existing_workspace = existing_workspace
+        self.index = index
+        self.is_edit_mode = existing_workspace is not None
+
+    def compose(self) -> ComposeResult:
+        """Compose add/edit workspace screen."""
+        with Container():
+            title = "Edit Workspace" if self.is_edit_mode else "Add Workspace"
+            yield Static(f"[bold cyan]{title}[/bold cyan]\n")
+
+            yield Label("Workspace Name *")
+            yield Input(
+                value=self.existing_workspace.name if self.existing_workspace else "",
+                placeholder="e.g., primary, product-a, feat-caching",
+                id="ws_name",
+            )
+
+            yield Label("Workspace Path *")
+            yield Input(
+                value=self.existing_workspace.path if self.existing_workspace else "",
+                placeholder="e.g., ~/development/project or /path/to/workspace",
+                id="ws_path",
+            )
+
+            with Horizontal(classes="button-row"):
+                save_label = "Update" if self.is_edit_mode else "Add"
+                yield Button(save_label, variant="success", id="save")
+                yield Button("Cancel", variant="default", id="cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "save":
+            name_input = self.query_one("#ws_name", Input)
+            path_input = self.query_one("#ws_path", Input)
+
+            name = name_input.value.strip()
+            path = path_input.value.strip()
+
+            # Validation
+            if not name:
+                self.app.notify("Workspace name is required", severity="error")
+                return
+
+            if not path:
+                self.app.notify("Workspace path is required", severity="error")
+                return
+
+            # Validate path exists
+            try:
+                expanded_path = Path(path).expanduser()
+                if not expanded_path.exists():
+                    self.app.notify(f"Path does not exist: {path}", severity="error")
+                    return
+                if not expanded_path.is_dir():
+                    self.app.notify(f"Path is not a directory: {path}", severity="error")
+                    return
+            except Exception as e:
+                self.app.notify(f"Invalid path: {e}", severity="error")
+                return
+
+            # Return the new/updated workspace
+            workspace = WorkspaceDefinition(name=name, path=path, is_default=False)
+            self.dismiss((workspace, self.index))
         else:
             self.dismiss(None)
 
@@ -830,6 +1048,9 @@ class ConfigTUI(App):
 
             with TabPane("Repository & VCS", id="tab_repo"):
                 yield from self._compose_repo_tab()
+
+            with TabPane("Workspaces", id="tab_workspaces"):
+                yield from self._compose_workspaces_tab()
 
             with TabPane("AI", id="tab_claude"):
                 yield from self._compose_claude_tab()
@@ -1357,6 +1578,42 @@ class ConfigTUI(App):
             with Horizontal(classes="button-bar"):
                 yield Button("Add Context File", variant="success", id="add_context_file")
 
+    def _compose_workspaces_tab(self) -> ComposeResult:
+        """Compose workspaces configuration tab content."""
+        with VerticalScroll():
+            yield Static("[bold cyan]Workspace Management[/bold cyan]", classes="section-title")
+            yield Static(
+                "Manage multiple workspace directories for concurrent multi-branch development. "
+                "The last-used workspace (marked with ⭐) is automatically selected for new sessions.",
+                classes="section-help",
+            )
+
+            # Container for workspace entries (will be updated dynamically)
+            with Vertical(id="workspaces_list"):
+                if self.config.repos.workspaces:
+                    last_used = self.config.prompts.last_used_workspace
+                    for idx, workspace in enumerate(self.config.repos.workspaces):
+                        is_last_used = (workspace.name == last_used)
+                        yield WorkspaceEntry(idx, workspace, is_last_used=is_last_used)
+                else:
+                    yield Static(
+                        "[dim]No workspaces configured. Add your first workspace to get started.[/dim]",
+                        id="empty_workspaces_message"
+                    )
+
+            # Add button
+            with Horizontal(classes="button-bar"):
+                yield Button("Add Workspace", variant="success", id="add_workspace")
+
+            # Help text
+            yield Static(
+                "\n[dim]Tips:[/dim]\n"
+                "[dim]• Click 'Use This' to set a workspace as your default (last-used)[/dim]\n"
+                "[dim]• The last-used workspace is automatically selected when creating new sessions[/dim]\n"
+                "[dim]• Use the -w flag to override the last-used workspace per session[/dim]",
+                classes="section-help"
+            )
+
     def _compose_session_workflow_tab(self) -> ComposeResult:
         """Compose session workflow configuration tab content."""
         with VerticalScroll():
@@ -1499,6 +1756,67 @@ class ConfigTUI(App):
             self.notify(f"Removed context file: {removed_file.path}", severity="information")
             self.modified = True
 
+    def on_workspace_entry_edit_pressed(self, message: WorkspaceEntry.EditPressed) -> None:
+        """Handle edit button press on workspace entry.
+
+        Args:
+            message: The edit pressed message containing index and workspace
+        """
+        def handle_edit_result(result):
+            """Handle the result from the edit screen."""
+            if result:
+                workspace, index = result
+                # Update the workspace in config
+                if 0 <= index < len(self.config.repos.workspaces):
+                    # Check if name changed and it's the last_used workspace
+                    old_workspace = self.config.repos.workspaces[index]
+                    if (old_workspace.name == self.config.prompts.last_used_workspace and
+                        old_workspace.name != workspace.name):
+                        # Update last_used_workspace to new name
+                        self.config.prompts.last_used_workspace = workspace.name
+
+                    self.config.repos.workspaces[index] = workspace
+                    self._refresh_workspaces_list()
+                    self.notify(f"Updated workspace: {workspace.name}", severity="information")
+                    self.modified = True
+
+        self.push_screen(
+            AddEditWorkspaceScreen(existing_workspace=message.workspace, index=message.index),
+            handle_edit_result
+        )
+
+    def on_workspace_entry_remove_pressed(self, message: WorkspaceEntry.RemovePressed) -> None:
+        """Handle remove button press on workspace entry.
+
+        Args:
+            message: The remove pressed message containing index
+        """
+        # Remove the workspace from config
+        if 0 <= message.index < len(self.config.repos.workspaces):
+            removed_workspace = self.config.repos.workspaces.pop(message.index)
+
+            # If this was the last_used workspace, update to first remaining workspace
+            if removed_workspace.name == self.config.prompts.last_used_workspace:
+                if self.config.repos.workspaces:
+                    self.config.prompts.last_used_workspace = self.config.repos.workspaces[0].name
+                else:
+                    self.config.prompts.last_used_workspace = None
+
+            self._refresh_workspaces_list()
+            self.notify(f"Removed workspace: {removed_workspace.name}", severity="information")
+            self.modified = True
+
+    def on_workspace_entry_set_as_last_used_pressed(self, message: WorkspaceEntry.SetAsLastUsedPressed) -> None:
+        """Handle set as last used button press on workspace entry.
+
+        Args:
+            message: The set as last used message containing workspace name
+        """
+        self.config.prompts.last_used_workspace = message.workspace_name
+        self._refresh_workspaces_list()
+        self.notify(f"Set '{message.workspace_name}' as last-used workspace", severity="information")
+        self.modified = True
+
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input change events.
 
@@ -1614,6 +1932,29 @@ class ConfigTUI(App):
 
             self.push_screen(AddContextFileScreen(), handle_add_result)
 
+        elif event.button.id == "add_workspace":
+            def handle_add_workspace_result(result):
+                """Handle the result from the add workspace screen."""
+                if result:
+                    workspace, _ = result
+                    # Check if workspace name already exists
+                    if any(w.name == workspace.name for w in self.config.repos.workspaces):
+                        self.notify(f"Workspace '{workspace.name}' already exists", severity="error")
+                        return
+
+                    # Add the new workspace to config
+                    self.config.repos.workspaces.append(workspace)
+
+                    # If this is the first workspace, set it as last_used
+                    if len(self.config.repos.workspaces) == 1:
+                        self.config.prompts.last_used_workspace = workspace.name
+
+                    self._refresh_workspaces_list()
+                    self.notify(f"Added workspace: {workspace.name}", severity="information")
+                    self.modified = True
+
+            self.push_screen(AddEditWorkspaceScreen(), handle_add_workspace_result)
+
         elif event.button.id == "upgrade_commands":
             self._handle_upgrade_commands()
 
@@ -1668,6 +2009,32 @@ class ConfigTUI(App):
 
         except Exception as e:
             self.notify(f"Error refreshing context files list: {e}", severity="error")
+
+    def _refresh_workspaces_list(self) -> None:
+        """Refresh the workspaces list display after add/edit/remove/set-as-last-used."""
+        # Get the workspaces list container
+        try:
+            list_container = self.query_one("#workspaces_list", Vertical)
+
+            # Remove all existing children
+            list_container.remove_children()
+
+            # Re-add workspace entries
+            if self.config.repos.workspaces:
+                last_used = self.config.prompts.last_used_workspace
+                for idx, workspace in enumerate(self.config.repos.workspaces):
+                    is_last_used = (workspace.name == last_used)
+                    list_container.mount(WorkspaceEntry(idx, workspace, is_last_used=is_last_used))
+            else:
+                list_container.mount(
+                    Static(
+                        "[dim]No workspaces configured. Add your first workspace to get started.[/dim]",
+                        id="empty_workspaces_message"
+                    )
+                )
+
+        except Exception as e:
+            self.notify(f"Error refreshing workspaces list: {e}", severity="error")
 
     def _collect_values(self) -> None:
         """Collect all values from input widgets and update config."""
