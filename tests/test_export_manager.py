@@ -1567,3 +1567,78 @@ def test_peek_export_file_single_session(temp_daf_home):
 
     # Cleanup
     export_path.unlink()
+
+
+def test_export_excludes_workspace_name(temp_daf_home):
+    """Test that export excludes workspace_name field for portable team handoffs (AAP-63987)."""
+    # Create a session with workspace_name set
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="test-workspace",
+        goal="Test workspace name exclusion",
+        working_directory="test-dir",
+        project_path="/path",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Set workspace_name after creation
+    session.workspace_name = "feat-caching"
+    session_manager.update_session(session)
+
+    # Export the session
+    export_manager = ExportManager(config_loader)
+    export_path = export_manager.export_sessions(identifiers=["test-workspace"])
+
+    # Extract and verify workspace_name is NOT in the export
+    with tarfile.open(export_path, "r:gz") as tar:
+        sessions_file = tar.extractfile("sessions.json")
+        sessions_data = json.load(sessions_file)
+
+        session_data = sessions_data["test-workspace"]
+        assert "workspace_name" not in session_data, "workspace_name should be excluded from export"
+
+    # Cleanup
+    export_path.unlink()
+
+
+def test_import_without_workspace_name(temp_daf_home):
+    """Test that import succeeds when workspace_name is not in exported data (AAP-63987)."""
+    # Create a session with workspace_name
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="import-workspace-test",
+        goal="Test import without workspace_name",
+        working_directory="test-dir",
+        project_path="/path",
+        ai_agent_session_id="uuid-import",
+    )
+
+    # Set workspace_name after creation
+    session.workspace_name = "primary"
+    session_manager.update_session(session)
+
+    # Export (workspace_name should be excluded)
+    export_manager = ExportManager(config_loader)
+    export_path = export_manager.export_sessions(identifiers=["import-workspace-test"])
+
+    # Delete the session
+    session_manager.delete_session("import-workspace-test")
+
+    # Import the session
+    imported_keys = export_manager.import_sessions(export_path, merge=False)
+
+    # Verify import succeeded
+    assert "import-workspace-test" in imported_keys
+
+    # Reload session manager and verify workspace_name is None
+    session_manager = SessionManager(config_loader)
+    imported_sessions = session_manager.index.get_sessions("import-workspace-test")
+    assert len(imported_sessions) == 1
+    assert imported_sessions[0].workspace_name is None, "workspace_name should be None after import"
+
+    # Cleanup
+    export_path.unlink()

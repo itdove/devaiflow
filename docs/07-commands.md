@@ -2679,6 +2679,9 @@ Export complete session(s) for team handoff.
 - **ALL conversation history** (.jsonl files)
 - Git branch sync for all conversations
 
+**Excluded for portability (AAP-63987):**
+- `workspace_name` - Machine-specific configuration, not portable across team members
+
 **Note:** Diagnostic logs are NOT included in exports (PROJ-60802). These are global system logs containing information from ALL sessions and would leak sensitive data about other tickets. For full system backups with diagnostic logs, use `daf backup` instead.
 
 ```bash
@@ -2864,13 +2867,17 @@ When importing a session exported by a teammate:
 2. **Diagnostic logs are restored** to `~/.daf-sessions/logs/imported/{timestamp}/` (PROJ-60657)
    - Logs are namespaced with a timestamp to avoid conflicts with your current logs
    - This preserves diagnostic history for debugging any issues from the exported session
-3. Run `daf open <SESSION>` to select which conversation to work on
-4. Tool automatically syncs git branch for the selected conversation (PROJ-61023):
+3. **Workspace selection happens on first open** (AAP-63987):
+   - Imported sessions have no `workspace_name` (excluded for portability)
+   - When you run `daf open`, workspace is selected using standard priority: `--workspace` flag > default workspace > interactive prompt
+   - After first open, session remembers your workspace choice for future opens
+4. Run `daf open <SESSION>` to select which conversation to work on
+5. Tool automatically syncs git branch for the selected conversation (PROJ-61023):
    - **If branch doesn't exist locally**: Automatically fetches and checks out from remote (no prompt to create)
    - **If branch exists locally but is behind**: Prompts to merge or rebase with remote changes
    - **If merge conflicts occur**: Aborts operation with clear resolution instructions
    - Only prompts to create new branch if it doesn't exist on remote either
-5. Continue work where teammate left off, with full context from their notes
+6. Continue work where teammate left off, with full context from their notes
 
 **Multi-Conversation Import Example:**
 ```bash
