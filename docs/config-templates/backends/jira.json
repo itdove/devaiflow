@@ -1,0 +1,35 @@
+{
+  "_comment": "JIRA backend configuration - REQUIRED fields marked with TODO",
+  "url": "TODO: https://your-jira-instance.com",
+  "_url_comment": "Your JIRA instance URL (e.g., 'https://jira.example.com' or 'https://example.atlassian.net')",
+  "user": "",
+  "_user_comment": "Leave empty to use environment variables (JIRA_USER) or prompt at runtime",
+  "field_mappings": null,
+  "_field_mappings_comment": "Auto-discovered on first use. You can manually set field IDs if needed. Example: {'acceptance_criteria': {'id': 'customfield_12345', 'required_for': ['Story', 'Epic']}}",
+  "field_cache_timestamp": null,
+  "field_cache_auto_refresh": true,
+  "field_cache_max_age_hours": 24,
+  "parent_field_mapping": null,
+  "_parent_field_mapping_comment": "Maps issue types to parent field names. Example: {'story': 'epic_link', 'task': 'epic_link', 'sub-task': 'parent'}",
+  "transitions": {
+    "on_start": {
+      "from": ["To Do", "New", "Refinement"],
+      "_from_comment": "TODO: Customize statuses that trigger transition when starting work",
+      "to": "",
+      "_to_comment": "TODO: Set the target status when starting work (e.g., 'In Progress'), or leave empty to prompt",
+      "prompt": false,
+      "_prompt_comment": "If true, prompts for status selection instead of auto-transitioning",
+      "on_fail": "warn",
+      "_on_fail_comment": "Action on transition failure: 'warn' (show warning) or 'error' (stop execution)"
+    },
+    "on_complete": {
+      "from": ["In Progress"],
+      "_from_comment": "TODO: Customize statuses that trigger transition when completing work",
+      "to": "",
+      "_to_comment": "TODO: Set the target status when completing work (e.g., 'Review', 'Done'), or leave empty to prompt",
+      "prompt": true,
+      "_prompt_comment": "If true, prompts for status selection instead of auto-transitioning",
+      "on_fail": "warn"
+    }
+  }
+}

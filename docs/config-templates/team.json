@@ -1,0 +1,13 @@
+{
+  "_comment": "Team-specific configuration",
+  "jira_workstream": null,
+  "_jira_workstream_comment": "TODO: Your team's workstream/component value (e.g., 'Backend', 'Frontend', 'Platform'). Optional.",
+  "jira_workstream_field": null,
+  "_jira_workstream_field_comment": "Optional: Override the workstream field name from organization.json (rarely needed)",
+  "jira_comment_visibility_type": null,
+  "_jira_comment_visibility_type_comment": "Optional: Restrict comment visibility. Values: 'group' or 'role'. Leave null for public comments.",
+  "jira_comment_visibility_value": null,
+  "_jira_comment_visibility_value_comment": "Optional: Group/role name for comment visibility (e.g., 'Developers', 'jira-users'). Required if type is set.",
+  "time_tracking_enabled": true,
+  "_time_tracking_enabled_comment": "Enable automatic time tracking for sessions"
+}
