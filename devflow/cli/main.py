@@ -164,7 +164,7 @@ def _check_and_refresh_jira_fields() -> None:
 
         # Reload config WITH patches to reapply patch-provided metadata like required_for
         # This ensures that patch-provided field metadata is not lost after auto-refresh
-        config = config_loader.load_config(apply_patches=True)
+        config = config_loader.load_config()
 
         # Save again with patches applied to merge discovered fields + patch metadata
         config_loader.save_config(config)

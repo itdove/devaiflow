@@ -135,7 +135,7 @@ def create_investigation_session(
         console_print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
         if is_json_mode():
             output_json(success=False, error={"message": "No configuration found", "code": "NO_CONFIG"})
-        return
+        sys.exit(1)
 
     # Validate parent ticket if provided (for tracking purposes)
     from devflow.utils import is_mock_mode
@@ -158,12 +158,12 @@ def create_investigation_session(
                             "message": f"Parent ticket {parent} not found or validation failed"
                         }
                     )
-                return
+                sys.exit(1)
         except Exception as e:
             console_print(f"[red]✗[/red] Failed to validate parent ticket: {e}")
             if is_json_mode():
                 output_json(success=False, error={"message": f"Parent validation failed: {e}", "code": "VALIDATION_ERROR"})
-            return
+            sys.exit(1)
 
         console_print(f"[green]✓[/green] Parent ticket validated: {parent}")
 
@@ -181,7 +181,7 @@ def create_investigation_session(
             console_print(f"[red]✗[/red] Directory does not exist: {project_path}")
             if is_json_mode():
                 output_json(success=False, error={"message": f"Directory does not exist: {project_path}", "code": "INVALID_PATH"})
-            return
+            sys.exit(1)
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
     else:
         # Prompt for repository selection from workspace
@@ -189,7 +189,9 @@ def create_investigation_session(
         project_path = _prompt_for_repository_selection(config)
         if not project_path:
             # User cancelled or no workspace configured
-            return
+            if is_json_mode():
+                output_json(success=False, error={"message": "Repository selection cancelled or failed", "code": "NO_REPOSITORY"})
+            sys.exit(1)
 
     working_directory = Path(project_path).name
 

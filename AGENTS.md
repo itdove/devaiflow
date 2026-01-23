@@ -365,36 +365,43 @@ devflow/
 
 ### Skills and Claude Commands Locations
 
-**IMPORTANT**: When updating skills or Claude commands, you must update files in MULTIPLE locations:
+**CRITICAL**: Skills must be edited in the correct location. There are THREE locations, but only ONE should be edited directly.
 
-#### Skills
-There are THREE locations for skill files:
+#### Skills - Edit Location Rules
 
-1. **Bundled skills (PRIMARY SOURCE OF TRUTH)**: `devflow/cli_skills/daf-cli/SKILL.md`
-   - This is the authoritative version that ships with the pip package
-   - Updated via `daf upgrade` command to install/upgrade to user's workspace
-   - **ALWAYS update this file first when making changes**
+**✅ ALWAYS EDIT HERE (PRIMARY SOURCE OF TRUTH):**
+- **`devflow/cli_skills/daf-cli/SKILL.md`** - Bundled skill (ships with pip package)
+  - This is the ONLY file you should edit when updating skills
+  - **DO NOT edit `.claude/skills/` directly** - those files are deployment targets
+  - Changes here automatically deploy via `daf upgrade` command
 
-2. **Development workspace**: `.claude/skills/daf-cli/SKILL.md` (in this repository)
-   - Local copy used during development of the DevAIFlow tool itself
-   - Allows immediate testing without running `daf upgrade`
-   - Should be kept in sync with bundled version for consistency
+**❌ DO NOT EDIT DIRECTLY (Deployment Targets):**
+1. **`.claude/skills/daf-cli/SKILL.md`** (in this repository)
+   - Development workspace copy
+   - Deployed by `daf upgrade` from `devflow/cli_skills/`
+   - Used for testing during development of DevAIFlow itself
 
-3. **User home directory**: `~/.claude/skills/daf-cli/SKILL.md`
-   - User's local copy installed via `daf upgrade`
-   - Gets updated when users run `daf upgrade` (auto-copies from bundled version)
+2. **`~/.claude/skills/daf-cli/SKILL.md`** (user home directory)
+   - User's local copy
+   - Deployed by `daf upgrade` from bundled version
    - End users interact with this file
 
+**Why this matters:**
+- Skills must only document commands that work **inside Claude Code sessions**
+- Commands like `daf open`, `daf new`, `daf investigate` launch Claude and cannot run inside sessions
+- Editing deployment targets creates confusion - your changes get overwritten by `daf upgrade`
+
 **When to update skills:**
-- After adding/modifying daf CLI commands
-- After changing command options or behavior
+- After adding/modifying daf CLI commands that work inside Claude sessions
+- After changing command options or behavior for in-session commands
 - After updating command examples or usage patterns
+- **Remember:** Only document commands that work inside Claude Code sessions
 
 **Update workflow:**
-1. Edit `devflow/cli_skills/daf-cli/SKILL.md` (bundled/primary version)
-2. Edit `.claude/skills/daf-cli/SKILL.md` (development copy for immediate testing)
-3. Users run `daf upgrade` to sync to their `~/.claude/skills/` directory
-4. Verify changes appear in all three locations
+1. Edit `devflow/cli_skills/daf-cli/SKILL.md` (bundled/primary version) ✅
+2. Run `daf upgrade` in development workspace to deploy to `.claude/skills/`
+3. Test the skill in a Claude Code session
+4. Users run `daf upgrade` to sync to their `~/.claude/skills/` directory
 
 #### Claude Commands
 1. **Bundled commands (source of truth)**: `devflow/claude_commands/*.md`
