@@ -307,7 +307,7 @@ class ExportManager(ArchiveManagerBase):
                 # session_data can be either a dict (new format) or a list (old format)
                 if isinstance(session_data, list):
                     # Old format: list of sessions - take the first one
-                    # (session groups are no longer supported)
+                    # (multi-session format is no longer supported, use single session with multiple conversations)
                     session_dict = session_data[0] if session_data else {}
                 else:
                     # New format: single session dict

@@ -56,7 +56,7 @@ class SessionManager:
         """Create a new session.
 
         Args:
-            name: Session group name (primary identifier)
+            name: Session name (primary identifier)
             goal: Session goal/description
             working_directory: Working directory name
             project_path: Full path to project
@@ -346,12 +346,12 @@ class SessionManager:
         from concurrent updates:
 
         1. Re-read current sessions.json from disk
-        2. Merge only modified session groups into fresh state
+        2. Merge only modified sessions into fresh state
         3. Write merged result atomically
 
         This ensures concurrent processes don't overwrite each other's changes.
-        Only session groups that were modified in this SessionManager instance
-        are updated; all other groups are preserved from disk.
+        Only sessions that were modified in this SessionManager instance
+        are updated; all other sessions are preserved from disk.
         """
         # If no groups were modified, no need to save
         if not self._modified_sessions:
@@ -360,7 +360,7 @@ class SessionManager:
         # STEP 1: Re-read current state from disk
         fresh_index = self.storage.load_index()
 
-        # STEP 2: Merge our modified session groups into fresh state
+        # STEP 2: Merge our modified sessions into fresh state
         for session_name in self._modified_sessions.keys():
             # Replace session with our version
             if session_name in self.index.sessions:
@@ -401,11 +401,11 @@ class SessionManager:
         self.storage.save_session_metadata(session)
 
     def rename_session(self, old_name: str, new_name: str) -> None:
-        """Rename a session group and its directory.
+        """Rename a session and its directory.
 
         Args:
-            old_name: Current session group name
-            new_name: New session group name
+            old_name: Current session name
+            new_name: New session name
 
         Raises:
             ValueError: If old session doesn't exist or new name already exists

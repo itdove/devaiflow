@@ -190,11 +190,11 @@ def test_jira_timeout_handling(mock_jira_cli, temp_cs_home):
     # (Implementation should handle this gracefully)
 ```
 
-### Testing Multi-Session Groups
+### Testing Multi-Conversation Sessions
 
 ```python
-def test_multi_session_group(mock_jira_cli, temp_cs_home):
-    """Test working with multiple sessions in same group."""
+def test_multi_conversation_session(mock_jira_cli, temp_cs_home):
+    """Test working with multiple conversations in same session."""
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
         "fields": {"summary": "Multi-project feature"}

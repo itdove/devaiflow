@@ -281,10 +281,10 @@ class ConfigLoader:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def get_session_dir(self, session_name: str) -> Path:
-        """Get the directory for a specific session group.
+        """Get the directory for a specific session.
 
         Args:
-            session_name: Session group name (primary identifier)
+            session_name: Session name (primary identifier)
 
         Returns:
             Path to session directory

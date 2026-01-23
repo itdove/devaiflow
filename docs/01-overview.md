@@ -191,7 +191,7 @@ Session "PROJ-12345" contains:
 
 **Core Session Management:**
 - Create, open, list, delete sessions
-- Session groups (multiple sessions per name/JIRA)
+- Multi-conversation sessions (multiple conversations per JIRA)
 - Progress notes with optional JIRA sync
 - Session summaries (local stats or AI-powered)
 - Search and filter sessions

@@ -45,7 +45,7 @@ daf sync --epic PROJ-36419
 **What it does:**
 1. Fetches your assigned JIRA tickets
 2. Filters by sprint/type if specified
-3. Creates session groups for new tickets
+3. Creates sessions for new tickets
 4. Updates existing sessions with latest JIRA data
 5. Shows summary of work ahead
 
@@ -75,7 +75,7 @@ daf new --name <NAME> --goal "..." [OPTIONS]
 ```
 
 **Options:**
-- `--name` - Session group name
+- `--name` - Session name
 - `--goal` - What you're trying to accomplish (required; supports file:// paths and http(s):// URLs)
 - `--jira` - JIRA ticket key (optional)
 - `--path` - Project path (auto-detected if not specified)
@@ -164,69 +164,63 @@ Understanding the difference between multi-conversation and multi-session is cri
 The daf tool organizes work into a **3-level hierarchy**:
 
 ```
-Level 1: Session Group (name: "PROJ-12345")
+Level 1: SESSION (issue_key: "PROJ-12345")
     │
-    ├── Level 2: Session #1 (session_id: 1)
+    ├── Level 2: Conversation (working_dir: backend-api)
+    │   │         - project_path: ~/dev/backend-api
+    │   │         - branch: aap-12345-backup-feature
+    │   │         - ai_agent_session_id: uuid-1a (active)
     │   │
-    │   ├── Level 3: Conversation (working_dir: backend-api)
-    │   │             - project_path: ~/dev/backend-api
-    │   │             - branch: aap-12345-backup-feature
-    │   │             - ai_agent_session_id: uuid-1a
-    │   │
-    │   ├── Level 3: Conversation (working_dir: frontend-app)
-    │   │             - project_path: ~/dev/frontend-app
-    │   │             - branch: aap-12345-backup-feature
-    │   │             - ai_agent_session_id: uuid-1b
-    │   │
-    │   └── Level 3: Conversation (working_dir: shared-lib)
-    │                 - project_path: ~/dev/shared-lib
-    │                 - branch: aap-12345-backup-feature
-    │                 - ai_agent_session_id: uuid-1c
+    │   └── Level 3: Archived Conversations
+    │                 - Previous Claude sessions (.jsonl files)
     │
-    └── Level 2: Session #2 (session_id: 2)
+    ├── Level 2: Conversation (working_dir: frontend-app)
+    │   │         - project_path: ~/dev/frontend-app
+    │   │         - branch: aap-12345-backup-feature
+    │   │         - ai_agent_session_id: uuid-1b (active)
+    │   │
+    │   └── Level 3: Archived Conversations
+    │                 - Previous Claude sessions (.jsonl files)
+    │
+    └── Level 2: Conversation (working_dir: shared-lib)
+        │         - project_path: ~/dev/shared-lib
+        │         - branch: aap-12345-backup-feature
+        │         - ai_agent_session_id: uuid-1c (active)
         │
-        ├── Level 3: Conversation (working_dir: backend-api)
-        │             - project_path: ~/dev/backend-api
-        │             - branch: aap-12345-alternative
-        │             - ai_agent_session_id: uuid-2a
-        │
-        └── Level 3: Conversation (working_dir: docs)
-                      - project_path: ~/dev/docs
-                      - branch: aap-12345-alternative
-                      - ai_agent_session_id: uuid-2b
+        └── Level 3: Archived Conversations
+                      - Previous Claude sessions (.jsonl files)
 ```
 
 **Key Concepts:**
-- **Level 1 - Session Group**: Named container identified by session name or JIRA key (e.g., "PROJ-12345")
-  - Groups all related work under one name
-  - Can contain multiple sessions (#1, #2, #3...)
+- **Level 1 - SESSION**: Container identified by session name or JIRA key (e.g., "PROJ-12345")
+  - Has session-level metadata (goal, status, notes, time tracking)
+  - Can contain multiple conversations (one per repository)
 
-- **Level 2 - Session**: Specific work stream with incremental ID (1, 2, 3...)
-  - Has its own metadata (goal, status, notes, time tracking)
-  - Can have multiple conversations (one per repository)
+- **Level 2 - Conversation**: Work in specific repository with unique Claude session
+  - Has conversation-specific data (ai_agent_session_id, project_path, branch, message_count)
+  - Can have archived conversations (previous Claude sessions for same repo)
 
-- **Level 3 - Conversation**: Work in one repository
-  - Has its own working directory, project path, branch, and Claude session UUID
-  - One conversation = one `.jsonl` file in Claude Code
+- **Level 3 - Archived Conversations**: Previous Claude sessions for same repository
+  - Preserved when starting fresh with `--new-conversation`
+  - Accessible via `daf sessions list` command
 
 **What `daf list` shows:**
 ```bash
 daf list
-# Output shows SESSIONS (Level 2) with ALL conversations (Level 3):
-# Status  Name             JIRA       Summary              Conversations                      Time
+# Output shows SESSIONS (Level 1) with ALL conversations (Level 2):
+# Status  Name           JIRA       Summary              Conversations                      Time
 # ───────────────────────────────────────────────────────────────────────────────────────────────
-#   ⏸    PROJ-12345 (#1)   PROJ-12345  Backup feature       3: backend-api, frontend, sops     2h 30m
-#   ▶    PROJ-12345 (#2)   PROJ-12345  Alternative approach 1: backend-api                     1h 15m
+#   ⏸    PROJ-12345      PROJ-12345  Backup feature       3: backend-api, frontend, sops     2h 30m
 ```
 
-- Each row is ONE session (Level 2)
-- "Conversations" shows COUNT and LIST of all conversation directories (Level 3)
+- Each row is ONE session (Level 1)
+- "Conversations" shows COUNT and LIST of all conversation directories (Level 2)
 - Active conversation (if session is active) is shown in **bold**
 - Use `daf info PROJ-12345` to see detailed information about each conversation
 
-#### Multi-Conversation (Default Behavior)
+#### Multi-Conversation Sessions (Default Behavior)
 
-**What it is:** One logical work session spanning multiple repositories.
+**What it is:** One session spanning multiple repositories.
 
 **When `daf new` creates a conversation:**
 - When you run `daf new --name <NAME>` and a session with that name already exists
@@ -235,26 +229,26 @@ daf list
 
 **Example:**
 ```bash
-# First command - creates session #1 with conversation in backend-api
+# First command - creates session with conversation in backend-api
 daf new --name PROJ-12345 --goal "Add auth feature" --path ~/projects/backend-api
 
-# Second command - adds conversation to session #1 in frontend-app
+# Second command - adds conversation to same session in frontend-app
 daf new --name PROJ-12345 --goal "Add auth feature" --path ~/projects/frontend-app
 
 # Result: 1 session with 2 conversations
 daf list
 # Shows 1 row:
-# PROJ-12345  |  Session #1  |  2 conversations  |  in_progress
+# PROJ-12345  |  2 conversations  |  in_progress
 
 daf info PROJ-12345
 # Shows:
-#   Session #1
+#   Session: PROJ-12345
 #   Conversations:
 #     1. backend-api (active)
 #     2. frontend-app
 ```
 
-**Why use multi-conversation:**
+**Why use multi-conversation sessions:**
 - ✅ **Most common use case** - work naturally spans multiple repos
 - ✅ Feature touches backend API + frontend + shared library
 - ✅ Bug fix requires changes in multiple services
@@ -266,14 +260,14 @@ daf info PROJ-12345
 **Cross-conversation context sharing:**
 See [Using Slash Commands in Multi-Conversation Sessions](#using-slash-commands-in-multi-conversation-sessions) for details on how to use `/daf list-conversations` and `/daf read-conversation` to share context between repositories.
 
-#### Multi-Session (Use `--new-session` flag)
+#### Starting Fresh with --new-conversation
 
-**What it is:** Multiple separate work streams in the same session group.
+**What it is:** Archive current conversation and start fresh Claude session in same repository.
 
-**When `daf new` creates a session:**
-- When you run `daf new --name <NAME> --new-session`
-- The command creates a NEW session (increments session_id)
-- Each session has its own metadata, notes, and time tracking
+**When to use:**
+- Conversation history too long (causing 413 errors)
+- Want clean slate but preserve old approach for reference
+- Completed one part, want fresh context for next
 
 **Example:**
 ```bash
@@ -1040,8 +1034,8 @@ daf link redis-test --jira PROJ-12345 --json
 **What it does:**
 1. Validates JIRA ticket exists
 2. Fetches ticket metadata (title, status, sprint)
-3. Links ticket to session group (prompts if already linked, unless --force or --json is used)
-4. Updates all sessions in the group
+3. Links ticket to session (prompts if already linked, unless --force or --json is used)
+4. Updates all conversations in the session
 
 **Automation support:**
 - `--force` flag skips interactive prompts, automatically replacing existing links

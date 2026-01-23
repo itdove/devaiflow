@@ -75,7 +75,7 @@ Each session is an **isolated workspace** with its own:
 
 **Key Features:**
 - 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf
-- 📂 **Session Groups** - Organize related work across multiple repositories
+- 📂 **Multi-Conversation Sessions** - Organize related work across multiple repositories
 - 🎫 **Optional Issue Tracker** - Link issue tracker tickets (JIRA supported), or never (your choice)
 - ⏱️ **Time Tracking** - Automatic tracking with pause/resume
 - 🔄 **Context Loading** - Automatically reads AGENTS.md, CLAUDE.md, and issue tracker tickets
