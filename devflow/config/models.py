@@ -120,7 +120,6 @@ class WorkspaceDefinition(BaseModel):
 
     name: str = Field(description="Unique workspace name (e.g., 'primary', 'product-a', 'feat-caching')")
     path: str = Field(description="Absolute or home-relative path to workspace directory")
-    is_default: bool = Field(default=False, description="Whether this is the default workspace")
 
     @field_validator('path')
     @classmethod
@@ -133,52 +132,10 @@ class WorkspaceDefinition(BaseModel):
 class RepoConfig(BaseModel):
     """Repository configuration."""
 
-    workspace: Optional[str] = None  # Deprecated - use workspaces instead (backward compatibility)
     workspaces: List[WorkspaceDefinition] = Field(default_factory=list)
+    last_used_workspace: Optional[str] = None  # Name of last used workspace
     detection: RepoDetectionConfig = Field(default_factory=RepoDetectionConfig)
     keywords: Dict[str, List[str]] = Field(default_factory=dict)
-
-    @model_validator(mode='after')
-    def migrate_workspace_to_workspaces(self) -> 'RepoConfig':
-        """Auto-migrate single workspace string to workspaces list.
-
-        For backward compatibility: if workspace is set but workspaces is empty,
-        create a workspace entry named 'default' with is_default=True.
-        """
-        if self.workspace and not self.workspaces:
-            # Migrate single workspace to workspaces list
-            self.workspaces = [
-                WorkspaceDefinition(
-                    name="default",
-                    path=self.workspace,
-                    is_default=True
-                )
-            ]
-
-        # Ensure at most one default workspace
-        default_count = sum(1 for w in self.workspaces if w.is_default)
-        if default_count > 1:
-            # Keep only the first default, unset others
-            found_default = False
-            for workspace in self.workspaces:
-                if workspace.is_default:
-                    if found_default:
-                        workspace.is_default = False
-                    else:
-                        found_default = True
-
-        return self
-
-    def get_default_workspace(self) -> Optional[WorkspaceDefinition]:
-        """Get the default workspace.
-
-        Returns:
-            Default WorkspaceDefinition or None if no default is set
-        """
-        for workspace in self.workspaces:
-            if workspace.is_default:
-                return workspace
-        return None
 
     def get_workspace_by_name(self, name: str) -> Optional[WorkspaceDefinition]:
         """Get a workspace by name.
@@ -192,6 +149,18 @@ class RepoConfig(BaseModel):
         for workspace in self.workspaces:
             if workspace.name == name:
                 return workspace
+        return None
+
+    def get_default_workspace_path(self) -> Optional[str]:
+        """Get the last used workspace path.
+
+        Returns:
+            Workspace path string or None if no last used workspace is set
+        """
+        if self.last_used_workspace:
+            workspace = self.get_workspace_by_name(self.last_used_workspace)
+            if workspace:
+                return workspace.path
         return None
 
 
@@ -258,7 +227,6 @@ class PromptsConfig(BaseModel):
     remember_last_repo_per_project: Dict[str, str] = Field(default_factory=dict)  # Map: {"PROJ": "backend-api"}
     show_prompt_unit_tests: bool = True  # Show testing instructions in initial prompt for development sessions
     auto_load_related_conversations: bool = False  # Auto-prompt AI agent to read other conversations in multi-project sessions
-    last_used_workspace: Optional[str] = None  # Last workspace selected by user (replaces is_default as dynamic default)
 
     @field_validator('auto_create_pr_status', mode='before')
     @classmethod
@@ -348,29 +316,6 @@ class Config(BaseModel):
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4")
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests (default: 10)
 
-    @model_validator(mode='after')
-    def initialize_last_used_workspace(self) -> 'Config':
-        """Auto-initialize last_used_workspace for better UX.
-
-        - Migrates is_default=True to last_used_workspace (backward compatibility)
-        - Auto-sets last_used_workspace to first workspace if not set
-        """
-        # Skip if no workspaces configured
-        if not self.repos.workspaces:
-            return self
-
-        # Migration: If any workspace has is_default=True, use it as last_used_workspace
-        if not self.prompts.last_used_workspace:
-            for workspace in self.repos.workspaces:
-                if workspace.is_default:
-                    self.prompts.last_used_workspace = workspace.name
-                    break
-
-        # Auto-initialize: If still not set, use first workspace
-        if not self.prompts.last_used_workspace:
-            self.prompts.last_used_workspace = self.repos.workspaces[0].name
-
-        return self
 
     class Config:
         populate_by_name = True

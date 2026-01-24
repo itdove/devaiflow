@@ -174,9 +174,7 @@ def _create_mock_jira_ticket(
     from devflow.cli.utils import get_workspace_path
     workspace_path = None
     if config and config.repos and config.repos.workspaces:
-        default_workspace = config.repos.get_default_workspace()
-        if default_workspace:
-            workspace_path = default_workspace.path
+        workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path)
 
     # Create mock Claude session with initial prompt
@@ -501,9 +499,7 @@ def create_jira_ticket_session(
     from devflow.cli.utils import get_workspace_path
     workspace_path = None
     if config and config.repos and config.repos.workspaces:
-        default_workspace = config.repos.get_default_workspace()
-        if default_workspace:
-            workspace_path = default_workspace.path
+        workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path)
 
     # Set up signal handlers for cleanup
@@ -548,9 +544,9 @@ def create_jira_ticket_session(
         # Use default workspace path for skills discovery
         if config and config.repos and config.repos.workspaces:
             from devflow.utils.claude_commands import get_workspace_skills_dir
-            default_workspace = config.repos.get_default_workspace()
-            if default_workspace:
-                workspace_skills = get_workspace_skills_dir(default_workspace.path)
+            default_workspace_path = config.repos.get_default_workspace_path()
+            if default_workspace_path:
+                workspace_skills = get_workspace_skills_dir(default_workspace_path)
                 if workspace_skills.exists():
                     skills_dirs.append(str(workspace_skills))
 

@@ -63,7 +63,13 @@ def test_jira_open_prompts_to_clone_to_temp_directory(temp_daf_home, mock_git_re
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     runner = CliRunner()
@@ -124,7 +130,13 @@ def test_jira_open_skips_clone_prompt_when_user_declines(temp_daf_home, mock_git
     """Test that `daf jira open` uses current directory when user declines cloning."""
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     runner = CliRunner()
@@ -171,7 +183,13 @@ def test_jira_open_skips_clone_prompt_in_json_mode(temp_daf_home, mock_git_repo)
     """Test that `daf jira open --json` skips interactive clone prompt."""
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     runner = CliRunner()
@@ -207,7 +225,13 @@ def test_jira_open_existing_session_delegates_to_daf_open(temp_daf_home, mock_gi
     """Test that `daf jira open` delegates to `daf open` when session already exists."""
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     # Create existing session with conversation metadata
@@ -228,7 +252,7 @@ def test_jira_open_existing_session_delegates_to_daf_open(temp_daf_home, mock_gi
         ai_agent_session_id=ai_agent_session_id,
         project_path=str(mock_git_repo),
         branch="main",
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
 
     session_manager.update_session(session)
@@ -255,7 +279,13 @@ def test_jira_open_validates_ticket_before_creating_session(temp_daf_home, mock_
     """Test that `daf jira open` validates issue tracker ticket exists before creating session."""
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     runner = CliRunner()
@@ -291,7 +321,13 @@ def test_jira_open_does_not_transition_ticket_status(temp_daf_home, mock_git_rep
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     # Create existing ticket_creation session (as created by daf jira open or daf jira new)
@@ -312,7 +348,7 @@ def test_jira_open_does_not_transition_ticket_status(temp_daf_home, mock_git_rep
         ai_agent_session_id=ai_agent_session_id,
         project_path=str(mock_git_repo),
         branch="main",
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
 
     session_manager.update_session(session)
@@ -378,7 +414,13 @@ def test_jira_open_reuses_conversation_on_reopen(temp_daf_home, mock_git_repo):
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     runner = CliRunner()
@@ -496,7 +538,13 @@ def test_jira_open_reopens_completed_ticket_creation_session(temp_daf_home, mock
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     # Create a completed ticket_creation session
@@ -518,7 +566,7 @@ def test_jira_open_reopens_completed_ticket_creation_session(temp_daf_home, mock
         ai_agent_session_id=original_uuid,
         project_path=str(mock_git_repo),
         branch="main",
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
 
     session_manager.update_session(session)

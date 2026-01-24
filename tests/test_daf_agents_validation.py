@@ -46,7 +46,11 @@ def test_validate_daf_agents_in_workspace_fallback(tmp_path, temp_daf_home):
     # Create config with workspace path
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(workspace)
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.prompts.last_used_workspace = "default"
     config_loader.save_config(config)
 
     # Should find DAF_AGENTS.md in workspace (fallback)
@@ -74,7 +78,11 @@ def test_validate_daf_agents_not_found_user_declines(tmp_path, temp_daf_home, mo
     # Create config with workspace path
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(workspace)
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.prompts.last_used_workspace = "default"
     config_loader.save_config(config)
 
     # Should NOT find DAF_AGENTS.md and user declined installation
@@ -105,7 +113,11 @@ def test_validate_daf_agents_auto_install_success(tmp_path, temp_daf_home, monke
     # Create config with workspace path
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(workspace)
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.prompts.last_used_workspace = "default"
     config_loader.save_config(config)
 
     # Mock _install_bundled_cs_agents to simulate successful installation
@@ -148,7 +160,11 @@ def test_validate_daf_agents_prefers_repo_over_workspace(tmp_path, temp_daf_home
     # Create config with workspace path
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(workspace)
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.prompts.last_used_workspace = "default"
     config_loader.save_config(config)
 
     # Should find DAF_AGENTS.md (and prefer repo over workspace)
@@ -176,7 +192,11 @@ def test_validate_daf_agents_auto_install_failure_with_diagnostics(tmp_path, tem
     # Create config with workspace path
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(workspace)
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.prompts.last_used_workspace = "default"
     config_loader.save_config(config)
 
     # Mock _install_bundled_cs_agents to simulate failure with diagnostics
@@ -465,7 +485,11 @@ def test_validate_context_files_triggers_upgrade_check_workspace(tmp_path, temp_
     # Create config with workspace path
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(workspace)
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.prompts.last_used_workspace = "default"
     config_loader.save_config(config)
 
     # Should find in workspace and upgrade

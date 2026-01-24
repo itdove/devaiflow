@@ -252,7 +252,7 @@ def test_config_tui_validation_missing_required(mock_config_loader, mock_config)
 
     # Clear required fields
     tui.config.jira.url = ""
-    tui.config.repos.workspace = ""
+    tui.config.repos.workspaces = []
 
     errors = tui._validate_all()
 

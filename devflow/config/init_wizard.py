@@ -58,7 +58,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("\n[bold]=== Repository Workspace ===[/bold]\n")
 
     # Workspace path
-    default_workspace = current_config.repos.workspace if current_config else str(Path.home() / "development")
+    default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else str(Path.home() / "development")
     workspace_path = Prompt.ask("Workspace path", default=default_workspace)
 
     console.print("\n[bold]=== Keyword Mappings ===[/bold]\n")
@@ -106,9 +106,13 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         jira_config.field_mappings = current_config.jira.field_mappings
         jira_config.field_cache_timestamp = current_config.jira.field_cache_timestamp
 
-    # Build repo config
+    # Build repo config with workspaces list
+    from devflow.config.models import WorkspaceDefinition
     repos_config = RepoConfig(
-        workspace=workspace_path,
+        workspaces=[
+            WorkspaceDefinition(name="default", path=workspace_path)
+        ],
+        last_used_workspace="default",
         keywords=keywords,
     )
 

@@ -78,7 +78,7 @@ class SessionManager:
         # Create initial conversation if we have the required info (NEW in PROJ-59791)
         if working_directory and project_path and ai_agent_session_id:
             config = self.config_loader.load_config()
-            workspace = config.repos.workspace if config else None
+            workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
             session.add_conversation(
                 working_dir=working_directory,

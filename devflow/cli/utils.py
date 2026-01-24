@@ -788,7 +788,7 @@ def select_workspace(
     Priority order (AAP-63945):
     1. workspace_flag (--workspace parameter)
     2. session.workspace_name (previously selected workspace for this session)
-    3. last-used workspace (prompts.last_used_workspace - global preference)
+    3. last-used workspace (repos.last_used_workspace - global preference)
     4. prompt user (if not skip_prompt)
 
     Args:
@@ -812,7 +812,7 @@ def select_workspace(
         'feat-caching'
 
         >>> # Use last-used workspace
-        >>> config.prompts.last_used_workspace = "primary"
+        >>> config.repos.last_used_workspace = "primary"
         >>> select_workspace(config)
         'primary'
 
@@ -828,10 +828,9 @@ def select_workspace(
         # Gracefully handle missing config - return None to use legacy behavior
         return None
 
-    # Handle old single-workspace configuration (backward compatibility)
-    # If repos.workspace is set but workspaces list is empty, not using new workspace feature
+    # Check if workspaces are configured
     if not config.repos.workspaces or len(config.repos.workspaces) == 0:
-        # Old single-workspace config or no workspaces configured - return None
+        # No workspaces configured - return None
         return None
 
     # Priority 1: --workspace flag
@@ -856,15 +855,15 @@ def select_workspace(
             console.print(f"[yellow]Warning: Session workspace '{session.workspace_name}' not found in config[/yellow]")
 
     # Priority 3: last-used workspace (global preference)
-    if config.prompts.last_used_workspace:
-        workspace = config.repos.get_workspace_by_name(config.prompts.last_used_workspace)
+    if config.repos.last_used_workspace:
+        workspace = config.repos.get_workspace_by_name(config.repos.last_used_workspace)
         if workspace:
             if not skip_prompt:
                 console_print(f"[dim]Using last-used workspace: {workspace.name}[/dim]")
             return workspace.name
         else:
             # Last-used workspace was deleted - fall through to prompt
-            console.print(f"[yellow]Warning: Last-used workspace '{config.prompts.last_used_workspace}' not found in config[/yellow]")
+            console.print(f"[yellow]Warning: Last-used workspace '{config.repos.last_used_workspace}' not found in config[/yellow]")
 
     # Priority 4: prompt user (if not skipped)
     if skip_prompt:
@@ -877,7 +876,7 @@ def select_workspace(
         sys.exit(1)
 
     console.print("\n[cyan]Select workspace:[/cyan]")
-    last_used = config.prompts.last_used_workspace
+    last_used = config.repos.last_used_workspace
     default_idx = 1
     for idx, workspace in enumerate(config.repos.workspaces, start=1):
         # Show ⭐ for last-used workspace
@@ -898,7 +897,7 @@ def select_workspace(
 
                 # Save as last-used workspace for future sessions
                 if save_last_used:
-                    config.prompts.last_used_workspace = selected.name
+                    config.repos.last_used_workspace = selected.name
                     # Save config to persist the last_used_workspace
                     try:
                         from devflow.config.loader import ConfigLoader

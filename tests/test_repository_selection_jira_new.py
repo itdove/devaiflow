@@ -35,7 +35,7 @@ def mock_config(mock_workspace, temp_daf_home):
     config = config_loader.load_config()
     # Use new workspaces list instead of old workspace field
     config.repos.workspaces = [
-        WorkspaceDefinition(name="default", path=str(mock_workspace), is_default=True)
+        WorkspaceDefinition(name="default", path=str(mock_workspace))
     ]
     # Set last-used workspace for the selection system
     config.prompts.last_used_workspace = "default"

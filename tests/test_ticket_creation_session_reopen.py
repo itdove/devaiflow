@@ -52,7 +52,13 @@ def test_reopen_ticket_creation_session_without_conversation_file(temp_daf_home,
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     session_manager = SessionManager(config_loader)
@@ -79,7 +85,7 @@ def test_reopen_ticket_creation_session_without_conversation_file(temp_daf_home,
             branch="main",
             temp_directory=temp_dir,
             original_project_path=str(mock_git_repo),
-            workspace=config.repos.workspace,
+            workspace=config.repos.get_default_workspace_path(),
         )
 
         session_manager.update_session(session)
@@ -143,7 +149,13 @@ def test_reopen_ticket_creation_session_with_conversation_file(temp_daf_home, mo
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     session_manager = SessionManager(config_loader)
@@ -168,7 +180,7 @@ def test_reopen_ticket_creation_session_with_conversation_file(temp_daf_home, mo
             branch="main",
             temp_directory=temp_dir,
             original_project_path=str(mock_git_repo),
-            workspace=config.repos.workspace,
+            workspace=config.repos.get_default_workspace_path(),
         )
 
         session_manager.update_session(session)
@@ -237,7 +249,13 @@ def test_reopen_normal_session_without_conversation_file(temp_daf_home, mock_git
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     session_manager = SessionManager(config_loader)
@@ -258,7 +276,7 @@ def test_reopen_normal_session_without_conversation_file(temp_daf_home, mock_git
         ai_agent_session_id=ai_agent_session_id,
         project_path=str(mock_git_repo),
         branch="main",
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
     session_manager.update_session(session)
 
@@ -307,7 +325,13 @@ def test_mock_mode_skips_temp_directory_prompt(temp_daf_home, mock_git_repo, mon
 
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     session_manager = SessionManager(config_loader)
@@ -332,7 +356,7 @@ def test_mock_mode_skips_temp_directory_prompt(temp_daf_home, mock_git_repo, mon
         project_path=str(mock_git_repo),
         branch="main",
         # No temp_directory or original_project_path
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
 
     session_manager.update_session(session)
@@ -378,7 +402,13 @@ def test_reopen_ticket_creation_session_never_prompts_for_branch(temp_daf_home, 
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     session_manager = SessionManager(config_loader)
@@ -405,7 +435,7 @@ def test_reopen_ticket_creation_session_never_prompts_for_branch(temp_daf_home, 
             branch="main",  # placeholder branch
             temp_directory=temp_dir,
             original_project_path=str(mock_git_repo),
-            workspace=config.repos.workspace,
+            workspace=config.repos.get_default_workspace_path(),
         )
 
         # Clear the branch to simulate ticket_creation session state
@@ -461,7 +491,13 @@ def test_reopen_ticket_creation_session_skips_jira_transition(temp_daf_home, moc
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     session_manager = SessionManager(config_loader)
@@ -488,7 +524,7 @@ def test_reopen_ticket_creation_session_skips_jira_transition(temp_daf_home, moc
         ai_agent_session_id=ai_agent_session_id,
         project_path=str(mock_git_repo),
         branch="main",
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
 
     session_manager.update_session(session)
@@ -549,7 +585,13 @@ def test_daf_jira_open_resumes_existing_conversation(temp_daf_home, mock_git_rep
     """
     config_loader = ConfigLoader()
     config = config_loader.create_default_config()
-    config.repos.workspace = str(mock_git_repo.parent)
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+
+    ]
     config_loader.save_config(config)
 
     session_manager = SessionManager(config_loader)
@@ -584,7 +626,7 @@ def test_daf_jira_open_resumes_existing_conversation(temp_daf_home, mock_git_rep
             branch="main",
             temp_directory=temp_dir,
             original_project_path=str(mock_git_repo),
-            workspace=config.repos.workspace,
+            workspace=config.repos.get_default_workspace_path(),
         )
 
         session_manager.update_session(session)

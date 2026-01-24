@@ -633,7 +633,7 @@ def open_session(
                     if working_dir != current_project
                 ]
 
-            workspace = config.repos.workspace if config and config.repos else None
+            workspace = config.repos.get_default_workspace_path() if config and config.repos else None
             initial_prompt = _generate_initial_prompt(
                 name=session.name,
                 goal=session.goal,
@@ -659,9 +659,9 @@ def open_session(
                 skills_dirs.append(str(user_skills))
 
             # 2. Workspace-level skills: <workspace>/.claude/skills/
-            if config and config.repos and config.repos.workspace:
+            if config and config.repos and config.repos.get_default_workspace_path():
                 from devflow.utils.claude_commands import get_workspace_skills_dir
-                workspace_skills = get_workspace_skills_dir(config.repos.workspace)
+                workspace_skills = get_workspace_skills_dir(config.repos.get_default_workspace_path())
                 if workspace_skills.exists():
                     skills_dirs.append(str(workspace_skills))
 
@@ -720,9 +720,9 @@ def open_session(
                 skills_dirs.append(str(user_skills))
 
             # 2. Workspace-level skills: <workspace>/.claude/skills/
-            if config and config.repos and config.repos.workspace:
+            if config and config.repos and config.repos.get_default_workspace_path():
                 from devflow.utils.claude_commands import get_workspace_skills_dir
-                workspace_skills = get_workspace_skills_dir(config.repos.workspace)
+                workspace_skills = get_workspace_skills_dir(config.repos.get_default_workspace_path())
                 if workspace_skills.exists():
                     skills_dirs.append(str(workspace_skills))
 
@@ -1120,7 +1120,15 @@ def _detect_working_directory_from_path(path: Path, config_loader) -> Optional[s
             return path.name
 
         if config and config.repos:
-            workspace = Path(config.repos.workspace).expanduser().absolute()
+            workspace_path = config.repos.get_default_workspace_path()
+
+            if not workspace_path:
+
+                console.print("[yellow]⚠[/yellow] No default workspace configured")
+
+                return None
+
+            workspace = Path(workspace_path).expanduser().absolute()
 
             # Check if path is within the workspace
             try:
@@ -1141,7 +1149,15 @@ def _detect_working_directory_from_path(path: Path, config_loader) -> Optional[s
         try:
             config = config_loader.load_config()
             if config and config.repos:
-                workspace = Path(config.repos.workspace).expanduser()
+                workspace_path = config.repos.get_default_workspace_path()
+
+                if not workspace_path:
+
+                    console.print("[yellow]⚠[/yellow] No default workspace configured")
+
+                    return None
+
+                workspace = Path(workspace_path).expanduser()
                 repo_path = workspace / str(path)
 
                 # Check if this repository exists in workspace
@@ -1191,22 +1207,27 @@ def _detect_working_directory_from_cwd(current_dir: Path, config_loader) -> Opti
         # If config loading fails, silently use directory name
         return current_dir.name
 
-    if config and config.repos:
-        workspace = Path(config.repos.workspace).expanduser().absolute()
+    if config and config.repos and config.repos.workspaces:
+        # Check if current_dir is within ANY of the configured workspaces
+        for workspace_def in config.repos.workspaces:
+            workspace = Path(workspace_def.path).expanduser().absolute()
 
-        # Check if current_dir is within the workspace or IS the workspace
-        try:
-            # This will raise ValueError if current_dir is not relative to workspace
-            relative = current_dir.relative_to(workspace)
-            # Get the first component of the relative path (the repository name)
-            repo_name = relative.parts[0] if relative.parts else current_dir.name
-            console.print(f"[dim]Detected repository in workspace: {repo_name}[/dim]")
-            return repo_name
-        except ValueError:
-            # current_dir is not within workspace, use directory name
-            repo_name = current_dir.name
-            console.print(f"[dim]Detected repository outside workspace: {repo_name}[/dim]")
-            return repo_name
+            # Check if current_dir is within the workspace or IS the workspace
+            try:
+                # This will raise ValueError if current_dir is not relative to workspace
+                relative = current_dir.relative_to(workspace)
+                # Get the first component of the relative path (the repository name)
+                repo_name = relative.parts[0] if relative.parts else current_dir.name
+                console.print(f"[dim]Detected repository in workspace '{workspace_def.name}': {repo_name}[/dim]")
+                return repo_name
+            except ValueError:
+                # current_dir is not within this workspace, try next one
+                continue
+
+        # Not in any workspace, use directory name
+        repo_name = current_dir.name
+        console.print(f"[dim]Detected repository outside workspace: {repo_name}[/dim]")
+        return repo_name
     else:
         # No workspace configured - use current directory name
         repo_name = current_dir.name
@@ -1243,7 +1264,7 @@ def _handle_conversation_selection_without_detection(
 
         # Get workspace for path display
         config = config_loader.load_config()
-        workspace = config.repos.workspace if config and config.repos else None
+        workspace = config.repos.get_default_workspace_path() if config and config.repos else None
         project_path = active.get_project_path(workspace)
 
         # Format last active time
@@ -1406,7 +1427,15 @@ def _create_conversation_from_workspace_selection(
     repo_options = []
 
     if config and config.repos:
-        workspace = Path(config.repos.workspace).expanduser()
+        workspace_path = config.repos.get_default_workspace_path()
+
+        if not workspace_path:
+
+            console.print("[yellow]⚠[/yellow] No default workspace configured")
+
+            return None
+
+        workspace = Path(workspace_path).expanduser()
 
         if workspace.exists() and workspace.is_dir():
             # List all directories in workspace, excluding those already in conversations
@@ -1487,7 +1516,7 @@ def _create_conversation_from_workspace_selection(
     new_session_id = str(uuid.uuid4())
 
     # Get workspace for portable paths
-    workspace_path = config.repos.workspace if config and config.repos else None
+    workspace_path = config.repos.get_default_workspace_path() if config and config.repos else None
 
     # Create the conversation
     try:
@@ -1556,7 +1585,7 @@ def _create_conversation_for_path(
 
     # Get workspace for portable paths
     config = config_loader.load_config()
-    workspace = config.repos.workspace if config and config.repos else None
+    workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
     # Create the conversation
     try:
@@ -1639,7 +1668,7 @@ def _create_conversation_for_current_directory(
 
     # Get workspace for portable paths
     config = config_loader.load_config()
-    workspace = config.repos.workspace if config and config.repos else None
+    workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
     # Create the conversation
     try:
@@ -1714,21 +1743,23 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
     repo_options = []
 
     if config and config.repos:
-        workspace = Path(config.repos.workspace).expanduser()
-        console.print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
+        workspace_path = config.repos.get_default_workspace_path()
+        if workspace_path:
+            workspace = Path(workspace_path).expanduser()
+            console.print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
 
-        if workspace.exists() and workspace.is_dir():
-            # List all directories in workspace
-            try:
-                directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
-                repo_options = sorted([d.name for d in directories])
+            if workspace.exists() and workspace.is_dir():
+                # List all directories in workspace
+                try:
+                    directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
+                    repo_options = sorted([d.name for d in directories])
 
-                if repo_options:
-                    console.print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
-                    for i, repo in enumerate(repo_options, 1):  # Show all repositories
-                        console.print(f"  {i}. {repo}")
-            except Exception as e:
-                console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
+                    if repo_options:
+                        console.print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
+                        for i, repo in enumerate(repo_options, 1):  # Show all repositories
+                            console.print(f"  {i}. {repo}")
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
 
     # Prompt for working directory
     console.print(f"\n[bold]Select working directory:[/bold]")
@@ -1765,7 +1796,15 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
             console.print(f"[dim]Selected: {repo_name}[/dim]")
 
             if config and config.repos:
-                workspace = Path(config.repos.workspace).expanduser()
+                workspace_path = config.repos.get_default_workspace_path()
+
+                if not workspace_path:
+
+                    console.print("[yellow]⚠[/yellow] No default workspace configured")
+
+                    return None
+
+                workspace = Path(workspace_path).expanduser()
                 project_path = workspace / repo_name
             else:
                 console.print(f"[red]✗[/red] No workspace configured in config")
@@ -1787,7 +1826,15 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
         repo_name = selection
 
         if config and config.repos:
-            workspace = Path(config.repos.workspace).expanduser()
+            workspace_path = config.repos.get_default_workspace_path()
+
+            if not workspace_path:
+
+                console.print("[yellow]⚠[/yellow] No default workspace configured")
+
+                return None
+
+            workspace = Path(workspace_path).expanduser()
             project_path = workspace / repo_name
 
             if not project_path.exists():
@@ -1809,7 +1856,7 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
 
         # Get workspace for portable paths
         config = config_loader.load_config()
-        workspace = config.repos.workspace if config and config.repos else None
+        workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
         session.add_conversation(
             working_dir=project_path.name,
@@ -2681,8 +2728,16 @@ def _validate_context_files(project_path: str, config_loader) -> bool:
 
     # Check workspace directory as fallback
     config = config_loader.load_config()
-    if config and config.repos and config.repos.workspace:
-        workspace_path = Path(config.repos.workspace).expanduser()
+    if config and config.repos and config.repos.get_default_workspace_path():
+        workspace_path = config.repos.get_default_workspace_path()
+
+        if not workspace_path:
+
+            console.print("[yellow]⚠[/yellow] No default workspace configured")
+
+            return None
+
+        workspace_path = Path(workspace_path).expanduser()
         cs_agents_workspace = workspace_path / "DAF_AGENTS.md"
 
         if cs_agents_workspace.exists():
@@ -2698,7 +2753,7 @@ def _validate_context_files(project_path: str, config_loader) -> bool:
     console.print(f"\n[dim]DAF_AGENTS.md provides daf tool usage instructions to Claude.[/dim]")
     console.print(f"\nSearched locations:")
     console.print(f"  1. Repository: {cs_agents_repo}")
-    if config and config.repos and config.repos.workspace:
+    if config and config.repos and config.repos.get_default_workspace_path():
         console.print(f"  2. Workspace:  {cs_agents_workspace}")
 
     # Offer to install bundled DAF_AGENTS.md
@@ -2721,7 +2776,7 @@ def _validate_context_files(project_path: str, config_loader) -> bool:
         console.print(f"\n  Option 1: Copy to repository (project-specific)")
         console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {repo_path}/")
         console.print(f"\n  Option 2: Copy to workspace (shared across all projects)")
-        if config and config.repos and config.repos.workspace:
+        if config and config.repos and config.repos.get_default_workspace_path():
             console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
         console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
         return False
@@ -2751,7 +2806,7 @@ def _validate_context_files(project_path: str, config_loader) -> bool:
         console.print(f"\n  Option 1: Copy to repository (project-specific)")
         console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {repo_path}/")
         console.print(f"\n  Option 2: Copy to workspace (shared across all projects)")
-        if config and config.repos and config.repos.workspace:
+        if config and config.repos and config.repos.get_default_workspace_path():
             console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
         console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
         return False

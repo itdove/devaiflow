@@ -35,7 +35,7 @@ def list_workspaces() -> None:
     table.add_column("Default", style="green")
 
     for workspace in config.repos.workspaces:
-        default_marker = "✓" if workspace.is_default else ""
+        default_marker = "✓" if config.repos.last_used_workspace == workspace.name else ""
         table.add_row(workspace.name, workspace.path, default_marker)
 
     console.print(table)
@@ -134,24 +134,22 @@ def add_workspace(name: str, path: str, set_default: bool = False) -> None:
             console.print("[dim]Cancelled[/dim]")
             return
 
-    # Check if this should be the default (only if no default exists and not explicitly set)
-    if not set_default and not config.repos.get_default_workspace():
-        set_default = Confirm.ask("\nSet as default workspace?", default=True)
+    # Check if this should be the last used (only if no last used exists and not explicitly set)
+    if not set_default and not config.repos.last_used_workspace:
+        set_default = Confirm.ask("\nSet as last used workspace?", default=True)
 
     # Create workspace definition
     workspace = WorkspaceDefinition(
         name=name,
-        path=str(expanded_path),
-        is_default=set_default
+        path=str(expanded_path)
     )
-
-    # If setting as default, unset other defaults
-    if set_default:
-        for w in config.repos.workspaces:
-            w.is_default = False
 
     # Add to config
     config.repos.workspaces.append(workspace)
+
+    # If setting as last used, update last_used_workspace
+    if set_default:
+        config.repos.last_used_workspace = name
 
     # Save config
     config_loader.save_config(config)
@@ -159,7 +157,7 @@ def add_workspace(name: str, path: str, set_default: bool = False) -> None:
     console.print(f"\n[green]✓[/green] Added workspace: {name}")
     console.print(f"[dim]Path: {expanded_path}[/dim]")
     if set_default:
-        console.print(f"[dim]Default: Yes[/dim]")
+        console.print(f"[dim]Last used: Yes[/dim]")
 
 
 @require_outside_claude
@@ -187,7 +185,7 @@ def remove_workspace(name: str) -> None:
         # Show configured workspaces
         console.print("[cyan]Configured workspaces:[/cyan]")
         for i, workspace in enumerate(config.repos.workspaces, 1):
-            default_marker = " [default]" if workspace.is_default else ""
+            default_marker = " [default]" if config.repos.last_used_workspace == workspace.name else ""
             console.print(f"  {i}. {workspace.name} ({workspace.path}){default_marker}")
 
         console.print()
@@ -244,14 +242,14 @@ def remove_workspace(name: str) -> None:
             return
 
     # Remove workspace
-    was_default = workspace.is_default
+    was_last_used = (config.repos.last_used_workspace == workspace.name)
     config.repos.workspaces = [
         w for w in config.repos.workspaces if w.name != name
     ]
 
     # If removed workspace was default, set first remaining as default
-    if was_default and config.repos.workspaces:
-        config.repos.workspaces[0].is_default = True
+    if was_last_used and config.repos.workspaces:
+        config.repos.last_used_workspace = config.repos.workspaces[0].name
         console.print(f"[dim]Set '{config.repos.workspaces[0].name}' as new default[/dim]")
 
     # Save config
@@ -286,7 +284,7 @@ def set_default_workspace(name: str) -> None:
         # Show configured workspaces
         console.print("[cyan]Configured workspaces:[/cyan]")
         for i, workspace in enumerate(config.repos.workspaces, 1):
-            default_marker = " [current default]" if workspace.is_default else ""
+            default_marker = " [current default]" if config.repos.last_used_workspace == workspace.name else ""
             console.print(f"  {i}. {workspace.name} ({workspace.path}){default_marker}")
 
         console.print()
@@ -316,22 +314,18 @@ def set_default_workspace(name: str) -> None:
         console.print(f"[red]✗[/red] Workspace not found: {name}")
         return
 
-    # Already default?
-    if workspace.is_default:
-        console.print(f"[yellow]⚠[/yellow] Workspace '{name}' is already the default")
+    # Already last used?
+    if config.repos.last_used_workspace == workspace.name:
+        console.print(f"[yellow]⚠[/yellow] Workspace '{name}' is already the last used workspace")
         return
 
-    # Unset all defaults
-    for w in config.repos.workspaces:
-        w.is_default = False
-
-    # Set new default
-    workspace.is_default = True
+    # Set as last used workspace
+    config.repos.last_used_workspace = name
 
     # Save config
     config_loader.save_config(config)
 
-    console.print(f"\n[green]✓[/green] Set '{name}' as default workspace")
+    console.print(f"\n[green]✓[/green] Set '{name}' as last used workspace")
 
 
 @require_outside_claude
@@ -361,7 +355,7 @@ def rename_workspace(old_name: str, new_name: str) -> None:
         # Show configured workspaces
         console.print("[cyan]Configured workspaces:[/cyan]")
         for i, workspace in enumerate(config.repos.workspaces, 1):
-            default_marker = " [default]" if workspace.is_default else ""
+            default_marker = " [default]" if config.repos.last_used_workspace == workspace.name else ""
             console.print(f"  {i}. {workspace.name} ({workspace.path}){default_marker}")
 
         console.print()

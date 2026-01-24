@@ -56,6 +56,7 @@ def test_auto_create_template_when_enabled(temp_daf_home):
     config_loader = ConfigLoader()
 
     # Create config with auto_create enabled
+    from devflow.config.models import WorkspaceDefinition
     config = Config(
         jira=JiraConfig(
             url="https://jira.example.com",
@@ -63,7 +64,12 @@ def test_auto_create_template_when_enabled(temp_daf_home):
             transitions={},
         ),
         repos=RepoConfig(
-            workspace=str(temp_daf_home / "workspace"),
+            workspaces=[
+                WorkspaceDefinition(
+                    name="default",
+                    path=str(temp_daf_home / "workspace")
+                )
+            ],
         ),
         templates=TemplateConfig(
             auto_create=True,
@@ -194,6 +200,7 @@ def test_auto_create_template_in_open_command(temp_daf_home):
     config_loader = ConfigLoader()
 
     # Create config with auto_create enabled
+    from devflow.config.models import WorkspaceDefinition
     config = Config(
         jira=JiraConfig(
             url="https://jira.example.com",
@@ -201,7 +208,12 @@ def test_auto_create_template_in_open_command(temp_daf_home):
             transitions={},
         ),
         repos=RepoConfig(
-            workspace=str(temp_daf_home / "workspace"),
+            workspaces=[
+                WorkspaceDefinition(
+                    name="default",
+                    path=str(temp_daf_home / "workspace")
+                )
+            ],
         ),
         templates=TemplateConfig(
             auto_create=True,
@@ -255,6 +267,7 @@ def test_no_duplicate_template_creation(temp_daf_home):
     config_loader = ConfigLoader()
 
     # Create config with auto_create enabled
+    from devflow.config.models import WorkspaceDefinition
     config = Config(
         jira=JiraConfig(
             url="https://jira.example.com",
@@ -262,7 +275,12 @@ def test_no_duplicate_template_creation(temp_daf_home):
             transitions={},
         ),
         repos=RepoConfig(
-            workspace=str(temp_daf_home / "workspace"),
+            workspaces=[
+                WorkspaceDefinition(
+                    name="default",
+                    path=str(temp_daf_home / "workspace")
+                )
+            ],
         ),
         templates=TemplateConfig(
             auto_create=True,

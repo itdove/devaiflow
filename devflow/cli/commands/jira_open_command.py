@@ -155,7 +155,7 @@ def jira_open_session(issue_key: str) -> None:
         branch=current_branch,
         temp_directory=temp_directory,  # None if user declined
         original_project_path=original_project_path,  # None if user declined
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
 
     session_manager.update_session(session)

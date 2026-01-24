@@ -868,7 +868,7 @@ class AddEditWorkspaceScreen(ModalScreen):
                 return
 
             # Return the new/updated workspace
-            workspace = WorkspaceDefinition(name=name, path=path, is_default=False)
+            workspace = WorkspaceDefinition(name=name, path=path)
             self.dismiss((workspace, self.index))
         else:
             self.dismiss(None)
@@ -1229,14 +1229,8 @@ class ConfigTUI(App):
                 classes="section-help",
             )
 
-            yield ConfigInput(
-                "Workspace Directory",
-                "repos.workspace",
-                value=self.config.repos.workspace,
-                help_text="Directory containing your git repositories",
-                required=True,
-                validator=PathValidator(),
-            )
+            # Note: Workspace configuration now uses the workspaces list editor below
+            # The old single workspace field has been removed
 
             yield Static("[bold]Detection Settings[/bold]", classes="subsection-title")
 
@@ -1591,7 +1585,7 @@ class ConfigTUI(App):
             # Container for workspace entries (will be updated dynamically)
             with Vertical(id="workspaces_list"):
                 if self.config.repos.workspaces:
-                    last_used = self.config.prompts.last_used_workspace
+                    last_used = self.config.repos.last_used_workspace
                     for idx, workspace in enumerate(self.config.repos.workspaces):
                         is_last_used = (workspace.name == last_used)
                         yield WorkspaceEntry(idx, workspace, is_last_used=is_last_used)
@@ -1770,10 +1764,10 @@ class ConfigTUI(App):
                 if 0 <= index < len(self.config.repos.workspaces):
                     # Check if name changed and it's the last_used workspace
                     old_workspace = self.config.repos.workspaces[index]
-                    if (old_workspace.name == self.config.prompts.last_used_workspace and
+                    if (old_workspace.name == self.config.repos.last_used_workspace and
                         old_workspace.name != workspace.name):
                         # Update last_used_workspace to new name
-                        self.config.prompts.last_used_workspace = workspace.name
+                        self.config.repos.last_used_workspace = workspace.name
 
                     self.config.repos.workspaces[index] = workspace
                     self._refresh_workspaces_list()
@@ -1796,11 +1790,11 @@ class ConfigTUI(App):
             removed_workspace = self.config.repos.workspaces.pop(message.index)
 
             # If this was the last_used workspace, update to first remaining workspace
-            if removed_workspace.name == self.config.prompts.last_used_workspace:
+            if removed_workspace.name == self.config.repos.last_used_workspace:
                 if self.config.repos.workspaces:
-                    self.config.prompts.last_used_workspace = self.config.repos.workspaces[0].name
+                    self.config.repos.last_used_workspace = self.config.repos.workspaces[0].name
                 else:
-                    self.config.prompts.last_used_workspace = None
+                    self.config.repos.last_used_workspace = None
 
             self._refresh_workspaces_list()
             self.notify(f"Removed workspace: {removed_workspace.name}", severity="information")
@@ -1812,7 +1806,7 @@ class ConfigTUI(App):
         Args:
             message: The set as last used message containing workspace name
         """
-        self.config.prompts.last_used_workspace = message.workspace_name
+        self.config.repos.last_used_workspace = message.workspace_name
         self._refresh_workspaces_list()
         self.notify(f"Set '{message.workspace_name}' as last-used workspace", severity="information")
         self.modified = True
@@ -1947,7 +1941,7 @@ class ConfigTUI(App):
 
                     # If this is the first workspace, set it as last_used
                     if len(self.config.repos.workspaces) == 1:
-                        self.config.prompts.last_used_workspace = workspace.name
+                        self.config.repos.last_used_workspace = workspace.name
 
                     self._refresh_workspaces_list()
                     self.notify(f"Added workspace: {workspace.name}", severity="information")
@@ -1962,11 +1956,12 @@ class ConfigTUI(App):
         """Handle the upgrade commands button press."""
         from devflow.utils.claude_commands import install_or_upgrade_commands
 
-        if not self.config.repos or not self.config.repos.workspace:
-            self.notify("Workspace not configured. Please configure workspace first.", severity="error")
+        workspace_path = self.config.repos.get_default_workspace_path()
+        if not workspace_path:
+            self.notify("No default workspace configured. Please configure a workspace first.", severity="error")
             return
 
-        workspace = self.config.repos.workspace
+        workspace = workspace_path
         self.notify("Upgrading slash commands...", severity="information")
 
         try:
@@ -2021,7 +2016,7 @@ class ConfigTUI(App):
 
             # Re-add workspace entries
             if self.config.repos.workspaces:
-                last_used = self.config.prompts.last_used_workspace
+                last_used = self.config.repos.last_used_workspace
                 for idx, workspace in enumerate(self.config.repos.workspaces):
                     is_last_used = (workspace.name == last_used)
                     list_container.mount(WorkspaceEntry(idx, workspace, is_last_used=is_last_used))
@@ -2085,7 +2080,7 @@ class ConfigTUI(App):
 
         # Repository settings
         try:
-            self.config.repos.workspace = self.query_one(key_to_id("input", "repos.workspace"), Input).value.strip()
+            # Note: repos.workspace field removed - now using workspaces list
 
             detection_method = self.query_one(key_to_id("select", "repos.detection.method"), Select).value
             if detection_method and detection_method != Select.BLANK:
@@ -2260,18 +2255,20 @@ class ConfigTUI(App):
         # Required fields
         if not self.config.jira.url:
             errors.append("JIRA URL is required")
-        if not self.config.repos.workspace:
-            errors.append("Repository workspace is required")
+        if not self.config.repos.workspaces or len(self.config.repos.workspaces) == 0:
+            errors.append("At least one workspace is required")
 
-        # Path validation
-        try:
-            workspace_path = Path(self.config.repos.workspace).expanduser()
-            if not workspace_path.exists():
-                errors.append(f"Workspace directory does not exist: {workspace_path}")
-            elif not workspace_path.is_dir():
-                errors.append(f"Workspace path is not a directory: {workspace_path}")
-        except Exception as e:
-            errors.append(f"Invalid workspace path: {e}")
+        # Workspace path validation
+        if self.config.repos.workspaces:
+            for workspace in self.config.repos.workspaces:
+                try:
+                    workspace_path = Path(workspace.path).expanduser()
+                    if not workspace_path.exists():
+                        errors.append(f"Workspace '{workspace.name}' directory does not exist: {workspace.path}")
+                    elif not workspace_path.is_dir():
+                        errors.append(f"Workspace '{workspace.name}' path is not a directory: {workspace.path}")
+                except Exception as e:
+                    errors.append(f"Invalid workspace '{workspace.name}' path: {e}")
 
         # URL validation
         if not (self.config.jira.url.startswith("http://") or self.config.jira.url.startswith("https://")):

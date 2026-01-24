@@ -652,7 +652,10 @@ Workspaces enable you to organize repositories into named locations (similar to 
 **WorkspaceDefinition Fields:**
 - **name** (string, required) - Unique workspace identifier
 - **path** (string, required) - Directory path (supports ~ expansion)
-- **is_default** (boolean, optional) - Whether this is the default workspace
+
+**RepoConfig Fields:**
+- **workspaces** (array, required) - List of workspace definitions
+- **last_used_workspace** (string, optional) - Name of the last used workspace
 
 **Example:**
 ```json
@@ -661,20 +664,18 @@ Workspaces enable you to organize repositories into named locations (similar to 
     "workspaces": [
       {
         "name": "primary",
-        "path": "/Users/username/development",
-        "is_default": true
+        "path": "/Users/username/development"
       },
       {
         "name": "product-a",
-        "path": "/Users/username/repos/product-a",
-        "is_default": false
+        "path": "/Users/username/repos/product-a"
       },
       {
         "name": "feat-caching",
-        "path": "/Users/username/workspaces/caching",
-        "is_default": false
+        "path": "/Users/username/workspaces/caching"
       }
-    ]
+    ],
+    "last_used_workspace": "primary"
   }
 }
 ```
@@ -710,7 +711,7 @@ daf open AAP-123  # Uses remembered workspace
 **Workspace Selection Priority:**
 1. `-w`/`--workspace` flag (highest priority)
 2. Session's stored workspace_name
-3. Default workspace (is_default=true)
+3. Last used workspace (last_used_workspace)
 4. Interactive prompt
 
 **Use Cases:**
@@ -718,38 +719,6 @@ daf open AAP-123  # Uses remembered workspace
 - Separate experimental branches from main development
 - Group repositories by product or feature
 - Enable concurrent multi-branch development
-
-### repos.workspace (Deprecated)
-
-**Type:** string
-**Required:** No
-**Description:** Single workspace directory (deprecated in favor of repos.workspaces)
-
-**Note:** If you have an existing single `workspace` string in your config, it will be automatically migrated to `workspaces` list with name "default" on first load.
-
-**Example (old format):**
-```json
-{
-  "repos": {
-    "workspace": "/Users/your-username/development/myorg"
-  }
-}
-```
-
-**Automatically migrates to:**
-```json
-{
-  "repos": {
-    "workspaces": [
-      {
-        "name": "default",
-        "path": "/Users/your-username/development/myorg",
-        "is_default": true
-      }
-    ]
-  }
-}
-```
 
 ### repos.detection
 

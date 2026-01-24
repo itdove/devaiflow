@@ -305,6 +305,7 @@ class ConfigLoader:
             JiraTransitionConfig,
             RepoConfig,
             TimeTrackingConfig,
+            WorkspaceDefinition,
         )
 
         default_config = Config(
@@ -336,7 +337,13 @@ class ConfigLoader:
                 field_cache_timestamp=None,
             ),
             repos=RepoConfig(
-                workspace=str(Path.home() / "development"),
+                workspaces=[
+                    WorkspaceDefinition(
+                        name="default",
+                        path=str(Path.home() / "development")
+                    )
+                ],
+                last_used_workspace="default",
                 keywords={},
             ),
             time_tracking=TimeTrackingConfig(),

@@ -1400,15 +1400,14 @@ class Session(BaseModel):
   - Feature support matrix documented with known limitations
   - Ready for community testing and feedback
 - ✓ Multiple named workspaces for concurrent multi-branch development (AAP-63377)
-  - WorkspaceDefinition model with name, path, is_default fields
-  - RepoConfig supports List[WorkspaceDefinition] with backward compatibility
-  - Automatic migration from single workspace string to workspaces list
+  - WorkspaceDefinition model with name, path fields
+  - RepoConfig supports List[WorkspaceDefinition] and last_used_workspace
   - Session model includes workspace_name field for persistence
-  - Workspace selection with priority resolution (flag > session > default > prompt)
+  - Workspace selection with priority resolution (flag > session > last_used > prompt)
   - Updated AAP-60431 check to use (project_path, workspace_name) tuple
   - Allows concurrent sessions on same project in different workspaces
   - Continues blocking concurrent sessions within same workspace
-  - daf workspace command group (add, remove, list, set-default)
+  - daf workspace command group (add, remove, list, set-default, rename)
   - --workspace flag added to daf new and daf open commands
   - Session remembers workspace for automatic reuse on reopen
   - daf list and daf info display workspace information
