@@ -37,12 +37,12 @@ def upgrade_commands_only(
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
-    if not config or not config.repos or not config.repos.workspace:
+    if not config or not config.repos or not config.repos.get_default_workspace_path():
         console.print("[red]✗[/red] Workspace not configured")
         console.print("[dim]Run 'daf config tui' to configure your workspace[/dim]")
         return
 
-    workspace = config.repos.workspace
+    workspace = config.repos.get_default_workspace_path()
 
     # Verify workspace exists
     workspace_path = Path(workspace).expanduser().resolve()
@@ -157,12 +157,12 @@ def upgrade_all(
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
-    if not config or not config.repos or not config.repos.workspace:
+    if not config or not config.repos or not config.repos.get_default_workspace_path():
         console.print("[red]✗[/red] Workspace not configured")
         console.print("[dim]Run 'daf config tui' to configure your workspace[/dim]")
         return
 
-    workspace = config.repos.workspace
+    workspace = config.repos.get_default_workspace_path()
 
     # Verify workspace exists
     workspace_path = Path(workspace).expanduser().resolve()

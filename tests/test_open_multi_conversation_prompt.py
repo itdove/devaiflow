@@ -35,7 +35,13 @@ def test_open_always_prompts_for_conversation_selection_when_multiple_exist(tmp_
     # Configure workspace
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Create session with first conversation
@@ -93,7 +99,13 @@ def test_open_single_conversation_does_not_prompt(tmp_path, temp_daf_home):
     # Configure workspace
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Create session with 1 conversation
@@ -187,7 +199,13 @@ def test_open_multi_conversation_ignores_current_directory_detection(tmp_path, t
     # Configure workspace
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Create session with 2 conversations
@@ -254,7 +272,13 @@ def test_open_multi_conversation_prompt_shows_all_conversations(tmp_path, temp_d
     # Configure workspace
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Create session with 3 conversations

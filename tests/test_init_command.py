@@ -123,7 +123,10 @@ def test_init_refresh_preserves_user_config(temp_daf_home_no_patches, mock_jira_
     config.jira.user = "custom-user"
     config.jira.project = "CUSTOM"
     config.jira.workstream = "CustomWorkstream"
-    config.repos.workspace = "/custom/workspace"
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path="/custom/workspace")
+    ]
 
     loader.save_config(config)
 
@@ -153,7 +156,9 @@ def test_init_refresh_preserves_user_config(temp_daf_home_no_patches, mock_jira_
     assert updated_config.jira.user == "custom-user"
     assert updated_config.jira.project == "CUSTOM"
     assert updated_config.jira.workstream == "CustomWorkstream"
-    assert updated_config.repos.workspace == "/custom/workspace"
+    assert len(updated_config.repos.workspaces) == 1
+    assert updated_config.repos.workspaces[0].name == "default"
+    assert updated_config.repos.workspaces[0].path == "/custom/workspace"
 
     # Verify field mappings were updated
     assert updated_config.jira.field_mappings is not None
@@ -313,7 +318,10 @@ def test_init_reset_updates_config_values(temp_daf_home_no_patches, mock_jira_cl
     config.jira.user = "old-user"
     config.jira.project = "OLD"
     config.jira.workstream = "OldWorkstream"
-    config.repos.workspace = "/old/workspace"
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path="/old/workspace")
+    ]
     loader.save_config(config)
 
     # Mock field discovery
@@ -356,7 +364,9 @@ def test_init_reset_updates_config_values(temp_daf_home_no_patches, mock_jira_cl
     assert updated_config.jira.user == "new-user"
     assert updated_config.jira.project == "NEW"
     assert updated_config.jira.workstream == "NewWorkstream"
-    assert updated_config.repos.workspace == "/new/workspace"
+    assert len(updated_config.repos.workspaces) == 1
+    assert updated_config.repos.workspaces[0].name == "default"
+    assert updated_config.repos.workspaces[0].path == "/new/workspace"
 
 
 def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_jira_cli, monkeypatch):
@@ -371,7 +381,10 @@ def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_ji
     config.jira.user = "custom-user"
     config.jira.project = "CUSTOM"
     config.jira.workstream = "CustomWorkstream"
-    config.repos.workspace = "/custom/workspace"
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path="/custom/workspace")
+    ]
     loader.save_config(config)
 
     # Mock field discovery
@@ -414,7 +427,9 @@ def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_ji
     assert updated_config.jira.user == "custom-user"
     assert updated_config.jira.project == "CUSTOM"
     assert updated_config.jira.workstream == "CustomWorkstream"
-    assert updated_config.repos.workspace == "/custom/workspace"
+    assert len(updated_config.repos.workspaces) == 1
+    assert updated_config.repos.workspaces[0].name == "default"
+    assert updated_config.repos.workspaces[0].path == "/custom/workspace"
 
 
 def test_init_reset_refreshes_field_mappings(temp_daf_home, mock_jira_cli, monkeypatch):

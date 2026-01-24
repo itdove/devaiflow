@@ -4569,7 +4569,7 @@ daf config tui
 
 **Direct editing:**
 ```bash
-jq '.repos.workspace = "~/development"' ~/.daf-sessions/config.json > /tmp/cfg.json
+jq '.repos.workspaces = [{"name": "default", "path": "~/development"}] | .repos.last_used_workspace = "default"' ~/.daf-sessions/config.json > /tmp/cfg.json
 mv /tmp/cfg.json ~/.daf-sessions/config.json
 ```
 
@@ -4630,7 +4630,7 @@ JSON
 
 **Approach 2: jq for selective updates**
 ```bash
-jq '.jira.project = "PROJ" | .jira.workstream = "Platform" | .repos.workspace = "/tmp"' \
+jq '.jira.project = "PROJ" | .jira.workstream = "Platform" | .repos.workspaces = [{"name": "default", "path": "/tmp"}] | .repos.last_used_workspace = "default"' \
   ~/.daf-sessions/config.json > /tmp/cfg.json && mv /tmp/cfg.json ~/.daf-sessions/config.json
 ```
 

@@ -535,7 +535,26 @@ When `--debug` is used with the test runner, it automatically propagates to all 
      - Investigate whether the failure indicates a regression
      - Update tests if the new behavior is intentional
 
-3. **Run Integration Tests**
+3. **Clear Python Cache After Model Changes**
+   - **CRITICAL**: When making changes to Pydantic models (in `devflow/config/models.py` or other model files):
+     - Python caches bytecode (.pyc files) which can cause tests to pass locally using old model definitions
+     - This creates false positives where tests pass locally but fail in CI/CD
+     - **Always clear cache and reinstall** after model changes:
+       ```bash
+       # Clear Python bytecode cache
+       find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+       find . -name "*.pyc" -delete 2>/dev/null || true
+
+       # Reinstall package in development mode
+       pip install -e . --no-deps
+
+       # Run tests to verify changes
+       pytest
+       ```
+   - **Why this matters**: Changing field names, moving fields between models, or removing fields will not be reflected in tests until the cache is cleared
+   - **Example**: Moving `last_used_workspace` from `PromptsConfig` to `RepoConfig` required cache clearing to properly test
+
+4. **Run Integration Tests**
    - Integration tests are located in `integration-tests/` directory
    - **Run all tests**: Use `./run_all_integration_tests.sh` to run the complete test suite
      - **Can be run from inside Claude Code** - uses environment isolation to avoid conflicts
@@ -1400,15 +1419,14 @@ class Session(BaseModel):
   - Feature support matrix documented with known limitations
   - Ready for community testing and feedback
 - ✓ Multiple named workspaces for concurrent multi-branch development (AAP-63377)
-  - WorkspaceDefinition model with name, path, is_default fields
-  - RepoConfig supports List[WorkspaceDefinition] with backward compatibility
-  - Automatic migration from single workspace string to workspaces list
+  - WorkspaceDefinition model with name, path fields
+  - RepoConfig supports List[WorkspaceDefinition] and last_used_workspace
   - Session model includes workspace_name field for persistence
-  - Workspace selection with priority resolution (flag > session > default > prompt)
+  - Workspace selection with priority resolution (flag > session > last_used > prompt)
   - Updated AAP-60431 check to use (project_path, workspace_name) tuple
   - Allows concurrent sessions on same project in different workspaces
   - Continues blocking concurrent sessions within same workspace
-  - daf workspace command group (add, remove, list, set-default)
+  - daf workspace command group (add, remove, list, set-default, rename)
   - --workspace flag added to daf new and daf open commands
   - Session remembers workspace for automatic reuse on reopen
   - daf list and daf info display workspace information

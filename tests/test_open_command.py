@@ -757,7 +757,13 @@ def test_detect_working_directory_from_cwd_git_repo_in_workspace(tmp_path, temp_
     config_loader = ConfigLoader()
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Detect from within repo
@@ -799,7 +805,13 @@ def test_detect_working_directory_from_cwd_git_repo_outside_workspace(tmp_path, 
     config_loader = ConfigLoader()
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Detect from repo outside workspace
@@ -1008,7 +1020,13 @@ def test_open_session_auto_detects_existing_conversation(tmp_path, temp_daf_home
     # Configure workspace
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Create session with conversation for backend-api
@@ -1074,7 +1092,13 @@ def test_open_session_prompts_for_new_conversation_in_different_repo(tmp_path, t
     # Configure workspace
     config = config_loader.load_config()
     if config:
-        config.repos.workspace = str(workspace)
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(workspace))
+
+        ]
         config_loader.save_config(config)
 
     # Create session with only backend-api conversation

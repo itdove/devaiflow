@@ -67,8 +67,9 @@ class ExportManager(ArchiveManagerBase):
             if not config:
                 config = self.config_loader.create_default_config()
 
-            if config and config.repos and config.repos.workspace:
-                workspace = Path(config.repos.workspace)
+            workspace_path = config.repos.get_default_workspace_path() if config and config.repos else None
+            if workspace_path:
+                workspace = Path(workspace_path)
                 # Ensure workspace directory exists
                 workspace.mkdir(parents=True, exist_ok=True)
             else:
@@ -418,7 +419,7 @@ class ExportManager(ArchiveManagerBase):
             # Verify repository existence and warn about missing ones
             # Only check the newly imported sessions, not all existing sessions
             config = self.config_loader.load_config()
-            workspace = config.repos.workspace if config else None
+            workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
             # Create a sessions index with only the imported sessions
             from devflow.config.models import SessionIndex
@@ -483,7 +484,7 @@ class ExportManager(ArchiveManagerBase):
         if not config:
             return
 
-        workspace = config.repos.workspace
+        workspace = config.repos.get_default_workspace_path() if config.repos else None
 
         for working_dir, conversation in session.conversations.items():
             # Process all sessions (active + archived) in this Conversation

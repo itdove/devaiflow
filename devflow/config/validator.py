@@ -103,18 +103,19 @@ class ConfigValidator:
                 severity="warning"
             ))
 
-        # Check workspace path
-        if config.repos and config.repos.workspace:
-            workspace_path = Path(config.repos.workspace).expanduser()
-            if not workspace_path.exists():
-                issues.append(ValidationIssue(
-                    file="config.json",
-                    field="repos.workspace",
-                    issue_type="invalid_path",
-                    message=f"workspace directory does not exist: {config.repos.workspace}",
-                    suggestion=f"Create the directory: mkdir -p {config.repos.workspace}",
-                    severity="warning"
-                ))
+        # Check workspace paths
+        if config.repos and config.repos.workspaces:
+            for workspace in config.repos.workspaces:
+                workspace_path = Path(workspace.path).expanduser()
+                if not workspace_path.exists():
+                    issues.append(ValidationIssue(
+                        file="config.json",
+                        field=f"repos.workspaces[{workspace.name}]",
+                        issue_type="invalid_path",
+                        message=f"workspace directory does not exist: {workspace.path}",
+                        suggestion=f"Create the directory: mkdir -p {workspace.path}",
+                        severity="warning"
+                    ))
 
         is_complete = len(issues) == 0
         return ValidationResult(is_complete=is_complete, issues=issues)
@@ -266,19 +267,19 @@ class ConfigValidator:
                 with open(config_file, "r") as f:
                     user_data = json.load(f)
 
-                # Check workspace path
-                if "repos" in user_data and "workspace" in user_data["repos"]:
-                    workspace = user_data["repos"]["workspace"]
-                    workspace_path = Path(workspace).expanduser()
-                    if not workspace_path.exists():
-                        issues.append(ValidationIssue(
-                            file="config.json",
-                            field="repos.workspace",
-                            issue_type="invalid_path",
-                            message=f"workspace directory does not exist: {workspace}",
-                            suggestion=f"Create the directory: mkdir -p {workspace}",
-                            severity="warning"
-                        ))
+                # Check workspace paths
+                if "repos" in user_data and "workspaces" in user_data["repos"]:
+                    for workspace in user_data["repos"]["workspaces"]:
+                        workspace_path = Path(workspace["path"]).expanduser()
+                        if not workspace_path.exists():
+                            issues.append(ValidationIssue(
+                                file="config.json",
+                                field=f"repos.workspaces[{workspace['name']}]",
+                                issue_type="invalid_path",
+                                message=f"workspace directory does not exist: {workspace['path']}",
+                                suggestion=f"Create the directory: mkdir -p {workspace['path']}",
+                                severity="warning"
+                            ))
             except Exception as e:
                 issues.append(ValidationIssue(
                     file="config.json",

@@ -27,11 +27,18 @@ def mock_workspace(tmp_path):
 @pytest.fixture
 def mock_config(mock_workspace, temp_daf_home):
     """Create a mock config with workspace path."""
+    from devflow.config.models import WorkspaceDefinition
+
     config_loader = ConfigLoader()
     config_loader.create_default_config()
 
     config = config_loader.load_config()
-    config.repos.workspace = str(mock_workspace)
+    # Use new workspaces list instead of old workspace field
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(mock_workspace))
+    ]
+    # Set last-used workspace for the selection system
+    config.repos.last_used_workspace = "default"
     config_loader.save_config(config)
 
     return config

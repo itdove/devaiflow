@@ -290,7 +290,7 @@ def create_investigation_session(
         branch=current_branch,
         temp_directory=temp_directory,
         original_project_path=original_project_path,
-        workspace=config.repos.workspace,
+        workspace=config.repos.get_default_workspace_path(),
     )
     session.working_directory = working_directory
 
@@ -300,7 +300,7 @@ def create_investigation_session(
     session_manager.update_session(session)
 
     # Build initial prompt with investigation-only constraints
-    workspace = config.repos.workspace if config and config.repos else None
+    workspace = config.repos.get_default_workspace_path() if config and config.repos else None
     initial_prompt = _build_investigation_prompt(goal, parent, config, name, project_path=project_path, workspace=workspace)
 
     # Set up signal handlers for cleanup
@@ -340,11 +340,13 @@ def create_investigation_session(
             skills_dirs.append(str(user_skills))
 
         # Workspace-level skills
-        if config and config.repos and config.repos.workspace:
+        if config and config.repos:
             from devflow.utils.claude_commands import get_workspace_skills_dir
-            workspace_skills = get_workspace_skills_dir(config.repos.workspace)
-            if workspace_skills.exists():
-                skills_dirs.append(str(workspace_skills))
+            workspace_path = config.repos.get_default_workspace_path()
+            if workspace_path:
+                workspace_skills = get_workspace_skills_dir(workspace_path)
+                if workspace_skills.exists():
+                    skills_dirs.append(str(workspace_skills))
 
         # Project-level skills
         project_skills = Path(project_path) / ".claude" / "skills"
