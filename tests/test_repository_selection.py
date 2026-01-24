@@ -36,7 +36,7 @@ def mock_config_loader(mock_workspace, temp_daf_home):
     config.repos.workspaces = [
         WorkspaceDefinition(name="default", path=str(mock_workspace))
     ]
-    config.prompts.last_used_workspace = "default"
+    config.repos.last_used_workspace = "default"
     config_loader.save_config(config)
 
     return config_loader

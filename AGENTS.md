@@ -535,7 +535,26 @@ When `--debug` is used with the test runner, it automatically propagates to all 
      - Investigate whether the failure indicates a regression
      - Update tests if the new behavior is intentional
 
-3. **Run Integration Tests**
+3. **Clear Python Cache After Model Changes**
+   - **CRITICAL**: When making changes to Pydantic models (in `devflow/config/models.py` or other model files):
+     - Python caches bytecode (.pyc files) which can cause tests to pass locally using old model definitions
+     - This creates false positives where tests pass locally but fail in CI/CD
+     - **Always clear cache and reinstall** after model changes:
+       ```bash
+       # Clear Python bytecode cache
+       find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+       find . -name "*.pyc" -delete 2>/dev/null || true
+
+       # Reinstall package in development mode
+       pip install -e . --no-deps
+
+       # Run tests to verify changes
+       pytest
+       ```
+   - **Why this matters**: Changing field names, moving fields between models, or removing fields will not be reflected in tests until the cache is cleared
+   - **Example**: Moving `last_used_workspace` from `PromptsConfig` to `RepoConfig` required cache clearing to properly test
+
+4. **Run Integration Tests**
    - Integration tests are located in `integration-tests/` directory
    - **Run all tests**: Use `./run_all_integration_tests.sh` to run the complete test suite
      - **Can be run from inside Claude Code** - uses environment isolation to avoid conflicts

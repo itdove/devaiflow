@@ -70,6 +70,7 @@ def test_auto_create_template_when_enabled(temp_daf_home):
                     path=str(temp_daf_home / "workspace")
                 )
             ],
+            last_used_workspace="default",
         ),
         templates=TemplateConfig(
             auto_create=True,
@@ -214,6 +215,7 @@ def test_auto_create_template_in_open_command(temp_daf_home):
                     path=str(temp_daf_home / "workspace")
                 )
             ],
+            last_used_workspace="default",
         ),
         templates=TemplateConfig(
             auto_create=True,
@@ -281,6 +283,7 @@ def test_no_duplicate_template_creation(temp_daf_home):
                     path=str(temp_daf_home / "workspace")
                 )
             ],
+            last_used_workspace="default",
         ),
         templates=TemplateConfig(
             auto_create=True,

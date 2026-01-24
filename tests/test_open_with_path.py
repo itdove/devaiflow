@@ -301,7 +301,7 @@ def temp_workspace(temp_daf_home):
         config.repos.workspaces = [
             WorkspaceDefinition(name="default", path=str(workspace_dir))
         ]
-    config.prompts.last_used_workspace = "default"
+    config.repos.last_used_workspace = "default"
 
     config_loader.save_config(config)
 
