@@ -17,6 +17,7 @@ setup(
         "Bug Tracker": "https://github.com/itdove/devaiflow/issues",
         "Documentation": "https://github.com/itdove/devaiflow/blob/main/README.md",
         "Source Code": "https://github.com/itdove/devaiflow",
+        "Logo": "https://raw.githubusercontent.com/itdove/devaiflow/main/images/daf-logo-160x160.png"
     },
     packages=find_packages(),
     package_data={},

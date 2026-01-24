@@ -7,6 +7,8 @@
 
 A CLI tool to manage AI coding assistant sessions with optional issue tracker integration.
 
+![Alt DevAIFlow](images/daf-logo-160x160.png)
+
 **AI Assistants:** Claude Code (fully tested) | GitHub Copilot, Cursor, Windsurf (experimental)
 **Issue Trackers:** JIRA (currently supported) | Others (planned)
 
@@ -91,11 +93,11 @@ Each session is an **isolated workspace** with its own:
 ## Quick Start
 
 ```bash
-# Install from PyPI
-pip install devaiflow
+# Install
+pip install .
 
 # Export environment variables for issue tracker (JIRA example)
-export JIRA_URL="https://jira.example.com"  # Currently supports JIRA only
+export JIRA_URL=  # Currently supports JIRA only"https://jira.example.com"
 export JIRA_API_TOKEN=<YOUR_JIRA_PAT>
 
 # Initialization
@@ -266,24 +268,12 @@ See the [Installation Guide](docs/02-installation.md) for detailed setup instruc
 
 See `docs/config-templates/` for complete templates with detailed comments and examples.
 
-## Installation
-
-### From PyPI (Recommended)
-
-```bash
-pip install devaiflow
-```
-
-### From Source (Development)
+## Development
 
 For developers working on the DevAIFlow codebase:
 
 ```bash
-# Clone the repository
-git clone https://github.com/itdove/devaiflow.git
-cd devaiflow
-
-# Install in editable mode with dev dependencies
+# Setup
 pip install -e ".[dev]"
 
 # Run unit tests
