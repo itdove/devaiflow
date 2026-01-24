@@ -1335,7 +1335,13 @@ def config_show(ctx: click.Context, format: str, validate: bool) -> None:
 
     # Show repository configuration
     console.print("[bold]Repositories:[/bold]")
-    console.print(f"  Workspace: {config.repos.workspace}")
+    if config.repos.workspaces:
+        console.print("  Workspaces:")
+        for ws in config.repos.workspaces:
+            default_marker = " [last used]" if config.repos.last_used_workspace == ws.name else ""
+            console.print(f"    • {ws.name}: {ws.path}{default_marker}")
+    else:
+        console.print("  Workspaces: (none configured)")
     if config.repos.keywords:
         console.print(f"  Keywords: {len(config.repos.keywords)} mappings")
     else:
@@ -2235,8 +2241,11 @@ def _get_config_changes(old_config, new_config) -> list:
         changes.append(f"Workstream: {old_ws} → {new_ws}")
 
     # Compare repository settings
-    if old_config.repos.workspace != new_config.repos.workspace:
-        changes.append(f"Workspace: {old_config.repos.workspace} → {new_config.repos.workspace}")
+    # Compare workspaces lists (comparing all properties)
+    old_workspaces = {ws.name: ws.path for ws in old_config.repos.workspaces} if old_config.repos.workspaces else {}
+    new_workspaces = {ws.name: ws.path for ws in new_config.repos.workspaces} if new_config.repos.workspaces else {}
+    if old_workspaces != new_workspaces:
+        changes.append(f"Workspaces: {len(old_workspaces)} → {len(new_workspaces)} configured")
 
     # Compare keywords (simplified comparison)
     old_keywords = set(old_config.repos.keywords.keys())

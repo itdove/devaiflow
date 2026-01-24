@@ -655,7 +655,7 @@ def create_new_session(
             # Add conversation to existing session
             console.print(f"\n[cyan]Adding conversation to existing session: {name}[/cyan]")
             config = config_loader.load_config()
-            workspace = config.repos.workspace if config else None
+            workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
             session.add_conversation(
                 working_dir=working_directory,
@@ -788,7 +788,7 @@ def create_new_session(
 
         # Generate the initial prompt with context loading hints
         # Use session.goal which now contains the concatenated value
-        workspace = config.repos.workspace if config and config.repos else None
+        workspace = config.repos.get_default_workspace_path() if config and config.repos else None
         initial_prompt = _generate_initial_prompt(
             name, session.goal, issue_key, issue_title,
             project_path=project_path, workspace=workspace
@@ -808,11 +808,13 @@ def create_new_session(
             skills_dirs.append(str(user_skills))
 
         # 2. Workspace-level skills: <workspace>/.claude/skills/
-        if config and config.repos and config.repos.workspace:
+        if config and config.repos:
             from devflow.utils.claude_commands import get_workspace_skills_dir
-            workspace_skills = get_workspace_skills_dir(config.repos.workspace)
-            if workspace_skills.exists():
-                skills_dirs.append(str(workspace_skills))
+            workspace_path = config.repos.get_default_workspace_path()
+            if workspace_path:
+                workspace_skills = get_workspace_skills_dir(workspace_path)
+                if workspace_skills.exists():
+                    skills_dirs.append(str(workspace_skills))
 
         # 3. Project-level skills: <project>/.claude/skills/
         project_skills = Path(project_path) / ".claude" / "skills"
@@ -886,7 +888,7 @@ def create_new_session(
 
         console.print(f"\n[yellow]You can manually start with:[/yellow]")
         console.print(f"  cd {project_path}")
-        workspace = config.repos.workspace if config and config.repos else None
+        workspace = config.repos.get_default_workspace_path() if config and config.repos else None
         initial_prompt = _generate_initial_prompt(name, session.goal, issue_key, issue_title,
                                                    project_path=project_path, workspace=workspace)
         console.print(f"  claude --session-id {session_id} \"{initial_prompt}\"")
@@ -913,13 +915,15 @@ def _suggest_and_select_repository(
     available_repos = []
     workspace_path = None
     if config and config.repos:
-        workspace_path = Path(config.repos.workspace).expanduser()
-        if workspace_path.exists() and workspace_path.is_dir():
-            try:
-                directories = [d for d in workspace_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
-                available_repos = sorted([d.name for d in directories])
-            except Exception as e:
-                console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
+        workspace_path_str = config.repos.get_default_workspace_path()
+        if workspace_path_str:
+            workspace_path = Path(workspace_path_str).expanduser()
+            if workspace_path.exists() and workspace_path.is_dir():
+                try:
+                    directories = [d for d in workspace_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
+                    available_repos = sorted([d.name for d in directories])
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
 
     if not available_repos:
         # No workspace configured or no repos found

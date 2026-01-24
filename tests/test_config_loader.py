@@ -44,7 +44,8 @@ def test_save_and_load_config(temp_daf_home):
 
     assert loaded_config is not None
     assert loaded_config.jira.url == "https://jira.example.com"
-    assert loaded_config.repos.workspace == str(Path.home() / "development")
+    assert len(loaded_config.repos.workspaces) == 1
+    assert loaded_config.repos.workspaces[0].path == str(Path.home() / "development")
 
 
 def test_load_config_invalid_json(temp_daf_home):

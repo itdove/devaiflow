@@ -291,10 +291,17 @@ def temp_workspace(temp_daf_home):
 
     # Ensure repos object exists
     if not config.repos:
-        from devflow.config.models import RepoConfig
-        config.repos = RepoConfig(workspace=str(workspace_dir), keywords={})
+        from devflow.config.models import RepoConfig, WorkspaceDefinition
+        config.repos = RepoConfig(
+            workspaces=[WorkspaceDefinition(name="default", path=str(workspace_dir))],
+            keywords={}
+        )
     else:
-        config.repos.workspace = str(workspace_dir)
+        from devflow.config.models import WorkspaceDefinition
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(workspace_dir))
+        ]
+    config.repos.last_used_workspace = "default"
 
     config_loader.save_config(config)
 

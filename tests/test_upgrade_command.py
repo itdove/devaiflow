@@ -17,7 +17,7 @@ def mock_config(tmp_path):
     """Create a mock config object with workspace configured."""
     config = Mock(spec=Config)
     config.repos = Mock(spec=RepoConfig)
-    config.repos.workspace = str(tmp_path)
+    config.repos.get_default_workspace_path.return_value = str(tmp_path)
     return config
 
 
@@ -45,7 +45,7 @@ class TestUpgradeCommandsOnly:
         """Test upgrade when workspace is not configured."""
         mock_config = Mock(spec=Config)
         mock_config.repos = Mock(spec=RepoConfig)
-        mock_config.repos.workspace = None
+        mock_config.repos.get_default_workspace_path.return_value = None
 
         mock_loader = Mock()
         mock_loader.load_config.return_value = mock_config
@@ -59,7 +59,7 @@ class TestUpgradeCommandsOnly:
 
         mock_config = Mock(spec=Config)
         mock_config.repos = Mock(spec=RepoConfig)
-        mock_config.repos.workspace = str(nonexistent)
+        mock_config.repos.get_default_workspace_path.return_value = str(nonexistent)
 
         mock_loader = Mock()
         mock_loader.load_config.return_value = mock_config

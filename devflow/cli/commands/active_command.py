@@ -58,7 +58,7 @@ def show_active(output_json: bool = False) -> None:
     current_work_time = f"{hours}h {minutes}m"
 
     # Format project path display
-    workspace = config.repos.workspace if config else None
+    workspace = config.repos.get_default_workspace_path() if config else None
     project_path = conversation.get_project_path(workspace)
 
     # JSON output mode

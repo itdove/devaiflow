@@ -11,21 +11,18 @@ def test_workspace_definition_model():
     """Test WorkspaceDefinition model creation."""
     workspace = WorkspaceDefinition(
         name="primary",
-        path="/Users/test/development",
-        is_default=True
+        path="/Users/test/development"
     )
 
     assert workspace.name == "primary"
     assert workspace.path == "/Users/test/development"
-    assert workspace.is_default is True
 
 
 def test_workspace_definition_path_expansion(tmp_path):
     """Test that WorkspaceDefinition expands ~ in paths."""
     workspace = WorkspaceDefinition(
         name="test",
-        path="~/development",
-        is_default=False
+        path="~/development"
     )
 
     # Path should be expanded (not contain ~)
@@ -37,66 +34,22 @@ def test_repo_config_with_workspaces():
     """Test RepoConfig with multiple workspaces."""
     config = RepoConfig(
         workspaces=[
-            WorkspaceDefinition(name="primary", path="/path/primary", is_default=True),
-            WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=False),
-            WorkspaceDefinition(name="feat-caching", path="/path/feat-caching", is_default=False),
+            WorkspaceDefinition(name="primary", path="/path/primary"),
+            WorkspaceDefinition(name="product-a", path="/path/product-a"),
+            WorkspaceDefinition(name="feat-caching", path="/path/feat-caching"),
         ]
     )
 
     assert len(config.workspaces) == 3
     assert config.workspaces[0].name == "primary"
-    assert config.workspaces[0].is_default is True
-
-
-def test_repo_config_backward_compatibility_migration():
-    """Test that single workspace string migrates to workspaces list."""
-    # Old config format with single workspace string
-    config = RepoConfig(
-        workspace="/Users/test/development"
-    )
-
-    # Should auto-migrate to workspaces list
-    assert len(config.workspaces) == 1
-    assert config.workspaces[0].name == "default"
-    assert config.workspaces[0].path == "/Users/test/development"
-    assert config.workspaces[0].is_default is True
-
-
-def test_repo_config_get_default_workspace():
-    """Test getting the default workspace."""
-    config = RepoConfig(
-        workspaces=[
-            WorkspaceDefinition(name="primary", path="/path/primary", is_default=False),
-            WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=True),
-            WorkspaceDefinition(name="feat-caching", path="/path/feat-caching", is_default=False),
-        ]
-    )
-
-    default = config.get_default_workspace()
-    assert default is not None
-    assert default.name == "product-a"
-    assert default.is_default is True
-
-
-def test_repo_config_get_default_workspace_none():
-    """Test get_default_workspace when no default is set."""
-    config = RepoConfig(
-        workspaces=[
-            WorkspaceDefinition(name="primary", path="/path/primary", is_default=False),
-            WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=False),
-        ]
-    )
-
-    default = config.get_default_workspace()
-    assert default is None
 
 
 def test_repo_config_get_workspace_by_name():
     """Test getting workspace by name."""
     config = RepoConfig(
         workspaces=[
-            WorkspaceDefinition(name="primary", path="/path/primary", is_default=True),
-            WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=False),
+            WorkspaceDefinition(name="primary", path="/path/primary"),
+            WorkspaceDefinition(name="product-a", path="/path/product-a"),
         ]
     )
 
@@ -110,30 +63,12 @@ def test_repo_config_get_workspace_by_name_not_found():
     """Test getting non-existent workspace by name."""
     config = RepoConfig(
         workspaces=[
-            WorkspaceDefinition(name="primary", path="/path/primary", is_default=True),
+            WorkspaceDefinition(name="primary", path="/path/primary"),
         ]
     )
 
     workspace = config.get_workspace_by_name("nonexistent")
     assert workspace is None
-
-
-def test_repo_config_multiple_defaults_correction():
-    """Test that RepoConfig corrects multiple default workspaces."""
-    # Create config with multiple defaults (invalid state)
-    config = RepoConfig(
-        workspaces=[
-            WorkspaceDefinition(name="primary", path="/path/primary", is_default=True),
-            WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=True),
-            WorkspaceDefinition(name="feat-caching", path="/path/feat-caching", is_default=False),
-        ]
-    )
-
-    # Should auto-correct to have only one default (the first one)
-    default_count = sum(1 for w in config.workspaces if w.is_default)
-    assert default_count == 1
-    assert config.workspaces[0].is_default is True
-    assert config.workspaces[1].is_default is False
 
 
 def test_session_workspace_name_field():
@@ -283,89 +218,3 @@ def test_workspace_persistence_in_session():
     manager.delete_session("test-workspace-persist")
 
 
-def test_last_used_workspace_initialized_from_is_default():
-    """Test that last_used_workspace is initialized from is_default workspace."""
-    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
-
-    config = Config(
-        jira=JiraConfig(
-            url="https://jira.example.com",
-            user="test@example.com",
-            transitions={},
-        ),
-        repos=RepoConfig(
-            workspaces=[
-                WorkspaceDefinition(name="primary", path="/path/primary", is_default=False),
-                WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=True),
-                WorkspaceDefinition(name="feat-caching", path="/path/feat-caching", is_default=False),
-            ]
-        ),
-        prompts=PromptsConfig(),
-    )
-
-    # Config validator should auto-initialize last_used_workspace from is_default
-    assert config.prompts.last_used_workspace == "product-a"
-
-
-def test_last_used_workspace_initialized_to_first_workspace():
-    """Test that last_used_workspace is initialized to first workspace if no is_default."""
-    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
-
-    config = Config(
-        jira=JiraConfig(
-            url="https://jira.example.com",
-            user="test@example.com",
-            transitions={},
-        ),
-        repos=RepoConfig(
-            workspaces=[
-                WorkspaceDefinition(name="primary", path="/path/primary", is_default=False),
-                WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=False),
-            ]
-        ),
-        prompts=PromptsConfig(),
-    )
-
-    # Should auto-initialize to first workspace
-    assert config.prompts.last_used_workspace == "primary"
-
-
-def test_last_used_workspace_not_overwritten_if_set():
-    """Test that existing last_used_workspace is not overwritten."""
-    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
-
-    config = Config(
-        jira=JiraConfig(
-            url="https://jira.example.com",
-            user="test@example.com",
-            transitions={},
-        ),
-        repos=RepoConfig(
-            workspaces=[
-                WorkspaceDefinition(name="primary", path="/path/primary", is_default=True),
-                WorkspaceDefinition(name="product-a", path="/path/product-a", is_default=False),
-            ]
-        ),
-        prompts=PromptsConfig(last_used_workspace="product-a"),
-    )
-
-    # Should keep existing last_used_workspace value
-    assert config.prompts.last_used_workspace == "product-a"
-
-
-def test_last_used_workspace_none_when_no_workspaces():
-    """Test that last_used_workspace remains None when no workspaces configured."""
-    from devflow.config.models import Config, JiraConfig, RepoConfig, PromptsConfig
-
-    config = Config(
-        jira=JiraConfig(
-            url="https://jira.example.com",
-            user="test@example.com",
-            transitions={},
-        ),
-        repos=RepoConfig(workspaces=[]),
-        prompts=PromptsConfig(),
-    )
-
-    # Should remain None when no workspaces
-    assert config.prompts.last_used_workspace is None

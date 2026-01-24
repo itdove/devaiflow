@@ -169,6 +169,7 @@ class TestMergedConfigValidation:
 
     def test_validate_invalid_workspace_path(self, validator, temp_config_dir):
         """Test detection of non-existent workspace path."""
+        from devflow.config.models import WorkspaceDefinition
         config = Config(
             jira=JiraConfig(
                 url="https://jira.company.com",
@@ -176,7 +177,11 @@ class TestMergedConfigValidation:
                 project="PROJ",
                 transitions={},
             ),
-            repos=RepoConfig(workspace="/nonexistent/path"),
+            repos=RepoConfig(
+                workspaces=[
+                    WorkspaceDefinition(name="default", path="/nonexistent/path")
+                ]
+            ),
         )
 
         result = validator.validate_merged_config(config)
@@ -186,6 +191,7 @@ class TestMergedConfigValidation:
 
     def test_validate_multiple_issues(self, validator, temp_config_dir):
         """Test detection of multiple issues in config."""
+        from devflow.config.models import WorkspaceDefinition
         config = Config(
             jira=JiraConfig(
                 url="TODO: https://example.com",
@@ -193,7 +199,11 @@ class TestMergedConfigValidation:
                 project=None,
                 transitions={},
             ),
-            repos=RepoConfig(workspace="/nonexistent/path"),
+            repos=RepoConfig(
+                workspaces=[
+                    WorkspaceDefinition(name="default", path="/nonexistent/path")
+                ]
+            ),
         )
 
         result = validator.validate_merged_config(config)
@@ -287,7 +297,10 @@ class TestSplitConfigValidation:
         """Test detection of invalid workspace in config.json."""
         user_data = {
             "repos": {
-                "workspace": "/nonexistent/workspace",
+                "workspaces": [
+                    {"name": "default", "path": "/nonexistent/workspace"}
+                ],
+                "last_used_workspace": "default",
                 "detection": {"method": "keyword_match", "fallback": "prompt"},
                 "keywords": {}
             },
@@ -303,7 +316,7 @@ class TestSplitConfigValidation:
         assert not result.is_complete
         assert any(
             issue.file == "config.json" and
-            issue.field == "repos.workspace" and
+            "repos.workspaces" in issue.field and
             issue.issue_type == "invalid_path"
             for issue in result.issues
         )

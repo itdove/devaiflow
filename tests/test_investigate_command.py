@@ -83,7 +83,13 @@ class TestInvestigateCommand:
         # Create config
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
-        config.repos.workspace = str(Path(temp_daf_home) / "workspace")
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+
+        ]
         config_loader.save_config(config)
 
         # Create workspace directory
@@ -131,7 +137,13 @@ class TestInvestigateCommand:
         # Create config
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
-        config.repos.workspace = str(Path(temp_daf_home) / "workspace")
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+
+        ]
         config_loader.save_config(config)
 
         # Create workspace and project
@@ -175,7 +187,13 @@ class TestInvestigateCommand:
         # Create config
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
-        config.repos.workspace = str(Path(temp_daf_home) / "workspace")
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+
+        ]
         config_loader.save_config(config)
 
         # Create workspace and project
@@ -215,7 +233,13 @@ class TestInvestigateCommand:
         # Create config
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
-        config.repos.workspace = str(Path(temp_daf_home) / "workspace")
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+
+        ]
         config_loader.save_config(config)
 
         # Create workspace and project
@@ -267,7 +291,13 @@ class TestInvestigateCompleteIntegration:
         # Create config
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
-        config.repos.workspace = str(Path(temp_daf_home) / "workspace")
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+
+        ]
         config_loader.save_config(config)
 
         # Create workspace and project

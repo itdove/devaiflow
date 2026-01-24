@@ -97,14 +97,17 @@ def test_export_import_portable_paths(temp_daf_home, monkeypatch):
     alice_project.mkdir(parents=True)
 
     # Create config for Alice
-    from devflow.config.models import Config, JiraConfig, RepoConfig, TimeTrackingConfig, SessionSummaryConfig, PromptsConfig, JiraTransitionConfig
+    from devflow.config.models import Config, JiraConfig, RepoConfig, TimeTrackingConfig, SessionSummaryConfig, PromptsConfig, JiraTransitionConfig, WorkspaceDefinition
     alice_config = Config(
         jira=JiraConfig(
             url="https://jira.example.com",
             user="alice@example.com",
             transitions={"open": JiraTransitionConfig()}
         ),
-        repos=RepoConfig(workspace=str(alice_workspace)),
+        repos=RepoConfig(
+            workspaces=[WorkspaceDefinition(name="default", path=str(alice_workspace))],
+            last_used_workspace="default"
+        ),
         time_tracking=TimeTrackingConfig(),
         session_summary=SessionSummaryConfig(),
         prompts=PromptsConfig(),
@@ -143,7 +146,10 @@ def test_export_import_portable_paths(temp_daf_home, monkeypatch):
             user="bob@example.com",
             transitions={"open": JiraTransitionConfig()}
         ),
-        repos=RepoConfig(workspace=str(bob_workspace)),
+        repos=RepoConfig(
+            workspaces=[WorkspaceDefinition(name="default", path=str(bob_workspace))],
+            last_used_workspace="default"
+        ),
         time_tracking=TimeTrackingConfig(),
         session_summary=SessionSummaryConfig(),
         prompts=PromptsConfig(),
