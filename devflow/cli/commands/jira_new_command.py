@@ -170,8 +170,14 @@ def _create_mock_jira_ticket(
     mock_jira = MockJiraClient(config=config)
 
     # Build initial prompt with session name
-    workspace = config.repos.workspace if config and config.repos else None
-    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace)
+    # Get default workspace path for skills discovery (mock mode doesn't select workspace interactively)
+    from devflow.cli.utils import get_workspace_path
+    workspace_path = None
+    if config and config.repos and config.repos.workspaces:
+        default_workspace = config.repos.get_default_workspace()
+        if default_workspace:
+            workspace_path = default_workspace.path
+    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path)
 
     # Create mock Claude session with initial prompt
     ai_agent_session_id = mock_claude.create_session(
@@ -228,7 +234,6 @@ def _create_mock_jira_ticket(
         ai_agent_session_id=ai_agent_session_id,
         project_path=project_path,
         branch=current_branch,  # Current branch (or None if not a git repo)
-        workspace=config.repos.workspace,
     )
     session.working_directory = working_dir_name  # Set working_directory for active_conversation lookup
 
@@ -483,7 +488,6 @@ def create_jira_ticket_session(
         branch=current_branch,  # Current branch from temp directory
         temp_directory=temp_directory,
         original_project_path=original_project_path,
-        workspace=config.repos.workspace,
     )
     session.working_directory = working_directory  # Set working_directory for active_conversation lookup
 
@@ -493,8 +497,14 @@ def create_jira_ticket_session(
     session_manager.update_session(session)
 
     # Build initial prompt with analysis-only constraints and session metadata
-    workspace = config.repos.workspace if config and config.repos else None
-    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace)
+    # Get default workspace path for skills discovery
+    from devflow.cli.utils import get_workspace_path
+    workspace_path = None
+    if config and config.repos and config.repos.workspaces:
+        default_workspace = config.repos.get_default_workspace()
+        if default_workspace:
+            workspace_path = default_workspace.path
+    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path)
 
     # Set up signal handlers for cleanup
     global _cleanup_session, _cleanup_session_manager, _cleanup_name, _cleanup_config, _cleanup_done
@@ -535,11 +545,14 @@ def create_jira_ticket_session(
             skills_dirs.append(str(user_skills))
 
         # 2. Workspace-level skills: <workspace>/.claude/skills/
-        if config and config.repos and config.repos.workspace:
+        # Use default workspace path for skills discovery
+        if config and config.repos and config.repos.workspaces:
             from devflow.utils.claude_commands import get_workspace_skills_dir
-            workspace_skills = get_workspace_skills_dir(config.repos.workspace)
-            if workspace_skills.exists():
-                skills_dirs.append(str(workspace_skills))
+            default_workspace = config.repos.get_default_workspace()
+            if default_workspace:
+                workspace_skills = get_workspace_skills_dir(default_workspace.path)
+                if workspace_skills.exists():
+                    skills_dirs.append(str(workspace_skills))
 
         # 3. Project-level skills: <project>/.claude/skills/
         project_skills = Path(project_path) / ".claude" / "skills"
@@ -896,14 +909,30 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
         Project path string if selected, None if cancelled or no workspace
     """
     from rich.prompt import Prompt
+    from devflow.cli.utils import select_workspace, get_workspace_path
 
-    # Check if workspace is configured
-    if not config or not config.repos or not config.repos.workspace:
-        console_print(f"[yellow]⚠[/yellow] No workspace configured")
+    # Select workspace using priority resolution system
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag=None,  # No --workspace flag for jira new
+        session=None,  # No existing session yet
+        skip_prompt=False  # Always prompt for workspace selection
+    )
+
+    if not selected_workspace_name:
+        # No workspace selected - fall back to current directory
+        console_print(f"[yellow]⚠[/yellow] No workspace selected")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
         return str(Path.cwd())
 
-    workspace = Path(config.repos.workspace).expanduser()
+    # Get workspace path from workspace name
+    workspace_path = get_workspace_path(config, selected_workspace_name)
+    if not workspace_path:
+        console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
+        console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
+        return str(Path.cwd())
+
+    workspace = Path(workspace_path).expanduser()
 
     if not workspace.exists() or not workspace.is_dir():
         console_print(f"[yellow]⚠[/yellow] Workspace directory does not exist: {workspace}")
