@@ -2,6 +2,93 @@
 
 This file contains organization-level coding standards and guidelines that apply to all projects within your organization.
 
+## JIRA Integration (Optional)
+
+If your organization uses JIRA with DevAIFlow, you can configure JIRA-specific guidelines here.
+
+### Acceptance Criteria
+
+**OPTIONAL**: Define your organization's requirements for acceptance criteria in JIRA tickets.
+
+Example approach:
+- Acceptance criteria should be in checkbox format: `- [] criterion`
+- All criteria must be verified and tested before marking complete
+- Update JIRA checkboxes as work progresses using `daf jira update`
+
+#### Example Workflow
+```bash
+# 1. At session start, read the ticket
+daf jira view PROJ-12345
+
+# 2. During development, track progress
+daf note PROJ-12345 "Completed acceptance criterion 1"
+
+# 3. Before completing, update JIRA checkboxes
+daf jira update PROJ-12345 --acceptance-criteria "- [x] criterion 1\n- [x] criterion 2"
+
+# 4. Complete the session
+daf complete PROJ-12345
+```
+
+### JIRA Wiki Markup (Optional)
+
+**NOTE**: JIRA text fields require JIRA Wiki markup, not Markdown. This only applies when writing content that will be sent to JIRA.
+
+Key differences from Markdown:
+
+| Element | JIRA Wiki Markup | Markdown |
+|---------|------------------|----------|
+| Headers | `h2.` or `h3.` | `##` or `###` |
+| Bold | `*text*` | `**text**` |
+| Italic | `_text_` | `*text*` |
+| Code blocks | `{code:bash}...{code}` | Triple backticks |
+| Inline code | `{{code}}` | Single backticks |
+| Lists | `*` or `#` | `-` or `1.` |
+| Links | `[text\|url]` | `[text](url)` |
+
+### JIRA Issue Templates (Optional)
+
+Define standard templates for your organization's JIRA issue types. Customize these based on your team's needs.
+
+#### Example Story Template
+```
+h3. *User Story*
+
+As a [type of user], I want [goal] so that [reason]
+
+h3. *Acceptance Criteria*
+
+- [] Acceptance criterion 1
+- [] Acceptance criterion 2
+- [] Acceptance criterion 3
+
+h3. *Technical Notes*
+
+[Any technical implementation details]
+```
+
+#### Example Bug Template
+```
+*Description*
+[What is happening]
+
+*Steps to Reproduce*
+# Step 1
+# Step 2
+# Step 3
+
+*Expected Behavior*
+[What should happen]
+
+*Actual Behavior*
+[What is currently happening]
+
+*Acceptance Criteria*
+- [] Bug fix verified
+- [] No regression in related functionality
+- [] Tests added to prevent recurrence
+```
+
 ## Coding Standards
 
 ### Python
