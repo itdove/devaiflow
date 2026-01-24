@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="devaiflow",
-    version="1.0.1-dev",
+    version="1.0.1",
     author="Dominique Vernier",
     description="DevAIFlow - Manage AI coding assistant sessions with optional issue tracker integration",
     long_description=long_description,
