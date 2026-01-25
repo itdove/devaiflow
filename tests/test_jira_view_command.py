@@ -83,7 +83,7 @@ def test_format_ticket_with_sprint_and_points():
     result = format_ticket_for_claude(ticket_data)
 
     assert "Sprint: Sprint 42" in result
-    assert "Story Points: 5" in result
+    assert "Points: 5" in result
     assert "Epic: PROJ-10000" in result
 
 
@@ -116,7 +116,7 @@ def test_format_ticket_complete_example():
     assert "Reporter: Dominique Vernier" in result
     assert "Epic: PROJ-59038" in result
     assert "Sprint: Platform Sprint 2025-47" in result
-    assert "Story Points: 2" in result
+    assert "Points: 2" in result
     assert "Description:" in result
     assert "As a developer using Claude Code" in result
     assert "Acceptance Criteria:" in result
@@ -212,16 +212,24 @@ def test_get_ticket_detailed_with_all_fields(mock_jira_cli):
     # Provide field_mappings for all custom fields
     field_mappings = {
         "acceptance_criteria": {
-            "id": "customfield_12315940"
+            "id": "customfield_12315940",
+            "type": "string",
+            "schema": "string"
         },
         "story_points": {
-            "id": "customfield_12310243"
+            "id": "customfield_12310243",
+            "type": "number",
+            "schema": "number"
         },
         "sprint": {
-            "id": "customfield_12310940"
+            "id": "customfield_12310940",
+            "type": "array",
+            "schema": "com.pyxis.greenhopper.jira:gh-sprint"
         },
         "epic_link": {
-            "id": "customfield_12311140"
+            "id": "customfield_12311140",
+            "type": "string",
+            "schema": "string"
         }
     }
 
@@ -243,14 +251,18 @@ def test_get_ticket_detailed_with_all_fields(mock_jira_cli):
     assert ticket["acceptance_criteria"] == "- Criterion A\n- Criterion B"
 
 
-def test_view_jira_ticket_success(mock_jira_cli, capsys):
+def test_view_jira_ticket_success(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
     """Test viewing a issue tracker ticket using the command."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    # Provide data in raw JIRA API format - JiraClient.get_ticket_detailed() will process it
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
         "fields": {
             "summary": "Test ticket",
-            "status": {"name": "New"},
             "issuetype": {"name": "Story"},
+            "status": {"name": "New"},
             "description": "Test description",
             "priority": {"name": "Major"},
         }
@@ -268,8 +280,11 @@ def test_view_jira_ticket_success(mock_jira_cli, capsys):
     assert "Test description" in captured.out
 
 
-def test_view_jira_ticket_not_found(mock_jira_cli, capsys):
+def test_view_jira_ticket_not_found(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
     """Test viewing a non-existent issue tracker ticket."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
     with pytest.raises(SystemExit) as exc_info:
         view_jira_ticket("PROJ-99999")
 
@@ -453,8 +468,11 @@ def test_get_ticket_detailed_with_changelog(mock_jira_cli):
     assert len(ticket["changelog"]["histories"]) == 1
 
 
-def test_view_jira_ticket_with_history(mock_jira_cli, capsys):
+def test_view_jira_ticket_with_history(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
     """Test viewing a issue tracker ticket with changelog history."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
         "fields": {
@@ -516,8 +534,11 @@ def test_view_jira_ticket_with_history(mock_jira_cli, capsys):
     assert "priority: Normal → Major" in captured.out
 
 
-def test_view_jira_ticket_without_history(mock_jira_cli, capsys):
+def test_view_jira_ticket_without_history(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
     """Test that changelog is not shown when show_history=False."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
         "fields": {
@@ -539,8 +560,29 @@ def test_view_jira_ticket_without_history(mock_jira_cli, capsys):
     assert "Changelog/History:" not in captured.out
 
 
-def test_get_child_issues_with_subtasks_and_epic_children(mock_jira_cli):
+def test_get_child_issues_with_subtasks_and_epic_children(mock_jira_cli, temp_daf_home, monkeypatch):
     """Test fetching child issues including subtasks and epic children."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    # Create minimal config.json (required for parent_field_mapping defaults)
+    import json
+    config_data = {
+        "backend_config_source": "local",
+        "repos": {},
+        "time_tracking": {},
+        "session_summary": {},
+        "templates": {},
+        "context_files": {},
+        "prompts": {},
+        "pr_template_url": None,
+        "mock_services": False,
+        "gcp_vertex_region": None,
+        "update_checker_timeout": 5
+    }
+    with open(temp_daf_home / "config.json", "w") as f:
+        json.dump(config_data, f)
+
     # Set up JQL search response
     mock_jira_cli.set_search_results({
         "jql": 'parent = PROJ-12345 OR "Epic Link" = PROJ-12345 ORDER BY key ASC',
@@ -575,10 +617,11 @@ def test_get_child_issues_with_subtasks_and_epic_children(mock_jira_cli):
         ]
     })
 
-    # Provide field_mappings for epic_link
+    # Provide field_mappings for epic_link with display name
     field_mappings = {
         "epic_link": {
-            "id": "customfield_12311140"
+            "id": "customfield_12311140",
+            "name": "Epic Link"
         }
     }
 
@@ -600,18 +643,22 @@ def test_get_child_issues_with_subtasks_and_epic_children(mock_jira_cli):
     assert children[2]["assignee"] is None
 
 
-def test_get_child_issues_no_children(mock_jira_cli):
+def test_get_child_issues_no_children(mock_jira_cli, temp_daf_home, monkeypatch):
     """Test fetching child issues when there are none."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
     # Set up empty JQL search response
     mock_jira_cli.set_search_results({
         "jql": 'parent = PROJ-12345 OR "Epic Link" = PROJ-12345 ORDER BY key ASC',
         "issues": []
     })
 
-    # Provide field_mappings for epic_link
+    # Provide field_mappings for epic_link with display name
     field_mappings = {
         "epic_link": {
-            "id": "customfield_12311140"
+            "id": "customfield_12311140",
+            "name": "Epic Link"
         }
     }
 
@@ -621,8 +668,11 @@ def test_get_child_issues_no_children(mock_jira_cli):
     assert len(children) == 0
 
 
-def test_get_child_issues_without_epic_link_mapping(mock_jira_cli):
+def test_get_child_issues_without_epic_link_mapping(mock_jira_cli, temp_daf_home, monkeypatch):
     """Test fetching child issues when epic_link field mapping is not configured."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
     # Set up JQL search response
     mock_jira_cli.set_search_results({
         "jql": "parent = PROJ-12345 ORDER BY key ASC",
@@ -737,7 +787,7 @@ def test_view_jira_ticket_with_children(mock_jira_cli, temp_daf_home, monkeypatc
         json.dump({"jira_project": "TEST", "sync_filters": {}}, f)
 
     with open(temp_daf_home / "team.json", "w") as f:
-        json.dump({"jira_workstream": None}, f)
+        json.dump({"jira_custom_field_defaults": None}, f)
 
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
@@ -835,7 +885,7 @@ def test_view_jira_ticket_with_children_no_children(mock_jira_cli, temp_daf_home
         json.dump({"jira_project": "TEST", "sync_filters": {}}, f)
 
     with open(temp_daf_home / "team.json", "w") as f:
-        json.dump({"jira_workstream": None}, f)
+        json.dump({"jira_custom_field_defaults": None}, f)
 
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
@@ -864,8 +914,11 @@ def test_view_jira_ticket_with_children_no_children(mock_jira_cli, temp_daf_home
     assert "No child issues found" in captured.out
 
 
-def test_view_jira_ticket_without_children(mock_jira_cli, capsys):
+def test_view_jira_ticket_without_children(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
     """Test that child issues are not shown when show_children=False."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
         "fields": {

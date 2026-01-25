@@ -44,7 +44,13 @@ def create_test_config():
             "filters": {}
         },
         "repos": {
-            "workspace": str(Path.cwd()),  # Use current directory as workspace
+            "workspaces": [
+                {
+                    "name": "primary",
+                    "path": str(Path.cwd())
+                }
+            ],
+            "last_used_workspace": "primary",
             "detection": {
                 "method": "keyword_match",
                 "fallback": "prompt"

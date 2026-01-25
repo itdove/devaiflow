@@ -234,12 +234,13 @@ class FileBackend(StorageBackend):
         if filters.working_directory:
             filtered_sessions = [s for s in filtered_sessions if s.working_directory == filters.working_directory]
 
-        if filters.sprint:
-            filtered_sessions = [
-                s
-                for s in filtered_sessions
-                if s.issue_metadata and s.issue_metadata.get("sprint") == filters.sprint
-            ]
+        if filters.issue_metadata_filters:
+            for field_name, field_value in filters.issue_metadata_filters.items():
+                filtered_sessions = [
+                    s
+                    for s in filtered_sessions
+                    if s.issue_metadata and s.issue_metadata.get(field_name) == field_value
+                ]
 
         if filters.issue_status:
             # Support comma-separated JIRA status values

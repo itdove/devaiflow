@@ -329,7 +329,7 @@ def test_pr_template_url_persists_across_save_load(temp_daf_home):
     assert loaded_config.pr_template_url is None
 
     # Modify some other field
-    loaded_config.jira.user = "new-user"
+    loaded_config.jira.project = "NEW-PROJECT"
     loader.save_config(loaded_config)
 
     # Load again
@@ -337,7 +337,7 @@ def test_pr_template_url_persists_across_save_load(temp_daf_home):
     assert loaded_config2 is not None
     # pr_template_url should still be None (not deleted)
     assert loaded_config2.pr_template_url is None
-    assert loaded_config2.jira.user == "new-user"
+    assert loaded_config2.jira.project == "NEW-PROJECT"
 
 
 def test_prompts_fields_persist_across_save_load(temp_daf_home):
@@ -467,7 +467,7 @@ def test_optional_fields_with_none_in_json(temp_daf_home):
     assert config is not None
     assert config.pr_template_url is None
     assert config.jira.project is None
-    assert config.jira.workstream is None
+    assert config.jira.custom_field_defaults is None or config.jira.custom_field_defaults == {}
     assert config.prompts.auto_commit_on_complete is None
 
     # Save it back

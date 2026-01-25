@@ -110,16 +110,10 @@ def link_jira(
     # Update all sessions in the group
     for session in sessions:
         session.issue_key = issue_key
-        # Populate JIRA metadata
-        if not session.issue_metadata:
-            session.issue_metadata = {}
-        session.issue_metadata["summary"] = issue_metadata_dict.get("summary")
-        session.issue_metadata["type"] = issue_metadata_dict.get("type")
-        session.issue_metadata["status"] = issue_metadata_dict.get("status")
-        session.issue_metadata["sprint"] = issue_metadata_dict.get("sprint")
-        session.issue_metadata["points"] = issue_metadata_dict.get("points")
-        session.issue_metadata["assignee"] = issue_metadata_dict.get("assignee")
-        session.issue_metadata["epic"] = issue_metadata_dict.get("epic")
+
+        # Copy ALL fields from issue_metadata_dict to issue_metadata (generic approach)
+        # Exclude the 'key' and 'updated' fields (already stored separately)
+        session.issue_metadata = {k: v for k, v in issue_metadata_dict.items() if k not in ('key', 'updated') and v is not None}
 
         # Update goal to concatenated format: "{ISSUE_KEY}: {JIRA_TITLE}"
         issue_summary = issue_metadata_dict.get("summary")

@@ -13,7 +13,9 @@ daf list --active
 **Common options:**
 - `--active` - Show only active sessions
 - `--status in_progress` - Filter by session status
-- `--sprint current` - Filter by current sprint
+- `--field <field_name>=<value>` - Filter by custom field name (e.g., `--field my_field=value`)
+  - Uses field names from organization.json field_mappings configuration
+  - Example: `--field grouping_field="Group A"`
 - `--working-directory <dir>` - Filter by repository
 - `--since "last week"` - Sessions active since time
 

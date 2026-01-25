@@ -106,7 +106,7 @@ class TestBuildTicketCreationPrompt:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
         return config_loader.load_config()
 
@@ -180,7 +180,7 @@ class TestBuildTicketCreationPrompt:
         assert "READ-ONLY analysis" in prompt
 
     def test_prompt_includes_jira_project_and_workstream(self, mock_config, temp_daf_home):
-        """Test that the prompt includes the configured project and workstream."""
+        """Test that the prompt includes the configured project and custom field defaults."""
         prompt = _build_ticket_creation_prompt(
             issue_type="story",
             parent="PROJ-12345",
@@ -190,9 +190,9 @@ class TestBuildTicketCreationPrompt:
             project_path=None
         )
 
-        # Verify project and workstream are mentioned
+        # Verify project and custom fields are mentioned
         assert "project: PROJ" in prompt
-        assert "workstream: Platform" in prompt
+        assert "custom fields: workstream=Platform" in prompt
 
     def test_prompt_includes_parent_when_provided(self, mock_config, temp_daf_home):
         """Test that the prompt includes parent reference when provided."""

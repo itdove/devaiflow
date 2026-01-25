@@ -53,8 +53,6 @@ def create_jira_update_command():
     @click.option("--priority", type=click.Choice(["Critical", "Major", "Normal", "Minor"]), help="Update priority")
     @click.option("--assignee", help="Update assignee (username or 'none' to clear)")
     @click.option("--summary", help="Update issue summary")
-    @click.option("--acceptance-criteria", help="Update acceptance criteria")
-    @click.option("--workstream", help="Update workstream")
     @click.option("--git-pull-request", help="Add PR/MR URL(s) to git-pull-request field (comma-separated, auto-appends to existing)")
     @click.option("--field", "-f", multiple=True, help="Update custom field (format: field_name=value). Supports any JIRA field. Example: --field epic_link=PROJ-12345 --field severity=Critical")
     def jira_update_base(
@@ -65,8 +63,6 @@ def create_jira_update_command():
         priority: Optional[str],
         assignee: Optional[str],
         summary: Optional[str],
-        acceptance_criteria: Optional[str],
-        workstream: Optional[str],
         git_pull_request: Optional[str],
         field: tuple,
         **kwargs  # Capture dynamic options
@@ -83,10 +79,10 @@ def create_jira_update_command():
             daf jira update PROJ-12345 --description "New description text"
             daf jira update PROJ-12345 --description-file /path/to/description.txt
             daf jira update PROJ-12345 --priority Major --assignee jdoe
-            daf jira update PROJ-12345 --summary "New summary" --workstream Platform
+            daf jira update PROJ-12345 --summary "New summary" --field workstream=Platform
             daf jira update PROJ-12345 --git-pull-request "https://github.com/org/repo/pull/123"
             daf jira update PROJ-12345 --field epic_link=PROJ-59000
-            daf jira update PROJ-12345 -f severity=Critical -f size=L
+            daf jira update PROJ-12345 -f severity=Critical -f size=L -f workstream=Platform
 
         \b
         To see all editable fields for a specific issue, use:
@@ -137,8 +133,6 @@ def create_jira_update_command():
             priority=priority,
             assignee=assignee,
             summary=summary,
-            acceptance_criteria=acceptance_criteria,
-            workstream=workstream,
             git_pull_request=git_pull_request,
             output_json=output_json,
             **custom_fields_filtered
@@ -146,8 +140,8 @@ def create_jira_update_command():
 
     # Add dynamic options for editable fields (excluding hardcoded ones)
     hardcoded_fields = {
-        "summary", "description", "priority", "assignee", "workstream",
-        "acceptance_criteria", "git_pull_request"
+        "summary", "description", "priority", "assignee",
+        "git_pull_request"
     }
 
     for field_name, field_info in editable_fields.items():

@@ -275,11 +275,13 @@ class TestSplitConfigValidation:
             for issue in result.issues
         )
 
-    def test_validate_team_config_placeholder(self, validator, temp_config_dir):
-        """Test detection of placeholder in team.json."""
+    def test_validate_team_config_valid(self, validator, temp_config_dir):
+        """Test that valid team.json passes validation."""
         team_data = {
-            "jira_workstream": "TODO: Your team's workstream",
-            "time_tracking_enabled": True
+            "jira_custom_field_defaults": {"workstream": "Platform", "team": "Backend"},
+            "time_tracking_enabled": True,
+            "jira_comment_visibility_type": "group",
+            "jira_comment_visibility_value": "Developers"
         }
 
         with open(temp_config_dir / "team.json", "w") as f:
@@ -287,11 +289,10 @@ class TestSplitConfigValidation:
 
         result = validator.validate_split_config_files()
 
-        assert not result.is_complete
-        assert any(
-            issue.file == "team.json" and issue.field == "jira_workstream"
-            for issue in result.issues
-        )
+        # team.json fields are not validated for placeholders, only for parseability
+        # So this should pass validation
+        assert result.is_complete
+        assert not any(issue.file == "team.json" for issue in result.issues)
 
     def test_validate_config_json_invalid_workspace(self, validator, temp_config_dir):
         """Test detection of invalid workspace in config.json."""

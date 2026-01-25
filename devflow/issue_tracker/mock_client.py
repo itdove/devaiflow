@@ -86,13 +86,12 @@ class MockIssueTrackerClient(IssueTrackerClient):
         priority: Optional[str] = None,
         affected_version: Optional[str] = None,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
         acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
         """Create a bug ticket."""
-        return self._create_ticket("Bug", summary, description, project, parent, workstream, acceptance_criteria, priority=priority)
+        return self._create_ticket("Bug", summary, description, project, parent, acceptance_criteria, priority=priority, **custom_fields)
 
     def create_story(
         self,
@@ -100,13 +99,12 @@ class MockIssueTrackerClient(IssueTrackerClient):
         description: str,
         project: str,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
         acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
         """Create a story ticket."""
-        return self._create_ticket("Story", summary, description, project, parent, workstream, acceptance_criteria)
+        return self._create_ticket("Story", summary, description, project, parent, acceptance_criteria, **custom_fields)
 
     def create_task(
         self,
@@ -114,25 +112,23 @@ class MockIssueTrackerClient(IssueTrackerClient):
         description: str,
         project: str,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
         acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
         """Create a task ticket."""
-        return self._create_ticket("Task", summary, description, project, parent, workstream, acceptance_criteria)
+        return self._create_ticket("Task", summary, description, project, parent, acceptance_criteria, **custom_fields)
 
     def create_epic(
         self,
         summary: str,
         description: str,
         project: str,
-        workstream: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
         """Create an epic ticket."""
-        return self._create_ticket("Epic", summary, description, project, None, workstream, None)
+        return self._create_ticket("Epic", summary, description, project, None, None, **custom_fields)
 
     def create_spike(
         self,
@@ -140,13 +136,12 @@ class MockIssueTrackerClient(IssueTrackerClient):
         description: str,
         project: str,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
         acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
         """Create a spike ticket."""
-        return self._create_ticket("Spike", summary, description, project, parent, workstream, acceptance_criteria)
+        return self._create_ticket("Spike", summary, description, project, parent, acceptance_criteria, **custom_fields)
 
     def _create_ticket(
         self,
@@ -155,9 +150,8 @@ class MockIssueTrackerClient(IssueTrackerClient):
         description: str,
         project: str,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
         acceptance_criteria: Optional[str] = None,
-        **extra_fields,
+        **custom_fields,
     ) -> str:
         """Internal helper to create a ticket."""
         # Get next ticket number (global counter across all projects)
@@ -174,14 +168,19 @@ class MockIssueTrackerClient(IssueTrackerClient):
             "project": project,
             "assignee": None,
             "reporter": "mock-user",
-            "priority": extra_fields.get("priority"),
+            "priority": custom_fields.get("priority"),
             "labels": [],
             "epic": parent if issue_type != "Epic" else None,
             "sprint": None,
             "points": None,
             "acceptance_criteria": acceptance_criteria,
-            "workstream": workstream,
         }
+
+        # Add all custom fields generically
+        for field_name, field_value in custom_fields.items():
+            if field_name not in ticket and field_value is not None:
+                ticket[field_name] = field_value
+
         self.store.set_jira_ticket(key, ticket)
         return key
 

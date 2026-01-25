@@ -1,7 +1,7 @@
 #!/bin/bash
 # test_jira_sync.sh
 # Integration test for DevAIFlow JIRA sync features
-# Tests: daf sync --sprint, daf sync --tickets, synced session creation
+# Tests: daf sync --field, daf sync (all tickets), synced session creation
 #
 # This script runs entirely in mock mode (DAF_MOCK_MODE=1) and does not require
 # access to production JIRA, GitHub, or GitLab services.
@@ -97,6 +97,9 @@ NC='\033[0m'  # No Color
 TESTS_PASSED=0
 TESTS_TOTAL=0
 
+# Get the directory of this script before changing directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Function to print section headers
 print_section() {
     echo ""
@@ -136,8 +139,8 @@ cd "$TEMP_GIT_REPO"
 
 print_section "JIRA Sync Integration Test"
 echo "This script tests the JIRA sync features:"
-echo "  1. Sync sprint tickets (daf sync --sprint)"
-echo "  2. Sync specific tickets (daf sync --tickets)"
+echo "  1. Sync tickets with field filters (daf sync --field)"
+echo "  2. Sync all configured tickets (daf sync)"
 echo "  3. Verify synced sessions are created"
 echo "  4. Verify session metadata from JIRA"
 echo "  5. Test sync with filters"
@@ -161,24 +164,23 @@ if [ $CONFIG_EXIT_CODE -ne 0 ]; then
 fi
 echo -e "  ${GREEN}✓${NC} Configuration initialized"
 TESTS_PASSED=$((TESTS_PASSED + 1))
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Test 1: Sync current sprint
-print_section "Test 1: Sync Current Sprint"
-print_test "Sync tickets from current sprint"
+# Test 1: Sync with field filter
+print_section "Test 1: Sync with Field Filter"
+print_test "Sync tickets with custom field filter (sprint)"
 
-SYNC_OUTPUT=$(daf sync --sprint "$SPRINT_NAME" 2>&1)
+SYNC_OUTPUT=$(daf sync --field sprint="$SPRINT_NAME" 2>&1)
 SYNC_EXIT_CODE=$?
 
 if [ $SYNC_EXIT_CODE -ne 0 ]; then
-    echo -e "  ${RED}✗${NC} Sprint sync FAILED with exit code $SYNC_EXIT_CODE"
-    echo -e "  ${RED}Command:${NC} daf sync --sprint \"$SPRINT_NAME\""
+    echo -e "  ${RED}✗${NC} Sync with field filter FAILED with exit code $SYNC_EXIT_CODE"
+    echo -e "  ${RED}Command:${NC} daf sync --field sprint=\"$SPRINT_NAME\""
     echo -e "  ${RED}Output:${NC}"
     echo "$SYNC_OUTPUT" | sed 's/^/    /'
     exit 1
 fi
 
-echo -e "  ${GREEN}✓${NC} Sprint sync completed successfully"
+echo -e "  ${GREEN}✓${NC} Sync with field filter completed successfully"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Verify sync output contains useful information
@@ -369,18 +371,18 @@ else
     exit 1
 fi
 
-# Test 7: Sync with sprint filter
-print_section "Test 7: Sync with Sprint Filter"
-print_test "Sync tickets with sprint filter"
+# Test 7: Sync with field filter (different value)
+print_section "Test 7: Sync with Field Filter (Different Value)"
+print_test "Sync tickets with different field filter value"
 
-FILTER_SYNC_OUTPUT=$(daf sync --sprint current 2>&1)
+FILTER_SYNC_OUTPUT=$(daf sync --field sprint="current" 2>&1)
 FILTER_SYNC_EXIT=$?
 
 if [ $FILTER_SYNC_EXIT -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} Sync with sprint filter completed"
+    echo -e "  ${GREEN}✓${NC} Sync with field filter completed"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    echo -e "  ${YELLOW}ℹ${NC}  Sprint filter may not be supported (non-critical)"
+    echo -e "  ${YELLOW}ℹ${NC}  Field filter may not match any tickets (non-critical)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
@@ -421,11 +423,11 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo -e "${BOLD}${GREEN}✓ All tests passed!${NC}"
     echo ""
     echo "Successfully tested JIRA sync workflow:"
-    echo "  ✓ daf sync --sprint - Sync sprint tickets"
-    echo "  ✓ daf sync --tickets - Sync specific tickets"
+    echo "  ✓ daf sync --field - Sync tickets with custom field filters"
+    echo "  ✓ daf sync - Sync all configured tickets"
     echo "  ✓ Session creation from synced tickets"
     echo "  ✓ Session metadata from JIRA"
-    echo "  ✓ daf status - Sprint dashboard with synced tickets"
+    echo "  ✓ daf status - Dashboard with synced tickets"
     echo "  ✓ Re-sync idempotency"
     echo "  ✓ Status filter support"
     echo "  ✓ Sync updates existing sessions"

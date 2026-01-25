@@ -122,9 +122,8 @@ def test_init_refresh_preserves_user_config(temp_daf_home_no_patches, mock_jira_
 
     # Set custom user values
     config.jira.url = "https://custom-jira.example.com"
-    config.jira.user = "custom-user"
     config.jira.project = "CUSTOM"
-    config.jira.workstream = "CustomWorkstream"
+    config.jira.custom_field_defaults = {"workstream": "CustomWorkstream"}
     from devflow.config.models import WorkspaceDefinition
     config.repos.workspaces = [
         WorkspaceDefinition(name="default", path="/custom/workspace")
@@ -155,9 +154,8 @@ def test_init_refresh_preserves_user_config(temp_daf_home_no_patches, mock_jira_
     # Verify user config was preserved
     updated_config = loader.load_config()
     assert updated_config.jira.url == "https://custom-jira.example.com"
-    assert updated_config.jira.user == "custom-user"
     assert updated_config.jira.project == "CUSTOM"
-    assert updated_config.jira.workstream == "CustomWorkstream"
+    assert updated_config.jira.custom_field_defaults == {"workstream": "CustomWorkstream"}
     assert len(updated_config.repos.workspaces) == 1
     assert updated_config.repos.workspaces[0].name == "default"
     assert updated_config.repos.workspaces[0].path == "/custom/workspace"
@@ -265,26 +263,25 @@ def test_init_first_time_with_jira_discovery(temp_daf_home, mock_jira_cli, monke
     # Mock all prompts and wizard inputs
     with patch("rich.prompt.Confirm.ask") as mock_confirm, \
          patch("rich.prompt.Prompt.ask") as mock_prompt, \
+         patch("devflow.jira.client.JiraClient"), \
          patch("devflow.jira.field_mapper.JiraFieldMapper.discover_fields", return_value=mock_field_mappings), \
          patch("devflow.cli.main._validate_jira_url", return_value=True):
         # Confirm prompts:
         # 1. Enable JIRA integration: Yes
-        # 2. Update keywords (in wizard): No
-        # 3. Discover JIRA fields: Yes
-        # 4. PR template config: No
+        # 2. Configure keywords (in wizard): No
+        # 3. Configure PR/MR template URL (in wizard): No
+        # 4. Discover JIRA fields: Yes
         # 5. Configure workstream: No
-        mock_confirm.side_effect = [True, False, True, False, False]
+        mock_confirm.side_effect = [True, False, False, True, False]
 
         # Wizard prompts for JIRA config:
         # 1. JIRA URL
         # 2. JIRA Project
-        # 3. JIRA User
-        # 4. Workstream
-        # 5. Workspace path
+        # 3. Workstream
+        # 4. Workspace path
         mock_prompt.side_effect = [
             "https://test-jira.example.com",
             "TEST",
-            "test-user",
             "TestWorkstream",
             str(Path.home() / "development")
         ]
@@ -325,7 +322,6 @@ def test_init_first_time_with_invalid_jira_url(temp_daf_home, monkeypatch):
         mock_prompt.side_effect = [
             "https://jira.example.com",  # Invalid example URL
             "PROJ",
-            "test-user",
             "TestWorkstream",
             str(Path.home() / "development")
         ]
@@ -406,9 +402,8 @@ def test_init_reset_updates_config_values(temp_daf_home_no_patches, mock_jira_cl
     loader = ConfigLoader()
     config = loader.create_default_config()
     config.jira.url = "https://old-jira.example.com"
-    config.jira.user = "old-user"
     config.jira.project = "OLD"
-    config.jira.workstream = "OldWorkstream"
+    config.jira.custom_field_defaults = {"workstream": "OldWorkstream"}
     from devflow.config.models import WorkspaceDefinition
     config.repos.workspaces = [
         WorkspaceDefinition(name="default", path="/old/workspace")
@@ -437,8 +432,6 @@ def test_init_reset_updates_config_values(temp_daf_home_no_patches, mock_jira_cl
         mock_prompt.side_effect = [
             "https://new-jira.example.com",  # JIRA URL
             "NEW",  # JIRA Project
-            "new-user",  # JIRA User
-            "NewWorkstream",  # Workstream
             "/new/workspace",  # Workspace path
         ]
 
@@ -452,9 +445,9 @@ def test_init_reset_updates_config_values(temp_daf_home_no_patches, mock_jira_cl
     # Verify config was updated
     updated_config = loader.load_config()
     assert updated_config.jira.url == "https://new-jira.example.com"
-    assert updated_config.jira.user == "new-user"
     assert updated_config.jira.project == "NEW"
-    assert updated_config.jira.workstream == "NewWorkstream"
+    # custom_field_defaults preserved from old config (not prompted in wizard)
+    assert updated_config.jira.custom_field_defaults == {"workstream": "OldWorkstream"}
     assert len(updated_config.repos.workspaces) == 1
     assert updated_config.repos.workspaces[0].name == "default"
     assert updated_config.repos.workspaces[0].path == "/new/workspace"
@@ -469,9 +462,8 @@ def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_ji
     loader = ConfigLoader()
     config = loader.create_default_config()
     config.jira.url = "https://custom-jira.example.com"
-    config.jira.user = "custom-user"
     config.jira.project = "CUSTOM"
-    config.jira.workstream = "CustomWorkstream"
+    config.jira.custom_field_defaults = {"workstream": "CustomWorkstream"}
     from devflow.config.models import WorkspaceDefinition
     config.repos.workspaces = [
         WorkspaceDefinition(name="default", path="/custom/workspace")
@@ -496,12 +488,10 @@ def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_ji
     with patch("rich.prompt.Prompt.ask") as mock_prompt, \
          patch("rich.prompt.Confirm.ask", return_value=False), \
          patch("devflow.jira.field_mapper.JiraFieldMapper.discover_fields", return_value=mock_field_mappings):
-        # Mock responses - all use defaults
+        # Mock responses - all use defaults (note: workstream no longer prompted, preserved from old config)
         mock_prompt.side_effect = [
             "https://custom-jira.example.com",  # JIRA URL (same)
             "CUSTOM",  # JIRA Project (same)
-            "custom-user",  # JIRA User (same)
-            "CustomWorkstream",  # Workstream (same)
             "/custom/workspace",  # Workspace path (same)
         ]
 
@@ -515,9 +505,8 @@ def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_ji
     # Verify config was unchanged
     updated_config = loader.load_config()
     assert updated_config.jira.url == "https://custom-jira.example.com"
-    assert updated_config.jira.user == "custom-user"
     assert updated_config.jira.project == "CUSTOM"
-    assert updated_config.jira.workstream == "CustomWorkstream"
+    assert updated_config.jira.custom_field_defaults.get("workstream") == "CustomWorkstream"
     assert len(updated_config.repos.workspaces) == 1
     assert updated_config.repos.workspaces[0].name == "default"
     assert updated_config.repos.workspaces[0].path == "/custom/workspace"

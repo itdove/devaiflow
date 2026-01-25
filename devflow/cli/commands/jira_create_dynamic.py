@@ -37,8 +37,8 @@ def create_jira_create_command():
 
     # Build dynamic list of field names for --field option
     hardcoded_fields = {
-        "summary", "description", "priority", "project", "workstream",
-        "parent", "epic_link", "affected_version"
+        "summary", "description", "priority", "project",
+        "parent", "affected_version"
     }
 
     # Get custom field names (excluding hardcoded ones and system fields)
@@ -71,7 +71,6 @@ def create_jira_create_command():
     @click.option("--description-file", type=click.Path(exists=True), help="File with description")
     @click.option("--priority", type=click.Choice(["Critical", "Major", "Normal", "Minor"]), help="Issue priority (default: Major for bug/story, Normal for task)")
     @click.option("--project", help="JIRA project key (prompts to save if not in config)")
-    @click.option("--workstream", help="Workstream (prompts to save if not in config)")
     @click.option("--parent", help="Parent issue key to link to (epic for story/task/bug, parent for sub-task)")
     @click.option("--affected-version", help="Affected version (bugs only, uses config default if not specified)")
     @click.option("--linked-issue", help="Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to'). Use with --issue")
@@ -87,7 +86,6 @@ def create_jira_create_command():
         description_file: str,
         priority: str,
         project: str,
-        workstream: str,
         parent: str,
         affected_version: str,
         linked_issue: str,
@@ -128,7 +126,6 @@ def create_jira_create_command():
             summary=summary,
             priority=priority,
             project=project,
-            workstream=workstream,
             parent=parent,
             affected_version=affected_version,
             description=description,
@@ -160,10 +157,10 @@ def create_jira_create_command():
         daf jira create story --summary "Implement backup feature" --interactive
         daf jira create task --summary "Update documentation" --parent PROJ-59038
         daf jira create bug --summary "Login error" --create-session
-        daf jira create story --summary "New feature" --project PROJ --workstream Platform
+        daf jira create story --summary "New feature" --project PROJ --field workstream=Platform
         daf jira create bug --summary "Critical bug" --field severity=Critical --field size=L
-        daf jira create story --summary "New story" --acceptance-criteria "- Criterion 1"
-        daf jira create story --summary "Alternative" --field acceptance_criteria="- Criterion 1"
+        daf jira create story --summary "New story" --field workstream=Platform --field team=Backend
+        daf jira create bug --summary "Production issue" --field workstream=Core --field priority=P1
     """
 
     # Add dynamic options for creation fields (excluding already hardcoded ones)

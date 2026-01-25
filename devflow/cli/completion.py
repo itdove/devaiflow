@@ -73,35 +73,6 @@ def complete_working_directories(ctx, param, incomplete):
         return []
 
 
-def complete_sprints(ctx, param, incomplete):
-    """Auto-complete sprint names.
-
-    Args:
-        ctx: Click context
-        param: Parameter being completed
-        incomplete: Partial input from user
-
-    Returns:
-        List of completion suggestions
-    """
-    try:
-        config_loader = ConfigLoader()
-        sessions_index = config_loader.load_sessions()
-
-        sprints = set()
-        for session_list in sessions_index.sessions.values():
-            for session in session_list:
-                if session.issue_metadata and session.issue_metadata.get("sprint"):
-                    sprints.add(session.issue_metadata.get("sprint"))
-
-        # Add "current" as a special value
-        sprints.add("current")
-
-        return [s for s in sprints if s.startswith(incomplete)]
-    except Exception:
-        return []
-
-
 def complete_tags(ctx, param, incomplete):
     """Auto-complete tag names.
 

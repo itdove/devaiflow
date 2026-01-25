@@ -2,8 +2,6 @@
   "_comment": "JIRA backend configuration - REQUIRED fields marked with TODO",
   "url": "TODO: https://your-jira-instance.com",
   "_url_comment": "Your JIRA instance URL (e.g., 'https://jira.example.com' or 'https://example.atlassian.net')",
-  "user": "",
-  "_user_comment": "Leave empty to use environment variables (JIRA_USER) or prompt at runtime",
   "field_mappings": null,
   "_field_mappings_comment": "Auto-discovered on first use. You can manually set field IDs if needed. Example: {'acceptance_criteria': {'id': 'customfield_12345', 'required_for': ['Story', 'Epic']}}",
   "field_cache_timestamp": null,

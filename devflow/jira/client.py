@@ -121,6 +121,33 @@ class JiraClient(IssueTrackerClient):
             # Default to bearer for unknown auth types
             return f"Bearer {self._jira_token}"
 
+    def _add_custom_fields_to_payload(
+        self,
+        payload: Dict,
+        custom_fields: Dict[str, any],
+        field_mapper
+    ) -> None:
+        """Add custom fields to JIRA API payload with proper formatting.
+
+        Args:
+            payload: JIRA API payload dict with "fields" key (modified in-place)
+            custom_fields: Dictionary of custom field names to values
+            field_mapper: JiraFieldMapper instance for field ID lookup
+
+        Note:
+            Modifies the payload dict in-place by adding formatted custom fields.
+        """
+        from devflow.cli.commands.jira_update_command import build_field_value
+
+        for field_name, field_value in custom_fields.items():
+            if field_value is None:
+                continue
+            field_id = field_mapper.get_field_id(field_name)
+            if field_id:
+                field_info = field_mapper.get_field_info(field_name) or {}
+                formatted_value = build_field_value(field_info, str(field_value), field_mapper)
+                payload["fields"][field_id] = formatted_value
+
     def _get_field_name(self, field_id: str) -> str:
         """Get human-readable field name from field ID.
 
@@ -248,39 +275,49 @@ class JiraClient(IssueTrackerClient):
                 "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
             }
 
-            # Resolve field IDs from field_mappings
-            story_points_field = None
-            sprint_field = None
-            epic_link_field = None
-
+            # Extract ALL custom fields generically from field_mappings
             if field_mappings:
-                story_points_field = field_mappings.get("story_points", {}).get("id")
-                sprint_field = field_mappings.get("sprint", {}).get("id")
-                epic_link_field = field_mappings.get("epic_link", {}).get("id")
+                for field_name, field_info in field_mappings.items():
+                    field_id = field_info.get("id")
+                    if not field_id or field_id not in fields:
+                        continue
 
-            # Story points
-            if fields.get(story_points_field):
-                try:
-                    ticket_data["points"] = int(fields[story_points_field])
-                except (ValueError, TypeError):
-                    pass
+                    field_value = fields[field_id]
+                    if field_value is None:
+                        continue
 
-            # Sprint (get first sprint if multiple)
-            sprints = fields.get(sprint_field, [])
-            if sprints and len(sprints) > 0:
-                # Sprint is in format: "com.atlassian.greenhopper.service.sprint.Sprint@xxxxx[id=1234,name=Sprint Name,...]"
-                sprint_str = sprints[0] if isinstance(sprints, list) else sprints
-                if isinstance(sprint_str, str) and "name=" in sprint_str:
-                    # Extract name from sprint string
-                    name_start = sprint_str.find("name=") + 5
-                    name_end = sprint_str.find(",", name_start)
-                    if name_end == -1:
-                        name_end = sprint_str.find("]", name_start)
-                    ticket_data["sprint"] = sprint_str[name_start:name_end]
+                    # Apply type-based transformations
+                    field_type = field_info.get("type", "string")
+                    field_schema = field_info.get("schema", "")
 
-            # Epic link
-            if fields.get(epic_link_field):
-                ticket_data["epic"] = fields[epic_link_field]
+                    # Number fields - convert to int
+                    if field_type == "number":
+                        try:
+                            field_value = int(field_value)
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Sprint fields - parse Greenhopper format
+                    # Detect by schema containing "sprint" keyword
+                    elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
+                        sprint_str = field_value[0]
+                        if isinstance(sprint_str, str) and "name=" in sprint_str:
+                            # Extract name from Greenhopper sprint string format
+                            name_start = sprint_str.find("name=") + 5
+                            name_end = sprint_str.find(",", name_start)
+                            if name_end == -1:
+                                name_end = sprint_str.find("]", name_start)
+                            field_value = sprint_str[name_start:name_end]
+
+                    # Store field value under its normalized name
+                    ticket_data[field_name] = field_value
+
+                    # Backward compatibility aliases (TEMPORARY - should be removed eventually)
+                    # TODO: Remove these once all consuming code uses normalized field names
+                    if "epic" in field_name and "link" in field_name:
+                        ticket_data["epic"] = field_value
+                    elif "story" in field_name and "point" in field_name:
+                        ticket_data["points"] = field_value
 
             return ticket_data
 
@@ -601,51 +638,49 @@ class JiraClient(IssueTrackerClient):
                 "reporter": fields.get("reporter", {}).get("displayName") if fields.get("reporter") else None,
             }
 
-            # Resolve field IDs from field_mappings
-            story_points_field = None
-            sprint_field = None
-            epic_link_field = None
-            git_pr_field = None
-
+            # Extract ALL custom fields generically from field_mappings
             if field_mappings:
-                story_points_field = field_mappings.get("story_points", {}).get("id")
-                sprint_field = field_mappings.get("sprint", {}).get("id")
-                epic_link_field = field_mappings.get("epic_link", {}).get("id")
-                git_pr_field = field_mappings.get("git_pull_request", {}).get("id")
+                for field_name, field_info in field_mappings.items():
+                    field_id = field_info.get("id")
+                    if not field_id or field_id not in fields:
+                        continue
 
-            # Story points
-            if fields.get(story_points_field):
-                try:
-                    ticket_data["points"] = int(fields[story_points_field])
-                except (ValueError, TypeError):
-                    pass
+                    field_value = fields[field_id]
+                    if field_value is None:
+                        continue
 
-            # Sprint (get first sprint if multiple)
-            sprints = fields.get(sprint_field, [])
-            if sprints and len(sprints) > 0:
-                # Sprint is in format: "com.atlassian.greenhopper.service.sprint.Sprint@xxxxx[id=1234,name=Sprint Name,...]"
-                sprint_str = sprints[0] if isinstance(sprints, list) else sprints
-                if isinstance(sprint_str, str) and "name=" in sprint_str:
-                    # Extract name from sprint string
-                    name_start = sprint_str.find("name=") + 5
-                    name_end = sprint_str.find(",", name_start)
-                    if name_end == -1:
-                        name_end = sprint_str.find("]", name_start)
-                    ticket_data["sprint"] = sprint_str[name_start:name_end]
+                    # Apply type-based transformations
+                    field_type = field_info.get("type", "string")
+                    field_schema = field_info.get("schema", "")
 
-            # Epic link
-            if fields.get(epic_link_field):
-                ticket_data["epic"] = fields[epic_link_field]
+                    # Number fields - convert to int
+                    if field_type == "number":
+                        try:
+                            field_value = int(field_value)
+                        except (ValueError, TypeError):
+                            pass
 
-            # Acceptance Criteria - only if field mapping is available
-            if field_mappings and "acceptance_criteria" in field_mappings:
-                ac_field_id = field_mappings["acceptance_criteria"].get("id")
-                if ac_field_id and fields.get(ac_field_id):
-                    ticket_data["acceptance_criteria"] = fields[ac_field_id]
+                    # Sprint fields - parse Greenhopper format
+                    # Detect by schema containing "sprint" keyword
+                    elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
+                        sprint_str = field_value[0]
+                        if isinstance(sprint_str, str) and "name=" in sprint_str:
+                            # Extract name from Greenhopper sprint string format
+                            name_start = sprint_str.find("name=") + 5
+                            name_end = sprint_str.find(",", name_start)
+                            if name_end == -1:
+                                name_end = sprint_str.find("]", name_start)
+                            field_value = sprint_str[name_start:name_end]
 
-            # Git Pull Request
-            if fields.get(git_pr_field):
-                ticket_data["git_pull_request"] = fields[git_pr_field]
+                    # Store field value under its normalized name
+                    ticket_data[field_name] = field_value
+
+                    # Backward compatibility aliases (TEMPORARY - should be removed eventually)
+                    # TODO: Remove these once all consuming code uses normalized field names
+                    if "epic" in field_name and "link" in field_name:
+                        ticket_data["epic"] = field_value
+                    elif "story" in field_name and "point" in field_name:
+                        ticket_data["points"] = field_value
 
             # Changelog (if requested)
             if include_changelog:
@@ -665,23 +700,25 @@ class JiraClient(IssueTrackerClient):
         self,
         assignee: Optional[str] = None,
         status: Optional[str] = None,
-        sprint: Optional[str] = None,
+        sprint: Optional[str] = None,  # Deprecated: use field_filters instead
         ticket_type: Optional[str] = None,
         status_list: Optional[List[str]] = None,
         field_mappings: Optional[Dict] = None,
+        field_filters: Optional[Dict[str, str]] = None,
     ) -> List[Dict]:
         """List issue tracker tickets with filters using REST API.
 
         Args:
             assignee: Filter by assignee (use "currentUser()" for current user, will be auto-resolved)
             status: Filter by status (single value, deprecated in favor of status_list)
-            sprint: Filter by sprint name
+            sprint: Filter by sprint name (deprecated - use field_filters instead)
             ticket_type: Filter by ticket type (Story, Bug, etc.)
             status_list: Filter by multiple status values (takes precedence over status)
             field_mappings: Optional field mappings dict from config to resolve custom field IDs
+            field_filters: Filter by custom fields (e.g., {"sprint": "Sprint 1", "severity": "Critical"})
 
         Returns:
-            List of ticket dictionaries with keys: key, type, status, summary, sprint, points, assignee
+            List of ticket dictionaries with keys: key, type, status, summary, and any custom fields from field_mappings
 
         Raises:
             JiraApiError: If API request fails
@@ -689,16 +726,6 @@ class JiraClient(IssueTrackerClient):
             JiraConnectionError: If connection fails
         """
         try:
-            # Resolve field IDs from field_mappings
-            story_points_field = None
-            sprint_field = None
-            epic_link_field = None
-
-            if field_mappings:
-                story_points_field = field_mappings.get("story_points", {}).get("id")
-                sprint_field = field_mappings.get("sprint", {}).get("id")
-                epic_link_field = field_mappings.get("epic_link", {}).get("id")
-
             # Build JQL query
             jql_parts = []
 
@@ -718,7 +745,23 @@ class JiraClient(IssueTrackerClient):
                 # Single status - legacy support
                 jql_parts.append(f'status = "{status}"')
 
-            if sprint:
+            # Generic custom field filtering
+            if field_filters:
+                for field_name, field_value in field_filters.items():
+                    # Get the field ID from field_mappings if available
+                    field_id = field_name
+                    if field_mappings and field_name in field_mappings:
+                        field_info = field_mappings[field_name]
+                        # Use the display name if available, otherwise use field name
+                        field_id = field_info.get("name", field_name)
+
+                    # Handle special values
+                    if field_value == "IS NOT EMPTY":
+                        jql_parts.append(f'"{field_id}" is not EMPTY')
+                    else:
+                        jql_parts.append(f'"{field_id}" = "{field_value}"')
+            elif sprint:
+                # Backward compatibility: support legacy sprint parameter
                 if sprint == "IS NOT EMPTY":
                     jql_parts.append("sprint is not EMPTY")
                 else:
@@ -732,10 +775,19 @@ class JiraClient(IssueTrackerClient):
             # Add ordering
             jql += " ORDER BY updated DESC"
 
-            # Build fields list dynamically
+            # Build fields list dynamically - include ALL custom fields from field_mappings
             # Note: 'created' and 'updated' are returned at the root level of the issue object
             # (alongside 'key' and 'fields'), not inside the 'fields' object
-            fields_list = f"created,updated,issuetype,status,summary,assignee,{story_points_field},{sprint_field},{epic_link_field}"
+            fields_list_parts = ["created", "updated", "issuetype", "status", "summary", "assignee"]
+
+            # Add all custom field IDs from field_mappings
+            if field_mappings:
+                for field_info in field_mappings.values():
+                    field_id = field_info.get("id")
+                    if field_id:
+                        fields_list_parts.append(field_id)
+
+            fields_list = ",".join(fields_list_parts)
 
             # Make API request
             response = self._api_request(
@@ -777,27 +829,49 @@ class JiraClient(IssueTrackerClient):
                     "updated": issue.get("updated"),  # Timestamp from issue root (ISO format)
                 }
 
-                # Story points
-                if fields.get(story_points_field):
-                    try:
-                        ticket_data["points"] = int(fields[story_points_field])
-                    except (ValueError, TypeError):
-                        pass
+                # Extract ALL custom fields generically from field_mappings
+                if field_mappings:
+                    for field_name, field_info in field_mappings.items():
+                        field_id = field_info.get("id")
+                        if not field_id or field_id not in fields:
+                            continue
 
-                # Sprint (get first sprint if multiple)
-                sprints = fields.get(sprint_field, [])
-                if sprints and len(sprints) > 0:
-                    sprint_str = sprints[0] if isinstance(sprints, list) else sprints
-                    if isinstance(sprint_str, str) and "name=" in sprint_str:
-                        name_start = sprint_str.find("name=") + 5
-                        name_end = sprint_str.find(",", name_start)
-                        if name_end == -1:
-                            name_end = sprint_str.find("]", name_start)
-                        ticket_data["sprint"] = sprint_str[name_start:name_end]
+                        field_value = fields[field_id]
+                        if field_value is None:
+                            continue
 
-                # Epic link
-                if fields.get(epic_link_field):
-                    ticket_data["epic"] = fields[epic_link_field]
+                        # Apply type-based transformations
+                        field_type = field_info.get("type", "string")
+                        field_schema = field_info.get("schema", "")
+
+                        # Number fields - convert to int
+                        if field_type == "number":
+                            try:
+                                field_value = int(field_value)
+                            except (ValueError, TypeError):
+                                pass
+
+                        # Sprint fields - parse Greenhopper format
+                        # Detect by schema containing "sprint" keyword
+                        elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
+                            sprint_str = field_value[0]
+                            if isinstance(sprint_str, str) and "name=" in sprint_str:
+                                # Extract name from Greenhopper sprint string format
+                                name_start = sprint_str.find("name=") + 5
+                                name_end = sprint_str.find(",", name_start)
+                                if name_end == -1:
+                                    name_end = sprint_str.find("]", name_start)
+                                field_value = sprint_str[name_start:name_end]
+
+                        # Store field value under its normalized name
+                        ticket_data[field_name] = field_value
+
+                        # Backward compatibility aliases (TEMPORARY - should be removed eventually)
+                        # TODO: Remove these once all consuming code uses normalized field names
+                        if "epic" in field_name and "link" in field_name:
+                            ticket_data["epic"] = field_value
+                        elif "story" in field_name and "point" in field_name:
+                            ticket_data["points"] = field_value
 
                 tickets.append(ticket_data)
 
@@ -815,15 +889,16 @@ class JiraClient(IssueTrackerClient):
         parent_key: str,
         field_mappings: Optional[Dict] = None,
     ) -> List[Dict]:
-        """Get all child issues for a parent issue (subtasks and epic children).
+        """Get all child issues for a parent issue.
 
-        Uses JQL to find:
+        Uses JQL to find child issues based on parent_field_mapping configuration.
+        Searches for:
         - Direct subtasks (where parent field = parent_key)
-        - Stories/tasks linked via Epic Link (where Epic Link = parent_key)
+        - Issues linked via configured parent fields from parent_field_mapping
 
         Args:
             parent_key: issue key of the parent issue (e.g., PROJ-12345)
-            field_mappings: Optional field mappings dict from config to resolve custom field IDs
+            field_mappings: Optional field mappings dict from config to resolve field display names
 
         Returns:
             List of child issue dictionaries with keys: key, type, status, summary, assignee
@@ -835,15 +910,36 @@ class JiraClient(IssueTrackerClient):
             JiraConnectionError: If connection fails
         """
         try:
-            # Build JQL query to find both subtasks and epic children
-            # JIRA JQL uses field names, not field IDs
-            # For Epic Link, we use "Epic Link" in JQL even though the field ID is customfield_XXXXX
+            # Build JQL query to find child issues
+            # JIRA JQL uses display field names, not field IDs or normalized names
             jql_parts = [f'parent = {parent_key}']
 
-            # Add epic children search if epic_link field is configured
-            if field_mappings and field_mappings.get("epic_link"):
-                # Use the standard "Epic Link" field name in JQL
-                jql_parts.append(f'"Epic Link" = {parent_key}')
+            # Add JQL clauses for all parent fields configured in parent_field_mapping
+            try:
+                from devflow.config.loader import ConfigLoader
+                config_loader = ConfigLoader()
+                config = config_loader.load_config()
+
+                if config and config.jira and config.jira.parent_field_mapping:
+                    # Collect all unique parent field names from parent_field_mapping
+                    parent_field_names = set(config.jira.parent_field_mapping.values())
+
+                    # For each parent field, add JQL clause using its display name
+                    if field_mappings:
+                        for field_name in parent_field_names:
+                            # Skip the standard "parent" field (already handled above)
+                            if field_name == "parent":
+                                continue
+
+                            # Get field metadata to find display name
+                            field_info = field_mappings.get(field_name)
+                            if field_info:
+                                # Use display name from metadata for JQL
+                                display_name = field_info.get("name", field_name)
+                                jql_parts.append(f'"{display_name}" = {parent_key}')
+            except Exception:
+                # If config loading fails, just use parent field
+                pass
 
             # Combine with OR
             jql = " OR ".join(jql_parts)
@@ -1144,7 +1240,7 @@ class JiraClient(IssueTrackerClient):
             field_mapper: JiraFieldMapper instance for field ID lookup
 
         Returns:
-            Field ID string (e.g., "customfield_12311140" for epic_link, or "parent" for sub-task)
+            Field ID string (e.g., "customfield_12311140", or "parent" for sub-task)
             Returns None if parent_field_mapping not configured or field not found
         """
         try:
@@ -1153,16 +1249,14 @@ class JiraClient(IssueTrackerClient):
             config = config_loader.load_config()
 
             if not config or not config.jira or not config.jira.parent_field_mapping:
-                # Fallback to epic_link for backward compatibility
-                return field_mapper.get_field_id("epic_link")
+                return None
 
             # Get logical field name from parent_field_mapping (e.g., "epic_link" or "parent")
             issue_type_lower = issue_type.lower()
             logical_field_name = config.jira.parent_field_mapping.get(issue_type_lower)
 
             if not logical_field_name:
-                # Fallback to epic_link for backward compatibility
-                return field_mapper.get_field_id("epic_link")
+                return None
 
             # If logical field is "parent" (standard field for sub-tasks), return it directly
             if logical_field_name == "parent":
@@ -1172,8 +1266,7 @@ class JiraClient(IssueTrackerClient):
             return field_mapper.get_field_id(logical_field_name)
 
         except Exception:
-            # Fallback to epic_link for backward compatibility
-            return field_mapper.get_field_id("epic_link")
+            return None
 
     def create_bug(
         self,
@@ -1181,11 +1274,11 @@ class JiraClient(IssueTrackerClient):
         description: str,
         priority: str,
         project_key: str,
-        workstream: str,
         field_mapper,
         parent: Optional[str] = None,
         affected_version: Optional[str] = None,
         components: Optional[List[str]] = None,
+        required_custom_fields: Optional[dict] = None,
         **custom_fields
     ) -> str:
         """Create a JIRA bug issue.
@@ -1195,11 +1288,11 @@ class JiraClient(IssueTrackerClient):
             description: Bug description (using template from AGENTS.md)
             priority: Bug priority (Critical, Major, Normal, Minor)
             project_key: JIRA project key (e.g., "PROJ")
-            workstream: Workstream value (e.g., "Platform", "Hosted Services")
             field_mapper: JiraFieldMapper instance for field ID lookup
             parent: Optional parent issue key (epic for bugs, uses parent_field_mapping from config)
             affected_version: Affected version (optional, will prompt if not provided)
             components: List of component names (default: [])
+            required_custom_fields: Dictionary of required custom fields {field_name: value}
             **custom_fields: Additional custom fields (field_id: value pairs)
 
         Returns:
@@ -1213,9 +1306,8 @@ class JiraClient(IssueTrackerClient):
         """
         if components is None:
             components = []
-
-        # Get field IDs from mapper
-        workstream_field = field_mapper.get_field_id("workstream")
+        if required_custom_fields is None:
+            required_custom_fields = {}
 
         # Get parent field ID based on parent_field_mapping from config
         parent_field_id = self._get_parent_field_id("bug", field_mapper)
@@ -1233,12 +1325,11 @@ class JiraClient(IssueTrackerClient):
             }
         }
 
-        # Add workstream if field is configured
-        if workstream_field:
-            payload["fields"][workstream_field] = [{"value": workstream}]
+        # Add required custom fields generically
+        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
 
-        # Set acceptance criteria if required based on field_mappings
-        self._set_required_acceptance_criteria(payload, "Bug", field_mapper, description)
+        # Set required fields based on field_mappings metadata
+        self._set_required_fields(payload, "Bug", field_mapper)
 
         # Add parent link if provided and field is configured
         if parent and parent_field_id:
@@ -1304,10 +1395,10 @@ class JiraClient(IssueTrackerClient):
         description: str,
         priority: str,
         project_key: str,
-        workstream: str,
         field_mapper,
         parent: Optional[str] = None,
         components: Optional[List[str]] = None,
+        required_custom_fields: Optional[dict] = None,
         **custom_fields
     ) -> str:
         """Create a JIRA story issue.
@@ -1317,10 +1408,10 @@ class JiraClient(IssueTrackerClient):
             description: Story description (using template from AGENTS.md)
             priority: Story priority (Critical, Major, Normal, Minor)
             project_key: JIRA project key (e.g., "PROJ")
-            workstream: Workstream value (e.g., "Platform", "Hosted Services")
             field_mapper: JiraFieldMapper instance for field ID lookup
             parent: Optional parent issue key (epic for stories, uses parent_field_mapping from config)
             components: List of component names (default: [])
+            required_custom_fields: Dictionary of required custom fields {field_name: value}
             **custom_fields: Additional custom fields (field_id: value pairs)
 
         Returns:
@@ -1334,9 +1425,8 @@ class JiraClient(IssueTrackerClient):
         """
         if components is None:
             components = []
-
-        # Get field IDs from mapper
-        workstream_field = field_mapper.get_field_id("workstream")
+        if required_custom_fields is None:
+            required_custom_fields = {}
 
         # Get parent field ID based on parent_field_mapping from config
         parent_field_id = self._get_parent_field_id("story", field_mapper)
@@ -1353,12 +1443,11 @@ class JiraClient(IssueTrackerClient):
             }
         }
 
-        # Add workstream if field is configured
-        if workstream_field:
-            payload["fields"][workstream_field] = [{"value": workstream}]
+        # Add required custom fields generically
+        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
 
-        # Set acceptance criteria if required based on field_mappings
-        self._set_required_acceptance_criteria(payload, "Story", field_mapper, description)
+        # Set required fields based on field_mappings metadata
+        self._set_required_fields(payload, "Story", field_mapper)
 
         # Add parent link if provided and field is configured
         if parent and parent_field_id:
@@ -1424,10 +1513,10 @@ class JiraClient(IssueTrackerClient):
         description: str,
         priority: str,
         project_key: str,
-        workstream: str,
         field_mapper,
         parent: Optional[str] = None,
         components: Optional[List[str]] = None,
+        required_custom_fields: Optional[dict] = None,
         **custom_fields
     ) -> str:
         """Create a JIRA task issue.
@@ -1437,10 +1526,10 @@ class JiraClient(IssueTrackerClient):
             description: Task description (using template from AGENTS.md)
             priority: Task priority (Critical, Major, Normal, Minor)
             project_key: JIRA project key (e.g., "PROJ")
-            workstream: Workstream value (e.g., "Platform", "Hosted Services")
             field_mapper: JiraFieldMapper instance for field ID lookup
             parent: Optional parent issue key (epic for tasks, uses parent_field_mapping from config)
             components: List of component names (default: [])
+            required_custom_fields: Dictionary of required custom fields {field_name: value}
             **custom_fields: Additional custom fields (field_id: value pairs)
 
         Returns:
@@ -1454,9 +1543,8 @@ class JiraClient(IssueTrackerClient):
         """
         if components is None:
             components = []
-
-        # Get field IDs from mapper
-        workstream_field = field_mapper.get_field_id("workstream")
+        if required_custom_fields is None:
+            required_custom_fields = {}
 
         # Get parent field ID based on parent_field_mapping from config
         parent_field_id = self._get_parent_field_id("task", field_mapper)
@@ -1473,12 +1561,11 @@ class JiraClient(IssueTrackerClient):
             }
         }
 
-        # Add workstream if field is configured
-        if workstream_field:
-            payload["fields"][workstream_field] = [{"value": workstream}]
+        # Add required custom fields generically
+        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
 
-        # Set acceptance criteria if required based on field_mappings
-        self._set_required_acceptance_criteria(payload, "Task", field_mapper, description)
+        # Set required fields based on field_mappings metadata
+        self._set_required_fields(payload, "Task", field_mapper)
 
         # Add parent link if provided and field is configured
         if parent and parent_field_id:
@@ -1544,10 +1631,10 @@ class JiraClient(IssueTrackerClient):
         description: str,
         priority: str,
         project_key: str,
-        workstream: str,
         field_mapper,
         parent: Optional[str] = None,
         components: Optional[List[str]] = None,
+        required_custom_fields: Optional[dict] = None,
         **custom_fields
     ) -> str:
         """Create a JIRA epic issue.
@@ -1557,10 +1644,10 @@ class JiraClient(IssueTrackerClient):
             description: Epic description (using template from AGENTS.md)
             priority: Epic priority (Critical, Major, Normal, Minor)
             project_key: JIRA project key (e.g., "PROJ")
-            workstream: Workstream value (e.g., "Platform", "Hosted Services")
             field_mapper: JiraFieldMapper instance for field ID lookup
             parent: Optional parent issue key (not typically used for epics as they are top-level)
             components: List of component names (default: [])
+            required_custom_fields: Dictionary of required custom fields {field_name: value}
             **custom_fields: Additional custom fields (field_id: value pairs)
 
         Returns:
@@ -1579,9 +1666,8 @@ class JiraClient(IssueTrackerClient):
         """
         if components is None:
             components = []
-
-        # Get field IDs from mapper
-        workstream_field = field_mapper.get_field_id("workstream")
+        if required_custom_fields is None:
+            required_custom_fields = {}
 
         # Build payload
         payload = {
@@ -1595,17 +1681,11 @@ class JiraClient(IssueTrackerClient):
             }
         }
 
-        # Add workstream if field is configured
-        if workstream_field:
-            payload["fields"][workstream_field] = [{"value": workstream}]
+        # Add required custom fields generically
+        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
 
-        # Set acceptance criteria if required based on field_mappings
-        self._set_required_acceptance_criteria(payload, "Epic", field_mapper, description)
-
-        # Optional: Add Epic Name field if discovered (optional in modern JIRA)
-        epic_name_field = field_mapper.get_field_id("epic_name")
-        if epic_name_field:
-            payload["fields"][epic_name_field] = summary
+        # Set required fields based on field_mappings metadata
+        self._set_required_fields(payload, "Epic", field_mapper)
 
         # Note: Epics typically don't have parent links as they are top-level containers
         # However, if parent is provided and a parent field exists, add it
@@ -1674,10 +1754,10 @@ class JiraClient(IssueTrackerClient):
         description: str,
         priority: str,
         project_key: str,
-        workstream: str,
         field_mapper,
         parent: Optional[str] = None,
         components: Optional[List[str]] = None,
+        required_custom_fields: Optional[dict] = None,
         **custom_fields
     ) -> str:
         """Create a JIRA spike issue.
@@ -1687,10 +1767,10 @@ class JiraClient(IssueTrackerClient):
             description: Spike description (using template from AGENTS.md)
             priority: Spike priority (Critical, Major, Normal, Minor)
             project_key: JIRA project key (e.g., "PROJ")
-            workstream: Workstream value (e.g., "Platform", "Hosted Services")
             field_mapper: JiraFieldMapper instance for field ID lookup
             parent: Optional parent issue key (epic for spikes, uses parent_field_mapping from config)
             components: List of component names (default: [])
+            required_custom_fields: Dictionary of required custom fields {field_name: value}
             **custom_fields: Additional custom fields (field_id: value pairs)
 
         Returns:
@@ -1707,9 +1787,8 @@ class JiraClient(IssueTrackerClient):
         """
         if components is None:
             components = []
-
-        # Get field IDs from mapper
-        workstream_field = field_mapper.get_field_id("workstream")
+        if required_custom_fields is None:
+            required_custom_fields = {}
 
         # Get parent field ID based on parent_field_mapping from config
         parent_field_id = self._get_parent_field_id("spike", field_mapper)
@@ -1726,12 +1805,11 @@ class JiraClient(IssueTrackerClient):
             }
         }
 
-        # Add workstream if field is configured
-        if workstream_field:
-            payload["fields"][workstream_field] = [{"value": workstream}]
+        # Add required custom fields generically
+        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
 
-        # Set acceptance criteria if required based on field_mappings
-        self._set_required_acceptance_criteria(payload, "Spike", field_mapper, description)
+        # Set required fields based on field_mappings metadata
+        self._set_required_fields(payload, "Spike", field_mapper)
 
         # Add parent link if provided and field is configured
         if parent and parent_field_id:
@@ -1791,65 +1869,62 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to create spike: {e}")
 
-    def _set_required_acceptance_criteria(
+    def _set_required_fields(
         self,
         payload: Dict,
         issue_type: str,
-        field_mapper,
-        description: str
+        field_mapper
     ) -> None:
-        """Set acceptance criteria field if required for the issue type.
+        """Set required fields for the issue type if not already provided.
 
-        Checks field_mappings metadata to determine if acceptance_criteria is marked
-        as required for the given issue type. If required but not extracted from the
-        description, sets a default placeholder value.
+        Iterates through all fields in field_mappings and sets default placeholder
+        values for fields that are marked as required for the given issue type
+        but not already present in the payload.
 
         Args:
             payload: The JIRA API payload dict with "fields" key (modified in-place)
             issue_type: The JIRA issue type (e.g., "Bug", "Story", "Task")
             field_mapper: JiraFieldMapper instance for field metadata lookup
-            description: Issue description to attempt extraction from
 
         Note:
-            Modifies the payload dict in-place by adding acceptance_criteria field if needed.
+            Modifies the payload dict in-place by adding required fields if needed.
         """
-        # Get the acceptance criteria field ID
-        acceptance_criteria_field = field_mapper.get_field_id("acceptance_criteria")
-
-        # If field not configured, skip setting acceptance criteria
-        if not acceptance_criteria_field:
+        # Get all field mappings
+        if not hasattr(field_mapper, '_cache') or not field_mapper._cache:
             return
 
-        # Extract acceptance criteria from description if present
-        acceptance_criteria = self._extract_acceptance_criteria(description)
+        # Iterate through all fields in field_mappings
+        for field_name, field_info in field_mapper._cache.items():
+            # Check if this field is required for the given issue type
+            required_for = field_info.get("required_for", [])
+            if issue_type not in required_for:
+                continue
 
-        # Check if acceptance_criteria is required for this issue type
-        ac_field_info = field_mapper.get_field_info("acceptance_criteria")
-        is_required = ac_field_info and issue_type in ac_field_info.get("required_for", [])
+            # Get field ID
+            field_id = field_info.get("id")
+            if not field_id:
+                continue
 
-        # Set acceptance criteria if provided or if required
-        if acceptance_criteria or is_required:
-            if not acceptance_criteria:
-                # Use default placeholder if required but not provided
-                acceptance_criteria = f"TBD: Define acceptance criteria for this {issue_type.lower()}"
-            payload["fields"][acceptance_criteria_field] = acceptance_criteria
+            # Skip if field is already set in payload
+            if field_id in payload.get("fields", {}):
+                continue
 
-    def _extract_acceptance_criteria(self, description: str) -> str:
-        """Extract acceptance criteria from issue description.
+            # Set a default placeholder value based on field type
+            field_type = field_info.get("type", "string")
+            field_schema = field_info.get("schema", "")
 
-        This method attempts to extract the acceptance criteria section
-        from a JIRA description that follows the templates in AGENTS.md.
+            # Generate appropriate placeholder based on field type
+            if field_type == "string" or "string" in str(field_schema):
+                placeholder = f"TBD: Define {field_name.replace('_', ' ')} for this {issue_type.lower()}"
+            elif field_type == "number":
+                placeholder = 0
+            elif field_type == "array" or "array" in str(field_schema):
+                placeholder = []
+            else:
+                # Default to empty string for unknown types
+                placeholder = ""
 
-        Args:
-            description: Issue description text
-
-        Returns:
-            Extracted acceptance criteria or empty string if not found
-        """
-        # Look for common patterns in bug/story templates
-        # For now, return empty string - caller can set acceptance criteria explicitly
-        # This can be enhanced later to parse from description
-        return ""
+            payload["fields"][field_id] = placeholder
 
     def get_issue_link_types(self) -> List[Dict]:
         """Fetch available issue link types from JIRA.

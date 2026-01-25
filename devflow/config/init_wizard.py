@@ -36,24 +36,15 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     jira_url = Prompt.ask("JIRA URL", default=default_url)
 
     # JIRA Project
+    console.print("[dim]The project key is the short identifier for your JIRA project (e.g., 'PROJ', 'ENG', 'DEVOPS')[/dim]")
+    console.print("[dim]You can find it in your JIRA URL: https://jira.company.com/browse/PROJ-123 → 'PROJ'[/dim]")
+    console.print("[dim]Can be set later, but required for: creating issues, field discovery[/dim]")
     default_project = current_config.jira.project if current_config else None
     if default_project:
         jira_project = Prompt.ask("JIRA Project Key", default=default_project)
     else:
         jira_project_input = Prompt.ask("JIRA Project Key (optional, press Enter to skip)", default="")
         jira_project = jira_project_input if jira_project_input else None
-
-    # JIRA User
-    default_user = current_config.jira.user if current_config else "your-username"
-    jira_user = Prompt.ask("JIRA Username", default=default_user)
-
-    # Workstream
-    default_workstream = current_config.jira.workstream if current_config else None
-    if default_workstream:
-        workstream = Prompt.ask("Which workstream do you work on?", default=default_workstream)
-    else:
-        workstream_input = Prompt.ask("Which workstream do you work on? (optional, press Enter to skip)", default="")
-        workstream = workstream_input if workstream_input else None
 
     console.print("\n[bold]=== Repository Workspace ===[/bold]\n")
 
@@ -87,9 +78,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     # Build JIRA config with transitions
     jira_config = JiraConfig(
         url=jira_url,
-        user=jira_user,
         project=jira_project,
-        workstream=workstream,
         transitions={},  # Transitions configured via patches or daf config set-transition-* commands
         filters={
             "sync": JiraFiltersConfig(
@@ -101,10 +90,13 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         time_tracking=True,
     )
 
-    # Preserve field mappings from current config if available
+    # Preserve field mappings and custom field defaults from current config if available
     if current_config and current_config.jira.field_mappings:
         jira_config.field_mappings = current_config.jira.field_mappings
         jira_config.field_cache_timestamp = current_config.jira.field_cache_timestamp
+
+    if current_config and current_config.jira.custom_field_defaults:
+        jira_config.custom_field_defaults = current_config.jira.custom_field_defaults
 
     # Build repo config with workspaces list
     from devflow.config.models import WorkspaceDefinition
@@ -125,9 +117,33 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         templates=TemplateConfig(),
     )
 
-    # Preserve PR template URL if it exists
+    # PR/MR Template Configuration (optional)
+    console.print("\n[bold]=== PR/MR Template Configuration (Optional) ===[/bold]\n")
+    console.print("You have three options for generating PR/MR descriptions:")
+    console.print("  [cyan]1.[/cyan] Provide a template URL - AI will fill your organization's template")
+    console.print("  [cyan]2.[/cyan] Leave empty - AI will generate descriptions automatically")
+    console.print("  [cyan]3.[/cyan] Add template guidance to AGENTS.md/ORGANIZATION.md/TEAM.md files")
+    console.print()
+
+    pr_template_url = None
     if current_config and current_config.pr_template_url:
-        new_config.pr_template_url = current_config.pr_template_url
+        # Show current value
+        console.print(f"[dim]Current template URL: {current_config.pr_template_url}[/dim]")
+        if Confirm.ask("Update PR/MR template URL?", default=False):
+            console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
+            template_url_input = Prompt.ask("Enter PR/MR template URL (leave empty to clear)", default="")
+            pr_template_url = template_url_input.strip() if template_url_input.strip() else None
+        else:
+            # Keep existing URL
+            pr_template_url = current_config.pr_template_url
+    else:
+        # No existing template URL
+        if Confirm.ask("Configure PR/MR template URL?", default=False):
+            console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
+            template_url_input = Prompt.ask("Enter PR/MR template URL (leave empty to skip)", default="")
+            pr_template_url = template_url_input.strip() if template_url_input.strip() else None
+
+    new_config.pr_template_url = pr_template_url
 
     return new_config
 

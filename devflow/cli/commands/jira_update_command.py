@@ -29,12 +29,11 @@ def build_field_value(field_info: Dict[str, Any], value: str, field_mapper: Jira
     schema = field_info.get("schema", "string")
 
     # Handle different field types
+    # IMPORTANT: Check array fields BEFORE single-select fields
+    # to properly handle multi-select fields like workstream (type=array, schema=option)
     if schema == "multiurl" or "url" in schema.lower():
         # For URL fields, return as-is
         return value
-    elif schema == "option" or schema == "com.atlassian.jira.plugin.system.customfieldtypes:select":
-        # Single-select field
-        return {"value": value}
     elif schema == "array" or field_type == "array":
         # Multi-select field (like workstream)
         if "option" in schema:
@@ -42,6 +41,9 @@ def build_field_value(field_info: Dict[str, Any], value: str, field_mapper: Jira
         else:
             # Array of strings
             return [value]
+    elif schema == "option" or schema == "com.atlassian.jira.plugin.system.customfieldtypes:select":
+        # Single-select field
+        return {"value": value}
     elif schema == "priority":
         return {"name": value}
     elif schema == "user":
@@ -60,8 +62,6 @@ def update_jira_issue(
     priority: Optional[str] = None,
     assignee: Optional[str] = None,
     summary: Optional[str] = None,
-    acceptance_criteria: Optional[str] = None,
-    workstream: Optional[str] = None,
     git_pull_request: Optional[str] = None,
     status: Optional[str] = None,
     linked_issue: Optional[str] = None,
@@ -81,13 +81,11 @@ def update_jira_issue(
         priority: New priority value
         assignee: New assignee username
         summary: New summary text
-        acceptance_criteria: New acceptance criteria
-        workstream: New workstream value
         git_pull_request: PR/MR URLs (comma-separated, will be appended to existing)
         status: Target status to transition to (e.g., 'In Progress', 'Review', 'Closed')
         linked_issue: Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to')
         issue: Issue key to link to (e.g., PROJ-12345)
-        **custom_fields: Additional custom fields discovered dynamically
+        **custom_fields: Additional custom fields discovered dynamically (e.g., workstream="Platform", acceptance_criteria="...")
     """
     try:
         # Load config
@@ -144,19 +142,16 @@ def update_jira_issue(
             else:
                 payload["fields"]["assignee"] = {"name": assignee}
 
-        # Handle custom fields with mapper
-        if acceptance_criteria:
-            acceptance_criteria_field = field_mapper.get_field_id("acceptance_criteria") or "customfield_12315940"
-            payload["fields"][acceptance_criteria_field] = acceptance_criteria
-
-        if workstream:
-            workstream_field = field_mapper.get_field_id("workstream") or "customfield_12319275"
-            payload["fields"][workstream_field] = [{"value": workstream}]
-
         # Handle git-pull-request (fetch, append, update)
         if git_pull_request:
             # Get the git-pull-request field ID from mapper
-            git_pr_field = field_mapper.get_field_id("git_pull_request") or "customfield_12310220"
+            git_pr_field = field_mapper.get_field_id("git_pull_request")
+            if not git_pr_field:
+                if output_json:
+                    json_output(success=False, error={"code": "FIELD_NOT_FOUND", "message": "git_pull_request field not found in JIRA"})
+                else:
+                    console.print("[red]✗[/red] git_pull_request field not found in JIRA. Run 'daf jira discover' to refresh field mappings.")
+                sys.exit(1)
 
             # Fetch current PR links
             try:

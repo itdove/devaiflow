@@ -33,13 +33,20 @@ class JiraBackendConfig(BaseModel):
     """
 
     url: str
-    user: str = ""  # Optional - usually set per user or via environment
     transitions: Dict[str, JiraTransitionConfig] = Field(default_factory=dict)
     field_mappings: Optional[Dict[str, Dict[str, Any]]] = None  # Cached field mappings (creation fields only)
     field_cache_timestamp: Optional[str] = None  # ISO timestamp of last field discovery
     field_cache_auto_refresh: bool = True  # Auto-refresh field mappings when stale
     field_cache_max_age_hours: int = 24  # Maximum age in hours before cache is stale (default: 24h)
-    parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to logical field names (e.g., {"story": "epic_link", "sub-task": "parent"})
+    parent_field_mapping: Optional[Dict[str, str]] = Field(
+        default_factory=lambda: {
+            "story": "epic_link",
+            "task": "epic_link",
+            "bug": "epic_link",
+            "spike": "epic_link",
+            "sub-task": "parent"
+        }
+    )  # Maps issue types to logical field names
 
 
 class OrganizationConfig(BaseModel):
@@ -51,22 +58,20 @@ class OrganizationConfig(BaseModel):
 
     jira_project: Optional[str] = None  # JIRA project key (e.g., "PROJ")
     jira_affected_version: Optional[str] = None  # Default affected version for bugs
-    jira_acceptance_criteria_field: Optional[str] = None  # Field name alias for acceptance criteria
-    jira_workstream_field: Optional[str] = None  # Field name alias for workstream
-    jira_epic_link_field: Optional[str] = None  # Field name alias for epic link
     sync_filters: Dict[str, JiraFiltersConfig] = Field(default_factory=dict)  # Renamed from 'filters'
     agent_backend: Optional[str] = None  # AI agent backend enforced by organization (e.g., "claude", "github-copilot")
+    status_grouping_field: Optional[str] = None  # Field to group by in status dashboard (e.g., "sprint", "iteration", "release") - None means no grouping
+    status_totals_field: Optional[str] = None  # Field to sum for totals in status dashboard (e.g., "points", "story_points", "effort") - None means no totals
 
 
 class TeamConfig(BaseModel):
     """Team-specific JIRA configuration (team.json).
 
     Contains team-specific settings that may vary between teams
-    (workstream, comment visibility, time tracking preferences).
+    (custom field defaults, comment visibility, time tracking preferences).
     """
 
-    jira_workstream: Optional[str] = None  # Default workstream (e.g., "Platform")
-    jira_workstream_field: Optional[str] = None  # Field name alias for workstream (deprecated - use organization)
+    jira_custom_field_defaults: Optional[Dict[str, Any]] = None  # Default values for custom fields (e.g., {"workstream": "Platform", "affected_version": "v1.0"})
     time_tracking_enabled: bool = True  # Team-wide time tracking preference
     jira_comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'
     jira_comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
@@ -85,23 +90,27 @@ class JiraConfig(BaseModel):
     """
 
     url: str
-    user: str
     transitions: Dict[str, JiraTransitionConfig]
     time_tracking: bool = True
     filters: Dict[str, JiraFiltersConfig] = Field(default_factory=dict)
     project: Optional[str] = None  # JIRA project key (e.g., "PROJ")
-    workstream: Optional[str] = None  # Default workstream (e.g., "Platform")
+    custom_field_defaults: Optional[Dict[str, Any]] = None  # Default values for custom fields (e.g., {"workstream": "Platform", "affected_version": "v1.0"})
     affected_version: Optional[str] = None  # Default affected version for bugs (e.g., "v1.0.0")
-    acceptance_criteria_field: Optional[str] = None  # Field name alias for acceptance criteria
-    workstream_field: Optional[str] = None  # Field name alias for workstream
-    epic_link_field: Optional[str] = None  # Field name alias for epic link
     field_mappings: Optional[Dict[str, Dict[str, Any]]] = None  # Cached field mappings (creation fields only)
     field_cache_timestamp: Optional[str] = None  # ISO timestamp of last field discovery
     field_cache_auto_refresh: bool = True  # Auto-refresh field mappings when stale
     field_cache_max_age_hours: int = 24  # Maximum age in hours before cache is stale (default: 24h)
     comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'
     comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
-    parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to logical field names (e.g., {"story": "epic_link", "sub-task": "parent"})
+    parent_field_mapping: Optional[Dict[str, str]] = Field(
+        default_factory=lambda: {
+            "story": "epic_link",
+            "task": "epic_link",
+            "bug": "epic_link",
+            "spike": "epic_link",
+            "sub-task": "parent"
+        }
+    )  # Maps issue types to logical field names
 
 
 class RepoDetectionConfig(BaseModel):
@@ -1029,7 +1038,7 @@ class SessionIndex(BaseModel):
         self,
         status: Optional[str] = None,
         working_directory: Optional[str] = None,
-        sprint: Optional[str] = None,
+        issue_metadata_filters: Optional[Dict[str, str]] = None,
         issue_status: Optional[str] = None,
         since: Optional[datetime] = None,
         before: Optional[datetime] = None,
@@ -1039,7 +1048,7 @@ class SessionIndex(BaseModel):
         Args:
             status: Filter by session status (comma-separated for multiple)
             working_directory: Filter by working directory
-            sprint: Filter by sprint
+            issue_metadata_filters: Filter by custom fields (e.g., {"sprint": "Sprint 1", "severity": "Critical"})
             issue_status: Filter by issue tracker status (comma-separated for multiple)
             since: Filter by sessions active since this datetime
             before: Filter by sessions active before this datetime
@@ -1066,12 +1075,13 @@ class SessionIndex(BaseModel):
         if working_directory:
             all_sessions = [s for s in all_sessions if s.working_directory == working_directory]
 
-        # Sprint filtering
-        if sprint:
-            all_sessions = [
-                s for s in all_sessions
-                if s.issue_metadata.get("sprint") == sprint
-            ]
+        # Custom field filtering
+        if issue_metadata_filters:
+            for field_name, field_value in issue_metadata_filters.items():
+                all_sessions = [
+                    s for s in all_sessions
+                    if s.issue_metadata.get(field_name) == field_value
+                ]
 
         # Time-based filtering
         if since:

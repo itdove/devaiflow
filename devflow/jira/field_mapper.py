@@ -46,10 +46,14 @@ class JiraFieldMapper:
                     "type": "array",
                     "schema": "option",
                     "allowed_values": ["Platform", "Hosted Services"],
-                    "required_for": ["Bug", "Story"]
+                    "required_for": ["Bug", "Story"],
+                    "available_for": ["Bug", "Story", "Task", "Epic"]
                 },
                 ...
             }
+
+            Note: "available_for" lists ALL issue types where this field can be set.
+                  "required_for" lists only issue types where this field is mandatory.
 
         Raises:
             RuntimeError: If API request fails
@@ -386,8 +390,13 @@ class JiraFieldMapper:
                             "type": schema_info.get("type", "string"),
                             "schema": schema_info.get("custom", schema_info.get("type", "string")),
                             "required_for": [],
+                            "available_for": [],
                             "allowed_values": []
                         }
+
+                    # Track which issue types this field is available for (ALL issue types where it appears)
+                    if issue_type_name not in mappings[normalized_name]["available_for"]:
+                        mappings[normalized_name]["available_for"].append(issue_type_name)
 
                     # Track which issue types require this field
                     if field_data.get("required", False):
@@ -444,6 +453,7 @@ class JiraFieldMapper:
                 "type": field_type,
                 "schema": schema_custom,
                 "required_for": [],
+                "available_for": [],
                 "allowed_values": []
             }
 
@@ -521,70 +531,3 @@ class JiraFieldMapper:
         """
         self._cache = field_mappings
 
-    def get_workstream_with_prompt(
-        self,
-        config_workstream: Optional[str] = None,
-        save_to_config: bool = True
-    ) -> Optional[str]:
-        """Get workstream value from config or prompt user.
-
-        This method is useful for JIRA issue creation commands. It will:
-        1. Use the configured workstream if available
-        2. Otherwise, prompt user to select from allowed values
-        3. Optionally offer to save the selection to config
-
-        Args:
-            config_workstream: Pre-configured workstream value (from config.jira.workstream)
-            save_to_config: If True, offer to save user's selection to config
-
-        Returns:
-            Selected workstream value or None if user cancels
-
-        Example:
-            mapper = JiraFieldMapper(jira_client, config.jira.field_mappings)
-            workstream = mapper.get_workstream_with_prompt(config.jira.workstream)
-            if not workstream:
-                console.print("[red]Workstream required for issue creation[/red]")
-                return
-        """
-        from rich.prompt import Prompt, Confirm
-
-        # If workstream is already configured, use it
-        if config_workstream:
-            return config_workstream
-
-        # Get workstream field info
-        workstream_info = self.get_field_info("workstream")
-        if not workstream_info:
-            console.print("[yellow]⚠[/yellow] Workstream field not found in JIRA.")
-            console.print("  Run [cyan]daf config refresh-jira-fields[/cyan] to update field mappings.")
-            # Prompt for manual entry
-            workstream = Prompt.ask("\nEnter workstream value (or leave empty to cancel)", default="")
-            return workstream.strip() if workstream else None
-
-        allowed_values = workstream_info.get("allowed_values", [])
-
-        # Prompt user to select workstream
-        if allowed_values:
-            console.print("\n[bold]Available workstreams:[/bold]")
-            for val in allowed_values:
-                console.print(f"  - {val}")
-            console.print()
-
-            workstream = Prompt.ask(
-                "Select workstream",
-                choices=allowed_values,
-                default=allowed_values[0] if allowed_values else None
-            )
-        else:
-            workstream = Prompt.ask("Enter workstream value")
-
-        if not workstream:
-            return None
-
-        # Offer to save to config
-        if save_to_config:
-            if Confirm.ask(f"\nSave '{workstream}' as default workstream in config?", default=True):
-                console.print(f"[green]✓[/green] You can set default workstream with: [cyan]daf config tui {workstream}[/cyan]")
-
-        return workstream

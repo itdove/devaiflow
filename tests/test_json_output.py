@@ -143,8 +143,10 @@ class TestJSONOutputStatus:
         output = json.loads(json_part)
         assert output["success"] is True
         assert output["data"]["summary"]["total_sessions"] == 1
-        assert "sprints" in output["data"]
-        assert "no_sprint_sessions" in output["data"]
+        assert "groups" in output["data"]
+        assert "ungrouped_sessions" in output["data"]
+        assert "grouping_field" in output["data"]
+        assert "totals_field" in output["data"]
 
 
 class TestJSONOutputValidation:

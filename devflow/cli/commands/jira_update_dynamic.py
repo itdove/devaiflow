@@ -49,8 +49,6 @@ def create_jira_update_command():
     @click.option("--priority", type=click.Choice(["Critical", "Major", "Normal", "Minor"]), help="Update priority")
     @click.option("--assignee", help="Update assignee (username or 'none' to clear)")
     @click.option("--summary", help="Update issue summary")
-    @click.option("--acceptance-criteria", help="Update acceptance criteria")
-    @click.option("--workstream", help="Update workstream")
     @click.option("--git-pull-request", help="Add PR/MR URL(s) to git-pull-request field (comma-separated, auto-appends to existing)")
     @click.option("--linked-issue", help="Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to'). Use with --issue")
     @click.option("--issue", help="Issue key to link to (e.g., PROJ-12345). Use with --linked-issue")
@@ -64,8 +62,6 @@ def create_jira_update_command():
         priority: Optional[str],
         assignee: Optional[str],
         summary: Optional[str],
-        acceptance_criteria: Optional[str],
-        workstream: Optional[str],
         git_pull_request: Optional[str],
         status: Optional[str],
         linked_issue: Optional[str],
@@ -86,12 +82,12 @@ def create_jira_update_command():
             daf jira update PROJ-12345 --description "New description text"
             daf jira update PROJ-12345 --description-file /path/to/description.txt
             daf jira update PROJ-12345 --priority Major --assignee jdoe
-            daf jira update PROJ-12345 --summary "New summary" --workstream Platform
+            daf jira update PROJ-12345 --summary "New summary" --field workstream=Platform
             daf jira update PROJ-12345 --status "In Progress"
             daf jira update PROJ-12345 --status "Review" --priority Major
             daf jira update PROJ-12345 --git-pull-request "https://github.com/org/repo/pull/123"
             daf jira update PROJ-12345 --field epic_link=PROJ-59000
-            daf jira update PROJ-12345 -f severity=Critical -f size=L
+            daf jira update PROJ-12345 -f severity=Critical -f size=L -f workstream=Platform
         """
         from devflow.cli.commands.jira_update_command import update_jira_issue
 
@@ -118,8 +114,6 @@ def create_jira_update_command():
             priority=priority,
             assignee=assignee,
             summary=summary,
-            acceptance_criteria=acceptance_criteria,
-            workstream=workstream,
             git_pull_request=git_pull_request,
             status=status,
             linked_issue=linked_issue,
@@ -131,7 +125,7 @@ def create_jira_update_command():
     # Add dynamic options for editable fields (excluding already hardcoded ones)
     hardcoded_fields = {
         "description", "summary", "priority", "assignee",
-        "acceptance_criteria", "workstream", "git_pull_request"
+        "git_pull_request"
     }
 
     for field_name, field_info in editable_fields.items():

@@ -98,8 +98,8 @@ class ConfigValidator:
                 file="organization.json",
                 field="jira_project",
                 issue_type="null_required",
-                message="jira_project is null (required for ticket creation)",
-                suggestion="Set jira_project in organization.json to your JIRA project key (e.g., 'PROJ')",
+                message="jira_project is null (required for creating issues and field discovery)",
+                suggestion="Set jira_project in organization.json to your JIRA project key (e.g., 'PROJ') - limited functionality without it",
                 severity="warning"
             ))
 
@@ -240,16 +240,6 @@ class ConfigValidator:
             try:
                 with open(team_file, "r") as f:
                     team_data = json.load(f)
-
-                # Check workstream for placeholders (optional field, but check if present)
-                if "jira_workstream" in team_data and team_data["jira_workstream"]:
-                    workstream_issues = self._check_placeholder_value(
-                        "team.json",
-                        "jira_workstream",
-                        team_data["jira_workstream"],
-                        "Set jira_workstream in team.json to your team's workstream value"
-                    )
-                    issues.extend(workstream_issues)
             except Exception as e:
                 issues.append(ValidationIssue(
                     file="team.json",

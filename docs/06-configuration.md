@@ -74,7 +74,7 @@ DevAIFlow is fully generic and works with any JIRA instance. You have two option
 
 **Option 2: Workspace Configuration (Team Collaboration - Recommended)**
 - Copy configuration templates to your workspace root
-- Customize for your team (JIRA URL, project, workstream)
+- Customize for your team (JIRA URL, project, custom field defaults)
 - Commit to git for team sharing
 - See [Multi-File Configuration System](#multi-file-configuration-system) section below
 - Template location: `docs/config-templates/`
@@ -334,25 +334,31 @@ When `prompt: false`, the tool will:
 }
 ```
 
-### jira.workstream
+### jira.custom_field_defaults
 
-**Type:** string
+**Type:** object (dictionary)
 **Required:** No
-**Default:** "Platform"
-**Description:** Default workstream value for issue creation
+**Default:** null
+**Description:** Default values for custom fields used during issue creation. Any custom field can be specified here (e.g., workstream, team, severity, size). Fields are auto-discovered from your JIRA instance.
 
 **Example:**
 ```json
 {
   "jira": {
-    "workstream": "Platform"
+    "custom_field_defaults": {
+      "workstream": "Platform",
+      "team": "Backend",
+      "severity": "Medium"
+    }
   }
 }
 ```
 
 **CLI Command:**
 ```bash
-daf config tui <workstream-name>
+daf config tui
+# Navigate to "JIRA Integration" tab
+# Set "Custom Field Defaults" field
 ```
 
 ### jira.affected_version
@@ -1888,9 +1894,8 @@ organization.json:
   - `jira_project` - JIRA project key for ticket creation (e.g. `PROJ`)
 
 **Optional fields** (can be null or left as defaults):
-- `jira_workstream` - Team workstream value
+- `jira_custom_field_defaults` - Default values for custom fields (e.g., `{"workstream": "Platform", "team": "Backend"}`)
 - `jira_affected_version` - Default affected version for bugs
-- `jira_acceptance_criteria_field` - Custom field mapping (auto-discovered if null)
 - All prompt configuration values
 - All time tracking settings
 
@@ -2076,13 +2081,13 @@ Configuration is split across 4 separate files based on purpose:
 
 **organization.json** - Organization Settings
 - JIRA project key
-- Field aliases (acceptance criteria, workstream, epic link)
+- Field aliases (acceptance criteria, epic link)
 - Sync filters (which tickets to sync)
 - Affected version defaults
 - Field requirements and enforcement
 
 **team.json** - Team-Specific Settings
-- Default workstream/component
+- Default custom field values (e.g., workstream, team, component)
 - Comment visibility restrictions
 - Time tracking preferences
 - Team-specific field overrides
@@ -2162,7 +2167,7 @@ When multiple config sources exist, they merge with this priority:
 
 **Example:**
 - Workspace sets `jira_project: "MYAPP"`
-- User sets `jira_workstream: "Backend"`
+- User sets `jira_custom_field_defaults: {"team": "Backend"}`
 - Both settings are active (merged)
 
 ### Viewing Configuration

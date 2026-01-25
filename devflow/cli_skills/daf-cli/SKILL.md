@@ -48,8 +48,8 @@ daf jira create story \
 # Create with issue links
 daf jira create bug --summary "Critical bug" --parent PROJ-1234 --linked-issue "blocks" --issue PROJ-5678
 
-# Use custom fields
-daf jira create bug --summary "..." --field severity=Critical --field size=L
+# Use custom fields (use field names from organization.json field_mappings)
+daf jira create bug --summary "..." --field field_name1=value1 --field field_name2=value2
 
 # JSON output for automation
 daf jira create story --summary "..." --parent PROJ-1234 --json
@@ -76,7 +76,7 @@ daf jira create story --summary "..." --parent PROJ-1234 --json
 ```bash
 # Update issue fields
 daf jira update PROJ-12345 --description "New description"
-daf jira update PROJ-12345 --priority Major --workstream Platform
+daf jira update PROJ-12345 --priority Major --field field_name=value
 daf jira update PROJ-12345 --status "In Progress"
 daf jira update PROJ-12345 --git-pull-request "https://github.com/..."
 
@@ -85,8 +85,8 @@ daf jira update PROJ-12345 --linked-issue "blocks" --issue PROJ-5678
 daf jira update PROJ-12345 --linked-issue "is blocked by" --issue PROJ-9999
 daf jira update PROJ-12345 --linked-issue "relates to" --issue PROJ-1111
 
-# Update custom fields
-daf jira update PROJ-12345 --field severity=Critical
+# Update custom fields (use field names from organization.json field_mappings)
+daf jira update PROJ-12345 --field field_name=value
 
 # JSON output
 daf jira update PROJ-12345 --status "In Progress" --json
@@ -159,7 +159,7 @@ daf list --json
 ```
 
 ```bash
-# Show current sprint status
+# Show status dashboard (with configured grouping/totals)
 daf status
 daf status --json
 ```
@@ -289,6 +289,100 @@ h3. End to End Test
 # Step 3: Verify cache hit on second call..."
 ```
 
+## Syncing JIRA Tickets
+
+The `daf sync` command creates daf sessions for JIRA tickets that match filter criteria configured in organization.json.
+
+```bash
+# Sync tickets based on configured filters
+daf sync
+
+# Filter by custom fields (uses field names from field_mappings)
+daf sync --field workstream="Platform"
+daf sync --field sprint="Sprint 2025-02"
+
+# Filter by ticket type
+daf sync --type story
+daf sync --type bug
+
+# Filter by epic
+daf sync --epic AAP-12345
+
+# JSON output
+daf sync --json
+```
+
+### Understanding Sync Filters
+
+Sync filters are configured in `organization.json` under `jira.filters.sync` section:
+
+```json
+{
+  "jira": {
+    "filters": {
+      "sync": {
+        "status": ["To Do", "In Progress"],
+        "required_fields": ["sprint", "workstream"],
+        "assignee": "currentUser()"
+      }
+    }
+  }
+}
+```
+
+**To see your current sync filter configuration:**
+```bash
+daf config show-sync-filters
+daf config show-sync-filters --json
+```
+
+**Filter settings:**
+- `status`: JIRA statuses to sync (e.g., "To Do", "In Progress")
+- `required_fields`: Fields that must be present on tickets (uses field names from field_mappings)
+- `assignee`: Filter by assignee
+  - `"currentUser()"` - Only your assigned tickets
+  - `"username"` - Specific user's tickets
+  - `null` - All tickets (no assignee filter)
+
+**How required_fields works:**
+- Tickets MUST have ALL specified fields set to be synced
+- Uses field names from `field_mappings` configuration
+- Example: If `required_fields: ["sprint", "workstream"]`, tickets without sprint OR workstream will be skipped
+- Use `daf config show-fields` to see available field names
+
+**Command-line filters:**
+- Command-line `--field` filters are ADDED to the configured filters
+- Example: `daf sync --field severity="Critical"` will sync only tickets that:
+  - Match configured status/assignee/required_fields filters
+  - AND have severity="Critical"
+
+## Understanding Custom Fields
+
+**IMPORTANT:** The `--field` parameter uses **field names** from your organization's `field_mappings` configuration, NOT customfield IDs.
+
+**How it works:**
+1. Your organization.json contains a `field_mappings` section that maps friendly names to JIRA customfield IDs
+2. Example mapping:
+   ```json
+   "field_mappings": {
+     "severity": {"id": "customfield_12345", "name": "Severity"},
+     "team": {"id": "customfield_67890", "name": "Team"}
+   }
+   ```
+3. You use the mapped name in commands: `--field severity=Critical` (NOT `--field customfield_12345=Critical`)
+
+**Why this matters:**
+- Customfield IDs are organization-specific and hard to remember
+- Field mappings provide consistent, readable names
+- If a field name is not in field_mappings, the command will fail
+
+**To see available field names:**
+- **RECOMMENDED:** Run `daf config show-fields` to list all available custom fields
+- Read DAF_AGENTS.md section "Discovering Custom Fields" (automatically loaded in sessions)
+- Check `~/.daf-sessions/organization.json` field_mappings section
+- Run `daf config refresh-jira-fields` to update field definitions from JIRA
+- Use `daf jira create <type> --help` to see discovered fields for that issue type
+
 ## Tips for Claude Code Sessions
 
 1. **ALWAYS use JIRA Wiki markup in issue descriptions** - NOT Markdown
@@ -297,7 +391,7 @@ h3. End to End Test
 4. **Use separate --acceptance-criteria field** - Don't put in description
 5. **Add notes regularly** - Track progress with `daf note`
 6. **Check session type** - Read-only constraints enforced for ticket_creation and investigation
-7. **Use custom fields with `--field`** - Works for any JIRA custom field
+7. **Use field names from field_mappings** - `--field` takes mapped names, not customfield IDs
 8. **Refer to DAF_AGENTS.md for templates** - Project-specific JIRA issue templates
 9. **Use `--json` for automation** - All commands support JSON output
 

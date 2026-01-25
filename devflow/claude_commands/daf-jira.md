@@ -21,8 +21,8 @@ daf jira view PROJ-12345 --history    # Include changelog
 - Ticket key and summary
 - Current status and priority
 - Assignee and reporter
-- Epic and sprint information
-- Story points (if set)
+- Parent/epic links (if applicable)
+- Custom fields (organization-specific)
 - Full description
 - Acceptance criteria
 - Pull request links
@@ -36,9 +36,9 @@ Status: In Progress
 Type: Story
 Priority: Major
 Assignee: John Doe
-Epic: PROJ-59038
-Sprint: Sprint 42
-Story Points: 5
+Parent: PROJ-59038
+Custom Field 1: Value A (custom field)
+Custom Field 2: Value B (custom field)
 
 Description:
 As a user, I want to backup my data so that I can restore it later.

@@ -119,17 +119,20 @@ def test_format_metadata(sample_session, mock_config_loader):
 
 
 def test_format_jira_section(sample_session, mock_config_loader):
-    """Test JIRA section formatting."""
+    """Test JIRA section formatting with generic custom fields."""
     exporter = MarkdownExporter(mock_config_loader)
     lines = exporter._format_jira_section(sample_session)
 
     assert "## Issue Tracker Ticket\n" in lines
     assert "- **Key:** [PROJ-12345](https://jira.example.com/browse/PROJ-12345)" in lines
+    # Standard fields (summary, type, status) are shown first
     assert "- **Summary:** Implement backup feature" in lines
     assert "- **Type:** Story" in lines
     assert "- **Status:** In Progress" in lines
+    # Custom fields are displayed generically (with title case formatting)
     assert "- **Sprint:** 2025-01" in lines
-    assert "- **Story Points:** 5" in lines
+    assert "- **Points:** 5" in lines  # Generic: "points" → "Points" (not "Story Points")
+    # Epic gets special link handling
     assert "- **Epic:** [PROJ-10000](https://jira.example.com/browse/PROJ-10000)" in lines
 
 

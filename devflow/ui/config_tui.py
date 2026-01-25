@@ -1072,35 +1072,6 @@ class ConfigTUI(App):
         # This ensures the field is properly rendered before we hide it
         self.set_timer(0.1, self._update_api_key_visibility)
 
-    def _create_workstream_widget(self) -> ComposeResult:
-        """Create appropriate widget for workstream based on field mappings.
-
-        Returns:
-            ConfigSelect if allowed_values available, otherwise ConfigInput.
-        """
-        if self.config.jira.field_mappings:
-            ws_info = self.config.jira.field_mappings.get("workstream")
-            if ws_info and ws_info.get("allowed_values"):
-                # Use dropdown with allowed values
-                choices = [(v, v) for v in ws_info["allowed_values"]]
-                yield ConfigSelect(
-                    "Workstream",
-                    "jira.workstream",
-                    choices=choices,
-                    value=self.config.jira.workstream,
-                    help_text="Default workstream for issue creation (validated against JIRA)",
-                    allow_blank=True,
-                )
-                return
-
-        # Fallback to text input
-        yield ConfigInput(
-            "Workstream",
-            "jira.workstream",
-            value=self.config.jira.workstream or "",
-            help_text="Default workstream for issue creation",
-        )
-
     def _compose_jira_tab(self) -> ComposeResult:
         """Compose JIRA configuration tab content."""
         with VerticalScroll():
@@ -1126,9 +1097,6 @@ class ConfigTUI(App):
                 help_text="JIRA project key (e.g., PROJ, TEAM)",
             )
 
-            # Use smart widget selection for workstream
-            yield from self._create_workstream_widget()
-
             yield ConfigInput(
                 "Affected Version",
                 "jira.affected_version",
@@ -1136,27 +1104,11 @@ class ConfigTUI(App):
                 help_text="Default affected version for bugs (leave empty if not applicable)",
             )
 
-            yield Static("[bold]Field Settings[/bold]", classes="subsection-title")
-
-            yield ConfigInput(
-                "Acceptance Criteria Field",
-                "jira.acceptance_criteria_field",
-                value=self.config.jira.acceptance_criteria_field or "",
-                help_text="Field name for acceptance criteria (default: acceptance_criteria)",
-            )
-
-            yield ConfigInput(
-                "Workstream Field",
-                "jira.workstream_field",
-                value=self.config.jira.workstream_field or "",
-                help_text="Field name for workstream (default: workstream)",
-            )
-
-            yield ConfigInput(
-                "Epic Link Field",
-                "jira.epic_link_field",
-                value=self.config.jira.epic_link_field or "",
-                help_text="Field name for epic link (default: epic_link)",
+            yield Static("[bold]Custom Field Defaults[/bold]", classes="subsection-title")
+            yield Static(
+                "[dim]Set default values for JIRA custom fields in team.json as {\"field_name\": \"value\"}[/dim]\n"
+                "[dim]Example: {\"workstream\": \"Platform\", \"team\": \"Backend\"}[/dim]",
+                classes="section-help",
             )
 
             yield Static("[bold]Comment Visibility[/bold]", classes="subsection-title")
@@ -1335,7 +1287,7 @@ class ConfigTUI(App):
                 "PR/MR Template URL",
                 "pr_template_url",
                 value=self.config.pr_template_url or "",
-                help_text="URL to PR/MR template (e.g., https://github.com/org/repo/blob/main/.github/PULL_REQUEST_TEMPLATE.md)",
+                help_text="Optional: URL to PR/MR template. Three options: (1) Provide URL - AI fills template, (2) Leave empty - AI generates automatically, (3) Add template guidance to AGENTS.md/ORGANIZATION.md/TEAM.md",
                 validator=URLValidator(),
             )
 
@@ -2044,28 +1996,8 @@ class ConfigTUI(App):
             project_val = self.query_one(key_to_id("input", "jira.project"), Input).value.strip()
             self.config.jira.project = project_val if project_val else None
 
-            # Workstream can be either Input or Select (depending on field mappings)
-            try:
-                # Try Select first (if field_mappings available)
-                workstream_widget = self.query_one(key_to_id("select", "jira.workstream"), Select)
-                workstream_val = workstream_widget.value if workstream_widget.value != Select.BLANK else None
-            except:
-                # Fallback to Input
-                workstream_val = self.query_one(key_to_id("input", "jira.workstream"), Input).value.strip()
-                workstream_val = workstream_val if workstream_val else None
-            self.config.jira.workstream = workstream_val
-
             affected_val = self.query_one(key_to_id("input", "jira.affected_version"), Input).value.strip()
             self.config.jira.affected_version = affected_val if affected_val else None
-
-            ac_field_val = self.query_one(key_to_id("input", "jira.acceptance_criteria_field"), Input).value.strip()
-            self.config.jira.acceptance_criteria_field = ac_field_val if ac_field_val else None
-
-            ws_field_val = self.query_one(key_to_id("input", "jira.workstream_field"), Input).value.strip()
-            self.config.jira.workstream_field = ws_field_val if ws_field_val else None
-
-            epic_field_val = self.query_one(key_to_id("input", "jira.epic_link_field"), Input).value.strip()
-            self.config.jira.epic_link_field = epic_field_val if epic_field_val else None
 
             self.config.jira.time_tracking = self.query_one(key_to_id("checkbox", "jira.time_tracking"), Checkbox).value
 
@@ -2216,33 +2148,6 @@ class ConfigTUI(App):
         if self.config != self.original_config:
             self.modified = True
 
-    def _validate_workstream(self) -> Optional[str]:
-        """Validate workstream against JIRA allowed values.
-
-        Returns:
-            Error message if invalid, None if valid.
-        """
-        if not self.config.jira.workstream:
-            return None  # Optional field
-
-        if not self.config.jira.field_mappings:
-            return None  # Can't validate without mappings
-
-        workstream_info = self.config.jira.field_mappings.get("workstream")
-        if not workstream_info:
-            return None  # Field not in mappings
-
-        allowed_values = workstream_info.get("allowed_values", [])
-        if not allowed_values:
-            return None  # No validation possible
-
-        if self.config.jira.workstream not in allowed_values:
-            return (
-                f"Workstream '{self.config.jira.workstream}' is not in allowed values. "
-                f"Valid options: {', '.join(allowed_values)}"
-            )
-
-        return None
 
     def _validate_all(self) -> List[str]:
         """Validate all input fields.
@@ -2273,11 +2178,6 @@ class ConfigTUI(App):
         # URL validation
         if not (self.config.jira.url.startswith("http://") or self.config.jira.url.startswith("https://")):
             errors.append("JIRA URL must start with http:// or https://")
-
-        # Workstream validation
-        workstream_error = self._validate_workstream()
-        if workstream_error:
-            errors.append(workstream_error)
 
         return errors
 

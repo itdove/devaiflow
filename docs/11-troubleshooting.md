@@ -574,7 +574,7 @@ Field 'acceptance_criteria' is required
 - Field cache timestamp
 
 **What is preserved:**
-- All user configuration (JIRA URL, workstream, workspace path, etc.)
+- All user configuration (JIRA URL, custom field defaults, workspace path, etc.)
 - All session data (sessions, notes, templates)
 
 ## Conversation Issues

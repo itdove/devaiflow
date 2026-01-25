@@ -189,24 +189,30 @@ def _create_mock_jira_ticket(
         project = "PROJ"  # Fallback for mock mode
     else:
         project = config.jira.project
-    workstream = config.jira.workstream if config.jira.workstream else None
+
+    # Get all custom field defaults generically
+    custom_fields = config.jira.custom_field_defaults if config.jira.custom_field_defaults else {}
 
     # Generate mock ticket summary and description
     summary = goal[:100]  # Limit to 100 chars for summary
     description = f"Mock ticket created for: {goal}"
 
     # Create mock issue tracker ticket with appropriate defaults
+    # Pass custom fields generically (mock will handle formatting)
     ticket_data = mock_jira.create_ticket(
         issue_type=issue_type.capitalize(),
         summary=summary,
         description=description,
         project=project,
         priority="Major",
-        workstream=[{"value": workstream}],
         parent=parent,
+        **custom_fields,  # Pass all custom fields generically
     )
 
     mock_ticket_key = ticket_data["key"]
+
+    # Build custom fields display string
+    custom_fields_str = "\n".join([f"{k.replace('_', ' ').title()}: {v}" for k, v in custom_fields.items()])
 
     # Simulate assistant message acknowledging ticket creation
     mock_claude.add_message(
@@ -217,7 +223,7 @@ def _create_mock_jira_ticket(
                 f"Type: {issue_type}\n"
                 f"Parent: {parent}\n"
                 f"Project: {project}\n"
-                f"Workstream: {workstream}"
+                f"{custom_fields_str}"
     )
 
     # Update session with Claude session ID
@@ -799,9 +805,9 @@ def _build_ticket_creation_prompt(
     Returns:
         Initial prompt string with analysis-only instructions
     """
-    # Get JIRA project and workstream from config
+    # Get JIRA project and custom field defaults from config
     project = config.jira.project if config.jira.project else "PROJ"
-    workstream = config.jira.workstream if config.jira.workstream else None
+    custom_fields = config.jira.custom_field_defaults if config.jira.custom_field_defaults else {}
 
     # Build the "Work on" line based on whether parent is provided
     if parent:
@@ -858,11 +864,15 @@ def _build_ticket_creation_prompt(
     parent_instruction = f"4. IMPORTANT: Link to parent using --parent {parent}" if parent else "4. (Optional) Link to a parent epic using --parent EPIC-KEY if desired"
 
     if parent:
-        example_command = f"Example command: daf jira create {issue_type} --summary \"...\" --parent {parent} --description \"<your analysis here>\" --acceptance-criteria \"...\""
-        parent_note = "Note: The --parent parameter automatically maps to the correct JIRA field (epic_link for story/task/bug)."
+        example_command = f"Example command: daf jira create {issue_type} --summary \"...\" --parent {parent} --description \"<your analysis here>\" --field acceptance_criteria=\"...\""
+        parent_note = "Note: The --parent parameter automatically maps to the appropriate JIRA parent field based on your configuration."
     else:
-        example_command = f"Example command: daf jira create {issue_type} --summary \"...\" --description \"<your analysis here>\" --acceptance-criteria \"...\""
-        parent_note = "Note: You can optionally link to a parent epic using --parent EPIC-KEY. The parameter automatically maps to the correct JIRA field (epic_link for story/task/bug)."
+        example_command = f"Example command: daf jira create {issue_type} --summary \"...\" --description \"<your analysis here>\" --field acceptance_criteria=\"...\""
+        parent_note = "Note: You can optionally link to a parent epic using --parent EPIC-KEY. The parameter automatically maps to the appropriate JIRA parent field based on your configuration."
+
+    # Build custom fields instruction string
+    custom_fields_parts = [f"{k}={v}" for k, v in custom_fields.items()]
+    custom_fields_str = ", ".join(custom_fields_parts) if custom_fields_parts else "no custom fields configured"
 
     prompt_parts.extend([
         "⚠️  IMPORTANT CONSTRAINTS:",
@@ -876,7 +886,7 @@ def _build_ticket_creation_prompt(
         "2. Read relevant files, search for patterns, understand the architecture",
         f"3. Create a detailed JIRA {issue_type} using the 'daf jira create' command",
         parent_instruction,
-        f"5. Use project: {project}, workstream: {workstream}",
+        f"5. Use project: {project}, custom fields: {custom_fields_str}",
         "6. Include detailed description and acceptance criteria based on your analysis",
         "",
     ])

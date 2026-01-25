@@ -49,10 +49,6 @@
           "title": "Url",
           "type": "string"
         },
-        "user": {
-          "title": "User",
-          "type": "string"
-        },
         "transitions": {
           "additionalProperties": {
             "$ref": "#/$defs/JiraTransitionConfig"
@@ -84,17 +80,17 @@
           "default": null,
           "title": "Project"
         },
-        "workstream": {
+        "custom_field_defaults": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "object"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Workstream"
+          "title": "Custom Field Defaults"
         },
         "affected_version": {
           "anyOf": [
@@ -108,47 +104,10 @@
           "default": null,
           "title": "Affected Version"
         },
-        "acceptance_criteria_field": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Acceptance Criteria Field"
-        },
-        "workstream_field": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Workstream Field"
-        },
-        "epic_link_field": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Epic Link Field"
-        },
         "field_mappings": {
           "anyOf": [
             {
               "additionalProperties": {
-                "additionalProperties": true,
                 "type": "object"
               },
               "type": "object"
@@ -218,13 +177,18 @@
               "type": "null"
             }
           ],
-          "default": null,
+          "default": {
+            "story": "epic_link",
+            "task": "epic_link",
+            "bug": "epic_link",
+            "spike": "epic_link",
+            "sub-task": "parent"
+          },
           "title": "Parent Field Mapping"
         }
       },
       "required": [
         "url",
-        "user",
         "transitions"
       ],
       "title": "JiraConfig",
@@ -517,9 +481,24 @@
     "RepoConfig": {
       "description": "Repository configuration.",
       "properties": {
-        "workspace": {
-          "title": "Workspace",
-          "type": "string"
+        "workspaces": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceDefinition"
+          },
+          "title": "Workspaces",
+          "type": "array"
+        },
+        "last_used_workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used Workspace"
         },
         "detection": {
           "$ref": "#/$defs/RepoDetectionConfig"
@@ -535,9 +514,6 @@
           "type": "object"
         }
       },
-      "required": [
-        "workspace"
-      ],
       "title": "RepoConfig",
       "type": "object"
     },
@@ -641,9 +617,30 @@
       },
       "title": "TimeTrackingConfig",
       "type": "object"
+    },
+    "WorkspaceDefinition": {
+      "description": "Definition for a named workspace directory.\n\nWorkspaces allow managing multiple repository locations for concurrent\nmulti-branch development or product/feature grouping (like VSCode workspaces).",
+      "properties": {
+        "name": {
+          "description": "Unique workspace name (e.g., 'primary', 'product-a', 'feat-caching')",
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "description": "Absolute or home-relative path to workspace directory",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "path"
+      ],
+      "title": "WorkspaceDefinition",
+      "type": "object"
     }
   },
-  "description": "Main configuration for DevAIFlow (merged view from all config files).\n\nThis is the unified configuration model used throughout the application.\nIn the new format, it combines data from:\n- config.json (user preferences)\n- backends/jira.json (backend settings)\n- organization.json (org settings)\n- team.json (team settings)\n\nFor backward compatibility, it can also load from the old single config.json format.",
+  "description": "Configuration schema for DevAIFlow (daf tool), auto-generated from Pydantic models",
   "properties": {
     "jira": {
       "$ref": "#/$defs/JiraConfig"
@@ -729,6 +726,8 @@
     "jira",
     "repos"
   ],
-  "title": "Config",
-  "type": "object"
+  "title": "DevAIFlow Configuration",
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/itdove/devaiflow/blob/main/config.schema.json"
 }

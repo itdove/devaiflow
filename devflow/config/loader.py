@@ -311,9 +311,7 @@ class ConfigLoader:
         default_config = Config(
             jira=JiraConfig(
                 url="https://jira.example.com",
-                user="your-username",
                 project=None,
-                workstream=None,
                 transitions={
                     "on_start": JiraTransitionConfig(
                         from_status=["New", "To Do"],
@@ -439,7 +437,6 @@ class ConfigLoader:
             # Return default backend config
             return JiraBackendConfig(
                 url="https://jira.example.com",
-                user="",
                 transitions={
                     "on_start": JiraTransitionConfig(
                         from_status=["New", "To Do"],
@@ -463,7 +460,6 @@ class ConfigLoader:
             console.print("[dim]  Using default backend configuration[/dim]")
             return JiraBackendConfig(
                 url="https://jira.example.com",
-                user="",
                 transitions={},
             )
 
@@ -559,7 +555,6 @@ class ConfigLoader:
         return JiraConfig(
             # From backend
             url=backend.url,
-            user=backend.user,
             transitions=backend.transitions,
             field_mappings=backend.field_mappings,
             field_cache_timestamp=backend.field_cache_timestamp,
@@ -569,13 +564,9 @@ class ConfigLoader:
             # From organization
             project=org.jira_project,
             affected_version=org.jira_affected_version,
-            acceptance_criteria_field=org.jira_acceptance_criteria_field,
-            epic_link_field=org.jira_epic_link_field,
             filters=org.sync_filters,  # Renamed from 'filters' to 'sync_filters'
-            # Use organization's workstream_field if available, fallback to team's
-            workstream_field=org.jira_workstream_field or team.jira_workstream_field,
             # From team
-            workstream=team.jira_workstream,
+            custom_field_defaults=team.jira_custom_field_defaults,
             time_tracking=team.time_tracking_enabled,
             comment_visibility_type=team.jira_comment_visibility_type,
             comment_visibility_value=team.jira_comment_visibility_value,
@@ -730,7 +721,6 @@ class ConfigLoader:
         # Extract backend config
         backend_config = JiraBackendConfig(
             url=config.jira.url,
-            user=config.jira.user,
             transitions=config.jira.transitions,
             field_mappings=config.jira.field_mappings,
             field_cache_timestamp=config.jira.field_cache_timestamp,
@@ -750,9 +740,6 @@ class ConfigLoader:
         org_config = OrganizationConfig(
             jira_project=config.jira.project,
             jira_affected_version=config.jira.affected_version,
-            jira_acceptance_criteria_field=config.jira.acceptance_criteria_field,
-            jira_workstream_field=config.jira.workstream_field,
-            jira_epic_link_field=config.jira.epic_link_field,
             sync_filters=config.jira.filters,  # Renamed from 'filters' to 'sync_filters'
         )
 
@@ -762,8 +749,7 @@ class ConfigLoader:
 
         # Extract team config
         team_config = TeamConfig(
-            jira_workstream=config.jira.workstream,
-            jira_workstream_field=config.jira.workstream_field,  # Kept for backward compat
+            jira_custom_field_defaults=config.jira.custom_field_defaults,
             time_tracking_enabled=config.jira.time_tracking,
             jira_comment_visibility_type=config.jira.comment_visibility_type,
             jira_comment_visibility_value=config.jira.comment_visibility_value,

@@ -133,7 +133,7 @@ class TestCreateJiraTicketSession:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
         return config_loader.load_config()
 
@@ -372,7 +372,7 @@ class TestJiraNewCommandInteractivePrompts:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -407,7 +407,7 @@ class TestJiraNewCommandInteractivePrompts:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -443,7 +443,7 @@ class TestJiraNewCommandInteractivePrompts:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -485,7 +485,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -526,7 +526,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -553,7 +553,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -580,7 +580,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -609,7 +609,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -648,7 +648,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "CUSTOM"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -685,7 +685,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -739,7 +739,7 @@ class TestJiraNewMockMode:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -793,7 +793,7 @@ class TestJiraNewPathFlag:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         # Create a temporary project directory
@@ -835,7 +835,7 @@ class TestJiraNewPathFlag:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -858,7 +858,7 @@ class TestJiraNewPathFlag:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         # Create a temporary project directory
@@ -900,7 +900,7 @@ class TestJiraNewPathFlag:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -932,7 +932,7 @@ class TestJiraNewPathFlag:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         # Create a project directory
@@ -976,7 +976,7 @@ class TestJiraNewPathFlag:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         # Create a project directory (git repo to test temp clone skip)
@@ -1050,7 +1050,7 @@ class TestJiraNewWithGoalFromFile:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         # Create a requirements file
@@ -1091,7 +1091,7 @@ class TestJiraNewWithGoalFromFile:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         # Mock requests.get to simulate fetching from URL
@@ -1135,7 +1135,7 @@ class TestJiraNewWithGoalFromFile:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         runner = CliRunner()
@@ -1162,7 +1162,7 @@ class TestExceptionHandlingInCleanup:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         session_manager = SessionManager(config_loader=config_loader)
@@ -1209,7 +1209,7 @@ class TestExceptionHandlingInCleanup:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         # Ensure we're NOT in mock mode (so we go through subprocess.run path)
@@ -1242,7 +1242,7 @@ class TestExceptionHandlingInCleanup:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         session_manager = SessionManager(config_loader=config_loader)
@@ -1287,7 +1287,7 @@ class TestExceptionHandlingInCleanup:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         session_manager = SessionManager(config_loader=config_loader)
@@ -1334,7 +1334,7 @@ class TestExceptionHandlingInCleanup:
         config_loader = ConfigLoader()
         config = config_loader.create_default_config()
         config.jira.project = "PROJ"
-        config.jira.workstream = "Platform"
+        config.jira.custom_field_defaults = {"workstream": "Platform"}
         config_loader.save_config(config)
 
         session_manager = SessionManager(config_loader=config_loader)

@@ -202,7 +202,7 @@ class SessionManager:
         self,
         status: Optional[str] = None,
         working_directory: Optional[str] = None,
-        sprint: Optional[str] = None,
+        issue_metadata_filters: Optional[Dict[str, str]] = None,
         issue_status: Optional[str] = None,
         since: Optional[datetime] = None,
         before: Optional[datetime] = None,
@@ -212,7 +212,7 @@ class SessionManager:
         Args:
             status: Filter by session status (comma-separated for multiple)
             working_directory: Filter by working directory
-            sprint: Filter by sprint
+            issue_metadata_filters: Filter by custom fields (e.g., {"sprint": "Sprint 1", "severity": "Critical"})
             issue_status: Filter by issue tracker status (comma-separated for multiple)
             since: Filter by sessions active since this datetime
             before: Filter by sessions active before this datetime
@@ -223,7 +223,7 @@ class SessionManager:
         filters = SessionFilters(
             status=status,
             working_directory=working_directory,
-            sprint=sprint,
+            issue_metadata_filters=issue_metadata_filters or {},
             issue_status=issue_status,
             since=since,
             before=before,

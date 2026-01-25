@@ -1871,9 +1871,9 @@ daf jira create <TYPE> [OPTIONS]
 - `--description` - Issue description text
 - `--description-file <PATH>` - File containing description
 - `--priority` - Priority (Critical, Major, Normal, Minor) [default: Major for bug/story, Normal for task]
-- `--workstream` - Workstream (prompts to save if not in config)
 - `--parent` - Parent issue key to link to (epic for story/task/bug, parent for sub-task)
 - `--affected-version` - Affected version (bugs only) [default: myproject-ga]
+- `--field` / `-f` - Set custom field value (format: field_name=value, can be used multiple times)
 - `--create-session` - Create daf session immediately after creation
 - `--interactive` - Interactive template mode (prompts for summary + description)
 
@@ -1898,8 +1898,8 @@ daf jira create bug --summary "Customer backup fails" --priority Major
 # Interactive mode (prompts for both summary and description)
 daf jira create bug --interactive
 
-# Specify workstream (prompts to save if different from config)
-daf jira create bug --summary "Login error" --workstream "Hosted Services"
+# Specify custom fields
+daf jira create bug --summary "Login error" --field workstream="Hosted Services" --field severity=High
 
 # Load description from file
 daf jira create story --summary "New feature" --description-file story_desc.txt
@@ -2001,11 +2001,12 @@ h3. *Supporting documentation*
 <Provide any related communication on this issue>
 ```
 
-**Workstream Handling:**
+**Custom Field Handling:**
 
-1. If workstream in config → uses config value
-2. If `--workstream` flag differs from config → prompts to update config
-3. If no workstream configured → prompts user, saves to config
+Custom field values can be provided via:
+1. Config defaults (`jira.custom_field_defaults`) - used if not specified in command
+2. `--field` options - override config defaults for specific fields
+3. Multiple `--field` options can be used for different custom fields
 
 **Field Discovery:**
 
@@ -2020,7 +2021,7 @@ On first use, automatically discovers and caches JIRA custom field mappings in `
 - No need to navigate web interface
 - Uses JIRA templates from AGENTS.md
 - Automatic field discovery and caching
-- Configurable workstream with prompts
+- Configurable custom field defaults
 - Optional immediate session creation
 - Fully interactive mode (no flags required)
 
@@ -2041,7 +2042,6 @@ daf jira update <ISSUE-KEY> [OPTIONS]
 - `--assignee` - Update assignee (username or "none" to clear)
 - `--summary` - Update issue summary
 - `--acceptance-criteria` - Update acceptance criteria
-- `--workstream` - Update workstream
 - `--status` - Transition ticket to a new status (e.g., 'In Progress', 'Review', 'Closed')
 - `--git-pull-request` - Add PR/MR URL(s) (comma-separated, auto-appends to existing)
 - `--field` / `-f` - Update any custom field (format: field_name=value)
@@ -2060,9 +2060,6 @@ daf jira update PROJ-12345 --priority Major --assignee jdoe
 
 # Update summary
 daf jira update PROJ-12345 --summary "New summary text"
-
-# Update workstream
-daf jira update PROJ-12345 --workstream Platform
 
 # Update acceptance criteria
 daf jira update PROJ-12345 --acceptance-criteria "- New criterion 1\n- New criterion 2"
@@ -3913,14 +3910,14 @@ When config doesn't exist, `daf init` (without flags):
 1. Creates `~/.daf-sessions/config.json` with default settings
 2. Detects JIRA API token from environment
 3. Discovers and caches JIRA custom field mappings (if token available)
-4. Prompts to configure project and workstream
+4. Prompts to configure project and custom field defaults
 
 **Refresh mode (`--refresh`):**
 
 When config exists, use `daf init --refresh` to update automatically discovered data:
 - Refreshes JIRA custom field mappings from JIRA API
 - Updates `field_cache_timestamp` in config.json
-- **Preserves all user-provided configuration** (URL, workstream, workspace, etc.)
+- **Preserves all user-provided configuration** (URL, custom field defaults, workspace, etc.)
 - **Does NOT prompt** for any configuration values
 - **Does NOT modify** user data (sessions, templates, backups)
 
@@ -3947,7 +3944,6 @@ Current values shown as defaults. Press Enter to keep, or type new value.
 JIRA URL [https://jira.example.com]: https://jira.example.com
 JIRA Project Key [PROJ]: MYPROJ
 JIRA Username [your-username]: myuser
-Which workstream do you work on? [Platform]: Platform
 
 === Repository Workspace ===
 
@@ -3971,14 +3967,13 @@ Changes:
   • JIRA URL: https://jira.example.com → https://jira.example.com
   • JIRA Project: PROJ → MYPROJ
   • JIRA User: your-username → myuser
-  • Workstream: Platform → Platform
   • Workspace: ~/development/myproject → ~/dev/projects
 ```
 
 **When to use each mode:**
 - `daf init` - First-time setup or switching JIRA instances
 - `daf init --refresh` - When JIRA custom fields change (updates mappings only)
-- `daf init --reset` - When you need to update multiple configuration values (URL, workstream, workspace, etc.)
+- `daf init --reset` - When you need to update multiple configuration values (URL, custom field defaults, workspace, etc.)
 
 **Field Discovery:**
 
@@ -4315,7 +4310,7 @@ daf config edit
 - Keyboard shortcuts (Ctrl+S to save)
 
 **Configuration Tabs:**
-- **JIRA** - JIRA server URL, project, workstream, field mappings, transitions
+- **JIRA** - JIRA server URL, project, custom field defaults, field mappings, transitions
 - **Repository** - Workspace directory, repository detection settings, keywords
 - **Prompts** - Automatic answers for `daf new`, `daf open`, `daf complete` prompts
 - **Context Files** - Additional context files for initial prompts (read-only, use CLI to manage)
@@ -4486,7 +4481,7 @@ daf config tui
 
 Features:
 - Tab navigation between configuration sections
-- Input validation (workstream allowed values, path existence, etc.)
+- Input validation (path existence, JSON format, etc.)
 - Real-time error feedback
 - Save/cancel workflow
 - Shows repo count after workspace changes
@@ -4509,12 +4504,8 @@ vi ~/.daf-sessions/config.json
 | Configuration Setting | TUI Location | JSON Path | Notes |
 |-----------------------|--------------|-----------|-------|
 | JIRA Project | JIRA Integration → Project Key | `.jira.project` | Normalized to uppercase |
-| JIRA Workstream | JIRA Integration → Workstream | `.jira.workstream` | Validated against allowed_values |
 | Workspace Directory | Repository → Workspace | `.repos.workspace` | Shows repo count in TUI |
 | Affected Version | JIRA Integration → Affected Version | `.jira.affected_version` | - |
-| Acceptance Criteria Field | JIRA Integration → Acceptance Criteria Field | `.jira.acceptance_criteria_field` | - |
-| Workstream Field | JIRA Integration → Workstream Field | `.jira.workstream_field` | - |
-| Epic Link Field | JIRA Integration → Epic Link Field | `.jira.epic_link_field` | - |
 | Comment Visibility | JIRA Integration → Comment Visibility | `.jira.comment_visibility_type`, `.jira.comment_visibility_value` | - |
 | Transition On Start | JIRA Transitions → On Start | `.jira.transitions.on_start` | JiraTransitionConfig object |
 | Transition On Complete | JIRA Transitions → On Complete | `.jira.transitions.on_complete` | JiraTransitionConfig object |
@@ -4538,25 +4529,7 @@ jq '.jira.project = "PROJ"' ~/.daf-sessions/config.json > /tmp/cfg.json
 mv /tmp/cfg.json ~/.daf-sessions/config.json
 ```
 
-#### Example 2: Setting Workstream with Validation
-
-**Using TUI:**
-```bash
-daf config tui
-# Navigate to "JIRA Integration" tab
-# Use dropdown for "Workstream" field (validates against allowed_values)
-# Select "Platform"
-# Press Save
-```
-
-**Direct editing:**
-```bash
-# Note: No validation when editing directly - ensure value is in allowed_values
-jq '.jira.workstream = "Platform"' ~/.daf-sessions/config.json > /tmp/cfg.json
-mv /tmp/cfg.json ~/.daf-sessions/config.json
-```
-
-#### Example 3: Setting Workspace Directory
+#### Example 2: Setting Workspace Directory
 
 **Using TUI:**
 ```bash
@@ -4618,11 +4591,11 @@ cat > ~/.daf-sessions/config.json << 'JSON'
 {
   "jira": {
     "url": "https://jira.example.com",
-    "project": "PROJ",
-    "workstream": "Platform"
+    "project": "PROJ"
   },
   "repos": {
-    "workspace": "/tmp"
+    "workspaces": [{"name": "default", "path": "/tmp"}],
+    "last_used_workspace": "default"
   }
 }
 JSON
@@ -4630,7 +4603,7 @@ JSON
 
 **Approach 2: jq for selective updates**
 ```bash
-jq '.jira.project = "PROJ" | .jira.workstream = "Platform" | .repos.workspaces = [{"name": "default", "path": "/tmp"}] | .repos.last_used_workspace = "default"' \
+jq '.jira.project = "PROJ" | .repos.workspaces = [{"name": "default", "path": "/tmp"}] | .repos.last_used_workspace = "default"' \
   ~/.daf-sessions/config.json > /tmp/cfg.json && mv /tmp/cfg.json ~/.daf-sessions/config.json
 ```
 

@@ -181,57 +181,121 @@ def _ensure_field_mappings(config, config_loader) -> JiraFieldMapper:
         return JiraFieldMapper(jira_client, {})
 
 
-def _get_workstream(config, config_loader, field_mapper, flag_value: Optional[str]) -> Optional[str]:
-    """Get workstream value from flag, config, or prompt.
+def _get_required_custom_fields(
+    config,
+    config_loader,
+    field_mapper,
+    issue_type: str,
+    flag_values: Optional[dict] = None
+) -> dict:
+    """Get all required custom field values for the given issue type.
 
-    Logic:
-    1. If --workstream flag provided, use it (prompt to save if different from config)
-    2. Else if workstream in config, use it
+    This function loops through all custom fields in field_mappings and collects
+    values for fields that are required for the specified issue type. It uses
+    field_mappings['field_name']['required_for'] to determine which fields are needed.
+
+    Logic for each required field:
+    1. If flag value provided, use it (prompt to save if different from config)
+    2. Else if value in custom_field_defaults, use it
     3. Else prompt user (using field_mapper for allowed values)
 
     Args:
         config: Config object
         config_loader: ConfigLoader instance
         field_mapper: JiraFieldMapper instance
-        flag_value: Value from --workstream flag (or None)
+        issue_type: JIRA issue type (e.g., "Bug", "Story", "Task")
+        flag_values: Optional dict of field values from command flags (e.g., {"workstream": "Platform"})
 
     Returns:
-        Workstream value to use, or None if cancelled
+        Dictionary of {field_name: value} for all required custom fields
     """
-    # Case 1: Flag provided
-    if flag_value:
-        # Check if different from config
-        if config.jira.workstream and config.jira.workstream != flag_value:
-            console_print(f"[dim]ℹ Current workstream in config: \"{config.jira.workstream}\"[/dim]")
-            console_print(f"[dim]ℹ Command uses workstream: \"{flag_value}\"[/dim]")
+    from rich.prompt import Prompt, Confirm
+
+    flag_values = flag_values or {}
+    custom_fields = {}
+
+    # Get custom field defaults from config
+    config_defaults = config.jira.custom_field_defaults or {}
+
+    # Get all field mappings
+    if not field_mapper.field_mappings:
+        return custom_fields
+
+    # Handle case where field_mappings might be a Mock or not a dict
+    try:
+        field_mappings_dict = dict(field_mapper.field_mappings)
+    except (AttributeError, TypeError, ValueError):
+        # field_mappings is not a dict (e.g., Mock object in tests)
+        return custom_fields
+
+    # Loop through all fields in field_mappings
+    for field_name, field_info in field_mappings_dict.items():
+        # Check if this field is required for the issue type
+        required_for = field_info.get("required_for", [])
+        if issue_type not in required_for:
+            continue
+
+        # This field is required - get its value
+        flag_value = flag_values.get(field_name)
+        config_value = config_defaults.get(field_name)
+
+        # Case 1: Flag provided
+        if flag_value:
+            # Check if different from config
+            if config_value and config_value != flag_value:
+                console_print(f"[dim]ℹ Current {field_name} in config: \"{config_value}\"[/dim]")
+                console_print(f"[dim]ℹ Command uses {field_name}: \"{flag_value}\"[/dim]")
+                console_print()
+
+                if not is_json_mode() and Confirm.ask(f"Update config to use \"{flag_value}\" as default for {field_name}?", default=False):
+                    if not config.jira.custom_field_defaults:
+                        config.jira.custom_field_defaults = {}
+                    config.jira.custom_field_defaults[field_name] = flag_value
+                    config_loader.save_config(config)
+                    console_print(f"[green]✓[/green] Updated config with {field_name} \"{flag_value}\"\n")
+
+            custom_fields[field_name] = flag_value
+            continue
+
+        # Case 2: Value in config defaults
+        if config_value:
+            console_print(f"[dim]Using {field_name} from config: \"{config_value}\"[/dim]")
+            custom_fields[field_name] = config_value
+            continue
+
+        # Case 3: Prompt user
+        allowed_values = field_info.get("allowed_values", [])
+
+        if allowed_values:
+            console_print(f"\n[bold]Available {field_name} values:[/bold]")
+            for val in allowed_values:
+                console_print(f"  - {val}")
             console_print()
 
-            if not is_json_mode() and Confirm.ask(f"Update config.json to use \"{flag_value}\" as default?", default=False):
-                config.jira.workstream = flag_value
-                config_loader.save_config(config)
-                console_print(f"[green]✓[/green] Updated config.json with workstream \"{flag_value}\"\n")
+            field_value = Prompt.ask(
+                f"Select {field_name}",
+                choices=allowed_values,
+                default=allowed_values[0] if allowed_values else None
+            )
+        else:
+            field_value = Prompt.ask(f"Enter {field_name} value")
 
-        return flag_value
+        if field_value:
+            # Save to config
+            if not config.jira.custom_field_defaults:
+                config.jira.custom_field_defaults = {}
+            config.jira.custom_field_defaults[field_name] = field_value
+            config_loader.save_config(config)
+            console_print(f"\n[green]ℹ[/green] {field_name.title()} set to \"{field_value}\" and saved to config")
+            console_print(f"[dim]You can change it later with: daf config tui[/dim]\n")
 
-    # Case 2: Workstream in config
-    if config.jira.workstream:
-        console_print(f"[dim]Using workstream from config: \"{config.jira.workstream}\"[/dim]")
-        return config.jira.workstream
+            custom_fields[field_name] = field_value
+        else:
+            # Field is required but user didn't provide - will fail later
+            console_print(f"[red]✗[/red] {field_name.title()} is required for {issue_type} creation")
+            return None
 
-    # Case 3: Prompt user
-    workstream = field_mapper.get_workstream_with_prompt(
-        config_workstream=None,
-        save_to_config=False  # We'll handle saving ourselves
-    )
-
-    if workstream:
-        # Save to config
-        config.jira.workstream = workstream
-        config_loader.save_config(config)
-        console_print(f"\n[green]ℹ[/green] Workstream set to \"{workstream}\" and saved to config.json")
-        console_print(f"[dim]You can change it later with: daf config tui <WORKSTREAM>[/dim]\n")
-
-    return workstream
+    return custom_fields
 
 
 def _get_project(config, config_loader, flag_value: Optional[str]) -> Optional[str]:
@@ -396,7 +460,6 @@ def create_issue(
     summary: Optional[str],
     priority: str,
     project: Optional[str],
-    workstream: Optional[str],
     parent: Optional[str],
     affected_version: str,
     description: Optional[str],
@@ -415,7 +478,6 @@ def create_issue(
         summary: Issue summary (or None to prompt)
         priority: Issue priority
         project: Project key from --project flag (or None)
-        workstream: Workstream from --workstream flag (or None)
         parent: Parent issue key to link to (epic for story/task/bug, parent for sub-task)
         affected_version: Affected version (bugs only)
         description: Description from --description flag (or None)
@@ -424,7 +486,7 @@ def create_issue(
         create_session: Create daf session after creation
         linked_issue: Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to')
         issue: Issue key to link to (e.g., PROJ-12345)
-        custom_fields: Additional custom fields from --field options
+        custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform", "team": "Backend"})
     """
     # Map issue type to template and client method
     ISSUE_TYPE_CONFIG = {
@@ -433,30 +495,35 @@ def create_issue(
             "label": "Epic",
             "client_method": "create_epic",
             "uses_affected_version": False,
+            "jira_issue_type": "Epic",
         },
         "spike": {
             "template": SPIKE_TEMPLATE,
             "label": "Spike",
             "client_method": "create_spike",
             "uses_affected_version": False,
+            "jira_issue_type": "Spike",
         },
         "story": {
             "template": STORY_TEMPLATE,
             "label": "Story",
             "client_method": "create_story",
             "uses_affected_version": False,
+            "jira_issue_type": "Story",
         },
         "task": {
             "template": TASK_TEMPLATE,
             "label": "Task",
             "client_method": "create_task",
             "uses_affected_version": False,
+            "jira_issue_type": "Task",
         },
         "bug": {
             "template": BUG_TEMPLATE,
             "label": "Bug",
             "client_method": "create_bug",
             "uses_affected_version": True,
+            "jira_issue_type": "Bug",
         },
     }
 
@@ -483,10 +550,13 @@ def create_issue(
         # Ensure field mappings
         field_mapper = _ensure_field_mappings(config, config_loader)
 
-        # Get workstream
-        resolved_workstream = _get_workstream(config, config_loader, field_mapper, workstream)
-        if not resolved_workstream:
-            console.print(f"[red]✗[/red] Workstream is required for {issue_type} creation")
+        # Get all required custom fields for this issue type
+        # Use custom_fields from --field options as flag values
+        required_custom_fields = _get_required_custom_fields(
+            config, config_loader, field_mapper, type_config["jira_issue_type"], custom_fields or {}
+        )
+        if required_custom_fields is None:
+            # User cancelled or required field missing
             sys.exit(1)
 
         # Get affected version (for bugs only)
@@ -536,9 +606,9 @@ def create_issue(
             "description": issue_description,
             "priority": priority,
             "project_key": resolved_project,
-            "workstream": resolved_workstream,
             "field_mapper": field_mapper,
             "parent": parent,
+            "required_custom_fields": required_custom_fields,  # Pass all required custom fields
         }
 
         # Add affected_version only for bugs
@@ -782,9 +852,12 @@ def create_issue(
                 "summary": summary,
                 "url": f"{config.jira.url}/browse/{issue_key}",
                 "project": resolved_project,
-                "workstream": resolved_workstream,
                 "priority": priority,
             }
+
+            # Add all custom fields to output
+            if required_custom_fields:
+                output_data["custom_fields"] = required_custom_fields
 
             if parent:
                 output_data["parent"] = parent
@@ -843,26 +916,26 @@ def create_issue(
 def create_bug(
     summary: Optional[str],
     priority: str,
-    workstream: Optional[str],
     parent: Optional[str],
     affected_version: str,
     description: Optional[str],
     description_file: Optional[str],
     interactive: bool,
     create_session: bool,
+    custom_fields: Optional[dict] = None,
 ) -> None:
     """Create a JIRA bug issue.
 
     Args:
         summary: Bug summary (or None to prompt)
         priority: Bug priority
-        workstream: Workstream from --workstream flag (or None)
         parent: Parent issue key to link to (epic for bugs)
         affected_version: Affected version
         description: Description from --description flag (or None)
         description_file: Path to description file (or None)
         interactive: Use interactive template mode
         create_session: Create daf session after creation
+        custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform"})
     """
     try:
         # Load config
@@ -882,10 +955,12 @@ def create_bug(
         # Ensure field mappings
         field_mapper = _ensure_field_mappings(config, config_loader)
 
-        # Get workstream
-        resolved_workstream = _get_workstream(config, config_loader, field_mapper, workstream)
-        if not resolved_workstream:
-            console.print("[red]✗[/red] Workstream is required for bug creation")
+        # Get all required custom fields for Bug issue type
+        required_custom_fields = _get_required_custom_fields(
+            config, config_loader, field_mapper, "Bug", custom_fields or {}
+        )
+        if required_custom_fields is None:
+            # User cancelled or required field missing
             sys.exit(1)
 
         # Prompt for summary if not provided
@@ -907,10 +982,10 @@ def create_bug(
                 description=bug_description,
                 priority=priority,
                 project_key=resolved_project,
-                workstream=resolved_workstream,
                 field_mapper=field_mapper,
                 parent=parent,
                 affected_version=affected_version,
+                required_custom_fields=required_custom_fields,  # Pass all required custom fields
             )
 
             console.print(f"\n[green]✓[/green] Created bug: [bold]{issue_key}[/bold]")
@@ -981,24 +1056,24 @@ def create_bug(
 def create_story(
     summary: Optional[str],
     priority: str,
-    workstream: Optional[str],
     parent: Optional[str],
     description: Optional[str],
     description_file: Optional[str],
     interactive: bool,
     create_session: bool,
+    custom_fields: Optional[dict] = None,
 ) -> None:
     """Create a JIRA story issue.
 
     Args:
         summary: Story summary (or None to prompt)
         priority: Story priority
-        workstream: Workstream from --workstream flag (or None)
         parent: Parent issue key to link to (epic for stories)
         description: Description from --description flag (or None)
         description_file: Path to description file (or None)
         interactive: Use interactive template mode
         create_session: Create daf session after creation
+        custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform"})
     """
     try:
         # Load config
@@ -1018,10 +1093,12 @@ def create_story(
         # Ensure field mappings
         field_mapper = _ensure_field_mappings(config, config_loader)
 
-        # Get workstream
-        resolved_workstream = _get_workstream(config, config_loader, field_mapper, workstream)
-        if not resolved_workstream:
-            console.print("[red]✗[/red] Workstream is required for story creation")
+        # Get all required custom fields for Story issue type
+        required_custom_fields = _get_required_custom_fields(
+            config, config_loader, field_mapper, "Story", custom_fields or {}
+        )
+        if required_custom_fields is None:
+            # User cancelled or required field missing
             sys.exit(1)
 
         # Prompt for summary if not provided
@@ -1043,9 +1120,9 @@ def create_story(
                 description=story_description,
                 priority=priority,
                 project_key=resolved_project,
-                workstream=resolved_workstream,
                 field_mapper=field_mapper,
                 parent=parent,
+                required_custom_fields=required_custom_fields,  # Pass all required custom fields
             )
 
             console.print(f"\n[green]✓[/green] Created story: [bold]{issue_key}[/bold]")
@@ -1113,24 +1190,24 @@ def create_story(
 def create_task(
     summary: Optional[str],
     priority: str,
-    workstream: Optional[str],
     parent: Optional[str],
     description: Optional[str],
     description_file: Optional[str],
     interactive: bool,
     create_session: bool,
+    custom_fields: Optional[dict] = None,
 ) -> None:
     """Create a JIRA task issue.
 
     Args:
         summary: Task summary (or None to prompt)
         priority: Task priority
-        workstream: Workstream from --workstream flag (or None)
         parent: Parent issue key to link to (epic for tasks)
         description: Description from --description flag (or None)
         description_file: Path to description file (or None)
         interactive: Use interactive template mode
         create_session: Create daf session after creation
+        custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform"})
     """
     try:
         # Load config
@@ -1150,10 +1227,12 @@ def create_task(
         # Ensure field mappings
         field_mapper = _ensure_field_mappings(config, config_loader)
 
-        # Get workstream
-        resolved_workstream = _get_workstream(config, config_loader, field_mapper, workstream)
-        if not resolved_workstream:
-            console.print("[red]✗[/red] Workstream is required for task creation")
+        # Get all required custom fields for Task issue type
+        required_custom_fields = _get_required_custom_fields(
+            config, config_loader, field_mapper, "Task", custom_fields or {}
+        )
+        if required_custom_fields is None:
+            # User cancelled or required field missing
             sys.exit(1)
 
         # Prompt for summary if not provided
@@ -1175,9 +1254,9 @@ def create_task(
                 description=task_description,
                 priority=priority,
                 project_key=resolved_project,
-                workstream=resolved_workstream,
                 field_mapper=field_mapper,
                 parent=parent,
+                required_custom_fields=required_custom_fields,  # Pass all required custom fields
             )
 
             console.print(f"\n[green]✓[/green] Created task: [bold]{issue_key}[/bold]")
