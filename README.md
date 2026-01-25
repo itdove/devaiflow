@@ -7,7 +7,7 @@
 
 A CLI tool to manage AI coding assistant sessions with optional issue tracker integration.
 
-![Alt DevAIFlow](images/daf-logo-160x160.png)
+![Alt DevAIFlow](https://raw.githubusercontent.com/itdove/devaiflow/main/images/daf-logo-160x160.png)
 
 **AI Assistants:** Claude Code (fully tested) | GitHub Copilot, Cursor, Windsurf (experimental)
 **Issue Trackers:** JIRA (currently supported) | Others (planned)
