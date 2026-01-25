@@ -8,8 +8,41 @@ from devflow.jira.field_mapper import JiraFieldMapper
 
 
 @pytest.fixture
-def mock_jira_client(monkeypatch):
-    """Create a JiraClient with mocked API requests."""
+def mock_jira_client(monkeypatch, tmp_path):
+    """Create a JiraClient with mocked API requests and isolated config."""
+    # Create isolated test environment
+    test_home = tmp_path / "test_home"
+    test_home.mkdir()
+    daf_home = test_home / ".devaiflow"
+    daf_home.mkdir()
+
+    # Create test config with parent_field_mapping
+    config_file = daf_home / "config.json"
+    config_file.write_text('''{
+        "jira": {
+            "url": "https://jira.example.com",
+            "user": "test-user",
+            "project": "PROJ",
+            "transitions": {},
+            "parent_field_mapping": {
+                "bug": "epic_link",
+                "story": "epic_link",
+                "task": "epic_link",
+                "spike": "epic_link",
+                "epic": "epic_link",
+                "sub-task": "parent"
+            }
+        },
+        "repos": {
+            "workspaces": [{"name": "primary", "path": "/tmp"}],
+            "last_used_workspace": "primary",
+            "detection": {"method": "keyword_match", "fallback": "prompt"},
+            "keywords": {}
+        }
+    }''')
+
+    # Set environment to use test directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(daf_home))
     monkeypatch.setenv("JIRA_API_TOKEN", "mock-token")
     monkeypatch.setenv("JIRA_URL", "https://jira.example.com")
 

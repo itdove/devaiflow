@@ -41,7 +41,15 @@ def create_test_config():
             "project": "PROJ",  # Set project to avoid warnings in mock mode
             "transitions": {},
             "time_tracking": True,
-            "filters": {}
+            "filters": {},
+            "parent_field_mapping": {
+                "bug": "epic_link",
+                "story": "epic_link",
+                "task": "epic_link",
+                "spike": "epic_link",
+                "epic": "epic_link",
+                "sub-task": "parent"
+            }
         },
         "repos": {
             "workspaces": [
