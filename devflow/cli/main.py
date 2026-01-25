@@ -2075,38 +2075,55 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
             console.print("  Run [cyan]daf init[/cyan] (without --refresh) to create initial configuration.")
             return
 
-        # Create default config
-        config = config_loader.create_default_config()
-        console.print("[green]✓[/green] Created default configuration")
-        console.print(f"Location: {config_loader.config_file}")
+        # Ask if user wants JIRA integration
+        console.print("\n[bold]=== Initial Setup ===[/bold]\n")
+        enable_jira = Confirm.ask("Do you want to integrate with JIRA?", default=True)
+
+        if enable_jira:
+            # Run interactive wizard to collect JIRA URL and other settings
+            from devflow.config.init_wizard import run_init_wizard
+            console.print("\nCollecting configuration values...")
+            console.print()
+            config = run_init_wizard(current_config=None)
+            config_loader.save_config(config)
+            console.print(f"\n[green]✓[/green] Configuration saved")
+            console.print(f"Location: {config_loader.config_file}")
+
+            # Validate JIRA URL before attempting field discovery
+            if not _validate_jira_url(config.jira.url):
+                console.print(f"[yellow]⚠[/yellow] JIRA URL appears to be invalid or unreachable: {config.jira.url}")
+                console.print("  You can update it later with: [cyan]daf init --reset[/cyan]")
+                console.print("  Then run field discovery with: [cyan]daf config refresh-jira-fields[/cyan]")
+            elif not skip_jira_discovery:
+                # Check if JIRA_API_TOKEN is set
+                if not os.getenv("JIRA_API_TOKEN"):
+                    console.print("\n[yellow]⚠[/yellow] JIRA_API_TOKEN not set. Skipping field discovery.")
+                    console.print("  Set JIRA_API_TOKEN and run: [cyan]daf config refresh-jira-fields[/cyan]")
+                else:
+                    # Ask if user wants to discover fields now
+                    console.print("\n[bold]JIRA Field Discovery[/bold]")
+                    if Confirm.ask("Discover JIRA custom fields now?", default=True):
+                        _discover_and_cache_jira_fields(config, config_loader)
+        else:
+            # Create default config without JIRA prompts
+            config = config_loader.create_default_config()
+            config_loader.save_config(config)
+            console.print(f"\n[green]✓[/green] Created default configuration")
+            console.print(f"Location: {config_loader.config_file}")
+            console.print("\n[dim]JIRA integration skipped. You can configure it later with:[/dim]")
+            console.print("  [cyan]daf init --reset[/cyan]")
 
         # Prompt for PR/MR template URL
         console.print("\n[bold]PR/MR Template Configuration[/bold]")
         console.print("Configure a URL to fetch your PR/MR template from (e.g., GitHub raw URL).")
 
-        if Confirm.ask("Configure PR/MR template URL?", default=True):
+        if Confirm.ask("Configure PR/MR template URL?", default=False):
             console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
             template_url = Prompt.ask("Enter PR/MR template URL (leave empty to skip)", default="")
             if template_url and template_url.strip():
                 config.pr_template_url = template_url.strip()
-
-            # Save updated config with template URL
-            if config.pr_template_url:
                 config_loader.save_config(config)
                 console.print(f"[green]✓[/green] Configured PR template URL: {config.pr_template_url}")
-
-        # Optionally discover JIRA fields
-        if not skip_jira_discovery:
-            console.print("\n[bold]JIRA Field Discovery[/bold]")
-
-            # Check if JIRA_API_TOKEN is set
-            if not os.getenv("JIRA_API_TOKEN"):
-                console.print("[yellow]⚠[/yellow] JIRA_API_TOKEN not set. Skipping field discovery.")
-                console.print("  Set JIRA_API_TOKEN and run: daf init --refresh")
-            else:
-                # Ask if user wants to discover fields now
-                if Confirm.ask("Discover JIRA custom fields now?", default=True):
-                    _discover_and_cache_jira_fields(config, config_loader)
 
         # Optionally configure workstream
         console.print("\n[bold]JIRA Workstream Configuration[/bold]")
@@ -2174,6 +2191,33 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
     console.print()
     console.print("[green]✓[/green] Configuration refreshed")
     console.print(f"Location: {config_loader.config_file}")
+
+
+def _validate_jira_url(url: str) -> bool:
+    """Validate JIRA URL by checking if it's reachable.
+
+    Args:
+        url: JIRA URL to validate
+
+    Returns:
+        True if URL appears valid and reachable, False otherwise
+    """
+    # Check for example/placeholder URLs
+    if "example.com" in url.lower() or not url.startswith(("http://", "https://")):
+        return False
+
+    # Try to make a simple request to verify the URL is reachable
+    import requests
+    try:
+        # Use a simple HEAD request with short timeout
+        response = requests.head(url, timeout=5, allow_redirects=True)
+        # Accept any response that doesn't indicate a connection error
+        # (we don't check auth here, just reachability)
+        return True
+    except (requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            requests.exceptions.RequestException):
+        return False
 
 
 def _discover_and_cache_jira_fields(config, config_loader) -> None:

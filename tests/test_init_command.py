@@ -17,7 +17,9 @@ def test_init_first_time_no_jira_token(temp_daf_home, monkeypatch):
     runner = CliRunner()
 
     # Mock prompts to skip interactive parts
-    with patch("rich.prompt.Confirm.ask", return_value=False):
+    # First call: Enable JIRA integration (answer No to skip wizard)
+    # Second call: PR template (answer No to skip)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
         result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Should succeed and create config
@@ -260,25 +262,114 @@ def test_init_first_time_with_jira_discovery(temp_daf_home, mock_jira_cli, monke
 
     runner = CliRunner()
 
-    # Mock all prompts to say "yes" to discovery but "no" to other interactive parts
+    # Mock all prompts and wizard inputs
     with patch("rich.prompt.Confirm.ask") as mock_confirm, \
-         patch("devflow.jira.field_mapper.JiraFieldMapper.discover_fields", return_value=mock_field_mappings):
-        # First call: PR template config
-        # Second call: Discover JIRA fields
-        # Third call: Configure workstream
-        mock_confirm.side_effect = [False, True, False]  # No to PR template, Yes to field discovery, No to workstream
+         patch("rich.prompt.Prompt.ask") as mock_prompt, \
+         patch("devflow.jira.field_mapper.JiraFieldMapper.discover_fields", return_value=mock_field_mappings), \
+         patch("devflow.cli.main._validate_jira_url", return_value=True):
+        # Confirm prompts:
+        # 1. Enable JIRA integration: Yes
+        # 2. Update keywords (in wizard): No
+        # 3. Discover JIRA fields: Yes
+        # 4. PR template config: No
+        # 5. Configure workstream: No
+        mock_confirm.side_effect = [True, False, True, False, False]
+
+        # Wizard prompts for JIRA config:
+        # 1. JIRA URL
+        # 2. JIRA Project
+        # 3. JIRA User
+        # 4. Workstream
+        # 5. Workspace path
+        mock_prompt.side_effect = [
+            "https://test-jira.example.com",
+            "TEST",
+            "test-user",
+            "TestWorkstream",
+            str(Path.home() / "development")
+        ]
 
         result = runner.invoke(cli, ["init"])
 
     # Should succeed
     assert result.exit_code == 0
-    assert "Created default configuration" in result.output
+    assert "Configuration saved" in result.output
 
     # Verify field mappings were cached
     loader = ConfigLoader()
     config = loader.load_config()
     assert config.jira.field_mappings is not None
     assert "workstream" in config.jira.field_mappings
+    assert config.jira.url == "https://test-jira.example.com"
+    assert config.jira.project == "TEST"
+
+
+def test_init_first_time_with_invalid_jira_url(temp_daf_home, monkeypatch):
+    """Test first-time init with invalid JIRA URL (example.com) prevents field discovery."""
+    # Set JIRA_API_TOKEN
+    monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+    runner = CliRunner()
+
+    # Mock prompts and wizard inputs with example URL
+    with patch("rich.prompt.Confirm.ask") as mock_confirm, \
+         patch("rich.prompt.Prompt.ask") as mock_prompt, \
+         patch("devflow.jira.field_mapper.JiraFieldMapper.discover_fields") as mock_discover, \
+         patch("devflow.cli.main._validate_jira_url", return_value=False):
+        # Confirm prompts:
+        # 1. Enable JIRA integration: Yes
+        # 2. Update keywords (in wizard): No
+        mock_confirm.side_effect = [True, False, False, False]
+
+        # Wizard prompts - user provides example.com URL (should be detected as invalid)
+        mock_prompt.side_effect = [
+            "https://jira.example.com",  # Invalid example URL
+            "PROJ",
+            "test-user",
+            "TestWorkstream",
+            str(Path.home() / "development")
+        ]
+
+        result = runner.invoke(cli, ["init"])
+
+    # Should succeed but warn about invalid URL
+    assert result.exit_code == 0
+    assert "Configuration saved" in result.output
+    assert "JIRA URL appears to be invalid or unreachable" in result.output
+
+    # Verify field discovery was NOT called (due to invalid URL)
+    mock_discover.assert_not_called()
+
+    # Verify config was created with user's URL (even though invalid)
+    loader = ConfigLoader()
+    config = loader.load_config()
+    assert config.jira.url == "https://jira.example.com"
+
+
+def test_init_first_time_without_jira_integration(temp_daf_home):
+    """Test first-time init when user chooses not to integrate with JIRA."""
+    runner = CliRunner()
+
+    # Mock prompts - user says No to JIRA integration
+    with patch("rich.prompt.Confirm.ask") as mock_confirm:
+        # 1. Enable JIRA integration: No
+        # 2. PR template config: No
+        mock_confirm.side_effect = [False, False]
+
+        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Should succeed
+    assert result.exit_code == 0
+    assert "Created default configuration" in result.output
+    assert "JIRA integration skipped" in result.output
+
+    # Verify config was created with defaults
+    loader = ConfigLoader()
+    config = loader.load_config()
+    assert config is not None
+    assert config.jira is not None
+    # Should have default example URL
+    assert config.jira.url == "https://jira.example.com"
 
 
 def test_init_reset_no_config_exists(temp_daf_home):
