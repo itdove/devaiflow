@@ -22,8 +22,11 @@ from devflow.session.manager import SessionManager
 def test_sync_creates_new_session_with_updated_timestamp(temp_daf_home, mock_jira_cli):
     """Test that sync stores issue_updated timestamp for new sessions."""
     # Initialize config
+    from unittest.mock import patch
     runner = CliRunner()
-    runner.invoke(cli, ["init"])
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Set up mock issue tracker ticket with updated timestamp
     mock_jira_cli.set_ticket("PROJ-12345", {
@@ -57,8 +60,11 @@ def test_sync_creates_new_session_with_updated_timestamp(temp_daf_home, mock_jir
 def test_sync_updates_existing_session_when_ticket_changed(temp_daf_home, mock_jira_cli):
     """Test that sync updates session when ticket timestamp changed."""
     # Initialize config
+    from unittest.mock import patch
     runner = CliRunner()
-    runner.invoke(cli, ["init"])
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -110,8 +116,11 @@ def test_sync_updates_existing_session_when_ticket_changed(temp_daf_home, mock_j
 def test_sync_skips_existing_session_when_ticket_unchanged(temp_daf_home, mock_jira_cli):
     """Test that sync skips session when ticket timestamp unchanged."""
     # Initialize config
+    from unittest.mock import patch
     runner = CliRunner()
-    runner.invoke(cli, ["init"])
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -161,8 +170,11 @@ def test_sync_skips_existing_session_when_ticket_unchanged(temp_daf_home, mock_j
 def test_sync_updates_existing_session_without_jira_updated(temp_daf_home, mock_jira_cli):
     """Test that sync updates session that has no jira_updated field (migration case)."""
     # Initialize config
+    from unittest.mock import patch
     runner = CliRunner()
-    runner.invoke(cli, ["init"])
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -213,8 +225,11 @@ def test_sync_updates_existing_session_without_jira_updated(temp_daf_home, mock_
 def test_sync_handles_missing_updated_field_gracefully(temp_daf_home, mock_jira_cli):
     """Test that sync handles case where JIRA doesn't return updated field."""
     # Initialize config
+    from unittest.mock import patch
     runner = CliRunner()
-    runner.invoke(cli, ["init"])
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Set up mock issue tracker ticket WITHOUT updated timestamp
     mock_jira_cli.set_ticket("PROJ-12345", {
@@ -248,8 +263,11 @@ def test_sync_handles_missing_updated_field_gracefully(temp_daf_home, mock_jira_
 def test_sync_multiple_sessions_mixed_updates(temp_daf_home, mock_jira_cli):
     """Test sync with multiple sessions where some need updates and some don't."""
     # Initialize config
+    from unittest.mock import patch
     runner = CliRunner()
-    runner.invoke(cli, ["init"])
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -344,8 +362,11 @@ def test_sync_multiple_sessions_mixed_updates(temp_daf_home, mock_jira_cli):
 def test_sync_ignores_ticket_creation_sessions_and_creates_development_session(temp_daf_home, mock_jira_cli):
     """Test that daf sync ignores ticket_creation sessions and creates new development sessions."""
     # Initialize config
+    from unittest.mock import patch
     runner = CliRunner()
-    runner.invoke(cli, ["init"])
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
