@@ -22,7 +22,7 @@ daf config set agent_backend github-copilot
 daf config set agent_backend cursor
 daf config set agent_backend windsurf
 
-# Or manually edit ~/.daf-sessions/config.json
+# Or manually edit $DEVAIFLOW_HOME/config.json
 {
   "agent_backend": "claude"  // or "github-copilot", "cursor", "windsurf"
 }

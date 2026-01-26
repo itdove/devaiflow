@@ -284,7 +284,7 @@ A Python CLI/TUI tool to manage AI coding assistant sessions with issue tracker 
 ### Data Flow
 1. User runs `daf open PROJ-12345`
 2. CLI parses command → calls session manager
-3. Session manager checks `~/.daf-sessions/sessions.json`
+3. Session manager checks `$DEVAIFLOW_HOME/sessions.json`
 4. If exists: load session metadata, resume AI assistant
 5. If not: fetch issue, create session, launch AI assistant
 6. Issue tracker integration handles status transitions
@@ -302,8 +302,8 @@ If you need details on the Design, you can be follow this link [Design](./design
 - **Packaging**: pip (standard Python package installation)
 
 ### Session Storage
-- `~/.daf-sessions/sessions.json` - Main index (JIRA key → Claude UUID mapping)
-- `~/.daf-sessions/sessions/{JIRA-KEY}/` - Per-session data
+- `$DEVAIFLOW_HOME/sessions.json` - Main index (JIRA key → Claude UUID mapping)
+- `$DEVAIFLOW_HOME/sessions/{JIRA-KEY}/` - Per-session data
   - `metadata.json` - Session details
   - `notes.md` - Progress notes
   - `memory.md` - Optional context hints
@@ -1219,8 +1219,8 @@ class Session(BaseModel):
   - Comprehensive test coverage (9 new tests in test_portable_paths.py)
   - All existing tests pass (926 tests total)
 - ✓ Diagnostic logs included in session export/import for better debugging
-  - Export includes all diagnostic logs from ~/.daf-sessions/logs/
-  - Import restores logs to namespaced location ~/.daf-sessions/logs/imported/{timestamp}/
+  - Export includes all diagnostic logs from $DEVAIFLOW_HOME/logs/
+  - Import restores logs to namespaced location $DEVAIFLOW_HOME/logs/imported/{timestamp}/
   - Logs namespaced by timestamp to avoid conflicts with current logs
   - Preserves diagnostic history for debugging issues across team handoffs
   - Shared implementation in ArchiveManagerBase for both export/import and backup/restore

@@ -1890,11 +1890,11 @@ class JiraClient(IssueTrackerClient):
             Modifies the payload dict in-place by adding required fields if needed.
         """
         # Get all field mappings
-        if not hasattr(field_mapper, '_cache') or not field_mapper._cache:
+        if not field_mapper.field_mappings:
             return
 
         # Iterate through all fields in field_mappings
-        for field_name, field_info in field_mapper._cache.items():
+        for field_name, field_info in field_mapper.field_mappings.items():
             # Check if this field is required for the given issue type
             required_for = field_info.get("required_for", [])
             if issue_type not in required_for:
@@ -1903,6 +1903,11 @@ class JiraClient(IssueTrackerClient):
             # Get field ID
             field_id = field_info.get("id")
             if not field_id:
+                continue
+
+            # Fields that should never be set during CREATE (auto-set by JIRA)
+            CREATE_READONLY_FIELDS = {"reporter", "created", "updated", "creator", "assignee"}
+            if field_id in CREATE_READONLY_FIELDS:
                 continue
 
             # Skip if field is already set in payload

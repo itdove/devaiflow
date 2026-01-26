@@ -49,7 +49,7 @@ Total: 3 notes
 
 **Important notes:**
 - This is a READ-ONLY command - safe to run inside Claude Code
-- Notes are stored in ~/.daf-sessions/sessions/<name>/notes.md
+- Notes are stored in $DEVAIFLOW_HOME/sessions/<name>/notes.md
 - Notes persist across sessions and exports
 - Included in session summaries
 

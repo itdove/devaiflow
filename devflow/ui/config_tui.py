@@ -867,6 +867,22 @@ class AddEditWorkspaceScreen(ModalScreen):
                 self.app.notify(f"Invalid path: {e}", severity="error")
                 return
 
+            # Validate workspace contains git repositories (warning only)
+            from devflow.git.utils import GitUtils
+            if not GitUtils.is_git_repository(expanded_path):
+                # Check if workspace contains any git repositories
+                has_git_repos = False
+                try:
+                    for item in expanded_path.iterdir():
+                        if item.is_dir() and (item / ".git").exists():
+                            has_git_repos = True
+                            break
+                except PermissionError:
+                    pass  # Can't check, skip validation
+
+                if not has_git_repos:
+                    self.app.notify(f"⚠ Warning: Workspace does not appear to contain git repositories", severity="warning", timeout=5)
+
             # Return the new/updated workspace
             workspace = WorkspaceDefinition(name=name, path=path)
             self.dismiss((workspace, self.index))
@@ -1104,10 +1120,78 @@ class ConfigTUI(App):
                 help_text="Default affected version for bugs (leave empty if not applicable)",
             )
 
+            # Get components from system_field_defaults if it exists
+            components_value = None
+            if self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
+                components_list = self.config.jira.system_field_defaults["components"]
+                # For dropdown, just use the first component if multiple are set
+                if isinstance(components_list, list) and components_list:
+                    components_value = components_list[0]
+                elif isinstance(components_list, str):
+                    components_value = components_list
+
+            # Get available components from field mappings
+            component_choices = []
+            if self.config.jira.field_mappings:
+                component_field = self.config.jira.field_mappings.get("component/s") or self.config.jira.field_mappings.get("components")
+                if component_field and "allowed_values" in component_field:
+                    # Extract component names from allowed_values
+                    # allowed_values can be simple strings, dicts, or JSON-serialized strings
+                    import json
+                    for comp in component_field["allowed_values"]:
+                        try:
+                            # If it's a simple string (direct value)
+                            if isinstance(comp, str):
+                                # Try to parse as JSON first (for dict-like strings)
+                                try:
+                                    comp_dict = json.loads(comp.replace("'", '"'))
+                                    if isinstance(comp_dict, dict) and "name" in comp_dict:
+                                        component_choices.append((comp_dict["name"], comp_dict["name"]))
+                                    else:
+                                        # Not a dict, use string directly
+                                        component_choices.append((comp, comp))
+                                except (json.JSONDecodeError, ValueError):
+                                    # Not JSON, use string directly
+                                    component_choices.append((comp, comp))
+                            # If it's already a dict
+                            elif isinstance(comp, dict) and "name" in comp:
+                                component_choices.append((comp["name"], comp["name"]))
+                        except:
+                            # If parsing fails, skip this component
+                            pass
+
+            # If we have component choices, use a dropdown; otherwise use text input
+            if component_choices:
+                yield ConfigSelect(
+                    "Component",
+                    "jira.components",
+                    choices=component_choices,
+                    value=components_value,
+                    help_text="Select default JIRA component for new issues",
+                    allow_blank=True,
+                )
+            else:
+                # Fallback to text input if no choices available
+                components_value_str = ""
+                if self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
+                    components_list = self.config.jira.system_field_defaults["components"]
+                    if isinstance(components_list, list):
+                        components_value_str = ",".join(components_list)
+                    else:
+                        components_value_str = str(components_list)
+
+                yield ConfigInput(
+                    "Components",
+                    "jira.components",
+                    value=components_value_str,
+                    help_text="Comma-separated list of JIRA components (e.g., ansible-saas,backend)",
+                )
+
             yield Static("[bold]Custom Field Defaults[/bold]", classes="subsection-title")
             yield Static(
-                "[dim]Set default values for JIRA custom fields in team.json as {\"field_name\": \"value\"}[/dim]\n"
-                "[dim]Example: {\"workstream\": \"Platform\", \"team\": \"Backend\"}[/dim]",
+                "[dim]Set default values for JIRA custom fields in team.json directly[/dim]\n"
+                "[dim]Example: {\"workstream\": \"Platform\"}[/dim]\n"
+                "[dim]Custom fields are organization-specific and should be configured per team[/dim]",
                 classes="section-help",
             )
 
@@ -1998,6 +2082,37 @@ class ConfigTUI(App):
 
             affected_val = self.query_one(key_to_id("input", "jira.affected_version"), Input).value.strip()
             self.config.jira.affected_version = affected_val if affected_val else None
+
+            # Components - try dropdown first, fallback to text input
+            try:
+                # Try to get from dropdown (ConfigSelect)
+                components_val = self.query_one(key_to_id("select", "jira.components"), Select).value
+                if components_val and components_val != Select.BLANK:
+                    # Single component from dropdown - store as list
+                    if not self.config.jira.system_field_defaults:
+                        self.config.jira.system_field_defaults = {}
+                    self.config.jira.system_field_defaults["components"] = [components_val]
+                elif self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
+                    # Clear components if blank selected
+                    del self.config.jira.system_field_defaults["components"]
+            except:
+                # Fallback to text input (ConfigInput) if dropdown not found
+                try:
+                    components_val = self.query_one(key_to_id("input", "jira.components"), Input).value.strip()
+                    if components_val:
+                        components_list = [c.strip() for c in components_val.split(",") if c.strip()]
+                        if not self.config.jira.system_field_defaults:
+                            self.config.jira.system_field_defaults = {}
+                        self.config.jira.system_field_defaults["components"] = components_list
+                    elif self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
+                        # Clear components if empty
+                        del self.config.jira.system_field_defaults["components"]
+                except:
+                    # Neither widget found - skip
+                    pass
+
+            # Note: Workstream and other custom fields are configured directly in team.json
+            # They are not part of the TUI to keep it focused on common system fields
 
             self.config.jira.time_tracking = self.query_one(key_to_id("checkbox", "jira.time_tracking"), Checkbox).value
 

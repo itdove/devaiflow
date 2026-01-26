@@ -78,7 +78,7 @@ def _show_no_config_error() -> None:
 
   [cyan]1. User Configuration[/cyan] (Personal setup)
      Run: [yellow]daf init[/yellow]
-     Creates configuration in: ~/.daf-sessions/
+     Creates configuration in: $DEVAIFLOW_HOME (defaults to ~/.daf-sessions)
 
   [cyan]2. Workspace Configuration[/cyan] (Recommended for teams)
      Create config files in your workspace root:
@@ -1019,7 +1019,7 @@ def cleanup_conversation_cmd(ctx: click.Context, identifier: str, older_than: st
         daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147  # Restore from backup
 
     \b
-    A backup is automatically created before cleanup (stored in $DEVAIFLOW_HOME/backups/ or ~/.daf-sessions/backups/).
+    A backup is automatically created before cleanup (stored in $DEVAIFLOW_HOME/backups/).
     Old backups are automatically cleaned up (keeping last 5 by default).
     You'll need to restart Claude Code to see the effect (conversation is cached).
     """
@@ -2011,7 +2011,7 @@ def config_generate_schema(ctx: click.Context, output: str) -> None:
             console.print("[dim]For VSCode, add this to .vscode/settings.json:[/dim]")
             console.print()
             console.print('[dim]  "json.schemas": [{[/dim]')
-            console.print(f'[dim]    "fileMatch": ["~/.daf-sessions/config.json"],[/dim]')
+            console.print(f'[dim]    "fileMatch": ["$DEVAIFLOW_HOME/config.json"],[/dim]')
             console.print(f'[dim]    "url": "{schema_path}"[/dim]')
             console.print('[dim]  }][/dim]')
 
@@ -2352,6 +2352,12 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
         console.print("  - Repository workspace path")
         console.print("  - Keyword mappings for smart repo detection")
         console.print("  - Custom field defaults (if needed) via [cyan]daf config tui[/cyan]")
+
+        console.print("\n[bold cyan]Next Step: Install Claude Code Commands[/bold cyan]")
+        console.print("To use DevAIFlow commands in Claude Code sessions:")
+        console.print("  [cyan]daf upgrade[/cyan]")
+        console.print()
+        console.print("[dim]This installs /daf-* slash commands into Claude Code[/dim]")
         return
 
     # Config exists

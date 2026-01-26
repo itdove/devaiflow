@@ -97,11 +97,14 @@ Each session is an **isolated workspace** with its own:
 pip install .
 
 # Export environment variables for issue tracker (JIRA example)
-export JIRA_URL=  # Currently supports JIRA only"https://jira.example.com"
+export JIRA_URL="https://jira.example.com"  # Currently supports JIRA only
 export JIRA_API_TOKEN=<YOUR_JIRA_PAT>
 
-# Initialization
-daf init
+# Initialize configuration (interactive wizard)
+daf init  # Configures JIRA URL, comment visibility, workspace path, etc.
+
+# Install Claude Code commands and skills
+daf upgrade  # Installs /daf-* slash commands into Claude Code
 
 # Sync JIRA tickets
 daf sync
@@ -252,7 +255,7 @@ See the [Installation Guide](docs/02-installation.md) for detailed setup instruc
 
 4. **User Configuration** (For personal use):
    - Run `daf init` to configure your JIRA instance
-   - Settings stored in `~/.daf-sessions/` directory
+   - Settings stored in `$DEVAIFLOW_HOME/` directory
    - Personal preferences only, no team sharing
 
 5. **Copy DAF_AGENTS.md**: Copy the `DAF_AGENTS.md` file to your project roots for automatic daf tool guidance in AI assistant sessions
@@ -320,7 +323,7 @@ daf list              # Shows mock sessions only
 daf new my-test       # Creates mock session
 daf purge-mock-data   # Clear all mock data
 
-# Mock data is stored separately in ~/.daf-sessions/mocks/
+# Mock data is stored separately in $DEVAIFLOW_HOME/mocks/
 ```
 
 Mock services include:

@@ -109,7 +109,7 @@ git rebase -i HEAD~3
 - Remember to run integration tests outside Claude Code
 - Update both docs/ and dodevflow/ when documenting
 - Use daf-cli skill for command reference
-- Always test with both ~/.daf-sessions and ~/.daf-sessions
+- Always test with both $DEVAIFLOW_HOME and $DEVAIFLOW_HOME
 
 ## Customization
 

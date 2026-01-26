@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from devflow.archive.base import ArchiveManagerBase
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
+from devflow.utils.paths import get_cs_home
 
 
 class BackupManager(ArchiveManagerBase):
@@ -42,7 +43,8 @@ class BackupManager(ArchiveManagerBase):
         """
         if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = Path.home() / f"daf-sessions-backup-{timestamp}.tar.gz"
+            output_path = get_cs_home() / f"backups/devaiflow-backup-{timestamp}.tar.gz"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
 
         backup_data = self._collect_backup_data()
 
@@ -94,7 +96,7 @@ class BackupManager(ArchiveManagerBase):
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
 
         # Extract to temporary directory
-        temp_dir = Path.home() / ".daf-sessions-restore-temp"
+        temp_dir = get_cs_home() / ".restore-temp"
         temp_dir.mkdir(exist_ok=True)
 
         try:

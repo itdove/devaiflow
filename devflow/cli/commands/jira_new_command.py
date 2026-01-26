@@ -947,18 +947,22 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
 
     console_print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
 
-    # List all directories in workspace
+    # List all git repositories in workspace
     repo_options = []
     try:
+        from devflow.git.utils import GitUtils
         directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
-        repo_options = sorted([d.name for d in directories])
+        # Filter to only include git repositories
+        git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
+        repo_options = sorted(git_repos)
     except Exception as e:
         console_print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
         return str(Path.cwd())
 
     if not repo_options:
-        console_print(f"[yellow]No repositories found in workspace[/yellow]")
+        console_print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+        console_print(f"[dim]Make sure your workspace contains git repositories.[/dim]")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
         return str(Path.cwd())
 

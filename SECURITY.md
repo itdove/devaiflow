@@ -99,12 +99,12 @@ Before sharing session exports with teammates:
 ### 5. File Permissions
 
 DevAIFlow stores session data in:
-- `~/.daf-sessions/` - Session metadata and configuration
+- `$DEVAIFLOW_HOME/` - Session metadata and configuration
 - `~/.claude/projects/` - Claude Code conversation files
 
 Ensure these directories have appropriate permissions:
 ```bash
-chmod 700 ~/.daf-sessions
+chmod 700 $DEVAIFLOW_HOME
 chmod 700 ~/.claude
 ```
 
@@ -112,7 +112,7 @@ chmod 700 ~/.claude
 
 ### 1. Local Data Storage
 
-- Session data (including JIRA keys, conversation history) is stored unencrypted in `~/.daf-sessions/`
+- Session data (including JIRA keys, conversation history) is stored unencrypted in `$DEVAIFLOW_HOME/`
 - Conversation files are stored in `~/.claude/projects/`
 - **Mitigation**: Use full-disk encryption and appropriate file permissions
 

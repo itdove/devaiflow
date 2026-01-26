@@ -23,7 +23,7 @@ daf config generate-schema
 ```json
 {
   "json.schemas": [{
-    "fileMatch": ["~/.daf-sessions/config.json"],
+    "fileMatch": ["$DEVAIFLOW_HOME/config.json"],
     "url": "/path/to/devaiflow/config.schema.json"
   }]
 }
@@ -58,7 +58,7 @@ daf config set-jira-url <url>    # Set specific values
 
 ## Configuration File
 
-Location: `~/.daf-sessions/config.json`
+Location: `$DEVAIFLOW_HOME/config.json`
 
 Create with: `daf init` or `daf config edit`
 
@@ -67,10 +67,10 @@ Create with: `daf init` or `daf config edit`
 DevAIFlow is fully generic and works with any JIRA instance. You have two options for configuration:
 
 **Option 1: User Configuration (Quick Start)**
-- Edit `~/.daf-sessions/*.json` files directly with your settings
+- Edit `$DEVAIFLOW_HOME/*.json` files directly with your settings
 - Use `daf init` for interactive setup wizard
 - Use `daf config tui` for the interactive TUI editor
-- Settings stored locally in `~/.daf-sessions/` directory
+- Settings stored locally in `$DEVAIFLOW_HOME/` directory
 
 **Option 2: Workspace Configuration (Team Collaboration - Recommended)**
 - Copy configuration templates to your workspace root
@@ -1118,12 +1118,12 @@ When you create or open a session, context files are loaded in this order:
 
 All hierarchical context files are stored in your DEVAIFLOW_HOME directory:
 
-- **Default**: `~/.daf-sessions/` (or `~/.daf-sessions/` for backward compatibility)
+- **Default**: `$DEVAIFLOW_HOME/` (or `$DEVAIFLOW_HOME/` for backward compatibility)
 - **Custom**: Set via `DEVAIFLOW_HOME` environment variable
 
 **Directory Structure:**
 ```
-~/.daf-sessions/
+$DEVAIFLOW_HOME/
 ├── backends/
 │   └── JIRA.md              # Backend-specific context
 ├── ORGANIZATION.md          # Organization-level context
@@ -1144,8 +1144,8 @@ Backend-specific integration rules for JIRA.
 
 **Example:**
 ```bash
-mkdir -p ~/.daf-sessions/backends
-cp docs/context-templates/JIRA.md ~/.daf-sessions/backends/JIRA.md
+mkdir -p $DEVAIFLOW_HOME/backends
+cp docs/context-templates/JIRA.md $DEVAIFLOW_HOME/backends/JIRA.md
 # Edit to customize for your JIRA instance
 ```
 
@@ -1166,7 +1166,7 @@ Organization-wide coding standards and architecture principles.
 
 **Example:**
 ```bash
-cp docs/context-templates/ORGANIZATION.md ~/.daf-sessions/ORGANIZATION.md
+cp docs/context-templates/ORGANIZATION.md $DEVAIFLOW_HOME/ORGANIZATION.md
 # Edit to match your organization's standards
 ```
 
@@ -1188,7 +1188,7 @@ Team-specific conventions and workflows.
 
 **Example:**
 ```bash
-cp docs/context-templates/TEAM.md ~/.daf-sessions/TEAM.md
+cp docs/context-templates/TEAM.md $DEVAIFLOW_HOME/TEAM.md
 # Edit to match your team's practices
 ```
 
@@ -1210,7 +1210,7 @@ Personal development notes and preferences.
 
 **Example:**
 ```bash
-cp docs/context-templates/CONFIG.md ~/.daf-sessions/CONFIG.md
+cp docs/context-templates/CONFIG.md $DEVAIFLOW_HOME/CONFIG.md
 # Edit to add your personal notes
 ```
 
@@ -1767,7 +1767,7 @@ Some settings can be overridden with environment variables:
 
 Customize the directory where DevAIFlow stores session data and configuration.
 
-**Default:** `~/.daf-sessions`
+**Default:** `$DEVAIFLOW_HOME`
 
 ```bash
 export DEVAIFLOW_HOME="~/my-custom-sessions"
@@ -1794,7 +1794,7 @@ cp -r docs/config-templates/* ~/workspace/.daf-config/
 # Point DEVAIFLOW_HOME to your workspace config
 export DEVAIFLOW_HOME="~/workspace/.daf-config"
 
-# Now daf will use workspace configs instead of ~/.daf-sessions
+# Now daf will use workspace configs instead of $DEVAIFLOW_HOME
 daf config show
 ```
 
@@ -1921,7 +1921,7 @@ daf config validate --json
 ### Check JSON Syntax
 
 ```bash
-python -m json.tool ~/.daf-sessions/config.json
+python -m json.tool $DEVAIFLOW_HOME/config.json
 ```
 
 Validates JSON syntax and pretty-prints (basic check only, use `daf config show --validate` for full validation).
@@ -2109,7 +2109,7 @@ DevAIFlow automatically discovers and loads configuration files based on your wo
    - Example: `~/workspace/myproject/*.json`
 
 2. **User Configuration**
-   - Fallback to `~/.daf-sessions/` directory
+   - Fallback to `$DEVAIFLOW_HOME/` directory
    - Personal preferences and local settings
 
 3. **Built-in Defaults** (Lowest Priority)
@@ -2162,7 +2162,7 @@ daf open PROJ-123
 When multiple config sources exist, they merge with this priority:
 
 1. **Workspace config** (~/workspace/myproject/*.json) - Highest priority
-2. **User config** (~/.daf-sessions/*.json)
+2. **User config** ($DEVAIFLOW_HOME/*.json)
 3. **Built-in defaults** - Lowest priority
 
 **Example:**
@@ -2212,13 +2212,13 @@ Each template includes:
 ### Edit Configuration
 
 ```bash
-nano ~/.daf-sessions/config.json
+nano $DEVAIFLOW_HOME/config.json
 ```
 
 or
 
 ```bash
-code ~/.daf-sessions/config.json
+code $DEVAIFLOW_HOME/config.json
 ```
 
 ### Reload Configuration
@@ -2229,7 +2229,7 @@ Configuration is loaded on each command, so changes take effect immediately.
 
 ```bash
 # Backup current config
-cp ~/.daf-sessions/config.json ~/.daf-sessions/config.json.backup
+cp $DEVAIFLOW_HOME/config.json $DEVAIFLOW_HOME/config.json.backup
 
 # Create new default config
 daf init
@@ -2289,7 +2289,7 @@ Add keywords that appear in JIRA summaries/goals:
 
 Before major config changes:
 ```bash
-cp ~/.daf-sessions/config.json ~/.daf-sessions/config.json.backup
+cp $DEVAIFLOW_HOME/config.json $DEVAIFLOW_HOME/config.json.backup
 ```
 
 ### 6. Document Custom Settings
@@ -2304,7 +2304,7 @@ Add comments in a separate file if needed (JSON doesn't support comments).
 
 **Solution:**
 ```bash
-python -m json.tool ~/.daf-sessions/config.json
+python -m json.tool $DEVAIFLOW_HOME/config.json
 ```
 
 Fix syntax errors shown.

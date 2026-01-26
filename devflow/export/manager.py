@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from devflow.archive.base import ArchiveManagerBase
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
+from devflow.utils.paths import get_cs_home
 
 
 class ExportManager(ArchiveManagerBase):
@@ -154,7 +155,6 @@ class ExportManager(ArchiveManagerBase):
             # between different DEVAIFLOW_HOME environments
             from devflow.utils import is_mock_mode
             if is_mock_mode():
-                from devflow.utils.paths import get_cs_home
                 mocks_dir = get_cs_home() / "mocks"
                 if mocks_dir.exists():
                     tar.add(mocks_dir, arcname="mocks")
@@ -188,7 +188,7 @@ class ExportManager(ArchiveManagerBase):
             raise FileNotFoundError(f"Export file not found: {export_path}")
 
         # Extract only metadata files to temp directory
-        temp_dir = Path.home() / ".daf-sessions-peek-temp"
+        temp_dir = get_cs_home() / ".peek-temp"
         temp_dir.mkdir(exist_ok=True)
 
         try:
@@ -256,7 +256,7 @@ class ExportManager(ArchiveManagerBase):
             raise FileNotFoundError(f"Export file not found: {export_path}")
 
         # Extract to temporary directory
-        temp_dir = Path.home() / ".daf-sessions-import-temp"
+        temp_dir = get_cs_home() / ".import-temp"
         temp_dir.mkdir(exist_ok=True)
 
         imported_keys = []
@@ -406,7 +406,6 @@ class ExportManager(ArchiveManagerBase):
             if mocks_dir.exists():
                 from devflow.utils import is_mock_mode
                 if is_mock_mode():
-                    from devflow.utils.paths import get_cs_home
                     target_mocks_dir = get_cs_home() / "mocks"
                     if target_mocks_dir.exists() and not merge:
                         shutil.rmtree(target_mocks_dir)

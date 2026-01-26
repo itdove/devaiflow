@@ -217,7 +217,7 @@ def _get_required_custom_fields(
     # Get custom field defaults from config
     config_defaults = config.jira.custom_field_defaults or {}
 
-    # Get all field mappings
+    # Get all field mappings from the field_mapper
     if not field_mapper.field_mappings:
         return custom_fields
 
@@ -228,8 +228,20 @@ def _get_required_custom_fields(
         # field_mappings is not a dict (e.g., Mock object in tests)
         return custom_fields
 
+    # JIRA system fields that are handled separately by create_issue function
+    # These should NOT be prompted for in _get_required_custom_fields
+    system_fields = {
+        "summary", "description", "priority", "project",
+        "issue_type", "issuetype", "reporter", "assignee",
+        "affected_version", "fixVersions", "versions"
+    }
+
     # Loop through all fields in field_mappings
     for field_name, field_info in field_mappings_dict.items():
+        # Skip JIRA system fields - these are handled separately
+        if field_name in system_fields:
+            continue
+
         # Check if this field is required for the issue type
         required_for = field_info.get("required_for", [])
         if issue_type not in required_for:
@@ -263,22 +275,33 @@ def _get_required_custom_fields(
             custom_fields[field_name] = config_value
             continue
 
-        # Case 3: Prompt user
-        allowed_values = field_info.get("allowed_values", [])
+        # Case 3: Prompt user (only in interactive mode)
+        if not is_json_mode():
+            allowed_values = field_info.get("allowed_values", [])
 
-        if allowed_values:
-            console_print(f"\n[bold]Available {field_name} values:[/bold]")
-            for val in allowed_values:
-                console_print(f"  - {val}")
-            console_print()
+            if allowed_values:
+                console_print(f"\n[bold]Available {field_name} values:[/bold]")
+                for val in allowed_values:
+                    console_print(f"  - {val}")
+                console_print()
 
-            field_value = Prompt.ask(
-                f"Select {field_name}",
-                choices=allowed_values,
-                default=allowed_values[0] if allowed_values else None
-            )
+                field_value = Prompt.ask(
+                    f"Select {field_name}",
+                    choices=allowed_values,
+                    default=allowed_values[0] if allowed_values else None
+                )
+            else:
+                field_value = Prompt.ask(f"Enter {field_name} value")
         else:
-            field_value = Prompt.ask(f"Enter {field_name} value")
+            # JSON mode - return error for missing required field
+            json_output(
+                success=False,
+                error={
+                    "code": "MISSING_REQUIRED_FIELD",
+                    "message": f"Required field '{field_name}' is missing. Use --field {field_name}=value or --{field_name} flag."
+                }
+            )
+            return None
 
         if field_value:
             # Save to config
@@ -469,6 +492,7 @@ def create_issue(
     linked_issue: Optional[str] = None,
     issue: Optional[str] = None,
     custom_fields: Optional[dict] = None,
+    system_fields: Optional[dict] = None,
     output_json: bool = False,
 ) -> None:
     """Create a JIRA issue (unified function for bug/story/task).
@@ -487,6 +511,7 @@ def create_issue(
         linked_issue: Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to')
         issue: Issue key to link to (e.g., PROJ-12345)
         custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform", "team": "Backend"})
+        system_fields: JIRA system field values from CLI options (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     """
     # Map issue type to template and client method
     ISSUE_TYPE_CONFIG = {
@@ -552,8 +577,12 @@ def create_issue(
 
         # Get all required custom fields for this issue type
         # Use custom_fields from --field options as flag values
+        # Also include summary if provided (summary might be in field_mappings as a required field)
+        flag_values = dict(custom_fields or {})
+        if summary:
+            flag_values['summary'] = summary
         required_custom_fields = _get_required_custom_fields(
-            config, config_loader, field_mapper, type_config["jira_issue_type"], custom_fields or {}
+            config, config_loader, field_mapper, type_config["jira_issue_type"], flag_values
         )
         if required_custom_fields is None:
             # User cancelled or required field missing
@@ -587,11 +616,22 @@ def create_issue(
 
         # Prompt for summary if not provided
         if not summary:
-            summary = Prompt.ask(f"\n[bold]{type_config['label']} summary[/bold]")
-            if not summary or not summary.strip():
-                console.print("[red]✗[/red] Summary is required")
+            if not is_json_mode():
+                summary = Prompt.ask(f"\n[bold]{type_config['label']} summary[/bold]")
+                if not summary or not summary.strip():
+                    console.print("[red]✗[/red] Summary is required")
+                    sys.exit(1)
+                summary = summary.strip()
+            else:
+                # JSON mode - return error for missing required field
+                json_output(
+                    success=False,
+                    error={
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "Summary is required. Use --summary flag."
+                    }
+                )
                 sys.exit(1)
-            summary = summary.strip()
 
         # Get description
         issue_description = _get_description(description, description_file, type_config["template"], interactive)
@@ -615,8 +655,21 @@ def create_issue(
         if type_config["uses_affected_version"]:
             create_kwargs["affected_version"] = resolved_affected_version
 
-        # Handle dynamically discovered custom fields
+        # Apply custom field defaults from team.json (merged with CLI --field options)
+        # CLI values take precedence over config defaults
+        # Filter out system fields that shouldn't be in custom_field_defaults
+        SYSTEM_FIELDS_FILTER = {"issue_type", "issuetype", "project", "summary", "description",
+                                "priority", "reporter", "assignee", "created", "updated"}
+        merged_custom_fields = {}
+        if config.jira.custom_field_defaults:
+            for field_name, field_value in config.jira.custom_field_defaults.items():
+                if field_name not in SYSTEM_FIELDS_FILTER:
+                    merged_custom_fields[field_name] = field_value
         if custom_fields:
+            merged_custom_fields.update(custom_fields)
+
+        # Handle dynamically discovered custom fields
+        if merged_custom_fields:
             # Discover creation fields for this project if not cached
             if not config.jira.field_mappings:
                 console.print(f"[dim]Discovering creation fields for {resolved_project}...[/dim]")
@@ -631,13 +684,18 @@ def create_issue(
                     console.print(f"[yellow]⚠[/yellow] Could not discover creation fields: {e}")
                     console.print("  Using field_mappings cache instead")
 
-            # Use creation mappings from field_mapper cache
-            mappings = field_mapper._cache or {}
+            # Use creation mappings from field_mapper
+            try:
+                mappings = dict(field_mapper.field_mappings) if field_mapper.field_mappings else {}
+            except (TypeError, AttributeError):
+                # field_mappings might be a Mock or not iterable
+                mappings = {}
 
             # Process each custom field
             from devflow.cli.commands.jira_update_command import build_field_value
-            for field_name, field_value in custom_fields.items():
-                if field_value is None:
+            for field_name, field_value in merged_custom_fields.items():
+                # Skip None and empty collections (empty tuples from Click's multiple=True options)
+                if field_value is None or field_value == () or field_value == []:
                     continue
 
                 # Get field info from mappings
@@ -647,11 +705,78 @@ def create_issue(
                     console.print(f"  Run [cyan]daf config refresh-jira-fields[/cyan] to discover available fields")
                     continue
 
-                field_id = field_info["id"]
+                try:
+                    field_id = field_info["id"]
+                except (TypeError, KeyError):
+                    # field_info might be a Mock or malformed
+                    console.print(f"[yellow]⚠[/yellow] Invalid field info for: {field_name}")
+                    continue
+
+                # Skip system fields that are already handled by the command
+                # These are set via dedicated parameters (summary, description, priority, etc.)
+                SYSTEM_FIELDS = {"issue_type", "issuetype", "project", "summary", "description",
+                                 "priority", "reporter", "assignee", "created", "updated"}
+                if field_id in SYSTEM_FIELDS:
+                    continue
 
                 # Build the appropriate value based on field type
                 formatted_value = build_field_value(field_info, field_value, field_mapper)
                 create_kwargs[field_id] = formatted_value
+
+        # Handle system fields (components, labels, etc.)
+        # Merge config defaults with CLI-provided values (CLI takes precedence)
+        merged_system_fields = {}
+        if config.jira.system_field_defaults:
+            merged_system_fields.update(config.jira.system_field_defaults)
+        if system_fields:
+            merged_system_fields.update(system_fields)
+
+        # Validate that components are provided (required by most JIRA projects)
+        # Check if components field exists in field_mappings and is available for this issue type
+        components_available = False
+        try:
+            if config.jira.field_mappings and "component/s" in config.jira.field_mappings:
+                components_info = config.jira.field_mappings["component/s"]
+                available_for = components_info.get("available_for", [])
+                if issue_type.title() in available_for:
+                    components_available = True
+        except (TypeError, AttributeError):
+            # field_mappings might be a Mock or not iterable
+            pass
+
+        # If components are available for this issue type but not provided, show error
+        if components_available and "components" not in merged_system_fields:
+            error_msg = (
+                f"Component is required for {issue_type} issues but not configured.\n"
+                f"  [dim]Fix by doing ONE of:[/dim]\n"
+                f"  [dim]1. Set default in team.json: {{\"jira_system_field_defaults\": {{\"components\": [\"your-component\"]}}}}[/dim]\n"
+                f"  [dim]2. Use --components flag: daf jira create {issue_type} --components your-component[/dim]\n"
+                f"  [dim]3. Use TUI to set default: daf config tui → JIRA Integration → Component dropdown[/dim]"
+            )
+            if output_json:
+                json_output(
+                    success=False,
+                    error={
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "Component is required but not configured",
+                        "field": "components",
+                        "solutions": [
+                            "Set default in team.json: {\"jira_system_field_defaults\": {\"components\": [\"your-component\"]}}",
+                            f"Use --components flag: daf jira create {issue_type} --components your-component",
+                            "Use TUI: daf config tui"
+                        ]
+                    }
+                )
+            else:
+                console.print(f"[red]✗[/red] {error_msg}")
+            sys.exit(1)
+
+        # Add system fields to create_kwargs (use field IDs directly like "components", "labels")
+        for field_name, field_value in merged_system_fields.items():
+            # Skip None and empty collections (empty tuples from Click's multiple=True options)
+            if field_value is not None and field_value != () and field_value != []:
+                # System fields use their original names (e.g., "components"), not customfield IDs
+                create_kwargs[field_name] = field_value
 
         issue_key = client_method(**create_kwargs)
 
@@ -965,11 +1090,22 @@ def create_bug(
 
         # Prompt for summary if not provided
         if not summary:
-            summary = Prompt.ask("\n[bold]Bug summary[/bold]")
-            if not summary or not summary.strip():
-                console.print("[red]✗[/red] Summary is required")
+            if not is_json_mode():
+                summary = Prompt.ask("\n[bold]Bug summary[/bold]")
+                if not summary or not summary.strip():
+                    console.print("[red]✗[/red] Summary is required")
+                    sys.exit(1)
+                summary = summary.strip()
+            else:
+                # JSON mode - return error for missing required field
+                json_output(
+                    success=False,
+                    error={
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "Summary is required. Use --summary flag."
+                    }
+                )
                 sys.exit(1)
-            summary = summary.strip()
 
         # Get description
         bug_description = _get_description(description, description_file, BUG_TEMPLATE, interactive)
@@ -1103,11 +1239,22 @@ def create_story(
 
         # Prompt for summary if not provided
         if not summary:
-            summary = Prompt.ask("\n[bold]Story summary[/bold]")
-            if not summary or not summary.strip():
-                console.print("[red]✗[/red] Summary is required")
+            if not is_json_mode():
+                summary = Prompt.ask("\n[bold]Story summary[/bold]")
+                if not summary or not summary.strip():
+                    console.print("[red]✗[/red] Summary is required")
+                    sys.exit(1)
+                summary = summary.strip()
+            else:
+                # JSON mode - return error for missing required field
+                json_output(
+                    success=False,
+                    error={
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "Summary is required. Use --summary flag."
+                    }
+                )
                 sys.exit(1)
-            summary = summary.strip()
 
         # Get description
         story_description = _get_description(description, description_file, STORY_TEMPLATE, interactive)
@@ -1237,11 +1384,22 @@ def create_task(
 
         # Prompt for summary if not provided
         if not summary:
-            summary = Prompt.ask("\n[bold]Task summary[/bold]")
-            if not summary or not summary.strip():
-                console.print("[red]✗[/red] Summary is required")
+            if not is_json_mode():
+                summary = Prompt.ask("\n[bold]Task summary[/bold]")
+                if not summary or not summary.strip():
+                    console.print("[red]✗[/red] Summary is required")
+                    sys.exit(1)
+                summary = summary.strip()
+            else:
+                # JSON mode - return error for missing required field
+                json_output(
+                    success=False,
+                    error={
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "Summary is required. Use --summary flag."
+                    }
+                )
                 sys.exit(1)
-            summary = summary.strip()
 
         # Get description
         task_description = _get_description(description, description_file, TASK_TEMPLATE, interactive)

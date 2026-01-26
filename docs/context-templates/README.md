@@ -35,12 +35,12 @@ Context files are loaded in this order:
 
 All hierarchical context files are stored in your DEVAIFLOW_HOME directory:
 
-- Default: `~/.daf-sessions/` (or `~/.daf-sessions/` for backward compatibility)
+- Default: `$DEVAIFLOW_HOME/` (or `$DEVAIFLOW_HOME/` for backward compatibility)
 - Custom: Set via `DEVAIFLOW_HOME` environment variable
 
 Directory structure:
 ```
-~/.daf-sessions/
+$DEVAIFLOW_HOME/
 ├── backends/
 │   └── JIRA.md              # Backend-specific context
 ├── ORGANIZATION.md          # Organization-level context
@@ -61,8 +61,8 @@ Backend-specific integration rules. Currently only JIRA backend is supported.
 
 **Example:**
 ```bash
-mkdir -p ~/.daf-sessions/backends
-cp docs/context-templates/JIRA.md ~/.daf-sessions/backends/JIRA.md
+mkdir -p $DEVAIFLOW_HOME/backends
+cp docs/context-templates/JIRA.md $DEVAIFLOW_HOME/backends/JIRA.md
 # Edit to customize for your JIRA instance
 ```
 
@@ -78,7 +78,7 @@ Organization-wide coding standards and architecture principles.
 
 **Example:**
 ```bash
-cp docs/context-templates/ORGANIZATION.md ~/.daf-sessions/ORGANIZATION.md
+cp docs/context-templates/ORGANIZATION.md $DEVAIFLOW_HOME/ORGANIZATION.md
 # Edit to match your organization's standards
 ```
 
@@ -94,7 +94,7 @@ Team-specific conventions and workflows.
 
 **Example:**
 ```bash
-cp docs/context-templates/TEAM.md ~/.daf-sessions/TEAM.md
+cp docs/context-templates/TEAM.md $DEVAIFLOW_HOME/TEAM.md
 # Edit to match your team's practices
 ```
 
@@ -110,7 +110,7 @@ Personal development notes and preferences.
 
 **Example:**
 ```bash
-cp docs/context-templates/CONFIG.md ~/.daf-sessions/CONFIG.md
+cp docs/context-templates/CONFIG.md $DEVAIFLOW_HOME/CONFIG.md
 # Edit to add your personal notes
 ```
 
@@ -130,7 +130,7 @@ Claude will automatically read all existing context files in the hierarchical or
 
 ### Required: Claude Code Permissions
 
-**IMPORTANT**: Claude Code must be configured to allow reading files from `~/.daf-sessions/` and `~/.daf-sessions/` directories. Without this permission, context files cannot be loaded and the tool will fail.
+**IMPORTANT**: Claude Code must be configured to allow reading files from `$DEVAIFLOW_HOME/` and `$DEVAIFLOW_HOME/` directories. Without this permission, context files cannot be loaded and the tool will fail.
 
 **Quick setup:**
 
@@ -139,8 +139,8 @@ Add to `~/.claude/settings.json`:
 {
   "file_access": {
     "read": [
-      "~/.daf-sessions/**/*",
-      "~/.daf-sessions/**/*"
+      "$DEVAIFLOW_HOME/**/*",
+      "$DEVAIFLOW_HOME/**/*"
     ]
   }
 }
@@ -190,15 +190,15 @@ Files are only loaded if they exist. This means:
 Examples:
 ```bash
 # Only backend context
-mkdir -p ~/.daf-sessions/backends
-echo "# JIRA Rules" > ~/.daf-sessions/backends/JIRA.md
+mkdir -p $DEVAIFLOW_HOME/backends
+echo "# JIRA Rules" > $DEVAIFLOW_HOME/backends/JIRA.md
 
 # Only user context
-echo "# My Notes" > ~/.daf-sessions/CONFIG.md
+echo "# My Notes" > $DEVAIFLOW_HOME/CONFIG.md
 
 # All levels
-mkdir -p ~/.daf-sessions/backends
-cp docs/context-templates/*.md ~/.daf-sessions/
+mkdir -p $DEVAIFLOW_HOME/backends
+cp docs/context-templates/*.md $DEVAIFLOW_HOME/
 # Edit each file as needed
 ```
 
@@ -221,9 +221,9 @@ The current filesystem-based approach provides:
 ### Files Not Being Loaded
 
 Check that:
-1. File exists in correct location: `ls -la ~/.daf-sessions/`
+1. File exists in correct location: `ls -la $DEVAIFLOW_HOME/`
 2. File has correct name (case-sensitive): `ORGANIZATION.md`, not `organization.md`
-3. File is readable: `cat ~/.daf-sessions/ORGANIZATION.md`
+3. File is readable: `cat $DEVAIFLOW_HOME/ORGANIZATION.md`
 4. Path is correct (check DEVAIFLOW_HOME if custom)
 
 ### Verify Loading
@@ -234,11 +234,11 @@ Check the initial prompt when opening a session to see which files are listed.
 
 Create test files to verify loading:
 ```bash
-mkdir -p ~/.daf-sessions/backends
-echo "# Test JIRA" > ~/.daf-sessions/backends/JIRA.md
-echo "# Test Org" > ~/.daf-sessions/ORGANIZATION.md
-echo "# Test Team" > ~/.daf-sessions/TEAM.md
-echo "# Test User" > ~/.daf-sessions/CONFIG.md
+mkdir -p $DEVAIFLOW_HOME/backends
+echo "# Test JIRA" > $DEVAIFLOW_HOME/backends/JIRA.md
+echo "# Test Org" > $DEVAIFLOW_HOME/ORGANIZATION.md
+echo "# Test Team" > $DEVAIFLOW_HOME/TEAM.md
+echo "# Test User" > $DEVAIFLOW_HOME/CONFIG.md
 
 # Create session and check initial prompt
 daf new --name test-context --goal "Test context loading"

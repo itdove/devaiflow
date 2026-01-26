@@ -29,6 +29,15 @@ class JiraFieldMapper:
         self.client = jira_client
         self._cache = field_mappings or {}
 
+    @property
+    def field_mappings(self) -> Dict[str, Dict[str, Any]]:
+        """Get the cached field mappings.
+
+        Returns:
+            Dictionary of field mappings
+        """
+        return self._cache
+
     def discover_fields(self, project_key: str) -> Dict[str, Dict[str, Any]]:
         """Discover custom fields for a project.
 
@@ -410,8 +419,14 @@ class JiraFieldMapper:
                             allowed_vals = []
                             for v in field_data["allowedValues"]:
                                 if isinstance(v, dict):
-                                    # Handle option objects
-                                    allowed_vals.append(v.get("value", str(v)))
+                                    # Handle option objects - try value, name, or id
+                                    if "value" in v:
+                                        allowed_vals.append(v["value"])
+                                    elif "name" in v:
+                                        allowed_vals.append(v["name"])
+                                    elif "id" in v:
+                                        allowed_vals.append(v["id"])
+                                    # Skip complex objects that don't have simple display values
                                 else:
                                     allowed_vals.append(str(v))
                             mappings[normalized_name]["allowed_values"] = allowed_vals

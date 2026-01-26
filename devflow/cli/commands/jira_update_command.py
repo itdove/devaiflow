@@ -36,7 +36,7 @@ def build_field_value(field_info: Dict[str, Any], value: str, field_mapper: Jira
         return value
     elif schema == "array" or field_type == "array":
         # Multi-select field (like workstream)
-        if "option" in schema:
+        if "option" in schema or "select" in schema:
             return [{"value": value}]
         else:
             # Array of strings
@@ -67,12 +67,12 @@ def update_jira_issue(
     linked_issue: Optional[str] = None,
     issue: Optional[str] = None,
     output_json: bool = False,
-    **custom_fields
+    custom_fields: Optional[Dict[str, Any]] = None,
+    system_fields: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Update a JIRA issue with specified fields.
 
-    This function supports both hardcoded common fields and dynamically discovered
-    custom fields through **custom_fields kwargs.
+    This function supports both hardcoded common fields, JIRA system fields, and custom fields.
 
     Args:
         issue_key: JIRA issue key (e.g., PROJ-12345)
@@ -85,8 +85,12 @@ def update_jira_issue(
         status: Target status to transition to (e.g., 'In Progress', 'Review', 'Closed')
         linked_issue: Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to')
         issue: Issue key to link to (e.g., PROJ-12345)
-        **custom_fields: Additional custom fields discovered dynamically (e.g., workstream="Platform", acceptance_criteria="...")
+        custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform", "team": "Backend"})
+        system_fields: JIRA system field values from CLI options (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     """
+    # Default empty dicts if None
+    custom_fields = custom_fields or {}
+    system_fields = system_fields or {}
     try:
         # Load config
         config_loader = ConfigLoader()
@@ -173,6 +177,19 @@ def update_jira_issue(
             merged_prs = merge_pr_urls(current_prs, git_pull_request)
 
             payload["fields"][git_pr_field] = merged_prs
+
+        # Handle system fields (components, labels, etc.)
+        # Merge config defaults with CLI-provided values (CLI takes precedence)
+        merged_system_fields = {}
+        if config.jira.system_field_defaults:
+            merged_system_fields.update(config.jira.system_field_defaults)
+        if system_fields:
+            merged_system_fields.update(system_fields)
+
+        # Add system fields to payload (use field IDs directly like "components", "labels")
+        for field_name, field_value in merged_system_fields.items():
+            # System fields use their original names (e.g., "components"), not customfield IDs
+            payload["fields"][field_name] = field_value
 
         # Handle dynamically discovered custom fields
         if custom_fields:
@@ -330,7 +347,7 @@ def update_jira_issue(
                     elif field_mapper:
                         # Try to reverse lookup the field name
                         field_name = field_key
-                        for norm_name, field_info in field_mapper._cache.items():
+                        for norm_name, field_info in field_mapper.field_mappings.items():
                             if field_info.get("id") == field_key:
                                 field_name = field_info.get("name", field_key)
                                 break

@@ -63,7 +63,7 @@ This hybrid approach provides:
 
 ## Configuration
 
-Edit `~/.daf-sessions/config.json`:
+Edit `$DEVAIFLOW_HOME/config.json`:
 
 ```json
 {
@@ -325,7 +325,7 @@ daf jira create bug --summary "Critical bug" --severity Critical --size L
 daf jira create bug --summary "Bug" --field severity=Critical
 ```
 
-Creation fields are discovered once and cached in `~/.daf-sessions/config.json`. Refresh with:
+Creation fields are discovered once and cached in `$DEVAIFLOW_HOME/config.json`. Refresh with:
 
 ```bash
 daf config refresh-jira-fields
@@ -725,7 +725,7 @@ Session not opened
 daf note PROJ-12345 "Implemented upload endpoint"
 ```
 
-Saved to `~/.daf-sessions/sessions/PROJ-12345/notes.md` only.
+Saved to `$DEVAIFLOW_HOME/sessions/PROJ-12345/notes.md` only.
 
 ### Note with JIRA Comment
 
@@ -1127,7 +1127,7 @@ jira version
 
 3. **Verify JIRA URL:**
    ```bash
-   cat ~/.daf-sessions/config.json | grep url
+   cat $DEVAIFLOW_HOME/config.json | grep url
    ```
 
 ### Transition Failed

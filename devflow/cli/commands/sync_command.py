@@ -49,7 +49,7 @@ def sync_jira(
     sync_filters = config.jira.filters.get("sync")
     if not sync_filters:
         console.print("[yellow]⚠[/yellow] No sync filters configured")
-        console.print("[dim]Check $DEVAIFLOW_HOME/config.json (or ~/.daf-sessions/config.json if DEVAIFLOW_HOME not set)[/dim]")
+        console.print("[dim]Check $DEVAIFLOW_HOME/config.json for sync filter configuration[/dim]")
         return
 
     console_print("[cyan]Fetching issue tracker tickets...[/cyan]")

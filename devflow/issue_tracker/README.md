@@ -63,7 +63,7 @@ In-memory implementation for testing without external dependencies.
 
 ## Configuration
 
-**File**: `~/.daf-sessions/config.json`
+**File**: `$DEVAIFLOW_HOME/config.json`
 
 ```json
 {

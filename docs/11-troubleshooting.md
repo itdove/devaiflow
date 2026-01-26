@@ -110,11 +110,11 @@ daf check --json | jq '.data.all_required_available'
 
 ### Context Files Cannot Be Read - Permission Denied
 
-**Problem:** When running `daf open`, Claude Code shows "Permission denied" errors when trying to read files from `~/.daf-sessions/` or `~/.daf-sessions/`
+**Problem:** When running `daf open`, Claude Code shows "Permission denied" errors when trying to read files from `$DEVAIFLOW_HOME/` or `$DEVAIFLOW_HOME/`
 
 **Example Error:**
 ```
-Error: Cannot read file: ~/.daf-sessions/ORGANIZATION.md
+Error: Cannot read file: $DEVAIFLOW_HOME/ORGANIZATION.md
 Permission denied
 ```
 
@@ -131,8 +131,8 @@ Permission denied
 {
   "file_access": {
     "read": [
-      "~/.daf-sessions/**/*",
-      "~/.daf-sessions/**/*"
+      "$DEVAIFLOW_HOME/**/*",
+      "$DEVAIFLOW_HOME/**/*"
     ]
   }
 }
@@ -149,8 +149,8 @@ EOF
    {
      "file_access": {
        "read": [
-         "~/.daf-sessions/**/*",
-         "~/.daf-sessions/**/*"
+         "$DEVAIFLOW_HOME/**/*",
+         "$DEVAIFLOW_HOME/**/*"
        ]
      }
    }
@@ -163,7 +163,7 @@ EOF
 4. **Test the fix:**
    ```bash
    # Create a test file
-   echo "# Test Content" > ~/.daf-sessions/ORGANIZATION.md
+   echo "# Test Content" > $DEVAIFLOW_HOME/ORGANIZATION.md
 
    # Open a session
    daf open PROJ-12345
@@ -211,8 +211,8 @@ The allow list **must** be in the global `~/.claude/settings.json` file, NOT in 
 {
   "file_access": {
     "read": [
-      "~/.daf-sessions/**/*",
-      "~/.daf-sessions/**/*"
+      "$DEVAIFLOW_HOME/**/*",
+      "$DEVAIFLOW_HOME/**/*"
     ]
   }
 }
@@ -237,19 +237,19 @@ EOF
    ```
 
 3. **Verify in Claude Code:**
-   - Ask Claude to read a file: "Can you read ~/.daf-sessions/ORGANIZATION.md?"
+   - Ask Claude to read a file: "Can you read $DEVAIFLOW_HOME/ORGANIZATION.md?"
    - If it can read it, the settings are working
 
 **Still not working?**
 
 1. **Check file exists:**
    ```bash
-   ls -la ~/.daf-sessions/ORGANIZATION.md
+   ls -la $DEVAIFLOW_HOME/ORGANIZATION.md
    ```
 
 2. **Check file permissions:**
    ```bash
-   chmod 644 ~/.daf-sessions/ORGANIZATION.md
+   chmod 644 $DEVAIFLOW_HOME/ORGANIZATION.md
    ```
 
 3. **Verify settings file syntax:**
@@ -452,7 +452,7 @@ This is expected behavior. Select the conversation you want to work on.
 
 3. **Verify JIRA URL in config:**
    ```bash
-   cat ~/.daf-sessions/config.json | grep url
+   cat $DEVAIFLOW_HOME/config.json | grep url
    ```
 
 ### JIRA Status Transition Failed
@@ -463,7 +463,7 @@ This is expected behavior. Select the conversation you want to work on.
 
 1. **Check transition configuration:**
    ```bash
-   cat ~/.daf-sessions/config.json
+   cat $DEVAIFLOW_HOME/config.json
    ```
 
 2. **Verify transition is valid for your workflow:**
@@ -566,7 +566,7 @@ Field 'acceptance_criteria' is required
 
 4. **Check field mappings in config:**
    ```bash
-   cat ~/.daf-sessions/config.json | grep -A 10 field_mappings
+   cat $DEVAIFLOW_HOME/config.json | grep -A 10 field_mappings
    ```
 
 **What gets refreshed:**
@@ -783,7 +783,7 @@ Backups are automatic and kept for all cleanups.
 daf init
 ```
 
-This creates the default config file at `~/.daf-sessions/config.json`.
+This creates the default config file at `$DEVAIFLOW_HOME/config.json`.
 
 ### Invalid JSON in Config
 
@@ -793,12 +793,12 @@ This creates the default config file at `~/.daf-sessions/config.json`.
 
 1. **Validate JSON:**
    ```bash
-   python -m json.tool ~/.daf-sessions/config.json
+   python -m json.tool $DEVAIFLOW_HOME/config.json
    ```
 
 2. **Restore default config:**
    ```bash
-   mv ~/.daf-sessions/config.json ~/.daf-sessions/config.json.backup
+   mv $DEVAIFLOW_HOME/config.json $DEVAIFLOW_HOME/config.json.backup
    daf init
    ```
 
@@ -897,7 +897,7 @@ daf config tui ~/development/workspace
 
 1. **Check keywords in config:**
    ```bash
-   cat ~/.daf-sessions/config.json
+   cat $DEVAIFLOW_HOME/config.json
    ```
 
 2. **Update keywords:**
@@ -1075,13 +1075,13 @@ daf cleanup-conversation PROJ-12345 --older-than 1d
 
 1. **Check if file exists:**
    ```bash
-   ls ~/.daf-sessions/sessions.json
+   ls $DEVAIFLOW_HOME/sessions.json
    ```
 
 2. **Restore from backup:**
    ```bash
    # If you have a backup
-   cp ~/.daf-sessions/sessions.json.backup ~/.daf-sessions/sessions.json
+   cp $DEVAIFLOW_HOME/sessions.json.backup $DEVAIFLOW_HOME/sessions.json
    ```
 
 3. **Import from export:**
@@ -1098,7 +1098,7 @@ daf cleanup-conversation PROJ-12345 --older-than 1d
 **Solution:**
 1. **Backup first:**
    ```bash
-   cp ~/.daf-sessions/sessions.json ~/.daf-sessions/sessions.json.backup
+   cp $DEVAIFLOW_HOME/sessions.json $DEVAIFLOW_HOME/sessions.json.backup
    ```
 
 2. **Manually edit sessions.json to remove duplicates**
@@ -1229,7 +1229,7 @@ export DAF_MOCK_MODE=1
 ```
 
 **What happens in mock mode:**
-- All session data is isolated to `~/.daf-sessions/mocks/`
+- All session data is isolated to `$DEVAIFLOW_HOME/mocks/`
 - `daf list` shows only mock sessions (separate from real sessions)
 - Visual warning banner appears on every command: "⚠️ MOCK MODE ENABLED ⚠️"
 - **Claude Code is NOT launched** - `daf open` skips the subprocess
@@ -1260,7 +1260,7 @@ daf list  # Shows real sessions again
 
 **Mock Data Location:**
 ```
-~/.daf-sessions/mocks/
+$DEVAIFLOW_HOME/mocks/
 ├── sessions.json       # Mock session index
 ├── jira.json          # Mock JIRA tickets, comments, transitions
 ├── github.json        # Mock GitHub PRs

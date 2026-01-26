@@ -8,7 +8,7 @@ This file provides essential instructions for using the `daf` tool (DevAIFlow) w
 - Understand JIRA issue template requirements (see Templates section below)
 - Get project-specific context about daf tool usage
 
-**Note**: Examples use generic placeholders (PROJECT, YourWorkstream). Actual values are configured in `~/.daf-sessions/config.json`.
+**Note**: Examples use generic placeholders (PROJECT, YourWorkstream). Actual values are configured in `$DEVAIFLOW_HOME/config.json`.
 
 ---
 
@@ -139,12 +139,12 @@ daf config show-fields --json
 **Method 2: Read the organization configuration**
 ```bash
 # View the organization.json file to see all field mappings
-cat ~/.daf-sessions/ORGANIZATION.md
+cat $DEVAIFLOW_HOME/ORGANIZATION.md
 # Look for the "field_mappings" section which shows available field names
 ```
 
 **Method 3: Check field_mappings in organization.json**
-The configuration file at `~/.daf-sessions/organization.json` contains a `field_mappings` section:
+The configuration file at `$DEVAIFLOW_HOME/organization.json` contains a `field_mappings` section:
 ```json
 {
   "field_mappings": {
@@ -195,6 +195,49 @@ daf sync --field field_name_1="Value1"
 - Field names are organization-specific and must be configured
 - If a field has `allowed_values`, only those values are valid
 - Run `daf config refresh-jira-fields` to update field definitions from JIRA
+
+### System Fields (Components, Labels, etc.)
+
+**IMPORTANT**: System fields like `components` and `labels` are **required** for creating JIRA issues in many projects.
+
+System fields are native JIRA fields (not custom fields) that are available in all JIRA instances:
+- **components**: Project components (e.g., "ansible-saas", "backend", "ui")
+- **labels**: Issue labels/tags
+- **priority**: Issue priority (Critical, Major, Normal, Minor)
+- **security_level**: Security/visibility level
+
+**Setting Default Components:**
+Configure default components in `$DEVAIFLOW_HOME/team.json`:
+```json
+{
+  "jira_system_field_defaults": {
+    "components": ["ansible-saas"]
+  }
+}
+```
+
+Or use the interactive TUI:
+```bash
+daf config tui  # Navigate to JIRA Integration tab → Component dropdown
+```
+
+**Creating Issues with Components:**
+```bash
+# Component from team.json defaults (RECOMMENDED)
+daf jira create bug --summary "Fix login issue"
+
+# Override component via CLI
+daf jira create bug --summary "Fix login issue" --component "backend"
+
+# Multiple components
+daf jira create bug --summary "Fix login issue" --component "backend" --component "ui"
+```
+
+**Why Components Matter:**
+- Many JIRA projects require components for all issues
+- Components help organize and filter issues by area
+- Team defaults ensure consistency across all created issues
+- Without a default, you'll be prompted to select a component interactively
 
 ### Understanding Sync Filters
 

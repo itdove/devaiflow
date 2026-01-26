@@ -29,7 +29,10 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         TemplateConfig,
     )
 
-    console.print("\n[bold]=== JIRA Configuration ===[/bold]\n")
+    console.print("\n[bold]DevAIFlow Configuration Wizard[/bold]\n")
+    console.print("[dim]All settings can be changed later using 'daf config tui'[/dim]\n")
+
+    console.print("[bold]=== JIRA Configuration ===[/bold]\n")
 
     # JIRA URL
     default_url = current_config.jira.url if current_config else "https://jira.example.com"
@@ -46,13 +49,69 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         jira_project_input = Prompt.ask("JIRA Project Key (optional, press Enter to skip)", default="")
         jira_project = jira_project_input if jira_project_input else None
 
+    console.print("\n[bold]=== JIRA Comment Visibility ===[/bold]\n")
+    console.print("[dim]Control who can see comments that DevAIFlow adds to JIRA tickets.[/dim]")
+    console.print("[dim]Can be set later via 'daf config tui'.[/dim]\n")
+
+    # Comment visibility type
+    default_visibility_type = current_config.jira.comment_visibility_type if current_config and current_config.jira.comment_visibility_type else "group"
+    console.print("Choose visibility type:")
+    console.print("  [white]1.[/white] group - Restrict by JIRA group membership (most common)")
+    console.print("  [white]2.[/white] role - Restrict by JIRA role")
+    console.print()
+    visibility_type_choice = Prompt.ask("Visibility type", choices=["group", "role"], default=default_visibility_type)
+
+    # Comment visibility value
+    default_visibility_value = current_config.jira.comment_visibility_value if current_config and current_config.jira.comment_visibility_value else None
+    console.print()
+    if visibility_type_choice == "group":
+        console.print("[dim]Enter the JIRA group name (e.g., 'Engineering Team', 'Developers')[/dim]")
+        default_value = default_visibility_value or "Engineering Team"
+    else:
+        console.print("[dim]Enter the JIRA role name (e.g., 'Administrators', 'Developers')[/dim]")
+        default_value = default_visibility_value or "Developers"
+
+    visibility_value = Prompt.ask(f"{visibility_type_choice.capitalize()} name", default=default_value)
+
     console.print("\n[bold]=== Repository Workspace ===[/bold]\n")
 
     # Workspace path
     default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else str(Path.home() / "development")
     workspace_path = Prompt.ask("Workspace path", default=default_workspace)
 
+    # Validate workspace path contains git repositories
+    workspace_path_obj = Path(workspace_path).expanduser()
+    if workspace_path_obj.exists():
+        from devflow.git.utils import GitUtils
+        # Check if workspace itself is a git repo
+        if GitUtils.is_git_repository(workspace_path_obj):
+            console.print(f"[green]✓[/green] Workspace is a git repository")
+        else:
+            # Check if workspace contains any git repositories
+            has_git_repos = False
+            try:
+                # Look for .git directories in immediate subdirectories (don't recurse too deep)
+                for item in workspace_path_obj.iterdir():
+                    if item.is_dir() and (item / ".git").exists():
+                        has_git_repos = True
+                        break
+            except PermissionError:
+                pass  # Can't check, skip validation
+
+            if has_git_repos:
+                console.print(f"[green]✓[/green] Workspace contains git repositories")
+            else:
+                console.print(f"[yellow]⚠[/yellow] Warning: Workspace does not appear to contain git repositories")
+                console.print(f"[dim]  DevAIFlow works with git repositories in subdirectories of the workspace.[/dim]")
+                console.print(f"[dim]  Example: {workspace_path}/my-project/.git[/dim]")
+    else:
+        console.print(f"[yellow]⚠[/yellow] Warning: Workspace path does not exist yet: {workspace_path}")
+        console.print(f"[dim]  It will be created when you clone repositories into it.[/dim]")
+
     console.print("\n[bold]=== Keyword Mappings ===[/bold]\n")
+    console.print("[dim]Optional: Keywords help suggest repositories when working across multiple repos.[/dim]")
+    console.print("[dim]DevAIFlow learns from your usage patterns, so keywords are only needed if you want[/dim]")
+    console.print("[dim]explicit routing rules. You can skip this and configure later via 'daf config tui'.[/dim]\n")
 
     # Keywords
     keywords = {}
@@ -72,7 +131,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
             keywords = current_config.repos.keywords
     else:
         # No existing keywords
-        if Confirm.ask("Configure keyword mappings?", default=False):
+        if Confirm.ask("Configure keyword mappings now?", default=False):
             keywords = _prompt_for_keywords({})
 
     # Build JIRA config with transitions
@@ -88,6 +147,8 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
             )
         },
         time_tracking=True,
+        comment_visibility_type=visibility_type_choice,
+        comment_visibility_value=visibility_value,
     )
 
     # Preserve field mappings and custom field defaults from current config if available
@@ -118,11 +179,13 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     )
 
     # PR/MR Template Configuration (optional)
-    console.print("\n[bold]=== PR/MR Template Configuration (Optional) ===[/bold]\n")
+    console.print("\n[bold]=== PR/MR Template Configuration ===[/bold]\n")
+    console.print("[dim]Optional: Configure how AI generates PR/MR descriptions.[/dim]")
+    console.print("[dim]Can be set later via 'daf config tui' or 'daf config set-pr-template-url'.[/dim]\n")
     console.print("You have three options for generating PR/MR descriptions:")
-    console.print("  [cyan]1.[/cyan] Provide a template URL - AI will fill your organization's template")
-    console.print("  [cyan]2.[/cyan] Leave empty - AI will generate descriptions automatically")
-    console.print("  [cyan]3.[/cyan] Add template guidance to AGENTS.md/ORGANIZATION.md/TEAM.md files")
+    console.print("  [white]1.[/white] Provide a template URL - AI will fill your organization's template")
+    console.print("  [white]2.[/white] Leave empty - AI will generate descriptions automatically")
+    console.print("  [white]3.[/white] Add template guidance to AGENTS.md/ORGANIZATION.md/TEAM.md files")
     console.print()
 
     pr_template_url = None
@@ -130,7 +193,11 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         # Show current value
         console.print(f"[dim]Current template URL: {current_config.pr_template_url}[/dim]")
         if Confirm.ask("Update PR/MR template URL?", default=False):
-            console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
+            console.print()
+            console.print("[dim]For GitHub templates, use the raw URL format:[/dim]")
+            console.print("[dim]  https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
+            console.print("[dim]  (Not the regular GitHub URL - must be raw.githubusercontent.com)[/dim]")
+            console.print()
             template_url_input = Prompt.ask("Enter PR/MR template URL (leave empty to clear)", default="")
             pr_template_url = template_url_input.strip() if template_url_input.strip() else None
         else:
@@ -139,7 +206,11 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     else:
         # No existing template URL
         if Confirm.ask("Configure PR/MR template URL?", default=False):
-            console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
+            console.print()
+            console.print("[dim]For GitHub templates, use the raw URL format:[/dim]")
+            console.print("[dim]  https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
+            console.print("[dim]  (Not the regular GitHub URL - must be raw.githubusercontent.com)[/dim]")
+            console.print()
             template_url_input = Prompt.ask("Enter PR/MR template URL (leave empty to skip)", default="")
             pr_template_url = template_url_input.strip() if template_url_input.strip() else None
 

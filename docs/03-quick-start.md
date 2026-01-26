@@ -426,7 +426,7 @@ daf cleanup-sessions
 jira me
 
 # Check config
-cat ~/.daf-sessions/config.json
+cat $DEVAIFLOW_HOME/config.json
 ```
 
 **Can't find session:**

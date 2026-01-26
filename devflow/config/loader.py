@@ -567,6 +567,7 @@ class ConfigLoader:
             filters=org.sync_filters,  # Renamed from 'filters' to 'sync_filters'
             # From team
             custom_field_defaults=team.jira_custom_field_defaults,
+            system_field_defaults=team.jira_system_field_defaults,
             time_tracking=team.time_tracking_enabled,
             comment_visibility_type=team.jira_comment_visibility_type,
             comment_visibility_value=team.jira_comment_visibility_value,
@@ -750,6 +751,7 @@ class ConfigLoader:
         # Extract team config
         team_config = TeamConfig(
             jira_custom_field_defaults=config.jira.custom_field_defaults,
+            jira_system_field_defaults=config.jira.system_field_defaults,
             time_tracking_enabled=config.jira.time_tracking,
             jira_comment_visibility_type=config.jira.comment_visibility_type,
             jira_comment_visibility_value=config.jira.comment_visibility_value,

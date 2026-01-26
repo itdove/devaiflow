@@ -132,17 +132,17 @@ daf config show
 
 ### Option 2: User Configuration (Alternative)
 
-Copy template files to `~/.daf-sessions/`:
+Copy template files to `$DEVAIFLOW_HOME/`:
 
 ```bash
-cp -r /path/to/devaiflow/docs/config-templates/backends ~/.daf-sessions/
-cp /path/to/devaiflow/docs/config-templates/organization.json ~/.daf-sessions/
-cp /path/to/devaiflow/docs/config-templates/team.json ~/.daf-sessions/
+cp -r /path/to/devaiflow/docs/config-templates/backends $DEVAIFLOW_HOME/
+cp /path/to/devaiflow/docs/config-templates/organization.json $DEVAIFLOW_HOME/
+cp /path/to/devaiflow/docs/config-templates/team.json $DEVAIFLOW_HOME/
 
 # Edit the files
-vim ~/.daf-sessions/backends/jira.json
-vim ~/.daf-sessions/organization.json
-vim ~/.daf-sessions/team.json
+vim $DEVAIFLOW_HOME/backends/jira.json
+vim $DEVAIFLOW_HOME/organization.json
+vim $DEVAIFLOW_HOME/team.json
 
 # Verify
 daf config show
@@ -171,10 +171,10 @@ These repositories would have all organization-specific JIRA settings pre-config
 DevAIFlow merges configuration from multiple sources:
 
 1. **Workspace config** (highest priority) - Config files in your workspace directory
-2. **User config** - `~/.daf-sessions/` directory
+2. **User config** - `$DEVAIFLOW_HOME/` directory
 3. **Built-in defaults** (lowest priority)
 
-Example: If `organization.json` exists in both workspace and `~/.daf-sessions/`, the workspace version takes precedence.
+Example: If `organization.json` exists in both workspace and `$DEVAIFLOW_HOME/`, the workspace version takes precedence.
 
 ## Validation
 
@@ -207,7 +207,7 @@ daf jira view MYAPP-123
 - Use `prompt: true` to manually select status during transitions
 
 ### "Configuration not loaded"
-- Verify files are in the correct location (workspace root or `~/.daf-sessions/`)
+- Verify files are in the correct location (workspace root or `$DEVAIFLOW_HOME/`)
 - Check JSON syntax is valid: `python -m json.tool < organization.json`
 - Ensure files are named exactly: `organization.json`, `team.json`, `backends/jira.json`
 

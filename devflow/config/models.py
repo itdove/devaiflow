@@ -72,6 +72,7 @@ class TeamConfig(BaseModel):
     """
 
     jira_custom_field_defaults: Optional[Dict[str, Any]] = None  # Default values for custom fields (e.g., {"workstream": "Platform", "affected_version": "v1.0"})
+    jira_system_field_defaults: Optional[Dict[str, Any]] = None  # Default values for JIRA system fields (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     time_tracking_enabled: bool = True  # Team-wide time tracking preference
     jira_comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'
     jira_comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
@@ -95,6 +96,7 @@ class JiraConfig(BaseModel):
     filters: Dict[str, JiraFiltersConfig] = Field(default_factory=dict)
     project: Optional[str] = None  # JIRA project key (e.g., "PROJ")
     custom_field_defaults: Optional[Dict[str, Any]] = None  # Default values for custom fields (e.g., {"workstream": "Platform", "affected_version": "v1.0"})
+    system_field_defaults: Optional[Dict[str, Any]] = None  # Default values for JIRA system fields (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     affected_version: Optional[str] = None  # Default affected version for bugs (e.g., "v1.0.0")
     field_mappings: Optional[Dict[str, Dict[str, Any]]] = None  # Cached field mappings (creation fields only)
     field_cache_timestamp: Optional[str] = None  # ISO timestamp of last field discovery

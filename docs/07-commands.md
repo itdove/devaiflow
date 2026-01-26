@@ -970,7 +970,7 @@ By default, `daf delete` removes **both** the session index entry and session fi
 
 **What gets deleted by default:**
 - Session entry in index (sessions.json)
-- Session directory (~/.daf-sessions/sessions/<NAME>/)
+- Session directory ($DEVAIFLOW_HOME/sessions/<NAME>/)
   - Progress notes (notes.md)
   - Metadata files (metadata.json)
   - Memory files (memory.md)
@@ -2221,7 +2221,7 @@ daf jira add-comment PROJ-12345 "Automated update" --json
 
 **Visibility Configuration:**
 
-The default comment visibility is configured in `~/.daf-sessions/config.json`:
+The default comment visibility is configured in `$DEVAIFLOW_HOME/config.json`:
 
 ```json
 {
@@ -2299,7 +2299,7 @@ daf note --latest "Fixed validation bug"
 ```
 
 **Notes storage:**
-- Always saved locally in `~/.daf-sessions/sessions/{NAME}/notes.md`
+- Always saved locally in `$DEVAIFLOW_HOME/sessions/{NAME}/notes.md`
 - With `--jira`: also added as comment on JIRA ticket
 - If JIRA sync fails, note is still saved locally
 
@@ -2512,7 +2512,7 @@ Time Tracked: 5h 45m
     bob: 2h 15m
 
 Notes: 12 entries
-  Notes File: ~/.daf-sessions/sessions/implement-backup-feature/notes.md
+  Notes File: $DEVAIFLOW_HOME/sessions/implement-backup-feature/notes.md
 ```
 
 **Output (--uuid-only):**
@@ -2861,7 +2861,7 @@ When importing a session exported by a teammate:
 1. Import extracts session metadata, **session notes**, and **ALL conversation histories** (PROJ-60697)
    - Session notes (notes.md) are fully preserved, allowing you to see all previous work notes
    - You can continue adding notes after import using `daf note` command
-2. **Diagnostic logs are restored** to `~/.daf-sessions/logs/imported/{timestamp}/` (PROJ-60657)
+2. **Diagnostic logs are restored** to `$DEVAIFLOW_HOME/logs/imported/{timestamp}/` (PROJ-60657)
    - Logs are namespaced with a timestamp to avoid conflicts with your current logs
    - This preserves diagnostic history for debugging any issues from the exported session
 3. **Workspace selection happens on first open** (AAP-63987):
@@ -3053,7 +3053,7 @@ daf backup --output ~/backups/cs-backup-20251120.tar.gz
 - ALL conversation history (.jsonl files)
 - Session index (sessions.json)
 - All session directories
-- **Diagnostic logs** (~/.daf-sessions/logs/) - for debugging (PROJ-60657)
+- **Diagnostic logs** ($DEVAIFLOW_HOME/logs/) - for debugging (PROJ-60657)
 
 **Backup vs Export - Key Differences:**
 
@@ -3110,7 +3110,7 @@ daf restore ~/backup.tar.gz --force
 **Diagnostic Logs Restoration:**
 
 When restoring from a backup:
-- **Diagnostic logs are restored** to `~/.daf-sessions/logs/imported/{timestamp}/` (PROJ-60657)
+- **Diagnostic logs are restored** to `$DEVAIFLOW_HOME/logs/imported/{timestamp}/` (PROJ-60657)
 - Logs are namespaced with a timestamp to avoid conflicts with your current logs
 - This preserves diagnostic history for debugging
 
@@ -3468,7 +3468,7 @@ daf purge-mock-data --force
 ```
 
 **What it clears:**
-- Mock sessions (`~/.daf-sessions/mocks/sessions.json`)
+- Mock sessions (`$DEVAIFLOW_HOME/mocks/sessions.json`)
 - Mock JIRA tickets, comments, transitions
 - Mock GitHub pull requests
 - Mock GitLab merge requests
@@ -3833,7 +3833,7 @@ daf edit broken-session
 ```
 
 **Notes:**
-- Always creates a backup in `~/.daf-sessions/backups/` before saving
+- Always creates a backup in `$DEVAIFLOW_HOME/backups/` before saving
 - Backup filename format: `session-{name}-{timestamp}.json`
 - Validation prevents saving invalid data
 - Can cancel changes without saving (no backup created if cancelled)
@@ -3907,10 +3907,15 @@ daf init --reset
 **First-time setup:**
 
 When config doesn't exist, `daf init` (without flags):
-1. Creates `~/.daf-sessions/config.json` with default settings
+1. Creates `$DEVAIFLOW_HOME/config.json` with default settings
 2. Detects JIRA API token from environment
-3. Discovers and caches JIRA custom field mappings (if token available)
-4. Prompts to configure project and custom field defaults
+3. Prompts for essential configuration:
+   - JIRA URL and project key
+   - Comment visibility (who can see DevAIFlow's JIRA comments)
+   - Workspace path (repository directory)
+   - Optional: Keyword mappings for multi-repo suggestions
+   - Optional: PR/MR template URL
+4. Discovers and caches JIRA custom field mappings (if token available)
 
 **Refresh mode (`--refresh`):**
 
@@ -3936,38 +3941,62 @@ When config exists, use `daf init --reset` to review and update all configuratio
 ```
 $ daf init --reset
 
-Reviewing configuration values...
-Current values shown as defaults. Press Enter to keep, or type new value.
+DevAIFlow Configuration Wizard
+
+All settings can be changed later using 'daf config tui'
 
 === JIRA Configuration ===
 
-JIRA URL [https://jira.example.com]: https://jira.example.com
-JIRA Project Key [PROJ]: MYPROJ
-JIRA Username [your-username]: myuser
+The project key is the short identifier for your JIRA project (e.g., 'PROJ', 'ENG', 'DEVOPS')
+You can find it in your JIRA URL: https://jira.company.com/browse/PROJ-123 → 'PROJ'
+Can be set later, but required for: creating issues, field discovery
+
+JIRA URL (https://jira.example.com):
+JIRA Project Key (optional, press Enter to skip) (PROJ):
+
+=== JIRA Comment Visibility ===
+
+Control who can see comments that DevAIFlow adds to JIRA tickets.
+Can be set later via 'daf config tui'.
+
+Choose visibility type:
+  1. group - Restrict by JIRA group membership (most common)
+  2. role - Restrict by JIRA role
+
+Visibility type [group/role] (group):
+
+Enter the JIRA group name (e.g., 'Engineering Team', 'Developers')
+Group name (Engineering Team):
 
 === Repository Workspace ===
 
-Workspace path [~/development/myproject]: ~/dev/projects
+Workspace path (~/development/myproject):
 
 === Keyword Mappings ===
 
-Current keywords:
-  - management: myproject-management-service
-  - console: myproject-admin-console
+Optional: Keywords help suggest repositories when working across multiple repos.
+DevAIFlow learns from your usage patterns, so keywords are only needed if you want
+explicit routing rules. You can skip this and configure later via 'daf config tui'.
 
-Update keywords? [n]: n
+Configure keyword mappings now? [y/n] (n): n
+
+=== PR/MR Template Configuration ===
+
+Optional: Configure how AI generates PR/MR descriptions.
+Can be set later via 'daf config tui' or 'daf config set-pr-template-url'.
+
+You have three options for generating PR/MR descriptions:
+  1. Provide a template URL - AI will fill your organization's template
+  2. Leave empty - AI will generate descriptions automatically
+  3. Add template guidance to AGENTS.md/ORGANIZATION.md/TEAM.md files
+
+Configure PR/MR template URL? [y/n] (n): n
 
 Discovering JIRA custom field mappings...
 ✓ Found 4 custom fields
 
-✓ Configuration updated
-Location: ~/.daf-sessions/config.json
-
-Changes:
-  • JIRA URL: https://jira.example.com → https://jira.example.com
-  • JIRA Project: PROJ → MYPROJ
-  • JIRA User: your-username → myuser
-  • Workspace: ~/development/myproject → ~/dev/projects
+✓ Configuration saved
+Location: $DEVAIFLOW_HOME/config.json
 ```
 
 **When to use each mode:**
@@ -4488,15 +4517,15 @@ Features:
 
 #### Option 2: Direct JSON Editing (Automation/Scripts)
 
-For scripts and automation, edit `~/.daf-sessions/config.json` directly:
+For scripts and automation, edit `$DEVAIFLOW_HOME/config.json` directly:
 
 ```bash
 # Using jq (recommended for automation)
-jq '.jira.project = "PROJ"' ~/.daf-sessions/config.json > /tmp/cfg.json
-mv /tmp/cfg.json ~/.daf-sessions/config.json
+jq '.jira.project = "PROJ"' $DEVAIFLOW_HOME/config.json > /tmp/cfg.json
+mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 
 # Or edit manually
-vi ~/.daf-sessions/config.json
+vi $DEVAIFLOW_HOME/config.json
 ```
 
 ### Configuration Mapping Reference
@@ -4525,8 +4554,8 @@ daf config tui
 
 **Direct editing:**
 ```bash
-jq '.jira.project = "PROJ"' ~/.daf-sessions/config.json > /tmp/cfg.json
-mv /tmp/cfg.json ~/.daf-sessions/config.json
+jq '.jira.project = "PROJ"' $DEVAIFLOW_HOME/config.json > /tmp/cfg.json
+mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 ```
 
 #### Example 2: Setting Workspace Directory
@@ -4542,8 +4571,8 @@ daf config tui
 
 **Direct editing:**
 ```bash
-jq '.repos.workspaces = [{"name": "default", "path": "~/development"}] | .repos.last_used_workspace = "default"' ~/.daf-sessions/config.json > /tmp/cfg.json
-mv /tmp/cfg.json ~/.daf-sessions/config.json
+jq '.repos.workspaces = [{"name": "default", "path": "~/development"}] | .repos.last_used_workspace = "default"' $DEVAIFLOW_HOME/config.json > /tmp/cfg.json
+mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 ```
 
 #### Example 4: Complex Configuration (Transitions)
@@ -4567,8 +4596,8 @@ cat > /tmp/transition.json << 'JSON'
 }
 JSON
 
-jq '.jira.transitions.on_start = input' ~/.daf-sessions/config.json /tmp/transition.json > /tmp/cfg.json
-mv /tmp/cfg.json ~/.daf-sessions/config.json
+jq '.jira.transitions.on_start = input' $DEVAIFLOW_HOME/config.json /tmp/transition.json > /tmp/cfg.json
+mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 ```
 
 ### Validation Differences
@@ -4587,7 +4616,7 @@ Integration tests should be updated to use one of these approaches:
 
 **Approach 1: Direct JSON creation (recommended for speed)**
 ```bash
-cat > ~/.daf-sessions/config.json << 'JSON'
+cat > $DEVAIFLOW_HOME/config.json << 'JSON'
 {
   "jira": {
     "url": "https://jira.example.com",
@@ -4604,7 +4633,7 @@ JSON
 **Approach 2: jq for selective updates**
 ```bash
 jq '.jira.project = "PROJ" | .repos.workspaces = [{"name": "default", "path": "/tmp"}] | .repos.last_used_workspace = "default"' \
-  ~/.daf-sessions/config.json > /tmp/cfg.json && mv /tmp/cfg.json ~/.daf-sessions/config.json
+  $DEVAIFLOW_HOME/config.json > /tmp/cfg.json && mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 ```
 
 ### Removal Notice

@@ -914,8 +914,11 @@ def _suggest_and_select_repository(
             workspace_path = Path(workspace_path_str).expanduser()
             if workspace_path.exists() and workspace_path.is_dir():
                 try:
+                    from devflow.git.utils import GitUtils
                     directories = [d for d in workspace_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
-                    available_repos = sorted([d.name for d in directories])
+                    # Filter to only include git repositories
+                    git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
+                    available_repos = sorted(git_repos)
                 except Exception as e:
                     console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
 

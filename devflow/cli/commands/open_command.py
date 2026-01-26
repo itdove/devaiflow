@@ -1438,13 +1438,16 @@ def _create_conversation_from_workspace_selection(
         workspace = Path(workspace_path).expanduser()
 
         if workspace.exists() and workspace.is_dir():
-            # List all directories in workspace, excluding those already in conversations
+            # List all git repositories in workspace, excluding those already in conversations
             try:
+                from devflow.git.utils import GitUtils
                 directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
+                # Filter to only include git repositories
+                git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
                 existing_dirs = set(session.conversations.keys())
 
                 # Filter out directories that already have conversations
-                all_repos = sorted([d.name for d in directories])
+                all_repos = sorted(git_repos)
                 available_repos = [repo for repo in all_repos if repo not in existing_dirs]
                 repo_options = available_repos
 
@@ -1749,10 +1752,13 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
             console.print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
 
             if workspace.exists() and workspace.is_dir():
-                # List all directories in workspace
+                # List all git repositories in workspace
                 try:
+                    from devflow.git.utils import GitUtils
                     directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
-                    repo_options = sorted([d.name for d in directories])
+                    # Filter to only include git repositories
+                    git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
+                    repo_options = sorted(git_repos)
 
                     if repo_options:
                         console.print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")

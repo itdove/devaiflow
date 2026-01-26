@@ -12,10 +12,10 @@ If you might want to restore your sessions or configuration later:
 
 ```bash
 # Backup entire DevAIFlow directory
-tar -czf devaiflow-backup-$(date +%Y%m%d).tar.gz ~/.daf-sessions/
+tar -czf devaiflow-backup-$(date +%Y%m%d).tar.gz $DEVAIFLOW_HOME/
 
 # Or backup specific data
-cp -r ~/.daf-sessions/ ~/devaiflow-backup/
+cp -r $DEVAIFLOW_HOME/ ~/devaiflow-backup/
 ```
 
 ### Export Active Sessions
@@ -52,7 +52,7 @@ daf --version  # Should show "command not found"
 
 ```bash
 # Remove entire DevAIFlow directory
-rm -rf ~/.daf-sessions/
+rm -rf $DEVAIFLOW_HOME/
 
 # Remove workspace configurations (optional)
 # Review each workspace first!
@@ -106,7 +106,7 @@ If you want to keep your session data but remove the application:
 # Uninstall package only
 pip uninstall devaiflow
 
-# Keep ~/.daf-sessions/ for future reinstall
+# Keep $DEVAIFLOW_HOME/ for future reinstall
 # Data remains intact for later use
 ```
 
@@ -116,18 +116,18 @@ pip uninstall devaiflow
 
 ```bash
 # Keep configuration, remove sessions
-rm -rf ~/.daf-sessions/sessions/
-rm -rf ~/.daf-sessions/conversations/
+rm -rf $DEVAIFLOW_HOME/sessions/
+rm -rf $DEVAIFLOW_HOME/conversations/
 ```
 
 ### Remove Only Configuration
 
 ```bash
 # Keep sessions, remove config
-rm ~/.daf-sessions/config.json
-rm ~/.daf-sessions/organization.json
-rm ~/.daf-sessions/team.json
-rm -rf ~/.daf-sessions/backends/
+rm $DEVAIFLOW_HOME/config.json
+rm $DEVAIFLOW_HOME/organization.json
+rm $DEVAIFLOW_HOME/team.json
+rm -rf $DEVAIFLOW_HOME/backends/
 ```
 
 ## Verification
@@ -140,7 +140,7 @@ which daf
 which cs
 
 # Check files are gone
-ls ~/.daf-sessions/  # Should not exist or show "No such file or directory"
+ls $DEVAIFLOW_HOME/  # Should not exist or show "No such file or directory"
 
 # Check pip
 pip list | grep devaiflow  # Should return nothing
@@ -151,7 +151,7 @@ pip list | grep devaiflow  # Should return nothing
 ### Files Deleted in Complete Uninstall
 
 ```
-~/.daf-sessions/
+$DEVAIFLOW_HOME/
 ├── config.json                   # User preferences
 ├── organization.json             # Organization settings
 ├── team.json                     # Team settings
@@ -234,14 +234,14 @@ hash -r
 **Solution:**
 ```bash
 # Check ownership
-ls -la ~/.daf-sessions/
+ls -la $DEVAIFLOW_HOME/
 
 # Remove with sudo if needed (be careful!)
-sudo rm -rf ~/.daf-sessions/
+sudo rm -rf $DEVAIFLOW_HOME/
 
 # Or change ownership first
-sudo chown -R $USER:$USER ~/.daf-sessions/
-rm -rf ~/.daf-sessions/
+sudo chown -R $USER:$USER $DEVAIFLOW_HOME/
+rm -rf $DEVAIFLOW_HOME/
 ```
 
 ### Can't Find All Workspace Configurations
@@ -263,11 +263,11 @@ If you want to temporarily disable DevAIFlow:
 
 ```bash
 # Rename the data directory
-mv ~/.daf-sessions ~/.daf-sessions.disabled
+mv $DEVAIFLOW_HOME $DEVAIFLOW_HOME.disabled
 
 # DevAIFlow will create fresh config on next run
 # To re-enable, just rename back:
-# mv ~/.daf-sessions.disabled ~/.daf-sessions
+# mv $DEVAIFLOW_HOME.disabled $DEVAIFLOW_HOME
 ```
 
 ## Data Retention

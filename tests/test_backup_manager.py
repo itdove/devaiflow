@@ -42,7 +42,7 @@ def test_create_backup_basic(temp_daf_home):
 
     assert backup_path.exists()
     assert backup_path.suffix == ".gz"
-    assert "daf-sessions-backup" in backup_path.name
+    assert "devaiflow-backup" in backup_path.name
 
     # Verify tar contents
     with tarfile.open(backup_path, "r:gz") as tar:

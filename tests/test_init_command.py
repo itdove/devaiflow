@@ -277,11 +277,15 @@ def test_init_first_time_with_jira_discovery(temp_daf_home, mock_jira_cli, monke
         # Wizard prompts for JIRA config:
         # 1. JIRA URL
         # 2. JIRA Project
-        # 3. Workstream
-        # 4. Workspace path
+        # 3. Comment visibility type
+        # 4. Comment visibility value (group/role name)
+        # 5. Workstream
+        # 6. Workspace path
         mock_prompt.side_effect = [
             "https://test-jira.example.com",
             "TEST",
+            "group",
+            "Engineering Team",
             "TestWorkstream",
             str(Path.home() / "development")
         ]
@@ -322,6 +326,8 @@ def test_init_first_time_with_invalid_jira_url(temp_daf_home, monkeypatch):
         mock_prompt.side_effect = [
             "https://jira.example.com",  # Invalid example URL
             "PROJ",
+            "group",                      # Comment visibility type
+            "Engineering Team",           # Comment visibility value
             "TestWorkstream",
             str(Path.home() / "development")
         ]
@@ -431,8 +437,10 @@ def test_init_reset_updates_config_values(temp_daf_home_no_patches, mock_jira_cl
         # Mock responses for wizard prompts
         mock_prompt.side_effect = [
             "https://new-jira.example.com",  # JIRA URL
-            "NEW",  # JIRA Project
-            "/new/workspace",  # Workspace path
+            "NEW",                            # JIRA Project
+            "group",                          # Comment visibility type
+            "New Team",                       # Comment visibility value
+            "/new/workspace",                 # Workspace path
         ]
 
         result = runner.invoke(cli, ["init", "--reset"])
@@ -491,8 +499,10 @@ def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_ji
         # Mock responses - all use defaults (note: workstream no longer prompted, preserved from old config)
         mock_prompt.side_effect = [
             "https://custom-jira.example.com",  # JIRA URL (same)
-            "CUSTOM",  # JIRA Project (same)
-            "/custom/workspace",  # Workspace path (same)
+            "CUSTOM",                            # JIRA Project (same)
+            "group",                             # Comment visibility type (default)
+            "Engineering Team",                  # Comment visibility value (default)
+            "/custom/workspace",                 # Workspace path (same)
         ]
 
         result = runner.invoke(cli, ["init", "--reset"])

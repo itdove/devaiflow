@@ -727,7 +727,7 @@ def test_cli_field_option_filters_non_custom_fields(monkeypatch):
             })()
 
     # Test the filtering logic directly
-    from devflow.cli.commands.jira_update_simple import create_jira_update_command
+    from devflow.cli.commands.jira_update_dynamic import create_jira_update_command
 
     # Mock ConfigLoader to return our mock config
     def mock_load_config(self):
@@ -769,9 +769,10 @@ def test_cli_field_option_filters_non_custom_fields(monkeypatch):
     ])
 
     assert "TypeError" not in result.output
-    # Custom field should be passed through
+    # Custom field should be passed through in custom_fields dict
     if update_called:
-        assert 'epic_link' in update_called[0]
+        assert 'custom_fields' in update_called[0]
+        assert 'epic_link' in update_called[0]['custom_fields']
 
 
 def test_transition_ticket_only(mock_jira_client, monkeypatch):

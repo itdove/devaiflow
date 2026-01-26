@@ -32,6 +32,7 @@ def mock_config():
     config.jira.url = "https://jira.example.com"
     config.jira.project = "PROJ"
     config.jira.custom_field_defaults = {"workstream": "Platform"}
+    config.jira.system_field_defaults = None  # Add system_field_defaults attribute
     config.jira.affected_version = "v1.0.0"
     config.jira.field_mappings = {}
     config.jira.field_cache_timestamp = None
