@@ -14,13 +14,15 @@ from devflow.session.manager import SessionManager
 @pytest.fixture
 def mock_workspace(tmp_path):
     """Create a mock workspace with test repositories."""
+    import subprocess
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    # Create test repositories
-    (workspace / "repo1").mkdir()
-    (workspace / "repo2").mkdir()
-    (workspace / "repo3").mkdir()
+    # Create test repositories as git repos
+    for repo_name in ["repo1", "repo2", "repo3"]:
+        repo_path = workspace / repo_name
+        repo_path.mkdir()
+        subprocess.run(["git", "init"], cwd=repo_path, capture_output=True, check=True)
 
     return workspace
 

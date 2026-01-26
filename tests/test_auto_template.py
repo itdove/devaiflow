@@ -228,9 +228,11 @@ def test_auto_create_template_in_open_command(temp_daf_home):
     workspace = temp_daf_home / "workspace"
     workspace.mkdir(parents=True)
 
-    # Create a test project directory
+    # Create a test project directory as a git repo
+    import subprocess
     project_path = workspace / "open-test-project"
     project_path.mkdir(parents=True)
+    subprocess.run(["git", "init"], cwd=project_path, capture_output=True, check=True)
 
     # Create a session without project_path
     session_manager = SessionManager(config_loader)
