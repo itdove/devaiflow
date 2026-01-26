@@ -64,7 +64,7 @@ export DAF_MOCK_MODE=1
 This ensures:
 - No production data is affected
 - No external services are required
-- Data is isolated to `~/.daf-sessions/mocks/`
+- Data is isolated to `$DEVAIFLOW_HOME/mocks/`
 - Visual indicators ("⚠️ MOCK MODE ENABLED") prevent confusion
 
 ## Output

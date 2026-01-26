@@ -45,9 +45,9 @@ class IssueTrackerClient(ABC):
                 - priority: Priority level (optional)
                 - labels: List of labels (optional)
                 - epic: Parent epic key (optional)
-                - sprint: Sprint name (optional)
-                - points: Story points (optional)
-                - acceptance_criteria: Acceptance criteria (optional)
+
+            Custom fields (sprint, points, acceptance_criteria, etc.) are returned
+            as additional keys in the dictionary based on the field_mappings provided
 
         Raises:
             JiraAuthError: If authentication fails
@@ -124,8 +124,6 @@ class IssueTrackerClient(ABC):
         priority: Optional[str] = None,
         affected_version: Optional[str] = None,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
@@ -138,10 +136,8 @@ class IssueTrackerClient(ABC):
             priority: Priority level (optional)
             affected_version: Version where bug was found (optional)
             parent: Parent epic/issue key (optional)
-            workstream: Workstream/component (optional)
-            acceptance_criteria: Acceptance criteria for fix (optional)
             field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields
+            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
 
         Returns:
             Created ticket key/ID
@@ -161,8 +157,6 @@ class IssueTrackerClient(ABC):
         description: str,
         project: str,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
@@ -173,10 +167,8 @@ class IssueTrackerClient(ABC):
             description: Detailed description with user story
             project: Project key/ID
             parent: Parent epic key (optional)
-            workstream: Workstream/component (optional)
-            acceptance_criteria: Acceptance criteria (optional)
             field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields
+            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
 
         Returns:
             Created ticket key/ID
@@ -196,8 +188,6 @@ class IssueTrackerClient(ABC):
         description: str,
         project: str,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
@@ -208,10 +198,8 @@ class IssueTrackerClient(ABC):
             description: Detailed description
             project: Project key/ID
             parent: Parent epic/issue key (optional)
-            workstream: Workstream/component (optional)
-            acceptance_criteria: Acceptance criteria (optional)
             field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields
+            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
 
         Returns:
             Created ticket key/ID
@@ -230,7 +218,6 @@ class IssueTrackerClient(ABC):
         summary: str,
         description: str,
         project: str,
-        workstream: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
@@ -240,9 +227,8 @@ class IssueTrackerClient(ABC):
             summary: Brief title of the epic
             description: Detailed description with background
             project: Project key/ID
-            workstream: Workstream/component (optional)
             field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields
+            **custom_fields: Additional custom fields (field_name=value pairs)
 
         Returns:
             Created ticket key/ID
@@ -262,8 +248,6 @@ class IssueTrackerClient(ABC):
         description: str,
         project: str,
         parent: Optional[str] = None,
-        workstream: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
         field_mapper=None,
         **custom_fields,
     ) -> str:
@@ -274,10 +258,8 @@ class IssueTrackerClient(ABC):
             description: Detailed description with research questions
             project: Project key/ID
             parent: Parent epic key (optional)
-            workstream: Workstream/component (optional)
-            acceptance_criteria: Acceptance criteria (optional)
             field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields
+            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
 
         Returns:
             Created ticket key/ID

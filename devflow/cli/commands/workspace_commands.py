@@ -134,6 +134,28 @@ def add_workspace(name: str, path: str, set_default: bool = False) -> None:
             console.print("[dim]Cancelled[/dim]")
             return
 
+    # Validate workspace contains git repositories
+    from devflow.git.utils import GitUtils
+    if GitUtils.is_git_repository(expanded_path):
+        console.print(f"[green]✓[/green] Workspace is a git repository")
+    else:
+        # Check if workspace contains any git repositories
+        has_git_repos = False
+        try:
+            for item in expanded_path.iterdir():
+                if item.is_dir() and (item / ".git").exists():
+                    has_git_repos = True
+                    break
+        except PermissionError:
+            pass  # Can't check, skip validation
+
+        if has_git_repos:
+            console.print(f"[green]✓[/green] Workspace contains git repositories")
+        else:
+            console.print(f"[yellow]⚠[/yellow] Warning: Workspace does not appear to contain git repositories")
+            console.print(f"[dim]  DevAIFlow works with git repositories in subdirectories of the workspace.[/dim]")
+            console.print(f"[dim]  Example: {expanded_path}/my-project/.git[/dim]")
+
     # Check if this should be the last used (only if no last used exists and not explicitly set)
     if not set_default and not config.repos.last_used_workspace:
         set_default = Confirm.ask("\nSet as last used workspace?", default=True)

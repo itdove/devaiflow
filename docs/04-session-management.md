@@ -436,7 +436,7 @@ Each session stores:
 - **tags** - Custom tags for organization
 
 ### Stored Data
-Each session has a directory at `~/.daf-sessions/sessions/{SESSION-NAME}/`:
+Each session has a directory at `$DEVAIFLOW_HOME/sessions/{SESSION-NAME}/`:
 - **metadata.json** - All metadata above
 - **notes.md** - Progress notes
 - **memory.md** - Context hints (optional)
@@ -576,7 +576,7 @@ daf list --status in_progress,paused
 daf note backup "Implemented upload endpoint"
 ```
 
-Saved to `~/.daf-sessions/sessions/backup/notes.md`:
+Saved to `$DEVAIFLOW_HOME/sessions/backup/notes.md`:
 ```markdown
 ## 2025-11-20 14:30:00
 
@@ -608,7 +608,7 @@ Uses the most recently updated session.
 Notes are stored in markdown format:
 
 ```bash
-cat ~/.daf-sessions/sessions/backup/notes.md
+cat $DEVAIFLOW_HOME/sessions/backup/notes.md
 ```
 
 ## Session Summaries
@@ -740,7 +740,7 @@ daf delete --all --force
 
 ### What Gets Deleted
 
-- Session metadata (`~/.daf-sessions/sessions/{NAME}/`)
+- Session metadata (`$DEVAIFLOW_HOME/sessions/{NAME}/`)
 - Progress notes
 - Memory files
 - Session entry in sessions.json

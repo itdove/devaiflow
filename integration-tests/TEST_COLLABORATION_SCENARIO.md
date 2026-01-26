@@ -96,13 +96,13 @@ If you need to restart the test from the beginning, clean up all test data:
 export DEVAIFLOW_HOME="$HOME/.daf-sessions-dev-a"
 export DAF_MOCK_MODE=1
 daf purge-mock-data --force
-rm -rf ~/.daf-sessions-dev-a
+rm -rf $DEVAIFLOW_HOME-dev-a
 
 # Clean Developer B's environment
 export DEVAIFLOW_HOME="$HOME/.daf-sessions-dev-b"
 export DAF_MOCK_MODE=1
 daf purge-mock-data --force
-rm -rf ~/.daf-sessions-dev-b
+rm -rf $DEVAIFLOW_HOME-dev-b
 
 # Clean up any git branches created during testing
 cd ~/development/workspace/devaiflow
@@ -136,7 +136,7 @@ daf config show
 
 **Expected Output**:
 ```
-✓ Initialized configuration at: ~/.daf-sessions-dev-a/config.json
+✓ Initialized configuration at: $DEVAIFLOW_HOME-dev-a/config.json
 Project: PROJ
 Workstream: Platform
 Workspace: /Users/yourname/development/workspace
@@ -168,7 +168,7 @@ echo "Created ticket: $TICKET_KEY"
 **What Happens**:
 1. A real JIRA ticket is created (e.g., PROJ-12345) even though mock mode is enabled
 2. The ticket key is automatically extracted and saved in `$TICKET_KEY`
-3. Session is created in `~/.daf-sessions-dev-a/sessions/PROJ-12345/` (using actual ticket key)
+3. Session is created in `$DEVAIFLOW_HOME-dev-a/sessions/PROJ-12345/` (using actual ticket key)
 4. You'll be prompted to select a working directory (choose your test repository)
 5. Git branch is created (e.g., `aap-12345-implement-user-authentication-feature`)
 6. Claude Code is launched (or simulated in mock mode)
@@ -263,7 +263,7 @@ daf config show
 
 **Expected Output**:
 ```
-✓ Initialized configuration at: ~/.daf-sessions-dev-b/config.json
+✓ Initialized configuration at: $DEVAIFLOW_HOME-dev-b/config.json
 Project: PROJ
 Workstream: Platform
 Workspace: /Users/yourname/development/workspace
@@ -502,7 +502,7 @@ daf export "$TICKET_KEY" -o /tmp/session-export.tar.gz
 
 **Solution**: Check that you're using the correct `DEVAIFLOW_HOME`:
 ```bash
-echo $DEVAIFLOW_HOME  # Should be ~/.daf-sessions-dev-b
+echo $DEVAIFLOW_HOME  # Should be $DEVAIFLOW_HOME-dev-b
 ls -la $DEVAIFLOW_HOME/sessions/  # Should show the ticket directory
 ```
 

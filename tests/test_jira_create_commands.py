@@ -6,7 +6,7 @@ from pathlib import Path
 
 from devflow.cli.commands.jira_create_commands import (
     _ensure_field_mappings,
-    _get_workstream,
+    _get_required_custom_fields,
     _get_project,
     _get_affected_version,
     _get_description,
@@ -31,7 +31,8 @@ def mock_config():
     config.jira = Mock(spec=JiraConfig)
     config.jira.url = "https://jira.example.com"
     config.jira.project = "PROJ"
-    config.jira.workstream = "Platform"
+    config.jira.custom_field_defaults = {"workstream": "Platform"}
+    config.jira.system_field_defaults = None  # Add system_field_defaults attribute
     config.jira.affected_version = "v1.0.0"
     config.jira.field_mappings = {}
     config.jira.field_cache_timestamp = None
@@ -54,7 +55,6 @@ def mock_field_mapper():
     mapper.is_cache_stale.return_value = False
     mapper.discover_fields.return_value = {"workstream": {"id": "customfield_12319275"}}
     mapper.get_field_id.return_value = "customfield_12319275"
-    mapper.get_workstream_with_prompt.return_value = "Platform"
     return mapper
 
 
@@ -151,47 +151,7 @@ class TestEnsureFieldMappings:
                 assert result is not None
 
 
-class TestGetWorkstream:
-    """Tests for _get_workstream function."""
-
-    def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
-        """Test that flag value is used when provided."""
-        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
-
-        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, "Platform")
-
-        assert result == "Platform"
-
-    def test_use_config_value_when_no_flag(self, mock_config, mock_config_loader, mock_field_mapper):
-        """Test that config value is used when no flag provided."""
-        mock_config.jira.workstream = "Platform"
-
-        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, None)
-
-        assert result == "Platform"
-
-    def test_prompt_user_when_no_flag_or_config(self, mock_config, mock_config_loader, mock_field_mapper):
-        """Test that user is prompted when no flag or config value."""
-        mock_config.jira.workstream = None
-        mock_field_mapper.get_workstream_with_prompt.return_value = "NewWorkstream"
-
-        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, None)
-
-        assert result == "NewWorkstream"
-        mock_field_mapper.get_workstream_with_prompt.assert_called_once()
-        mock_config_loader.save_config.assert_called_once()
-
-    def test_save_config_when_flag_differs_from_config(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
-        """Test that config is updated when flag value differs."""
-        mock_config.jira.workstream = "OldWorkstream"
-        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
-        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Confirm.ask', lambda *args, **kwargs: True)
-
-        result = _get_workstream(mock_config, mock_config_loader, mock_field_mapper, "Platform")
-
-        assert result == "Platform"
-        assert mock_config.jira.workstream == "Platform"
-        mock_config_loader.save_config.assert_called_once()
+# TestGetWorkstream removed - workstream is now handled generically via _get_required_custom_fields
 
 
 class TestGetProject:
@@ -324,7 +284,7 @@ class TestCreateIssue:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
+                    with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={"workstream": "Platform"}):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="v1.0.0"):
                                 with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
@@ -336,7 +296,6 @@ class TestCreateIssue:
                                         summary="Test bug",
                                         priority="Major",
                                         project="PROJ",
-                                        workstream="Platform",
                                         parent="PROJ-100",
                                         affected_version="v1.0.0",
                                         description="Bug description",
@@ -354,7 +313,6 @@ class TestCreateIssue:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
                                 mock_mapper = Mock()
@@ -365,8 +323,7 @@ class TestCreateIssue:
                                     summary="Test story",
                                     priority="Major",
                                     project="PROJ",
-                                    workstream="Platform",
-                                    parent="PROJ-100",
+                                                                        parent="PROJ-100",
                                     affected_version="",
                                     description="Story description",
                                     description_file=None,
@@ -383,7 +340,6 @@ class TestCreateIssue:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
                                 mock_mapper = Mock()
@@ -394,8 +350,7 @@ class TestCreateIssue:
                                     summary="Test task",
                                     priority="Major",
                                     project="PROJ",
-                                    workstream="Platform",
-                                    parent="PROJ-100",
+                                                                        parent="PROJ-100",
                                     affected_version="",
                                     description="Task description",
                                     description_file=None,
@@ -414,8 +369,7 @@ class TestCreateIssue:
                     summary="Test",
                     priority="Major",
                     project="PROJ",
-                    workstream="Platform",
-                    parent=None,
+                                        parent=None,
                     affected_version="",
                     description="Test",
                     description_file=None,
@@ -435,8 +389,7 @@ class TestCreateIssue:
                     summary="Test",
                     priority="Major",
                     project="PROJ",
-                    workstream="Platform",
-                    parent=None,
+                                        parent=None,
                     affected_version="",
                     description="Test",
                     description_file=None,
@@ -451,7 +404,6 @@ class TestCreateIssue:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             with patch('devflow.jira.utils.validate_jira_ticket') as mock_validate:
                                 mock_mapper = Mock()
@@ -463,8 +415,7 @@ class TestCreateIssue:
                                     summary="Test story",
                                     priority="Major",
                                     project="PROJ",
-                                    workstream="Platform",
-                                    parent="PROJ-100",
+                                                                        parent="PROJ-100",
                                     affected_version="",
                                     description="Story description",
                                     description_file=None,
@@ -480,7 +431,6 @@ class TestCreateIssue:
 
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings'):
-                with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                     with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                         with patch('devflow.jira.utils.validate_jira_ticket', return_value=None):
                             with pytest.raises(SystemExit):
@@ -489,8 +439,7 @@ class TestCreateIssue:
                                     summary="Test story",
                                     priority="Major",
                                     project="PROJ",
-                                    workstream="Platform",
-                                    parent="INVALID-100",
+                                                                        parent="INVALID-100",
                                     affected_version="",
                                     description="Story description",
                                     description_file=None,
@@ -505,7 +454,6 @@ class TestCreateIssue:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             with patch('devflow.jira.utils.validate_jira_ticket') as mock_validate:
                                 mock_mapper = Mock()
@@ -518,8 +466,7 @@ class TestCreateIssue:
                                     summary="Test story",
                                     priority="Major",
                                     project="PROJ",
-                                    workstream="Platform",
-                                    parent="PROJ-100",
+                                                                        parent="PROJ-100",
                                     affected_version="",
                                     description="Story description",
                                     description_file=None,
@@ -538,7 +485,6 @@ class TestCreateIssue:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             with patch('devflow.cli.commands.jira_create_commands.json_output') as mock_json_out:
                                 with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
@@ -550,8 +496,7 @@ class TestCreateIssue:
                                         summary="Test story",
                                         priority="Major",
                                         project="PROJ",
-                                        workstream="Platform",
-                                        parent="PROJ-100",
+                                                                                parent="PROJ-100",
                                         affected_version="",
                                         description="Story description",
                                         description_file=None,
@@ -577,7 +522,6 @@ class TestCreateBug:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             mock_mapper = Mock()
                             mock_ensure.return_value = mock_mapper
@@ -585,8 +529,7 @@ class TestCreateBug:
                             create_bug(
                                 summary=None,
                                 priority="Major",
-                                workstream="Platform",
-                                parent=None,
+                                                                parent=None,
                                 affected_version="v1.0.0",
                                 description="Bug description",
                                 description_file=None,
@@ -609,7 +552,6 @@ class TestCreateStory:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             mock_mapper = Mock()
                             mock_ensure.return_value = mock_mapper
@@ -617,8 +559,7 @@ class TestCreateStory:
                             create_story(
                                 summary="Test story",
                                 priority="Major",
-                                workstream="Platform",
-                                parent="PROJ-100",
+                                                                parent="PROJ-100",
                                 description="Story description",
                                 description_file=None,
                                 interactive=False,
@@ -646,7 +587,6 @@ class TestCreateTask:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_workstream', return_value="Platform"):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             mock_mapper = Mock()
                             mock_ensure.return_value = mock_mapper
@@ -655,8 +595,7 @@ class TestCreateTask:
                                 create_task(
                                     summary="Test task",
                                     priority="Major",
-                                    workstream="Platform",
-                                    parent=None,
+                                                                        parent=None,
                                     description="Task description",
                                     description_file=None,
                                     interactive=False,

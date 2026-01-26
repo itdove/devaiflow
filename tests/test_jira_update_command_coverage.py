@@ -127,7 +127,7 @@ def test_update_issue_custom_fields_discovery_error(mock_env, monkeypatch, temp_
                 mock_config_loader.return_value.load_config.return_value = mock_config
 
                 # Should fall back to creation field mappings and still complete
-                update_jira_issue("TEST-123", summary="Test", custom_field_test_field="value")
+                update_jira_issue("TEST-123", summary="Test", custom_fields={"test_field": "value"})
 
 
 def test_update_issue_custom_field_unknown(mock_env, monkeypatch, temp_daf_home):
@@ -144,7 +144,7 @@ def test_update_issue_custom_field_unknown(mock_env, monkeypatch, temp_daf_home)
             with patch("devflow.cli.commands.jira_update_command.ConfigLoader"):
                 # Should print warning about unknown field and exit (no fields to update)
                 with pytest.raises(SystemExit) as exc_info:
-                    update_jira_issue("TEST-123", custom_field_unknown="value")
+                    update_jira_issue("TEST-123", custom_fields={"unknown": "value"})
                 assert exc_info.value.code == 1
 
 
@@ -162,7 +162,7 @@ def test_update_issue_custom_field_none_value(mock_env, monkeypatch, temp_daf_ho
             with patch("devflow.cli.commands.jira_update_command.ConfigLoader"):
                 # Should skip None values and exit (no fields to update)
                 with pytest.raises(SystemExit) as exc_info:
-                    update_jira_issue("TEST-123", custom_field_test=None)
+                    update_jira_issue("TEST-123", custom_fields={"test": None})
                 assert exc_info.value.code == 1
 
 

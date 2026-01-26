@@ -2647,7 +2647,8 @@ def test_generate_commit_message_logging(temp_daf_home, tmp_path, monkeypatch):
     _generate_commit_message(session)
 
     # Verify log file was created
-    log_file = Path.home() / ".daf-sessions" / "logs" / "complete.log"
+    from devflow.utils.paths import get_cs_home
+    log_file = get_cs_home() / "logs" / "complete.log"
     assert log_file.exists()
 
     # Read log and verify content

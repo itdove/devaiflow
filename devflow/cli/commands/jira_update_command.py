@@ -29,19 +29,21 @@ def build_field_value(field_info: Dict[str, Any], value: str, field_mapper: Jira
     schema = field_info.get("schema", "string")
 
     # Handle different field types
+    # IMPORTANT: Check array fields BEFORE single-select fields
+    # to properly handle multi-select fields like workstream (type=array, schema=option)
     if schema == "multiurl" or "url" in schema.lower():
         # For URL fields, return as-is
         return value
-    elif schema == "option" or schema == "com.atlassian.jira.plugin.system.customfieldtypes:select":
-        # Single-select field
-        return {"value": value}
     elif schema == "array" or field_type == "array":
         # Multi-select field (like workstream)
-        if "option" in schema:
+        if "option" in schema or "select" in schema:
             return [{"value": value}]
         else:
             # Array of strings
             return [value]
+    elif schema == "option" or schema == "com.atlassian.jira.plugin.system.customfieldtypes:select":
+        # Single-select field
+        return {"value": value}
     elif schema == "priority":
         return {"name": value}
     elif schema == "user":
@@ -60,19 +62,17 @@ def update_jira_issue(
     priority: Optional[str] = None,
     assignee: Optional[str] = None,
     summary: Optional[str] = None,
-    acceptance_criteria: Optional[str] = None,
-    workstream: Optional[str] = None,
     git_pull_request: Optional[str] = None,
     status: Optional[str] = None,
     linked_issue: Optional[str] = None,
     issue: Optional[str] = None,
     output_json: bool = False,
-    **custom_fields
+    custom_fields: Optional[Dict[str, Any]] = None,
+    system_fields: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Update a JIRA issue with specified fields.
 
-    This function supports both hardcoded common fields and dynamically discovered
-    custom fields through **custom_fields kwargs.
+    This function supports both hardcoded common fields, JIRA system fields, and custom fields.
 
     Args:
         issue_key: JIRA issue key (e.g., PROJ-12345)
@@ -81,14 +81,16 @@ def update_jira_issue(
         priority: New priority value
         assignee: New assignee username
         summary: New summary text
-        acceptance_criteria: New acceptance criteria
-        workstream: New workstream value
         git_pull_request: PR/MR URLs (comma-separated, will be appended to existing)
         status: Target status to transition to (e.g., 'In Progress', 'Review', 'Closed')
         linked_issue: Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to')
         issue: Issue key to link to (e.g., PROJ-12345)
-        **custom_fields: Additional custom fields discovered dynamically
+        custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform", "team": "Backend"})
+        system_fields: JIRA system field values from CLI options (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     """
+    # Default empty dicts if None
+    custom_fields = custom_fields or {}
+    system_fields = system_fields or {}
     try:
         # Load config
         config_loader = ConfigLoader()
@@ -144,19 +146,16 @@ def update_jira_issue(
             else:
                 payload["fields"]["assignee"] = {"name": assignee}
 
-        # Handle custom fields with mapper
-        if acceptance_criteria:
-            acceptance_criteria_field = field_mapper.get_field_id("acceptance_criteria") or "customfield_12315940"
-            payload["fields"][acceptance_criteria_field] = acceptance_criteria
-
-        if workstream:
-            workstream_field = field_mapper.get_field_id("workstream") or "customfield_12319275"
-            payload["fields"][workstream_field] = [{"value": workstream}]
-
         # Handle git-pull-request (fetch, append, update)
         if git_pull_request:
             # Get the git-pull-request field ID from mapper
-            git_pr_field = field_mapper.get_field_id("git_pull_request") or "customfield_12310220"
+            git_pr_field = field_mapper.get_field_id("git_pull_request")
+            if not git_pr_field:
+                if output_json:
+                    json_output(success=False, error={"code": "FIELD_NOT_FOUND", "message": "git_pull_request field not found in JIRA"})
+                else:
+                    console.print("[red]✗[/red] git_pull_request field not found in JIRA. Run 'daf jira discover' to refresh field mappings.")
+                sys.exit(1)
 
             # Fetch current PR links
             try:
@@ -178,6 +177,19 @@ def update_jira_issue(
             merged_prs = merge_pr_urls(current_prs, git_pull_request)
 
             payload["fields"][git_pr_field] = merged_prs
+
+        # Handle system fields (components, labels, etc.)
+        # Merge config defaults with CLI-provided values (CLI takes precedence)
+        merged_system_fields = {}
+        if config.jira.system_field_defaults:
+            merged_system_fields.update(config.jira.system_field_defaults)
+        if system_fields:
+            merged_system_fields.update(system_fields)
+
+        # Add system fields to payload (use field IDs directly like "components", "labels")
+        for field_name, field_value in merged_system_fields.items():
+            # System fields use their original names (e.g., "components"), not customfield IDs
+            payload["fields"][field_name] = field_value
 
         # Handle dynamically discovered custom fields
         if custom_fields:
@@ -335,7 +347,7 @@ def update_jira_issue(
                     elif field_mapper:
                         # Try to reverse lookup the field name
                         field_name = field_key
-                        for norm_name, field_info in field_mapper._cache.items():
+                        for norm_name, field_info in field_mapper.field_mappings.items():
                             if field_info.get("id") == field_key:
                                 field_name = field_info.get("name", field_key)
                                 break

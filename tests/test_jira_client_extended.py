@@ -43,7 +43,11 @@ def test_get_ticket_with_sprint(mock_jira_cli):
 
     # Provide field_mappings to enable sprint extraction
     field_mappings = {
-        "sprint": {"id": "customfield_12310940"}
+        "sprint": {
+            "id": "customfield_12310940",
+            "type": "array",
+            "schema": "com.pyxis.greenhopper.jira:gh-sprint"
+        }
     }
 
     client = JiraClient()
@@ -67,7 +71,11 @@ def test_get_ticket_with_story_points(mock_jira_cli):
 
     # Provide field_mappings to enable story points extraction
     field_mappings = {
-        "story_points": {"id": "customfield_12310243"}
+        "story_points": {
+            "id": "customfield_12310243",
+            "type": "number",
+            "schema": "number"
+        }
     }
 
     client = JiraClient()
@@ -147,9 +155,21 @@ def test_get_ticket_all_fields(mock_jira_cli):
 
     # Provide field_mappings for all custom fields
     field_mappings = {
-        "story_points": {"id": "customfield_12310243"},
-        "sprint": {"id": "customfield_12310940"},
-        "epic_link": {"id": "customfield_12311140"}
+        "story_points": {
+            "id": "customfield_12310243",
+            "type": "number",
+            "schema": "number"
+        },
+        "sprint": {
+            "id": "customfield_12310940",
+            "type": "array",
+            "schema": "com.pyxis.greenhopper.jira:gh-sprint"
+        },
+        "epic_link": {
+            "id": "customfield_12311140",
+            "type": "string",
+            "schema": "string"
+        }
     }
 
     client = JiraClient()
@@ -614,9 +634,21 @@ def test_list_tickets_with_sprint_data(mock_jira_cli):
 
     # Provide field_mappings for all custom fields
     field_mappings = {
-        "story_points": {"id": "customfield_12310243"},
-        "sprint": {"id": "customfield_12310940"},
-        "epic_link": {"id": "customfield_12311140"}
+        "story_points": {
+            "id": "customfield_12310243",
+            "type": "number",
+            "schema": "number"
+        },
+        "sprint": {
+            "id": "customfield_12310940",
+            "type": "array",
+            "schema": "com.pyxis.greenhopper.jira:gh-sprint"
+        },
+        "epic_link": {
+            "id": "customfield_12311140",
+            "type": "string",
+            "schema": "string"
+        }
     }
 
     client = JiraClient()

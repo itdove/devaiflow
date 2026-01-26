@@ -86,4 +86,4 @@ daf config --help             # Full list of config subcommands
 **Important:**
 - This is a READ-ONLY command - safe to run inside Claude Code
 - To modify config, exit Claude Code and use `daf config set-*` commands
-- Configuration is stored in ~/.daf-sessions/config.yaml
+- Configuration is stored in $DEVAIFLOW_HOME/config.yaml

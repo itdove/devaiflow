@@ -51,6 +51,39 @@ class JiraApiError(JiraError):
         self.error_messages = error_messages or []
         self.field_errors = field_errors or {}
 
+    def __str__(self) -> str:
+        """Return detailed error message including API response details."""
+        parts = [self.message]
+
+        if self.status_code:
+            parts.append(f"(HTTP {self.status_code})")
+
+        if self.response_text:
+            # Try to parse and prettify JSON response
+            import json
+            try:
+                response_data = json.loads(self.response_text)
+                # Extract error details from JIRA response
+                if "errorMessages" in response_data and response_data["errorMessages"]:
+                    parts.append(f"JIRA errors: {', '.join(response_data['errorMessages'])}")
+                if "errors" in response_data and response_data["errors"]:
+                    field_errors_str = ", ".join([f"{k}: {v}" for k, v in response_data["errors"].items()])
+                    parts.append(f"Field errors: {field_errors_str}")
+                # If no structured errors, show raw response (truncated)
+                if not ("errorMessages" in response_data or "errors" in response_data):
+                    response_preview = self.response_text[:200]
+                    if len(self.response_text) > 200:
+                        response_preview += "..."
+                    parts.append(f"Response: {response_preview}")
+            except (json.JSONDecodeError, Exception):
+                # Not JSON or parsing failed - show raw response (truncated)
+                response_preview = self.response_text[:200]
+                if len(self.response_text) > 200:
+                    response_preview += "..."
+                parts.append(f"Response: {response_preview}")
+
+        return " - ".join(parts)
+
 
 class JiraNotFoundError(JiraError):
     """Raised when a JIRA resource is not found (404)."""

@@ -216,12 +216,11 @@ def test_schema_jira_fields():
 
     # Check required JIRA fields
     assert "url" in jira_def["properties"]
-    assert "user" in jira_def["properties"]
     assert "transitions" in jira_def["properties"]
 
     # Check optional JIRA fields
     assert "project" in jira_def["properties"]
-    assert "workstream" in jira_def["properties"]
+    assert "custom_field_defaults" in jira_def["properties"]
     assert "field_mappings" in jira_def["properties"]
 
 

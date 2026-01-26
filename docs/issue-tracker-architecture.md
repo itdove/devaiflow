@@ -120,7 +120,7 @@ ticket = client.get_ticket(key)
 
 ## Configuration
 
-**File**: `~/.daf-sessions/config.json`
+**File**: `$DEVAIFLOW_HOME/config.json`
 
 ```json
 {

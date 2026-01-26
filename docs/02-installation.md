@@ -364,11 +364,43 @@ If this shows your JIRA tickets, the integration is working!
 daf init
 ```
 
-This creates `~/.daf-sessions/config.json` with default settings.
+This launches an interactive wizard that prompts for:
+- **JIRA URL and project key** - Your JIRA instance details
+- **Comment visibility** - Control who can see DevAIFlow's JIRA comments (group or role)
+- **Workspace path** - Your main development directory
+- **Optional settings** - Keyword mappings for multi-repo suggestions, PR template URL
 
-### 2. Edit Configuration
+All settings can be changed later using `daf config tui`.
 
-Edit `~/.daf-sessions/config.json`:
+### 2. Install Claude Code Commands
+
+After initializing configuration, install the DevAIFlow slash commands and skills into Claude Code:
+
+```bash
+daf upgrade
+```
+
+This installs:
+- **Slash commands** (`/daf-*`) into `<workspace>/.claude/commands/`
+- **Skills** into `<workspace>/.claude/skills/`
+
+These enable you to use DevAIFlow features directly within Claude Code sessions.
+
+**Example usage:**
+```bash
+# Preview what would be installed
+daf upgrade --dry-run
+
+# Install both commands and skills
+daf upgrade
+
+# Install only commands
+daf upgrade --commands-only
+```
+
+### 3. Edit Configuration (Optional)
+
+Edit `$DEVAIFLOW_HOME/config.json`:
 
 ```json
 {
@@ -539,7 +571,7 @@ pip install --user .
 daf init
 
 # Verify location
-ls ~/.daf-sessions/config.json
+ls $DEVAIFLOW_HOME/config.json
 ```
 
 ## Upgrading
@@ -560,10 +592,10 @@ pip uninstall devaiflow
 
 ```bash
 # Backup first!
-cp -r ~/.daf-sessions ~/.daf-sessions.backup
+cp -r $DEVAIFLOW_HOME $DEVAIFLOW_HOME.backup
 
 # Remove all data
-rm -rf ~/.daf-sessions
+rm -rf $DEVAIFLOW_HOME
 ```
 
 **Note:** This does NOT delete your Claude Code conversation files in `~/.claude/projects/`.
@@ -678,11 +710,11 @@ Upgrade to latest version? [y/n] (y):
 
 ### Customizing for Your Organization
 
-**IMPORTANT**: DAF_AGENTS.md uses generic placeholders (PROJECT, YourWorkstream, gitlab.example.com) intentionally. Actual values are configured in `~/.daf-sessions/config.json` via `daf config` commands, NOT by editing DAF_AGENTS.md.
+**IMPORTANT**: DAF_AGENTS.md uses generic placeholders (PROJECT, YourWorkstream, gitlab.example.com) intentionally. Actual values are configured in `$DEVAIFLOW_HOME/config.json` via `daf config` commands, NOT by editing DAF_AGENTS.md.
 
 #### Configuration: What Goes Where
 
-**Configured in `~/.daf-sessions/config.json` (via `daf config`):**
+**Configured in `$DEVAIFLOW_HOME/config.json` (via `daf config`):**
 - ✅ JIRA URL, project key, workstream
 - ✅ Affected version for bugs
 - ✅ Field mappings (acceptance_criteria, epic_link, etc.)
@@ -791,20 +823,20 @@ git commit -m "Add customized DAF_AGENTS.md for our team"
 - JIRA issue template formats (Epic, Story, Bug, Task, Spike)
 - Organization-specific best practices (optional)
 
-DAF_AGENTS.md is generic by design - it uses placeholders that are filled in at runtime from your `~/.daf-sessions/config.json` and git configuration.
+DAF_AGENTS.md is generic by design - it uses placeholders that are filled in at runtime from your `$DEVAIFLOW_HOME/config.json` and git configuration.
 
 ## Configuring Claude Code Permissions
 
-**CRITICAL**: Claude Code must be configured to allow reading context files from `~/.daf-sessions/` and `~/.daf-sessions/`. Without this, the tool will fail when Claude tries to read organization context files.
+**CRITICAL**: Claude Code must be configured to allow reading context files from `$DEVAIFLOW_HOME/` and `$DEVAIFLOW_HOME/`. Without this, the tool will fail when Claude tries to read organization context files.
 
 ### Why This Matters
 
-DevAIFlow creates context files in `~/.daf-sessions/` that Claude Code automatically reads when you run `daf open` or `daf jira new`:
+DevAIFlow creates context files in `$DEVAIFLOW_HOME/` that Claude Code automatically reads when you run `daf open` or `daf jira new`:
 
-- `~/.daf-sessions/ORGANIZATION.md` - Organization-wide standards (JIRA templates, Wiki markup requirements)
-- `~/.daf-sessions/TEAM.md` - Team conventions
-- `~/.daf-sessions/USER.md` - Personal notes and preferences
-- `~/.daf-sessions/backends/JIRA.md` - JIRA integration rules
+- `$DEVAIFLOW_HOME/ORGANIZATION.md` - Organization-wide standards (JIRA templates, Wiki markup requirements)
+- `$DEVAIFLOW_HOME/TEAM.md` - Team conventions
+- `$DEVAIFLOW_HOME/USER.md` - Personal notes and preferences
+- `$DEVAIFLOW_HOME/backends/JIRA.md` - JIRA integration rules
 
 By default, Claude Code may block access to these directories because they are dotfiles (start with `.`).
 
@@ -824,16 +856,16 @@ Add file access permissions to your **global** Claude Code settings file:
 {
   "file_access": {
     "read": [
-      "~/.daf-sessions/**/*",
-      "~/.daf-sessions/**/*"
+      "$DEVAIFLOW_HOME/**/*",
+      "$DEVAIFLOW_HOME/**/*"
     ]
   }
 }
 ```
 
 **Why both paths?**
-- `~/.daf-sessions/` - New default location
-- `~/.daf-sessions/` - Backward compatibility with older versions
+- `$DEVAIFLOW_HOME/` - New default location
+- `$DEVAIFLOW_HOME/` - Backward compatibility with older versions
 
 ### Step-by-Step Setup
 
@@ -848,8 +880,8 @@ Add file access permissions to your **global** Claude Code settings file:
 {
   "file_access": {
     "read": [
-      "~/.daf-sessions/**/*",
-      "~/.daf-sessions/**/*"
+      "$DEVAIFLOW_HOME/**/*",
+      "$DEVAIFLOW_HOME/**/*"
     ]
   }
 }
@@ -864,11 +896,11 @@ EOF
 3. **Test with daf:**
    ```bash
    # Create a test context file
-   echo "# Test Organization Context" > ~/.daf-sessions/ORGANIZATION.md
+   echo "# Test Organization Context" > $DEVAIFLOW_HOME/ORGANIZATION.md
 
    # Open a session and verify Claude can read it
    daf new --name test-permissions --goal "Test Claude Code permissions"
-   # In the Claude Code session, ask: "Can you read ~/.daf-sessions/ORGANIZATION.md?"
+   # In the Claude Code session, ask: "Can you read $DEVAIFLOW_HOME/ORGANIZATION.md?"
    ```
 
 ### Why Global Settings?
@@ -876,7 +908,7 @@ EOF
 The allow list **must** be in the global `~/.claude/settings.json` file because:
 
 1. **Project-local settings aren't portable:** Project `.claude/settings.local.json` files are typically git-ignored and not pushed to repositories
-2. **daf jira new requires access:** When creating JIRA tickets with codebase analysis, Claude needs to read `~/.daf-sessions/ORGANIZATION.md` for organization standards
+2. **daf jira new requires access:** When creating JIRA tickets with codebase analysis, Claude needs to read `$DEVAIFLOW_HOME/ORGANIZATION.md` for organization standards
 3. **Team consistency:** All team members need the same access permissions, which global settings ensure
 
 **Do NOT use `.claude/settings.local.json` in the project directory** for this configuration - it won't be available across different working directories or for team members.
@@ -885,7 +917,7 @@ The allow list **must** be in the global `~/.claude/settings.json` file because:
 
 **Problem:** "Permission denied" when Claude tries to read context files
 
-**Cause:** Claude Code settings don't allow reading from `~/.daf-sessions/`
+**Cause:** Claude Code settings don't allow reading from `$DEVAIFLOW_HOME/`
 
 **Solution:** Add the paths to `file_access.read` array as shown above
 
@@ -907,7 +939,7 @@ python -m json.tool ~/.claude/settings.json
 ### Security Considerations
 
 **What this allows:**
-- Claude can read context files from `~/.daf-sessions/` and `~/.daf-sessions/`
+- Claude can read context files from `$DEVAIFLOW_HOME/` and `$DEVAIFLOW_HOME/`
 - These directories only contain markdown documentation files
 - No sensitive credentials or secrets stored in these locations
 
@@ -922,7 +954,7 @@ After configuration, verify Claude Code can read context files:
 
 ```bash
 # 1. Create test file
-echo "# Test Content" > ~/.daf-sessions/ORGANIZATION.md
+echo "# Test Content" > $DEVAIFLOW_HOME/ORGANIZATION.md
 
 # 2. Open a session
 daf open PROJ-12345

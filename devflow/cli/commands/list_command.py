@@ -1,7 +1,7 @@
 """Implementation of 'daf list' command."""
 
 import os
-from typing import Optional
+from typing import Dict, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -151,7 +151,7 @@ def _display_page(
 def list_sessions(
     status: Optional[str] = None,
     working_directory: Optional[str] = None,
-    sprint: Optional[str] = None,
+    issue_metadata_filters: Optional[Dict[str, str]] = None,
     issue_status: Optional[str] = None,
     since: Optional[str] = None,
     before: Optional[str] = None,
@@ -165,7 +165,7 @@ def list_sessions(
     Args:
         status: Filter by session status (comma-separated for multiple)
         working_directory: Filter by working directory
-        sprint: Filter by sprint
+        issue_metadata_filters: Filter by custom fields (e.g., {"sprint": "Sprint 1", "severity": "Critical"})
         issue_status: Filter by issue tracker status (comma-separated for multiple)
         since: Filter by sessions active since this time (e.g., "last week", "3 days ago")
         before: Filter by sessions active before this time
@@ -209,7 +209,7 @@ def list_sessions(
     sessions = session_manager.list_sessions(
         status=status,
         working_directory=working_directory,
-        sprint=sprint,
+        issue_metadata_filters=issue_metadata_filters,
         issue_status=issue_status,
         since=since_dt,
         before=before_dt,
@@ -224,7 +224,7 @@ def list_sessions(
                     "filters_applied": {
                         "status": status,
                         "working_directory": working_directory,
-                        "sprint": sprint,
+                        "issue_metadata_filters": issue_metadata_filters,
                         "issue_status": issue_status,
                         "since": since,
                         "before": before,
@@ -233,7 +233,7 @@ def list_sessions(
             )
         else:
             console.print("[dim]No sessions found[/dim]")
-            if status or working_directory or sprint or issue_status or since or before:
+            if status or working_directory or issue_metadata_filters or issue_status or since or before:
                 console.print("[dim]Try removing filters or use 'daf sync' to fetch issue tracker tickets[/dim]")
         return
 
@@ -295,7 +295,7 @@ def list_sessions(
                 "filters_applied": {
                     "status": status,
                     "working_directory": working_directory,
-                    "sprint": sprint,
+                    "issue_metadata_filters": issue_metadata_filters,
                     "issue_status": issue_status,
                     "since": since,
                     "before": before,

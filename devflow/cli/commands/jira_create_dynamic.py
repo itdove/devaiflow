@@ -37,8 +37,8 @@ def create_jira_create_command():
 
     # Build dynamic list of field names for --field option
     hardcoded_fields = {
-        "summary", "description", "priority", "project", "workstream",
-        "parent", "epic_link", "affected_version"
+        "summary", "description", "priority", "project",
+        "parent", "affected_version"
     }
 
     # Get custom field names (excluding hardcoded ones and system fields)
@@ -71,7 +71,6 @@ def create_jira_create_command():
     @click.option("--description-file", type=click.Path(exists=True), help="File with description")
     @click.option("--priority", type=click.Choice(["Critical", "Major", "Normal", "Minor"]), help="Issue priority (default: Major for bug/story, Normal for task)")
     @click.option("--project", help="JIRA project key (prompts to save if not in config)")
-    @click.option("--workstream", help="Workstream (prompts to save if not in config)")
     @click.option("--parent", help="Parent issue key to link to (epic for story/task/bug, parent for sub-task)")
     @click.option("--affected-version", help="Affected version (bugs only, uses config default if not specified)")
     @click.option("--linked-issue", help="Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to'). Use with --issue")
@@ -87,7 +86,6 @@ def create_jira_create_command():
         description_file: str,
         priority: str,
         project: str,
-        workstream: str,
         parent: str,
         affected_version: str,
         linked_issue: str,
@@ -117,8 +115,12 @@ def create_jira_create_command():
                 field_name, field_value = field_str.split('=', 1)
                 custom_fields[field_name.strip()] = field_value.strip()
 
-        # Merge with any dynamic options from kwargs
-        custom_fields.update(kwargs)
+        # Separate system fields from kwargs (non-customfield_* fields)
+        # These come from dynamically generated CLI options like --components, --labels
+        system_fields = {}
+        for field_name, field_value in kwargs.items():
+            if field_value is not None:  # Only include if value was provided
+                system_fields[field_name] = field_value
 
         # Extract output_json from context
         output_json = ctx.obj.get('output_json', False) if ctx.obj else False
@@ -128,7 +130,6 @@ def create_jira_create_command():
             summary=summary,
             priority=priority,
             project=project,
-            workstream=workstream,
             parent=parent,
             affected_version=affected_version,
             description=description,
@@ -138,6 +139,7 @@ def create_jira_create_command():
             linked_issue=linked_issue,
             issue=issue,
             custom_fields=custom_fields,
+            system_fields=system_fields,
             output_json=output_json,
         )
 
@@ -160,64 +162,51 @@ def create_jira_create_command():
         daf jira create story --summary "Implement backup feature" --interactive
         daf jira create task --summary "Update documentation" --parent PROJ-59038
         daf jira create bug --summary "Login error" --create-session
-        daf jira create story --summary "New feature" --project PROJ --workstream Platform
+        daf jira create story --summary "New feature" --project PROJ --field workstream=Platform
         daf jira create bug --summary "Critical bug" --field severity=Critical --field size=L
-        daf jira create story --summary "New story" --acceptance-criteria "- Criterion 1"
-        daf jira create story --summary "Alternative" --field acceptance_criteria="- Criterion 1"
+        daf jira create story --summary "New story" --field workstream=Platform --field team=Backend
+        daf jira create bug --summary "Production issue" --field workstream=Core --field priority=P1
     """
 
-    # Add dynamic options for creation fields (excluding already hardcoded ones)
-    for field_name, field_info in creation_fields.items():
-        # Skip hardcoded fields
-        if field_name in hardcoded_fields:
-            continue
+    # Dynamically add CLI options for JIRA system fields (non-custom fields)
+    # Custom fields (customfield_*) are handled via --field key=value
+    # System fields (components, labels, etc.) get dedicated CLI options
 
-        # Skip system fields
-        if not field_info.get("id", "").startswith("customfield_"):
-            continue
+    if creation_fields:
+        for field_name, field_info in creation_fields.items():
+            field_id = field_info.get("id", "")
 
-        # Create CLI-friendly option name (e.g., "story_points" -> "--story-points")
-        # Click option names can only contain alphanumeric characters, underscores, and hyphens
-        # and must not start with a number
-        import re
+            # Skip custom fields - they use --field instead
+            if field_id.startswith("customfield_"):
+                continue
 
-        # Step 1: Replace common separators with hyphens
-        sanitized_name = field_name.replace('_', '-').replace('/', '-').replace('.', '-')
+            # Skip fields that already have dedicated options (summary, description, priority, etc.)
+            if field_name in ["summary", "description", "priority", "project", "issuetype", "issue_type", "reporter", "assignee"]:
+                continue
 
-        # Step 2: Remove all characters that aren't alphanumeric or hyphens
-        sanitized_name = re.sub(r"[^a-zA-Z0-9-]", '', sanitized_name)
+            # Add CLI option for this system field
+            # Normalize field name for CLI: remove slashes, replace underscores with hyphens
+            normalized_field_name = field_name.replace('/', '').replace('_', '-')
+            option_name = f"--{normalized_field_name}"
+            field_display_name = field_info.get("name", field_name)
+            field_type = field_info.get("type", "string")
 
-        # Step 3: Collapse multiple consecutive hyphens into one
-        sanitized_name = re.sub(r'-+', '-', sanitized_name)
+            # Determine if this is a list field
+            is_list = field_type in ["array", "list"]
 
-        # Step 4: Remove leading/trailing hyphens
-        sanitized_name = sanitized_name.strip('-')
+            help_text = f"{field_display_name}"
+            if field_info.get("allowed_values"):
+                # Extract component names from allowed_values (which are dict strings)
+                # Skip this for now - allowed_values format is complex
+                pass
 
-        # Step 5: If name starts with a number or is empty, prefix with 'field-'
-        if not sanitized_name or sanitized_name[0].isdigit():
-            sanitized_name = f"field-{sanitized_name}"
-
-        option_name = f"--{sanitized_name}"
-
-        # Build help text
-        field_display_name = field_info.get("name", field_name)
-        help_text = f"Set {field_display_name}"
-
-        # Add allowed values to help text if available
-        allowed_values = field_info.get("allowed_values", [])
-        if allowed_values:
-            help_text += f" (choices: {', '.join(allowed_values[:5])}{'...' if len(allowed_values) > 5 else ''})"
-
-        # Add required info to help text
-        required_for = field_info.get("required_for", [])
-        if required_for:
-            help_text += f" [required for: {', '.join(required_for)}]"
-
-        # Add the dynamic option
-        jira_create_base = click.option(
-            option_name,
-            help=help_text,
-            default=None
-        )(jira_create_base)
+            # Add the option - use field_id as the parameter name since that's what JIRA expects
+            jira_create_base = click.option(
+                option_name,
+                field_id,  # Use field ID (e.g., "components") as the parameter name
+                help=help_text,
+                multiple=is_list,
+                default=None
+            )(jira_create_base)
 
     return jira_create_base

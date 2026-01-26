@@ -251,38 +251,30 @@ class MarkdownExporter:
             # No JIRA URL configured - just show the key
             lines.append(f"- **Key:** {session.issue_key}")
 
-        # Get values from issue_metadata
-        summary = session.issue_metadata.get("summary") if session.issue_metadata else None
-        issue_type = session.issue_metadata.get("type") if session.issue_metadata else None
-        status = session.issue_metadata.get("status") if session.issue_metadata else None
-        sprint = session.issue_metadata.get("sprint") if session.issue_metadata else None
-        points = session.issue_metadata.get("points") if session.issue_metadata else None
-        epic = session.issue_metadata.get("epic") if session.issue_metadata else None
+        # Standard fields (always show these first if present)
+        standard_fields = ["summary", "type", "status"]
 
-        # Summary
-        if summary:
-            lines.append(f"- **Summary:** {summary}")
+        # Get standard field values
+        if session.issue_metadata:
+            for field_name in standard_fields:
+                field_value = session.issue_metadata.get(field_name)
+                if field_value:
+                    # Capitalize field name for display
+                    display_name = field_name.capitalize()
+                    lines.append(f"- **{display_name}:** {field_value}")
 
-        # Type
-        if issue_type:
-            lines.append(f"- **Type:** {issue_type}")
+            # Export all other custom fields generically
+            for field_name, field_value in session.issue_metadata.items():
+                if field_name not in standard_fields and field_value is not None:
+                    # Capitalize field name for display
+                    display_name = field_name.replace("_", " ").title()
 
-        # Status
-        if status:
-            lines.append(f"- **Status:** {status}")
-
-        # Sprint
-        if sprint:
-            lines.append(f"- **Sprint:** {sprint}")
-
-        # Points
-        if points is not None:
-            lines.append(f"- **Story Points:** {points}")
-
-        # Epic
-        if epic:
-            epic_url = f"{jira_url}/browse/{epic}"
-            lines.append(f"- **Epic:** [{epic}]({epic_url})")
+                    # Special handling for parent/epic fields (create links)
+                    if field_name in ["parent", "epic"] and jira_url:
+                        field_url = f"{jira_url}/browse/{field_value}"
+                        lines.append(f"- **{display_name}:** [{field_value}]({field_url})")
+                    else:
+                        lines.append(f"- **{display_name}:** {field_value}")
 
         return lines
 

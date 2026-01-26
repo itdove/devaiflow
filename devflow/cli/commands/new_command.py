@@ -740,15 +740,9 @@ def create_new_session(
 
     # Populate JIRA metadata if available
     if issue_metadata_dict:
-        if not session.issue_metadata:
-            session.issue_metadata = {}
-        session.issue_metadata["summary"] = issue_metadata_dict.get("summary")
-        session.issue_metadata["type"] = issue_metadata_dict.get("type")
-        session.issue_metadata["status"] = issue_metadata_dict.get("status")
-        session.issue_metadata["sprint"] = issue_metadata_dict.get("sprint")
-        session.issue_metadata["points"] = issue_metadata_dict.get("points")
-        session.issue_metadata["assignee"] = issue_metadata_dict.get("assignee")
-        session.issue_metadata["epic"] = issue_metadata_dict.get("epic")
+        # Copy ALL fields from issue_metadata_dict to issue_metadata (generic approach)
+        # Exclude the 'key' and 'updated' fields (already stored separately)
+        session.issue_metadata = {k: v for k, v in issue_metadata_dict.items() if k not in ('key', 'updated') and v is not None}
         session_manager.update_session(session)
 
     # JSON output mode
@@ -920,8 +914,11 @@ def _suggest_and_select_repository(
             workspace_path = Path(workspace_path_str).expanduser()
             if workspace_path.exists() and workspace_path.is_dir():
                 try:
+                    from devflow.git.utils import GitUtils
                     directories = [d for d in workspace_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
-                    available_repos = sorted([d.name for d in directories])
+                    # Filter to only include git repositories
+                    git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
+                    available_repos = sorted(git_repos)
                 except Exception as e:
                     console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
 

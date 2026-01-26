@@ -155,7 +155,7 @@ def test_session_index_list_sessions_by_sprint():
     index.sessions["session1"] = session1
     index.sessions["session2"] = session2
 
-    result = index.list_sessions(sprint="Sprint 42")
+    result = index.list_sessions(issue_metadata_filters={"sprint": "Sprint 42"})
 
     assert len(result) == 1
     assert result[0].name == "session1"

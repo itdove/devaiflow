@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- Enhanced `daf init` wizard with better user guidance and explanations
+  - Added welcome message explaining all settings can be changed later
+  - Added comment visibility configuration (group/role based JIRA comment restrictions)
+  - Added detailed help text for keyword mappings (multi-repo suggestions)
+  - Added GitHub raw URL guidance for PR/MR templates
+  - Improved clarity on optional vs required settings
+
+### Fixed
+- Test environment isolation for unit tests - added `parent_field_mapping` to test configurations
+- Updated test fixtures to include new comment visibility prompts
+
 ## [1.0.0] - 2026-01-23
 
 

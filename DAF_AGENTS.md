@@ -8,7 +8,7 @@ This file provides essential instructions for using the `daf` tool (DevAIFlow) w
 - Understand JIRA issue template requirements (see Templates section below)
 - Get project-specific context about daf tool usage
 
-**Note**: Examples use generic placeholders (PROJECT, YourWorkstream). Actual values are configured in `~/.daf-sessions/config.json`.
+**Note**: Examples use generic placeholders (PROJECT, YourWorkstream). Actual values are configured in `$DEVAIFLOW_HOME/config.json`.
 
 ---
 
@@ -56,10 +56,12 @@ daf complete <session-name>
 daf jira view PROJ-12345
 daf jira create {bug|story|task} --summary "..." --parent PROJ-1234
 daf jira update PROJ-12345 --description "..."
+daf jira update PROJ-12345 --field <field_name>=<value>  # Update custom field
 
 # Configuration
-daf config tui  # Set Project Key to PROJ
-daf config tui  # Set Workstream to WORK
+daf config tui  # Interactive configuration editor
+daf config show-fields  # List available custom fields
+daf config refresh-jira-fields  # Refresh field mappings from JIRA
 
 # Workspace Management (AAP-63377)
 daf workspace list                              # List all workspaces (CAN run in sessions)
@@ -116,6 +118,144 @@ daf workspace set-default primary  # (RESTRICTED - run outside sessions)
 **Note**: Workspace management commands (`add`, `remove`, `rename`, `set-default`) are **RESTRICTED** and must be run outside Claude Code sessions. Only `daf workspace list` can run inside sessions.
 
 For detailed usage, workflow examples, and troubleshooting, refer to the **daf-cli skill**.
+
+---
+
+## Discovering Custom Fields
+
+**IMPORTANT**: Custom fields are organization-specific and configured via field_mappings in `organization.json`.
+
+### How to Find Available Custom Fields
+
+**Method 1: Use the show-fields command (RECOMMENDED)**
+```bash
+# Display all available custom fields in a readable format
+daf config show-fields
+
+# Get JSON output for programmatic use
+daf config show-fields --json
+```
+
+**Method 2: Read the organization configuration**
+```bash
+# View the organization.json file to see all field mappings
+cat $DEVAIFLOW_HOME/ORGANIZATION.md
+# Look for the "field_mappings" section which shows available field names
+```
+
+**Method 3: Check field_mappings in organization.json**
+The configuration file at `$DEVAIFLOW_HOME/organization.json` contains a `field_mappings` section:
+```json
+{
+  "field_mappings": {
+    "field_name_1": {
+      "id": "customfield_12345",
+      "name": "Display Name",
+      "type": "string",
+      "allowed_values": ["Value1", "Value2"]
+    },
+    "field_name_2": {
+      "id": "customfield_67890",
+      "name": "Another Field"
+    }
+  }
+}
+```
+
+**Method 4: Refresh field mappings from JIRA**
+```bash
+# This command fetches the latest field definitions from JIRA
+daf config refresh-jira-fields
+
+# Then view the updated fields
+daf config show-fields
+```
+
+### Using Custom Fields
+
+Once you know the field names from field_mappings, use them with the `--field` parameter:
+
+```bash
+# Create issue with custom fields
+daf jira create bug --summary "..." --parent PROJ-1234 \
+  --field field_name_1="Value1" \
+  --field field_name_2="Some value"
+
+# Update custom fields
+daf jira update PROJ-12345 --field field_name_1="NewValue"
+
+# Filter sessions by custom fields
+daf list --field field_name_1="Value1"
+daf sync --field field_name_1="Value1"
+```
+
+**Key Points:**
+- Custom field names come from the `field_mappings` configuration
+- Use the **field name** (not the customfield ID) with `--field`
+- Field names are organization-specific and must be configured
+- If a field has `allowed_values`, only those values are valid
+- Run `daf config refresh-jira-fields` to update field definitions from JIRA
+
+### System Fields (Components, Labels, etc.)
+
+**IMPORTANT**: System fields like `components` and `labels` are **required** for creating JIRA issues in many projects.
+
+System fields are native JIRA fields (not custom fields) that are available in all JIRA instances:
+- **components**: Project components (e.g., "ansible-saas", "backend", "ui")
+- **labels**: Issue labels/tags
+- **priority**: Issue priority (Critical, Major, Normal, Minor)
+- **security_level**: Security/visibility level
+
+**Setting Default Components:**
+Configure default components in `$DEVAIFLOW_HOME/team.json`:
+```json
+{
+  "jira_system_field_defaults": {
+    "components": ["ansible-saas"]
+  }
+}
+```
+
+Or use the interactive TUI:
+```bash
+daf config tui  # Navigate to JIRA Integration tab → Component dropdown
+```
+
+**Creating Issues with Components:**
+```bash
+# Component from team.json defaults (RECOMMENDED)
+daf jira create bug --summary "Fix login issue"
+
+# Override component via CLI
+daf jira create bug --summary "Fix login issue" --component "backend"
+
+# Multiple components
+daf jira create bug --summary "Fix login issue" --component "backend" --component "ui"
+```
+
+**Why Components Matter:**
+- Many JIRA projects require components for all issues
+- Components help organize and filter issues by area
+- Team defaults ensure consistency across all created issues
+- Without a default, you'll be prompted to select a component interactively
+
+### Understanding Sync Filters
+
+When using `daf sync`, tickets are filtered based on configuration in `organization.json`:
+
+**To see sync filter configuration:**
+```bash
+daf config show-sync-filters
+daf config show-sync-filters --json
+```
+
+**Sync filters control:**
+- `status`: Which JIRA statuses to sync (e.g., "To Do", "In Progress")
+- `required_fields`: Fields that MUST be present on tickets (uses field names from field_mappings)
+- `assignee`: Filter by assignee ("currentUser()", username, or null for all)
+
+**Example:**
+If `required_fields: ["sprint", "workstream"]`, only tickets that have BOTH sprint AND workstream set will be synced.
 
 ---
 

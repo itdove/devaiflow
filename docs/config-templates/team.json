@@ -1,9 +1,7 @@
 {
   "_comment": "Team-specific configuration",
-  "jira_workstream": null,
-  "_jira_workstream_comment": "TODO: Your team's workstream/component value (e.g., 'Backend', 'Frontend', 'Platform'). Optional.",
-  "jira_workstream_field": null,
-  "_jira_workstream_field_comment": "Optional: Override the workstream field name from organization.json (rarely needed)",
+  "jira_custom_field_defaults": null,
+  "_jira_custom_field_defaults_comment": "Optional: Default values for custom fields used by your team (e.g., {\"workstream\": \"Platform\", \"team\": \"Backend\", \"size\": \"M\"}). Fields auto-discovered from JIRA.",
   "jira_comment_visibility_type": null,
   "_jira_comment_visibility_type_comment": "Optional: Restrict comment visibility. Values: 'group' or 'role'. Leave null for public comments.",
   "jira_comment_visibility_value": null,

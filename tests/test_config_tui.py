@@ -169,10 +169,9 @@ def mock_config():
 
     jira_config = JiraConfig(
         url="https://jira.example.com",
-        user="testuser",
         transitions={},
         project="PROJ",
-        workstream="Platform",
+        custom_field_defaults={"workstream": "Platform"},
         affected_version="v1.0.0",
     )
 
@@ -205,7 +204,7 @@ def test_config_tui_initialization(mock_config_loader, mock_config):
 
     assert tui.config is not None
     assert tui.config.jira.url == "https://jira.example.com"
-    assert tui.config.jira.user == "testuser"
+    assert tui.config.jira.project == "PROJ"
     assert tui.modified is False
 
 
@@ -500,99 +499,10 @@ def test_config_tui_pr_template_url_collection(mock_config_loader, mock_config):
 # ============================================================================
 # Workstream Validation Tests
 # ============================================================================
-
-
-@patch("devflow.ui.config_tui.ConfigLoader")
-def test_tui_validates_workstream_allowed_values(mock_config_loader, mock_config):
-    """Test TUI rejects invalid workstream with allowed_values."""
-    # Setup mock
-    mock_loader_instance = Mock()
-    mock_loader_instance.load_config.return_value = mock_config
-    mock_loader_instance.session_home = Path("/tmp/test")
-    mock_config_loader.return_value = mock_loader_instance
-
-    # Set up field mappings with allowed values
-    mock_config.jira.field_mappings = {
-        "workstream": {
-            "allowed_values": ["Platform", "Platform", "Core"]
-        }
-    }
-    mock_config.jira.workstream = "InvalidWorkstream"
-
-    tui = ConfigTUI()
-    errors = tui._validate_all()
-
-    # Should have error about invalid workstream
-    assert any("InvalidWorkstream" in err for err in errors)
-    assert any("Platform" in err for err in errors)
-
-
-@patch("devflow.ui.config_tui.ConfigLoader")
-def test_tui_accepts_valid_workstream(mock_config_loader, mock_config):
-    """Test TUI accepts valid workstream from allowed_values."""
-    # Setup mock
-    mock_loader_instance = Mock()
-    mock_loader_instance.load_config.return_value = mock_config
-    mock_loader_instance.session_home = Path("/tmp/test")
-    mock_config_loader.return_value = mock_loader_instance
-
-    # Set up field mappings with allowed values
-    mock_config.jira.field_mappings = {
-        "workstream": {
-            "allowed_values": ["Platform", "Platform"]
-        }
-    }
-    mock_config.jira.workstream = "Platform"
-
-    tui = ConfigTUI()
-    errors = tui._validate_all()
-
-    # Should not have workstream error
-    assert not any("workstream" in err.lower() for err in errors)
-
-
-@patch("devflow.ui.config_tui.ConfigLoader")
-def test_tui_workstream_validation_without_field_mappings(mock_config_loader, mock_config):
-    """Test TUI gracefully handles missing field_mappings."""
-    # Setup mock
-    mock_loader_instance = Mock()
-    mock_loader_instance.load_config.return_value = mock_config
-    mock_loader_instance.session_home = Path("/tmp/test")
-    mock_config_loader.return_value = mock_loader_instance
-
-    # No field mappings
-    mock_config.jira.field_mappings = None
-    mock_config.jira.workstream = "AnyValue"
-
-    tui = ConfigTUI()
-    errors = tui._validate_all()
-
-    # Should not validate workstream without field mappings
-    assert not any("workstream" in err.lower() for err in errors)
-
-
-@patch("devflow.ui.config_tui.ConfigLoader")
-def test_tui_workstream_validation_optional_field(mock_config_loader, mock_config):
-    """Test TUI allows empty workstream (optional field)."""
-    # Setup mock
-    mock_loader_instance = Mock()
-    mock_loader_instance.load_config.return_value = mock_config
-    mock_loader_instance.session_home = Path("/tmp/test")
-    mock_config_loader.return_value = mock_loader_instance
-
-    # Set up field mappings but no workstream value
-    mock_config.jira.field_mappings = {
-        "workstream": {
-            "allowed_values": ["Platform", "Platform"]
-        }
-    }
-    mock_config.jira.workstream = None
-
-    tui = ConfigTUI()
-    errors = tui._validate_all()
-
-    # Should not require workstream (it's optional)
-    assert not any("workstream" in err.lower() for err in errors)
+# NOTE: Workstream validation tests removed because workstream is now a generic
+# custom field. Validation for custom field defaults is not performed in the TUI
+# as they can be any arbitrary JIRA field. Field-specific validation happens
+# at the JIRA API level during issue creation.
 
 
 # ============================================================================

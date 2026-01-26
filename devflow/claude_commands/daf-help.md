@@ -12,15 +12,15 @@ daf --help
 
 **Starting work:**
 ```bash
-daf sync --sprint current     # Sync assigned JIRA tickets
-daf new --name "..." --goal "..."  # Create new session
-daf open PROJ-12345           # Open/resume session
+daf sync --field <field_name>=<value>  # Filter by custom field (name from field_mappings)
+daf new --name "..." --goal "..."      # Create new session
+daf open PROJ-12345                    # Open/resume session
 ```
 
 **During work:**
 ```bash
 daf note "..."               # Add progress note
-daf status                   # Check sprint progress
+daf status                   # Check progress dashboard
 daf active                   # Show currently active conversation
 daf list                     # List all sessions
 ```
@@ -71,11 +71,11 @@ daf jira create bug --help   # See available options
 
 **Daily workflow:**
 ```bash
-daf sync --sprint current    # Start of day: sync tickets
-daf open PROJ-12345          # Open a ticket to work on
+daf sync --field <field_name>=<value>  # Filter by field name (from field_mappings)
+daf open PROJ-12345                    # Open a ticket to work on
 # ... do work in Claude Code ...
-daf note "Milestone reached"  # Add progress note
-daf complete PROJ-12345       # End of work: commit, PR, update JIRA
+daf note "Milestone reached"            # Add progress note
+daf complete PROJ-12345                # End of work: commit, PR, update JIRA
 ```
 
 **Multi-repo feature:**

@@ -23,13 +23,19 @@ def format_ticket_for_claude(ticket_data: dict) -> str:
     """
     lines = []
 
-    # Header
+    # Define standard fields that have specific display order and formatting
+    standard_fields = {
+        'key', 'summary', 'type', 'status', 'priority', 'assignee', 'reporter',
+        'description', 'changelog'
+    }
+
+    # Header - required fields
     lines.append(f"Key: {ticket_data['key']}")
     lines.append(f"Summary: {ticket_data['summary']}")
     lines.append(f"Type: {ticket_data['type']}")
     lines.append(f"Status: {ticket_data['status']}")
 
-    # Optional metadata
+    # Optional standard metadata
     if ticket_data.get('priority'):
         lines.append(f"Priority: {ticket_data['priority']}")
 
@@ -39,43 +45,48 @@ def format_ticket_for_claude(ticket_data: dict) -> str:
     if ticket_data.get('reporter'):
         lines.append(f"Reporter: {ticket_data['reporter']}")
 
-    if ticket_data.get('epic'):
-        lines.append(f"Epic: {ticket_data['epic']}")
+    # Display all custom fields generically
+    for field_name, field_value in sorted(ticket_data.items()):
+        # Skip standard fields (already displayed above or displayed later)
+        if field_name in standard_fields:
+            continue
 
-    if ticket_data.get('sprint'):
-        lines.append(f"Sprint: {ticket_data['sprint']}")
+        # Skip None/empty values
+        if field_value is None or field_value == '':
+            continue
 
-    if ticket_data.get('points'):
-        lines.append(f"Story Points: {ticket_data['points']}")
+        # Get display name by title-casing the field name
+        display_name = field_name.replace('_', ' ').title()
 
-    # Description
+        # Special handling for URL fields (git_pull_request and fields ending with _url)
+        if field_name == 'git_pull_request' or field_name.endswith('_url'):
+            lines.append("")
+            # Handle both string (comma-separated) and list formats
+            if isinstance(field_value, list):
+                urls = [url.strip() for url in field_value if url and url.strip()]
+            else:
+                urls = [url.strip() for url in str(field_value).split(',') if url.strip()]
+
+            if len(urls) == 1:
+                lines.append(f"{display_name}: {urls[0]}")
+            elif len(urls) > 1:
+                lines.append(f"{display_name}s:")
+                for url in urls:
+                    lines.append(f"  - {url}")
+        # Special handling for long text fields (description-like fields)
+        elif isinstance(field_value, str) and len(field_value) > 100:
+            lines.append("")
+            lines.append(f"{display_name}:")
+            lines.append(field_value)
+        # Regular inline fields
+        else:
+            lines.append(f"{display_name}: {field_value}")
+
+    # Description (always at the end for readability)
     if ticket_data.get('description'):
         lines.append("")
         lines.append("Description:")
         lines.append(ticket_data['description'])
-
-    # Acceptance Criteria
-    if ticket_data.get('acceptance_criteria'):
-        lines.append("")
-        lines.append("Acceptance Criteria:")
-        lines.append(ticket_data['acceptance_criteria'])
-
-    # Git Pull Request Links
-    if ticket_data.get('git_pull_request'):
-        lines.append("")
-        # Handle both string (comma-separated) and list formats
-        git_pr = ticket_data['git_pull_request']
-        if isinstance(git_pr, list):
-            pr_urls = [url.strip() for url in git_pr if url and url.strip()]
-        else:
-            pr_urls = [url.strip() for url in git_pr.split(',') if url.strip()]
-
-        if len(pr_urls) == 1:
-            lines.append(f"Git Pull Request: {pr_urls[0]}")
-        elif len(pr_urls) > 1:
-            lines.append("Git Pull Requests:")
-            for url in pr_urls:
-                lines.append(f"  - {url}")
 
     return "\n".join(lines)
 

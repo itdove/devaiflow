@@ -85,7 +85,7 @@ def test_list_sessions_with_sprint_filter(temp_daf_home):
     session2.issue_metadata = {"sprint": "Sprint 43"}
     session_manager.update_session(session2)
 
-    result = session_manager.list_sessions(sprint="Sprint 42")
+    result = session_manager.list_sessions(issue_metadata_filters={"sprint": "Sprint 42"})
 
     assert len(result) == 1
     assert result[0].issue_metadata.get("sprint") == "Sprint 42"

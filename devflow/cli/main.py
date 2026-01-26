@@ -9,7 +9,6 @@ from devflow import __version__
 from devflow.cli.completion import (
     complete_session_identifiers,
     complete_working_directories,
-    complete_sprints,
     complete_tags,
     complete_file_paths,
 )
@@ -79,7 +78,7 @@ def _show_no_config_error() -> None:
 
   [cyan]1. User Configuration[/cyan] (Personal setup)
      Run: [yellow]daf init[/yellow]
-     Creates configuration in: ~/.daf-sessions/
+     Creates configuration in: $DEVAIFLOW_HOME (defaults to ~/.daf-sessions)
 
   [cyan]2. Workspace Configuration[/cyan] (Recommended for teams)
      Create config files in your workspace root:
@@ -385,7 +384,7 @@ def sessions_list_cmd(ctx: click.Context, identifier: str) -> None:
 @click.option("--active", is_flag=True, help="Show only active sessions")
 @click.option("--status", help="Filter by session status: created, in_progress, paused, complete (comma-separated for multiple)")
 @click.option("--working-directory", shell_complete=complete_working_directories, help="Filter by working directory")
-@click.option("--sprint", shell_complete=complete_sprints, help="Filter by sprint")
+@click.option("--field", multiple=True, help="Filter by custom field (format: field_name=value, can be specified multiple times)")
 @click.option("--issue-status", help="Filter by issue tracker status (comma-separated for multiple)")
 @click.option("--since", help="Filter by sessions active since this time (e.g., 'last week', '3 days ago', '2025-01-01')")
 @click.option("--before", help="Filter by sessions active before this time")
@@ -398,7 +397,7 @@ def list(
     active: bool,
     status: str,
     working_directory: str,
-    sprint: str,
+    field: tuple,
     issue_status: str,
     since: str,
     before: str,
@@ -444,10 +443,17 @@ def list(
     if active and not status:
         status = "in_progress"
 
+    # Parse field filters from tuple of "field_name=value" strings
+    issue_metadata_filters = {}
+    for field_filter in field:
+        if '=' in field_filter:
+            field_name, field_value = field_filter.split('=', 1)
+            issue_metadata_filters[field_name.strip()] = field_value.strip()
+
     list_sessions(
         status=status,
         working_directory=working_directory,
-        sprint=sprint,
+        issue_metadata_filters=issue_metadata_filters,
         issue_status=issue_status,
         since=since,
         before=before,
@@ -705,16 +711,23 @@ def active(ctx: click.Context) -> None:
 
 
 @cli.command()
-@click.option("--sprint", shell_complete=complete_sprints, help="Filter by sprint")
+@click.option("--field", multiple=True, help="Filter by custom field (format: field_name=value, can be specified multiple times)")
 @click.option("--type", "ticket_type", help="Filter by ticket type")
 @click.option("--epic", help="Filter by epic")
 @json_option
-def sync(ctx: click.Context, sprint: str, ticket_type: str, epic: str) -> None:
+def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str) -> None:
     """Sync with issue tracker tickets."""
     from devflow.cli.commands.sync_command import sync_jira
 
+    # Parse field filters from tuple of "field_name=value" strings
+    field_filters = {}
+    for field_filter in field:
+        if '=' in field_filter:
+            field_name, field_value = field_filter.split('=', 1)
+            field_filters[field_name.strip()] = field_value.strip()
+
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    sync_jira(sprint=sprint, ticket_type=ticket_type, epic=epic, output_json=output_json)
+    sync_jira(field_filters=field_filters, ticket_type=ticket_type, epic=epic, output_json=output_json)
 
 
 @cli.command()
@@ -1006,7 +1019,7 @@ def cleanup_conversation_cmd(ctx: click.Context, identifier: str, older_than: st
         daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147  # Restore from backup
 
     \b
-    A backup is automatically created before cleanup (stored in $DEVAIFLOW_HOME/backups/ or ~/.daf-sessions/backups/).
+    A backup is automatically created before cleanup (stored in $DEVAIFLOW_HOME/backups/).
     Old backups are automatically cleaned up (keeping last 5 by default).
     You'll need to restart Claude Code to see the effect (conversation is cached).
     """
@@ -1314,13 +1327,12 @@ def config_show(ctx: click.Context, format: str, validate: bool) -> None:
     # Show JIRA configuration
     console.print("[bold]JIRA:[/bold]")
     console.print(f"  URL: {config.jira.url}")
-    console.print(f"  User: {config.jira.user}")
     console.print(f"  Project: {config.jira.project or '(not set)'}")
-    console.print(f"  Workstream: {config.jira.workstream or '(not set)'}")
+    if config.jira.custom_field_defaults:
+        console.print(f"  Custom Field Defaults: {config.jira.custom_field_defaults}")
+    else:
+        console.print("  Custom Field Defaults: (not set)")
     console.print(f"  Affected Version: {config.jira.affected_version or '(not set)'}")
-    console.print(f"  Acceptance Criteria Field: {config.jira.acceptance_criteria_field or '(not set)'}")
-    console.print(f"  Workstream Field: {config.jira.workstream_field or '(not set)'}")
-    console.print(f"  Epic Link Field: {config.jira.epic_link_field or '(not set)'}")
     console.print(f"  Time Tracking: {config.jira.time_tracking}")
 
     # Show field cache info
@@ -1451,6 +1463,206 @@ def show_prompts(ctx: click.Context) -> None:
         console.print("\n[dim]No repositories remembered yet[/dim]")
 
     console.print()
+
+
+@config.command(name="show-fields")
+@json_option
+def show_fields(ctx: click.Context) -> None:
+    """Display available JIRA custom fields from field_mappings.
+
+    Shows all custom fields configured in organization.json field_mappings.
+    This helps discover which field names can be used with --field options.
+
+    Example:
+        daf config show-fields
+        daf config show-fields --json
+    """
+    from devflow.config.loader import ConfigLoader
+    from rich.table import Table
+    import json
+
+    output_json = ctx.obj.get('output_json', False)
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+
+    if not config:
+        if output_json:
+            print(json.dumps({"success": False, "error": "No configuration found. Run 'daf init' first."}))
+        else:
+            console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
+        return
+
+    if not config.jira or not config.jira.field_mappings:
+        if output_json:
+            print(json.dumps({"success": True, "data": {"fields": []}, "message": "No custom fields configured in field_mappings"}))
+        else:
+            console.print("\n[yellow]⚠[/yellow] No custom fields configured in field_mappings.")
+            console.print("[dim]Run [cyan]daf config refresh-jira-fields[/cyan] to discover fields from JIRA[/dim]\n")
+        return
+
+    field_mappings = config.jira.field_mappings
+
+    # JSON output
+    if output_json:
+        fields_data = []
+        for field_name, field_info in field_mappings.items():
+            field_data = {
+                "field_name": field_name,
+                "display_name": field_info.get("name", field_name),
+                "jira_id": field_info.get("id", ""),
+                "type": field_info.get("type", "unknown"),
+            }
+            if "schema" in field_info:
+                field_data["schema"] = field_info["schema"]
+            if "allowed_values" in field_info and field_info["allowed_values"]:
+                field_data["allowed_values"] = field_info["allowed_values"]
+            if "required_for" in field_info and field_info["required_for"]:
+                field_data["required_for"] = field_info["required_for"]
+            fields_data.append(field_data)
+
+        print(json.dumps({"success": True, "data": {"fields": fields_data, "count": len(fields_data)}}))
+        return
+
+    # Human-readable output
+    console.print(f"\n[bold]Available Custom Fields[/bold] ({len(field_mappings)} fields)\n")
+    console.print("[dim]Use these field names with --field option (e.g., --field field_name=value)[/dim]\n")
+
+    for field_name, field_info in sorted(field_mappings.items()):
+        console.print(f"[bold cyan]{field_name}[/bold cyan]")
+        console.print(f"  Display Name: {field_info.get('name', field_name)}")
+        console.print(f"  JIRA ID: [dim]{field_info.get('id', 'unknown')}[/dim]")
+
+        # Type and schema
+        field_type = field_info.get("type", "unknown")
+        if "schema" in field_info:
+            console.print(f"  Type: {field_type} (schema: {field_info['schema']})")
+        else:
+            console.print(f"  Type: {field_type}")
+
+        # Allowed values
+        if "allowed_values" in field_info and field_info["allowed_values"]:
+            values = field_info["allowed_values"]
+            if len(values) <= 5:
+                console.print(f"  Allowed Values: {', '.join(map(str, values))}")
+            else:
+                console.print(f"  Allowed Values: {', '.join(map(str, values[:5]))}, ... ({len(values)} total)")
+
+        # Required for issue types
+        if "required_for" in field_info and field_info["required_for"]:
+            console.print(f"  Required For: {', '.join(field_info['required_for'])}")
+
+        console.print()
+
+    console.print(f"[dim]Total: {len(field_mappings)} custom field(s)[/dim]")
+    console.print(f"[dim]Refresh with: daf config refresh-jira-fields[/dim]\n")
+
+
+@config.command(name="show-sync-filters")
+@json_option
+def show_sync_filters(ctx: click.Context) -> None:
+    """Display sync filter configuration for 'daf sync' command.
+
+    Shows which JIRA tickets are synced when running 'daf sync':
+    - Status filter: Which JIRA statuses to sync
+    - Required fields: Fields that must be present on tickets
+    - Assignee filter: Filter by assignee
+
+    This configuration is in organization.json under sync_filters.sync section.
+
+    Example:
+        daf config show-sync-filters
+        daf config show-sync-filters --json
+    """
+    from devflow.config.loader import ConfigLoader
+    from rich.table import Table
+    import json
+
+    output_json = ctx.obj.get('output_json', False)
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+
+    if not config:
+        if output_json:
+            print(json.dumps({"success": False, "error": "No configuration found. Run 'daf init' first."}))
+        else:
+            console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
+        return
+
+    if not config.jira or not config.jira.filters:
+        if output_json:
+            print(json.dumps({"success": True, "data": {"sync_filters": None}, "message": "No sync filters configured"}))
+        else:
+            console.print("\n[yellow]⚠[/yellow] No sync filters configured.")
+            console.print("[dim]Configure in organization.json under jira.filters.sync[/dim]\n")
+        return
+
+    sync_filters = config.jira.filters.get("sync")
+    if not sync_filters:
+        if output_json:
+            print(json.dumps({"success": True, "data": {"sync_filters": None}, "message": "No sync filters configured"}))
+        else:
+            console.print("\n[yellow]⚠[/yellow] No sync filters configured.")
+            console.print("[dim]Configure in organization.json under jira.filters.sync[/dim]\n")
+        return
+
+    # JSON output
+    if output_json:
+        sync_data = {
+            "status": sync_filters.status if hasattr(sync_filters, 'status') else [],
+            "required_fields": sync_filters.required_fields if hasattr(sync_filters, 'required_fields') else [],
+            "assignee": sync_filters.assignee if hasattr(sync_filters, 'assignee') else "currentUser()",
+        }
+        print(json.dumps({"success": True, "data": {"sync_filters": sync_data}}))
+        return
+
+    # Human-readable output
+    console.print("\n[bold]Sync Filter Configuration[/bold]")
+    console.print("[dim]These filters determine which JIRA tickets are synced with 'daf sync'[/dim]\n")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="yellow")
+    table.add_column("Description", style="dim")
+
+    # Status filter
+    status_list = sync_filters.status if hasattr(sync_filters, 'status') else []
+    table.add_row(
+        "status",
+        ", ".join(status_list) if status_list else "[dim]not set[/dim]",
+        "JIRA statuses to sync (e.g., 'To Do', 'In Progress')"
+    )
+
+    # Required fields
+    required_fields = sync_filters.required_fields if hasattr(sync_filters, 'required_fields') else []
+    table.add_row(
+        "required_fields",
+        ", ".join(required_fields) if required_fields else "[dim]none[/dim]",
+        "Fields that must be present on tickets (uses field names from field_mappings)"
+    )
+
+    # Assignee filter
+    assignee = sync_filters.assignee if hasattr(sync_filters, 'assignee') else "currentUser()"
+    table.add_row(
+        "assignee",
+        assignee,
+        "'currentUser()' (your tickets) | username | null (all tickets)"
+    )
+
+    console.print(table)
+    console.print()
+
+    if required_fields:
+        console.print("[bold]Required Fields Explanation:[/bold]")
+        console.print(f"[dim]Tickets must have ALL of these fields set to be synced:[/dim]")
+        for field in required_fields:
+            console.print(f"  • {field}")
+        console.print()
+        console.print("[dim]Use 'daf config show-fields' to see all available field names[/dim]")
+    else:
+        console.print("[dim]No required fields configured - all tickets matching status/assignee filters will be synced[/dim]")
+
+    console.print()
+    console.print("[dim]Configuration file: organization.json (jira.filters.sync section)[/dim]\n")
 
 
 @config.command(name="edit")
@@ -1799,7 +2011,7 @@ def config_generate_schema(ctx: click.Context, output: str) -> None:
             console.print("[dim]For VSCode, add this to .vscode/settings.json:[/dim]")
             console.print()
             console.print('[dim]  "json.schemas": [{[/dim]')
-            console.print(f'[dim]    "fileMatch": ["~/.daf-sessions/config.json"],[/dim]')
+            console.print(f'[dim]    "fileMatch": ["$DEVAIFLOW_HOME/config.json"],[/dim]')
             console.print(f'[dim]    "url": "{schema_path}"[/dim]')
             console.print('[dim]  }][/dim]')
 
@@ -2089,16 +2301,38 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
             console.print(f"\n[green]✓[/green] Configuration saved")
             console.print(f"Location: {config_loader.config_file}")
 
+            # Check JIRA authentication environment variables
+            console.print("\n[bold]JIRA Authentication Check[/bold]")
+            jira_token = os.getenv("JIRA_API_TOKEN")
+            jira_auth_type = os.getenv("JIRA_AUTH_TYPE", "bearer")
+
+            if not jira_token:
+                console.print("[yellow]⚠[/yellow] JIRA_API_TOKEN environment variable is not set")
+                console.print("  You need to set this to authenticate with JIRA:")
+                console.print("  [cyan]export JIRA_API_TOKEN='your-jira-api-token'[/cyan]")
+                console.print("  Generate a token at: [dim]https://id.atlassian.com/manage-profile/security/api-tokens[/dim]")
+            else:
+                console.print(f"[green]✓[/green] JIRA_API_TOKEN is set")
+                console.print(f"[dim]  Authentication type: {jira_auth_type}[/dim]")
+                if jira_auth_type != "bearer" and jira_auth_type != "basic":
+                    console.print(f"[yellow]⚠[/yellow] Unknown JIRA_AUTH_TYPE: {jira_auth_type}")
+                    console.print("  Supported types: 'bearer' (default), 'basic'")
+
             # Validate JIRA URL before attempting field discovery
             if not _validate_jira_url(config.jira.url):
                 console.print(f"[yellow]⚠[/yellow] JIRA URL appears to be invalid or unreachable: {config.jira.url}")
                 console.print("  You can update it later with: [cyan]daf init --reset[/cyan]")
                 console.print("  Then run field discovery with: [cyan]daf config refresh-jira-fields[/cyan]")
             elif not skip_jira_discovery:
-                # Check if JIRA_API_TOKEN is set
-                if not os.getenv("JIRA_API_TOKEN"):
-                    console.print("\n[yellow]⚠[/yellow] JIRA_API_TOKEN not set. Skipping field discovery.")
-                    console.print("  Set JIRA_API_TOKEN and run: [cyan]daf config refresh-jira-fields[/cyan]")
+                # Only attempt field discovery if both JIRA_API_TOKEN and project key are set
+                if not jira_token:
+                    console.print("\n[dim]Skipping JIRA field discovery (JIRA_API_TOKEN not set)[/dim]")
+                    console.print("[dim]Run [cyan]daf config refresh-jira-fields[/cyan] after setting the token[/dim]")
+                elif not config.jira.project:
+                    console.print("\n[yellow]⚠[/yellow] Project key not set - skipping field discovery")
+                    console.print("[dim]  Limited functionality: Cannot create JIRA issues until project key is set[/dim]")
+                    console.print("[dim]  Set project key with: [cyan]daf config tui[/cyan] or [cyan]daf init --reset[/cyan][/dim]")
+                    console.print("[dim]  Then run: [cyan]daf config refresh-jira-fields[/cyan][/dim]")
                 else:
                     # Ask if user wants to discover fields now
                     console.print("\n[bold]JIRA Field Discovery[/bold]")
@@ -2113,48 +2347,17 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
             console.print("\n[dim]JIRA integration skipped. You can configure it later with:[/dim]")
             console.print("  [cyan]daf init --reset[/cyan]")
 
-        # Prompt for PR/MR template URL
-        console.print("\n[bold]PR/MR Template Configuration[/bold]")
-        console.print("Configure a URL to fetch your PR/MR template from (e.g., GitHub raw URL).")
-
-        if Confirm.ask("Configure PR/MR template URL?", default=False):
-            console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
-            template_url = Prompt.ask("Enter PR/MR template URL (leave empty to skip)", default="")
-            if template_url and template_url.strip():
-                config.pr_template_url = template_url.strip()
-                config_loader.save_config(config)
-                console.print(f"[green]✓[/green] Configured PR template URL: {config.pr_template_url}")
-
-        # Optionally configure workstream
-        console.print("\n[bold]JIRA Workstream Configuration[/bold]")
-        console.print("Configure your JIRA workstream for issue creation.")
-
-        # Check if field mappings have workstream info
-        if config.jira.field_mappings and "workstream" in config.jira.field_mappings:
-            workstream_info = config.jira.field_mappings["workstream"]
-            allowed_values = workstream_info.get("allowed_values", [])
-
-            if allowed_values:
-                console.print(f"\n[dim]Available workstreams: {', '.join(allowed_values)}[/dim]")
-
-                if Confirm.ask("Configure workstream now?", default=True):
-                    workstream = Prompt.ask(
-                        "Select workstream",
-                        choices=allowed_values,
-                        default=allowed_values[0] if allowed_values else None
-                    )
-                    config.jira.workstream = workstream
-                    config_loader.save_config(config)
-                    console.print(f"[green]✓[/green] Configured workstream: {config.jira.workstream}")
-            else:
-                console.print("[dim]Run [cyan]daf config tui[/cyan] later to configure workstream.[/dim]")
-        else:
-            console.print("[dim]Run [cyan]daf config tui[/cyan] later to configure workstream.[/dim]")
-
         console.print("\n[yellow]Please review and edit the configuration file:[/yellow]")
-        console.print("  - JIRA URL, username, project, and workstream")
+        console.print("  - JIRA URL and project")
         console.print("  - Repository workspace path")
         console.print("  - Keyword mappings for smart repo detection")
+        console.print("  - Custom field defaults (if needed) via [cyan]daf config tui[/cyan]")
+
+        console.print("\n[bold cyan]Next Step: Install Claude Code Commands[/bold cyan]")
+        console.print("To use DevAIFlow commands in Claude Code sessions:")
+        console.print("  [cyan]daf upgrade[/cyan]")
+        console.print()
+        console.print("[dim]This installs /daf-* slash commands into Claude Code[/dim]")
         return
 
     # Config exists
@@ -2273,16 +2476,14 @@ def _get_config_changes(old_config, new_config) -> list:
     if old_config.jira.url != new_config.jira.url:
         changes.append(f"JIRA URL: {old_config.jira.url} → {new_config.jira.url}")
 
-    if old_config.jira.user != new_config.jira.user:
-        changes.append(f"JIRA User: {old_config.jira.user} → {new_config.jira.user}")
-
     if old_config.jira.project != new_config.jira.project:
         changes.append(f"JIRA Project: {old_config.jira.project} → {new_config.jira.project}")
 
-    if old_config.jira.workstream != new_config.jira.workstream:
-        old_ws = old_config.jira.workstream or "(not set)"
-        new_ws = new_config.jira.workstream or "(not set)"
-        changes.append(f"Workstream: {old_ws} → {new_ws}")
+    if old_config.jira.custom_field_defaults != new_config.jira.custom_field_defaults:
+        old_defaults = old_config.jira.custom_field_defaults or {}
+        new_defaults = new_config.jira.custom_field_defaults or {}
+        if old_defaults != new_defaults:
+            changes.append(f"Custom Field Defaults: {old_defaults} → {new_defaults}")
 
     # Compare repository settings
     # Compare workspaces lists (comparing all properties)

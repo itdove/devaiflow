@@ -16,7 +16,7 @@ console = Console()
 
 @require_outside_claude
 def sync_jira(
-    sprint: Optional[str] = None,
+    field_filters: Optional[Dict[str, str]] = None,
     ticket_type: Optional[str] = None,
     epic: Optional[str] = None,
     output_json: bool = False,
@@ -28,11 +28,10 @@ def sync_jira(
 
     Filter criteria (from config):
     - Status: New, To Do, or In Progress (configurable)
-    - Sprint: Must be set
-    - Story points: NOT required (Bugs don't have story points)
+    - Required fields: Configurable in organization.json
 
     Args:
-        sprint: Filter by sprint (e.g., "2025-01" or "current")
+        field_filters: Filter by custom fields (e.g., {"sprint": "Sprint 1", "severity": "Critical"})
         ticket_type: Filter by ticket type (Story, Bug, etc.)
         epic: Filter by epic
     """
@@ -50,7 +49,7 @@ def sync_jira(
     sync_filters = config.jira.filters.get("sync")
     if not sync_filters:
         console.print("[yellow]⚠[/yellow] No sync filters configured")
-        console.print("[dim]Check $DEVAIFLOW_HOME/config.json (or ~/.daf-sessions/config.json if DEVAIFLOW_HOME not set)[/dim]")
+        console.print("[dim]Check $DEVAIFLOW_HOME/config.json for sync filter configuration[/dim]")
         return
 
     console_print("[cyan]Fetching issue tracker tickets...[/cyan]")
@@ -67,9 +66,9 @@ def sync_jira(
         tickets = jira_client.list_tickets(
             assignee=sync_filters.assignee,
             status_list=sync_filters.status if sync_filters.status else None,
-            sprint=sprint,
             ticket_type=ticket_type,
             field_mappings=config.jira.field_mappings,
+            field_filters=field_filters,
         )
     except JiraAuthError as e:
         console_print(f"[red]✗[/red] Authentication failed: {e}")
@@ -91,13 +90,11 @@ def sync_jira(
             # Check if ticket has all required fields
             skip_ticket = False
             for field in required_fields:
-                if field == "sprint" and not ticket.get("sprint"):
-                    console_print(f"[dim]Skipping {ticket['key']}: No sprint assigned[/dim]")
+                # Generic field checking - any field can be required
+                if not ticket.get(field):
+                    console_print(f"[dim]Skipping {ticket['key']}: Missing required field '{field}'[/dim]")
                     skip_ticket = True
                     break
-                elif field == "story-points" and not ticket.get("points"):
-                    # Allow tickets without story points (Bugs don't have story points)
-                    pass
 
             if not skip_ticket:
                 filtered_tickets.append(ticket)
@@ -149,17 +146,10 @@ def sync_jira(
             session.issue_tracker = "jira"
             session.issue_key = issue_key
             session.issue_updated = ticket.get("updated")
-            session.issue_metadata = {
-                "summary": ticket.get("summary"),
-                "type": ticket.get("type"),
-                "status": ticket.get("status"),
-                "sprint": ticket.get("sprint"),
-                "points": ticket.get("points"),
-                "assignee": ticket.get("assignee"),
-                "epic": ticket.get("epic"),
-            }
-            # Remove None values from issue_metadata
-            session.issue_metadata = {k: v for k, v in session.issue_metadata.items() if v is not None}
+
+            # Copy ALL fields from ticket to issue_metadata (generic approach)
+            # Exclude the 'key' and 'updated' fields (already stored separately)
+            session.issue_metadata = {k: v for k, v in ticket.items() if k not in ('key', 'updated') and v is not None}
 
             session_manager.update_session(session)
             created_count += 1
@@ -190,17 +180,10 @@ def sync_jira(
                     session.issue_tracker = "jira"
                     session.issue_key = issue_key
                     session.issue_updated = ticket_updated
-                    session.issue_metadata = {
-                        "summary": ticket.get("summary"),
-                        "type": ticket.get("type"),
-                        "status": ticket.get("status"),
-                        "sprint": ticket.get("sprint"),
-                        "points": ticket.get("points"),
-                        "assignee": ticket.get("assignee"),
-                        "epic": ticket.get("epic"),
-                    }
-                    # Remove None values from issue_metadata
-                    session.issue_metadata = {k: v for k, v in session.issue_metadata.items() if v is not None}
+
+                    # Copy ALL fields from ticket to issue_metadata (generic approach)
+                    # Exclude the 'key' and 'updated' fields (already stored separately)
+                    session.issue_metadata = {k: v for k, v in ticket.items() if k not in ('key', 'updated') and v is not None}
 
                     session_manager.update_session(session)
                     updated_count += 1
@@ -215,6 +198,20 @@ def sync_jira(
 
     # JSON output mode
     if output_json:
+        filters_metadata = {
+            "assignee": sync_filters.assignee,
+            "status": sync_filters.status if sync_filters.status else None,
+            "ticket_type": ticket_type,
+        }
+
+        # Add field_filters if provided
+        if field_filters:
+            filters_metadata["field_filters"] = field_filters
+
+        # Add epic if provided
+        if epic:
+            filters_metadata["epic"] = epic
+
         json_output(
             success=True,
             data={
@@ -224,13 +221,7 @@ def sync_jira(
                 "updated_count": updated_count,
             },
             metadata={
-                "filters": {
-                    "assignee": sync_filters.assignee,
-                    "status": sync_filters.status if sync_filters.status else None,
-                    "sprint": sprint,
-                    "ticket_type": ticket_type,
-                    "epic": epic,
-                }
+                "filters": filters_metadata
             }
         )
         return

@@ -25,7 +25,11 @@ def mock_config():
     config.jira = Mock(spec=JiraConfig)
     config.jira.url = "https://jira.example.com"
     config.jira.project = "PROJ"
-    config.jira.field_mappings = {"workstream": {"id": "customfield_12319275"}}
+    config.jira.field_mappings = {
+        "workstream": {"id": "customfield_12319275"},
+        "acceptance_criteria": {"id": "customfield_12315940"}
+    }
+    config.jira.system_field_defaults = None  # Add system_field_defaults attribute
     return config
 
 
@@ -42,7 +46,19 @@ def mock_field_mapper():
         "workstream": {"id": "customfield_12319275", "name": "Workstream"},
         "acceptance_criteria": {"id": "customfield_12315940", "name": "Acceptance Criteria"},
     }
-    mapper.discover_editable_fields.return_value = {"workstream": {"id": "customfield_12319275", "type": "array", "schema": "option"}}
+    mapper.discover_editable_fields.return_value = {
+        "workstream": {
+            "id": "customfield_12319275",
+            "type": "array",
+            "schema": "array_option",  # Contains "option" to trigger [{"value": v}] format
+            "allowed_values": ["Platform", "Core", "Backend"]
+        },
+        "acceptance_criteria": {
+            "id": "customfield_12315940",
+            "type": "string",
+            "schema": "string"
+        }
+    }
     return mapper
 
 
@@ -241,7 +257,7 @@ class TestUpdateJiraIssue:
                     assert call_args[0][1]["fields"]["assignee"] is None
 
     def test_update_acceptance_criteria(self, mock_config, mock_field_mapper):
-        """Test updating acceptance criteria."""
+        """Test updating acceptance criteria via custom fields."""
         mock_loader = Mock()
         mock_loader.load_config.return_value = mock_config
 
@@ -250,7 +266,7 @@ class TestUpdateJiraIssue:
         with patch('devflow.cli.commands.jira_update_command.ConfigLoader', return_value=mock_loader):
             with patch('devflow.cli.commands.jira_update_command.JiraClient', return_value=mock_client):
                 with patch('devflow.cli.commands.jira_update_command.JiraFieldMapper', return_value=mock_field_mapper):
-                    update_jira_issue("PROJ-12345", acceptance_criteria="New AC")
+                    update_jira_issue("PROJ-12345", custom_fields={"acceptance_criteria": "New AC"})
 
                     call_args = mock_client.update_issue.call_args
                     assert call_args[0][1]["fields"]["customfield_12315940"] == "New AC"
@@ -265,7 +281,7 @@ class TestUpdateJiraIssue:
         with patch('devflow.cli.commands.jira_update_command.ConfigLoader', return_value=mock_loader):
             with patch('devflow.cli.commands.jira_update_command.JiraClient', return_value=mock_client):
                 with patch('devflow.cli.commands.jira_update_command.JiraFieldMapper', return_value=mock_field_mapper):
-                    update_jira_issue("PROJ-12345", workstream="Platform")
+                    update_jira_issue("PROJ-12345", custom_fields={"workstream": "Platform"})
 
                     call_args = mock_client.update_issue.call_args
                     assert call_args[0][1]["fields"]["customfield_12319275"] == [{"value": "Platform"}]

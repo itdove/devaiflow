@@ -20,12 +20,21 @@ def get_editable_fields_for_command() -> Dict[str, Dict[str, Any]]:
         if not config or not config.jira:
             return {}
 
-        # Use cached editable mappings if available
-        if config.jira.field_mappings_editable:
-            return config.jira.field_mappings_editable
+        # Use regular field mappings if available
+        if config.jira.field_mappings:
+            return config.jira.field_mappings
 
-        # Otherwise use regular field mappings as fallback
-        return config.jira.field_mappings or {}
+        # Try loading from backends/jira.json
+        from pathlib import Path
+        import json
+        backends_dir = config_loader.session_home / "backends"
+        jira_file = backends_dir / "jira.json"
+        if jira_file.exists():
+            with open(jira_file) as f:
+                jira_config = json.load(f)
+                return jira_config.get("field_mappings", {})
+
+        return {}
 
     except Exception:
         # Fail silently - the command will still work with hardcoded fields
@@ -49,8 +58,6 @@ def create_jira_update_command():
     @click.option("--priority", type=click.Choice(["Critical", "Major", "Normal", "Minor"]), help="Update priority")
     @click.option("--assignee", help="Update assignee (username or 'none' to clear)")
     @click.option("--summary", help="Update issue summary")
-    @click.option("--acceptance-criteria", help="Update acceptance criteria")
-    @click.option("--workstream", help="Update workstream")
     @click.option("--git-pull-request", help="Add PR/MR URL(s) to git-pull-request field (comma-separated, auto-appends to existing)")
     @click.option("--linked-issue", help="Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to'). Use with --issue")
     @click.option("--issue", help="Issue key to link to (e.g., PROJ-12345). Use with --linked-issue")
@@ -64,8 +71,6 @@ def create_jira_update_command():
         priority: Optional[str],
         assignee: Optional[str],
         summary: Optional[str],
-        acceptance_criteria: Optional[str],
-        workstream: Optional[str],
         git_pull_request: Optional[str],
         status: Optional[str],
         linked_issue: Optional[str],
@@ -86,12 +91,12 @@ def create_jira_update_command():
             daf jira update PROJ-12345 --description "New description text"
             daf jira update PROJ-12345 --description-file /path/to/description.txt
             daf jira update PROJ-12345 --priority Major --assignee jdoe
-            daf jira update PROJ-12345 --summary "New summary" --workstream Platform
+            daf jira update PROJ-12345 --summary "New summary" --field workstream=Platform
             daf jira update PROJ-12345 --status "In Progress"
             daf jira update PROJ-12345 --status "Review" --priority Major
             daf jira update PROJ-12345 --git-pull-request "https://github.com/org/repo/pull/123"
             daf jira update PROJ-12345 --field epic_link=PROJ-59000
-            daf jira update PROJ-12345 -f severity=Critical -f size=L
+            daf jira update PROJ-12345 -f severity=Critical -f size=L -f workstream=Platform
         """
         from devflow.cli.commands.jira_update_command import update_jira_issue
 
@@ -108,8 +113,12 @@ def create_jira_update_command():
                 field_name, field_value = field_str.split('=', 1)
                 custom_fields[field_name.strip()] = field_value.strip()
 
-        # Merge with any dynamic options from kwargs
-        custom_fields.update(kwargs)
+        # Separate system fields from kwargs (non-customfield_* fields)
+        # These come from dynamically generated CLI options like --components, --labels
+        system_fields = {}
+        for field_name, field_value in kwargs.items():
+            if field_value is not None:  # Only include if value was provided
+                system_fields[field_name] = field_value
 
         update_jira_issue(
             issue_key=issue_key,
@@ -118,50 +127,60 @@ def create_jira_update_command():
             priority=priority,
             assignee=assignee,
             summary=summary,
-            acceptance_criteria=acceptance_criteria,
-            workstream=workstream,
             git_pull_request=git_pull_request,
             status=status,
             linked_issue=linked_issue,
             issue=issue,
             output_json=output_json,
-            **custom_fields
+            custom_fields=custom_fields,
+            system_fields=system_fields,
         )
 
-    # Add dynamic options for editable fields (excluding already hardcoded ones)
-    hardcoded_fields = {
-        "description", "summary", "priority", "assignee",
-        "acceptance_criteria", "workstream", "git_pull_request"
-    }
+    # Note: We no longer generate dedicated CLI options (like --epic-link, --story-points) for custom fields.
+    # All custom fields must be updated using --field field_name=value.
+    # This simplifies the CLI and eliminates confusion about which format to use.
+    #
+    # Old behavior (REMOVED):
+    #   daf jira update PROJ-123 --epic-link PROJ-456 --story-points 5
+    #
+    # New behavior (USE THIS):
+    #   daf jira update PROJ-123 --field epic_link=PROJ-456 --field story_points=5
 
-    for field_name, field_info in editable_fields.items():
-        # Skip hardcoded fields
-        if field_name in hardcoded_fields:
-            continue
+    # Dynamically add CLI options for JIRA system fields (non-custom fields)
+    # Custom fields (customfield_*) are handled via --field key=value
+    # System fields (components, labels, etc.) get dedicated CLI options
 
-        # Skip system fields (summary, description, etc. are already handled)
-        if not field_info.get("id", "").startswith("customfield_"):
-            continue
+    if editable_fields:
+        for field_name, field_info in editable_fields.items():
+            field_id = field_info.get("id", "")
 
-        # Create CLI-friendly option name (e.g., "epic_link" -> "--epic-link")
-        option_name = f"--{field_name.replace('_', '-')}"
+            # Skip custom fields - they use --field instead
+            if field_id.startswith("customfield_"):
+                continue
 
-        # Build help text
-        field_display_name = field_info.get("name", field_name)
-        help_text = f"Update {field_display_name}"
+            # Skip fields that already have dedicated options
+            if field_name in ["summary", "description", "priority", "issuetype", "issue_type", "reporter", "assignee", "status"]:
+                continue
 
-        # Add allowed values to help text if available
-        allowed_values = field_info.get("allowed_values", [])
-        if allowed_values:
-            help_text += f" (choices: {', '.join(allowed_values[:5])}{'...' if len(allowed_values) > 5 else ''})"
+            # Add CLI option for this system field
+            # Normalize field name for CLI: remove slashes, replace underscores with hyphens
+            normalized_field_name = field_name.replace('/', '').replace('_', '-')
+            option_name = f"--{normalized_field_name}"
+            field_display_name = field_info.get("name", field_name)
+            field_type = field_info.get("type", "string")
 
-        # Add the dynamic option
-        # Click will automatically convert option_name to parameter name
-        # (e.g., "--epic-link" becomes "epic_link")
-        jira_update_base = click.option(
-            option_name,
-            help=help_text,
-            default=None
-        )(jira_update_base)
+            # Determine if this is a list field
+            is_list = field_type in ["array", "list"]
+
+            help_text = f"{field_display_name}"
+
+            # Add the option - use field_id as the parameter name since that's what JIRA expects
+            jira_update_base = click.option(
+                option_name,
+                field_id,  # Use field ID (e.g., "components") as the parameter name
+                help=help_text,
+                multiple=is_list,
+                default=None
+            )(jira_update_base)
 
     return jira_update_base

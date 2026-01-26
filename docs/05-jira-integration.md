@@ -63,7 +63,7 @@ This hybrid approach provides:
 
 ## Configuration
 
-Edit `~/.daf-sessions/config.json`:
+Edit `$DEVAIFLOW_HOME/config.json`:
 
 ```json
 {
@@ -103,16 +103,17 @@ Edit `~/.daf-sessions/config.json`:
 
 **Note:** To control whether session summaries are automatically added to JIRA, use `prompts.auto_add_issue_summary` - see [Prompts Configuration](06-configuration.md#prompts-configuration)
 
-### Configuring JIRA Project and Workstream
+### Configuring JIRA Project and Custom Fields
 
-For creating JIRA issues, you need to configure your project and workstream:
+For creating JIRA issues, you need to configure your project and any custom field defaults:
 
 ```bash
 # Set JIRA project key
 daf config tui  # Navigate to JIRA Integration → Project Key PROJ
 
-# Set JIRA workstream
-daf config tui  # Navigate to JIRA Integration → Workstream Platform
+# Set custom field defaults (e.g., workstream, team, etc.)
+daf config tui  # Navigate to JIRA Integration → Custom Field Defaults
+                # Example: {"workstream": "Platform", "team": "Backend"}
 
 # Set affected version for bugs (one-time configuration)
 daf config tui  # Navigate to JIRA Integration → Affected Version v1.0.0
@@ -127,7 +128,8 @@ Alternatively, provide them via flags:
 daf jira create story \
   --summary "My story" \
   --project PROJ \
-  --workstream Platform
+  --field workstream=Platform \
+  --field team=Backend
 ```
 
 ### Configuring JIRA Transitions
@@ -289,7 +291,7 @@ daf jira update PROJ-12345 --description-file /tmp/new_description.txt
 # Update multiple fields
 daf jira update PROJ-12345 \
   --priority Major \
-  --workstream Platform \
+  --field workstream=Platform \
   --summary "Updated summary"
 
 # Update acceptance criteria
@@ -323,7 +325,7 @@ daf jira create bug --summary "Critical bug" --severity Critical --size L
 daf jira create bug --summary "Bug" --field severity=Critical
 ```
 
-Creation fields are discovered once and cached in `~/.daf-sessions/config.json`. Refresh with:
+Creation fields are discovered once and cached in `$DEVAIFLOW_HOME/config.json`. Refresh with:
 
 ```bash
 daf config refresh-jira-fields
@@ -723,7 +725,7 @@ Session not opened
 daf note PROJ-12345 "Implemented upload endpoint"
 ```
 
-Saved to `~/.daf-sessions/sessions/PROJ-12345/notes.md` only.
+Saved to `$DEVAIFLOW_HOME/sessions/PROJ-12345/notes.md` only.
 
 ### Note with JIRA Comment
 
@@ -1125,7 +1127,7 @@ jira version
 
 3. **Verify JIRA URL:**
    ```bash
-   cat ~/.daf-sessions/config.json | grep url
+   cat $DEVAIFLOW_HOME/config.json | grep url
    ```
 
 ### Transition Failed

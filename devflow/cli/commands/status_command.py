@@ -1,6 +1,6 @@
 """Implementation of 'daf status' command."""
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -15,15 +15,23 @@ console = Console()
 
 
 def show_status(output_json: bool = False) -> None:
-    """Show sprint status dashboard.
+    """Show status dashboard.
 
-    Displays sessions grouped by status with sprint progress summary.
+    Displays sessions grouped by configured field (default: sprint) with totals summary.
 
     Args:
         output_json: Output in JSON format (default: False)
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
+
+    # Load organization config to get grouping and totals field names
+    org_config = config_loader._load_organization_config()
+    grouping_field = None  # Default: no grouping
+    totals_field = None    # Default: no totals
+    if org_config:
+        grouping_field = org_config.status_grouping_field
+        totals_field = org_config.status_totals_field
 
     # Get all sessions
     all_sessions = session_manager.list_sessions()
@@ -34,7 +42,7 @@ def show_status(output_json: bool = False) -> None:
                 success=True,
                 data={
                     "sessions": [],
-                    "sprints": {},
+                    "groups": {},
                     "summary": {
                         "total_sessions": 0,
                         "in_progress": 0,
@@ -50,18 +58,23 @@ def show_status(output_json: bool = False) -> None:
             console.print("[dim]Use 'daf new' to create a session or 'daf sync' to import issue tracker tickets[/dim]")
         return
 
-    # Group sessions by sprint (if JIRA integrated)
-    sessions_by_sprint: Dict[str, List[Session]] = {}
-    no_sprint_sessions = []
+    # Group sessions by configured field (e.g., sprint, iteration, release)
+    sessions_by_group: Dict[str, List[Session]] = {}
+    ungrouped_sessions = []
 
-    for session in all_sessions:
-        sprint = session.issue_metadata.get("sprint") if session.issue_metadata else None
-        if sprint:
-            if sprint not in sessions_by_sprint:
-                sessions_by_sprint[sprint] = []
-            sessions_by_sprint[sprint].append(session)
-        else:
-            no_sprint_sessions.append(session)
+    # Only group if a grouping field is configured
+    if grouping_field:
+        for session in all_sessions:
+            group_value = session.issue_metadata.get(grouping_field) if session.issue_metadata else None
+            if group_value:
+                if group_value not in sessions_by_group:
+                    sessions_by_group[group_value] = []
+                sessions_by_group[group_value].append(session)
+            else:
+                ungrouped_sessions.append(session)
+    else:
+        # No grouping configured - all sessions are ungrouped
+        ungrouped_sessions = all_sessions
 
     # Calculate overall summary
     total_sessions = len(all_sessions)
@@ -92,31 +105,38 @@ def show_status(output_json: bool = False) -> None:
                 "ai_agent_session_id": active_conversation.ai_agent_session_id
             }
 
-        # Build sprint data
-        sprints_data = {}
-        for sprint_name, sprint_sessions in sessions_by_sprint.items():
-            total_points = sum(
-                s.issue_metadata.get("points") or 0
-                for s in sprint_sessions
-                if s.issue_metadata and s.issue_metadata.get("points")
-            )
-            in_progress_points = sum(
-                s.issue_metadata.get("points") or 0
-                for s in sprint_sessions
-                if s.status == "in_progress" and s.issue_metadata and s.issue_metadata.get("points")
-            )
-            sprints_data[sprint_name] = {
-                "sessions": serialize_sessions(sprint_sessions),
-                "total_points": total_points,
-                "in_progress_points": in_progress_points
+        # Build groups data (generic - works with any field)
+        groups_data = {}
+        for group_name, group_sessions in sessions_by_group.items():
+            group_data = {
+                "sessions": serialize_sessions(group_sessions)
             }
+
+            # Only include totals if totals_field is configured
+            if totals_field:
+                total_value = sum(
+                    s.issue_metadata.get(totals_field) or 0
+                    for s in group_sessions
+                    if s.issue_metadata and s.issue_metadata.get(totals_field)
+                )
+                in_progress_value = sum(
+                    s.issue_metadata.get(totals_field) or 0
+                    for s in group_sessions
+                    if s.status == "in_progress" and s.issue_metadata and s.issue_metadata.get(totals_field)
+                )
+                group_data["total"] = total_value
+                group_data["in_progress"] = in_progress_value
+
+            groups_data[group_name] = group_data
 
         json_output(
             success=True,
             data={
                 "active_conversation": active_data,
-                "sprints": sprints_data,
-                "no_sprint_sessions": serialize_sessions(no_sprint_sessions),
+                "groups": groups_data,
+                "ungrouped_sessions": serialize_sessions(ungrouped_sessions),
+                "grouping_field": grouping_field,
+                "totals_field": totals_field,
                 "summary": {
                     "total_sessions": total_sessions,
                     "in_progress": in_progress,
@@ -138,16 +158,22 @@ def show_status(output_json: bool = False) -> None:
         _display_active_conversation_panel(active_result)
         console.print()  # Add spacing
 
-    # Display sprint-based status
-    if sessions_by_sprint:
-        for sprint_name, sprint_sessions in sorted(sessions_by_sprint.items(), reverse=True):
-            _display_sprint_status(sprint_name, sprint_sessions)
+    # Display grouped status (by sprint, iteration, release, etc.)
+    if sessions_by_group:
+        for group_name, group_sessions in sorted(sessions_by_group.items(), reverse=True):
+            _display_group_status(group_name, group_sessions, grouping_field, totals_field)
             console.print()
 
-    # Display non-sprint sessions
-    if no_sprint_sessions:
-        console.print("[bold]Non-Sprint Sessions[/bold]\n")
-        _display_session_table(no_sprint_sessions)
+    # Display ungrouped sessions
+    if ungrouped_sessions:
+        if grouping_field:
+            # Show "No {field} Sessions" header when grouping is configured
+            grouping_field_display = grouping_field.replace('_', ' ').title()
+            console.print(f"[bold]No {grouping_field_display} Sessions[/bold]\n")
+        else:
+            # Show "All Sessions" header when no grouping is configured
+            console.print(f"[bold]All Sessions[/bold]\n")
+        _display_session_table(ungrouped_sessions, totals_field)
         console.print()
 
     # Overall summary
@@ -160,38 +186,45 @@ def show_status(output_json: bool = False) -> None:
     console.print(f"  Total time tracked: {hours}h {minutes}m")
 
 
-def _display_sprint_status(sprint_name: str, sessions: List[Session]) -> None:
-    """Display status for a specific sprint.
+def _display_group_status(group_name: str, sessions: List[Session], grouping_field: str, totals_field: Optional[str]) -> None:
+    """Display status for a specific group (sprint, iteration, release, etc.).
 
     Args:
-        sprint_name: Sprint name
-        sessions: Sessions in this sprint
+        group_name: Group name (e.g., "Sprint 42", "Release 1.0")
+        sessions: Sessions in this group
+        grouping_field: Name of the field used for grouping (e.g., "sprint", "release")
+        totals_field: Name of the field to sum for totals (e.g., "points", "effort"), or None to skip totals
     """
-    # Calculate story points (if available)
-    total_points = sum(
-        s.issue_metadata.get("points") or 0
-        for s in sessions
-        if s.issue_metadata and s.issue_metadata.get("points")
-    )
-    in_progress_points = sum(
-        s.issue_metadata.get("points") or 0
-        for s in sessions
-        if s.status == "in_progress" and s.issue_metadata and s.issue_metadata.get("points")
-    )
+    grouping_field_display = grouping_field.replace('_', ' ').title()
+    console.print(f"[bold]{grouping_field_display}: {group_name}[/bold]")
 
-    console.print(f"[bold]Sprint: {sprint_name}[/bold]")
-    if total_points > 0:
-        console.print(f"[dim]Progress: {in_progress_points}/{total_points} points[/dim]")
+    # Calculate and display totals only if totals_field is configured
+    if totals_field:
+        total_value = sum(
+            s.issue_metadata.get(totals_field) or 0
+            for s in sessions
+            if s.issue_metadata and s.issue_metadata.get(totals_field)
+        )
+        in_progress_value = sum(
+            s.issue_metadata.get(totals_field) or 0
+            for s in sessions
+            if s.status == "in_progress" and s.issue_metadata and s.issue_metadata.get(totals_field)
+        )
+
+        if total_value > 0:
+            totals_field_display = totals_field.replace('_', ' ')
+            console.print(f"[dim]Progress: {in_progress_value}/{total_value} {totals_field_display}[/dim]")
+
     console.print()
+    _display_session_table(sessions, totals_field)
 
-    _display_session_table(sessions)
 
-
-def _display_session_table(sessions: List[Session]) -> None:
+def _display_session_table(sessions: List[Session], totals_field: Optional[str] = None) -> None:
     """Display sessions in a table.
 
     Args:
         sessions: List of sessions to display
+        totals_field: Name of the field to display for totals (e.g., "points", "effort"), or None to skip totals
     """
     # Group by status
     in_progress = [s for s in sessions if s.status == "in_progress"]
@@ -204,7 +237,7 @@ def _display_session_table(sessions: List[Session]) -> None:
         display_text, color = get_status_display("in_progress")
         console.print(f"[{color}]{display_text}:[/{color}]")
         for session in in_progress:
-            _display_session_summary(session)
+            _display_session_summary(session, totals_field)
         console.print()
 
     # Display paused sessions
@@ -212,7 +245,7 @@ def _display_session_table(sessions: List[Session]) -> None:
         display_text, color = get_status_display("paused")
         console.print(f"[{color}]{display_text}:[/{color}]")
         for session in paused:
-            _display_session_summary(session)
+            _display_session_summary(session, totals_field)
         console.print()
 
     # Display created sessions
@@ -220,7 +253,7 @@ def _display_session_table(sessions: List[Session]) -> None:
         display_text, color = get_status_display("created")
         console.print(f"[{color}]{display_text}:[/{color}]")
         for session in created:
-            _display_session_summary(session)
+            _display_session_summary(session, totals_field)
         console.print()
 
     # Display complete sessions (limit to last 3)
@@ -228,21 +261,34 @@ def _display_session_table(sessions: List[Session]) -> None:
         display_text, color = get_status_display("complete")
         console.print(f"[{color}]{display_text}:[/{color}]")
         for session in complete[:3]:  # Show only last 3
-            _display_session_summary(session)
+            _display_session_summary(session, totals_field)
         if len(complete) > 3:
             console.print(f"  [dim]... and {len(complete) - 3} more[/dim]")
         console.print()
 
 
-def _display_session_summary(session: Session) -> None:
+def _display_session_summary(session: Session, totals_field: Optional[str] = None) -> None:
     """Display a single session summary line.
 
     Args:
         session: Session to display
+        totals_field: Name of the field to display for totals (e.g., "points", "effort"), or None to skip totals
     """
     issue_display = f" ({session.issue_key})" if session.issue_key else ""
-    points = session.issue_metadata.get("points") if session.issue_metadata else None
-    points_display = f" | {points} pts" if points else ""
+
+    # Only display value if totals_field is configured
+    value_display = ""
+    if totals_field:
+        value = session.issue_metadata.get(totals_field) if session.issue_metadata else None
+
+        # Create display suffix based on field name
+        if value is not None:
+            if totals_field == "points":
+                value_display = f" | {value} pts"
+            else:
+                # Generic display for other fields
+                field_abbrev = totals_field.replace('_', ' ')
+                value_display = f" | {value} {field_abbrev}"
 
     # Calculate time spent
     total_seconds = sum(
@@ -260,7 +306,7 @@ def _display_session_summary(session: Session) -> None:
     issue_type = session.issue_metadata.get("type") if session.issue_metadata else None
     type_icon = "🐛" if issue_type == "Bug" else "📋"
 
-    console.print(f"  {type_icon} {session.name}{issue_display}  {goal_display}{points_display}{time_display}")
+    console.print(f"  {type_icon} {session.name}{issue_display}  {goal_display}{value_display}{time_display}")
     console.print(f"     [dim]└─ {session.working_directory or 'No directory'} | Last: {session.last_active.strftime('%Y-%m-%d %H:%M')}[/dim]")
 
 

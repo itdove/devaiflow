@@ -126,7 +126,7 @@ A **session** is the core organizational unit - it represents one piece of work:
 - **Progress Notes** - Local notes, optionally synced to JIRA
 - **Git Branch** - Associated branch (auto-created if needed)
 
-**Storage Location:** `~/.daf-sessions/sessions/{session-name}/metadata.json`
+**Storage Location:** `$DEVAIFLOW_HOME/sessions/{session-name}/metadata.json`
 
 ### Conversations vs Sessions
 
@@ -400,10 +400,10 @@ daf open PROJ-12345
 
 ## Data Storage
 
-All session data is stored locally in `~/.daf-sessions/`:
+All session data is stored locally in `$DEVAIFLOW_HOME/`:
 
 ```
-~/.daf-sessions/
+$DEVAIFLOW_HOME/
 ├── config.json              # Configuration
 ├── sessions.json            # Session index
 ├── sessions/                # Per-session data
