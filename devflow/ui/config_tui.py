@@ -634,7 +634,7 @@ class HelpScreen(ModalScreen):
                 "  Enter               - Activate button/checkbox\n"
                 "  Escape              - Cancel/close\n"
                 "  Ctrl+S              - Save configuration\n"
-                "  Ctrl+M              - Toggle Simple/Advanced Mode\n"
+                "  Ctrl+T              - Toggle Simple/Advanced Mode\n"
                 "  ?                   - Show this help\n"
                 "  Q / Ctrl+C          - Quit\n\n"
                 "[bold]Modes:[/bold]\n\n"
@@ -1033,7 +1033,7 @@ class ConfigTUI(App):
         Binding("?", "help", "Help"),
         Binding("ctrl+s", "save", "Save"),
         Binding("ctrl+p", "preview", "Preview"),
-        Binding("ctrl+m", "toggle_mode", "Toggle Mode"),
+        Binding("ctrl+t", "toggle_mode", "Toggle Mode"),
     ]
 
     TITLE = "DevAIFlow - Configuration"
@@ -1078,7 +1078,7 @@ class ConfigTUI(App):
         yield Header()
 
         # Mode indicator
-        mode_text = "[bold cyan]Advanced Mode[/bold cyan] (Ctrl+M to switch to Simple)" if self.advanced_mode else "[bold green]Simple Mode[/bold green] (Ctrl+M to switch to Advanced)"
+        mode_text = "[bold cyan]Advanced Mode[/bold cyan] (Ctrl+T to switch to Simple)" if self.advanced_mode else "[bold green]Simple Mode[/bold green] (Ctrl+T to switch to Advanced)"
         yield Static(mode_text, id="mode_indicator", classes="mode-indicator")
 
         with TabbedContent(id="main_tabs"):
@@ -1784,20 +1784,26 @@ class ConfigTUI(App):
 
     def action_toggle_mode(self) -> None:
         """Toggle between Simple and Advanced mode."""
-        # Collect current values before exit
-        self._collect_values()
+        try:
+            # Collect current values before exit
+            self._collect_values()
 
-        # Save current config if modified
-        if self.modified:
-            try:
-                self.config_loader.save_config(self.config)
-            except Exception as e:
-                self.notify(f"Failed to save before mode switch: {e}", severity="error")
-                return
+            # Save current config if modified
+            if self.modified:
+                try:
+                    self.config_loader.save_config(self.config)
+                    self.notify("Configuration saved", severity="information")
+                except Exception as e:
+                    self.notify(f"Failed to save before mode switch: {e}", severity="error")
+                    return
 
-        # Exit with return value to indicate mode to restart in
-        new_mode = not self.advanced_mode
-        self.exit({"restart_mode": "advanced" if new_mode else "simple"})
+            # Exit with return value to indicate mode to restart in
+            new_mode = not self.advanced_mode
+            mode_name = "Advanced" if new_mode else "Simple"
+            self.notify(f"Switching to {mode_name} Mode...", severity="information")
+            self.exit({"restart_mode": "advanced" if new_mode else "simple"})
+        except Exception as e:
+            self.notify(f"Toggle mode failed: {e}", severity="error")
 
     def action_quit(self) -> None:
         """Quit the application."""
