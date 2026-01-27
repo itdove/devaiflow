@@ -175,7 +175,7 @@ def _create_mock_jira_ticket(
     workspace_path = None
     if config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path)
+    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affected_version=affected_version)
 
     # Create mock Claude session with initial prompt
     ai_agent_session_id = mock_claude.create_session(
@@ -295,6 +295,7 @@ def create_jira_ticket_session(
     name: Optional[str] = None,
     path: Optional[str] = None,
     branch: Optional[str] = None,
+    affected_version: Optional[str] = None,
 ) -> None:
     """Create a new session for issue tracker ticket creation.
 
@@ -309,6 +310,8 @@ def create_jira_ticket_session(
         goal: Goal/description for the ticket
         name: Optional session name (auto-generated from goal if not provided)
         path: Optional project path (bypasses interactive selection if provided)
+        branch: Optional git branch name
+        affected_version: Optional affected version (required for bugs)
     """
     from devflow.session.manager import SessionManager
     from devflow.config.loader import ConfigLoader
@@ -506,7 +509,7 @@ def create_jira_ticket_session(
     workspace_path = None
     if config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path)
+    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affected_version=affected_version)
 
     # Set up signal handlers for cleanup
     global _cleanup_session, _cleanup_session_manager, _cleanup_name, _cleanup_config, _cleanup_done
@@ -714,86 +717,94 @@ def _load_hierarchical_context_files(config: Optional['Config']) -> list:
 
 
 def _discover_all_skills(project_path: Optional[str] = None, workspace: Optional[str] = None) -> list[tuple[str, str]]:
-    """Discover all skills from user-level, workspace-level, and project-level locations.
+    """Discover all skills from user-level, workspace-level, hierarchical (DEVAIFLOW_HOME), and project-level locations.
+
+    Discovery order (guarantees load order - generic skills before organization-specific extensions):
+    1. User-level generic skills: ~/.claude/skills/ (alphabetical)
+    2. Workspace-level skills: <workspace>/.claude/skills/ (alphabetical) - generic tool skills (daf-cli, gh-cli, etc.)
+    3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (numbered: 01-enterprise, 02-organization, etc.) - extends generic skills
+    4. Project-level skills: <project>/.claude/skills/ (alphabetical)
+
+    Rationale: Hierarchical skills extend generic skills (see "Extends: daf-cli" in skill frontmatter),
+    so generic skills must be loaded first.
 
     Args:
         project_path: Project directory path (for project-level skills)
         workspace: Workspace directory path (for workspace-level skills)
 
     Returns:
-        List of tuples (skill_path, description) for all discovered skills
+        List of tuples (skill_path, description) for all discovered skills in load order
     """
     discovered_skills = []
 
-    # 1. User-level skills: ~/.claude/skills/
+    def _scan_skill_dir(skill_file: Path, skill_dir_name: str) -> Optional[tuple[str, str]]:
+        """Scan a single skill directory and extract description."""
+        if not skill_file.exists():
+            return None
+
+        description = f"{skill_dir_name} skill"
+        # Try to extract description from YAML frontmatter
+        try:
+            with open(skill_file, 'r') as f:
+                lines = f.readlines()
+                if lines and lines[0].strip() == '---':
+                    for line in lines[1:]:
+                        if line.strip() == '---':
+                            break
+                        if line.startswith('description:'):
+                            description = line.split('description:', 1)[1].strip()
+                            break
+        except Exception:
+            pass
+
+        return (str(skill_file.resolve()), description)
+
+    # 1. User-level skills: ~/.claude/skills/ (generic skills like daf-cli, git-cli)
     user_skills_dir = Path.home() / ".claude" / "skills"
     if user_skills_dir.exists():
-        for skill_dir in user_skills_dir.iterdir():
+        for skill_dir in sorted(user_skills_dir.iterdir()):
             if skill_dir.is_dir():
                 skill_file = skill_dir / "SKILL.md"
-                if skill_file.exists():
-                    description = f"{skill_dir.name} skill"
-                    # Try to extract description from YAML frontmatter
-                    try:
-                        with open(skill_file, 'r') as f:
-                            lines = f.readlines()
-                            if lines and lines[0].strip() == '---':
-                                for line in lines[1:]:
-                                    if line.strip() == '---':
-                                        break
-                                    if line.startswith('description:'):
-                                        description = line.split('description:', 1)[1].strip()
-                                        break
-                    except Exception:
-                        pass
-                    discovered_skills.append((str(skill_file.resolve()), description))
+                result = _scan_skill_dir(skill_file, skill_dir.name)
+                if result:
+                    discovered_skills.append(result)
 
-    # 2. Workspace-level skills: <workspace>/.claude/skills/
+    # 2. Workspace-level skills: <workspace>/.claude/skills/ (generic tool skills)
     if workspace:
         from devflow.utils.claude_commands import get_workspace_skills_dir
         workspace_skills_dir = get_workspace_skills_dir(workspace)
         if workspace_skills_dir.exists():
-            for skill_dir in workspace_skills_dir.iterdir():
+            for skill_dir in sorted(workspace_skills_dir.iterdir()):
                 if skill_dir.is_dir():
                     skill_file = skill_dir / "SKILL.md"
-                    if skill_file.exists():
-                        description = f"{skill_dir.name} skill"
-                        try:
-                            with open(skill_file, 'r') as f:
-                                lines = f.readlines()
-                                if lines and lines[0].strip() == '---':
-                                    for line in lines[1:]:
-                                        if line.strip() == '---':
-                                            break
-                                        if line.startswith('description:'):
-                                            description = line.split('description:', 1)[1].strip()
-                                            break
-                        except Exception:
-                            pass
-                        discovered_skills.append((str(skill_file.resolve()), description))
+                    result = _scan_skill_dir(skill_file, skill_dir.name)
+                    if result:
+                        discovered_skills.append(result)
 
-    # 3. Project-level skills: <project>/.claude/skills/
+    # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (organization-specific skills that extend generic ones)
+    # These are numbered (01-enterprise, 02-organization, 03-team, 04-user) to guarantee order
+    from devflow.utils.paths import get_cs_home
+    cs_home = get_cs_home()
+    hierarchical_skills_dir = cs_home / ".claude" / "skills"
+    if hierarchical_skills_dir.exists():
+        # Sort to ensure numbered order (01-, 02-, 03-, 04-)
+        for skill_dir in sorted(hierarchical_skills_dir.iterdir()):
+            if skill_dir.is_dir():
+                skill_file = skill_dir / "SKILL.md"
+                result = _scan_skill_dir(skill_file, skill_dir.name)
+                if result:
+                    discovered_skills.append(result)
+
+    # 4. Project-level skills: <project>/.claude/skills/
     if project_path:
         project_skills_dir = Path(project_path) / ".claude" / "skills"
         if project_skills_dir.exists():
-            for skill_dir in project_skills_dir.iterdir():
+            for skill_dir in sorted(project_skills_dir.iterdir()):
                 if skill_dir.is_dir():
                     skill_file = skill_dir / "SKILL.md"
-                    if skill_file.exists():
-                        description = f"{skill_dir.name} skill"
-                        try:
-                            with open(skill_file, 'r') as f:
-                                lines = f.readlines()
-                                if lines and lines[0].strip() == '---':
-                                    for line in lines[1:]:
-                                        if line.strip() == '---':
-                                            break
-                                        if line.startswith('description:'):
-                                            description = line.split('description:', 1)[1].strip()
-                                            break
-                        except Exception:
-                            pass
-                        discovered_skills.append((str(skill_file.resolve()), description))
+                    result = _scan_skill_dir(skill_file, skill_dir.name)
+                    if result:
+                        discovered_skills.append(result)
 
     return discovered_skills
 
@@ -806,6 +817,7 @@ def _build_ticket_creation_prompt(
     session_name: str,
     project_path: Optional[str] = None,
     workspace: Optional[str] = None,
+    affected_version: Optional[str] = None,
 ) -> str:
     """Build the initial prompt for ticket creation sessions.
 
@@ -816,13 +828,16 @@ def _build_ticket_creation_prompt(
         config: Configuration object
         session_name: Name of the session (unused, kept for backward compatibility)
         project_path: Unused, kept for backward compatibility
+        workspace: Workspace path for skill discovery
+        affected_version: Affected version for bugs (optional)
 
     Returns:
         Initial prompt string with analysis-only instructions
     """
-    # Get JIRA project and custom field defaults from config
+    # Get JIRA project and field defaults from config
     project = config.jira.project if config.jira.project else "PROJ"
     custom_fields = config.jira.custom_field_defaults if config.jira.custom_field_defaults else {}
+    system_fields = config.jira.system_field_defaults if config.jira.system_field_defaults else {}
 
     # Build the "Work on" line based on whether parent is provided
     if parent:
@@ -874,20 +889,67 @@ def _build_ticket_creation_prompt(
 
     prompt_parts.append("")
 
-    # Add issue tracker ticket creation instructions
-    # Conditionally include parent-related instructions
-    parent_instruction = f"4. IMPORTANT: Link to parent using --parent {parent}" if parent else "4. (Optional) Link to a parent epic using --parent EPIC-KEY if desired"
+    # Build example command with all configured defaults
+    example_cmd_parts = [f"daf jira create {issue_type}"]
+    example_cmd_parts.append('--summary "..."')
 
     if parent:
-        example_command = f"Example command: daf jira create {issue_type} --summary \"...\" --parent {parent} --description \"<your analysis here>\" --field acceptance_criteria=\"...\""
-        parent_note = "Note: The --parent parameter automatically maps to the appropriate JIRA parent field based on your configuration."
-    else:
-        example_command = f"Example command: daf jira create {issue_type} --summary \"...\" --description \"<your analysis here>\" --field acceptance_criteria=\"...\""
-        parent_note = "Note: You can optionally link to a parent epic using --parent EPIC-KEY. The parameter automatically maps to the appropriate JIRA parent field based on your configuration."
+        example_cmd_parts.append(f'--parent {parent}')
 
-    # Build custom fields instruction string
-    custom_fields_parts = [f"{k}={v}" for k, v in custom_fields.items()]
-    custom_fields_str = ", ".join(custom_fields_parts) if custom_fields_parts else "no custom fields configured"
+    # For bugs, add affected_version parameter (required field)
+    if issue_type == "bug":
+        # Use the provided affected_version or show placeholder
+        affected_ver = affected_version if affected_version else "VERSION"
+        example_cmd_parts.append(f'--affected-version "{affected_ver}"')
+
+    # Add system field defaults (components, labels, etc.)
+    if system_fields:
+        if "components" in system_fields and system_fields["components"]:
+            # components can be a list
+            components = system_fields["components"]
+            if isinstance(components, list):
+                example_cmd_parts.append(f'--components {" ".join(components)}')
+            else:
+                example_cmd_parts.append(f'--components {components}')
+
+        if "labels" in system_fields and system_fields["labels"]:
+            labels = system_fields["labels"]
+            if isinstance(labels, list):
+                example_cmd_parts.append(f'--labels {" ".join(labels)}')
+            else:
+                example_cmd_parts.append(f'--labels {labels}')
+
+    # Add description and acceptance criteria
+    example_cmd_parts.append('--description "<your analysis here>"')
+    example_cmd_parts.append('--field acceptance_criteria="..."')
+
+    # Add custom field defaults (workstream, etc.)
+    for key, value in custom_fields.items():
+        example_cmd_parts.append(f'--field {key}="{value}"')
+
+    example_command = " \\\n  ".join(example_cmd_parts)
+
+    # Build instruction strings
+    parent_instruction = f"4. IMPORTANT: Link to parent using --parent {parent}" if parent else "4. (Optional) Link to a parent epic using --parent EPIC-KEY if desired"
+
+    # Add affected_version note for bugs
+    if issue_type == "bug":
+        affected_version_note = f"IMPORTANT: For bugs, you MUST specify --affected-version with the version this bug affects."
+    else:
+        affected_version_note = None
+
+    parent_note = "Note: The --parent parameter automatically maps to the appropriate JIRA parent field based on your configuration."
+
+    # Build defaults summary for instruction line
+    defaults_parts = []
+    if custom_fields:
+        custom_parts = [f"{k}={v}" for k, v in custom_fields.items()]
+        defaults_parts.append(f"custom fields: {', '.join(custom_parts)}")
+    if system_fields:
+        system_parts = [f"{k}={v}" for k, v in system_fields.items() if v]
+        if system_parts:
+            defaults_parts.append(f"system fields: {', '.join(system_parts)}")
+    defaults_str = "; ".join(defaults_parts) if defaults_parts else "no defaults configured"
 
     prompt_parts.extend([
         "⚠️  IMPORTANT CONSTRAINTS:",
@@ -901,7 +963,7 @@ def _build_ticket_creation_prompt(
         "2. Read relevant files, search for patterns, understand the architecture",
         f"3. Create a detailed JIRA {issue_type} using the 'daf jira create' command",
         parent_instruction,
-        f"5. Use project: {project}, custom fields: {custom_fields_str}",
+        f"5. Use project: {project}; configured defaults: {defaults_str}",
         "6. Include detailed description and acceptance criteria based on your analysis",
         "",
     ])
@@ -910,6 +972,12 @@ def _build_ticket_creation_prompt(
         example_command,
         "",
         parent_note,
+    ])
+
+    if affected_version_note:
+        prompt_parts.append(affected_version_note)
+
+    prompt_parts.extend([
         "",
         "After you create the ticket, the session will be automatically renamed to 'creation-<ticket_key>'",
         "for easy identification. Users can reopen with: daf open creation-<ticket_key>",

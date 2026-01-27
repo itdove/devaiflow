@@ -1119,7 +1119,8 @@ jira.add_command(create_jira_update_command())
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str) -> None:
+@click.option("--affected-version", help="Affected version for bugs (required for bug type)")
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str, affected_version: Optional[str]) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1143,7 +1144,12 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch)
+    # Prompt for affected_version if creating a bug and not provided
+    if issue_type == "bug" and not affected_version:
+        # Simple text prompt - no validation, no choices shown
+        affected_version = click.prompt("Enter affected version for this bug")
+
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, affected_version)
 
 
 @jira.command(name="open")

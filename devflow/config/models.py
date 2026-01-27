@@ -81,7 +81,7 @@ class TeamConfig(BaseModel):
     (custom field defaults, comment visibility, time tracking preferences).
     """
 
-    jira_custom_field_defaults: Optional[Dict[str, Any]] = None  # Default values for custom fields (e.g., {"workstream": "Platform", "affected_version": "v1.0"})
+    jira_custom_field_defaults: Optional[Dict[str, Any]] = None  # Default values for custom fields (e.g., {"workstream": "Platform"})
     jira_system_field_defaults: Optional[Dict[str, Any]] = None  # Default values for JIRA system fields (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     time_tracking_enabled: bool = True  # Team-wide time tracking preference
     jira_comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'

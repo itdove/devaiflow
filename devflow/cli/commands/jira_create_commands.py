@@ -230,8 +230,9 @@ def _get_required_custom_fields(
 
     # JIRA system fields that are handled separately by create_issue function
     # These should NOT be prompted for in _get_required_custom_fields
+    # Only include: API mandatory fields (summary, project) + issuetype + special system fields
     system_fields = {
-        "summary", "description", "priority", "project",
+        "summary", "project",
         "issue_type", "issuetype", "reporter", "assignee",
         "affected_version", "fixVersions", "versions"
     }
@@ -420,9 +421,14 @@ def _get_required_system_fields(
         # field_mappings is not a dict (e.g., Mock object in tests)
         return system_fields
 
-    # Fields that are always provided by the caller (summary, description, priority, project)
-    # These should not be prompted for here
-    ALWAYS_PROVIDED_FIELDS = {"summary", "description", "priority", "project", "issuetype", "issue_type"}
+    # Fields that are always provided by the caller or have automatic defaults
+    # Based on JIRA REST API: only project and summary are mandatory for issue creation
+    # See: https://developer.atlassian.com/server/jira/platform/jira-rest-api-example-create-issue-7897248/
+    # - summary, project: API mandatory fields (hardcoded CLI options)
+    # - issuetype: Specified as CLI argument (not a flag)
+    # - reporter: Automatically set to authenticated user if not provided
+    # - assignee: Optional field, automatically set in some JIRA configs
+    ALWAYS_PROVIDED_FIELDS = {"summary", "project", "issuetype", "issue_type", "reporter", "assignee"}
 
     # First pass: Add all fields that were provided via CLI flags (flag_values)
     # This ensures we don't lose CLI-provided values even if fields aren't marked as required
@@ -458,7 +464,10 @@ def _get_required_system_fields(
         # This field is required - get its value
         # Use field_id as the key for system fields (e.g., "components", "labels")
         # Note: flag values are already handled in first pass above
-        config_value = config_defaults.get(field_key)
+        # Check both field_key (field_id) and field_name to handle cases where config
+        # stores the original field_name (e.g., "component/s") but CLI uses normalized
+        # field_id (e.g., "components")
+        config_value = config_defaults.get(field_key) or config_defaults.get(field_name)
 
         # Case 1: Value in config defaults
         if config_value is not None:

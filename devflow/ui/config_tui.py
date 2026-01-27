@@ -1151,13 +1151,6 @@ class ConfigTUI(App):
                 help_text="JIRA project key (e.g., PROJ, TEAM)",
             )
 
-            yield ConfigInput(
-                "Affected Version",
-                "jira.affected_version",
-                value=self.config.jira.affected_version or "",
-                help_text="Default affected version for bugs (leave empty if not applicable)",
-            )
-
             # Get components from system_field_defaults if it exists
             components_value = None
             if self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
@@ -1227,11 +1220,76 @@ class ConfigTUI(App):
 
             yield Static("[bold]Custom Field Defaults[/bold]", classes="subsection-title")
             yield Static(
-                "[dim]Set default values for JIRA custom fields in team.json directly[/dim]\n"
-                "[dim]Example: {\"workstream\": \"Platform\"}[/dim]\n"
-                "[dim]Custom fields are organization-specific and should be configured per team[/dim]",
+                "[dim]Set default values for custom fields that will be automatically applied when creating issues[/dim]",
                 classes="section-help",
             )
+
+            # Get available custom fields from field_mappings
+            custom_field_choices = []
+            if self.config.jira.field_mappings:
+                for field_key, field_info in self.config.jira.field_mappings.items():
+                    # Skip system fields (those without customfield_ id)
+                    if isinstance(field_info, dict) and "id" in field_info:
+                        field_id = field_info["id"]
+                        if isinstance(field_id, str) and field_id.startswith("customfield_"):
+                            # This is a custom field
+                            field_name = field_info.get("name", field_key)
+                            custom_field_choices.append((field_name, field_key))
+
+            # If we have discovered custom fields, show inputs for them
+            if custom_field_choices:
+                # Get current custom field defaults
+                current_defaults = self.config.jira.custom_field_defaults or {}
+
+                # Show inputs for common custom fields (workstream, etc.)
+                for field_name, field_key in sorted(custom_field_choices):
+                    current_value = current_defaults.get(field_key, "")
+
+                    # Get allowed values if they exist
+                    field_info = self.config.jira.field_mappings.get(field_key)
+                    allowed_values = field_info.get("allowed_values", []) if field_info else []
+
+                    # If field has allowed values, use dropdown; otherwise use text input
+                    if allowed_values and len(allowed_values) > 0:
+                        # Create choices from allowed values
+                        choices = []
+                        for val in allowed_values:
+                            if isinstance(val, dict) and "value" in val:
+                                choices.append((val["value"], val["value"]))
+                            elif isinstance(val, str):
+                                choices.append((val, val))
+
+                        if choices:
+                            yield ConfigSelect(
+                                field_name,
+                                f"jira.custom_field_defaults.{field_key}",
+                                choices=choices,
+                                value=str(current_value) if current_value else None,
+                                help_text=f"Default value for {field_name} field",
+                                allow_blank=True,
+                            )
+                        else:
+                            # Fallback to text input if choices parsing failed
+                            yield ConfigInput(
+                                field_name,
+                                f"jira.custom_field_defaults.{field_key}",
+                                value=str(current_value) if current_value else "",
+                                help_text=f"Default value for {field_name} field",
+                            )
+                    else:
+                        # No allowed values, use text input
+                        yield ConfigInput(
+                            field_name,
+                            f"jira.custom_field_defaults.{field_key}",
+                            value=str(current_value) if current_value else "",
+                            help_text=f"Default value for {field_name} field",
+                        )
+            else:
+                # No custom fields discovered yet
+                yield Static(
+                    "[dim]No custom fields discovered yet. Run 'daf config show-fields' to discover fields from your JIRA instance.[/dim]",
+                    classes="section-help",
+                )
 
             yield Static("[bold]Comment Visibility[/bold]", classes="subsection-title")
 
@@ -2141,9 +2199,6 @@ class ConfigTUI(App):
             project_val = self.query_one(key_to_id("input", "jira.project"), Input).value.strip()
             self.config.jira.project = project_val if project_val else None
 
-            affected_val = self.query_one(key_to_id("input", "jira.affected_version"), Input).value.strip()
-            self.config.jira.affected_version = affected_val if affected_val else None
-
             # Components - try dropdown first, fallback to text input
             try:
                 # Try to get from dropdown (ConfigSelect)
@@ -2172,8 +2227,40 @@ class ConfigTUI(App):
                     # Neither widget found - skip
                     pass
 
-            # Note: Workstream and other custom fields are configured directly in team.json
-            # They are not part of the TUI to keep it focused on common system fields
+            # Collect custom field defaults
+            if self.config.jira.field_mappings:
+                # Initialize custom_field_defaults dict if needed
+                if not self.config.jira.custom_field_defaults:
+                    self.config.jira.custom_field_defaults = {}
+
+                # Collect each custom field
+                for field_key, field_info in self.config.jira.field_mappings.items():
+                    if isinstance(field_info, dict) and "id" in field_info:
+                        field_id = field_info["id"]
+                        if isinstance(field_id, str) and field_id.startswith("customfield_"):
+                            # This is a custom field - try to collect its value
+                            config_key = f"jira.custom_field_defaults.{field_key}"
+
+                            try:
+                                # Try dropdown first
+                                value = self.query_one(key_to_id("select", config_key), Select).value
+                                if value and value != Select.BLANK:
+                                    self.config.jira.custom_field_defaults[field_key] = value
+                                elif field_key in self.config.jira.custom_field_defaults:
+                                    # Clear if blank selected
+                                    del self.config.jira.custom_field_defaults[field_key]
+                            except:
+                                # Try text input
+                                try:
+                                    value = self.query_one(key_to_id("input", config_key), Input).value.strip()
+                                    if value:
+                                        self.config.jira.custom_field_defaults[field_key] = value
+                                    elif field_key in self.config.jira.custom_field_defaults:
+                                        # Clear if empty
+                                        del self.config.jira.custom_field_defaults[field_key]
+                                except:
+                                    # Widget not found - skip this field
+                                    pass
 
             self.config.jira.time_tracking = self.query_one(key_to_id("checkbox", "jira.time_tracking"), Checkbox).value
 
