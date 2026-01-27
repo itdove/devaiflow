@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://devaiflow.dev/schemas/enterprise.schema.json",
+  "title": "Enterprise Configuration",
+  "description": "Enterprise-wide configuration for DevAIFlow",
+  "type": "object",
+  "properties": {
+    "agent_backend": {
+      "type": ["string", "null"],
+      "enum": ["claude", "github-copilot", null],
+      "description": "AI agent backend enforced by enterprise (e.g., 'claude', 'github-copilot'). Use null to allow teams/users to choose."
+    },
+    "backend_overrides": {
+      "type": ["object", "null"],
+      "description": "Override any fields from backend configs (backends/*.json). Example: {\"field_mappings\": {\"components\": {\"required_for\": [\"Bug\", \"Story\"]}}}",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

@@ -38,11 +38,22 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     default_url = current_config.jira.url if current_config else "https://jira.example.com"
     jira_url = Prompt.ask("JIRA URL", default=default_url)
 
-    # JIRA Project
+    # JIRA Project (stored in organization.json)
     console.print("[dim]The project key is the short identifier for your JIRA project (e.g., 'PROJ', 'ENG', 'DEVOPS')[/dim]")
     console.print("[dim]You can find it in your JIRA URL: https://jira.company.com/browse/PROJ-123 → 'PROJ'[/dim]")
     console.print("[dim]Can be set later, but required for: creating issues, field discovery[/dim]")
-    default_project = current_config.jira.project if current_config else None
+
+    # Try to get default from organization.json first (more accurate), then fall back to merged config
+    default_project = None
+    if current_config:
+        from devflow.config.loader import ConfigLoader
+        config_loader = ConfigLoader()
+        org_config = config_loader._load_organization_config()
+        if org_config and org_config.jira_project:
+            default_project = org_config.jira_project
+        elif current_config.jira.project:
+            default_project = current_config.jira.project
+
     if default_project:
         jira_project = Prompt.ask("JIRA Project Key", default=default_project)
     else:
@@ -134,6 +145,43 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         if Confirm.ask("Configure keyword mappings now?", default=False):
             keywords = _prompt_for_keywords({})
 
+    # Hierarchical Config Source (organization-level)
+    console.print("\n[bold]=== Hierarchical Configuration ===[/bold]\n")
+    console.print("[dim]Optional: URL to organization-wide config files (ENTERPRISE.md, ORGANIZATION.md, etc.)[/dim]")
+    console.print("[dim]This enables automatic distribution of organization policies and AI agent skills.[/dim]")
+    console.print("[dim]After setting this, run 'daf upgrade' to download config files and skills.[/dim]")
+    console.print("[dim]Can be set later via 'daf config tui --advanced' in the Organization tab.[/dim]\n")
+    console.print("Examples:")
+    console.print("  - file:///company/shared/devaiflow/configs")
+    console.print("  - https://github.com/company/devaiflow-config/configs")
+    console.print()
+
+    hierarchical_config_source = None
+    if current_config:
+        # Check if there's an organization config with hierarchical_config_source
+        from devflow.config.loader import ConfigLoader
+        config_loader = ConfigLoader()
+        org_config = config_loader._load_organization_config()
+        if org_config and org_config.hierarchical_config_source:
+            console.print(f"[dim]Current source: {org_config.hierarchical_config_source}[/dim]")
+            if Confirm.ask("Update hierarchical config source?", default=False):
+                # Show current value as default when updating
+                source_input = Prompt.ask(
+                    "Hierarchical config source URL (or press Enter to keep current)",
+                    default=org_config.hierarchical_config_source
+                )
+                hierarchical_config_source = source_input if source_input else None
+            else:
+                hierarchical_config_source = org_config.hierarchical_config_source
+        else:
+            if Confirm.ask("Configure hierarchical config source now?", default=False):
+                source_input = Prompt.ask("Hierarchical config source URL", default="")
+                hierarchical_config_source = source_input if source_input else None
+    else:
+        if Confirm.ask("Configure hierarchical config source now?", default=False):
+            source_input = Prompt.ask("Hierarchical config source URL", default="")
+            hierarchical_config_source = source_input if source_input else None
+
     # Build JIRA config with transitions
     jira_config = JiraConfig(
         url=jira_url,
@@ -198,7 +246,11 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
             console.print("[dim]  https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
             console.print("[dim]  (Not the regular GitHub URL - must be raw.githubusercontent.com)[/dim]")
             console.print()
-            template_url_input = Prompt.ask("Enter PR/MR template URL (leave empty to clear)", default="")
+            # Show current URL as default when updating
+            template_url_input = Prompt.ask(
+                "Enter PR/MR template URL (or press Enter to keep current)",
+                default=current_config.pr_template_url
+            )
             pr_template_url = template_url_input.strip() if template_url_input.strip() else None
         else:
             # Keep existing URL
@@ -215,6 +267,10 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
             pr_template_url = template_url_input.strip() if template_url_input.strip() else None
 
     new_config.pr_template_url = pr_template_url
+
+    # Save hierarchical_config_source to organization.json
+    if hierarchical_config_source is not None:  # Only save if user provided a value
+        _save_organization_config(jira_project, hierarchical_config_source)
 
     return new_config
 
@@ -250,3 +306,40 @@ def _prompt_for_keywords(existing_keywords: dict) -> dict:
                 keywords[keyword] = repos
 
     return keywords
+
+
+def _save_organization_config(jira_project: Optional[str], hierarchical_config_source: str) -> None:
+    """Save organization-level configuration to organization.json.
+
+    Args:
+        jira_project: JIRA project key
+        hierarchical_config_source: URL to hierarchical config files
+    """
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import OrganizationConfig
+    import json
+
+    config_loader = ConfigLoader()
+    org_config_path = config_loader.session_home / "organization.json"
+
+    # Load existing organization config if it exists
+    if org_config_path.exists():
+        try:
+            with open(org_config_path, 'r') as f:
+                org_data = json.load(f)
+        except Exception:
+            org_data = {}
+    else:
+        org_data = {}
+
+    # Update with new values
+    if jira_project:
+        org_data['jira_project'] = jira_project
+    if hierarchical_config_source:
+        org_data['hierarchical_config_source'] = hierarchical_config_source
+
+    # Save organization config
+    with open(org_config_path, 'w') as f:
+        json.dump(org_data, f, indent=2)
+
+    console.print(f"[green]✓[/green] Organization config saved to: {org_config_path}")

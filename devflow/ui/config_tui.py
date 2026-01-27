@@ -573,12 +573,13 @@ class WorkspaceEntry(Container):
         # Path
         yield Static(f"Path: {self.workspace.path}", classes="ws-path")
 
-        # Buttons
+        # Buttons - use workspace name in ID to ensure uniqueness
+        btn_id_base = f"ws_{self.workspace.name.replace(' ', '_')}_{self.index}"
         with Horizontal(classes="button-row"):
             if not self.is_last_used:
-                yield Button("Use This", variant="success", id=f"use_{self.index}", classes="compact")
-            yield Button("Edit", variant="primary", id=f"edit_{self.index}", classes="compact")
-            yield Button("Remove", variant="error", id=f"remove_{self.index}", classes="compact")
+                yield Button("Use This", variant="success", id=f"use_{btn_id_base}", classes="compact")
+            yield Button("Edit", variant="primary", id=f"edit_{btn_id_base}", classes="compact")
+            yield Button("Remove", variant="error", id=f"remove_{btn_id_base}", classes="compact")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
@@ -633,8 +634,12 @@ class HelpScreen(ModalScreen):
                 "  Enter               - Activate button/checkbox\n"
                 "  Escape              - Cancel/close\n"
                 "  Ctrl+S              - Save configuration\n"
+                "  Ctrl+M              - Toggle Simple/Advanced Mode\n"
                 "  ?                   - Show this help\n"
                 "  Q / Ctrl+C          - Quit\n\n"
+                "[bold]Modes:[/bold]\n\n"
+                "  Simple Mode         - Topic-based tabs (JIRA, Repository, etc.)\n"
+                "  Advanced Mode       - File-based tabs (Enterprise, Organization, Team, User)\n\n"
                 "[bold]Field Types:[/bold]\n\n"
                 "  * (asterisk)        - Required field\n"
                 "  Checkbox            - Toggle with Enter/Space\n"
@@ -1012,6 +1017,14 @@ class ConfigTUI(App):
     VerticalScroll {
         height: 1fr;
     }
+
+    .mode-indicator {
+        height: 1;
+        padding: 0 2;
+        background: $panel;
+        text-align: center;
+        border-bottom: solid $primary;
+    }
     """
 
     BINDINGS = [
@@ -1020,12 +1033,17 @@ class ConfigTUI(App):
         Binding("?", "help", "Help"),
         Binding("ctrl+s", "save", "Save"),
         Binding("ctrl+p", "preview", "Preview"),
+        Binding("ctrl+m", "toggle_mode", "Toggle Mode"),
     ]
 
     TITLE = "DevAIFlow - Configuration"
 
-    def __init__(self):
-        """Initialize the TUI application."""
+    def __init__(self, advanced_mode: bool = False):
+        """Initialize the TUI application.
+
+        Args:
+            advanced_mode: If True, start in Advanced Mode (file-based tabs)
+        """
         super().__init__()
         self.config_loader = ConfigLoader()
         self.config = self.config_loader.load_config()
@@ -1034,21 +1052,22 @@ class ConfigTUI(App):
             raise RuntimeError("Failed to load configuration")
         self.original_config = self.config.model_copy(deep=True)
         self.modified = False
+        self.advanced_mode = advanced_mode
 
     def _get_agent_backend_enforcement_source(self) -> Optional[str]:
-        """Check if agent_backend is enforced by organization or team config.
+        """Check if agent_backend is enforced by enterprise or team config.
 
         Returns:
-            "organization" if enforced by org config
+            "enterprise" if enforced by enterprise config
             "team" if enforced by team config
             None if user can choose
         """
-        # Load org and team configs to check if they enforce agent_backend
-        org_config = self.config_loader._load_organization_config()
+        # Load enterprise and team configs to check if they enforce agent_backend
+        enterprise_config = self.config_loader._load_enterprise_config()
         team_config = self.config_loader._load_team_config()
 
-        if org_config and org_config.agent_backend:
-            return "organization"
+        if enterprise_config and enterprise_config.agent_backend:
+            return "enterprise"
         elif team_config and team_config.agent_backend:
             return "team"
         else:
@@ -1058,24 +1077,43 @@ class ConfigTUI(App):
         """Compose the main TUI layout."""
         yield Header()
 
-        with TabbedContent():
-            with TabPane("JIRA Integration", id="tab_jira"):
-                yield from self._compose_jira_tab()
+        # Mode indicator
+        mode_text = "[bold cyan]Advanced Mode[/bold cyan] (Ctrl+M to switch to Simple)" if self.advanced_mode else "[bold green]Simple Mode[/bold green] (Ctrl+M to switch to Advanced)"
+        yield Static(mode_text, id="mode_indicator", classes="mode-indicator")
 
-            with TabPane("Repository & VCS", id="tab_repo"):
-                yield from self._compose_repo_tab()
+        with TabbedContent(id="main_tabs"):
+            if self.advanced_mode:
+                # Advanced Mode: File-based tabs
+                with TabPane("Enterprise", id="tab_enterprise"):
+                    yield from self._compose_enterprise_tab()
 
-            with TabPane("Workspaces", id="tab_workspaces"):
-                yield from self._compose_workspaces_tab()
+                with TabPane("Organization", id="tab_organization"):
+                    yield from self._compose_organization_tab()
 
-            with TabPane("AI", id="tab_claude"):
-                yield from self._compose_claude_tab()
+                with TabPane("Team", id="tab_team"):
+                    yield from self._compose_team_tab()
 
-            with TabPane("Session Workflow", id="tab_workflow"):
-                yield from self._compose_session_workflow_tab()
+                with TabPane("User", id="tab_user"):
+                    yield from self._compose_user_tab()
+            else:
+                # Simple Mode: Topic-based tabs (current)
+                with TabPane("JIRA Integration", id="tab_jira"):
+                    yield from self._compose_jira_tab()
 
-            with TabPane("Advanced", id="tab_advanced"):
-                yield from self._compose_advanced_tab()
+                with TabPane("Repository & VCS", id="tab_repo"):
+                    yield from self._compose_repo_tab()
+
+                with TabPane("Workspaces", id="tab_workspaces"):
+                    yield from self._compose_workspaces_tab()
+
+                with TabPane("AI", id="tab_claude"):
+                    yield from self._compose_claude_tab()
+
+                with TabPane("Session Workflow", id="tab_workflow"):
+                    yield from self._compose_session_workflow_tab()
+
+                with TabPane("Advanced", id="tab_advanced"):
+                    yield from self._compose_advanced_tab()
 
         yield Footer()
 
@@ -1426,7 +1464,7 @@ class ConfigTUI(App):
             # Agent Backend Selection
             yield Static("[bold]AI Agent Backend[/bold]", classes="subsection-title")
 
-            # Check if agent_backend is enforced by organization or team
+            # Check if agent_backend is enforced by enterprise or team
             agent_enforced_by = self._get_agent_backend_enforcement_source()
 
             if agent_enforced_by:
@@ -1743,6 +1781,23 @@ class ConfigTUI(App):
             self.original_config = self.config.model_copy(deep=True)
         except Exception as e:
             self.notify(f"Failed to save configuration: {e}", severity="error")
+
+    def action_toggle_mode(self) -> None:
+        """Toggle between Simple and Advanced mode."""
+        # Collect current values before exit
+        self._collect_values()
+
+        # Save current config if modified
+        if self.modified:
+            try:
+                self.config_loader.save_config(self.config)
+            except Exception as e:
+                self.notify(f"Failed to save before mode switch: {e}", severity="error")
+                return
+
+        # Exit with return value to indicate mode to restart in
+        new_mode = not self.advanced_mode
+        self.exit({"restart_mode": "advanced" if new_mode else "simple"})
 
     def action_quit(self) -> None:
         """Quit the application."""
@@ -2259,6 +2314,46 @@ class ConfigTUI(App):
         # Note: Patches settings removed - patch system deprecated
         # Configuration now uses 4-file format (backends/jira.json, organization.json, team.json, config.json)
 
+        # Organization-level fields (Advanced Mode only)
+        # These are saved directly to organization.json, not the merged Config
+        if self.advanced_mode:
+            try:
+                import json
+                from pathlib import Path
+
+                # Read current organization.json
+                org_file = self.config_loader.config_dir / "organization.json"
+                if org_file.exists():
+                    with open(org_file, 'r') as f:
+                        org_data = json.load(f)
+                else:
+                    org_data = {}
+
+                # Collect organization.jira_project
+                try:
+                    jira_project_val = self.query_one(key_to_id("input", "organization.jira_project"), Input).value.strip()
+                    if jira_project_val:
+                        org_data['jira_project'] = jira_project_val
+                        # Also update the merged config for consistency
+                        self.config.jira.project = jira_project_val
+                except Exception:
+                    pass  # Field not found, skip
+
+                # Collect organization.hierarchical_config_source
+                try:
+                    hierarchical_config_val = self.query_one(key_to_id("input", "organization.hierarchical_config_source"), Input).value.strip()
+                    org_data['hierarchical_config_source'] = hierarchical_config_val if hierarchical_config_val else None
+                except Exception:
+                    pass  # Field not found, skip
+
+                # Save updated organization.json
+                org_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(org_file, 'w') as f:
+                    json.dump(org_data, f, indent=2)
+
+            except Exception as e:
+                self.notify(f"Error collecting organization values: {e}", severity="error")
+
         # Mark as modified
         if self.config != self.original_config:
             self.modified = True
@@ -2320,6 +2415,178 @@ class ConfigTUI(App):
         except Exception:
             pass  # Ignore errors during typing
 
+    def _compose_enterprise_tab(self) -> ComposeResult:
+        """Compose Enterprise configuration tab (Advanced Mode)."""
+        with VerticalScroll():
+            yield Static("[bold cyan]Enterprise Configuration[/bold cyan]", classes="section-title")
+            yield Static(
+                "Enterprise-wide settings enforced across all users (read-only)",
+                classes="section-help",
+            )
+
+            # Load enterprise config to display
+            enterprise_config = self.config_loader._load_enterprise_config()
+
+            if not enterprise_config:
+                yield Static(
+                    "[dim]No enterprise.json file found at $DEVAIFLOW_HOME/enterprise.json[/dim]",
+                    classes="section-help"
+                )
+                yield Static(
+                    "[yellow]Enterprise configuration is optional and managed by administrators.[/yellow]",
+                    classes="section-help"
+                )
+            else:
+                # Show read-only enterprise settings
+                if enterprise_config.agent_backend:
+                    yield Static(f"[bold]AI Agent Backend:[/bold] {enterprise_config.agent_backend}")
+                    yield Static(
+                        "[dim]This setting is enforced by your organization[/dim]",
+                        classes="section-help"
+                    )
+
+                if enterprise_config.backend_overrides:
+                    yield Static("\n[bold]Backend Overrides:[/bold]")
+                    yield Static(
+                        "[dim]Enterprise has configured field metadata corrections[/dim]",
+                        classes="section-help"
+                    )
+
+                yield Static("\n[yellow]ℹ Enterprise settings are read-only and managed by administrators[/yellow]")
+
+    def _compose_organization_tab(self) -> ComposeResult:
+        """Compose Organization configuration tab (Advanced Mode)."""
+        with VerticalScroll():
+            yield Static("[bold cyan]Organization Configuration[/bold cyan]", classes="section-title")
+            yield Static(
+                "Project-specific settings (saved to organization.json)",
+                classes="section-help",
+            )
+
+            # Load organization config
+            org_config = self.config_loader._load_organization_config()
+
+            yield ConfigInput(
+                "JIRA Project Key",
+                "organization.jira_project",
+                value=org_config.jira_project if org_config and org_config.jira_project else "",
+                help_text="Default JIRA project for this organization (e.g., AAP, PROJ)",
+            )
+
+            yield ConfigInput(
+                "Hierarchical Config Source",
+                "organization.hierarchical_config_source",
+                value=org_config.hierarchical_config_source if org_config and org_config.hierarchical_config_source else "",
+                help_text="URL or path to hierarchical config files (e.g., file:///company/shared/devaiflow/configs or https://github.com/company/devaiflow-config/configs)",
+            )
+
+            yield Static("\n[dim]Advanced: Sync Filters[/dim]", classes="subsection-title")
+            yield Static(
+                "[dim]Configure which JIRA tickets to sync with 'daf sync'[/dim]",
+                classes="section-help"
+            )
+
+            # Show current sync filter configuration
+            if org_config and org_config.sync_filters and "sync" in org_config.sync_filters:
+                sync_filter = org_config.sync_filters["sync"]
+                if sync_filter.status:
+                    yield Static(f"[dim]Sync Status:[/dim] {', '.join(sync_filter.status)}")
+                if sync_filter.required_fields:
+                    yield Static(f"[dim]Required Fields:[/dim] {', '.join(sync_filter.required_fields)}")
+                if sync_filter.assignee:
+                    yield Static(f"[dim]Assignee Filter:[/dim] {sync_filter.assignee}")
+
+            yield Static("\n[yellow]💡 See ORGANIZATION.md for detailed policies and templates[/yellow]")
+
+    def _compose_team_tab(self) -> ComposeResult:
+        """Compose Team configuration tab (Advanced Mode)."""
+        with VerticalScroll():
+            yield Static("[bold cyan]Team Configuration[/bold cyan]", classes="section-title")
+            yield Static(
+                "Team-wide defaults (saved to team.json)",
+                classes="section-help",
+            )
+
+            # Load team config
+            team_config = self.config_loader._load_team_config()
+
+            # Check if team enforces agent_backend
+            if team_config and team_config.agent_backend:
+                yield Static(f"[bold]AI Agent Backend:[/bold] {team_config.agent_backend}")
+                yield Static(
+                    "[dim]This setting is enforced by your team[/dim]",
+                    classes="section-help"
+                )
+            else:
+                yield Static("[dim]No team-specific agent backend enforcement[/dim]")
+
+            yield Static("\n[dim]Team defaults for custom fields:[/dim]", classes="subsection-title")
+            yield Static(
+                "[dim]Configure team-wide defaults for JIRA fields[/dim]",
+                classes="section-help"
+            )
+
+            if team_config and team_config.jira_custom_field_defaults:
+                for field, value in team_config.jira_custom_field_defaults.items():
+                    yield Static(f"[dim]{field}:[/dim] {value}")
+
+            yield Static("\n[yellow]💡 See TEAM.md for team conventions and workflows[/yellow]")
+
+    def _compose_user_tab(self) -> ComposeResult:
+        """Compose User configuration tab (Advanced Mode)."""
+        with VerticalScroll():
+            yield Static("[bold cyan]User Configuration[/bold cyan]", classes="section-title")
+            yield Static(
+                "Your personal preferences (saved to config.json)",
+                classes="section-help",
+            )
+
+            yield Static("[bold]Repository Settings[/bold]", classes="subsection-title")
+
+            yield ConfigInput(
+                "Last Used Workspace",
+                "repos.last_used_workspace",
+                value=self.config.repos.last_used_workspace or "",
+                help_text="Last workspace used (automatically updated)",
+            )
+
+            yield Static("\n[bold]AI Settings[/bold]", classes="subsection-title")
+
+            # Only show if not enforced by enterprise/team
+            enforcement_source = self._get_agent_backend_enforcement_source()
+            if enforcement_source:
+                yield Static(
+                    f"[yellow]AI Agent Backend is enforced by {enforcement_source} configuration[/yellow]",
+                    classes="section-help"
+                )
+            else:
+                agent_backend_select = Select(
+                    [
+                        ("Claude (Anthropic)", "claude"),
+                        ("GitHub Copilot", "github-copilot"),
+                    ],
+                    value=self.config.agent_backend or "claude",
+                    id="agent_backend",
+                )
+                yield ConfigSelect("AI Agent Backend", "agent_backend", agent_backend_select)
+
+            yield Static("\n[bold]Personal Field Defaults[/bold]", classes="subsection-title")
+            yield Static(
+                "[dim]Configure your personal defaults for JIRA fields[/dim]",
+                classes="section-help"
+            )
+
+            if self.config.jira.custom_field_defaults:
+                for field, value in self.config.jira.custom_field_defaults.items():
+                    yield ConfigInput(
+                        f"{field}",
+                        f"jira.custom_field_defaults.{field}",
+                        value=str(value),
+                        help_text=f"Personal default for {field}",
+                    )
+
+            yield Static("\n[yellow]💡 See USER.md for personal customization options[/yellow]")
+
     def _create_backup(self) -> Path:
         """Create backup of current config file.
 
@@ -2336,11 +2603,27 @@ class ConfigTUI(App):
         return backup_path
 
 
-def run_config_tui() -> None:
-    """Run the configuration TUI application."""
-    app = ConfigTUI()
-    app.run()
+def run_config_tui(advanced_mode: bool = False) -> None:
+    """Run the configuration TUI application.
+
+    Args:
+        advanced_mode: If True, start in Advanced Mode (file-based tabs)
+    """
+    while True:
+        app = ConfigTUI(advanced_mode=advanced_mode)
+        result = app.run()
+
+        # Check if we need to restart in different mode
+        if result and isinstance(result, dict) and "restart_mode" in result:
+            advanced_mode = result["restart_mode"] == "advanced"
+            # Loop will restart with new mode
+        else:
+            # Normal exit
+            break
 
 
 if __name__ == "__main__":
-    run_config_tui()
+    import sys
+    # Check for --advanced flag
+    advanced = "--advanced" in sys.argv
+    run_config_tui(advanced_mode=advanced)

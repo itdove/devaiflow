@@ -3,6 +3,10 @@
 import click
 from typing import Dict, Any
 from devflow.config.loader import ConfigLoader
+from devflow.cli.commands.jira_field_utils import (
+    parse_field_options,
+    add_dynamic_system_field_options,
+)
 
 
 def get_creation_fields_for_command() -> Dict[str, Dict[str, Any]]:
@@ -105,15 +109,10 @@ def create_jira_create_command():
             priority = "Normal" if issue_type.lower() == "task" else "Major"
 
         # Parse --field options into custom_fields dict
-        custom_fields = {}
-        if field:
-            for field_str in field:
-                if '=' not in field_str:
-                    console.print(f"[yellow]⚠[/yellow] Invalid field format: '{field_str}'. Expected format: field_name=value")
-                    continue
-
-                field_name, field_value = field_str.split('=', 1)
-                custom_fields[field_name.strip()] = field_value.strip()
+        # Only allow custom fields (customfield_*), not system fields
+        # Will exit with error if any system field is used via --field
+        creation_fields = get_creation_fields_for_command()
+        custom_fields = parse_field_options(field, creation_fields)
 
         # Separate system fields from kwargs (non-customfield_* fields)
         # These come from dynamically generated CLI options like --components, --labels
@@ -171,42 +170,14 @@ def create_jira_create_command():
     # Dynamically add CLI options for JIRA system fields (non-custom fields)
     # Custom fields (customfield_*) are handled via --field key=value
     # System fields (components, labels, etc.) get dedicated CLI options
-
-    if creation_fields:
-        for field_name, field_info in creation_fields.items():
-            field_id = field_info.get("id", "")
-
-            # Skip custom fields - they use --field instead
-            if field_id.startswith("customfield_"):
-                continue
-
-            # Skip fields that already have dedicated options (summary, description, priority, etc.)
-            if field_name in ["summary", "description", "priority", "project", "issuetype", "issue_type", "reporter", "assignee"]:
-                continue
-
-            # Add CLI option for this system field
-            # Normalize field name for CLI: remove slashes, replace underscores with hyphens
-            normalized_field_name = field_name.replace('/', '').replace('_', '-')
-            option_name = f"--{normalized_field_name}"
-            field_display_name = field_info.get("name", field_name)
-            field_type = field_info.get("type", "string")
-
-            # Determine if this is a list field
-            is_list = field_type in ["array", "list"]
-
-            help_text = f"{field_display_name}"
-            if field_info.get("allowed_values"):
-                # Extract component names from allowed_values (which are dict strings)
-                # Skip this for now - allowed_values format is complex
-                pass
-
-            # Add the option - use field_id as the parameter name since that's what JIRA expects
-            jira_create_base = click.option(
-                option_name,
-                field_id,  # Use field ID (e.g., "components") as the parameter name
-                help=help_text,
-                multiple=is_list,
-                default=None
-            )(jira_create_base)
+    hardcoded_fields = {
+        "summary", "description", "priority", "project",
+        "parent", "affected_version", "issuetype", "issue_type"
+    }
+    jira_create_base = add_dynamic_system_field_options(
+        jira_create_base,
+        creation_fields,
+        hardcoded_fields
+    )
 
     return jira_create_base

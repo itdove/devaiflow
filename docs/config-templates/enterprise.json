@@ -1,0 +1,7 @@
+{
+  "_comment": "Enterprise-wide configuration (company/organization level)",
+  "agent_backend": null,
+  "_agent_backend_comment": "Optional: Enforce AI agent backend for entire enterprise (e.g., 'claude', 'github-copilot'). Leave null to allow teams/users to choose.",
+  "backend_overrides": null,
+  "_backend_overrides_comment": "Optional: Override backend configuration values. Example: {\"field_mappings\": {\"components\": {\"required_for\": [\"Bug\", \"Story\"]}}} to fix incorrect JIRA API metadata."
+}

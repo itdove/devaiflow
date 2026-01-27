@@ -58,6 +58,7 @@ setup(
         "anthropic>=0.40.0",
         "requests>=2.31.0",
         "pyyaml>=6.0",
+        "jsonschema>=4.17.0",
     ],
     extras_require={
         "dev": [

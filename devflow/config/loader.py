@@ -136,11 +136,8 @@ class ConfigLoader:
 
             config = Config(**data)
 
-            # Validate configuration and show warnings
-            from .validator import ConfigValidator
-            validator = ConfigValidator(self.config_dir)
-            validation_result = validator.validate_merged_config(config)
-            validator.print_validation_warnings_on_load(validation_result)
+            # Note: Old format validation removed - migrate to new 5-file format
+            # Use validate_split_config_files() after migration
 
             return config
         except ValidationError as e:
@@ -463,6 +460,29 @@ class ConfigLoader:
                 transitions={},
             )
 
+    def _load_enterprise_config(self) -> Optional["EnterpriseConfig"]:
+        """Load enterprise configuration from enterprise.json.
+
+        Returns:
+            EnterpriseConfig object with defaults if file doesn't exist
+        """
+        from .models import EnterpriseConfig
+
+        enterprise_file = self.config_dir / "enterprise.json"
+
+        if not enterprise_file.exists():
+            # Return default enterprise config
+            return EnterpriseConfig()
+
+        try:
+            with open(enterprise_file, "r") as f:
+                data = json.load(f)
+            return EnterpriseConfig(**data)
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to load enterprise config: {e}")
+            console.print("[dim]  Using default enterprise configuration[/dim]")
+            return EnterpriseConfig()
+
     def _load_organization_config(self) -> Optional["OrganizationConfig"]:
         """Load organization configuration from organization.json.
 
@@ -534,36 +554,89 @@ class ConfigLoader:
                 repos=RepoConfig(workspace=str(Path.home() / "development"))
             )
 
+    def _deep_merge_dicts(self, base: Any, override: Any) -> Any:
+        """Deep merge two dictionaries, with override values taking precedence.
+
+        This is a generic merge utility that can be used for any backend configuration.
+
+        Args:
+            base: Base dictionary (values will be overridden)
+            override: Override dictionary (values take precedence)
+
+        Returns:
+            Merged result (dict if both inputs are dicts, otherwise override value)
+        """
+        if not isinstance(base, dict) or not isinstance(override, dict):
+            # If either is not a dict, return the override value
+            return override
+
+        result = dict(base)
+        for key, override_value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(override_value, dict):
+                # Both are dicts - recurse
+                result[key] = self._deep_merge_dicts(result[key], override_value)
+            else:
+                # Override the value
+                result[key] = override_value
+
+        return result
+
+    def _apply_backend_overrides(self, backend_dict: Dict[str, Any], overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Apply organization backend overrides to backend configuration.
+
+        This is a generic method that works for any issue tracker backend (JIRA, GitHub, etc.).
+
+        Args:
+            backend_dict: Backend configuration as a dictionary
+            overrides: Override configuration from organization.json
+
+        Returns:
+            Merged backend configuration dictionary
+        """
+        if not overrides:
+            return backend_dict
+
+        return self._deep_merge_dicts(backend_dict, overrides)
+
     def _merge_jira_config(
         self,
         backend: "JiraBackendConfig",
+        enterprise: "EnterpriseConfig",
         org: "OrganizationConfig",
         team: "TeamConfig",
+        user: "UserConfig",
     ) -> "JiraConfig":
-        """Merge backend, organization, and team configs into unified JiraConfig.
+        """Merge backend, enterprise, organization, team, and user configs into unified JiraConfig.
 
         Args:
             backend: Backend configuration
+            enterprise: Enterprise configuration
             org: Organization configuration
             team: Team configuration
+            user: User configuration
 
         Returns:
             Merged JiraConfig object
         """
         from .models import JiraConfig
 
+        # Convert backend to dict and apply enterprise overrides
+        backend_dict = backend.model_dump(by_alias=True, exclude_none=False)
+        merged_backend_dict = self._apply_backend_overrides(backend_dict, enterprise.backend_overrides)
+
+        # Reconstruct backend config from merged dict (to ensure type safety)
+        # Note: We only override specific fields, not the entire backend object
         return JiraConfig(
-            # From backend
-            url=backend.url,
-            transitions=backend.transitions,
-            field_mappings=backend.field_mappings,
-            field_cache_timestamp=backend.field_cache_timestamp,
-            field_cache_auto_refresh=backend.field_cache_auto_refresh,
-            field_cache_max_age_hours=backend.field_cache_max_age_hours,
-            parent_field_mapping=backend.parent_field_mapping,
+            # From backend (with organization overrides applied)
+            url=merged_backend_dict.get("url", backend.url),
+            transitions=merged_backend_dict.get("transitions", backend.transitions),
+            field_mappings=merged_backend_dict.get("field_mappings", backend.field_mappings),
+            field_cache_timestamp=merged_backend_dict.get("field_cache_timestamp", backend.field_cache_timestamp),
+            field_cache_auto_refresh=merged_backend_dict.get("field_cache_auto_refresh", backend.field_cache_auto_refresh),
+            field_cache_max_age_hours=merged_backend_dict.get("field_cache_max_age_hours", backend.field_cache_max_age_hours),
+            parent_field_mapping=merged_backend_dict.get("parent_field_mapping", backend.parent_field_mapping),
             # From organization
             project=org.jira_project,
-            affected_version=org.jira_affected_version,
             filters=org.sync_filters,  # Renamed from 'filters' to 'sync_filters'
             # From team
             custom_field_defaults=team.jira_custom_field_defaults,
@@ -571,29 +644,33 @@ class ConfigLoader:
             time_tracking=team.time_tracking_enabled,
             comment_visibility_type=team.jira_comment_visibility_type,
             comment_visibility_value=team.jira_comment_visibility_value,
+            # From user
+            affected_version=user.jira_affected_version,
         )
 
     def _load_new_format_config(self) -> Optional[Config]:
-        """Load configuration from 4 separate files (new format).
+        """Load configuration from 5 separate files (new format).
 
         Returns:
-            Merged Config object from all 4 config files
+            Merged Config object from all 5 config files
         """
         # Load each config file
         user_config = self._load_user_config()
         backend_config = self._load_backend_config()
+        enterprise_config = self._load_enterprise_config()
         org_config = self._load_organization_config()
         team_config = self._load_team_config()
 
         # Merge JIRA configs
-        merged_jira = self._merge_jira_config(backend_config, org_config, team_config)
+        merged_jira = self._merge_jira_config(backend_config, enterprise_config, org_config, team_config, user_config)
 
-        # Merge agent_backend with priority: Organization > Team > User
+        # Merge agent_backend with priority: Enterprise > Organization > Team > User
+        # Enterprise can enforce agent backend for all organizations
         # Organization can enforce agent backend for all teams
         # Team can enforce agent backend for that team
-        # User can only choose if org/team haven't enforced it
+        # User can only choose if enterprise/org/team haven't enforced it
         agent_backend = (
-            org_config.agent_backend  # Organization takes precedence
+            enterprise_config.agent_backend  # Enterprise takes highest precedence
             or team_config.agent_backend  # Then team
             or "claude"  # Default to claude if not set anywhere
         )
@@ -681,10 +758,11 @@ class ConfigLoader:
             console.print()
 
     def _save_new_format_config(self, config: Config) -> None:
-        """Save configuration in new 4-file format.
+        """Save configuration in new 5-file format.
 
         Splits Config object into:
         - config.json: User preferences (UserConfig)
+        - enterprise.json: Enterprise settings (EnterpriseConfig)
         - organization.json: Organization settings (OrganizationConfig)
         - team.json: Team settings (TeamConfig)
         - backends/jira.json: JIRA backend (JiraBackendConfig)
@@ -694,6 +772,7 @@ class ConfigLoader:
         """
         from .models import (
             UserConfig,
+            EnterpriseConfig,
             OrganizationConfig,
             TeamConfig,
             JiraBackendConfig,
@@ -713,6 +792,7 @@ class ConfigLoader:
             mock_services=config.mock_services,
             gcp_vertex_region=config.gcp_vertex_region,
             update_checker_timeout=config.update_checker_timeout,
+            jira_affected_version=config.jira.affected_version,
         )
 
         # Save user config (config.json)
@@ -737,12 +817,54 @@ class ConfigLoader:
         with open(backends_dir / "jira.json", "w") as f:
             json.dump(backend_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
 
+        # Extract enterprise config
+        # Note: agent_backend is retrieved from config.agent_backend (already merged with Enterprise > Team priority)
+        # backend_overrides come from field_mappings which don't exist in the merged config
+        # For now, we'll need to check if enterprise.json exists and preserve its content
+        # This is because the merged config doesn't preserve the source of these values
+        enterprise_config = EnterpriseConfig(
+            agent_backend=config.agent_backend,  # This is already the merged value
+            backend_overrides=None,  # Preserve existing value if file exists
+        )
+
+        # If enterprise.json exists, preserve backend_overrides
+        enterprise_file = self.config_dir / "enterprise.json"
+        if enterprise_file.exists():
+            try:
+                with open(enterprise_file, "r") as f:
+                    existing_data = json.load(f)
+                if "backend_overrides" in existing_data:
+                    enterprise_config.backend_overrides = existing_data["backend_overrides"]
+            except Exception:
+                pass  # Ignore errors, will use default
+
+        # Save enterprise config (enterprise.json)
+        with open(self.config_dir / "enterprise.json", "w") as f:
+            json.dump(enterprise_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
+
         # Extract organization config
         org_config = OrganizationConfig(
             jira_project=config.jira.project,
-            jira_affected_version=config.jira.affected_version,
             sync_filters=config.jira.filters,  # Renamed from 'filters' to 'sync_filters'
+            status_grouping_field=None,  # Preserve existing if file exists
+            status_totals_field=None,  # Preserve existing if file exists
+            hierarchical_config_source=None,  # Preserve existing if file exists
         )
+
+        # If organization.json exists, preserve status fields and hierarchical_config_source
+        org_file = self.config_dir / "organization.json"
+        if org_file.exists():
+            try:
+                with open(org_file, "r") as f:
+                    existing_data = json.load(f)
+                if "status_grouping_field" in existing_data:
+                    org_config.status_grouping_field = existing_data["status_grouping_field"]
+                if "status_totals_field" in existing_data:
+                    org_config.status_totals_field = existing_data["status_totals_field"]
+                if "hierarchical_config_source" in existing_data:
+                    org_config.hierarchical_config_source = existing_data["hierarchical_config_source"]
+            except Exception:
+                pass  # Ignore errors, will use default
 
         # Save organization config (organization.json)
         with open(self.config_dir / "organization.json", "w") as f:

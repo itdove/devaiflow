@@ -124,33 +124,39 @@ Permission denied
 
 1. **Add file access permissions to Claude Code settings:**
 
-   Create or edit `~/.claude/settings.json`:
+   Create or edit `~/.claude/settings.json` (using default `~/.daf-sessions` location):
    ```bash
    mkdir -p ~/.claude
    cat > ~/.claude/settings.json << 'EOF'
 {
-  "file_access": {
-    "read": [
-      "$DEVAIFLOW_HOME/**/*",
-      "$DEVAIFLOW_HOME/**/*"
+  "permissions": {
+    "allow": [
+      "Read(~/.daf-sessions/ENTERPRISE.md)",
+      "Read(~/.daf-sessions/ORGANIZATION.md)",
+      "Read(~/.daf-sessions/TEAM.md)",
+      "Read(~/.daf-sessions/USER.md)"
     ]
   }
 }
 EOF
    ```
 
+   **Note:** If you set a custom `DEVAIFLOW_HOME` environment variable, replace `~/.daf-sessions` with your custom path.
+
 2. **Verify the configuration:**
    ```bash
    cat ~/.claude/settings.json
    ```
 
-   Should show:
+   Should show (with default location):
    ```json
    {
-     "file_access": {
-       "read": [
-         "$DEVAIFLOW_HOME/**/*",
-         "$DEVAIFLOW_HOME/**/*"
+     "permissions": {
+       "allow": [
+         "Read(~/.daf-sessions/ENTERPRISE.md)",
+         "Read(~/.daf-sessions/ORGANIZATION.md)",
+         "Read(~/.daf-sessions/TEAM.md)",
+         "Read(~/.daf-sessions/USER.md)"
        ]
      }
    }
@@ -206,18 +212,22 @@ The allow list **must** be in the global `~/.claude/settings.json` file, NOT in 
    # Backup existing file
    mv ~/.claude/settings.json ~/.claude/settings.json.backup
 
-   # Create new file with correct syntax
+   # Create new file with correct syntax (using default ~/.daf-sessions location)
    cat > ~/.claude/settings.json << 'EOF'
 {
-  "file_access": {
-    "read": [
-      "$DEVAIFLOW_HOME/**/*",
-      "$DEVAIFLOW_HOME/**/*"
+  "permissions": {
+    "allow": [
+      "Read(~/.daf-sessions/ENTERPRISE.md)",
+      "Read(~/.daf-sessions/ORGANIZATION.md)",
+      "Read(~/.daf-sessions/TEAM.md)",
+      "Read(~/.daf-sessions/USER.md)"
     ]
   }
 }
 EOF
    ```
+
+   **Note:** If you set a custom `DEVAIFLOW_HOME` environment variable, replace `~/.daf-sessions` with your custom path.
 
 ### Settings Changes Not Taking Effect
 

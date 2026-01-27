@@ -52,8 +52,44 @@ The TUI provides:
 **Command Line**:
 ```bash
 daf init                          # Interactive setup wizard
-daf config show                   # View current configuration
-daf config set-jira-url <url>    # Set specific values
+daf config show                   # View merged final configuration
+daf config show --json            # JSON output for scripting
+```
+
+## Viewing Configuration
+
+### View Merged Configuration
+
+Display the complete configuration after merging all sources:
+
+```bash
+daf config show
+```
+
+This shows the final merged configuration from all 5 sources:
+1. `backends/jira.json` - Backend configuration (JIRA API settings, transitions, field mappings)
+2. `ENTERPRISE.md` - Enterprise-level overrides
+3. `organization.json` - Organization settings (project, sync filters)
+4. `team.json` - Team settings (custom/system field defaults, components, labels)
+5. `USER.md` - User preferences (workspace, affected version)
+
+**Why use this:**
+- Understand what configuration is actually being used at runtime
+- Debug configuration issues by seeing the final merged result
+- Verify team/organization defaults are being applied correctly
+- Check field mappings and available custom fields
+
+**Output format:**
+- Human-readable: Syntax-highlighted JSON with source file references
+- JSON mode: Machine-readable output for scripts (`--json` flag)
+
+**Examples:**
+```bash
+# View with syntax highlighting
+daf config show
+
+# JSON output for scripting
+daf config show --json
 ```
 
 ## Configuration File

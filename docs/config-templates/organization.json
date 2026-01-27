@@ -1,9 +1,7 @@
 {
-  "_comment": "Organization-wide JIRA configuration",
+  "_comment": "Organization/Project-specific JIRA configuration",
   "jira_project": "TODO: YOUR_PROJECT_KEY",
   "_jira_project_comment": "Your JIRA project key (e.g., 'PROJ', 'MYAPP', 'ENG'). Required for ticket creation.",
-  "jira_affected_version": null,
-  "_jira_affected_version_comment": "Optional: Default affected version for bugs (e.g., 'v1.0', 'production')",
   "sync_filters": {
     "sync": {
       "status": ["To Do", "In Progress"],
@@ -13,5 +11,9 @@
       "assignee": "currentUser()",
       "_assignee_comment": "Filter tickets by assignee: 'currentUser()' (only your tickets) | specific username | null (all tickets)"
     }
-  }
+  },
+  "status_grouping_field": null,
+  "_status_grouping_field_comment": "Optional: Field to group by in status dashboard (e.g., 'sprint', 'iteration', 'release')",
+  "status_totals_field": null,
+  "_status_totals_field_comment": "Optional: Field to sum for totals in status dashboard (e.g., 'points', 'story_points', 'effort')"
 }

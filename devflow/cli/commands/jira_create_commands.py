@@ -374,6 +374,144 @@ def _get_project(config, config_loader, flag_value: Optional[str]) -> Optional[s
     return None
 
 
+def _get_required_system_fields(
+    config,
+    config_loader,
+    field_mapper,
+    issue_type: str,
+    flag_values: Optional[dict] = None
+) -> dict:
+    """Get all required system field values for the given issue type.
+
+    This function checks field_mappings for system fields (non-custom fields like
+    components, labels, etc.) that are marked as required for the specified issue type.
+
+    Logic for each required system field:
+    1. If flag value provided, use it (prompt to save if different from config)
+    2. Else if value in system_field_defaults, use it
+    3. Else prompt user (only in interactive mode)
+
+    Args:
+        config: Config object
+        config_loader: ConfigLoader instance
+        field_mapper: JiraFieldMapper instance
+        issue_type: JIRA issue type (e.g., "Bug", "Story", "Task")
+        flag_values: Optional dict of field values from command flags (e.g., {"components": ["backend"]})
+
+    Returns:
+        Dictionary of {field_name: value} for all required system fields
+    """
+    from rich.prompt import Prompt, Confirm
+
+    flag_values = flag_values or {}
+    system_fields = {}
+
+    # Get system field defaults from config
+    config_defaults = config.jira.system_field_defaults or {}
+
+    # Get all field mappings from the field_mapper
+    if not field_mapper.field_mappings:
+        return system_fields
+
+    # Handle case where field_mappings might be a Mock or not a dict
+    try:
+        field_mappings_dict = dict(field_mapper.field_mappings)
+    except (AttributeError, TypeError, ValueError):
+        # field_mappings is not a dict (e.g., Mock object in tests)
+        return system_fields
+
+    # Fields that are always provided by the caller (summary, description, priority, project)
+    # These should not be prompted for here
+    ALWAYS_PROVIDED_FIELDS = {"summary", "description", "priority", "project", "issuetype", "issue_type"}
+
+    # First pass: Add all fields that were provided via CLI flags (flag_values)
+    # This ensures we don't lose CLI-provided values even if fields aren't marked as required
+    for field_key, flag_value in flag_values.items():
+        if flag_value is not None and flag_value != () and flag_value != []:
+            system_fields[field_key] = flag_value
+
+    # Second pass: Loop through field_mappings to handle required fields
+    for field_name, field_info in field_mappings_dict.items():
+        # Get the field ID to determine if it's a system field
+        field_id = field_info.get("id")
+        if not field_id:
+            continue
+
+        # Skip custom fields (customfield_*) - those are handled by _get_required_custom_fields
+        if isinstance(field_id, str) and field_id.startswith("customfield_"):
+            continue
+
+        # Skip fields that are always provided by the caller
+        if field_id in ALWAYS_PROVIDED_FIELDS or field_name in ALWAYS_PROVIDED_FIELDS:
+            continue
+
+        # Skip if this field was already added from flag_values in first pass
+        field_key = field_id
+        if field_key in system_fields:
+            continue
+
+        # Check if this field is required for the issue type
+        required_for = field_info.get("required_for", [])
+        if issue_type not in required_for:
+            continue
+
+        # This field is required - get its value
+        # Use field_id as the key for system fields (e.g., "components", "labels")
+        # Note: flag values are already handled in first pass above
+        config_value = config_defaults.get(field_key)
+
+        # Case 1: Value in config defaults
+        if config_value is not None:
+            console_print(f"[dim]Using {field_key} from config: \"{config_value}\"[/dim]")
+            system_fields[field_key] = config_value
+            continue
+
+        # Case 2: Prompt user (only in interactive mode)
+        if not is_json_mode():
+            allowed_values = field_info.get("allowed_values", [])
+
+            if allowed_values:
+                console_print(f"\n[bold]Available {field_key} values:[/bold]")
+                for val in allowed_values:
+                    console_print(f"  - {val}")
+                console_print()
+
+                field_value = Prompt.ask(
+                    f"Select {field_key}",
+                    choices=allowed_values,
+                    default=allowed_values[0] if allowed_values else None
+                )
+            else:
+                field_value = Prompt.ask(f"Enter {field_key} value")
+        else:
+            # JSON mode - return error for missing required field
+            json_output(
+                success=False,
+                error={
+                    "code": "MISSING_REQUIRED_FIELD",
+                    "message": f"Required field '{field_key}' is missing. Use --{field_key} flag or configure in system_field_defaults."
+                }
+            )
+            return None
+
+        if field_value:
+            # Save to config
+            if not config.jira.system_field_defaults:
+                config.jira.system_field_defaults = {}
+            config.jira.system_field_defaults[field_key] = field_value
+            config_loader.save_config(config)
+            console_print(f"\n[green]ℹ[/green] {field_key.title()} set to \"{field_value}\" and saved to config")
+            console_print(f"[dim]You can change it later with: daf config tui[/dim]\n")
+
+            system_fields[field_key] = field_value
+        else:
+            # Field is required but user didn't provide - will fail later
+            console_print(f"[red]✗[/red] {field_key.title()} is required for {issue_type} creation")
+            return None
+
+    return system_fields
+
+
 def _get_affected_version(config, config_loader, flag_value: Optional[str]) -> str:
     """Get affected version value from flag, config, or prompt.
 
@@ -575,6 +713,15 @@ def create_issue(
         # Ensure field mappings
         field_mapper = _ensure_field_mappings(config, config_loader)
 
+        # Get all required system fields for this issue type
+        # Pass system_fields from CLI options as flag values
+        required_system_fields = _get_required_system_fields(
+            config, config_loader, field_mapper, type_config["jira_issue_type"], system_fields or {}
+        )
+        if required_system_fields is None:
+            # User cancelled or required field missing
+            sys.exit(1)
+
         # Get all required custom fields for this issue type
         # Use custom_fields from --field options as flag values
         # Also include summary if provided (summary might be in field_mappings as a required field)
@@ -648,7 +795,7 @@ def create_issue(
             "project_key": resolved_project,
             "field_mapper": field_mapper,
             "parent": parent,
-            "required_custom_fields": required_custom_fields,  # Pass all required custom fields
+            "required_custom_fields": {},  # Empty - custom fields will be passed via **kwargs below
         }
 
         # Add affected_version only for bugs
@@ -656,7 +803,10 @@ def create_issue(
             create_kwargs["affected_version"] = resolved_affected_version
 
         # Apply custom field defaults from team.json (merged with CLI --field options)
-        # CLI values take precedence over config defaults
+        # Merge in this order (later values override earlier):
+        # 1. config.jira.custom_field_defaults
+        # 2. required_custom_fields (from field_mappings required_for)
+        # 3. custom_fields (from CLI --field options)
         # Filter out system fields that shouldn't be in custom_field_defaults
         SYSTEM_FIELDS_FILTER = {"issue_type", "issuetype", "project", "summary", "description",
                                 "priority", "reporter", "assignee", "created", "updated"}
@@ -665,6 +815,8 @@ def create_issue(
             for field_name, field_value in config.jira.custom_field_defaults.items():
                 if field_name not in SYSTEM_FIELDS_FILTER:
                     merged_custom_fields[field_name] = field_value
+        if required_custom_fields:
+            merged_custom_fields.update(required_custom_fields)
         if custom_fields:
             merged_custom_fields.update(custom_fields)
 
@@ -724,10 +876,15 @@ def create_issue(
                 create_kwargs[field_id] = formatted_value
 
         # Handle system fields (components, labels, etc.)
-        # Merge config defaults with CLI-provided values (CLI takes precedence)
+        # Merge in this order (later values override earlier):
+        # 1. config.jira.system_field_defaults
+        # 2. required_system_fields (from field_mappings required_for)
+        # 3. system_fields (from CLI options)
         merged_system_fields = {}
         if config.jira.system_field_defaults:
             merged_system_fields.update(config.jira.system_field_defaults)
+        if required_system_fields:
+            merged_system_fields.update(required_system_fields)
         if system_fields:
             merged_system_fields.update(system_fields)
 

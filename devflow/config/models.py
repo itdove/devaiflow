@@ -49,19 +49,29 @@ class JiraBackendConfig(BaseModel):
     )  # Maps issue types to logical field names
 
 
+class EnterpriseConfig(BaseModel):
+    """Enterprise-wide configuration (enterprise.json).
+
+    Contains company/enterprise-level settings that apply across
+    all organizations and projects (AI backend enforcement, backend overrides).
+    """
+
+    agent_backend: Optional[str] = None  # AI agent backend enforced by enterprise (e.g., "claude", "github-copilot")
+    backend_overrides: Optional[Dict[str, Any]] = None  # Override any fields from backend configs (backends/*.json). Example: {"field_mappings": {"components": {"required_for": ["Bug", "Story"]}}}
+
+
 class OrganizationConfig(BaseModel):
-    """Organization-wide JIRA configuration (organization.json).
+    """Organization/Project-specific JIRA configuration (organization.json).
 
     Contains organization or project-specific settings that should be
     shared across teams (project key, field aliases, sync filters).
     """
 
     jira_project: Optional[str] = None  # JIRA project key (e.g., "PROJ")
-    jira_affected_version: Optional[str] = None  # Default affected version for bugs
     sync_filters: Dict[str, JiraFiltersConfig] = Field(default_factory=dict)  # Renamed from 'filters'
-    agent_backend: Optional[str] = None  # AI agent backend enforced by organization (e.g., "claude", "github-copilot")
     status_grouping_field: Optional[str] = None  # Field to group by in status dashboard (e.g., "sprint", "iteration", "release") - None means no grouping
     status_totals_field: Optional[str] = None  # Field to sum for totals in status dashboard (e.g., "points", "story_points", "effort") - None means no totals
+    hierarchical_config_source: Optional[str] = None  # URL or path to hierarchical config files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md). Supports file://, http://, https://. Example: "https://github.com/ansible-saas/devflow-for-red-hatters/configs" or "file:///path/to/configs"
 
 
 class TeamConfig(BaseModel):
@@ -296,6 +306,7 @@ class UserConfig(BaseModel):
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests
+    jira_affected_version: Optional[str] = None  # User's current affected version for bug creation (e.g., "v1.0.0")
 
 
 class Config(BaseModel):

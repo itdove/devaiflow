@@ -565,6 +565,15 @@ def create_jira_ticket_session(
         for skills_dir in skills_dirs:
             cmd.extend(["--add-dir", skills_dir])
 
+        # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
+        # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
+        from devflow.utils.paths import get_cs_home
+        cs_home = get_cs_home()
+        if cs_home.exists():
+            hierarchical_files = _load_hierarchical_context_files(config)
+            if hierarchical_files:
+                cmd.extend(["--add-dir", str(cs_home)])
+
         # Debug: Print command being executed
         console_print(f"\n[dim]Debug - Command:[/dim]")
         console_print(f"[dim]  claude executable: {cmd[0]}[/dim]")
@@ -656,9 +665,10 @@ def _load_hierarchical_context_files(config: Optional['Config']) -> list:
 
     Checks for context files from:
     - Backend: backends/JIRA.md
+    - Enterprise: ENTERPRISE.md
     - Organization: ORGANIZATION.md
     - Team: TEAM.md
-    - User: CONFIG.md
+    - User: USER.md
 
     Only returns files that physically exist on disk.
     Paths are resolved relative to DEVAIFLOW_HOME.
@@ -680,6 +690,11 @@ def _load_hierarchical_context_files(config: Optional['Config']) -> list:
         # Use absolute path so Claude can read it with Read tool
         context_files.append((str(backend_path), "JIRA backend integration rules"))
 
+    # Enterprise context
+    enterprise_path = cs_home / "ENTERPRISE.md"
+    if enterprise_path.exists() and enterprise_path.is_file():
+        context_files.append((str(enterprise_path), "enterprise-wide policies and standards"))
+
     # Organization context
     org_path = cs_home / "ORGANIZATION.md"
     if org_path.exists() and org_path.is_file():
@@ -691,7 +706,7 @@ def _load_hierarchical_context_files(config: Optional['Config']) -> list:
         context_files.append((str(team_path), "team conventions and workflows"))
 
     # User context
-    user_path = cs_home / "CONFIG.md"
+    user_path = cs_home / "USER.md"
     if user_path.exists() and user_path.is_file():
         context_files.append((str(user_path), "personal notes and preferences"))
 

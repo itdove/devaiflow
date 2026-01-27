@@ -134,13 +134,29 @@ Claude will automatically read all existing context files in the hierarchical or
 
 **Quick setup:**
 
-Add to `~/.claude/settings.json`:
+Add to `~/.claude/settings.json` (replace `$DEVAIFLOW_HOME` with `~/.daf-sessions` for default location):
 ```json
 {
-  "file_access": {
-    "read": [
-      "$DEVAIFLOW_HOME/**/*",
-      "$DEVAIFLOW_HOME/**/*"
+  "permissions": {
+    "allow": [
+      "Read($DEVAIFLOW_HOME/ENTERPRISE.md)",
+      "Read($DEVAIFLOW_HOME/ORGANIZATION.md)",
+      "Read($DEVAIFLOW_HOME/TEAM.md)",
+      "Read($DEVAIFLOW_HOME/USER.md)"
+    ]
+  }
+}
+```
+
+**Example with default location:**
+```json
+{
+  "permissions": {
+    "allow": [
+      "Read(~/.daf-sessions/ENTERPRISE.md)",
+      "Read(~/.daf-sessions/ORGANIZATION.md)",
+      "Read(~/.daf-sessions/TEAM.md)",
+      "Read(~/.daf-sessions/USER.md)"
     ]
   }
 }

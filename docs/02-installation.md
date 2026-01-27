@@ -833,10 +833,11 @@ DAF_AGENTS.md is generic by design - it uses placeholders that are filled in at 
 
 DevAIFlow creates context files in `$DEVAIFLOW_HOME/` that Claude Code automatically reads when you run `daf open` or `daf jira new`:
 
+- `$DEVAIFLOW_HOME/backends/JIRA.md` - JIRA integration rules
+- `$DEVAIFLOW_HOME/ENTERPRISE.md` - Enterprise-wide policies and standards
 - `$DEVAIFLOW_HOME/ORGANIZATION.md` - Organization-wide standards (JIRA templates, Wiki markup requirements)
 - `$DEVAIFLOW_HOME/TEAM.md` - Team conventions
 - `$DEVAIFLOW_HOME/USER.md` - Personal notes and preferences
-- `$DEVAIFLOW_HOME/backends/JIRA.md` - JIRA integration rules
 
 By default, Claude Code may block access to these directories because they are dotfiles (start with `.`).
 
@@ -854,18 +855,34 @@ Add file access permissions to your **global** Claude Code settings file:
 
 ```json
 {
-  "file_access": {
-    "read": [
-      "$DEVAIFLOW_HOME/**/*",
-      "$DEVAIFLOW_HOME/**/*"
+  "permissions": {
+    "allow": [
+      "Read($DEVAIFLOW_HOME/ENTERPRISE.md)",
+      "Read($DEVAIFLOW_HOME/ORGANIZATION.md)",
+      "Read($DEVAIFLOW_HOME/TEAM.md)",
+      "Read($DEVAIFLOW_HOME/USER.md)"
     ]
   }
 }
 ```
 
-**Why both paths?**
-- `$DEVAIFLOW_HOME/` - New default location
-- `$DEVAIFLOW_HOME/` - Backward compatibility with older versions
+**IMPORTANT:** Replace `$DEVAIFLOW_HOME` with your actual DevAIFlow home directory:
+- **Default location**: `~/.daf-sessions` (if you haven't customized it)
+- **Custom location**: Use the value of your `DEVAIFLOW_HOME` environment variable
+
+**Example with default location:**
+```json
+{
+  "permissions": {
+    "allow": [
+      "Read(~/.daf-sessions/ENTERPRISE.md)",
+      "Read(~/.daf-sessions/ORGANIZATION.md)",
+      "Read(~/.daf-sessions/TEAM.md)",
+      "Read(~/.daf-sessions/USER.md)"
+    ]
+  }
+}
+```
 
 ### Step-by-Step Setup
 
@@ -874,19 +891,23 @@ Add file access permissions to your **global** Claude Code settings file:
    # Check if file exists
    ls ~/.claude/settings.json
 
-   # If not, create it
+   # If not, create it (using default ~/.daf-sessions location)
    mkdir -p ~/.claude
    cat > ~/.claude/settings.json << 'EOF'
 {
-  "file_access": {
-    "read": [
-      "$DEVAIFLOW_HOME/**/*",
-      "$DEVAIFLOW_HOME/**/*"
+  "permissions": {
+    "allow": [
+      "Read(~/.daf-sessions/ENTERPRISE.md)",
+      "Read(~/.daf-sessions/ORGANIZATION.md)",
+      "Read(~/.daf-sessions/TEAM.md)",
+      "Read(~/.daf-sessions/USER.md)"
     ]
   }
 }
 EOF
    ```
+
+   **Note:** If you set a custom `DEVAIFLOW_HOME` environment variable, replace `~/.daf-sessions` with your custom path.
 
 2. **Verify the file:**
    ```bash
