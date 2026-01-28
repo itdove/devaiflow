@@ -1791,6 +1791,12 @@ def test_handle_branch_creation_with_uncommitted_changes_continue(tmp_path):
     # Create uncommitted changes
     (tmp_path / "test.txt").write_text("modified")
 
+    # Create a mock config with default_branch_strategy to avoid Prompt.ask
+    from unittest.mock import Mock
+    mock_config = Mock()
+    mock_config.prompts = Mock()
+    mock_config.prompts.default_branch_strategy = "from_default"
+
     # Mock git operations and Confirm.ask
     # First call: Continue despite uncommitted changes? -> Yes
     # Second call: Create git branch for this session? -> Yes
@@ -1801,12 +1807,13 @@ def test_handle_branch_creation_with_uncommitted_changes_continue(tmp_path):
          patch.object(GitUtils, 'pull_current_branch', return_value=True), \
          patch.object(GitUtils, 'create_branch', return_value=True):
 
-        # Call function
+        # Call function with mock config
         branch = _handle_branch_creation(
             str(tmp_path),
             "PROJ-12345",
             "test feature",
-            auto_from_default=False
+            auto_from_default=False,
+            config=mock_config
         )
 
         # Verify a branch name was returned (user continued)
@@ -1829,6 +1836,12 @@ def test_handle_branch_creation_no_uncommitted_changes(tmp_path):
     subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
 
+    # Create a mock config with default_branch_strategy to avoid Prompt.ask
+    from unittest.mock import Mock
+    mock_config = Mock()
+    mock_config.prompts = Mock()
+    mock_config.prompts.default_branch_strategy = "from_default"
+
     # Mock git operations and Confirm.ask to simulate user saying "Yes" to creating branch
     with patch('devflow.cli.commands.new_command.Confirm.ask', return_value=True) as mock_confirm, \
          patch.object(GitUtils, 'fetch_origin', return_value=True), \
@@ -1837,12 +1850,13 @@ def test_handle_branch_creation_no_uncommitted_changes(tmp_path):
          patch.object(GitUtils, 'pull_current_branch', return_value=True), \
          patch.object(GitUtils, 'create_branch', return_value=True):
 
-        # Call function
+        # Call function with mock config
         branch = _handle_branch_creation(
             str(tmp_path),
             "PROJ-12345",
             "test feature",
-            auto_from_default=False
+            auto_from_default=False,
+            config=mock_config
         )
 
         # Verify a branch was created
