@@ -36,6 +36,27 @@ def json_option(f):
     return wrapper
 
 
+# Common decorator for -w/--workspace flag (AAP-64296)
+def workspace_option(help_text="Workspace name to use (overrides session default and config default)"):
+    """Add -w/--workspace option to a command.
+
+    This decorator adds the -w/--workspace flag to session creation commands.
+    The workspace parameter is added to the function's kwargs.
+
+    Args:
+        help_text: Custom help text for the workspace option (default provided)
+
+    Usage:
+        @workspace_option()
+        def my_command(ctx, workspace, **kwargs):
+            # workspace is now available as a parameter
+            pass
+    """
+    def decorator(f):
+        return click.option("-w", "--workspace", help=help_text)(f)
+    return decorator
+
+
 def _check_mock_mode() -> None:
     """Check if mock mode is enabled and display a warning banner.
 
@@ -277,7 +298,7 @@ def cli(ctx: click.Context) -> None:
 @click.option("--path", help="Project path (defaults to current directory)")
 @click.option("--branch", help="Git branch name (optional)")
 @click.option("--template", help="Template name to use for session configuration")
-@click.option("-w", "--workspace", help="Workspace name to use (overrides session default and config default)")
+@workspace_option()
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
 @json_option
 def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, new_session: bool) -> None:
@@ -324,7 +345,7 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
 @cli.command()
 @click.argument("identifier", shell_complete=complete_session_identifiers)
 @click.option("--path", help="Project path (auto-detects conversation in multi-conversation sessions)")
-@click.option("-w", "--workspace", help="Workspace name to use (overrides session stored workspace)")
+@workspace_option("Workspace name to use (overrides session stored workspace)")
 @click.option("--new-conversation", is_flag=True, help="Create a new conversation (archive current and start fresh)")
 @click.option("--conversation-id", help="Resume a specific archived conversation by its UUID")
 @json_option
@@ -1123,8 +1144,9 @@ jira.add_command(create_jira_update_command())
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
+@workspace_option()
 @click.option("--affected-version", help="Affected version for bugs (required for bug type)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str, affected_version: Optional[str]) -> None:
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str, workspace: str, affected_version: Optional[str]) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1158,7 +1180,7 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
             # Simple text prompt - no validation, no choices shown
             affected_version = click.prompt("Enter affected version for this bug")
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, affected_version)
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affected_version)
 
 
 @jira.command(name="open")
@@ -1187,7 +1209,8 @@ def jira_open(ctx: click.Context, issue_key: str) -> None:
 @click.option("--parent", required=False, help="Optional parent issue key (for tracking investigation under an epic)")
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
-def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str, path: str) -> None:
+@workspace_option()
+def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str, path: str, workspace: str) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1214,7 +1237,7 @@ def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str,
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    create_investigation_session(goal, parent, name, path)
+    create_investigation_session(goal, parent, name, path, workspace)
 
 
 @cli.group()
