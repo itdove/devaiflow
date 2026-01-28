@@ -455,6 +455,11 @@ def open_session(
             session.goal
         )
 
+        # Check if user explicitly cancelled due to uncommitted changes
+        if branch is False:
+            console.print("\n[yellow]Session open cancelled[/yellow]")
+            return
+
         if branch:
             # Update active conversation's branch
             if session.active_conversation:
@@ -1773,24 +1778,24 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
         console.print(f"  • Enter a number (1-{len(repo_options)}) to select from the list above")
         console.print(f"  • Enter a repository name")
         console.print(f"  • Enter an absolute path (starting with / or ~)")
-        console.print(f"  • Enter 'cancel' to exit")
+        console.print(f"  • Enter 'cancel' or 'q' to exit")
     else:
         console.print(f"  • Enter a repository name from workspace")
         console.print(f"  • Enter an absolute path (starting with / or ~)")
-        console.print(f"  • Enter 'cancel' to exit")
+        console.print(f"  • Enter 'cancel' or 'q' to exit")
 
     selection = Prompt.ask("Selection")
 
     # Validate input is not empty
     if not selection or selection.strip() == "":
         if repo_options:
-            console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(repo_options)}), repository name, path, or 'cancel'")
+            console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(repo_options)}), repository name, path, or 'cancel'/'q'")
         else:
-            console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a repository name, path, or 'cancel'")
+            console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a repository name, path, or 'cancel'/'q'")
         return False
 
     # Handle cancel
-    if selection.lower() == "cancel":
+    if selection.lower() in ["cancel", "q"]:
         console.print(f"\n[yellow]Cancelled[/yellow] - session not opened")
         return False
 

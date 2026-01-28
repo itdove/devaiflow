@@ -1224,64 +1224,6 @@ def config(ctx: click.Context) -> None:
     pass
 
 
-@config.command(name="show")
-@json_option
-def config_show(ctx: click.Context) -> None:
-    """Display the merged final configuration.
-
-    Shows the complete configuration after merging all sources:
-    - backends/jira.json (backend configuration)
-    - ENTERPRISE.md (enterprise-level overrides)
-    - organization.json (organization settings)
-    - team.json (team settings)
-    - USER.md (user preferences)
-
-    The merged configuration is what daf actually uses at runtime.
-
-    Example:
-        daf config show
-        daf config show --json
-    """
-    from devflow.config.loader import ConfigLoader
-    from devflow.cli.utils import output_json, is_json_mode
-
-    config_loader = ConfigLoader()
-    config = config_loader.load_config()
-
-    if not config:
-        if is_json_mode():
-            output_json(success=False, error={"code": "NO_CONFIG", "message": "Configuration not found"})
-        else:
-            console.print("[red]✗[/red] Configuration not found")
-            console.print("[dim]Run 'daf init' to create initial configuration[/dim]")
-        raise click.exceptions.Exit(1)
-
-    # Convert config to dict for display
-    config_dict = config.model_dump(by_alias=True, exclude_none=False)
-
-    if is_json_mode():
-        output_json(success=True, data=config_dict)
-    else:
-        import json
-        from rich.syntax import Syntax
-
-        # Pretty print the merged config
-        console.print("\n[bold cyan]━━━ Merged Configuration ━━━[/bold cyan]\n")
-
-        # Format as JSON with syntax highlighting
-        json_str = json.dumps(config_dict, indent=2, sort_keys=False)
-        syntax = Syntax(json_str, "json", theme="monokai", line_numbers=False)
-        console.print(syntax)
-
-        console.print("\n[dim]This is the final merged configuration from all sources:[/dim]")
-        console.print("[dim]  • backends/jira.json (backend configuration)[/dim]")
-        console.print("[dim]  • ENTERPRISE.md (enterprise-level overrides)[/dim]")
-        console.print("[dim]  • organization.json (organization settings)[/dim]")
-        console.print("[dim]  • team.json (team settings)[/dim]")
-        console.print("[dim]  • USER.md (user preferences)[/dim]")
-        console.print()
-
-
 @config.command(name="refresh-jira-fields")
 @json_option
 def refresh_jira_fields(ctx: click.Context) -> None:
@@ -1319,27 +1261,294 @@ def refresh_jira_fields(ctx: click.Context) -> None:
     _discover_and_cache_jira_fields(config, config_loader)
 
 
+def _show_prompts(config, output_json: bool) -> None:
+    """Helper function to display prompt configuration."""
+    from rich.table import Table
+
+    console.print("\n[bold]Prompt Configuration[/bold]\n")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="yellow")
+    table.add_column("Command", style="dim")
+
+    prompts = config.prompts
+
+    table.add_row(
+        "auto_commit_on_complete",
+        str(prompts.auto_commit_on_complete) if prompts.auto_commit_on_complete is not None else "[dim]not set[/dim]",
+        "daf complete"
+    )
+    table.add_row(
+        "auto_create_pr_on_complete",
+        str(prompts.auto_create_pr_on_complete) if prompts.auto_create_pr_on_complete is not None else "[dim]not set[/dim]",
+        "daf complete"
+    )
+    table.add_row(
+        "auto_create_pr_status",
+        prompts.auto_create_pr_status,
+        "daf complete"
+    )
+    table.add_row(
+        "auto_add_issue_summary",
+        str(prompts.auto_add_issue_summary) if prompts.auto_add_issue_summary is not None else "[dim]not set[/dim]",
+        "daf complete"
+    )
+    table.add_row(
+        "auto_launch_claude",
+        str(prompts.auto_launch_claude) if prompts.auto_launch_claude is not None else "[dim]not set[/dim]",
+        "daf open"
+    )
+    table.add_row(
+        "auto_checkout_branch",
+        str(prompts.auto_checkout_branch) if prompts.auto_checkout_branch is not None else "[dim]not set[/dim]",
+        "daf open"
+    )
+    table.add_row(
+        "auto_sync_with_base",
+        prompts.auto_sync_with_base if prompts.auto_sync_with_base else "[dim]not set[/dim]",
+        "daf open"
+    )
+    table.add_row(
+        "default_branch_strategy",
+        prompts.default_branch_strategy if prompts.default_branch_strategy else "[dim]not set[/dim]",
+        "daf new"
+    )
+    table.add_row(
+        "show_prompt_unit_tests",
+        str(prompts.show_prompt_unit_tests),
+        "daf new, daf open"
+    )
+
+    console.print(table)
+
+    if prompts.remember_last_repo_per_project:
+        console.print("\n[bold]Last Repository Per Project:[/bold]")
+        for project, repo in prompts.remember_last_repo_per_project.items():
+            console.print(f"  {project}: {repo}")
+    else:
+        console.print("\n[dim]No repositories remembered yet[/dim]")
+
+    console.print()
+
+
+def _show_fields(config, output_json: bool) -> None:
+    """Helper function to display available JIRA fields."""
+    from rich.table import Table
+    import json
+
+    if not config.jira or not config.jira.field_mappings:
+        if output_json:
+            print(json.dumps({"success": True, "data": {"fields": []}, "message": "No custom fields configured in field_mappings"}))
+        else:
+            console.print("\n[yellow]⚠[/yellow] No custom fields configured in field_mappings.")
+            console.print("[dim]Run [cyan]daf config refresh-jira-fields[/cyan] to discover fields from JIRA[/dim]\n")
+        return
+
+    field_mappings = config.jira.field_mappings
+
+    # JSON output
+    if output_json:
+        fields_data = []
+        for field_name, field_info in field_mappings.items():
+            field_data = {
+                "field_name": field_name,
+                "display_name": field_info.get("name", field_name),
+                "jira_id": field_info.get("id", ""),
+                "type": field_info.get("type", "unknown"),
+            }
+            if "schema" in field_info:
+                field_data["schema"] = field_info["schema"]
+            if "allowed_values" in field_info and field_info["allowed_values"]:
+                field_data["allowed_values"] = field_info["allowed_values"]
+            if "required_for" in field_info and field_info["required_for"]:
+                field_data["required_for"] = field_info["required_for"]
+            fields_data.append(field_data)
+
+        print(json.dumps({"success": True, "data": {"fields": fields_data, "count": len(fields_data)}}))
+        return
+
+    # Human-readable output
+    console.print(f"\n[bold]Available Custom Fields[/bold] ({len(field_mappings)} fields)\n")
+    console.print("[dim]Use these field names with --field option (e.g., --field field_name=value)[/dim]\n")
+
+    for field_name, field_info in sorted(field_mappings.items()):
+        console.print(f"[bold cyan]{field_name}[/bold cyan]")
+        console.print(f"  Display Name: {field_info.get('name', field_name)}")
+        console.print(f"  JIRA ID: [dim]{field_info.get('id', 'unknown')}[/dim]")
+
+        # Type and schema
+        field_type = field_info.get("type", "unknown")
+        if "schema" in field_info:
+            console.print(f"  Type: {field_type} (schema: {field_info['schema']})")
+        else:
+            console.print(f"  Type: {field_type}")
+
+        # Allowed values
+        if "allowed_values" in field_info and field_info["allowed_values"]:
+            values = field_info["allowed_values"]
+            if len(values) <= 5:
+                console.print(f"  Allowed Values: {', '.join(map(str, values))}")
+            else:
+                console.print(f"  Allowed Values: {', '.join(map(str, values[:5]))}, ... ({len(values)} total)")
+
+        # Required for issue types
+        if "required_for" in field_info and field_info["required_for"]:
+            console.print(f"  Required For: {', '.join(field_info['required_for'])}")
+
+        console.print()
+
+    console.print(f"[dim]Total: {len(field_mappings)} custom field(s)[/dim]")
+    console.print(f"[dim]Refresh with: daf config refresh-jira-fields[/dim]\n")
+
+
+def _show_sync_filters(config, output_json: bool) -> None:
+    """Helper function to display sync filter configuration."""
+    from rich.table import Table
+    import json
+
+    if not config.jira or not config.jira.filters:
+        if output_json:
+            print(json.dumps({"success": True, "data": {"sync_filters": None}, "message": "No sync filters configured"}))
+        else:
+            console.print("\n[yellow]⚠[/yellow] No sync filters configured.")
+            console.print("[dim]Configure in organization.json under jira.filters.sync[/dim]\n")
+        return
+
+    sync_filters = config.jira.filters.get("sync")
+    if not sync_filters:
+        if output_json:
+            print(json.dumps({"success": True, "data": {"sync_filters": None}, "message": "No sync filters configured"}))
+        else:
+            console.print("\n[yellow]⚠[/yellow] No sync filters configured.")
+            console.print("[dim]Configure in organization.json under jira.filters.sync[/dim]\n")
+        return
+
+    # JSON output
+    if output_json:
+        sync_data = {
+            "status": sync_filters.status if hasattr(sync_filters, 'status') else [],
+            "required_fields": sync_filters.required_fields if hasattr(sync_filters, 'required_fields') else [],
+            "assignee": sync_filters.assignee if hasattr(sync_filters, 'assignee') else "currentUser()",
+        }
+        print(json.dumps({"success": True, "data": {"sync_filters": sync_data}}))
+        return
+
+    # Human-readable output
+    console.print("\n[bold]Sync Filter Configuration[/bold]")
+    console.print("[dim]These filters determine which JIRA tickets are synced with 'daf sync'[/dim]\n")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="yellow")
+    table.add_column("Description", style="dim")
+
+    # Status filter
+    status_list = sync_filters.status if hasattr(sync_filters, 'status') else []
+    table.add_row(
+        "status",
+        ", ".join(status_list) if status_list else "[dim]not set[/dim]",
+        "JIRA statuses to sync (e.g., 'To Do', 'In Progress')"
+    )
+
+    # Required fields
+    required_fields = sync_filters.required_fields if hasattr(sync_filters, 'required_fields') else []
+
+    # Check if required_fields is a dict (type-specific) or list (legacy)
+    if isinstance(required_fields, dict):
+        # Type-specific required fields
+        required_fields_display = f"{len(required_fields)} issue types configured"
+        required_fields_desc = "Required fields per issue type (see below for details)"
+    elif required_fields:
+        # Legacy list format
+        required_fields_display = ", ".join(required_fields)
+        required_fields_desc = "Fields that must be present on tickets (uses field names from field_mappings)"
+    else:
+        required_fields_display = "[dim]none[/dim]"
+        required_fields_desc = "Fields that must be present on tickets (uses field names from field_mappings)"
+
+    table.add_row(
+        "required_fields",
+        required_fields_display,
+        required_fields_desc
+    )
+
+    # Assignee filter
+    assignee = sync_filters.assignee if hasattr(sync_filters, 'assignee') else "currentUser()"
+    table.add_row(
+        "assignee",
+        assignee,
+        "'currentUser()' (your tickets) | username | null (all tickets)"
+    )
+
+    console.print(table)
+    console.print()
+
+    # Display required fields explanation
+    if required_fields:
+        if isinstance(required_fields, dict):
+            # Type-specific required fields - show per issue type
+            console.print("[bold]Required Fields by Issue Type:[/bold]")
+            console.print("[dim]Each issue type has its own set of required fields:[/dim]\n")
+
+            # Create a table for type-specific fields
+            fields_table = Table(show_header=True, header_style="bold cyan")
+            fields_table.add_column("Issue Type", style="cyan")
+            fields_table.add_column("Required Fields", style="yellow")
+
+            for issue_type, fields in sorted(required_fields.items()):
+                fields_table.add_row(issue_type, ", ".join(fields) if fields else "[dim]none[/dim]")
+
+            console.print(fields_table)
+            console.print()
+            console.print("[dim]Use 'daf config show --fields' to see all available field names[/dim]")
+        else:
+            # Legacy list format
+            console.print("[bold]Required Fields Explanation:[/bold]")
+            console.print(f"[dim]Tickets must have ALL of these fields set to be synced:[/dim]")
+            for field in required_fields:
+                console.print(f"  • {field}")
+            console.print()
+            console.print("[dim]Use 'daf config show --fields' to see all available field names[/dim]")
+    else:
+        console.print("[dim]No required fields configured - all tickets matching status/assignee filters will be synced[/dim]")
+
+    console.print()
+    console.print("[dim]Configuration file: organization.json (jira.filters.sync section)[/dim]\n")
+
+
+@config.command(name="show")
 @json_option
 @click.option("--format", type=click.Choice(["merged", "split"]), default="merged", help="Show merged config or split files separately")
 @click.option("--validate", is_flag=True, help="Validate configuration and show detailed issues")
-def config_show(ctx: click.Context, format: str, validate: bool) -> None:
+@click.option("--fields", is_flag=True, help="Show available JIRA custom fields from field_mappings")
+@click.option("--prompts", is_flag=True, help="Show prompt configuration settings")
+@click.option("--sync-filters", is_flag=True, help="Show sync filter configuration for 'daf sync'")
+def config_show(ctx: click.Context, format: str, validate: bool, fields: bool, prompts: bool, sync_filters: bool) -> None:
     """Show current configuration.
 
     By default, shows merged configuration from all config files.
-    Use --format split to show each config file separately.
-    Use --json for raw JSON output.
-    Use --validate to check for placeholder values and completeness issues.
+    Use specialized flags to show specific configuration areas.
 
     Examples:
-        daf config show                  # Show merged config (default)
-        daf config show --format split   # Show split config files
-        daf config show --json           # Show as JSON
-        daf config show --validate       # Validate configuration completeness
+        daf config show                    # Show merged config (default)
+        daf config show --fields           # Show available JIRA fields
+        daf config show --prompts          # Show prompt settings
+        daf config show --sync-filters     # Show sync filter configuration
+        daf config show --format split     # Show split config files
+        daf config show --validate         # Validate configuration
+        daf config show --json             # Show as JSON
     """
     from devflow.config.loader import ConfigLoader
     from devflow.config.validator import ConfigValidator
     from pathlib import Path
     import json
+
+    # Check for mutually exclusive flags
+    specialized_flags = sum([fields, prompts, sync_filters])
+    if specialized_flags > 1:
+        console.print("[red]✗[/red] Only one of --fields, --prompts, --sync-filters can be used at a time")
+        return
 
     config_loader = ConfigLoader()
 
@@ -1352,6 +1561,14 @@ def config_show(ctx: click.Context, format: str, validate: bool) -> None:
     if not config:
         _show_no_config_error()
         return
+
+    # Route to specialized views
+    if fields:
+        return _show_fields(config, output_json)
+    elif prompts:
+        return _show_prompts(config, output_json)
+    elif sync_filters:
+        return _show_sync_filters(config, output_json)
 
     # If --validate flag is used, show detailed validation report
     if validate:
@@ -1449,293 +1666,6 @@ def config_show(ctx: click.Context, format: str, validate: bool) -> None:
         console.print("[bold]PR Template URL:[/bold] (not set)")
 
     console.print()
-
-
-@config.command(name="show-prompts")
-@json_option
-def show_prompts(ctx: click.Context) -> None:
-    """Display current prompt configuration.
-
-    Shows all configured prompt defaults and which commands use each setting.
-
-    Example:
-        daf config show-prompts
-    """
-    from devflow.config.loader import ConfigLoader
-    from rich.table import Table
-
-    config_loader = ConfigLoader()
-    config = config_loader.load_config()
-
-    if not config:
-        console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
-        return
-
-    console.print("\n[bold]Prompt Configuration[/bold]\n")
-
-    table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="yellow")
-    table.add_column("Command", style="dim")
-
-    prompts = config.prompts
-
-    table.add_row(
-        "auto_commit_on_complete",
-        str(prompts.auto_commit_on_complete) if prompts.auto_commit_on_complete is not None else "[dim]not set[/dim]",
-        "daf complete"
-    )
-    table.add_row(
-        "auto_create_pr_on_complete",
-        str(prompts.auto_create_pr_on_complete) if prompts.auto_create_pr_on_complete is not None else "[dim]not set[/dim]",
-        "daf complete"
-    )
-    table.add_row(
-        "auto_create_pr_status",
-        prompts.auto_create_pr_status,
-        "daf complete"
-    )
-    table.add_row(
-        "auto_add_issue_summary",
-        str(prompts.auto_add_issue_summary) if prompts.auto_add_issue_summary is not None else "[dim]not set[/dim]",
-        "daf complete"
-    )
-    table.add_row(
-        "auto_launch_claude",
-        str(prompts.auto_launch_claude) if prompts.auto_launch_claude is not None else "[dim]not set[/dim]",
-        "daf open"
-    )
-    table.add_row(
-        "auto_checkout_branch",
-        str(prompts.auto_checkout_branch) if prompts.auto_checkout_branch is not None else "[dim]not set[/dim]",
-        "daf open"
-    )
-    table.add_row(
-        "auto_sync_with_base",
-        prompts.auto_sync_with_base if prompts.auto_sync_with_base else "[dim]not set[/dim]",
-        "daf open"
-    )
-    table.add_row(
-        "default_branch_strategy",
-        prompts.default_branch_strategy if prompts.default_branch_strategy else "[dim]not set[/dim]",
-        "daf new"
-    )
-    table.add_row(
-        "show_prompt_unit_tests",
-        str(prompts.show_prompt_unit_tests),
-        "daf new, daf open"
-    )
-
-    console.print(table)
-
-    if prompts.remember_last_repo_per_project:
-        console.print("\n[bold]Last Repository Per Project:[/bold]")
-        for project, repo in prompts.remember_last_repo_per_project.items():
-            console.print(f"  {project}: {repo}")
-    else:
-        console.print("\n[dim]No repositories remembered yet[/dim]")
-
-    console.print()
-
-
-@config.command(name="show-fields")
-@json_option
-def show_fields(ctx: click.Context) -> None:
-    """Display available JIRA custom fields from field_mappings.
-
-    Shows all custom fields configured in organization.json field_mappings.
-    This helps discover which field names can be used with --field options.
-
-    Example:
-        daf config show-fields
-        daf config show-fields --json
-    """
-    from devflow.config.loader import ConfigLoader
-    from rich.table import Table
-    import json
-
-    output_json = ctx.obj.get('output_json', False)
-    config_loader = ConfigLoader()
-    config = config_loader.load_config()
-
-    if not config:
-        if output_json:
-            print(json.dumps({"success": False, "error": "No configuration found. Run 'daf init' first."}))
-        else:
-            console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
-        return
-
-    if not config.jira or not config.jira.field_mappings:
-        if output_json:
-            print(json.dumps({"success": True, "data": {"fields": []}, "message": "No custom fields configured in field_mappings"}))
-        else:
-            console.print("\n[yellow]⚠[/yellow] No custom fields configured in field_mappings.")
-            console.print("[dim]Run [cyan]daf config refresh-jira-fields[/cyan] to discover fields from JIRA[/dim]\n")
-        return
-
-    field_mappings = config.jira.field_mappings
-
-    # JSON output
-    if output_json:
-        fields_data = []
-        for field_name, field_info in field_mappings.items():
-            field_data = {
-                "field_name": field_name,
-                "display_name": field_info.get("name", field_name),
-                "jira_id": field_info.get("id", ""),
-                "type": field_info.get("type", "unknown"),
-            }
-            if "schema" in field_info:
-                field_data["schema"] = field_info["schema"]
-            if "allowed_values" in field_info and field_info["allowed_values"]:
-                field_data["allowed_values"] = field_info["allowed_values"]
-            if "required_for" in field_info and field_info["required_for"]:
-                field_data["required_for"] = field_info["required_for"]
-            fields_data.append(field_data)
-
-        print(json.dumps({"success": True, "data": {"fields": fields_data, "count": len(fields_data)}}))
-        return
-
-    # Human-readable output
-    console.print(f"\n[bold]Available Custom Fields[/bold] ({len(field_mappings)} fields)\n")
-    console.print("[dim]Use these field names with --field option (e.g., --field field_name=value)[/dim]\n")
-
-    for field_name, field_info in sorted(field_mappings.items()):
-        console.print(f"[bold cyan]{field_name}[/bold cyan]")
-        console.print(f"  Display Name: {field_info.get('name', field_name)}")
-        console.print(f"  JIRA ID: [dim]{field_info.get('id', 'unknown')}[/dim]")
-
-        # Type and schema
-        field_type = field_info.get("type", "unknown")
-        if "schema" in field_info:
-            console.print(f"  Type: {field_type} (schema: {field_info['schema']})")
-        else:
-            console.print(f"  Type: {field_type}")
-
-        # Allowed values
-        if "allowed_values" in field_info and field_info["allowed_values"]:
-            values = field_info["allowed_values"]
-            if len(values) <= 5:
-                console.print(f"  Allowed Values: {', '.join(map(str, values))}")
-            else:
-                console.print(f"  Allowed Values: {', '.join(map(str, values[:5]))}, ... ({len(values)} total)")
-
-        # Required for issue types
-        if "required_for" in field_info and field_info["required_for"]:
-            console.print(f"  Required For: {', '.join(field_info['required_for'])}")
-
-        console.print()
-
-    console.print(f"[dim]Total: {len(field_mappings)} custom field(s)[/dim]")
-    console.print(f"[dim]Refresh with: daf config refresh-jira-fields[/dim]\n")
-
-
-@config.command(name="show-sync-filters")
-@json_option
-def show_sync_filters(ctx: click.Context) -> None:
-    """Display sync filter configuration for 'daf sync' command.
-
-    Shows which JIRA tickets are synced when running 'daf sync':
-    - Status filter: Which JIRA statuses to sync
-    - Required fields: Fields that must be present on tickets
-    - Assignee filter: Filter by assignee
-
-    This configuration is in organization.json under sync_filters.sync section.
-
-    Example:
-        daf config show-sync-filters
-        daf config show-sync-filters --json
-    """
-    from devflow.config.loader import ConfigLoader
-    from rich.table import Table
-    import json
-
-    output_json = ctx.obj.get('output_json', False)
-    config_loader = ConfigLoader()
-    config = config_loader.load_config()
-
-    if not config:
-        if output_json:
-            print(json.dumps({"success": False, "error": "No configuration found. Run 'daf init' first."}))
-        else:
-            console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
-        return
-
-    if not config.jira or not config.jira.filters:
-        if output_json:
-            print(json.dumps({"success": True, "data": {"sync_filters": None}, "message": "No sync filters configured"}))
-        else:
-            console.print("\n[yellow]⚠[/yellow] No sync filters configured.")
-            console.print("[dim]Configure in organization.json under jira.filters.sync[/dim]\n")
-        return
-
-    sync_filters = config.jira.filters.get("sync")
-    if not sync_filters:
-        if output_json:
-            print(json.dumps({"success": True, "data": {"sync_filters": None}, "message": "No sync filters configured"}))
-        else:
-            console.print("\n[yellow]⚠[/yellow] No sync filters configured.")
-            console.print("[dim]Configure in organization.json under jira.filters.sync[/dim]\n")
-        return
-
-    # JSON output
-    if output_json:
-        sync_data = {
-            "status": sync_filters.status if hasattr(sync_filters, 'status') else [],
-            "required_fields": sync_filters.required_fields if hasattr(sync_filters, 'required_fields') else [],
-            "assignee": sync_filters.assignee if hasattr(sync_filters, 'assignee') else "currentUser()",
-        }
-        print(json.dumps({"success": True, "data": {"sync_filters": sync_data}}))
-        return
-
-    # Human-readable output
-    console.print("\n[bold]Sync Filter Configuration[/bold]")
-    console.print("[dim]These filters determine which JIRA tickets are synced with 'daf sync'[/dim]\n")
-
-    table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="yellow")
-    table.add_column("Description", style="dim")
-
-    # Status filter
-    status_list = sync_filters.status if hasattr(sync_filters, 'status') else []
-    table.add_row(
-        "status",
-        ", ".join(status_list) if status_list else "[dim]not set[/dim]",
-        "JIRA statuses to sync (e.g., 'To Do', 'In Progress')"
-    )
-
-    # Required fields
-    required_fields = sync_filters.required_fields if hasattr(sync_filters, 'required_fields') else []
-    table.add_row(
-        "required_fields",
-        ", ".join(required_fields) if required_fields else "[dim]none[/dim]",
-        "Fields that must be present on tickets (uses field names from field_mappings)"
-    )
-
-    # Assignee filter
-    assignee = sync_filters.assignee if hasattr(sync_filters, 'assignee') else "currentUser()"
-    table.add_row(
-        "assignee",
-        assignee,
-        "'currentUser()' (your tickets) | username | null (all tickets)"
-    )
-
-    console.print(table)
-    console.print()
-
-    if required_fields:
-        console.print("[bold]Required Fields Explanation:[/bold]")
-        console.print(f"[dim]Tickets must have ALL of these fields set to be synced:[/dim]")
-        for field in required_fields:
-            console.print(f"  • {field}")
-        console.print()
-        console.print("[dim]Use 'daf config show-fields' to see all available field names[/dim]")
-    else:
-        console.print("[dim]No required fields configured - all tickets matching status/assignee filters will be synced[/dim]")
-
-    console.print()
-    console.print("[dim]Configuration file: organization.json (jira.filters.sync section)[/dim]\n")
 
 
 @config.command(name="edit")

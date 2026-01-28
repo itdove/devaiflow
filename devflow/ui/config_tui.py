@@ -1287,7 +1287,7 @@ class ConfigTUI(App):
             else:
                 # No custom fields discovered yet
                 yield Static(
-                    "[dim]No custom fields discovered yet. Run 'daf config show-fields' to discover fields from your JIRA instance.[/dim]",
+                    "[dim]No custom fields discovered yet. Run 'daf config show --fields' to discover fields from your JIRA instance.[/dim]",
                     classes="section-help",
                 )
 

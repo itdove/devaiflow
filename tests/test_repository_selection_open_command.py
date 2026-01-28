@@ -165,3 +165,24 @@ def test_cancel_returns_false(mock_workspace, mock_config_loader, mock_session, 
 
     # Verify: Returns False (user cancelled)
     assert result is False
+
+
+def test_q_returns_false(mock_workspace, mock_config_loader, mock_session, monkeypatch):
+    """Test that entering 'q' returns False (alias for cancel)."""
+    from rich.prompt import Prompt
+
+    # Mock Prompt.ask to simulate 'q'
+    monkeypatch.setattr(Prompt, "ask", lambda prompt: "q")
+
+    # Create session manager
+    session_manager = SessionManager(mock_config_loader)
+
+    # Call the function
+    result = _prompt_for_working_directory(
+        session=mock_session,
+        config_loader=mock_config_loader,
+        session_manager=session_manager,
+    )
+
+    # Verify: Returns False (user cancelled)
+    assert result is False

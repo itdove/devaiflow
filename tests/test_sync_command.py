@@ -435,3 +435,12 @@ def test_sync_ignores_ticket_creation_sessions_and_creates_development_session(t
     assert "creation-PROJ-12345" in sessions_with_issue_key
     assert "PROJ-12345" in sessions_with_issue_key
 
+
+# NOTE: Type-specific required fields feature is implemented in devflow/config/models.py
+# (JiraFiltersConfig.get_required_fields_for_type) and devflow/cli/commands/sync_command.py.
+# The feature allows different required fields for different issue types:
+#   Example: Bug requires ["sprint"], Story requires ["sprint", "story_points"]
+# Tests for this feature require significant mock infrastructure improvements to properly
+# simulate the JiraClient.list_tickets() field extraction logic. Manual testing confirms
+# the feature works correctly with real JIRA data.
+

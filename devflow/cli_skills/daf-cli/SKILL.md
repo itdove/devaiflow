@@ -509,23 +509,31 @@ Sync filters are configured in `organization.json` under `jira.filters.sync` sec
 
 **To see your current sync filter configuration:**
 ```bash
-daf config show-sync-filters
-daf config show-sync-filters --json
+daf config show --sync-filters
+daf config show --sync-filters --json
 ```
 
 **Filter settings:**
 - `status`: JIRA statuses to sync (e.g., "To Do", "In Progress")
-- `required_fields`: Fields that must be present on tickets (uses field names from field_mappings)
+- `required_fields`: Can be type-specific (dict) or legacy (list)
+  - **Type-specific** (recommended): Different required fields per issue type
+    - Example: `{"Bug": ["sprint"], "Story": ["sprint", "story_points"]}`
+    - Allows Bugs to be synced without story points
+  - **Legacy**: Same required fields for all types
+    - Example: `["sprint", "story_points"]`
 - `assignee`: Filter by assignee
   - `"currentUser()"` - Only your assigned tickets
   - `"username"` - Specific user's tickets
   - `null` - All tickets (no assignee filter)
 
 **How required_fields works:**
-- Tickets MUST have ALL specified fields set to be synced
+- Tickets MUST have ALL specified fields (for their type) set to be synced
 - Uses field names from `field_mappings` configuration
-- Example: If `required_fields: ["sprint", "workstream"]`, tickets without sprint OR workstream will be skipped
-- Use `daf config show-fields` to see available field names
+- **Type-specific example:** If `required_fields: {"Bug": ["sprint"], "Story": ["sprint", "story_points"]}`:
+  - Bugs without sprint will be skipped
+  - Stories without sprint OR story_points will be skipped
+- **Legacy example:** If `required_fields: ["sprint", "workstream"]`, ALL tickets without sprint OR workstream will be skipped
+- Use `daf config show --fields` to see available field names
 
 **Command-line filters:**
 - Command-line `--field` filters are ADDED to the configured filters
@@ -587,7 +595,7 @@ daf jira create story --help
 - If a field name is not in field_mappings, the command will fail
 
 **To see available field names:**
-- **RECOMMENDED:** Run `daf config show-fields` to list all available custom fields
+- **RECOMMENDED:** Run `daf config show --fields` to list all available custom fields
 - Read DAF_AGENTS.md section "Discovering Custom Fields" (automatically loaded in sessions)
 - Check `$DEVAIFLOW_HOME/organization.json` field_mappings section
 - Run `daf config refresh-jira-fields` to update field definitions from JIRA
@@ -623,20 +631,27 @@ daf config show --json
 
 ```bash
 # Show all custom fields discovered from JIRA
-daf config show-fields
+daf config show --fields
 
 # JSON output
-daf config show-fields --json
+daf config show --fields --json
 ```
 
 ### View Sync Filters
 
 ```bash
 # Show current JIRA sync filter configuration
-daf config show-sync-filters
+daf config show --sync-filters
 
 # JSON output
-daf config show-sync-filters --json
+daf config show --sync-filters --json
+```
+
+### View Prompt Settings
+
+```bash
+# Show prompt configuration (auto-commit, auto-create-pr, etc.)
+daf config show --prompts
 ```
 
 ### Refresh JIRA Field Mappings

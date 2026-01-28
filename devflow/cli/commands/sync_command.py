@@ -82,25 +82,33 @@ def sync_jira(
 
     console_print(f"[dim]Found {len(tickets)} tickets matching filters[/dim]")
 
-    # Filter by required fields (from config)
-    required_fields = sync_filters.required_fields if hasattr(sync_filters, 'required_fields') else []
-    if required_fields:
-        filtered_tickets = []
-        for ticket in tickets:
-            # Check if ticket has all required fields
-            skip_ticket = False
-            for field in required_fields:
-                # Generic field checking - any field can be required
-                if not ticket.get(field):
-                    console_print(f"[dim]Skipping {ticket['key']}: Missing required field '{field}'[/dim]")
-                    skip_ticket = True
-                    break
+    # Filter by type-specific required fields
+    filtered_tickets = []
+    for ticket in tickets:
+        # Get issue type for this ticket
+        # Note: JiraClient.list_tickets() returns issue type in "type" field
+        issue_type = ticket.get("type")
 
-            if not skip_ticket:
-                filtered_tickets.append(ticket)
+        if not issue_type:
+            console_print(f"[dim]Skipping {ticket['key']}: No issue type found[/dim]")
+            continue
 
-        tickets = filtered_tickets
-        console_print(f"[dim]After filtering by required fields: {len(tickets)} tickets[/dim]")
+        # Get required fields for this issue type
+        required_fields = sync_filters.get_required_fields_for_type(issue_type)
+
+        # Check if ticket has all required fields for its type
+        skip_ticket = False
+        for field in required_fields:
+            if not ticket.get(field):
+                console_print(f"[dim]Skipping {ticket['key']} ({issue_type}): Missing required field '{field}'[/dim]")
+                skip_ticket = True
+                break
+
+        if not skip_ticket:
+            filtered_tickets.append(ticket)
+
+    tickets = filtered_tickets
+    console_print(f"[dim]After filtering by required fields: {len(tickets)} tickets[/dim]")
 
     console_print()
 

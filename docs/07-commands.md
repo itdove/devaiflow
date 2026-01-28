@@ -155,6 +155,59 @@ Creating branch: aap-12345-fix-bug-retry...
 - **Safety**: Never deletes existing branches to preserve history
 - **Flexibility**: Option 3 gives full control over branch naming
 
+**Uncommitted Changes Check:**
+
+Before creating a new branch, daf checks if you have uncommitted changes in the current branch:
+
+```bash
+✓ Detected git repository
+
+⚠ Warning: You have uncommitted changes in the current branch
+
+Uncommitted changes:
+  M devflow/cli/commands/new_command.py
+  M tests/test_open_command.py
+  ?? new_file.txt
+
+Creating a new branch with uncommitted changes may cause issues.
+Consider committing, stashing, or discarding your changes first.
+
+Continue anyway? [y/n] (n):
+```
+
+**What happens:**
+- **Default = No**: By default, the operation is cancelled if you say "n" (protects your work)
+- **Show changes**: Lists all modified (M), added (A), and untracked (??) files
+- **Give context**: Explains why uncommitted changes can cause problems
+- **Cancel safely**: Returns you to terminal without creating session/opening
+
+**If you say "n" (recommended):**
+```bash
+Branch creation cancelled
+Tip: Commit your changes with 'git commit' or stash them with 'git stash' before creating a new branch
+
+Session creation cancelled
+```
+
+**If you say "y" (continue anyway):**
+- Branch is created with uncommitted changes
+- Changes remain uncommitted in the new branch
+- May cause confusion when switching branches later
+
+**Auto mode behavior (daf open):**
+When using `daf open` (auto mode), uncommitted changes are logged but don't block the operation:
+```bash
+⚠ Warning: You have uncommitted changes in the current branch
+...
+Proceeding with branch creation despite uncommitted changes (auto mode)
+```
+
+**Why this matters:**
+- **Prevent lost work**: Uncommitted changes can be lost when switching branches
+- **Avoid confusion**: Keeps your work organized by branch
+- **Clear warnings**: Shows exactly what files are affected
+- **Recommended workflow**: Commit or stash before creating new branches
+
 ---
 
 ### Multi-Conversation vs Multi-Session Architecture

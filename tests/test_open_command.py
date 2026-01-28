@@ -1739,3 +1739,167 @@ def test_jira_open_uses_full_session_name_to_avoid_loop(temp_daf_home):
     assert "issue tracker ticket validated" not in result.output
     # Should exit with error code (session not found)
     assert result.exit_code == 1
+
+
+def test_handle_branch_creation_with_uncommitted_changes_cancel(tmp_path):
+    """Test that uncommitted changes warning allows user to cancel branch creation."""
+    # Initialize a git repo
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    # Create an initial commit
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    # Create uncommitted changes
+    (tmp_path / "test.txt").write_text("modified")
+    (tmp_path / "new_file.txt").write_text("new content")
+
+    # Mock Confirm.ask to simulate user saying "No" (don't continue)
+    with patch('devflow.cli.commands.new_command.Confirm.ask', return_value=False) as mock_confirm:
+        # Call function
+        branch = _handle_branch_creation(
+            str(tmp_path),
+            "PROJ-12345",
+            "test feature",
+            auto_from_default=False
+        )
+
+        # Verify the function returned False (explicitly cancelled)
+        assert branch is False
+
+        # Verify Confirm.ask was called (asking to continue despite uncommitted changes)
+        mock_confirm.assert_called_once()
+        call_args = mock_confirm.call_args
+        assert "Continue anyway?" in call_args[0][0]
+
+
+def test_handle_branch_creation_with_uncommitted_changes_continue(tmp_path):
+    """Test that uncommitted changes warning allows user to continue anyway."""
+    # Initialize a git repo
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    # Create an initial commit
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    # Create uncommitted changes
+    (tmp_path / "test.txt").write_text("modified")
+
+    # Create a mock config with default_branch_strategy to avoid Prompt.ask
+    from unittest.mock import Mock
+    mock_config = Mock()
+    mock_config.prompts = Mock()
+    mock_config.prompts.default_branch_strategy = "from_default"
+
+    # Mock git operations and Confirm.ask
+    # First call: Continue despite uncommitted changes? -> Yes
+    # Second call: Create git branch for this session? -> Yes
+    with patch('devflow.cli.commands.new_command.Confirm.ask', side_effect=[True, True]) as mock_confirm, \
+         patch.object(GitUtils, 'fetch_origin', return_value=True), \
+         patch.object(GitUtils, 'get_default_branch', return_value='main'), \
+         patch.object(GitUtils, 'checkout_branch', return_value=True), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
+         patch.object(GitUtils, 'create_branch', return_value=True):
+
+        # Call function with mock config
+        branch = _handle_branch_creation(
+            str(tmp_path),
+            "PROJ-12345",
+            "test feature",
+            auto_from_default=False,
+            config=mock_config
+        )
+
+        # Verify a branch name was returned (user continued)
+        assert branch is not None
+        assert "proj-12345" in branch.lower()
+
+        # Verify Confirm.ask was called twice
+        assert mock_confirm.call_count == 2
+
+
+def test_handle_branch_creation_no_uncommitted_changes(tmp_path):
+    """Test that no warning is shown when there are no uncommitted changes."""
+    # Initialize a git repo
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    # Create an initial commit (clean working directory)
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    # Create a mock config with default_branch_strategy to avoid Prompt.ask
+    from unittest.mock import Mock
+    mock_config = Mock()
+    mock_config.prompts = Mock()
+    mock_config.prompts.default_branch_strategy = "from_default"
+
+    # Mock git operations and Confirm.ask to simulate user saying "Yes" to creating branch
+    with patch('devflow.cli.commands.new_command.Confirm.ask', return_value=True) as mock_confirm, \
+         patch.object(GitUtils, 'fetch_origin', return_value=True), \
+         patch.object(GitUtils, 'get_default_branch', return_value='main'), \
+         patch.object(GitUtils, 'checkout_branch', return_value=True), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
+         patch.object(GitUtils, 'create_branch', return_value=True):
+
+        # Call function with mock config
+        branch = _handle_branch_creation(
+            str(tmp_path),
+            "PROJ-12345",
+            "test feature",
+            auto_from_default=False,
+            config=mock_config
+        )
+
+        # Verify a branch was created
+        assert branch is not None
+
+        # Verify Confirm.ask was called only once (for "Create git branch?")
+        # NOT for "Continue anyway?" since there are no uncommitted changes
+        assert mock_confirm.call_count == 1
+        call_args = mock_confirm.call_args
+        assert "Create git branch for this session?" in call_args[0][0]
+
+
+def test_handle_branch_creation_uncommitted_changes_auto_mode(tmp_path):
+    """Test that auto mode proceeds with warning when there are uncommitted changes."""
+    # Initialize a git repo
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    # Create an initial commit
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    # Create uncommitted changes
+    (tmp_path / "test.txt").write_text("modified")
+
+    # Mock git operations for auto mode
+    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+         patch.object(GitUtils, 'get_default_branch', return_value='main'), \
+         patch.object(GitUtils, 'checkout_branch', return_value=True), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
+         patch.object(GitUtils, 'create_branch', return_value=True):
+
+        # Call with auto_from_default=True (should NOT ask to continue)
+        branch = _handle_branch_creation(
+            str(tmp_path),
+            "PROJ-12345",
+            "test feature",
+            auto_from_default=True
+        )
+
+        # Verify branch was created (auto mode doesn't ask, just proceeds with warning)
+        assert branch is not None
+
+

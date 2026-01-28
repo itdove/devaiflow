@@ -63,9 +63,11 @@ Prompt Configuration:
 
 **View specific configuration subsets:**
 ```bash
-daf config show-prompts       # Show only prompt configuration
-daf config context list       # List available context files
-daf config context show       # Show context file contents
+daf config show --prompts       # Show only prompt configuration
+daf config show --fields        # Show available JIRA custom fields
+daf config show --sync-filters  # Show sync filter configuration
+daf config context list         # List available context files
+daf config context show         # Show context file contents
 ```
 
 **Modify configuration (must run OUTSIDE Claude Code):**

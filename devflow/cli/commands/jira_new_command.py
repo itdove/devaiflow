@@ -1036,17 +1036,17 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
     console_print(f"\n[bold]Select repository:[/bold]")
     console_print(f"  • Enter a number (1-{len(repo_options)}) to select from the list")
     console_print(f"  • Enter a repository name")
-    console_print(f"  • Enter 'cancel' to exit")
+    console_print(f"  • Enter 'cancel' or 'q' to exit")
 
     selection = Prompt.ask("Selection")
 
     # Validate input is not empty
     if not selection or selection.strip() == "":
-        console_print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(repo_options)}), repository name, or 'cancel'")
+        console_print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(repo_options)}), repository name, or 'cancel'/'q'")
         return None
 
     # Handle cancel
-    if selection.lower() == "cancel":
+    if selection.lower() in ["cancel", "q"]:
         console_print(f"\n[yellow]Cancelled[/yellow]")
         return None
 

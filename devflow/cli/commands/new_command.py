@@ -631,6 +631,11 @@ def create_new_session(
         branch_identifier = issue_key if issue_key else name
         branch = _handle_branch_creation(project_path, branch_identifier, goal)
 
+        # Check if user explicitly cancelled due to uncommitted changes
+        if branch is False:
+            console.print("\n[yellow]Session creation cancelled[/yellow]")
+            return
+
     # Generate session ID upfront
     session_id = str(uuid.uuid4())
 
@@ -996,17 +1001,17 @@ def _suggest_and_select_repository(
     console.print(f"  • Enter a number (1-{len(available_repos)}) to select from the list above")
     console.print(f"  • Enter a repository name")
     console.print(f"  • Enter an absolute path (starting with / or ~)")
-    console.print(f"  • Enter 'cancel' to use current directory")
+    console.print(f"  • Enter 'cancel' or 'q' to use current directory")
 
     selection = Prompt.ask("Selection")
 
     # Validate input is not empty
     if not selection or selection.strip() == "":
-        console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(available_repos)}), repository name, path, or 'cancel'")
+        console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(available_repos)}), repository name, path, or 'cancel'/'q'")
         return None
 
     # Handle cancel
-    if selection.lower() == "cancel":
+    if selection.lower() in ["cancel", "q"]:
         return None
 
     # Check if it's a number (selecting from list)
@@ -1185,7 +1190,7 @@ def _handle_branch_creation(
     goal: Optional[str],
     auto_from_default: bool = False,
     config: Optional[any] = None
-) -> Optional[str]:
+) -> Optional[str] | bool:
     """Handle git branch creation if in a git repository.
 
     Args:
@@ -1198,7 +1203,9 @@ def _handle_branch_creation(
         config: Configuration object (optional, will load if not provided)
 
     Returns:
-        Branch name if created/exists, None otherwise
+        Branch name if created/exists
+        None if no git repo or user chose not to create a branch (continue anyway)
+        False if user explicitly cancelled due to uncommitted changes (don't continue)
     """
     path = Path(project_path)
 
@@ -1207,6 +1214,34 @@ def _handle_branch_creation(
         return None
 
     console_print("\n[cyan]✓[/cyan] Detected git repository")
+
+    # Check for uncommitted changes before creating new branch
+    if GitUtils.has_uncommitted_changes(path):
+        console_print("\n[yellow]⚠ Warning: You have uncommitted changes in the current branch[/yellow]")
+
+        # Show status summary
+        status_summary = GitUtils.get_status_summary(path)
+        if status_summary:
+            console_print("\n[dim]Uncommitted changes:[/dim]")
+            for line in status_summary.split('\n'):
+                console_print(f"  {line}")
+
+        # In JSON mode or auto mode, proceed with warning logged
+        if is_json_mode() or auto_from_default:
+            mode_str = "JSON mode" if is_json_mode() else "auto mode"
+            console_print(f"\n[yellow]Proceeding with branch creation despite uncommitted changes ({mode_str})[/yellow]")
+        else:
+            # Ask user if they want to continue
+            console_print(
+                "\n[dim]Creating a new branch with uncommitted changes may cause issues.\n"
+                "Consider committing, stashing, or discarding your changes first.[/dim]"
+            )
+
+            should_continue = Confirm.ask("\nContinue anyway?", default=False)
+            if not should_continue:
+                console_print("\n[yellow]Branch creation cancelled[/yellow]")
+                console_print("[dim]Tip: Commit your changes with 'git commit' or stash them with 'git stash' before creating a new branch[/dim]")
+                return False  # Explicit cancellation - don't continue
 
     # Load config if not provided
     if config is None:

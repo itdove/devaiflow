@@ -148,6 +148,24 @@ def test_cancel_returns_none(mock_workspace, mock_config_loader, monkeypatch):
     assert result is None
 
 
+def test_q_returns_none(mock_workspace, mock_config_loader, monkeypatch):
+    """Test that entering 'q' returns None (alias for cancel)."""
+    from rich.prompt import Prompt
+
+    # Mock Prompt.ask to simulate 'q'
+    monkeypatch.setattr(Prompt, "ask", lambda prompt: "q")
+
+    # Call the function
+    result = _suggest_and_select_repository(
+        config_loader=mock_config_loader,
+        issue_key=None,
+        issue_metadata_dict=None,
+    )
+
+    # Verify: Returns None (use current directory)
+    assert result is None
+
+
 def test_invalid_number_returns_none(mock_workspace, mock_config_loader, monkeypatch):
     """Test that selecting an invalid number shows error and returns None."""
     from rich.prompt import Prompt
