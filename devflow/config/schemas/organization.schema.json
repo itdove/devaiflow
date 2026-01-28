@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://devaiflow.dev/schemas/organization.schema.json",
+  "title": "Organization Configuration",
+  "description": "Organization/Project-specific JIRA configuration",
+  "type": "object",
+  "properties": {
+    "jira_project": {
+      "type": ["string", "null"],
+      "description": "JIRA project key (e.g., 'PROJ', 'ENG', 'MYAPP'). Required for ticket creation."
+    },
+    "sync_filters": {
+      "type": "object",
+      "description": "Filters for JIRA ticket synchronization",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of JIRA statuses to sync (e.g., ['To Do', 'In Progress'])"
+          },
+          "required_fields": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of required fields for ticket creation"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Assignee filter: 'currentUser()' for user's tickets, specific username, or null for all"
+          }
+        },
+        "required": ["status", "required_fields", "assignee"],
+        "additionalProperties": false
+      }
+    },
+    "status_grouping_field": {
+      "type": ["string", "null"],
+      "description": "Field to group by in status dashboard (e.g., 'sprint', 'iteration', 'release'). None means no grouping."
+    },
+    "status_totals_field": {
+      "type": ["string", "null"],
+      "description": "Field to sum for totals in status dashboard (e.g., 'points', 'story_points', 'effort'). None means no totals."
+    }
+  },
+  "additionalProperties": false
+}

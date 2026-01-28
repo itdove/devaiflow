@@ -124,33 +124,39 @@ Permission denied
 
 1. **Add file access permissions to Claude Code settings:**
 
-   Create or edit `~/.claude/settings.json`:
+   Create or edit `~/.claude/settings.json` (using default `~/.daf-sessions` location):
    ```bash
    mkdir -p ~/.claude
    cat > ~/.claude/settings.json << 'EOF'
 {
-  "file_access": {
-    "read": [
-      "$DEVAIFLOW_HOME/**/*",
-      "$DEVAIFLOW_HOME/**/*"
+  "permissions": {
+    "allow": [
+      "Read(~/.daf-sessions/ENTERPRISE.md)",
+      "Read(~/.daf-sessions/ORGANIZATION.md)",
+      "Read(~/.daf-sessions/TEAM.md)",
+      "Read(~/.daf-sessions/USER.md)"
     ]
   }
 }
 EOF
    ```
 
+   **Note:** If you set a custom `DEVAIFLOW_HOME` environment variable, replace `~/.daf-sessions` with your custom path.
+
 2. **Verify the configuration:**
    ```bash
    cat ~/.claude/settings.json
    ```
 
-   Should show:
+   Should show (with default location):
    ```json
    {
-     "file_access": {
-       "read": [
-         "$DEVAIFLOW_HOME/**/*",
-         "$DEVAIFLOW_HOME/**/*"
+     "permissions": {
+       "allow": [
+         "Read(~/.daf-sessions/ENTERPRISE.md)",
+         "Read(~/.daf-sessions/ORGANIZATION.md)",
+         "Read(~/.daf-sessions/TEAM.md)",
+         "Read(~/.daf-sessions/USER.md)"
        ]
      }
    }
@@ -206,18 +212,22 @@ The allow list **must** be in the global `~/.claude/settings.json` file, NOT in 
    # Backup existing file
    mv ~/.claude/settings.json ~/.claude/settings.json.backup
 
-   # Create new file with correct syntax
+   # Create new file with correct syntax (using default ~/.daf-sessions location)
    cat > ~/.claude/settings.json << 'EOF'
 {
-  "file_access": {
-    "read": [
-      "$DEVAIFLOW_HOME/**/*",
-      "$DEVAIFLOW_HOME/**/*"
+  "permissions": {
+    "allow": [
+      "Read(~/.daf-sessions/ENTERPRISE.md)",
+      "Read(~/.daf-sessions/ORGANIZATION.md)",
+      "Read(~/.daf-sessions/TEAM.md)",
+      "Read(~/.daf-sessions/USER.md)"
     ]
   }
 }
 EOF
    ```
+
+   **Note:** If you set a custom `DEVAIFLOW_HOME` environment variable, replace `~/.daf-sessions` with your custom path.
 
 ### Settings Changes Not Taking Effect
 
@@ -576,6 +586,73 @@ Field 'acceptance_criteria' is required
 **What is preserved:**
 - All user configuration (JIRA URL, custom field defaults, workspace path, etc.)
 - All session data (sessions, notes, templates)
+
+### JIRA API Debug Logging
+
+**Problem:** JIRA commands fail with cryptic errors and you need to see exactly what's being sent to the API
+
+**Example Errors:**
+- "Field validation failed" without details
+- "Custom field not available for this issue type"
+- "Unknown field error"
+- Silent JIRA API failures
+
+**Solution: Enable Debug Logging**
+
+1. **Set the debug environment variable:**
+   ```bash
+   export DEVAIFLOW_DEBUG=1
+   ```
+
+2. **Run your JIRA command:**
+   ```bash
+   daf jira create bug --summary "Test" --parent PROJ-123
+   ```
+
+3. **You'll see detailed API request/response:**
+   ```
+   JIRA API Request:
+   POST https://jira.example.com/rest/api/2/issue
+   Payload:
+   {
+     "fields": {
+       "project": {"key": "PROJ"},
+       "summary": "Test",
+       "issuetype": {"name": "Bug"},
+       "customfield_12345": "Platform"
+     }
+   }
+
+   JIRA API Response:
+   Status: 400
+   {
+     "errorMessages": [],
+     "errors": {
+       "customfield_12345": "Field is not available for Bug issues"
+     }
+   }
+   ```
+
+4. **Disable debug logging when done:**
+   ```bash
+   unset DEVAIFLOW_DEBUG
+   ```
+
+**What the debug output shows:**
+- Full HTTP method and URL
+- Complete request payload (all fields being sent)
+- JIRA server response
+- HTTP status codes
+- Field validation errors from JIRA
+
+**Use Cases:**
+- Troubleshooting custom field validation errors
+- Understanding why JIRA rejects ticket creation
+- Debugging field mapping issues
+- Verifying what values are being sent to JIRA
+- Testing JIRA API integration
+
+**Note:** Debug output is automatically disabled when using `--json` flag to prevent breaking JSON output format.
 
 ## Conversation Issues
 

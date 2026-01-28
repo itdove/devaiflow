@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- JIRA API debug logging with `DEVAIFLOW_DEBUG=1` environment variable
+  - Shows full request/response details for all JIRA API calls
+  - Helps troubleshoot field validation and API errors
+  - Automatically disabled in JSON output mode
+
 ### Improved
 - Enhanced `daf init` wizard with better user guidance and explanations
   - Added welcome message explaining all settings can be changed later
@@ -14,10 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added detailed help text for keyword mappings (multi-repo suggestions)
   - Added GitHub raw URL guidance for PR/MR templates
   - Improved clarity on optional vs required settings
+- JIRA field validation now checks if custom fields are available for the issue type being created
+  - Prevents cryptic JIRA errors when using `--field` with incompatible issue types
+  - Shows clear warning and skips unavailable fields
 
 ### Fixed
 - Test environment isolation for unit tests - added `parent_field_mapping` to test configurations
 - Updated test fixtures to include new comment visibility prompts
+- Mock mode now skips JIRA field auto-refresh to prevent network errors in tests
+- Mock mode now uses default affected version ("v1.0.0") instead of prompting
+- Custom field validation prevents sending fields that aren't available for the issue type
 
 ## [1.0.0] - 2026-01-23
 

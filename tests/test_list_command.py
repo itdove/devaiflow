@@ -38,9 +38,10 @@ def test_list_single_session(temp_daf_home):
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
-    # JIRA key may be truncated in table display (e.g., "PROJ-123…")
-    assert "PROJ-123" in result.output
-    assert "test-dir" in result.output
+    # JIRA key may be truncated in table display (e.g., "PROJ-1…")
+    assert "PROJ-1" in result.output
+    # Directory name may be truncated (e.g., "test-d…")
+    assert "test-" in result.output or "test-d" in result.output
     assert "Your Sessions" in result.output
 
 
@@ -212,8 +213,8 @@ def test_list_displays_status_colors(temp_daf_home):
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
-    # Check for status indicators (output may be truncated in table, e.g., "in_progre…")
-    assert "in_progre" in result.output or "In Progre" in result.output
+    # Check for status indicators (output may be truncated in table, e.g., "in_pr…")
+    assert "in_pr" in result.output or "In Pr" in result.output
 
 
 def test_list_shows_session_summary(temp_daf_home):
@@ -263,10 +264,10 @@ def test_list_with_jira_summary(temp_daf_home):
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
-    # JIRA key may be truncated in table display (e.g., "PROJ-123…")
-    assert "PROJ-123" in result.output
-    # Check for text that may wrap across lines in table
-    assert "Implement" in result.output and "backup" in result.output
+    # JIRA key may be truncated in table display (e.g., "PROJ-1…")
+    assert "PROJ-1" in result.output
+    # Check for text that may wrap across lines or be truncated in table
+    assert ("Implement" in result.output or "Impleme" in result.output) and "backup" in result.output
 
 
 def test_list_pagination_default_limit(temp_daf_home):
@@ -747,3 +748,97 @@ def test_list_interactive_mode_with_filters(temp_daf_home):
     # Should show both pages of complete sessions
     assert "Showing 1-3 of 5 sessions" in result.output
     assert "Showing 4-5 of 5 sessions" in result.output
+
+
+def test_list_last_activity_column(temp_daf_home):
+    """Test that Last Activity column shows conversation last_active time."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create a session with a recent conversation activity
+    now = datetime.now()
+    recent_session = session_manager.create_session(
+        name="recent-session",
+        goal="Recent work",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-recent",
+    )
+
+    # Update the conversation's last_active to be very recent (within minutes)
+    if recent_session.active_conversation:
+        recent_session.active_conversation.last_active = now - timedelta(minutes=5)
+        session_manager.update_session(recent_session)
+
+    # Create an older session
+    old_session = session_manager.create_session(
+        name="old-session",
+        goal="Old work",
+        working_directory="old-dir",
+        project_path="/path/to/old",
+        ai_agent_session_id="uuid-old",
+    )
+
+    # Update the conversation's last_active to be days ago
+    if old_session.active_conversation:
+        old_session.active_conversation.last_active = now - timedelta(days=3)
+        session_manager.update_session(old_session)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["list", "--all"])
+
+    assert result.exit_code == 0
+    # Check that Last Activity column exists (column header might wrap to "Last" and "Activity")
+    assert "Activity" in result.output
+
+    # The recent session should show minutes ago
+    # Note: Exact text may vary based on timing, but should contain "m ago" or "just now"
+    assert ("m ago" in result.output or "just now" in result.output)
+
+    # The old session should show days ago
+    assert "d ago" in result.output
+
+
+def test_list_last_activity_multi_conversation(temp_daf_home):
+    """Test that Last Activity shows most recent activity across multiple conversations."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    now = datetime.now()
+
+    # Create a session
+    session = session_manager.create_session(
+        name="multi-repo-session",
+        goal="Multi-repo work",
+        working_directory="repo1",
+        project_path="/path/to/repo1",
+        ai_agent_session_id="uuid-repo1",
+    )
+
+    # Set first conversation to 2 days ago
+    if session.active_conversation:
+        session.active_conversation.last_active = now - timedelta(days=2)
+
+    # Add a second conversation with more recent activity (1 hour ago)
+    session.add_conversation(
+        working_dir="repo2",
+        project_path="/path/to/repo2",
+        ai_agent_session_id="uuid-repo2",
+        branch="feature-branch"
+    )
+
+    # Update the second conversation's last_active to be very recent
+    second_conv = session.get_conversation("repo2")
+    if second_conv:
+        second_conv.last_active = now - timedelta(hours=1)
+
+    session_manager.update_session(session)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["list", "--all"])
+
+    assert result.exit_code == 0
+    # Should show the most recent activity (1 hour ago, not 2 days ago)
+    assert "1h ago" in result.output or "h ago" in result.output
+    # Should NOT show 2d ago since there's more recent activity
+    assert "2d ago" not in result.output or result.output.index("h ago") < result.output.index("2d ago")

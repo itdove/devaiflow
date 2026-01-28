@@ -116,6 +116,10 @@ def _check_and_refresh_jira_fields() -> None:
     # Suppress output if --json flag is present
     is_json_mode = "--json" in sys.argv
 
+    # Skip in mock mode (mock tickets don't need field discovery)
+    if os.getenv("DAF_MOCK_MODE") == "1":
+        return
+
     # Only run if JIRA_API_TOKEN is set (avoid errors for non-JIRA usage)
     if not os.getenv("JIRA_API_TOKEN"):
         return
@@ -1119,7 +1123,8 @@ jira.add_command(create_jira_update_command())
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str) -> None:
+@click.option("--affected-version", help="Affected version for bugs (required for bug type)")
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str, affected_version: Optional[str]) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1143,7 +1148,17 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch)
+    # Prompt for affected_version if creating a bug and not provided
+    if issue_type == "bug" and not affected_version:
+        # Skip prompt in mock mode (use default silently)
+        from devflow.utils import is_mock_mode
+        if is_mock_mode():
+            affected_version = "v1.0.0"
+        else:
+            # Simple text prompt - no validation, no choices shown
+            affected_version = click.prompt("Enter affected version for this bug")
+
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, affected_version)
 
 
 @jira.command(name="open")
@@ -1207,6 +1222,64 @@ def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str,
 def config(ctx: click.Context) -> None:
     """Configuration management commands."""
     pass
+
+
+@config.command(name="show")
+@json_option
+def config_show(ctx: click.Context) -> None:
+    """Display the merged final configuration.
+
+    Shows the complete configuration after merging all sources:
+    - backends/jira.json (backend configuration)
+    - ENTERPRISE.md (enterprise-level overrides)
+    - organization.json (organization settings)
+    - team.json (team settings)
+    - USER.md (user preferences)
+
+    The merged configuration is what daf actually uses at runtime.
+
+    Example:
+        daf config show
+        daf config show --json
+    """
+    from devflow.config.loader import ConfigLoader
+    from devflow.cli.utils import output_json, is_json_mode
+
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+
+    if not config:
+        if is_json_mode():
+            output_json(success=False, error={"code": "NO_CONFIG", "message": "Configuration not found"})
+        else:
+            console.print("[red]✗[/red] Configuration not found")
+            console.print("[dim]Run 'daf init' to create initial configuration[/dim]")
+        raise click.exceptions.Exit(1)
+
+    # Convert config to dict for display
+    config_dict = config.model_dump(by_alias=True, exclude_none=False)
+
+    if is_json_mode():
+        output_json(success=True, data=config_dict)
+    else:
+        import json
+        from rich.syntax import Syntax
+
+        # Pretty print the merged config
+        console.print("\n[bold cyan]━━━ Merged Configuration ━━━[/bold cyan]\n")
+
+        # Format as JSON with syntax highlighting
+        json_str = json.dumps(config_dict, indent=2, sort_keys=False)
+        syntax = Syntax(json_str, "json", theme="monokai", line_numbers=False)
+        console.print(syntax)
+
+        console.print("\n[dim]This is the final merged configuration from all sources:[/dim]")
+        console.print("[dim]  • backends/jira.json (backend configuration)[/dim]")
+        console.print("[dim]  • ENTERPRISE.md (enterprise-level overrides)[/dim]")
+        console.print("[dim]  • organization.json (organization settings)[/dim]")
+        console.print("[dim]  • team.json (team settings)[/dim]")
+        console.print("[dim]  • USER.md (user preferences)[/dim]")
+        console.print()
 
 
 @config.command(name="refresh-jira-fields")
@@ -1667,12 +1740,14 @@ def show_sync_filters(ctx: click.Context) -> None:
 
 @config.command(name="edit")
 @json_option
-def config_edit(ctx: click.Context) -> None:
+@click.option("--advanced", is_flag=True, help="Start in Advanced Mode (file-based tabs)")
+def config_edit(ctx: click.Context, advanced: bool) -> None:
     """Launch interactive TUI for configuration editing.
 
     Opens a full-screen text-based user interface for managing all
     daf configuration settings. Provides:
-    - Tabbed interface for different configuration sections
+    - Simple Mode: Topic-based tabs (JIRA, AI, Repository, etc.) - default
+    - Advanced Mode: File-based tabs (Enterprise, Organization, Team, User) - use --advanced
     - Input validation for URLs, paths, and required fields
     - Help screen with keyboard shortcuts
     - Preview mode before saving
@@ -1682,16 +1757,18 @@ def config_edit(ctx: click.Context) -> None:
         Tab / Shift+Tab     - Navigate between fields
         Arrow Keys          - Navigate tabs and fields
         Ctrl+S              - Save configuration
+        Ctrl+M              - Toggle between Simple and Advanced modes
         ?                   - Show help
         Q / Ctrl+C          - Quit
 
-    Example:
-        daf config edit
+    Examples:
+        daf config edit                # Start in Simple Mode (default)
+        daf config edit --advanced     # Start in Advanced Mode
     """
     from devflow.ui.config_tui import run_config_tui
 
     try:
-        run_config_tui()
+        run_config_tui(advanced_mode=advanced)
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to launch configuration TUI: {e}")
         console.print("[dim]You can still edit configuration manually in config.json[/dim]")
@@ -1699,18 +1776,20 @@ def config_edit(ctx: click.Context) -> None:
 
 @config.command(name="tui")
 @json_option
-def config_tui(ctx: click.Context) -> None:
+@click.option("--advanced", is_flag=True, help="Start in Advanced Mode (file-based tabs)")
+def config_tui(ctx: click.Context, advanced: bool) -> None:
     """Alias for 'daf config edit' - launch interactive TUI.
 
     This is an alias for the 'edit' command, provided for convenience.
 
-    Example:
-        daf config tui
+    Examples:
+        daf config tui                # Start in Simple Mode (default)
+        daf config tui --advanced     # Start in Advanced Mode
     """
     from devflow.ui.config_tui import run_config_tui
 
     try:
-        run_config_tui()
+        run_config_tui(advanced_mode=advanced)
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to launch configuration TUI: {e}")
         console.print("[dim]You can still edit configuration manually in config.json[/dim]")

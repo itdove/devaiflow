@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://devaiflow.dev/schemas/team.schema.json",
+  "title": "Team Configuration",
+  "description": "Team-specific JIRA configuration",
+  "type": "object",
+  "properties": {
+    "jira_custom_field_defaults": {
+      "type": ["object", "null"],
+      "description": "Default values for custom fields (e.g., {\"workstream\": \"Platform\", \"affected_version\": \"v1.0\"})",
+      "additionalProperties": true
+    },
+    "jira_system_field_defaults": {
+      "type": ["object", "null"],
+      "description": "Default values for JIRA system fields (e.g., {\"components\": [\"ansible-saas\"], \"labels\": [\"backend\"]})",
+      "additionalProperties": true
+    },
+    "time_tracking_enabled": {
+      "type": "boolean",
+      "description": "Team-wide time tracking preference",
+      "default": true
+    },
+    "jira_comment_visibility_type": {
+      "type": ["string", "null"],
+      "enum": ["group", "role", null],
+      "description": "Comment visibility type: 'group' or 'role'"
+    },
+    "jira_comment_visibility_value": {
+      "type": ["string", "null"],
+      "description": "Comment visibility value (group/role name)"
+    },
+    "agent_backend": {
+      "type": ["string", "null"],
+      "enum": ["claude", "github-copilot", null],
+      "description": "AI agent backend enforced by team (e.g., 'claude', 'github-copilot'). Use null to allow users to choose."
+    }
+  },
+  "additionalProperties": false
+}

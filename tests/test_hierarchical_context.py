@@ -31,9 +31,10 @@ def test_load_hierarchical_context_files_with_all_files(temp_daf_home, monkeypat
     backends_dir.mkdir(exist_ok=True)
 
     (backends_dir / "JIRA.md").write_text("# JIRA Rules")
+    (temp_daf_home / "ENTERPRISE.md").write_text("# Enterprise Standards")
     (temp_daf_home / "ORGANIZATION.md").write_text("# Org Standards")
     (temp_daf_home / "TEAM.md").write_text("# Team Conventions")
-    (temp_daf_home / "CONFIG.md").write_text("# My Notes")
+    (temp_daf_home / "USER.md").write_text("# My Notes")
 
     # Create a minimal config
     config = _create_minimal_config()
@@ -42,19 +43,21 @@ def test_load_hierarchical_context_files_with_all_files(temp_daf_home, monkeypat
     result = _load_hierarchical_context_files(config)
 
     # Verify: All files are included in correct order
-    assert len(result) == 4
+    assert len(result) == 5
 
-    # Check order: backend -> organization -> team -> user
+    # Check order: backend -> enterprise -> organization -> team -> user
     assert result[0][1] == "JIRA backend integration rules"
-    assert result[1][1] == "organization coding standards"
-    assert result[2][1] == "team conventions and workflows"
-    assert result[3][1] == "personal notes and preferences"
+    assert result[1][1] == "enterprise-wide policies and standards"
+    assert result[2][1] == "organization coding standards"
+    assert result[3][1] == "team conventions and workflows"
+    assert result[4][1] == "personal notes and preferences"
 
     # Verify paths are absolute
     assert str(backends_dir / "JIRA.md") in result[0][0]
-    assert str(temp_daf_home / "ORGANIZATION.md") in result[1][0]
-    assert str(temp_daf_home / "TEAM.md") in result[2][0]
-    assert str(temp_daf_home / "CONFIG.md") in result[3][0]
+    assert str(temp_daf_home / "ENTERPRISE.md") in result[1][0]
+    assert str(temp_daf_home / "ORGANIZATION.md") in result[2][0]
+    assert str(temp_daf_home / "TEAM.md") in result[3][0]
+    assert str(temp_daf_home / "USER.md") in result[4][0]
 
 
 def test_load_hierarchical_context_files_with_some_files(temp_daf_home):
@@ -64,7 +67,7 @@ def test_load_hierarchical_context_files_with_some_files(temp_daf_home):
     backends_dir.mkdir(exist_ok=True)
 
     (backends_dir / "JIRA.md").write_text("# JIRA Rules")
-    (temp_daf_home / "CONFIG.md").write_text("# My Notes")
+    (temp_daf_home / "USER.md").write_text("# My Notes")
 
     # Note: ORGANIZATION.md and TEAM.md are NOT created
 
@@ -121,7 +124,7 @@ def test_load_hierarchical_context_files_skips_directories(temp_daf_home):
 
     (backends_dir / "JIRA.md").mkdir(exist_ok=True)  # Directory, not file
     (temp_daf_home / "ORGANIZATION.md").mkdir(exist_ok=True)  # Directory, not file
-    (temp_daf_home / "CONFIG.md").write_text("# My Notes")  # File
+    (temp_daf_home / "USER.md").write_text("# My Notes")  # File
 
     # Create a minimal config
     config = _create_minimal_config()
@@ -140,10 +143,11 @@ def test_load_hierarchical_context_files_order(temp_daf_home):
     backends_dir = temp_daf_home / "backends"
     backends_dir.mkdir(exist_ok=True)
 
-    # Create in reverse order: CONFIG -> TEAM -> ORGANIZATION -> JIRA
-    (temp_daf_home / "CONFIG.md").write_text("# User")
+    # Create in reverse order: USER -> TEAM -> ORGANIZATION -> ENTERPRISE -> JIRA
+    (temp_daf_home / "USER.md").write_text("# User")
     (temp_daf_home / "TEAM.md").write_text("# Team")
     (temp_daf_home / "ORGANIZATION.md").write_text("# Org")
+    (temp_daf_home / "ENTERPRISE.md").write_text("# Enterprise")
     (backends_dir / "JIRA.md").write_text("# JIRA")
 
     # Create a minimal config
@@ -153,12 +157,13 @@ def test_load_hierarchical_context_files_order(temp_daf_home):
     result = _load_hierarchical_context_files(config)
 
     # Verify: Files are in correct order regardless of creation order
-    assert len(result) == 4
+    assert len(result) == 5
 
-    # Order must be: backend -> organization -> team -> user
+    # Order must be: backend -> enterprise -> organization -> team -> user
     descriptions = [r[1] for r in result]
     assert descriptions == [
         "JIRA backend integration rules",
+        "enterprise-wide policies and standards",
         "organization coding standards",
         "team conventions and workflows",
         "personal notes and preferences"
@@ -188,7 +193,7 @@ def test_load_hierarchical_context_files_returns_absolute_paths(temp_daf_home):
     backends_dir.mkdir(exist_ok=True)
 
     (backends_dir / "JIRA.md").write_text("# JIRA Rules")
-    (temp_daf_home / "CONFIG.md").write_text("# My Notes")
+    (temp_daf_home / "USER.md").write_text("# My Notes")
 
     # Create a minimal config
     config = _create_minimal_config()
@@ -232,9 +237,10 @@ def test_load_hierarchical_context_files_integration_with_generate_prompt(temp_d
     backends_dir.mkdir(exist_ok=True)
 
     (backends_dir / "JIRA.md").write_text("# JIRA Rules")
+    (temp_daf_home / "ENTERPRISE.md").write_text("# Enterprise Standards")
     (temp_daf_home / "ORGANIZATION.md").write_text("# Org Standards")
     (temp_daf_home / "TEAM.md").write_text("# Team Conventions")
-    (temp_daf_home / "CONFIG.md").write_text("# My Notes")
+    (temp_daf_home / "USER.md").write_text("# My Notes")
 
     # Execute: Generate initial prompt
     prompt = _generate_initial_prompt(
@@ -244,12 +250,14 @@ def test_load_hierarchical_context_files_integration_with_generate_prompt(temp_d
 
     # Verify: Hierarchical files appear in prompt
     assert "backends/JIRA.md" in prompt
+    assert "ENTERPRISE.md" in prompt
     assert "ORGANIZATION.md" in prompt
     assert "TEAM.md" in prompt
-    assert "CONFIG.md" in prompt
+    assert "USER.md" in prompt
 
     # Verify descriptions are included
     assert "JIRA backend integration rules" in prompt
+    assert "enterprise-wide policies and standards" in prompt
     assert "organization coding standards" in prompt
     assert "team conventions and workflows" in prompt
     assert "personal notes and preferences" in prompt
@@ -265,7 +273,7 @@ def test_load_hierarchical_context_files_integration_partial_files(temp_daf_home
 
     (backends_dir / "JIRA.md").write_text("# JIRA Rules")
     # Note: ORGANIZATION.md and TEAM.md are NOT created
-    (temp_daf_home / "CONFIG.md").write_text("# My Notes")
+    (temp_daf_home / "USER.md").write_text("# My Notes")
 
     # Execute: Generate initial prompt
     prompt = _generate_initial_prompt(
@@ -275,7 +283,7 @@ def test_load_hierarchical_context_files_integration_partial_files(temp_daf_home
 
     # Verify: Only existing files appear in prompt
     assert "backends/JIRA.md" in prompt
-    assert "CONFIG.md" in prompt
+    assert "USER.md" in prompt
 
     # Verify missing files do NOT appear in prompt
     assert "ORGANIZATION.md" not in prompt

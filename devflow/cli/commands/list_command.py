@@ -1,6 +1,7 @@
 """Implementation of 'daf list' command."""
 
 import os
+from datetime import datetime
 from typing import Dict, Optional
 
 from rich.console import Console
@@ -51,6 +52,7 @@ def _display_page(
     table.add_column("JIRA")
     table.add_column("Summary")
     table.add_column("Conversations", style="dim")
+    table.add_column("Last Activity", style="dim", justify="right")
     table.add_column("Time", justify="right")
 
     for session in sessions_page:
@@ -109,6 +111,32 @@ def _display_page(
         # AAP-63377: Display workspace name
         workspace_display = session.workspace_name or "-"
 
+        # Get most recent conversation activity (last opened/closed time)
+        last_session_display = "-"
+        if session.conversations:
+            # Find the most recent last_active across all conversations
+            most_recent_activity = None
+            for conv_data in session.conversations.values():
+                # Handle both Conversation (new format) and ConversationContext (old format)
+                conv = conv_data.active_session if hasattr(conv_data, 'active_session') else conv_data
+                if conv and conv.last_active:
+                    if most_recent_activity is None or conv.last_active > most_recent_activity:
+                        most_recent_activity = conv.last_active
+
+            if most_recent_activity:
+                # Calculate time ago
+                time_diff = datetime.now() - most_recent_activity
+                hours_ago = int(time_diff.total_seconds() // 3600)
+                days_ago = hours_ago // 24
+
+                if days_ago > 0:
+                    last_session_display = f"{days_ago}d ago"
+                elif hours_ago > 0:
+                    last_session_display = f"{hours_ago}h ago"
+                else:
+                    minutes_ago = int((time_diff.total_seconds() % 3600) // 60)
+                    last_session_display = f"{minutes_ago}m ago" if minutes_ago > 0 else "just now"
+
         # Add row
         table.add_row(
             status_display,
@@ -117,6 +145,7 @@ def _display_page(
             issue_display,
             session.issue_metadata.get("summary") if session.issue_metadata else session.goal or "",
             conversations_display,
+            last_session_display,
             time_str,
         )
 

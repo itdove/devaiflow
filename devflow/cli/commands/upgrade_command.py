@@ -139,7 +139,8 @@ def upgrade_all(
     dry_run: bool = False,
     quiet: bool = False,
     upgrade_commands: bool = True,
-    upgrade_skills: bool = True
+    upgrade_skills: bool = True,
+    upgrade_hierarchical_skills: bool = True
 ) -> None:
     """Upgrade bundled Claude Code slash commands and/or skills in workspace.
 
@@ -147,12 +148,14 @@ def upgrade_all(
     - Install commands/skills if they don't exist yet
     - Upgrade commands/skills if they are outdated
     - Skip commands/skills that are already up-to-date
+    - Install organization-specific skills from hierarchical config files
 
     Args:
         dry_run: If True, only report what would be changed without actually changing
         quiet: If True, suppress console output (errors still shown)
         upgrade_commands: If True, upgrade bundled slash commands
         upgrade_skills: If True, upgrade bundled skills
+        upgrade_hierarchical_skills: If True, install hierarchical skills from config files
     """
     config_loader = ConfigLoader()
     config = config_loader.load_config()
@@ -248,6 +251,39 @@ def upgrade_all(
         if not quiet:
             console.print()
 
+    # Upgrade hierarchical skills if requested
+    if upgrade_hierarchical_skills:
+        if not quiet:
+            console.print("[bold]Hierarchical Skills (from config files):[/bold]")
+
+        from devflow.utils.hierarchical_skills import (
+            install_hierarchical_skills,
+            get_hierarchical_skill_statuses
+        )
+
+        statuses_before = get_hierarchical_skill_statuses()
+
+        try:
+            changed, up_to_date, failed = install_hierarchical_skills(
+                dry_run=dry_run,
+                quiet=quiet
+            )
+            all_changed.extend([f"hierarchical:{name}" for name in changed])
+            all_up_to_date.extend([f"hierarchical:{name}" for name in up_to_date])
+            all_failed.extend([f"hierarchical:{name}" for name in failed])
+
+            _print_upgrade_table(
+                changed, up_to_date, failed, statuses_before,
+                item_type="hierarchical skill", dry_run=dry_run, quiet=quiet
+            )
+
+        except Exception as e:
+            console.print(f"[red]✗[/red] Hierarchical skill installation failed: {e}")
+            # Don't raise - continue with summary
+
+        if not quiet:
+            console.print()
+
     # Overall summary
     if not quiet:
         console.print("[bold]Summary:[/bold]")
@@ -273,6 +309,10 @@ def upgrade_all(
         if upgrade_skills:
             skills_dir = workspace_path / ".claude" / "skills"
             console.print(f"[dim]Skills location: {skills_dir}[/dim]")
+        if upgrade_hierarchical_skills:
+            from devflow.utils.paths import get_cs_home
+            hierarchical_skills_dir = get_cs_home() / ".claude" / "skills"
+            console.print(f"[dim]Hierarchical skills location: {hierarchical_skills_dir}[/dim]")
 
 
 def _print_upgrade_table(

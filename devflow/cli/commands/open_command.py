@@ -329,16 +329,16 @@ def open_session(
     is_first_launch = not (active_conv and active_conv.ai_agent_session_id)
 
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
-        # For ticket_creation sessions, check conversation file at stable location
+        # For ticket_creation and investigation sessions, check conversation file at stable location
         # Stable location uses original_project_path for sessions with temp_directory
         capture = SessionCapture()
 
         # Determine the correct location to check for conversation file
-        if session.session_type == "ticket_creation" and active_conv and active_conv.original_project_path:
+        if session.session_type in ("ticket_creation", "investigation") and active_conv and active_conv.original_project_path:
             # Use stable location based on original_project_path
             # This ensures we find the conversation even if temp directory was deleted
             session_dir = capture.get_session_dir(active_conv.original_project_path)
-            console.print(f"[dim]Checking for conversation file at stable location (ticket_creation session)...[/dim]")
+            console.print(f"[dim]Checking for conversation file at stable location ({session.session_type} session)...[/dim]")
         else:
             # Use current project path for normal sessions
             session_dir = capture.get_session_dir(active_conv.project_path)
@@ -349,8 +349,8 @@ def open_session(
         console.print(f"[dim]  {'found' if conversation_exists else 'not found'}[/dim]")
 
         if not conversation_exists:
-            if session.session_type == "ticket_creation":
-                # For ticket_creation sessions, no conversation at stable location means first launch
+            if session.session_type in ("ticket_creation", "investigation"):
+                # For ticket_creation and investigation sessions, no conversation at stable location means first launch
                 # Don't generate new session ID yet - will check again after temp directory handling
                 console.print(f"[dim]No conversation at stable location - will verify after temp directory handling[/dim]")
             else:
@@ -396,8 +396,8 @@ def open_session(
         # Refresh active_conv after working directory was set
         active_conv = session.active_conversation
 
-    # Handle temporary directory for ticket_creation sessions
-    if session.session_type == "ticket_creation":
+    # Handle temporary directory for ticket_creation and investigation sessions
+    if session.session_type in ("ticket_creation", "investigation"):
         _handle_temp_directory_for_ticket_creation(session, session_manager)
         # Refresh active_conv after temp directory handling
         active_conv = session.active_conversation
@@ -605,7 +605,7 @@ def open_session(
     global _cleanup_done
 
     # Validate that DAF_AGENTS.md exists before launching Claude
-    if active_conv and not _validate_context_files(active_conv.project_path, config_loader):
+    if active_conv and not _validate_context_files(session, config_loader):
         return
 
     try:
@@ -646,34 +646,24 @@ def open_session(
                 workspace=workspace,
             )
 
-            # Build command: prompt must come BEFORE --add-dir flags (positional argument)
-            cmd = ["claude", "--session-id", active_conv.ai_agent_session_id, initial_prompt]
+            # Build command with all skills and context directories
+            from devflow.utils.claude_commands import build_claude_command
 
-            # Add all skills directories to allowed paths (auto-approve skill file reads)
-            # Skills can be in 3 locations: user-level, workspace-level, project-level
-            skills_dirs = []
+            # Get default workspace path for skills discovery
+            workspace_path = None
+            if config and config.repos:
+                workspace_path = config.repos.get_default_workspace_path()
 
-            # 1. User-level skills: ~/.claude/skills/
-            user_skills = Path.home() / ".claude" / "skills"
-            if user_skills.exists():
-                skills_dirs.append(str(user_skills))
+            # Get project path from active conversation
+            project_path = active_conv.project_path if active_conv else None
 
-            # 2. Workspace-level skills: <workspace>/.claude/skills/
-            if config and config.repos and config.repos.get_default_workspace_path():
-                from devflow.utils.claude_commands import get_workspace_skills_dir
-                workspace_skills = get_workspace_skills_dir(config.repos.get_default_workspace_path())
-                if workspace_skills.exists():
-                    skills_dirs.append(str(workspace_skills))
-
-            # 3. Project-level skills: <project>/.claude/skills/
-            if active_conv:
-                project_skills = Path(active_conv.project_path) / ".claude" / "skills"
-                if project_skills.exists():
-                    skills_dirs.append(str(project_skills))
-
-            # Add all discovered skills directories AFTER the prompt
-            for skills_dir in skills_dirs:
-                cmd.extend(["--add-dir", skills_dir])
+            cmd = build_claude_command(
+                session_id=active_conv.ai_agent_session_id,
+                initial_prompt=initial_prompt,
+                project_path=project_path,
+                workspace_path=workspace_path,
+                config=config
+            )
 
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
@@ -735,6 +725,16 @@ def open_session(
             # Add all discovered skills directories
             for skills_dir in skills_dirs:
                 cmd.extend(["--add-dir", skills_dir])
+
+            # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
+            # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
+            from devflow.cli.commands.new_command import _load_hierarchical_context_files
+            from devflow.utils.paths import get_cs_home
+            cs_home = get_cs_home()
+            if cs_home.exists():
+                hierarchical_files = _load_hierarchical_context_files(config)
+                if hierarchical_files:
+                    cmd.extend(["--add-dir", str(cs_home)])
 
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
@@ -2342,7 +2342,7 @@ def _copy_conversation_from_temp(session, temp_dir: str) -> bool:
 
 
 def _handle_temp_directory_for_ticket_creation(session, session_manager) -> None:
-    """Handle temporary directory management for ticket_creation sessions.
+    """Handle temporary directory management for ticket_creation and investigation sessions.
 
     This function:
     1. Checks if session has temp_directory metadata
@@ -2352,7 +2352,7 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager) -> None
     5. Copies conversation file from stable location to temp directory
 
     Args:
-        session: Session object
+        session: Session object (ticket_creation or investigation type)
         session_manager: SessionManager instance
     """
     import tempfile
@@ -2704,7 +2704,7 @@ def _check_and_upgrade_daf_agents(installed_file: Path, location: str) -> bool:
         return True  # Don't block session opening
 
 
-def _validate_context_files(project_path: str, config_loader) -> bool:
+def _validate_context_files(session, config_loader) -> bool:
     """Validate that required context files exist before launching Claude.
 
     Checks for DAF_AGENTS.md in this order:
@@ -2714,13 +2714,97 @@ def _validate_context_files(project_path: str, config_loader) -> bool:
 
     If found, checks if installed version is outdated and prompts for upgrade.
 
+    For ticket_creation and investigation sessions with temp directories:
+    - Checks workspace directory only (temp directory doesn't persist)
+    - Does not try to install to temp directory
+
     Args:
-        project_path: Path to the project repository
+        session: Session object
         config_loader: Config loader to get workspace path
 
     Returns:
         True if DAF_AGENTS.md is found or successfully installed, False otherwise
     """
+    # For ticket_creation and investigation sessions with temp directories,
+    # only check workspace (temp directory is transient and gets deleted)
+    active_conv = session.active_conversation
+    is_temp_session = (
+        session.session_type in ("ticket_creation", "investigation") and
+        active_conv and
+        active_conv.temp_directory
+    )
+
+    if is_temp_session:
+        # For temp directory sessions, only check workspace (don't try to install to temp dir)
+        config = config_loader.load_config()
+        if config and config.repos and config.repos.get_default_workspace_path():
+            workspace_path = config.repos.get_default_workspace_path()
+            if workspace_path:
+                workspace_path = Path(workspace_path).expanduser()
+                cs_agents_workspace = workspace_path / "DAF_AGENTS.md"
+
+                if cs_agents_workspace.exists():
+                    console.print(f"[dim]✓ Found DAF_AGENTS.md in workspace (shared)[/dim]")
+                    console.print(f"[dim]  Location: {cs_agents_workspace}[/dim]")
+                    # Check if upgrade is needed
+                    if not _check_and_upgrade_daf_agents(cs_agents_workspace, "workspace"):
+                        return False
+                    return True
+                else:
+                    # Not found in workspace - offer to install there
+                    console.print(f"\n[yellow]⚠ DAF_AGENTS.md not found[/yellow]")
+                    console.print(f"\n[dim]DAF_AGENTS.md provides daf tool usage instructions to Claude.[/dim]")
+                    console.print(f"\nSearched locations:")
+                    console.print(f"  1. Workspace:  {cs_agents_workspace}")
+                    console.print(f"\n[dim]Note: Cannot install to temporary directory (session_type: {session.session_type})[/dim]")
+
+                    from rich.prompt import Confirm
+                    from devflow.utils import is_mock_mode
+                    mock_mode = is_mock_mode()
+
+                    should_install = True
+                    if not mock_mode:
+                        console.print(f"\n[bold]Install DAF_AGENTS.md to workspace?[/bold]")
+                        console.print(f"[dim]This will copy the bundled DAF_AGENTS.md to: {cs_agents_workspace}[/dim]")
+                        should_install = Confirm.ask("Install DAF_AGENTS.md to workspace?", default=True)
+                    else:
+                        console.print(f"[dim]Mock mode: Auto-installing DAF_AGENTS.md to {cs_agents_workspace}[/dim]")
+
+                    if not should_install:
+                        console.print(f"\n[yellow]Cannot continue without DAF_AGENTS.md[/yellow]")
+                        console.print(f"\n[bold]Manual installation:[/bold]")
+                        console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
+                        console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
+                        return False
+
+                    # Install bundled DAF_AGENTS.md to workspace
+                    success, diagnostics = _install_bundled_cs_agents(cs_agents_workspace)
+                    if success:
+                        console.print(f"[green]✓ Installed DAF_AGENTS.md to workspace[/green]")
+                        console.print(f"[dim]  Location: {cs_agents_workspace}[/dim]")
+                        return True
+                    else:
+                        console.print(f"\n[red]✗ Failed to install DAF_AGENTS.md[/red]")
+                        if diagnostics:
+                            console.print(f"\n[yellow]Debug information:[/yellow]")
+                            for diag in diagnostics:
+                                console.print(f"[dim]{diag}[/dim]")
+                        console.print(f"\n[bold]Manual installation:[/bold]")
+                        console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
+                        console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
+                        return False
+
+        # No workspace configured for temp session
+        console.print(f"\n[red]✗ Cannot proceed without workspace configured[/red]")
+        console.print(f"[dim]Temporary directory sessions require workspace to be configured[/dim]")
+        console.print(f"[dim]Run: daf config tui[/dim]")
+        return False
+
+    # Normal session: check repository directory first, then workspace
+    project_path = active_conv.project_path if active_conv else None
+    if not project_path:
+        return False
+
     repo_path = Path(project_path)
     cs_agents_repo = repo_path / "DAF_AGENTS.md"
 

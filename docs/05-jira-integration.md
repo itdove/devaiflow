@@ -167,6 +167,16 @@ daf config tui
 
 ## Creating JIRA Issues
 
+**CRITICAL ERROR PREVENTION:**
+- ❌ NEVER use `--field` with system fields (reporter, assignee, components, labels)
+- ✅ System fields MUST use their dedicated options: `--reporter jdoe`, `--assignee alice`, `--components backend`
+- If you use `--field reporter=jdoe`, the command will **EXIT WITH ERROR**
+- Error message will tell you: `✗ 'reporter' is a system field. Use --reporter option instead of --field`
+
+**Field Type Guidelines:**
+- **System fields** (reporter, assignee, components, labels, security-level, etc.): Use dedicated CLI options
+- **Custom fields** (customfield_*): Use `--field field_name=value` format
+
 ### Create a Bug
 
 ```bash
@@ -175,6 +185,19 @@ daf jira create bug \
   --priority Major \
   --parent PROJ-59038 \
   --description-file /tmp/bug_description.txt
+
+# With system fields (reporter, assignee, components, labels)
+daf jira create bug \
+  --summary "Production bug" \
+  --reporter jdoe \
+  --components backend \
+  --labels urgent
+
+# With custom fields
+daf jira create bug \
+  --summary "Critical bug" \
+  --field severity=Critical \
+  --field size=L
 ```
 
 ### Create a Story
@@ -281,6 +304,12 @@ This is more reliable than using curl and handles authentication automatically.
 
 ### Updating JIRA Issues
 
+**CRITICAL ERROR PREVENTION:**
+- ❌ NEVER use `--field` with system fields (reporter, assignee, components, labels)
+- ✅ System fields MUST use their dedicated options: `--reporter jdoe`, `--assignee alice`, `--components backend`
+- If you use `--field reporter=jdoe`, the command will **EXIT WITH ERROR**
+- Error message will tell you: `✗ 'reporter' is a system field. Use --reporter option instead of --field`
+
 ```bash
 # Update description
 daf jira update PROJ-12345 --description "New description text"
@@ -294,35 +323,48 @@ daf jira update PROJ-12345 \
   --field workstream=Platform \
   --summary "Updated summary"
 
-# Update acceptance criteria
-daf jira update PROJ-12345 --acceptance-criteria "- Criterion 1\n- Criterion 2"
+# Update with system fields (reporter, assignee, components, labels)
+daf jira update PROJ-12345 --assignee alice --components ansible-saas --labels backend,urgent
+daf jira update PROJ-12345 --reporter jdoe --components backend --security-level Internal
+daf jira update PROJ-12345 --assignee bob --reporter alice --components backend
 
-# Update with custom fields
+# Update with custom fields (use --field for ALL custom fields)
 daf jira update PROJ-12345 --field severity=Critical --field size=L
+daf jira update PROJ-12345 --field epic_link=PROJ-59000 --field story_points=5
+daf jira update PROJ-12345 --field acceptance_criteria="- Criterion 1\n- Criterion 2"
 
 # Add PR link (auto-appends to existing links)
 daf jira update PROJ-12345 --git-pull-request "https://github.com/org/repo/pull/123"
-
-# Use dynamic options (discovered when viewing help with issue key)
-daf jira update PROJ-12345 --epic-link PROJ-59000 --story-points 5
 ```
 
 ### Custom Fields Support
 
-Both `daf jira create` and `daf jira update` support dynamic custom field discovery:
+Both `daf jira create` and `daf jira update` support dynamic field discovery with strict separation between system and custom fields:
+
+**IMPORTANT:** ALL custom fields (customfield_*) MUST use `--field field_name=value` format. System fields (reporter, assignee, components, labels) have dedicated CLI options.
 
 #### For Creating Issues (Cached Fields)
 
 ```bash
-# View available creation fields (from cache)
-daf jira create --help
-# → Shows: --story-points, --severity, --size, etc.
+# View available fields (both system and custom)
+daf jira create bug --help
+# → Shows system field options: --reporter, --assignee, --components, --labels
+# → Shows available custom fields in --field help text
 
-# Use dynamic creation options
-daf jira create bug --summary "Critical bug" --severity Critical --size L
+# Use system fields with dedicated options
+daf jira create bug \
+  --summary "Critical bug" \
+  --reporter jdoe \
+  --assignee alice \
+  --components backend \
+  --labels urgent
 
-# Or use universal --field option
-daf jira create bug --summary "Bug" --field severity=Critical
+# Use custom fields with --field
+daf jira create bug \
+  --summary "Critical bug" \
+  --field severity=Critical \
+  --field size=L \
+  --field workstream=Platform
 ```
 
 Creation fields are discovered once and cached in `$DEVAIFLOW_HOME/config.json`. Refresh with:
@@ -331,36 +373,40 @@ Creation fields are discovered once and cached in `$DEVAIFLOW_HOME/config.json`.
 daf config refresh-jira-fields
 ```
 
-#### For Updating Issues (On-Demand Discovery)
+#### For Updating Issues
 
 ```bash
-# Discover what fields you can update for a specific issue
+# View available fields for a specific issue
 daf jira update PROJ-12345 --help
-# → Shows: --epic-link, --story-points, --sprint, --blocked, etc.
-# → Fields are discovered fresh each time for that specific issue
+# → Shows system field options: --reporter, --assignee, --components, --labels
+# → Shows available custom fields in --field help text
 
-# Use dynamic update options (shown in help)
-daf jira update PROJ-12345 --severity Critical --blocked True
+# Use system fields with dedicated options
+daf jira update PROJ-12345 \
+  --assignee alice \
+  --components backend \
+  --labels urgent,backend
 
-# Or use universal --field option
-daf jira update PROJ-12345 --field epic_link=PROJ-59000
+# Use custom fields with --field
+daf jira update PROJ-12345 \
+  --field epic_link=PROJ-59000 \
+  --field story_points=5 \
+  --field severity=Critical
 ```
 
 **How it works:**
 
-When you run `daf jira update PROJ-12345 --help`, the command:
-1. Detects the issue key in the command arguments
-2. Calls the JIRA editmeta API for that specific issue
-3. Discovers all editable fields for that issue's current state
-4. Generates dynamic CLI options with field names and allowed values
-5. Displays comprehensive help with all available options
+The command dynamically discovers available fields:
+1. System fields (non-customfield_*) get dedicated CLI options like `--reporter`, `--assignee`
+2. Custom fields (customfield_*) are documented in `--field` help text
+3. Trying to use `--field` with system fields will EXIT WITH ERROR
+4. This strict separation prevents API errors and makes field types explicit
 
-This means the help output is customized for each specific issue, showing only fields that can actually be edited.
-
-**Key Differences:**
-- **Create fields**: Cached in config.json, project-level, refreshable with `daf config refresh-jira-fields`
-- **Update fields**: Not cached, issue-specific, discovered fresh when viewing help
-- **Universal --field**: Always available for any custom field in both commands
+**Key Principles:**
+- **System fields**: Use dedicated options (e.g., `--reporter jdoe`, `--assignee alice`)
+- **Custom fields**: Use `--field key=value` (e.g., `--field severity=Critical`)
+- **Error prevention**: Mixing field types causes immediate error with helpful message
+- **Field discovery**: Run `daf config refresh-jira-fields` to update available custom fields
 
 ## Creating Sessions with JIRA
 
@@ -1077,6 +1123,39 @@ Creates single file with all tickets.
    curl -H "Authorization: Bearer $JIRA_API_TOKEN" \
         "https://jira.example.com/rest/api/2/myself"
    ```
+
+### Debug Logging
+
+When troubleshooting JIRA API issues, enable debug logging to see full request/response details:
+
+```bash
+# Enable debug logging
+export DEVAIFLOW_DEBUG=1
+
+# Run your JIRA command
+daf jira create bug --summary "Test" --parent PROJ-123
+
+# Disable when done
+unset DEVAIFLOW_DEBUG
+```
+
+**What you'll see:**
+- Full HTTP method and URL
+- Complete request payload (all fields being sent)
+- JIRA server response
+- HTTP status codes
+- Field validation errors from JIRA
+
+**Use cases:**
+- Troubleshooting custom field validation errors
+- Understanding why JIRA rejects ticket creation
+- Debugging field mapping issues
+- Verifying what values are being sent to JIRA
+- Testing JIRA API integration
+
+**Note:** Debug output is automatically disabled when using `--json` flag.
+
+For more details, see [Troubleshooting Guide - JIRA API Debug Logging](11-troubleshooting.md#jira-api-debug-logging).
 
 ### JIRA URL Not Detected
 

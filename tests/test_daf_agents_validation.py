@@ -8,6 +8,30 @@ from devflow.cli.commands.open_command import (
     _get_bundled_daf_agents_content
 )
 from devflow.config.loader import ConfigLoader
+from devflow.config.models import Conversation, ConversationContext, Session
+
+
+def _create_mock_session(repo_dir: str) -> Session:
+    """Helper to create a mock session object for testing."""
+    import uuid
+    # Create a ConversationContext (active session) with required fields
+    context = ConversationContext(
+        ai_agent_session_id=str(uuid.uuid4()),
+        project_path=repo_dir,  # Set project_path for _validate_context_files
+        working_directory=repo_dir,
+        temp_directory=None
+    )
+    # Create Conversation with active_session
+    conversation = Conversation(active_session=context)
+    # Create Session with required fields (name is required)
+    # Manually assign conversations dict instead of using add_conversation()
+    session = Session(
+        name="test-session",
+        session_type="standard",
+        conversations={repo_dir: conversation},
+        working_directory=repo_dir
+    )
+    return session
 
 
 def test_validate_daf_agents_in_repo(tmp_path, temp_daf_home):
@@ -21,9 +45,10 @@ def test_validate_daf_agents_in_repo(tmp_path, temp_daf_home):
     (repo_dir / "DAF_AGENTS.md").write_text(bundled_content)
 
     config_loader = ConfigLoader()
+    session = _create_mock_session(str(repo_dir))
 
     # Should find DAF_AGENTS.md in repo
-    result = _validate_context_files(str(repo_dir), config_loader)
+    result = _validate_context_files(session, config_loader)
     assert result is True
 
 
@@ -54,7 +79,11 @@ def test_validate_daf_agents_in_workspace_fallback(tmp_path, temp_daf_home):
     config_loader.save_config(config)
 
     # Should find DAF_AGENTS.md in workspace (fallback)
-    result = _validate_context_files(str(repo_dir), config_loader)
+    session = _create_mock_session(str(repo_dir))
+
+    
+
+    result = _validate_context_files(session, config_loader)
     assert result is True
 
 
@@ -86,7 +115,11 @@ def test_validate_daf_agents_not_found_user_declines(tmp_path, temp_daf_home, mo
     config_loader.save_config(config)
 
     # Should NOT find DAF_AGENTS.md and user declined installation
-    result = _validate_context_files(str(repo_dir), config_loader)
+    session = _create_mock_session(str(repo_dir))
+
+    
+
+    result = _validate_context_files(session, config_loader)
     assert result is False
 
     # Verify Confirm was called
@@ -130,7 +163,11 @@ def test_validate_daf_agents_auto_install_success(tmp_path, temp_daf_home, monke
     monkeypatch.setattr("devflow.cli.commands.open_command._install_bundled_cs_agents", mock_install)
 
     # Should auto-install DAF_AGENTS.md and succeed
-    result = _validate_context_files(str(repo_dir), config_loader)
+    session = _create_mock_session(str(repo_dir))
+
+    
+
+    result = _validate_context_files(session, config_loader)
     assert result is True
 
     # Verify DAF_AGENTS.md was created
@@ -168,7 +205,11 @@ def test_validate_daf_agents_prefers_repo_over_workspace(tmp_path, temp_daf_home
     config_loader.save_config(config)
 
     # Should find DAF_AGENTS.md (and prefer repo over workspace)
-    result = _validate_context_files(str(repo_dir), config_loader)
+    session = _create_mock_session(str(repo_dir))
+
+    
+
+    result = _validate_context_files(session, config_loader)
     assert result is True
 
 
@@ -213,7 +254,11 @@ def test_validate_daf_agents_auto_install_failure_with_diagnostics(tmp_path, tem
     monkeypatch.setattr("devflow.cli.commands.open_command._install_bundled_cs_agents", mock_install)
 
     # Should fail to install and return False
-    result = _validate_context_files(str(repo_dir), config_loader)
+    session = _create_mock_session(str(repo_dir))
+
+    
+
+    result = _validate_context_files(session, config_loader)
     assert result is False
 
     # Verify DAF_AGENTS.md was NOT created
@@ -243,7 +288,7 @@ def test_install_bundled_cs_agents_from_relative_path(tmp_path):
     assert success is True
     assert diagnostics == []
     assert destination.exists()
-    assert destination.read_text().startswith("# DevAIFlow Tool Usage Guide")
+    assert destination.read_text().startswith("# DevAIFlow Agent Workflow Guide")
 
 
 def test_install_bundled_cs_agents_returns_diagnostics_on_failure(tmp_path, monkeypatch):
@@ -309,7 +354,7 @@ def test_get_bundled_daf_agents_content_success():
     assert diagnostics == []
 
     # Verify it looks like DAF_AGENTS.md content
-    assert "DevAIFlow Tool Usage Guide" in content or "daf tool" in content.lower()
+    assert "DevAIFlow Agent Workflow Guide" in content or "daf" in content.lower()
 
 
 def test_check_and_upgrade_daf_agents_up_to_date(tmp_path, temp_daf_home, monkeypatch):
@@ -443,6 +488,8 @@ def test_check_and_upgrade_daf_agents_cannot_read_installed(tmp_path, temp_daf_h
 def test_validate_context_files_triggers_upgrade_check_repo(tmp_path, temp_daf_home, monkeypatch):
     """Test that _validate_context_files triggers upgrade check for repo DAF_AGENTS.md."""
     from unittest.mock import MagicMock
+    from devflow.config.models import Conversation
+    from devflow.config.models import Session
 
     # Mock Confirm.ask to return True (user accepts upgrade)
     mock_confirm = MagicMock(return_value=True)
@@ -455,8 +502,14 @@ def test_validate_context_files_triggers_upgrade_check_repo(tmp_path, temp_daf_h
 
     config_loader = ConfigLoader()
 
+    # Create a mock session object
+    import uuid
+    context = ConversationContext(ai_agent_session_id=str(uuid.uuid4()), project_path=str(repo_dir), working_directory=str(repo_dir), temp_directory=None)
+    conversation = Conversation(active_session=context)
+    session = Session(name="test-session", session_type="standard", conversations={str(repo_dir): conversation}, working_directory=str(repo_dir))
+
     # Should find, check, and upgrade DAF_AGENTS.md
-    result = _validate_context_files(str(repo_dir), config_loader)
+    result = _validate_context_files(session, config_loader)
     assert result is True
 
     # Verify upgrade was performed
@@ -468,6 +521,8 @@ def test_validate_context_files_triggers_upgrade_check_repo(tmp_path, temp_daf_h
 def test_validate_context_files_triggers_upgrade_check_workspace(tmp_path, temp_daf_home, monkeypatch):
     """Test that _validate_context_files triggers upgrade check for workspace DAF_AGENTS.md."""
     from unittest.mock import MagicMock
+    from devflow.config.models import Conversation
+    from devflow.config.models import Session
 
     # Mock Confirm.ask to return True (user accepts upgrade)
     mock_confirm = MagicMock(return_value=True)
@@ -492,8 +547,14 @@ def test_validate_context_files_triggers_upgrade_check_workspace(tmp_path, temp_
     config.repos.last_used_workspace = "default"
     config_loader.save_config(config)
 
+    # Create a mock session object
+    import uuid
+    context = ConversationContext(ai_agent_session_id=str(uuid.uuid4()), project_path=str(repo_dir), working_directory=str(repo_dir), temp_directory=None)
+    conversation = Conversation(active_session=context)
+    session = Session(name="test-session", session_type="standard", conversations={str(repo_dir): conversation}, working_directory=str(repo_dir))
+
     # Should find in workspace and upgrade
-    result = _validate_context_files(str(repo_dir), config_loader)
+    result = _validate_context_files(session, config_loader)
     assert result is True
 
     # Verify upgrade was performed on workspace file

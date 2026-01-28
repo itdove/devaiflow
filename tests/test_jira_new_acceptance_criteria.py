@@ -12,6 +12,21 @@ from devflow.config.loader import ConfigLoader
 class TestLoadHierarchicalContextFiles:
     """Test the _load_hierarchical_context_files function."""
 
+    def test_loads_enterprise_md_when_exists(self, temp_daf_home):
+        """Test that ENTERPRISE.md is loaded when it exists."""
+        from devflow.utils.paths import get_cs_home
+
+        cs_home = get_cs_home()
+        enterprise_file = cs_home / "ENTERPRISE.md"
+        enterprise_file.write_text("# Enterprise Policy")
+
+        result = _load_hierarchical_context_files(None)
+
+        # Should find ENTERPRISE.md
+        enterprise_entries = [r for r in result if "ENTERPRISE.md" in r[0]]
+        assert len(enterprise_entries) == 1
+        assert enterprise_entries[0][1] == "enterprise-wide policies and standards"
+
     def test_loads_organization_md_when_exists(self, temp_daf_home):
         """Test that ORGANIZATION.md is loaded when it exists."""
         from devflow.utils.paths import get_cs_home
@@ -43,19 +58,19 @@ class TestLoadHierarchicalContextFiles:
         assert team_entries[0][1] == "team conventions and workflows"
 
     def test_loads_config_md_when_exists(self, temp_daf_home):
-        """Test that CONFIG.md is loaded when it exists."""
+        """Test that USER.md is loaded when it exists."""
         from devflow.utils.paths import get_cs_home
 
         cs_home = get_cs_home()
-        config_file = cs_home / "CONFIG.md"
-        config_file.write_text("# Personal Notes")
+        user_file = cs_home / "USER.md"
+        user_file.write_text("# Personal Notes")
 
         result = _load_hierarchical_context_files(None)
 
-        # Should find CONFIG.md
-        config_entries = [r for r in result if "CONFIG.md" in r[0]]
-        assert len(config_entries) == 1
-        assert config_entries[0][1] == "personal notes and preferences"
+        # Should find USER.md
+        user_entries = [r for r in result if "USER.md" in r[0]]
+        assert len(user_entries) == 1
+        assert user_entries[0][1] == "personal notes and preferences"
 
     def test_loads_jira_backend_md_when_exists(self, temp_daf_home):
         """Test that backends/JIRA.md is loaded when it exists."""
@@ -84,17 +99,19 @@ class TestLoadHierarchicalContextFiles:
         from devflow.utils.paths import get_cs_home
 
         cs_home = get_cs_home()
+        (cs_home / "ENTERPRISE.md").write_text("# Enterprise")
         (cs_home / "ORGANIZATION.md").write_text("# Org")
         (cs_home / "TEAM.md").write_text("# Team")
-        (cs_home / "CONFIG.md").write_text("# Config")
+        (cs_home / "USER.md").write_text("# User")
 
         result = _load_hierarchical_context_files(None)
 
-        assert len(result) == 3
+        assert len(result) == 4
         paths = [r[0] for r in result]
+        assert any("ENTERPRISE.md" in p for p in paths)
         assert any("ORGANIZATION.md" in p for p in paths)
         assert any("TEAM.md" in p for p in paths)
-        assert any("CONFIG.md" in p for p in paths)
+        assert any("USER.md" in p for p in paths)
 
 
 class TestBuildTicketCreationPrompt:

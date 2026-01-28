@@ -4,3 +4,4 @@ rich>=13.7.0
 anthropic>=0.40.0  # Optional: for AI-powered session summaries
 requests>=2.31.0  # For JIRA REST API
 pyyaml>=6.0  # For reading JIRA CLI config
+jsonschema>=4.17.0  # For configuration validation

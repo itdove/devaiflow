@@ -3,6 +3,10 @@
 import click
 from typing import Dict, Any
 from devflow.config.loader import ConfigLoader
+from devflow.cli.commands.jira_field_utils import (
+    parse_field_options,
+    add_dynamic_system_field_options,
+)
 
 
 def get_creation_fields_for_command() -> Dict[str, Dict[str, Any]]:
@@ -36,9 +40,11 @@ def create_jira_create_command():
     creation_fields = get_creation_fields_for_command()
 
     # Build dynamic list of field names for --field option
+    # Only truly hardcoded options that won't be generated dynamically
+    # Based on JIRA REST API requirements: only project and summary are mandatory
+    # See: https://developer.atlassian.com/server/jira/platform/jira-rest-api-example-create-issue-7897248/
     hardcoded_fields = {
-        "summary", "description", "priority", "project",
-        "parent", "affected_version"
+        "summary", "project"
     }
 
     # Get custom field names (excluding hardcoded ones and system fields)
@@ -62,17 +68,15 @@ def create_jira_create_command():
     # Import json_option decorator
     from devflow.cli.main import json_option
 
-    # Define the base command (same as before)
+    # Define the base command
+    # Only hardcode JIRA API mandatory fields (project, summary) plus special DAF options
     @click.command(name="create")
     @click.argument("issue_type", type=click.Choice(["epic", "spike", "story", "task", "bug"], case_sensitive=False))
     @json_option
     @click.option("--summary", help="Issue summary (will prompt if not provided)")
-    @click.option("--description", help="Issue description")
-    @click.option("--description-file", type=click.Path(exists=True), help="File with description")
-    @click.option("--priority", type=click.Choice(["Critical", "Major", "Normal", "Minor"]), help="Issue priority (default: Major for bug/story, Normal for task)")
     @click.option("--project", help="JIRA project key (prompts to save if not in config)")
-    @click.option("--parent", help="Parent issue key to link to (epic for story/task/bug, parent for sub-task)")
-    @click.option("--affected-version", help="Affected version (bugs only, uses config default if not specified)")
+    @click.option("--parent", help="Parent issue key (epic for story/task/bug, parent epic for epic)")
+    @click.option("--description-file", type=click.Path(exists=True), help="File with description (companion to --description)")
     @click.option("--linked-issue", help="Type of relationship (e.g., 'blocks', 'is blocked by', 'relates to'). Use with --issue")
     @click.option("--issue", help="Issue key to link to (e.g., PROJ-12345). Use with --linked-issue")
     @click.option("--field", "-f", multiple=True, help=field_help)
@@ -82,41 +86,29 @@ def create_jira_create_command():
         ctx: click.Context,
         issue_type: str,
         summary: str,
-        description: str,
-        description_file: str,
-        priority: str,
         project: str,
         parent: str,
-        affected_version: str,
+        description_file: str,
         linked_issue: str,
         issue: str,
         field: tuple,
         create_session: bool,
         interactive: bool,
-        **kwargs  # Capture dynamic options
+        **kwargs  # Capture ALL dynamic options (description, priority, components, labels, versions, etc.)
     ):
         from devflow.cli.commands.jira_create_commands import create_issue
         from rich.console import Console
 
         console = Console()
 
-        # Set default priority based on issue type if not specified
-        if not priority:
-            priority = "Normal" if issue_type.lower() == "task" else "Major"
-
         # Parse --field options into custom_fields dict
-        custom_fields = {}
-        if field:
-            for field_str in field:
-                if '=' not in field_str:
-                    console.print(f"[yellow]⚠[/yellow] Invalid field format: '{field_str}'. Expected format: field_name=value")
-                    continue
-
-                field_name, field_value = field_str.split('=', 1)
-                custom_fields[field_name.strip()] = field_value.strip()
+        # Only allow custom fields (customfield_*), not system fields
+        # Will exit with error if any system field is used via --field
+        creation_fields = get_creation_fields_for_command()
+        custom_fields = parse_field_options(field, creation_fields)
 
         # Separate system fields from kwargs (non-customfield_* fields)
-        # These come from dynamically generated CLI options like --components, --labels
+        # These come from dynamically generated CLI options like --description, --priority, --parent, --components, --labels
         system_fields = {}
         for field_name, field_value in kwargs.items():
             if field_value is not None:  # Only include if value was provided
@@ -124,6 +116,38 @@ def create_jira_create_command():
 
         # Extract output_json from context
         output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+
+        # Extract formerly hardcoded fields from system_fields (now dynamic)
+        # Note: DON'T pop these yet - create_issue() needs them in system_fields for validation
+        # They will be extracted inside create_issue() after _get_required_system_fields() runs
+        # Exception: parent is still a hardcoded parameter because it has special mapping logic
+        priority = system_fields.get('priority', None)
+        description = system_fields.get('description', None)
+        affected_version = system_fields.get('versions', None)
+
+        # Unwrap tuple from Click's multiple=True option if needed
+        # --affects-versions creates a tuple like ('ansible-saas-ga',) even with single value
+        if affected_version and isinstance(affected_version, tuple) and len(affected_version) > 0:
+            affected_version = affected_version[0]
+
+        # Convert components tuple to list (Click's multiple=True creates tuples)
+        # --components ansible-saas creates ('ansible-saas',) but we need ['ansible-saas']
+        if 'components' in system_fields:
+            components_value = system_fields['components']
+            if isinstance(components_value, tuple):
+                system_fields['components'] = list(components_value)
+
+        # Convert labels tuple to list
+        if 'labels' in system_fields:
+            labels_value = system_fields['labels']
+            if isinstance(labels_value, tuple):
+                system_fields['labels'] = list(labels_value)
+
+        # Set default priority based on issue type if not specified
+        if not priority:
+            priority = "Normal" if issue_type.lower() == "task" else "Major"
+            # Add default priority to system_fields so it's available for validation
+            system_fields['priority'] = priority
 
         create_issue(
             issue_type=issue_type.lower(),
@@ -170,43 +194,19 @@ def create_jira_create_command():
 
     # Dynamically add CLI options for JIRA system fields (non-custom fields)
     # Custom fields (customfield_*) are handled via --field key=value
-    # System fields (components, labels, etc.) get dedicated CLI options
-
-    if creation_fields:
-        for field_name, field_info in creation_fields.items():
-            field_id = field_info.get("id", "")
-
-            # Skip custom fields - they use --field instead
-            if field_id.startswith("customfield_"):
-                continue
-
-            # Skip fields that already have dedicated options (summary, description, priority, etc.)
-            if field_name in ["summary", "description", "priority", "project", "issuetype", "issue_type", "reporter", "assignee"]:
-                continue
-
-            # Add CLI option for this system field
-            # Normalize field name for CLI: remove slashes, replace underscores with hyphens
-            normalized_field_name = field_name.replace('/', '').replace('_', '-')
-            option_name = f"--{normalized_field_name}"
-            field_display_name = field_info.get("name", field_name)
-            field_type = field_info.get("type", "string")
-
-            # Determine if this is a list field
-            is_list = field_type in ["array", "list"]
-
-            help_text = f"{field_display_name}"
-            if field_info.get("allowed_values"):
-                # Extract component names from allowed_values (which are dict strings)
-                # Skip this for now - allowed_values format is complex
-                pass
-
-            # Add the option - use field_id as the parameter name since that's what JIRA expects
-            jira_create_base = click.option(
-                option_name,
-                field_id,  # Use field ID (e.g., "components") as the parameter name
-                help=help_text,
-                multiple=is_list,
-                default=None
-            )(jira_create_base)
+    # System fields (description, priority, components, labels, versions, etc.) get dedicated CLI options
+    # Exclude from dynamic generation:
+    # - JIRA API mandatory fields: project, summary
+    # - issuetype: CLI argument (not option)
+    # - parent: Special hardcoded option with mapping logic (maps to epic_link, parent_link, etc. based on issue type)
+    hardcoded_fields = {
+        "summary", "project", "parent", "issuetype", "issue_type",
+        "epic_link", "parent_link"  # Don't generate these - parent option handles them
+    }
+    jira_create_base = add_dynamic_system_field_options(
+        jira_create_base,
+        creation_fields,
+        hardcoded_fields
+    )
 
     return jira_create_base

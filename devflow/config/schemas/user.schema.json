@@ -1,0 +1,181 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://devaiflow.dev/schemas/user.schema.json",
+  "title": "User Configuration",
+  "description": "User personal preferences configuration",
+  "type": "object",
+  "properties": {
+    "backend_config_source": {
+      "type": "string",
+      "enum": ["local", "central_db"],
+      "description": "Configuration source: 'local' or 'central_db' (future)"
+    },
+    "repos": {
+      "type": "object",
+      "description": "Repository configuration",
+      "properties": {
+        "workspaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique workspace name (e.g., 'primary', 'product-a')"
+              },
+              "path": {
+                "type": "string",
+                "description": "Absolute or home-relative path to workspace directory"
+              }
+            },
+            "required": ["name", "path"],
+            "additionalProperties": false
+          }
+        },
+        "last_used_workspace": {
+          "type": ["string", "null"],
+          "description": "Name of last used workspace"
+        },
+        "detection": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "description": "Detection method"
+            },
+            "fallback": {
+              "type": "string",
+              "description": "Fallback method"
+            }
+          },
+          "additionalProperties": false
+        },
+        "keywords": {
+          "type": "object",
+          "description": "Keyword to repository mappings",
+          "additionalProperties": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      },
+      "required": ["workspaces"],
+      "additionalProperties": false
+    },
+    "time_tracking": {
+      "type": "object",
+      "properties": {
+        "auto_start": {
+          "type": "boolean",
+          "description": "Automatically start time tracking"
+        },
+        "auto_pause_after": {
+          "type": ["string", "null"],
+          "description": "Auto-pause after duration (e.g., '30m')"
+        },
+        "reminder_interval": {
+          "type": ["string", "null"],
+          "description": "Reminder interval (e.g., '2h')"
+        }
+      },
+      "additionalProperties": false
+    },
+    "session_summary": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["local", "ai", "both"],
+          "description": "Summary generation mode"
+        },
+        "api_key_env": {
+          "type": "string",
+          "description": "Environment variable name for Claude API"
+        }
+      },
+      "additionalProperties": false
+    },
+    "templates": {
+      "type": "object",
+      "properties": {
+        "auto_create": {
+          "type": "boolean",
+          "description": "Automatically create templates for new directories"
+        },
+        "auto_use": {
+          "type": "boolean",
+          "description": "Automatically use matching templates"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context_files": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "File path (local) or URL"
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable description"
+              },
+              "hidden": {
+                "type": "boolean",
+                "description": "Hide from TUI"
+              }
+            },
+            "required": ["path", "description"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "prompts": {
+      "type": "object",
+      "description": "User prompt preferences",
+      "additionalProperties": true
+    },
+    "pr_template_url": {
+      "type": ["string", "null"],
+      "description": "URL to PR/MR template"
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["file", "django"],
+          "description": "Storage backend type"
+        }
+      },
+      "additionalProperties": false
+    },
+    "mock_services": {
+      "type": ["object", "null"],
+      "description": "Mock services configuration (reserved for future use)",
+      "additionalProperties": true
+    },
+    "gcp_vertex_region": {
+      "type": ["string", "null"],
+      "description": "GCP Vertex AI region"
+    },
+    "update_checker_timeout": {
+      "type": "integer",
+      "description": "Timeout in seconds for update check requests",
+      "default": 10
+    },
+    "jira_affected_version": {
+      "type": ["string", "null"],
+      "description": "User's current affected version for bug creation (e.g., 'v1.0.0')"
+    }
+  },
+  "required": ["repos"],
+  "additionalProperties": false
+}

@@ -33,8 +33,14 @@ daf jira view PROJ-12345 --json
 ### Create JIRA Issues
 
 **IMPORTANT:** JIRA fields are handled differently based on type:
-- **System fields** (components, labels, etc.): Use dedicated CLI options like `--components`, `--labels`
+- **System fields** (reporter, assignee, components, labels, etc.): Use dedicated CLI options like `--reporter`, `--assignee`, `--components`, `--labels`
 - **Custom fields** (customfield_*): Use `--field field_name=value` format
+
+**CRITICAL ERROR PREVENTION:**
+- ❌ NEVER use `--field` with system fields (reporter, assignee, components, labels)
+- ✅ System fields MUST use their dedicated options: `--reporter jdoe`, `--assignee alice`, `--components backend`
+- If you use `--field reporter=jdoe`, the command will **EXIT WITH ERROR**
+- Error message will tell you: `✗ 'reporter' is a system field. Use --reporter option instead of --field`
 
 **Note:** Components are automatically used from team.json if configured. If required but not configured, you'll get a helpful error message with solutions.
 
@@ -44,9 +50,10 @@ daf jira create bug --summary "Bug title" --priority Major --parent PROJ-1234 --
 daf jira create story --summary "Story title" --parent PROJ-1234 --description "..."
 daf jira create task --summary "Task title" --parent PROJ-1234 --description "..."
 
-# Create with system fields
-daf jira create bug --summary "Production bug" --components backend --labels urgent
-daf jira create story --summary "New feature" --components ui --security-level Internal
+# Create with system fields (reporter, assignee, components, labels, etc.)
+daf jira create bug --summary "Production bug" --reporter jdoe --components backend --labels urgent
+daf jira create story --summary "New feature" --assignee alice --components ui --security-level Internal
+daf jira create task --summary "Maintenance task" --reporter jdoe --assignee bob --components backend
 
 # Create with acceptance criteria (use --field, NOT --acceptance-criteria which no longer exists)
 # RECOMMENDED: Use heredoc for long acceptance criteria to avoid shell special character issues
@@ -198,8 +205,14 @@ EOF
 ### Update JIRA Issues
 
 **IMPORTANT:** JIRA fields are handled differently based on type (same as create):
-- **System fields** (components, labels, etc.): Use dedicated CLI options like `--components`, `--labels`
+- **System fields** (reporter, assignee, components, labels, etc.): Use dedicated CLI options like `--reporter`, `--assignee`, `--components`, `--labels`
 - **Custom fields** (customfield_*): Use `--field field_name=value` format
+
+**CRITICAL ERROR PREVENTION:**
+- ❌ NEVER use `--field` with system fields (reporter, assignee, components, labels)
+- ✅ System fields MUST use their dedicated options: `--reporter jdoe`, `--assignee alice`, `--components backend`
+- If you use `--field reporter=jdoe`, the command will **EXIT WITH ERROR**
+- Error message will tell you: `✗ 'reporter' is a system field. Use --reporter option instead of --field`
 
 ```bash
 # Update issue fields
@@ -207,9 +220,10 @@ daf jira update PROJ-12345 --priority Major --field field_name=value
 daf jira update PROJ-12345 --status "In Progress"
 daf jira update PROJ-12345 --git-pull-request "https://github.com/..."
 
-# Update with system fields (components, labels, etc.)
-daf jira update PROJ-12345 --components ansible-saas --labels backend,urgent
-daf jira update PROJ-12345 --components backend --security-level Internal
+# Update with system fields (reporter, assignee, components, labels, etc.)
+daf jira update PROJ-12345 --assignee alice --components ansible-saas --labels backend,urgent
+daf jira update PROJ-12345 --reporter jdoe --components backend --security-level Internal
+daf jira update PROJ-12345 --assignee bob --reporter alice --components backend
 
 # Update description - use heredoc for long/multi-line descriptions
 daf jira update PROJ-12345 --description "$(cat <<'EOF'
@@ -394,6 +408,9 @@ export JIRA_AUTH_TYPE="Bearer"
 # Optional: Custom JIRA URL
 export JIRA_URL="https://jira.example.com"
 
+# Optional: Enable debug logging for JIRA API calls
+export DEVAIFLOW_DEBUG=1
+
 # GitHub integration (for private repo access)
 export GITHUB_TOKEN="your-github-token"
 ```
@@ -576,19 +593,77 @@ daf jira create story --help
 - Run `daf config refresh-jira-fields` to update field definitions from JIRA
 - Use `daf jira create <type> --help` to see discovered fields for that issue type
 
+## Configuration Management
+
+### View Merged Configuration
+
+```bash
+# Display the final merged configuration from all sources
+daf config show
+
+# JSON output for scripting
+daf config show --json
+```
+
+**What it shows:**
+- The complete configuration after merging all 5 sources:
+  1. `backends/jira.json` - Backend configuration (JIRA API settings, transitions, field mappings)
+  2. `ENTERPRISE.md` - Enterprise-level overrides
+  3. `organization.json` - Organization settings (project, sync filters)
+  4. `team.json` - Team settings (custom/system field defaults, components, labels)
+  5. `USER.md` - User preferences (workspace, affected version)
+
+**Why use this:**
+- Understand what configuration is actually being used at runtime
+- Debug configuration issues by seeing the final merged result
+- Verify team/organization defaults are being applied correctly
+- Check field mappings and available custom fields
+
+### View Available JIRA Fields
+
+```bash
+# Show all custom fields discovered from JIRA
+daf config show-fields
+
+# JSON output
+daf config show-fields --json
+```
+
+### View Sync Filters
+
+```bash
+# Show current JIRA sync filter configuration
+daf config show-sync-filters
+
+# JSON output
+daf config show-sync-filters --json
+```
+
+### Refresh JIRA Field Mappings
+
+```bash
+# Update cached JIRA field definitions
+daf config refresh-jira-fields
+
+# JSON output
+daf config refresh-jira-fields --json
+```
+
 ## Tips for Claude Code Sessions
 
 1. **ALWAYS use JIRA Wiki markup in issue descriptions** - NOT Markdown
 2. **Use `daf jira view` to read tickets** - More reliable than curl
 3. **Always use `--parent` when creating issues** - Links to epic/parent
-4. **Use correct field syntax**:
-   - System fields: `--components ansible-saas --labels backend`
+4. **Use correct field syntax (CRITICAL - prevents errors)**:
+   - System fields: `--reporter jdoe --assignee alice --components backend --labels urgent`
    - Custom fields: `--field acceptance_criteria="..." --field workstream="Platform"`
+   - ❌ NEVER mix them: `--field reporter=jdoe` will EXIT WITH ERROR
 5. **Add notes regularly** - Track progress with `daf note`
 6. **Check session type** - Read-only constraints enforced for ticket_creation and investigation
 7. **Discover available fields** - Run `daf jira create <type> --help` to see all options
 8. **Refer to DAF_AGENTS.md for templates** - Project-specific JIRA issue templates
 9. **Use `--json` for automation** - All commands support JSON output
+10. **View merged config** - Run `daf config show` to see final configuration from all sources
 
 ## See Also
 

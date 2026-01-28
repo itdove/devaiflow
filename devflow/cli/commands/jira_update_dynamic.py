@@ -5,6 +5,10 @@ from typing import Dict, Any, Optional
 from devflow.config.loader import ConfigLoader
 from devflow.jira.client import JiraClient
 from devflow.jira.field_mapper import JiraFieldMapper
+from devflow.cli.commands.jira_field_utils import (
+    parse_field_options,
+    add_dynamic_system_field_options,
+)
 
 
 def get_editable_fields_for_command() -> Dict[str, Dict[str, Any]]:
@@ -101,17 +105,10 @@ def create_jira_update_command():
         from devflow.cli.commands.jira_update_command import update_jira_issue
 
         # Parse --field options into custom_fields dict
-        custom_fields = {}
-        if field:
-            for field_str in field:
-                if '=' not in field_str:
-                    from rich.console import Console
-                    console = Console()
-                    console.print(f"[yellow]⚠[/yellow] Invalid field format: '{field_str}'. Expected format: field_name=value")
-                    continue
-
-                field_name, field_value = field_str.split('=', 1)
-                custom_fields[field_name.strip()] = field_value.strip()
+        # Only allow custom fields (customfield_*), not system fields
+        # Will exit with error if any system field is used via --field
+        editable_fields = get_editable_fields_for_command()
+        custom_fields = parse_field_options(field, editable_fields)
 
         # Separate system fields from kwargs (non-customfield_* fields)
         # These come from dynamically generated CLI options like --components, --labels
@@ -149,38 +146,13 @@ def create_jira_update_command():
     # Dynamically add CLI options for JIRA system fields (non-custom fields)
     # Custom fields (customfield_*) are handled via --field key=value
     # System fields (components, labels, etc.) get dedicated CLI options
-
-    if editable_fields:
-        for field_name, field_info in editable_fields.items():
-            field_id = field_info.get("id", "")
-
-            # Skip custom fields - they use --field instead
-            if field_id.startswith("customfield_"):
-                continue
-
-            # Skip fields that already have dedicated options
-            if field_name in ["summary", "description", "priority", "issuetype", "issue_type", "reporter", "assignee", "status"]:
-                continue
-
-            # Add CLI option for this system field
-            # Normalize field name for CLI: remove slashes, replace underscores with hyphens
-            normalized_field_name = field_name.replace('/', '').replace('_', '-')
-            option_name = f"--{normalized_field_name}"
-            field_display_name = field_info.get("name", field_name)
-            field_type = field_info.get("type", "string")
-
-            # Determine if this is a list field
-            is_list = field_type in ["array", "list"]
-
-            help_text = f"{field_display_name}"
-
-            # Add the option - use field_id as the parameter name since that's what JIRA expects
-            jira_update_base = click.option(
-                option_name,
-                field_id,  # Use field ID (e.g., "components") as the parameter name
-                help=help_text,
-                multiple=is_list,
-                default=None
-            )(jira_update_base)
+    hardcoded_fields = {
+        "summary", "description", "priority", "assignee", "issuetype", "issue_type", "status"
+    }
+    jira_update_base = add_dynamic_system_field_options(
+        jira_update_base,
+        editable_fields,
+        hardcoded_fields
+    )
 
     return jira_update_base
