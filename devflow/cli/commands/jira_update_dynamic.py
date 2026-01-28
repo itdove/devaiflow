@@ -114,7 +114,9 @@ def create_jira_update_command():
         # These come from dynamically generated CLI options like --components, --labels
         system_fields = {}
         for field_name, field_value in kwargs.items():
-            if field_value is not None:  # Only include if value was provided
+            # Only include if value was actually provided (not None, not empty tuple/list)
+            # Empty tuples/lists mean the CLI option exists but wasn't used
+            if field_value is not None and field_value != () and field_value != []:
                 system_fields[field_name] = field_value
 
         update_jira_issue(
