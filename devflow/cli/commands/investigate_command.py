@@ -110,6 +110,7 @@ def create_investigation_session(
     parent: Optional[str] = None,
     name: Optional[str] = None,
     path: Optional[str] = None,
+    workspace: Optional[str] = None,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
@@ -124,6 +125,7 @@ def create_investigation_session(
         parent: Optional parent issue key (for tracking investigation under an epic)
         name: Optional session name (auto-generated from goal if not provided)
         path: Optional project path (bypasses interactive selection if provided)
+        workspace: Optional workspace name (overrides session default and config default)
     """
     from devflow.session.manager import SessionManager
     from devflow.config.loader import ConfigLoader
@@ -173,6 +175,7 @@ def create_investigation_session(
         console_print(f"[dim]Auto-generated session name: {name}[/dim]")
 
     # Determine project path
+    selected_workspace_name = None
     if path is not None:
         # Use provided path
         project_path = str(Path(path).absolute())
@@ -186,7 +189,7 @@ def create_investigation_session(
     else:
         # Prompt for repository selection from workspace
         from devflow.cli.commands.jira_new_command import _prompt_for_repository_selection
-        project_path = _prompt_for_repository_selection(config)
+        project_path, selected_workspace_name = _prompt_for_repository_selection(config, workspace_flag=workspace)
         if not project_path:
             # User cancelled or no workspace configured
             if is_json_mode():
@@ -243,6 +246,11 @@ def create_investigation_session(
     # Set parent for tracking if provided
     if parent:
         session.issue_key = parent
+
+    # AAP-64296: Store selected workspace in session
+    if selected_workspace_name:
+        session.workspace_name = selected_workspace_name
+
     session_manager.update_session(session)
 
     console_print(f"\n[green]✓[/green] Created session [cyan]{name}[/cyan] (session_type: [yellow]investigation[/yellow])")

@@ -296,6 +296,7 @@ def create_jira_ticket_session(
     name: Optional[str] = None,
     path: Optional[str] = None,
     branch: Optional[str] = None,
+    workspace: Optional[str] = None,
     affected_version: Optional[str] = None,
 ) -> None:
     """Create a new session for issue tracker ticket creation.
@@ -312,6 +313,7 @@ def create_jira_ticket_session(
         name: Optional session name (auto-generated from goal if not provided)
         path: Optional project path (bypasses interactive selection if provided)
         branch: Optional git branch name
+        workspace: Optional workspace name (overrides session default and config default)
         affected_version: Optional affected version (required for bugs)
     """
     from devflow.session.manager import SessionManager
@@ -364,6 +366,7 @@ def create_jira_ticket_session(
         console_print(f"[dim]Auto-generated session name: {name}[/dim]")
 
     # Determine project path
+    selected_workspace_name = None
     if path is not None:
         # Use provided path
         project_path = str(Path(path).absolute())
@@ -376,7 +379,7 @@ def create_jira_ticket_session(
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
     else:
         # Prompt for repository selection from workspace (similar to daf new and daf open)
-        project_path = _prompt_for_repository_selection(config)
+        project_path, selected_workspace_name = _prompt_for_repository_selection(config, workspace_flag=workspace)
         if not project_path:
             # User cancelled or no workspace configured
             return
@@ -430,6 +433,11 @@ def create_jira_ticket_session(
 
     # Set session_type to "ticket_creation"
     session.session_type = "ticket_creation"
+
+    # AAP-64296: Store selected workspace in session
+    if selected_workspace_name:
+        session.workspace_name = selected_workspace_name
+
     session_manager.update_session(session)
 
     console_print(f"\n[green]✓[/green] Created session [cyan]{name}[/cyan] (session_type: [yellow]ticket_creation[/yellow])")
@@ -966,14 +974,15 @@ def _build_ticket_creation_prompt(
     return "\n".join(prompt_parts)
 
 
-def _prompt_for_repository_selection(config) -> Optional[str]:
+def _prompt_for_repository_selection(config, workspace_flag: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
     """Prompt user to select a repository from workspace.
 
     Args:
         config: Configuration object
+        workspace_flag: Optional workspace name from command line flag
 
     Returns:
-        Project path string if selected, None if cancelled or no workspace
+        Tuple of (project_path, workspace_name) if selected, (None, None) if cancelled
     """
     from rich.prompt import Prompt
     from devflow.cli.utils import select_workspace, get_workspace_path
@@ -981,7 +990,7 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
     # Select workspace using priority resolution system
     selected_workspace_name = select_workspace(
         config,
-        workspace_flag=None,  # No --workspace flag for jira new
+        workspace_flag=workspace_flag,  # Use workspace from --workspace flag if provided
         session=None,  # No existing session yet
         skip_prompt=False  # Always prompt for workspace selection
     )
@@ -990,21 +999,21 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
         # No workspace selected - fall back to current directory
         console_print(f"[yellow]⚠[/yellow] No workspace selected")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd())
+        return str(Path.cwd()), None
 
     # Get workspace path from workspace name
     workspace_path = get_workspace_path(config, selected_workspace_name)
     if not workspace_path:
         console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd())
+        return str(Path.cwd()), None
 
     workspace = Path(workspace_path).expanduser()
 
     if not workspace.exists() or not workspace.is_dir():
         console_print(f"[yellow]⚠[/yellow] Workspace directory does not exist: {workspace}")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd())
+        return str(Path.cwd()), None
 
     console_print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
 
@@ -1019,13 +1028,13 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
     except Exception as e:
         console_print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd())
+        return str(Path.cwd()), None
 
     if not repo_options:
         console_print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
         console_print(f"[dim]Make sure your workspace contains git repositories.[/dim]")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd())
+        return str(Path.cwd()), None
 
     # Display available repositories
     console_print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
@@ -1043,12 +1052,12 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
     # Validate input is not empty
     if not selection or selection.strip() == "":
         console_print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(repo_options)}), repository name, or 'cancel'/'q'")
-        return None
+        return None, None
 
     # Handle cancel
     if selection.lower() in ["cancel", "q"]:
         console_print(f"\n[yellow]Cancelled[/yellow]")
-        return None
+        return None, None
 
     # Check if it's a number (selecting from list)
     if selection.isdigit():
@@ -1057,10 +1066,10 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
             repo_name = repo_options[repo_index]
             console_print(f"[dim]Selected: {repo_name}[/dim]")
             project_path = workspace / repo_name
-            return str(project_path)
+            return str(project_path), selected_workspace_name
         else:
             console_print(f"[red]✗[/red] Invalid selection. Please choose 1-{len(repo_options)}")
-            return None
+            return None, None
 
     # Otherwise treat as repository name
     repo_name = selection
@@ -1070,6 +1079,6 @@ def _prompt_for_repository_selection(config) -> Optional[str]:
         console_print(f"[yellow]⚠[/yellow] Repository not found: {project_path}")
         if not Confirm.ask("Use this path anyway?", default=False):
             console_print(f"\n[yellow]Cancelled[/yellow]")
-            return None
+            return None, None
 
-    return str(project_path)
+    return str(project_path), selected_workspace_name
