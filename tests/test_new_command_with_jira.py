@@ -216,6 +216,8 @@ def test_daf_new_sets_status_paused_after_claude_exits(temp_daf_home, monkeypatc
         # Simulate Claude Code exiting successfully
         class CompletedProcess:
             returncode = 0
+            stdout = ""  # Empty stdout for git commands
+            stderr = ""  # Empty stderr for git commands
         return CompletedProcess()
 
     monkeypatch.setattr("subprocess.run", mock_subprocess_run)
