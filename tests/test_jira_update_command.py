@@ -474,7 +474,8 @@ def test_get_ticket_pr_links_without_cached_field_mappings(mock_jira_client, mon
                 "fields": {
                     "customfield_12310220": {
                         "name": "Git Pull Request",
-                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
+                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
+                        "operations": ["set"]
                     }
                 }
             }
@@ -537,7 +538,8 @@ def test_get_ticket_pr_links_with_empty_field_mappings(mock_jira_client, monkeyp
                 "fields": {
                     "customfield_12310220": {
                         "name": "Git Pull Request",
-                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
+                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
+                        "operations": ["set"]
                     }
                 }
             }
@@ -632,7 +634,8 @@ def test_multiple_pr_creation_scenario(mock_jira_client, monkeypatch):
                 "fields": {
                     "customfield_12310220": {
                         "name": "Git Pull Request",
-                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
+                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
+                        "operations": ["set"]
                     }
                 }
             }
