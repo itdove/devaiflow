@@ -187,11 +187,14 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
     Supports:
     - file:// URLs (local filesystem)
     - http:// and https:// URLs (GitHub, GitLab, etc.)
+    - Plain local paths (e.g., /path/to/configs or ~/path/to/configs)
 
     Args:
         config_url: Base URL or path to config files directory
                     Examples:
                     - file:///path/to/configs
+                    - /path/to/configs (plain path)
+                    - ~/path/to/configs (home directory expansion)
                     - https://github.com/ansible-saas/devflow-for-red-hatters/configs
         config_filename: Name of config file to download (e.g., "ENTERPRISE.md")
 
@@ -200,9 +203,20 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
 
     Raises:
         ValueError: If URL format is unsupported
-        FileNotFoundError: If file:// path doesn't exist
+        FileNotFoundError: If local path doesn't exist
         requests.HTTPError: If HTTP request fails
     """
+    # Handle plain local paths (without file:// scheme)
+    if not config_url.startswith(('file://', 'http://', 'https://')):
+        # Plain local path - expand user directory and resolve
+        local_path = Path(config_url).expanduser().resolve()
+        config_file = local_path / config_filename
+
+        if not config_file.exists():
+            raise FileNotFoundError(f"Config file not found: {config_file}")
+
+        return config_file.read_text(encoding='utf-8')
+
     if config_url.startswith('file://'):
         # Local file path
         local_path = Path(config_url.replace('file://', ''))
@@ -264,9 +278,12 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
             raise ValueError(f"Failed to download config file from {raw_url}: {e}")
 
     else:
+        # This branch should never be reached now that we handle plain paths
         raise ValueError(
             f"Unsupported hierarchical_config_source format: {config_url}\n"
             "Supported formats:\n"
+            "  - /path/to/configs (plain path)\n"
+            "  - ~/path/to/configs (home directory)\n"
             "  - file:///path/to/configs\n"
             "  - https://github.com/user/repo/path\n"
             "  - https://gitlab.com/user/repo/path"
@@ -363,9 +380,12 @@ def install_hierarchical_skills(
                     # This is used for resolving relative paths in skill_url
                     if config_source.startswith('file://'):
                         source_base = Path(config_source.replace('file://', ''))
+                    elif not config_source.startswith(('http://', 'https://')):
+                        # Plain local path - use it directly (expand ~ and resolve)
+                        source_base = Path(config_source).expanduser().resolve()
                     else:
-                        # For remote sources, we can't resolve relative paths
-                        # relative paths only work with file:// sources
+                        # For remote sources (http/https), we can't resolve relative paths
+                        # relative paths only work with local file sources
                         source_base = cs_home
 
                     temp_config_path = source_base / config_file
@@ -389,24 +409,35 @@ def install_hierarchical_skills(
                         skill_dir_name = f"{order_num:02d}-{level_name}"
                         skill_install_path = skills_install_dir / skill_dir_name
 
-                        if not quiet:
-                            console.print(f"[cyan]Installing {level_name} skill from:[/cyan] {skill_url}")
-
                         try:
                             # Download skill content (pass temp_config_path for relative URL resolution)
                             skill_content = download_skill(skill_url, config_file_path=temp_config_path)
 
-                            # Create skill directory
-                            skill_install_path.mkdir(parents=True, exist_ok=True)
-
-                            # Write SKILL.md
+                            # Check if skill already exists and is up-to-date
                             skill_file = skill_install_path / "SKILL.md"
-                            skill_file.write_text(skill_content, encoding='utf-8')
+                            needs_update = True
 
-                            if not quiet:
-                                console.print(f"[green]✓[/green] Installed {level_name} skill to: {skill_install_path}")
+                            if skill_file.exists():
+                                # Compare content
+                                existing_content = skill_file.read_text(encoding='utf-8')
+                                if existing_content == skill_content:
+                                    needs_update = False
+                                    up_to_date.append(skill_dir_name)
 
-                            changed.append(skill_dir_name)
+                            if needs_update:
+                                # Only print "Installing..." if we're actually installing
+                                if not quiet:
+                                    console.print(f"[cyan]Installing {level_name} skill from:[/cyan] {skill_url}")
+                                # Create skill directory
+                                skill_install_path.mkdir(parents=True, exist_ok=True)
+
+                                # Write SKILL.md
+                                skill_file.write_text(skill_content, encoding='utf-8')
+
+                                if not quiet:
+                                    console.print(f"[green]✓[/green] Installed {level_name} skill to: {skill_install_path}")
+
+                                changed.append(skill_dir_name)
 
                         except Exception as e:
                             if not quiet:
@@ -453,11 +484,9 @@ def install_hierarchical_skills(
 
             skill_install_path = skills_install_dir / skill_dir_name
 
-            if not quiet:
-                console.print(f"[cyan]Installing {level_name} skill from:[/cyan] {skill_url}")
-
             if dry_run:
                 if not quiet:
+                    console.print(f"[cyan]Installing {level_name} skill from:[/cyan] {skill_url}")
                     console.print(f"[yellow]Would install to:[/yellow] {skill_install_path}")
                 changed.append(skill_dir_name)
                 continue
@@ -466,17 +495,31 @@ def install_hierarchical_skills(
                 # Download skill content (pass config_path for relative URL resolution)
                 skill_content = download_skill(skill_url, config_file_path=config_path)
 
-                # Create skill directory
-                skill_install_path.mkdir(parents=True, exist_ok=True)
-
-                # Write SKILL.md
+                # Check if skill already exists and is up-to-date
                 skill_file = skill_install_path / "SKILL.md"
-                skill_file.write_text(skill_content, encoding='utf-8')
+                needs_update = True
 
-                if not quiet:
-                    console.print(f"[green]✓[/green] Installed {level_name} skill to: {skill_install_path}")
+                if skill_file.exists():
+                    # Compare content
+                    existing_content = skill_file.read_text(encoding='utf-8')
+                    if existing_content == skill_content:
+                        needs_update = False
+                        up_to_date.append(skill_dir_name)
 
-                changed.append(skill_dir_name)
+                if needs_update:
+                    # Only print "Installing..." if we're actually installing
+                    if not quiet:
+                        console.print(f"[cyan]Installing {level_name} skill from:[/cyan] {skill_url}")
+                    # Create skill directory
+                    skill_install_path.mkdir(parents=True, exist_ok=True)
+
+                    # Write SKILL.md
+                    skill_file.write_text(skill_content, encoding='utf-8')
+
+                    if not quiet:
+                        console.print(f"[green]✓[/green] Installed {level_name} skill to: {skill_install_path}")
+
+                    changed.append(skill_dir_name)
 
             except Exception as e:
                 if not quiet:
