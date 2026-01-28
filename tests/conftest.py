@@ -109,7 +109,25 @@ def temp_daf_home(tmp_path, monkeypatch):
     jira_config.write_text(json.dumps({
         "url": "https://jira.test.com",
         "user": "test-user",
-        "transitions": {}
+        "transitions": {},
+        "field_mappings": {
+            "story_points": {
+                "id": "customfield_12310243",
+                "name": "Story Points",
+                "type": "number"
+            },
+            "sprint": {
+                "id": "customfield_12310940",
+                "name": "Sprint",
+                "type": "string",
+                "schema": "com.atlassian.greenhopper.service.sprint.Sprint"
+            },
+            "epic_link": {
+                "id": "customfield_12311140",
+                "name": "Epic Link",
+                "type": "string"
+            }
+        }
     }, indent=2))
 
     # Create minimal valid organization.json
@@ -158,7 +176,25 @@ def temp_daf_home_no_patches(tmp_path, monkeypatch):
     jira_config.write_text(json.dumps({
         "url": "https://jira.test.com",
         "user": "test-user",
-        "transitions": {}
+        "transitions": {},
+        "field_mappings": {
+            "story_points": {
+                "id": "customfield_12310243",
+                "name": "Story Points",
+                "type": "number"
+            },
+            "sprint": {
+                "id": "customfield_12310940",
+                "name": "Sprint",
+                "type": "string",
+                "schema": "com.atlassian.greenhopper.service.sprint.Sprint"
+            },
+            "epic_link": {
+                "id": "customfield_12311140",
+                "name": "Epic Link",
+                "type": "string"
+            }
+        }
     }, indent=2))
 
     # Create minimal valid organization.json

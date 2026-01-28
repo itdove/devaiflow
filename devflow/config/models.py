@@ -21,8 +21,33 @@ class JiraFiltersConfig(BaseModel):
     """Configuration for issue tracker ticket filters."""
 
     status: List[str] = ["New", "To Do", "In Progress"]
-    required_fields: List[str] = ["sprint", "story-points"]
+    required_fields: Union[List[str], Dict[str, List[str]]] = Field(default_factory=lambda: {
+        "Bug": ["sprint"],
+        "Story": ["sprint", "story_points"],
+        "Task": ["sprint", "story_points"],
+        "Epic": ["sprint"],
+        "Spike": ["sprint", "story_points"]
+    })
     assignee: str = "currentUser()"
+
+    def get_required_fields_for_type(self, issue_type: str) -> List[str]:
+        """Get required fields for a specific issue type.
+
+        Args:
+            issue_type: The JIRA issue type (e.g., "Bug", "Story", "Task")
+
+        Returns:
+            List of required field names for the given issue type.
+            If required_fields is a list (old format), returns that list for all types.
+            If required_fields is a dict (new format), returns the list for the specific type.
+            Returns empty list if type not specified in dict format.
+        """
+        if isinstance(self.required_fields, list):
+            # Old format: same required fields for all types
+            return self.required_fields
+        else:
+            # New format: type-specific required fields
+            return self.required_fields.get(issue_type, [])
 
 
 class JiraBackendConfig(BaseModel):
