@@ -1124,6 +1124,39 @@ Creates single file with all tickets.
         "https://jira.example.com/rest/api/2/myself"
    ```
 
+### Debug Logging
+
+When troubleshooting JIRA API issues, enable debug logging to see full request/response details:
+
+```bash
+# Enable debug logging
+export DEVAIFLOW_DEBUG=1
+
+# Run your JIRA command
+daf jira create bug --summary "Test" --parent PROJ-123
+
+# Disable when done
+unset DEVAIFLOW_DEBUG
+```
+
+**What you'll see:**
+- Full HTTP method and URL
+- Complete request payload (all fields being sent)
+- JIRA server response
+- HTTP status codes
+- Field validation errors from JIRA
+
+**Use cases:**
+- Troubleshooting custom field validation errors
+- Understanding why JIRA rejects ticket creation
+- Debugging field mapping issues
+- Verifying what values are being sent to JIRA
+- Testing JIRA API integration
+
+**Note:** Debug output is automatically disabled when using `--json` flag.
+
+For more details, see [Troubleshooting Guide - JIRA API Debug Logging](11-troubleshooting.md#jira-api-debug-logging).
+
 ### JIRA URL Not Detected
 
 **Error:** API calls fail, or wrong JIRA instance

@@ -408,6 +408,9 @@ export JIRA_AUTH_TYPE="Bearer"
 # Optional: Custom JIRA URL
 export JIRA_URL="https://jira.example.com"
 
+# Optional: Enable debug logging for JIRA API calls
+export DEVAIFLOW_DEBUG=1
+
 # GitHub integration (for private repo access)
 export GITHUB_TOKEN="your-github-token"
 ```

@@ -435,3 +435,79 @@ def get_all_skill_statuses(workspace: str) -> dict[str, str]:
             statuses[skill_name] = status
 
     return statuses
+
+
+def build_claude_command(
+    session_id: str,
+    initial_prompt: str,
+    project_path: Optional[str] = None,
+    workspace_path: Optional[str] = None,
+    config = None
+) -> list:
+    """Build Claude Code command with all necessary --add-dir flags for skills and context files.
+
+    This centralizes the logic for building Claude commands to ensure all session types
+    (daf new, daf jira new, daf investigate, daf open) consistently include all skills
+    and context files.
+
+    Skills discovery order (load order - generic before organization-specific):
+    1. User-level: ~/.claude/skills/
+    2. Workspace-level: <workspace>/.claude/skills/
+    3. Hierarchical: $DEVAIFLOW_HOME/.claude/skills/ (organization-specific)
+    4. Project-level: <project>/.claude/skills/
+
+    Args:
+        session_id: Claude session ID (UUID)
+        initial_prompt: Initial prompt to send to Claude
+        project_path: Project directory path (for project-level skills)
+        workspace_path: Workspace directory path (for workspace-level skills)
+        config: Configuration object (for hierarchical context files)
+
+    Returns:
+        List of command arguments ready for subprocess.run()
+    """
+    # Build base command: prompt must come BEFORE --add-dir flags (positional argument)
+    cmd = ["claude", "--session-id", session_id, initial_prompt]
+
+    # Collect all skills directories
+    skills_dirs = []
+
+    # 1. User-level skills: ~/.claude/skills/
+    user_skills = Path.home() / ".claude" / "skills"
+    if user_skills.exists():
+        skills_dirs.append(str(user_skills))
+
+    # 2. Workspace-level skills: <workspace>/.claude/skills/
+    if workspace_path:
+        workspace_skills = get_workspace_skills_dir(workspace_path)
+        if workspace_skills.exists():
+            skills_dirs.append(str(workspace_skills))
+
+    # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (organization-specific)
+    from devflow.utils.paths import get_cs_home
+    cs_home = get_cs_home()
+    hierarchical_skills = cs_home / ".claude" / "skills"
+    if hierarchical_skills.exists():
+        skills_dirs.append(str(hierarchical_skills))
+
+    # 4. Project-level skills: <project>/.claude/skills/
+    if project_path:
+        project_skills = Path(project_path) / ".claude" / "skills"
+        if project_skills.exists():
+            skills_dirs.append(str(project_skills))
+
+    # Add all discovered skills directories
+    for skills_dir in skills_dirs:
+        cmd.extend(["--add-dir", skills_dir])
+
+    # Add DEVAIFLOW_HOME for hierarchical context files (if they exist)
+    # This allows reading ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
+    if config:
+        from devflow.cli.commands.jira_new_command import _load_hierarchical_context_files
+        hierarchical_files = _load_hierarchical_context_files(config)
+        if hierarchical_files and cs_home.exists():
+            # Only add if not already added (avoid duplication)
+            if str(cs_home) not in skills_dirs:
+                cmd.extend(["--add-dir", str(cs_home)])
+
+    return cmd

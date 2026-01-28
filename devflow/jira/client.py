@@ -211,6 +211,38 @@ class JiraClient(IssueTrackerClient):
 
         timeout = kwargs.pop('timeout', self.timeout)
 
+        # Debug: Log API request details (only if DEVAIFLOW_DEBUG=1 and not in JSON output mode)
+        import os
+        from devflow.cli.utils import is_json_mode
+
+        debug_enabled = os.getenv("DEVAIFLOW_DEBUG") == "1" and not is_json_mode()
+
+        if debug_enabled:
+            import json
+            import logging
+            from rich.console import Console
+
+            logger = logging.getLogger(__name__)
+            console = Console()
+
+            # Log request
+            logger.debug(f"JIRA API Request - {method} {endpoint}")
+            console.print(f"\n[dim]JIRA API Request:[/dim]")
+            console.print(f"[dim]{method} {url}[/dim]")
+
+            # Log payload if present
+            if 'json' in kwargs:
+                logger.debug(f"Payload: {json.dumps(kwargs['json'], indent=2)}")
+                console.print("[dim]Payload:[/dim]")
+                console.print(f"[dim]{json.dumps(kwargs['json'], indent=2)}[/dim]")
+
+            # Log query params if present
+            if 'params' in kwargs:
+                logger.debug(f"Params: {kwargs['params']}")
+                console.print(f"[dim]Params: {kwargs['params']}[/dim]")
+
+            console.print()
+
         try:
             response = requests.request(
                 method=method,
@@ -219,6 +251,24 @@ class JiraClient(IssueTrackerClient):
                 timeout=timeout,
                 **kwargs
             )
+
+            # Debug: Log response (only if DEVAIFLOW_DEBUG=1 and not in JSON output mode)
+            if debug_enabled:
+                logger.debug(f"Response status: {response.status_code}")
+                console.print(f"[dim]Response status: {response.status_code}[/dim]")
+
+                # Log response body for non-2xx responses or if it's small enough
+                if response.status_code >= 300 or len(response.text) < 5000:
+                    try:
+                        response_json = response.json()
+                        logger.debug(f"Response: {json.dumps(response_json, indent=2)}")
+                        console.print(f"[dim]Response:[/dim]")
+                        console.print(f"[dim]{json.dumps(response_json, indent=2)}[/dim]\n")
+                    except Exception:
+                        # Not JSON or too large
+                        logger.debug(f"Response text: {response.text[:500]}")
+                        console.print(f"[dim]Response (first 500 chars): {response.text[:500]}[/dim]\n")
+
             return response
         except requests.exceptions.RequestException as e:
             raise JiraConnectionError(f"JIRA API request failed: {e}")

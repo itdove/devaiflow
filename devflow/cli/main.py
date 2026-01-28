@@ -116,6 +116,10 @@ def _check_and_refresh_jira_fields() -> None:
     # Suppress output if --json flag is present
     is_json_mode = "--json" in sys.argv
 
+    # Skip in mock mode (mock tickets don't need field discovery)
+    if os.getenv("DAF_MOCK_MODE") == "1":
+        return
+
     # Only run if JIRA_API_TOKEN is set (avoid errors for non-JIRA usage)
     if not os.getenv("JIRA_API_TOKEN"):
         return
@@ -1146,8 +1150,13 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
 
     # Prompt for affected_version if creating a bug and not provided
     if issue_type == "bug" and not affected_version:
-        # Simple text prompt - no validation, no choices shown
-        affected_version = click.prompt("Enter affected version for this bug")
+        # Skip prompt in mock mode (use default silently)
+        from devflow.utils import is_mock_mode
+        if is_mock_mode():
+            affected_version = "v1.0.0"
+        else:
+            # Simple text prompt - no validation, no choices shown
+            affected_version = click.prompt("Enter affected version for this bug")
 
     create_jira_ticket_session(issue_type, parent, goal, name, path, branch, affected_version)
 

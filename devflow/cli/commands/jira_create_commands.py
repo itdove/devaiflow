@@ -234,7 +234,9 @@ def _get_required_custom_fields(
     system_fields = {
         "summary", "project",
         "issue_type", "issuetype", "reporter", "assignee",
-        "affected_version", "fixVersions", "versions"
+        "affected_version", "fixVersions", "versions", "affects_version/s",  # Version fields
+        "components", "component/s", "labels", "label/s",  # System fields with dedicated CLI options
+        "description", "priority"  # Already handled as parameters to create_issue
     }
 
     # Loop through all fields in field_mappings
@@ -258,14 +260,8 @@ def _get_required_custom_fields(
             if config_value and config_value != flag_value:
                 console_print(f"[dim]ℹ Current {field_name} in config: \"{config_value}\"[/dim]")
                 console_print(f"[dim]ℹ Command uses {field_name}: \"{flag_value}\"[/dim]")
+                console_print(f"[dim]Not updating config (use 'daf config tui' to change default)[/dim]")
                 console_print()
-
-                if not is_json_mode() and Confirm.ask(f"Update config to use \"{flag_value}\" as default for {field_name}?", default=False):
-                    if not config.jira.custom_field_defaults:
-                        config.jira.custom_field_defaults = {}
-                    config.jira.custom_field_defaults[field_name] = flag_value
-                    config_loader.save_config(config)
-                    console_print(f"[green]✓[/green] Updated config with {field_name} \"{flag_value}\"\n")
 
             custom_fields[field_name] = flag_value
             continue
@@ -344,12 +340,8 @@ def _get_project(config, config_loader, flag_value: Optional[str]) -> Optional[s
         if config.jira.project and config.jira.project != flag_value:
             console_print(f"[dim]ℹ Current project in config: \"{config.jira.project}\"[/dim]")
             console_print(f"[dim]ℹ Command uses project: \"{flag_value}\"[/dim]")
+            console_print(f"[dim]Not updating config (use 'daf config tui' to change default)[/dim]")
             console_print()
-
-            if not is_json_mode() and Confirm.ask(f"Update config.json to use \"{flag_value}\" as default?", default=False):
-                config.jira.project = flag_value
-                config_loader.save_config(config)
-                console_print(f"[green]✓[/green] Updated config.json with project \"{flag_value}\"\n")
 
         return flag_value
 
@@ -433,7 +425,8 @@ def _get_required_system_fields(
     # First pass: Add all fields that were provided via CLI flags (flag_values)
     # This ensures we don't lose CLI-provided values even if fields aren't marked as required
     for field_key, flag_value in flag_values.items():
-        if flag_value is not None and flag_value != () and flag_value != []:
+        # Skip None, empty tuple (from Click multiple=True with no value), and empty list
+        if flag_value is not None and flag_value != () and flag_value != [] and flag_value != "":
             system_fields[field_key] = flag_value
 
     # Second pass: Loop through field_mappings to handle required fields
@@ -453,7 +446,8 @@ def _get_required_system_fields(
 
         # Skip if this field was already added from flag_values in first pass
         field_key = field_id
-        if field_key in system_fields:
+        # Also check field_name in case the key differs (e.g., "component/s" vs "components")
+        if field_key in system_fields or field_name in system_fields or field_id in flag_values or field_name in flag_values:
             continue
 
         # Check if this field is required for the issue type
@@ -543,12 +537,8 @@ def _get_affected_version(config, config_loader, flag_value: Optional[str]) -> s
         if config.jira.affected_version and config.jira.affected_version != flag_value:
             console_print(f"[dim]ℹ Current affected version in config: \"{config.jira.affected_version}\"[/dim]")
             console_print(f"[dim]ℹ Command uses affected version: \"{flag_value}\"[/dim]")
+            console_print(f"[dim]Not updating config (use 'daf config tui' to change default)[/dim]")
             console_print()
-
-            if not is_json_mode() and Confirm.ask(f"Update config.json to use \"{flag_value}\" as default?", default=False):
-                config.jira.affected_version = flag_value
-                config_loader.save_config(config)
-                console_print(f"[green]✓[/green] Updated config.json with affected version \"{flag_value}\"\n")
 
         return flag_value
 
@@ -558,9 +548,13 @@ def _get_affected_version(config, config_loader, flag_value: Optional[str]) -> s
         return config.jira.affected_version
 
     # Case 3: Prompt user with default
-    console_print("\n[yellow]⚠[/yellow] No affected version configured.")
-    console_print("[dim]Example: v1.0.0[/dim]")
-    if not is_json_mode():
+    # Skip prompt in mock mode (use default silently)
+    from devflow.utils import is_mock_mode
+    if is_mock_mode():
+        affected_version = "v1.0.0"
+    elif not is_json_mode():
+        console_print("\n[yellow]⚠[/yellow] No affected version configured.")
+        console_print("[dim]Example: v1.0.0[/dim]")
         affected_version = Prompt.ask(
             "[bold]Enter affected version[/bold]",
             default="v1.0.0"
@@ -866,6 +860,14 @@ def create_issue(
                     console.print(f"  Run [cyan]daf config refresh-jira-fields[/cyan] to discover available fields")
                     continue
 
+                # Validate field is available for this issue type
+                available_for = field_info.get("available_for", [])
+                if available_for and issue_type not in available_for:
+                    console.print(f"[yellow]⚠[/yellow] Field '{field_name}' is not available for {issue_type} issues")
+                    console.print(f"  Available for: {', '.join(available_for)}")
+                    console.print(f"  [dim]Skipping this field[/dim]")
+                    continue
+
                 try:
                     field_id = field_info["id"]
                 except (TypeError, KeyError):
@@ -882,16 +884,41 @@ def create_issue(
 
                 # Build the appropriate value based on field type
                 formatted_value = build_field_value(field_info, field_value, field_mapper)
+
+                # Skip invalid field values (config objects, functions, etc.)
+                # Valid JIRA field values: str, int, float, bool, list, tuple, dict, None
+                if formatted_value is not None and not isinstance(formatted_value, (str, int, float, bool, list, tuple, dict)):
+                    console_print(f"[yellow]⚠[/yellow] Skipping invalid custom field '{field_name}': {type(formatted_value).__name__}")
+                    continue
+
                 create_kwargs[field_id] = formatted_value
 
         # Handle system fields (components, labels, etc.)
         # Merge in this order (later values override earlier):
-        # 1. config.jira.system_field_defaults
+        # 1. config.jira.system_field_defaults (normalize keys to field IDs)
         # 2. required_system_fields (from field_mappings required_for)
         # 3. system_fields (from CLI options)
         merged_system_fields = {}
+
+        # Normalize system_field_defaults keys from field names to field IDs
+        # E.g., "component/s" → "components", "affects_version/s" → "versions"
         if config.jira.system_field_defaults:
-            merged_system_fields.update(config.jira.system_field_defaults)
+            try:
+                mappings = dict(field_mapper.field_mappings) if field_mapper.field_mappings else {}
+            except (TypeError, AttributeError):
+                mappings = {}
+
+            for key, value in config.jira.system_field_defaults.items():
+                # Try to find the field_id for this key
+                field_info = mappings.get(key)
+                if field_info and "id" in field_info:
+                    # Use field_id instead of field_name
+                    normalized_key = field_info["id"]
+                else:
+                    # No mapping found - use key as-is (might be already a field_id)
+                    normalized_key = key
+                merged_system_fields[normalized_key] = value
+
         if required_system_fields:
             merged_system_fields.update(required_system_fields)
         if system_fields:
@@ -938,13 +965,101 @@ def create_issue(
             sys.exit(1)
 
         # Add system fields to create_kwargs (use field IDs directly like "components", "labels")
+        # Skip fields that are already handled as dedicated parameters in create_* methods:
+        # - components: Dedicated parameter, already added to create_kwargs below
+        # - versions: Dedicated parameter (affected_version), already in create_kwargs
+        # - priority: Dedicated parameter, already in create_kwargs
+        # - description: Dedicated parameter, already in create_kwargs
+        DEDICATED_PARAM_FIELDS = {"components", "versions", "priority", "description"}
+
         for field_name, field_value in merged_system_fields.items():
+            # Skip fields with dedicated parameters
+            if field_name in DEDICATED_PARAM_FIELDS:
+                continue
+
             # Skip None and empty collections (empty tuples from Click's multiple=True options)
             if field_value is not None and field_value != () and field_value != []:
-                # System fields use their original names (e.g., "components"), not customfield IDs
+                # Skip invalid field values (config objects, functions, etc.)
+                # Valid JIRA field values: str, int, float, bool, list, tuple, dict
+                if not isinstance(field_value, (str, int, float, bool, list, tuple, dict)):
+                    console_print(f"[yellow]⚠[/yellow] Skipping invalid system field '{field_name}': {type(field_value).__name__}")
+                    continue
+                # System fields use their original names (e.g., "labels"), not customfield IDs
                 create_kwargs[field_name] = field_value
 
-        issue_key = client_method(**create_kwargs)
+        # Add components from merged_system_fields to create_kwargs (has dedicated parameter)
+        if "components" in merged_system_fields:
+            create_kwargs["components"] = merged_system_fields["components"]
+
+        # Create the issue with specific error handling
+        try:
+            issue_key = client_method(**create_kwargs)
+        except JiraValidationError as e:
+            # JIRA validation error - show field errors and server messages
+            error_msg = str(e)
+            if output_json:
+                json_output(
+                    success=False,
+                    error={
+                        "code": "VALIDATION_ERROR",
+                        "message": error_msg,
+                        "field_errors": e.field_errors if hasattr(e, 'field_errors') else {},
+                        "error_messages": e.error_messages if hasattr(e, 'error_messages') else []
+                    }
+                )
+            else:
+                console.print(f"[red]✗[/red] JIRA Validation Error: {error_msg}")
+                if hasattr(e, 'field_errors') and e.field_errors:
+                    console.print("  [red]Field errors from JIRA:[/red]")
+                    for field, msg in e.field_errors.items():
+                        console.print(f"    [red]• {field}: {msg}[/red]")
+                if hasattr(e, 'error_messages') and e.error_messages:
+                    console.print("  [red]Error messages from JIRA:[/red]")
+                    for msg in e.error_messages:
+                        console.print(f"    [red]• {msg}[/red]")
+            sys.exit(1)
+        except JiraAuthError as e:
+            # JIRA authentication error
+            error_msg = str(e)
+            if output_json:
+                json_output(
+                    success=False,
+                    error={"code": "AUTH_ERROR", "message": error_msg}
+                )
+            else:
+                console.print(f"[red]✗[/red] JIRA Authentication Error: {error_msg}")
+            sys.exit(1)
+        except JiraApiError as e:
+            # JIRA API error - show status code and response text
+            error_msg = str(e)
+            if output_json:
+                json_output(
+                    success=False,
+                    error={
+                        "code": "API_ERROR",
+                        "message": error_msg,
+                        "status_code": e.status_code if hasattr(e, 'status_code') else None,
+                        "response_text": e.response_text if hasattr(e, 'response_text') else None
+                    }
+                )
+            else:
+                console.print(f"[red]✗[/red] JIRA API Error: {error_msg}")
+                if hasattr(e, 'status_code'):
+                    console.print(f"  [dim]Status code: {e.status_code}[/dim]")
+                if hasattr(e, 'response_text'):
+                    console.print(f"  [dim]Server response: {e.response_text}[/dim]")
+            sys.exit(1)
+        except JiraConnectionError as e:
+            # JIRA connection error
+            error_msg = str(e)
+            if output_json:
+                json_output(
+                    success=False,
+                    error={"code": "CONNECTION_ERROR", "message": error_msg}
+                )
+            else:
+                console.print(f"[red]✗[/red] JIRA Connection Error: {error_msg}")
+            sys.exit(1)
 
         # Link issue if --linked-issue and --issue provided
         if linked_issue or issue:
@@ -1194,13 +1309,15 @@ def create_issue(
             console.print(f"[red]✗[/red] {e}")
         sys.exit(1)
     except Exception as e:
+        import traceback
         if output_json:
             json_output(
                 success=False,
-                error={"message": f"Unexpected error: {e}", "code": "UNEXPECTED_ERROR"}
+                error={"message": f"Unexpected error: {e}", "code": "UNEXPECTED_ERROR", "traceback": traceback.format_exc()}
             )
         else:
             console.print(f"[red]✗[/red] Unexpected error: {e}")
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
 
 

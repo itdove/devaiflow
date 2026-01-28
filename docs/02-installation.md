@@ -337,6 +337,9 @@ export JIRA_API_TOKEN="your-api-token-here"
 
 # Optional: JIRA URL (defaults to https://jira.example.com)
 export JIRA_URL="https://jira.example.com"
+
+# Optional: Enable debug logging for JIRA API calls (troubleshooting)
+export DEVAIFLOW_DEBUG=1
 ```
 
 **For jira-cli config fallback:**

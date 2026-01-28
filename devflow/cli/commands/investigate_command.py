@@ -328,44 +328,21 @@ def create_investigation_session(
 
     # Launch Claude Code
     try:
-        # Build command
-        cmd = ["claude", "--session-id", ai_agent_session_id, initial_prompt]
+        # Build command with all skills and context directories
+        from devflow.utils.claude_commands import build_claude_command
 
-        # Add skills directories
-        skills_dirs = []
-
-        # User-level skills
-        user_skills = Path.home() / ".claude" / "skills"
-        if user_skills.exists():
-            skills_dirs.append(str(user_skills))
-
-        # Workspace-level skills
+        # Get default workspace path for skills discovery
+        workspace_path = None
         if config and config.repos:
-            from devflow.utils.claude_commands import get_workspace_skills_dir
             workspace_path = config.repos.get_default_workspace_path()
-            if workspace_path:
-                workspace_skills = get_workspace_skills_dir(workspace_path)
-                if workspace_skills.exists():
-                    skills_dirs.append(str(workspace_skills))
 
-        # Project-level skills
-        project_skills = Path(project_path) / ".claude" / "skills"
-        if project_skills.exists():
-            skills_dirs.append(str(project_skills))
-
-        # Add skills directories
-        for skills_dir in skills_dirs:
-            cmd.extend(["--add-dir", skills_dir])
-
-        # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
-        # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
-        from devflow.cli.commands.new_command import _load_hierarchical_context_files
-        from devflow.utils.paths import get_cs_home
-        cs_home = get_cs_home()
-        if cs_home.exists():
-            hierarchical_files = _load_hierarchical_context_files(config)
-            if hierarchical_files:
-                cmd.extend(["--add-dir", str(cs_home)])
+        cmd = build_claude_command(
+            session_id=ai_agent_session_id,
+            initial_prompt=initial_prompt,
+            project_path=project_path,
+            workspace_path=workspace_path,
+            config=config
+        )
 
         # Debug output
         console_print(f"\n[dim]Debug - Command:[/dim]")

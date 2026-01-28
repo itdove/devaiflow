@@ -137,7 +137,8 @@ def _create_mock_jira_ticket(
     parent: str,
     goal: str,
     config,
-    project_path: str
+    project_path: str,
+    affected_version: Optional[str] = None
 ) -> str:
     """Create a mock issue tracker ticket in mock mode.
 
@@ -448,7 +449,8 @@ def create_jira_ticket_session(
             parent=parent,
             goal=goal,
             config=config,
-            project_path=project_path
+            project_path=project_path,
+            affected_version=affected_version
         )
 
         # Output JSON if in JSON mode
@@ -537,45 +539,21 @@ def create_jira_ticket_session(
 
     # Launch Claude Code with the session ID and initial prompt
     try:
-        # Build command: prompt must come BEFORE --add-dir flags (positional argument)
-        cmd = ["claude", "--session-id", ai_agent_session_id, initial_prompt]
+        # Build command with all skills and context directories
+        from devflow.utils.claude_commands import build_claude_command
 
-        # Add all skills directories to allowed paths (auto-approve skill file reads)
-        # Skills can be in 3 locations: user-level, workspace-level, project-level
-        skills_dirs = []
-
-        # 1. User-level skills: ~/.claude/skills/
-        user_skills = Path.home() / ".claude" / "skills"
-        if user_skills.exists():
-            skills_dirs.append(str(user_skills))
-
-        # 2. Workspace-level skills: <workspace>/.claude/skills/
-        # Use default workspace path for skills discovery
+        # Get default workspace path for skills discovery
+        default_workspace_path = None
         if config and config.repos and config.repos.workspaces:
-            from devflow.utils.claude_commands import get_workspace_skills_dir
             default_workspace_path = config.repos.get_default_workspace_path()
-            if default_workspace_path:
-                workspace_skills = get_workspace_skills_dir(default_workspace_path)
-                if workspace_skills.exists():
-                    skills_dirs.append(str(workspace_skills))
 
-        # 3. Project-level skills: <project>/.claude/skills/
-        project_skills = Path(project_path) / ".claude" / "skills"
-        if project_skills.exists():
-            skills_dirs.append(str(project_skills))
-
-        # Add all discovered skills directories AFTER the prompt
-        for skills_dir in skills_dirs:
-            cmd.extend(["--add-dir", skills_dir])
-
-        # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
-        # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
-        from devflow.utils.paths import get_cs_home
-        cs_home = get_cs_home()
-        if cs_home.exists():
-            hierarchical_files = _load_hierarchical_context_files(config)
-            if hierarchical_files:
-                cmd.extend(["--add-dir", str(cs_home)])
+        cmd = build_claude_command(
+            session_id=ai_agent_session_id,
+            initial_prompt=initial_prompt,
+            project_path=project_path,
+            workspace_path=default_workspace_path,
+            config=config
+        )
 
         # Debug: Print command being executed
         console_print(f"\n[dim]Debug - Command:[/dim]")
@@ -896,11 +874,11 @@ def _build_ticket_creation_prompt(
     if parent:
         example_cmd_parts.append(f'--parent {parent}')
 
-    # For bugs, add affected_version parameter (required field)
+    # For bugs, add affects_versions parameter (required field)
     if issue_type == "bug":
         # Use the provided affected_version or show placeholder
         affected_ver = affected_version if affected_version else "VERSION"
-        example_cmd_parts.append(f'--affected-version "{affected_ver}"')
+        example_cmd_parts.append(f'--affects-versions "{affected_ver}"')
 
     # Add system field defaults (components, labels, etc.)
     if system_fields:
@@ -932,9 +910,9 @@ def _build_ticket_creation_prompt(
     # Build instruction strings
     parent_instruction = f"4. IMPORTANT: Link to parent using --parent {parent}" if parent else "4. (Optional) Link to a parent epic using --parent EPIC-KEY if desired"
 
-    # Add affected_version note for bugs
+    # Add affects_versions note for bugs
     if issue_type == "bug":
-        affected_version_note = f"IMPORTANT: For bugs, you MUST specify --affected-version with the version this bug affects."
+        affected_version_note = f"IMPORTANT: For bugs, you MUST specify --affects-versions with the version this bug affects."
     else:
         affected_version_note = None
 

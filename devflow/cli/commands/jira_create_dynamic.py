@@ -125,6 +125,24 @@ def create_jira_create_command():
         description = system_fields.get('description', None)
         affected_version = system_fields.get('versions', None)
 
+        # Unwrap tuple from Click's multiple=True option if needed
+        # --affects-versions creates a tuple like ('ansible-saas-ga',) even with single value
+        if affected_version and isinstance(affected_version, tuple) and len(affected_version) > 0:
+            affected_version = affected_version[0]
+
+        # Convert components tuple to list (Click's multiple=True creates tuples)
+        # --components ansible-saas creates ('ansible-saas',) but we need ['ansible-saas']
+        if 'components' in system_fields:
+            components_value = system_fields['components']
+            if isinstance(components_value, tuple):
+                system_fields['components'] = list(components_value)
+
+        # Convert labels tuple to list
+        if 'labels' in system_fields:
+            labels_value = system_fields['labels']
+            if isinstance(labels_value, tuple):
+                system_fields['labels'] = list(labels_value)
+
         # Set default priority based on issue type if not specified
         if not priority:
             priority = "Normal" if issue_type.lower() == "task" else "Major"

@@ -802,45 +802,21 @@ def create_new_session(
             project_path=project_path, workspace=workspace
         )
 
-        # Build the claude command with session ID and enhanced prompt
-        # Prompt must come BEFORE --add-dir flags (positional argument)
-        cmd = ["claude", "--session-id", session_id, initial_prompt]
+        # Build command with all skills and context directories
+        from devflow.utils.claude_commands import build_claude_command
 
-        # Add all skills directories to allowed paths (auto-approve skill file reads)
-        # Skills can be in 3 locations: user-level, workspace-level, project-level
-        skills_dirs = []
-
-        # 1. User-level skills: ~/.claude/skills/
-        user_skills = Path.home() / ".claude" / "skills"
-        if user_skills.exists():
-            skills_dirs.append(str(user_skills))
-
-        # 2. Workspace-level skills: <workspace>/.claude/skills/
+        # Get default workspace path for skills discovery
+        workspace_path = None
         if config and config.repos:
-            from devflow.utils.claude_commands import get_workspace_skills_dir
             workspace_path = config.repos.get_default_workspace_path()
-            if workspace_path:
-                workspace_skills = get_workspace_skills_dir(workspace_path)
-                if workspace_skills.exists():
-                    skills_dirs.append(str(workspace_skills))
 
-        # 3. Project-level skills: <project>/.claude/skills/
-        project_skills = Path(project_path) / ".claude" / "skills"
-        if project_skills.exists():
-            skills_dirs.append(str(project_skills))
-
-        # Add all discovered skills directories AFTER the prompt
-        for skills_dir in skills_dirs:
-            cmd.extend(["--add-dir", skills_dir])
-
-        # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
-        # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
-        from devflow.utils.paths import get_cs_home
-        cs_home = get_cs_home()
-        if cs_home.exists():
-            hierarchical_files = _load_hierarchical_context_files(config)
-            if hierarchical_files:
-                cmd.extend(["--add-dir", str(cs_home)])
+        cmd = build_claude_command(
+            session_id=session_id,
+            initial_prompt=initial_prompt,
+            project_path=project_path,
+            workspace_path=workspace_path,
+            config=config
+        )
 
         # Set environment variables for the AI agent process
         # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)

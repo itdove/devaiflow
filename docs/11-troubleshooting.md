@@ -587,6 +587,73 @@ Field 'acceptance_criteria' is required
 - All user configuration (JIRA URL, custom field defaults, workspace path, etc.)
 - All session data (sessions, notes, templates)
 
+### JIRA API Debug Logging
+
+**Problem:** JIRA commands fail with cryptic errors and you need to see exactly what's being sent to the API
+
+**Example Errors:**
+- "Field validation failed" without details
+- "Custom field not available for this issue type"
+- "Unknown field error"
+- Silent JIRA API failures
+
+**Solution: Enable Debug Logging**
+
+1. **Set the debug environment variable:**
+   ```bash
+   export DEVAIFLOW_DEBUG=1
+   ```
+
+2. **Run your JIRA command:**
+   ```bash
+   daf jira create bug --summary "Test" --parent PROJ-123
+   ```
+
+3. **You'll see detailed API request/response:**
+   ```
+   JIRA API Request:
+   POST https://jira.example.com/rest/api/2/issue
+   Payload:
+   {
+     "fields": {
+       "project": {"key": "PROJ"},
+       "summary": "Test",
+       "issuetype": {"name": "Bug"},
+       "customfield_12345": "Platform"
+     }
+   }
+
+   JIRA API Response:
+   Status: 400
+   {
+     "errorMessages": [],
+     "errors": {
+       "customfield_12345": "Field is not available for Bug issues"
+     }
+   }
+   ```
+
+4. **Disable debug logging when done:**
+   ```bash
+   unset DEVAIFLOW_DEBUG
+   ```
+
+**What the debug output shows:**
+- Full HTTP method and URL
+- Complete request payload (all fields being sent)
+- JIRA server response
+- HTTP status codes
+- Field validation errors from JIRA
+
+**Use Cases:**
+- Troubleshooting custom field validation errors
+- Understanding why JIRA rejects ticket creation
+- Debugging field mapping issues
+- Verifying what values are being sent to JIRA
+- Testing JIRA API integration
+
+**Note:** Debug output is automatically disabled when using `--json` flag to prevent breaking JSON output format.
+
 ## Conversation Issues
 
 ### Corrupted Conversation File
