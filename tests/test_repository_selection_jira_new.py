@@ -67,8 +67,8 @@ def test_empty_input_returns_none_with_error(mock_workspace, mock_config, monkey
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
 
-    # Verify: Returns None
-    assert result is None
+    # Verify: Returns (None, None)
+    assert result == (None, None)
 
     # Verify: Error message was shown
     error_messages = [msg for msg in console_output if "Empty selection not allowed" in msg]
@@ -96,8 +96,8 @@ def test_whitespace_input_returns_none_with_error(mock_workspace, mock_config, m
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
 
-    # Verify: Returns None
-    assert result is None
+    # Verify: Returns (None, None)
+    assert result == (None, None)
 
     # Verify: Error message was shown
     error_messages = [msg for msg in console_output if "Empty selection not allowed" in msg]
@@ -114,9 +114,10 @@ def test_valid_number_selection_succeeds(mock_workspace, mock_config, monkeypatc
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
 
-    # Verify: Returns path to first repository
+    # Verify: Returns tuple with path to first repository
     assert result is not None
-    assert "repo1" in result or "repo2" in result or "repo3" in result
+    assert result[0] is not None
+    assert "repo1" in result[0] or "repo2" in result[0] or "repo3" in result[0]
 
 
 def test_cancel_returns_none(mock_workspace, mock_config, monkeypatch):
@@ -129,8 +130,8 @@ def test_cancel_returns_none(mock_workspace, mock_config, monkeypatch):
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
 
-    # Verify: Returns None (user cancelled)
-    assert result is None
+    # Verify: Returns (None, None) (user cancelled)
+    assert result == (None, None)
 
 
 def test_valid_repo_name_succeeds(mock_workspace, mock_config, monkeypatch):
@@ -146,9 +147,10 @@ def test_valid_repo_name_succeeds(mock_workspace, mock_config, monkeypatch):
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
 
-    # Verify: Returns path to repo2
+    # Verify: Returns tuple with path to repo2
     assert result is not None
-    assert "repo2" in result
+    assert result[0] is not None
+    assert "repo2" in result[0]
 
 
 def test_invalid_number_returns_none(mock_workspace, mock_config, monkeypatch):
@@ -172,8 +174,8 @@ def test_invalid_number_returns_none(mock_workspace, mock_config, monkeypatch):
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
 
-    # Verify: Returns None
-    assert result is None
+    # Verify: Returns (None, None)
+    assert result == (None, None)
 
     # Verify: Error message was shown
     error_messages = [msg for msg in console_output if "Invalid selection" in msg]
