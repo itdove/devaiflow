@@ -2192,217 +2192,222 @@ class ConfigTUI(App):
         def key_to_id(prefix: str, key: str) -> str:
             return f"#{prefix}_{key.replace('.', '_')}"
 
-        # JIRA settings
-        try:
-            self.config.jira.url = self.query_one(key_to_id("input", "jira.url"), Input).value.strip()
-
-            project_val = self.query_one(key_to_id("input", "jira.project"), Input).value.strip()
-            self.config.jira.project = project_val if project_val else None
-
-            # Components - try dropdown first, fallback to text input
+        # JIRA settings (only in Simple mode)
+        if not self.advanced_mode:
             try:
-                # Try to get from dropdown (ConfigSelect)
-                components_val = self.query_one(key_to_id("select", "jira.components"), Select).value
-                if components_val and components_val != Select.BLANK:
-                    # Single component from dropdown - store as list
-                    if not self.config.jira.system_field_defaults:
-                        self.config.jira.system_field_defaults = {}
-                    self.config.jira.system_field_defaults["components"] = [components_val]
-                elif self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
-                    # Clear components if blank selected
-                    del self.config.jira.system_field_defaults["components"]
-            except:
-                # Fallback to text input (ConfigInput) if dropdown not found
+                self.config.jira.url = self.query_one(key_to_id("input", "jira.url"), Input).value.strip()
+
+                project_val = self.query_one(key_to_id("input", "jira.project"), Input).value.strip()
+                self.config.jira.project = project_val if project_val else None
+
+                # Components - try dropdown first, fallback to text input
                 try:
-                    components_val = self.query_one(key_to_id("input", "jira.components"), Input).value.strip()
-                    if components_val:
-                        components_list = [c.strip() for c in components_val.split(",") if c.strip()]
+                    # Try to get from dropdown (ConfigSelect)
+                    components_val = self.query_one(key_to_id("select", "jira.components"), Select).value
+                    if components_val and components_val != Select.BLANK:
+                        # Single component from dropdown - store as list
                         if not self.config.jira.system_field_defaults:
                             self.config.jira.system_field_defaults = {}
-                        self.config.jira.system_field_defaults["components"] = components_list
+                        self.config.jira.system_field_defaults["components"] = [components_val]
                     elif self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
-                        # Clear components if empty
+                        # Clear components if blank selected
                         del self.config.jira.system_field_defaults["components"]
                 except:
-                    # Neither widget found - skip
-                    pass
+                    # Fallback to text input (ConfigInput) if dropdown not found
+                    try:
+                        components_val = self.query_one(key_to_id("input", "jira.components"), Input).value.strip()
+                        if components_val:
+                            components_list = [c.strip() for c in components_val.split(",") if c.strip()]
+                            if not self.config.jira.system_field_defaults:
+                                self.config.jira.system_field_defaults = {}
+                            self.config.jira.system_field_defaults["components"] = components_list
+                        elif self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
+                            # Clear components if empty
+                            del self.config.jira.system_field_defaults["components"]
+                    except:
+                        # Neither widget found - skip
+                        pass
 
-            # Collect custom field defaults
-            if self.config.jira.field_mappings:
-                # Initialize custom_field_defaults dict if needed
-                if not self.config.jira.custom_field_defaults:
-                    self.config.jira.custom_field_defaults = {}
+                # Collect custom field defaults
+                if self.config.jira.field_mappings:
+                    # Initialize custom_field_defaults dict if needed
+                    if not self.config.jira.custom_field_defaults:
+                        self.config.jira.custom_field_defaults = {}
 
-                # Collect each custom field
-                for field_key, field_info in self.config.jira.field_mappings.items():
-                    if isinstance(field_info, dict) and "id" in field_info:
-                        field_id = field_info["id"]
-                        if isinstance(field_id, str) and field_id.startswith("customfield_"):
-                            # This is a custom field - try to collect its value
-                            config_key = f"jira.custom_field_defaults.{field_key}"
+                    # Collect each custom field
+                    for field_key, field_info in self.config.jira.field_mappings.items():
+                        if isinstance(field_info, dict) and "id" in field_info:
+                            field_id = field_info["id"]
+                            if isinstance(field_id, str) and field_id.startswith("customfield_"):
+                                # This is a custom field - try to collect its value
+                                config_key = f"jira.custom_field_defaults.{field_key}"
 
-                            try:
-                                # Try dropdown first
-                                value = self.query_one(key_to_id("select", config_key), Select).value
-                                if value and value != Select.BLANK:
-                                    self.config.jira.custom_field_defaults[field_key] = value
-                                elif field_key in self.config.jira.custom_field_defaults:
-                                    # Clear if blank selected
-                                    del self.config.jira.custom_field_defaults[field_key]
-                            except:
-                                # Try text input
                                 try:
-                                    value = self.query_one(key_to_id("input", config_key), Input).value.strip()
-                                    if value:
+                                    # Try dropdown first
+                                    value = self.query_one(key_to_id("select", config_key), Select).value
+                                    if value and value != Select.BLANK:
                                         self.config.jira.custom_field_defaults[field_key] = value
                                     elif field_key in self.config.jira.custom_field_defaults:
-                                        # Clear if empty
+                                        # Clear if blank selected
                                         del self.config.jira.custom_field_defaults[field_key]
                                 except:
-                                    # Widget not found - skip this field
-                                    pass
+                                    # Try text input
+                                    try:
+                                        value = self.query_one(key_to_id("input", config_key), Input).value.strip()
+                                        if value:
+                                            self.config.jira.custom_field_defaults[field_key] = value
+                                        elif field_key in self.config.jira.custom_field_defaults:
+                                            # Clear if empty
+                                            del self.config.jira.custom_field_defaults[field_key]
+                                    except:
+                                        # Widget not found - skip this field
+                                        pass
 
-            self.config.jira.time_tracking = self.query_one(key_to_id("checkbox", "jira.time_tracking"), Checkbox).value
+                self.config.jira.time_tracking = self.query_one(key_to_id("checkbox", "jira.time_tracking"), Checkbox).value
 
-            comment_type = self.query_one(key_to_id("select", "jira.comment_visibility_type"), Select).value
-            self.config.jira.comment_visibility_type = comment_type if comment_type != Select.BLANK else None
+                comment_type = self.query_one(key_to_id("select", "jira.comment_visibility_type"), Select).value
+                self.config.jira.comment_visibility_type = comment_type if comment_type != Select.BLANK else None
 
-            comment_val = self.query_one(key_to_id("input", "jira.comment_visibility_value"), Input).value.strip()
-            self.config.jira.comment_visibility_value = comment_val if comment_val else None
+                comment_val = self.query_one(key_to_id("input", "jira.comment_visibility_value"), Input).value.strip()
+                self.config.jira.comment_visibility_value = comment_val if comment_val else None
 
-        except Exception as e:
-            self.notify(f"Error collecting JIRA values: {e}", severity="error")
+            except Exception as e:
+                self.notify(f"Error collecting JIRA values: {e}", severity="error")
 
-        # Repository settings
-        try:
-            # Note: repos.workspace field removed - now using workspaces list
-
-            detection_method = self.query_one(key_to_id("select", "repos.detection.method"), Select).value
-            if detection_method and detection_method != Select.BLANK:
-                self.config.repos.detection.method = detection_method
-
-            detection_fallback = self.query_one(key_to_id("select", "repos.detection.fallback"), Select).value
-            if detection_fallback and detection_fallback != Select.BLANK:
-                self.config.repos.detection.fallback = detection_fallback
-
-            # PR Template URL
-            pr_template_val = self.query_one(key_to_id("input", "pr_template_url"), Input).value.strip()
-            self.config.pr_template_url = pr_template_val if pr_template_val else None
-
-        except Exception as e:
-            self.notify(f"Error collecting repository values: {e}", severity="error")
-
-        # Prompts settings
-        try:
-            # Use _choice_to_bool to convert "true"/"false"/"prompt" to Optional[bool]
-            self.config.prompts.auto_commit_on_complete = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_commit_on_complete"), Select).value
-            )
-
-            self.config.prompts.auto_accept_ai_commit_message = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_accept_ai_commit_message"), Select).value
-            )
-
-            self.config.prompts.auto_create_pr_on_complete = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_create_pr_on_complete"), Select).value
-            )
-
-            pr_status_val = self.query_one(key_to_id("select", "prompts.auto_create_pr_status"), Select).value
-            self.config.prompts.auto_create_pr_status = pr_status_val if pr_status_val and pr_status_val != Select.BLANK else "prompt"
-
-            self.config.prompts.auto_add_issue_summary = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_add_issue_summary"), Select).value
-            )
-
-            self.config.prompts.auto_update_jira_pr_url = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_update_jira_pr_url"), Select).value
-            )
-
-            self.config.prompts.auto_push_to_remote = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_push_to_remote"), Select).value
-            )
-
-            # Use auto_launch_agent (new field) instead of auto_launch_claude (deprecated)
-            self.config.prompts.auto_launch_agent = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_launch_agent"), Select).value
-            )
-            # Also update auto_launch_claude for backward compatibility
-            self.config.prompts.auto_launch_claude = self.config.prompts.auto_launch_agent
-
-            self.config.prompts.auto_checkout_branch = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_checkout_branch"), Select).value
-            )
-
-            sync_val = self.query_one(key_to_id("select", "prompts.auto_sync_with_base"), Select).value
-            self.config.prompts.auto_sync_with_base = sync_val if sync_val != Select.BLANK else None
-
-            self.config.prompts.auto_complete_on_exit = _choice_to_bool(
-                self.query_one(key_to_id("select", "prompts.auto_complete_on_exit"), Select).value
-            )
-
-            branch_strat = self.query_one(key_to_id("select", "prompts.default_branch_strategy"), Select).value
-            self.config.prompts.default_branch_strategy = branch_strat if branch_strat != Select.BLANK else None
-
-            # show_prompt_unit_tests is a boolean field (not tri-state)
-            show_unit_tests = self.query_one(key_to_id("select", "prompts.show_prompt_unit_tests"), Select).value
-            self.config.prompts.show_prompt_unit_tests = (show_unit_tests == "true")
-
-            # auto_load_related_conversations is a boolean field (not tri-state)
-            auto_load_conv = self.query_one(key_to_id("select", "prompts.auto_load_related_conversations"), Select).value
-            self.config.prompts.auto_load_related_conversations = (auto_load_conv == "true")
-
-        except Exception as e:
-            self.notify(f"Error collecting prompts values: {e}", severity="error")
-
-        # AI Agent configuration settings
-        try:
-            # Agent backend selection (only if not enforced by org/team)
-            if not self._get_agent_backend_enforcement_source():
-                # User can choose - collect the value
-                agent_backend_val = self.query_one(key_to_id("select", "agent_backend"), Select).value
-                if agent_backend_val and agent_backend_val != Select.BLANK:
-                    self.config.agent_backend = agent_backend_val
-            # If enforced, keep the value from org/team (already in self.config)
-
-            # Only collect region value if Vertex AI is available (field exists) and using Claude
-            # Always preserve the value even when not using Claude
-            if _is_vertex_ai_available() and self.config.agent_backend == "claude":
-                region_val = self.query_one(key_to_id("select", "gcp_vertex_region"), Select).value
-                self.config.gcp_vertex_region = region_val if region_val != Select.BLANK else None
-            # If Vertex AI not available or not using Claude, keep existing value
-
-            # Session summary settings (works for all agents)
-            summary_mode = self.query_one(key_to_id("select", "session_summary.mode"), Select).value
-            if summary_mode and summary_mode != Select.BLANK:
-                self.config.session_summary.mode = summary_mode
-
-            # API key env - query from ConfigInput widget (always exists, just might be hidden)
+        # Repository settings (only in Simple mode)
+        if not self.advanced_mode:
             try:
-                api_key_field = self.query_one("#session_summary_api_key_field", ConfigInput)
-                api_key_env_val = api_key_field.get_value()
-                if api_key_env_val:
-                    self.config.session_summary.api_key_env = api_key_env_val
-            except:
-                # Keep existing value if field not found
-                pass
+                # Note: repos.workspace field removed - now using workspaces list
 
-            # Auto-load related conversations (only for Claude, but preserve value)
-            # Only query the field if Claude is selected (field only exists when is_claude=True)
-            if self.config.agent_backend == "claude":
+                detection_method = self.query_one(key_to_id("select", "repos.detection.method"), Select).value
+                if detection_method and detection_method != Select.BLANK:
+                    self.config.repos.detection.method = detection_method
+
+                detection_fallback = self.query_one(key_to_id("select", "repos.detection.fallback"), Select).value
+                if detection_fallback and detection_fallback != Select.BLANK:
+                    self.config.repos.detection.fallback = detection_fallback
+
+                # PR Template URL
+                pr_template_val = self.query_one(key_to_id("input", "pr_template_url"), Input).value.strip()
+                self.config.pr_template_url = pr_template_val if pr_template_val else None
+
+            except Exception as e:
+                self.notify(f"Error collecting repository values: {e}", severity="error")
+
+        # Prompts settings (only in Simple mode)
+        if not self.advanced_mode:
+            try:
+                # Use _choice_to_bool to convert "true"/"false"/"prompt" to Optional[bool]
+                self.config.prompts.auto_commit_on_complete = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_commit_on_complete"), Select).value
+                )
+
+                self.config.prompts.auto_accept_ai_commit_message = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_accept_ai_commit_message"), Select).value
+                )
+
+                self.config.prompts.auto_create_pr_on_complete = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_create_pr_on_complete"), Select).value
+                )
+
+                pr_status_val = self.query_one(key_to_id("select", "prompts.auto_create_pr_status"), Select).value
+                self.config.prompts.auto_create_pr_status = pr_status_val if pr_status_val and pr_status_val != Select.BLANK else "prompt"
+
+                self.config.prompts.auto_add_issue_summary = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_add_issue_summary"), Select).value
+                )
+
+                self.config.prompts.auto_update_jira_pr_url = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_update_jira_pr_url"), Select).value
+                )
+
+                self.config.prompts.auto_push_to_remote = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_push_to_remote"), Select).value
+                )
+
+                # Use auto_launch_agent (new field) instead of auto_launch_claude (deprecated)
+                self.config.prompts.auto_launch_agent = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_launch_agent"), Select).value
+                )
+                # Also update auto_launch_claude for backward compatibility
+                self.config.prompts.auto_launch_claude = self.config.prompts.auto_launch_agent
+
+                self.config.prompts.auto_checkout_branch = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_checkout_branch"), Select).value
+                )
+
+                sync_val = self.query_one(key_to_id("select", "prompts.auto_sync_with_base"), Select).value
+                self.config.prompts.auto_sync_with_base = sync_val if sync_val != Select.BLANK else None
+
+                self.config.prompts.auto_complete_on_exit = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_complete_on_exit"), Select).value
+                )
+
+                branch_strat = self.query_one(key_to_id("select", "prompts.default_branch_strategy"), Select).value
+                self.config.prompts.default_branch_strategy = branch_strat if branch_strat != Select.BLANK else None
+
+                # show_prompt_unit_tests is a boolean field (not tri-state)
+                show_unit_tests = self.query_one(key_to_id("select", "prompts.show_prompt_unit_tests"), Select).value
+                self.config.prompts.show_prompt_unit_tests = (show_unit_tests == "true")
+
+                # auto_load_related_conversations is a boolean field (not tri-state)
                 auto_load_conv = self.query_one(key_to_id("select", "prompts.auto_load_related_conversations"), Select).value
                 self.config.prompts.auto_load_related_conversations = (auto_load_conv == "true")
-            # Otherwise keep existing value
 
-        except Exception as e:
-            self.notify(f"Error collecting AI agent configuration values: {e}", severity="error")
+            except Exception as e:
+                self.notify(f"Error collecting prompts values: {e}", severity="error")
 
-        # Update checker settings
-        try:
-            timeout_val = self.query_one("#input_update_checker_timeout", Input).value.strip()
-            if timeout_val:
-                self.config.update_checker_timeout = int(timeout_val)
-        except Exception as e:
-            self.notify(f"Error collecting update checker values: {e}", severity="error")
+        # AI Agent configuration settings (only in Simple mode)
+        if not self.advanced_mode:
+            try:
+                # Agent backend selection (only if not enforced by org/team)
+                if not self._get_agent_backend_enforcement_source():
+                    # User can choose - collect the value
+                    agent_backend_val = self.query_one(key_to_id("select", "agent_backend"), Select).value
+                    if agent_backend_val and agent_backend_val != Select.BLANK:
+                        self.config.agent_backend = agent_backend_val
+                # If enforced, keep the value from org/team (already in self.config)
+
+                # Only collect region value if Vertex AI is available (field exists) and using Claude
+                # Always preserve the value even when not using Claude
+                if _is_vertex_ai_available() and self.config.agent_backend == "claude":
+                    region_val = self.query_one(key_to_id("select", "gcp_vertex_region"), Select).value
+                    self.config.gcp_vertex_region = region_val if region_val != Select.BLANK else None
+                # If Vertex AI not available or not using Claude, keep existing value
+
+                # Session summary settings (works for all agents)
+                summary_mode = self.query_one(key_to_id("select", "session_summary.mode"), Select).value
+                if summary_mode and summary_mode != Select.BLANK:
+                    self.config.session_summary.mode = summary_mode
+
+                # API key env - query from ConfigInput widget (always exists, just might be hidden)
+                try:
+                    api_key_field = self.query_one("#session_summary_api_key_field", ConfigInput)
+                    api_key_env_val = api_key_field.get_value()
+                    if api_key_env_val:
+                        self.config.session_summary.api_key_env = api_key_env_val
+                except:
+                    # Keep existing value if field not found
+                    pass
+
+                # Auto-load related conversations (only for Claude, but preserve value)
+                # Only query the field if Claude is selected (field only exists when is_claude=True)
+                if self.config.agent_backend == "claude":
+                    auto_load_conv = self.query_one(key_to_id("select", "prompts.auto_load_related_conversations"), Select).value
+                    self.config.prompts.auto_load_related_conversations = (auto_load_conv == "true")
+                # Otherwise keep existing value
+
+            except Exception as e:
+                self.notify(f"Error collecting AI agent configuration values: {e}", severity="error")
+
+        # Update checker settings (only in Simple mode)
+        if not self.advanced_mode:
+            try:
+                timeout_val = self.query_one("#input_update_checker_timeout", Input).value.strip()
+                if timeout_val:
+                    self.config.update_checker_timeout = int(timeout_val)
+            except Exception as e:
+                self.notify(f"Error collecting update checker values: {e}", severity="error")
 
         # Note: Patches settings removed - patch system deprecated
         # Configuration now uses 4-file format (backends/jira.json, organization.json, team.json, config.json)
