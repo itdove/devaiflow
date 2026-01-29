@@ -5,6 +5,7 @@ repositories to temporary directories for clean analysis, matching the
 behavior of `daf jira new`.
 """
 
+import os
 import subprocess
 import uuid
 from pathlib import Path
@@ -606,3 +607,89 @@ def test_jira_open_reopens_completed_ticket_creation_session(temp_daf_home, mock
         reopened_session = all_sessions[0]
         assert reopened_session.active_conversation.ai_agent_session_id == original_uuid, \
             f"UUID should be preserved. Expected {original_uuid}, got {reopened_session.active_conversation.ai_agent_session_id}"
+
+
+def test_jira_open_new_session_sets_branch_none(temp_daf_home, mock_git_repo):
+    """Test that daf jira open does not set branch for new ticket_creation sessions (AAP-64347).
+
+    This test verifies the fix for AAP-64347 where creating a new ticket_creation session
+    via `daf jira open` was incorrectly setting the branch to the current git branch,
+    which would then trigger branch creation prompts when opening the session.
+
+    Steps:
+    1. Run daf jira open PROJ-12345 when NO session exists
+    2. Command validates JIRA ticket and creates new ticket_creation session
+    3. Command recursively calls open_session() to open newly created session
+    4. Verify branch is set to None (not current git branch)
+    5. Verify _handle_branch_creation is never called
+    6. Verify "Skipping branch creation" message is shown
+    """
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    from devflow.config.models import WorkspaceDefinition
+
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(mock_git_repo.parent))
+    ]
+    config_loader.save_config(config)
+
+    # Ensure no session exists for PROJ-12345
+    session_manager = SessionManager(config_loader)
+    assert session_manager.get_session("creation-PROJ-12345") is None, "Session should not exist initially"
+
+    # Change to the mock git repository directory
+    # This ensures daf jira open uses this as the project_path
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(mock_git_repo)
+
+        runner = CliRunner()
+
+        # Mock JIRA ticket validation and all git operations
+        with patch('devflow.jira.JiraClient') as mock_jira_client_class, \
+             patch('devflow.jira.utils.validate_jira_ticket') as mock_validate, \
+             patch('devflow.utils.temp_directory.should_clone_to_temp', return_value=False), \
+             patch('devflow.cli.commands.open_command.GitUtils.get_remote_url', return_value="https://example.com/repo.git"), \
+             patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
+             patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
+             patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
+             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+             patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
+             patch('devflow.cli.commands.new_command._handle_branch_creation') as mock_branch_creation:
+
+            # Mock validate_jira_ticket to return ticket data
+            mock_validate.return_value = {
+                'summary': 'Test ticket for branch creation bug',
+                'type': 'Bug',
+                'status': 'To Do'
+            }
+
+            # Run daf jira open PROJ-12345 (NO existing session)
+            result = runner.invoke(cli, ["jira", "open", "PROJ-12345"])
+
+            # Verify the command succeeded
+            assert result.exit_code == 0, f"Command failed with output:\n{result.output}"
+
+            # CRITICAL: Verify that _handle_branch_creation was NEVER called
+            # This is the core assertion for AAP-64347
+            mock_branch_creation.assert_not_called(), \
+                f"_handle_branch_creation should not be called for ticket_creation sessions. Output:\n{result.output}"
+
+            # Verify output shows we're skipping branch creation
+            assert "Skipping branch creation (session_type: ticket_creation)" in result.output, \
+                f"Expected branch creation skip message. Got:\n{result.output}"
+
+            # Verify session was created with correct type and branch=None
+            session_manager_check = SessionManager(config_loader)
+            session = session_manager_check.get_session("creation-PROJ-12345")
+            assert session is not None, "Session should be created"
+            assert session.session_type == "ticket_creation", \
+                f"Session should be ticket_creation type, got: {session.session_type}"
+            assert session.active_conversation.branch is None, \
+                f"Branch should be None for ticket_creation sessions, got: {session.active_conversation.branch}"
+
+    finally:
+        os.chdir(original_cwd)

@@ -137,7 +137,7 @@ def jira_open_session(issue_key: str) -> None:
     session.issue_metadata["type"] = ticket.get('type')
     session.issue_metadata["status"] = ticket.get('status')
 
-    # Add conversation metadata 
+    # Add conversation metadata
     # Don't generate UUID here - let open_command.py handle it when it detects first launch
     # This prevents the issue where we generate a UUID but have no conversation file yet,
     # which causes open_command.py to generate a SECOND UUID and overwrite the first one
@@ -148,11 +148,12 @@ def jira_open_session(issue_key: str) -> None:
     # Always add conversation so open_session() has working directory info
     # Use empty string for ai_agent_session_id - open_command.py will generate UUID on first launch
     # temp_directory and original_project_path will be None if user declined cloning
+    # AAP-64347: Set branch=None for ticket_creation sessions (skip branch creation entirely)
     session.add_conversation(
         working_dir=working_directory,
         ai_agent_session_id="",  # Empty string signals first launch to open_command.py
         project_path=project_path,
-        branch=current_branch,
+        branch=None,  # AAP-64347: No branch for ticket_creation sessions
         temp_directory=temp_directory,  # None if user declined
         original_project_path=original_project_path,  # None if user declined
         workspace=config.repos.get_default_workspace_path(),
