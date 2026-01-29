@@ -253,28 +253,69 @@ daf complete PROJ-12345
 - Implementing well-defined requirements
 - Bug fixes with clear reproduction steps
 
-### Scenario 2: Working Across Multiple Repos
+### Scenario 2: Working Across Multiple Repositories (Multi-Conversation Sessions)
 
-You have one JIRA ticket that requires changes in multiple repositories.
+**Common Use Case:** One JIRA ticket requires changes in multiple repositories (e.g., backend API + frontend UI).
+
+**Recommended Approach:** Use multi-conversation sessions to keep all related work under one session with unified time tracking.
 
 ```bash
-# Sync creates the session
+# Create or sync the session
 daf sync --sprint current
+# Or: daf new --jira PROJ-12345 --goal "Add user profile feature"
 
-# Open for backend work
-cd ~/projects/backend-api
+# First time: Open for backend work
 daf open PROJ-12345
-# Select working directory when prompted
 
-# Later, open for frontend work (creates additional session in group)
-cd ~/projects/frontend-app
-daf open PROJ-12345
-# Select different working directory
+# You'll be prompted to select a repository:
+Available repositories (8):
+  1. backend-api
+  2. frontend-app
+  3. mobile-app
+  ...
 
-# Now you have 2 sessions in the PROJ-12345 group
+Which project? [1-8]: 1
+
+# Work in backend, make changes, then exit Claude Code...
+
+# Continue same session in frontend repository
 daf open PROJ-12345
-# Prompts: Which session? [1/2]
+
+# You'll see the existing conversation and option to create new one:
+Found 1 conversation(s) for PROJ-12345:
+
+  1. backend-api
+     Path: /Users/you/workspace/backend-api
+     Branch: feature/PROJ-12345
+     Last active: 15m ago
+
+  2. → Create new conversation (in a different project)
+
+Which conversation? [1-2]: 2
+
+# Select frontend repository:
+Available projects:
+  1. backend-api (already has conversation)
+  2. frontend-app
+  3. mobile-app
+  ...
+
+Which project? [1-3]: 2
+
+# Now working in frontend with separate conversation...
 ```
+
+**Result:** One session (PROJ-12345) with multiple conversations:
+- Unified time tracking across all repositories
+- Single JIRA ticket link
+- Separate Claude Code conversation history per repository
+- Easy to switch between with `daf open PROJ-12345`
+
+**Benefits:**
+- All work for one ticket stays together
+- Time tracking counts work across all repositories
+- Easier to manage with `daf status`, `daf list`
+- Each repository gets its own Git branch
 
 ### Scenario 3: Quick Experiment (No JIRA)
 

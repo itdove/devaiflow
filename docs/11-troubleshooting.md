@@ -1186,6 +1186,114 @@ daf cleanup-conversation PROJ-12345 --older-than 1d
    daf new --name "..." --goal "..."
    ```
 
+## Frequently Asked Questions (FAQ)
+
+### How do I work on one JIRA ticket across multiple repositories?
+
+**Common Scenario:** You have a single ticket (e.g., PROJ-12345) that requires changes in both a backend API repository and a frontend UI repository.
+
+**Solution: Use Multi-Conversation Sessions**
+
+DevAIFlow supports multiple conversations within a single session, allowing you to work on multiple repositories while keeping all work unified under one ticket.
+
+**Step-by-Step:**
+
+```bash
+# 1. Create or sync the session
+daf sync --sprint current
+# Or: daf new --jira PROJ-12345 --goal "Add user profile feature"
+
+# 2. First time: Open for backend work
+daf open PROJ-12345
+
+# You'll be prompted to select a repository:
+Available repositories (8):
+  1. backend-api
+  2. frontend-app
+  3. mobile-app
+  ...
+Which project? [1-8]: 1
+
+# 3. Work in backend, make changes, exit Claude Code when done
+
+# 4. Continue same session in frontend repository
+daf open PROJ-12345
+
+# Shows existing conversation and option to create new:
+Found 1 conversation(s) for PROJ-12345:
+
+  1. backend-api
+     Path: /Users/you/workspace/backend-api
+     Branch: feature/PROJ-12345
+     Last active: 15m ago
+
+  2. → Create new conversation (in a different project)
+
+Which conversation? [1-2]: 2
+
+# Select frontend repository:
+Available projects:
+  1. backend-api (already has conversation)
+  2. frontend-app
+  ...
+Which project? [1-3]: 2
+
+# 5. Now working in frontend with separate conversation
+```
+
+**Benefits:**
+- ✅ Unified time tracking across all repositories
+- ✅ Single JIRA ticket link
+- ✅ Separate Claude Code conversation history per repository
+- ✅ Each repository gets its own Git branch
+- ✅ Easy to switch between repos with `daf open PROJ-12345`
+
+**Documentation:**
+- [Session Management Guide](04-session-management.md#working-across-multiple-repositories) - Detailed explanation
+- [Commands Reference: daf open](07-commands.md#daf-open---resume-session) - Multi-repository workflow examples
+- [Quick Start Guide](03-quick-start.md#scenario-2-working-across-multiple-repositories-multi-conversation-sessions) - Complete walkthrough
+
+### How do I switch between repositories in a multi-repo session?
+
+Simply run `daf open PROJ-12345` again and select which conversation (repository) to work on:
+
+```bash
+daf open PROJ-12345
+
+Found 2 conversation(s) for PROJ-12345:
+
+  1. backend-api
+     Path: /Users/you/workspace/backend-api
+     Branch: feature/PROJ-12345
+     Last active: 2h ago
+
+  2. frontend-app
+     Path: /Users/you/workspace/frontend-app
+     Branch: feature/PROJ-12345-ui
+     Last active: 30m ago
+
+Which conversation? [1-2]: 1  # Select backend
+```
+
+### Can I add a third repository to an existing session?
+
+Yes! Just run `daf open PROJ-12345` and select "Create new conversation":
+
+```bash
+daf open PROJ-12345
+
+Found 2 conversation(s) for PROJ-12345:
+  1. backend-api
+  2. frontend-app
+  3. → Create new conversation (in a different project)
+
+Which conversation? [1-3]: 3  # Create new
+```
+
+Then select the third repository from the available projects list.
+
+---
+
 ## Getting More Help
 
 ### Enable Debug Logging

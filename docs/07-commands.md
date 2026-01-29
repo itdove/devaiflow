@@ -485,6 +485,50 @@ daf open PROJ-12345 --new-conversation
 daf open PROJ-12345 --json
 ```
 
+**Multi-Repository Workflow Example:**
+
+When working on a ticket that requires changes in multiple repositories (e.g., backend + frontend):
+
+```bash
+# First time: Work in backend repository
+daf open PROJ-12345
+
+# Prompted to select repository:
+Available repositories (8):
+  1. backend-api
+  2. frontend-app
+  ...
+Which project? [1-8]: 1
+
+# Work in backend, exit Claude Code when done...
+
+# Continue same ticket in frontend repository
+daf open PROJ-12345
+
+# Shows existing conversation and option to create new:
+Found 1 conversation(s) for PROJ-12345:
+
+  1. backend-api
+     Path: /Users/you/workspace/backend-api
+     Branch: feature/PROJ-12345
+     Last active: 15m ago
+
+  2. → Create new conversation (in a different project)
+
+Which conversation? [1-2]: 2
+
+# Select frontend repository:
+Available projects:
+  1. backend-api (already has conversation)
+  2. frontend-app
+  ...
+Which project? [1-3]: 2
+
+# Now working in frontend with separate conversation...
+```
+
+**Result:** One session tracks all work for PROJ-12345 across both repositories with unified time tracking.
+
 **What happens:**
 1. **First time opening:**
    - Prompts for working directory (if not set)
