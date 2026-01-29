@@ -955,7 +955,12 @@ def _build_ticket_creation_prompt(
     ])
 
     prompt_parts.extend([
+        "⚠️  CRITICAL: Use EXACTLY this command format (do not modify syntax):",
+        "",
         example_command,
+        "",
+        "⚠️  The command above is the EXACT format you MUST use. Do not attempt alternative formats.",
+        "   Use this template precisely, filling in your analysis and findings.",
         "",
         parent_note,
     ])
