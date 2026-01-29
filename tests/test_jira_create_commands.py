@@ -201,6 +201,8 @@ class TestGetAffectedVersion:
 
     def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
         """Test that flag value is used when provided."""
+        # No field_mappings set, so any version is allowed
+        mock_field_mapper.field_mappings = {}
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
 
         result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, "custom-version")
@@ -210,25 +212,50 @@ class TestGetAffectedVersion:
     def test_use_config_value_when_no_flag(self, mock_config, mock_config_loader, mock_field_mapper):
         """Test that config value is used when no flag provided."""
         mock_config.jira.affected_version = "v1.0.0"
+        # No field_mappings set, so any version is allowed
+        mock_field_mapper.field_mappings = {}
 
         result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
 
         assert result == "v1.0.0"
 
-    def test_use_default_when_no_flag_or_config(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
-        """Test that default is used when no flag or config value."""
+    def test_use_default_when_no_flag_or_config_and_required(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test that default is used when no flag or config value and field is required."""
         mock_config.jira.affected_version = None
+        # Mark field as required
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "required": True,
+                "allowed_values": []
+            }
+        }
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
 
         result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
 
         assert result == "v1.0.0"
 
+    def test_returns_none_when_optional_and_not_provided(self, mock_config, mock_config_loader, mock_field_mapper):
+        """Test that None is returned when field is optional and not provided."""
+        mock_config.jira.affected_version = None
+        # Field exists but not required
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "required": False,
+                "allowed_values": ["2.5.0", "2.4.0"]
+            }
+        }
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        assert result is None
+
     def test_prompt_with_allowed_versions_number_selection(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
         """Test prompting with allowed versions and selecting by number."""
         mock_config.jira.affected_version = None
         mock_field_mapper.field_mappings = {
             "affects_version/s": {
+                "required": True,
                 "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
             }
         }
@@ -245,6 +272,7 @@ class TestGetAffectedVersion:
         mock_config.jira.affected_version = None
         mock_field_mapper.field_mappings = {
             "affects_version/s": {
+                "required": True,
                 "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
             }
         }
@@ -256,28 +284,45 @@ class TestGetAffectedVersion:
         assert result == "2.5.0"
         mock_config_loader.save_config.assert_called_once()
 
-    def test_prompt_with_allowed_versions_custom_version(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
-        """Test prompting with allowed versions but entering custom version."""
+    def test_prompt_with_allowed_versions_rejects_invalid_then_accepts_valid(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test prompting with allowed versions rejects invalid input then accepts valid."""
         mock_config.jira.affected_version = None
         mock_field_mapper.field_mappings = {
             "affects_version/s": {
+                "required": True,
                 "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
             }
         }
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
-        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "3.0.0-beta")
+
+        # Simulate user entering invalid version first, then valid version
+        call_count = [0]
+        def mock_prompt(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return "3.0.0-beta"  # Invalid version
+            else:
+                return "2.5.0"  # Valid version
+
+        monkeypatch.setattr('devflow.jira.utils.Prompt.ask', mock_prompt)
 
         result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
 
-        assert result == "3.0.0-beta"
+        assert result == "2.5.0"
         mock_config_loader.save_config.assert_called_once()
 
     def test_prompt_without_allowed_versions_fallback(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
-        """Test fallback to free-text prompt when no allowed_values."""
+        """Test fallback to free-text prompt when no allowed_values but field is required."""
         mock_config.jira.affected_version = None
-        mock_field_mapper.field_mappings = {}
+        # Field is required but has no allowed_values
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "required": True,
+                "allowed_values": []
+            }
+        }
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
-        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "v1.2.3")
+        monkeypatch.setattr('devflow.jira.utils.Prompt.ask', lambda *args, **kwargs: "v1.2.3")
 
         result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
 
@@ -285,7 +330,57 @@ class TestGetAffectedVersion:
         mock_config_loader.save_config.assert_called_once()
 
     def test_prompt_with_invalid_number_selection(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
-        """Test handling invalid number selection."""
+        """Test handling invalid number selection loops until valid."""
+        mock_config.jira.affected_version = None
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "required": True,
+                "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
+            }
+        }
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+
+        # Simulate user entering invalid number first, then valid number
+        call_count = [0]
+        def mock_prompt(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return "99"  # Invalid number (out of range)
+            else:
+                return "1"  # Valid selection
+
+        monkeypatch.setattr('devflow.jira.utils.Prompt.ask', mock_prompt)
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        # Should accept valid selection after rejecting invalid
+        assert result == "2.5.0"
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_fallback_search_finds_version_field(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test fallback search finds version field not in hardcoded list."""
+        mock_config.jira.affected_version = None
+        # Use a field name not in the hardcoded list but containing "version"
+        mock_field_mapper.field_mappings = {
+            "fix_version/s": {
+                "required": True,
+                "allowed_values": ["3.0.0", "2.9.0", "2.8.0"]
+            },
+            "some_other_field": {
+                "allowed_values": ["foo", "bar"]
+            }
+        }
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.jira.utils.Prompt.ask', lambda *args, **kwargs: "1")
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        # Should find fix_version/s via fallback search and select first version
+        assert result == "3.0.0"
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_flag_value_validated_against_allowed_versions(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test flag value is validated against allowed_values and rejects invalid."""
         mock_config.jira.affected_version = None
         mock_field_mapper.field_mappings = {
             "affects_version/s": {
@@ -293,13 +388,26 @@ class TestGetAffectedVersion:
             }
         }
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
-        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "99")
 
-        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+        # Try to use invalid flag value
+        with pytest.raises(SystemExit):
+            _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, "invalid-version")
 
-        # Should default to first version when invalid number
-        assert result == "2.5.0"
-        mock_config_loader.save_config.assert_called_once()
+    def test_flag_value_accepts_valid_version(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test flag value accepts version from allowed_values."""
+        mock_config.jira.affected_version = None
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
+            }
+        }
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, "2.4.0")
+
+        assert result == "2.4.0"
+        # Should not save to config when flag is provided
+        mock_config_loader.save_config.assert_not_called()
 
 
 class TestGetDescription:

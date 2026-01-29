@@ -1,8 +1,12 @@
 """Utility functions for JIRA operations."""
 
 import re
-from typing import Union, List, Optional, Dict
+from typing import Union, List, Optional, Dict, TYPE_CHECKING
 from rich.console import Console
+from rich.prompt import Prompt
+
+if TYPE_CHECKING:
+    from devflow.jira.field_mapper import JiraFieldMapper
 
 console = Console()
 
@@ -162,3 +166,153 @@ def validate_jira_ticket(issue_key: str, client: Optional['JiraClient'] = None) 
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Unexpected error validating ticket: {e}")
         return None
+
+
+def validate_affected_version(version: str, field_mapper: Optional['JiraFieldMapper'] = None) -> bool:
+    """Validate that a version is in the allowed_values list if one exists.
+
+    Args:
+        version: Version string to validate
+        field_mapper: Optional JiraFieldMapper instance with field_mappings loaded
+
+    Returns:
+        True if version is valid (either in allowed_values or no restrictions exist)
+        False if version is invalid (not in allowed_values when restrictions exist)
+    """
+    if not field_mapper or not field_mapper.field_mappings:
+        # No field mapper or mappings - accept any version
+        return True
+
+    # Try to find allowed_values for version fields
+    allowed_versions = []
+
+    # Strategy 1: Check specific field names
+    for field_name in ["affects_version/s", "affected_version", "versions", "affects_versions"]:
+        field_info = field_mapper.field_mappings.get(field_name, {})
+        allowed_vals = field_info.get("allowed_values", [])
+        if allowed_vals:
+            allowed_versions = allowed_vals
+            break
+
+    # Strategy 2: Search for any version-related field
+    if not allowed_versions:
+        for field_name, field_info in field_mapper.field_mappings.items():
+            if ("version" in field_name or "affect" in field_name):
+                allowed_vals = field_info.get("allowed_values", [])
+                if allowed_vals:
+                    allowed_versions = allowed_vals
+                    break
+
+    # If no allowed_values found, accept any version
+    if not allowed_versions:
+        return True
+
+    # Check if version is in allowed list
+    return version in allowed_versions
+
+
+def is_version_field_required(field_mapper: Optional['JiraFieldMapper'] = None) -> bool:
+    """Check if the version field is marked as required in field_mappings.
+
+    Args:
+        field_mapper: Optional JiraFieldMapper instance with field_mappings loaded
+
+    Returns:
+        True if version field is required, False otherwise
+    """
+    if not field_mapper or not field_mapper.field_mappings:
+        return False
+
+    # Strategy 1: Check specific field names
+    for field_name in ["affects_version/s", "affected_version", "versions", "affects_versions"]:
+        field_info = field_mapper.field_mappings.get(field_name, {})
+        if field_info and field_info.get("required", False):
+            return True
+
+    # Strategy 2: Search for any version-related field
+    for field_name, field_info in field_mapper.field_mappings.items():
+        if ("version" in field_name or "affect" in field_name):
+            if field_info.get("required", False):
+                return True
+
+    return False
+
+
+def prompt_for_affected_version(field_mapper: Optional['JiraFieldMapper'] = None) -> str:
+    """Prompt user for affected version with list of available versions if possible.
+
+    This function:
+    1. Attempts to discover version fields with allowed_values from field_mappings
+    2. If found, displays a numbered list and allows selection by number or name
+    3. Validates that the entered version is in the allowed_values list
+    4. If not found, falls back to simple text prompt
+
+    Args:
+        field_mapper: Optional JiraFieldMapper instance with field_mappings loaded
+
+    Returns:
+        Selected version string
+
+    Examples:
+        >>> from devflow.jira.field_mapper import JiraFieldMapper
+        >>> field_mapper = JiraFieldMapper(jira_client)
+        >>> version = prompt_for_affected_version(field_mapper)
+    """
+    # Try to get allowed_values from field_mappings
+    allowed_versions = []
+    if field_mapper and field_mapper.field_mappings:
+        # Strategy 1: Check for specific field names that might represent affected version
+        # JIRA uses different field names: affects_version/s, affected_version, versions
+        for field_name in ["affects_version/s", "affected_version", "versions", "affects_versions"]:
+            field_info = field_mapper.field_mappings.get(field_name, {})
+            allowed_vals = field_info.get("allowed_values", [])
+            if allowed_vals:
+                allowed_versions = allowed_vals
+                break
+
+        # Strategy 2: If not found, search for any field containing "version" or "affect" with allowed_values
+        if not allowed_versions:
+            for field_name, field_info in field_mapper.field_mappings.items():
+                if ("version" in field_name or "affect" in field_name):
+                    allowed_vals = field_info.get("allowed_values", [])
+                    if allowed_vals:
+                        allowed_versions = allowed_vals
+                        break
+
+    if allowed_versions:
+        # Display numbered list of versions
+        console.print("\n[bold]Available versions:[/bold]")
+        for i, version in enumerate(allowed_versions, 1):
+            console.print(f"  {i}. {version}")
+        console.print()
+
+        # Prompt for selection (by number or name)
+        console.print("[bold]Select version:[/bold]")
+        console.print("  • Enter a number to select from the list")
+        console.print("  • Enter a version name from the list above")
+        console.print()
+
+        while True:
+            selection = Prompt.ask("Selection", default="1" if allowed_versions else "v1.0.0")
+
+            # Parse selection: check if it's a number
+            if selection.isdigit():
+                version_index = int(selection) - 1
+                if 0 <= version_index < len(allowed_versions):
+                    return allowed_versions[version_index]
+                else:
+                    console.print(f"[red]✗[/red] Invalid selection. Please enter a number between 1 and {len(allowed_versions)}.")
+                    continue
+            else:
+                # Validate that the entered version is in the allowed list
+                if selection in allowed_versions:
+                    return selection
+                else:
+                    console.print(f"[red]✗[/red] Version '{selection}' is not in the allowed versions list.")
+                    console.print(f"[dim]Please select from the list above or enter a valid number.[/dim]")
+                    continue
+    else:
+        # No allowed_values available, fall back to simple text prompt
+        console.print("\n[yellow]⚠[/yellow] No version list available.")
+        console.print("[dim]Example: v1.0.0[/dim]")
+        return Prompt.ask("[bold]Enter affected version[/bold]", default="v1.0.0")
