@@ -1943,11 +1943,16 @@ class JiraClient(IssueTrackerClient):
         if not field_mapper.field_mappings:
             return
 
+        # Normalize issue type to match JIRA's title-case convention
+        # JIRA returns issue types as title-case ("Bug", "Story", "Task")
+        # CLI accepts lowercase ("bug", "story", "task")
+        jira_issue_type = issue_type.capitalize()
+
         # Iterate through all fields in field_mappings
         for field_name, field_info in field_mapper.field_mappings.items():
             # Check if this field is required for the given issue type
             required_for = field_info.get("required_for", [])
-            if issue_type not in required_for:
+            if jira_issue_type not in required_for:
                 continue
 
             # Get field ID
