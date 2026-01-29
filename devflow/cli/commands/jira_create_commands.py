@@ -515,17 +515,18 @@ def _get_required_system_fields(
     return system_fields
 
 
-def _get_affected_version(config, config_loader, flag_value: Optional[str]) -> str:
+def _get_affected_version(config, config_loader, field_mapper, flag_value: Optional[str]) -> str:
     """Get affected version value from flag, config, or prompt.
 
     Logic:
     1. If --affected-version flag provided, use it (prompt to save if different from config)
     2. Else if affected_version in config, use it
-    3. Else prompt user with default value
+    3. Else prompt user with version list (from field_mappings) or default value
 
     Args:
         config: Config object
         config_loader: ConfigLoader instance
+        field_mapper: JiraFieldMapper instance (for accessing allowed_values)
         flag_value: Value from --affected-version flag (or None)
 
     Returns:
@@ -547,18 +548,58 @@ def _get_affected_version(config, config_loader, flag_value: Optional[str]) -> s
         console_print(f"[dim]Using affected version from config: \"{config.jira.affected_version}\"[/dim]")
         return config.jira.affected_version
 
-    # Case 3: Prompt user with default
+    # Case 3: Prompt user with version list or default
     # Skip prompt in mock mode (use default silently)
     from devflow.utils import is_mock_mode
     if is_mock_mode():
         affected_version = "v1.0.0"
     elif not is_json_mode():
-        console_print("\n[yellow]⚠[/yellow] No affected version configured.")
-        console_print("[dim]Example: v1.0.0[/dim]")
-        affected_version = Prompt.ask(
-            "[bold]Enter affected version[/bold]",
-            default="v1.0.0"
-        )
+        # Try to get allowed_values from field_mappings
+        allowed_versions = []
+        if field_mapper and field_mapper.field_mappings:
+            # Check for various field names that might represent affected version
+            # JIRA uses different field names: affects_version/s, affected_version, versions
+            for field_name in ["affects_version/s", "affected_version", "versions", "affects_versions"]:
+                field_info = field_mapper.field_mappings.get(field_name, {})
+                allowed_vals = field_info.get("allowed_values", [])
+                if allowed_vals:
+                    allowed_versions = allowed_vals
+                    break
+
+        if allowed_versions:
+            # Display numbered list of versions
+            console_print("\n[bold]Available versions:[/bold]")
+            for i, version in enumerate(allowed_versions, 1):
+                console_print(f"  {i}. {version}")
+            console_print()
+
+            # Prompt for selection (by number or name)
+            console_print("[bold]Select version:[/bold]")
+            console_print("  • Enter a number to select from the list")
+            console_print("  • Enter a version name directly")
+            console_print()
+
+            selection = Prompt.ask("Selection", default="1" if allowed_versions else "v1.0.0")
+
+            # Parse selection: check if it's a number
+            if selection.isdigit():
+                version_index = int(selection) - 1
+                if 0 <= version_index < len(allowed_versions):
+                    affected_version = allowed_versions[version_index]
+                else:
+                    console_print(f"[yellow]⚠[/yellow] Invalid selection. Using default.")
+                    affected_version = allowed_versions[0] if allowed_versions else "v1.0.0"
+            else:
+                # Treat as version name (custom or from list)
+                affected_version = selection
+        else:
+            # No allowed_values available, fall back to free-text prompt
+            console_print("\n[yellow]⚠[/yellow] No affected version configured.")
+            console_print("[dim]Example: v1.0.0[/dim]")
+            affected_version = Prompt.ask(
+                "[bold]Enter affected version[/bold]",
+                default="v1.0.0"
+            )
     else:
         affected_version = "v1.0.0"
 
@@ -747,7 +788,7 @@ def create_issue(
         # Get affected version (for bugs only)
         resolved_affected_version = None
         if type_config["uses_affected_version"]:
-            resolved_affected_version = _get_affected_version(config, config_loader, affected_version)
+            resolved_affected_version = _get_affected_version(config, config_loader, field_mapper, affected_version)
 
         # Validate parent ticket if provided
         if parent:

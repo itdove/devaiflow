@@ -199,30 +199,107 @@ class TestGetProject:
 class TestGetAffectedVersion:
     """Tests for _get_affected_version function."""
 
-    def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, monkeypatch):
+    def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
         """Test that flag value is used when provided."""
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
 
-        result = _get_affected_version(mock_config, mock_config_loader, "custom-version")
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, "custom-version")
 
         assert result == "custom-version"
 
-    def test_use_config_value_when_no_flag(self, mock_config, mock_config_loader):
+    def test_use_config_value_when_no_flag(self, mock_config, mock_config_loader, mock_field_mapper):
         """Test that config value is used when no flag provided."""
         mock_config.jira.affected_version = "v1.0.0"
 
-        result = _get_affected_version(mock_config, mock_config_loader, None)
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
 
         assert result == "v1.0.0"
 
-    def test_use_default_when_no_flag_or_config(self, mock_config, mock_config_loader, monkeypatch):
+    def test_use_default_when_no_flag_or_config(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
         """Test that default is used when no flag or config value."""
         mock_config.jira.affected_version = None
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: True)
 
-        result = _get_affected_version(mock_config, mock_config_loader, None)
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
 
         assert result == "v1.0.0"
+
+    def test_prompt_with_allowed_versions_number_selection(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test prompting with allowed versions and selecting by number."""
+        mock_config.jira.affected_version = None
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
+            }
+        }
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "2")
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        assert result == "2.4.0"
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_prompt_with_allowed_versions_name_selection(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test prompting with allowed versions and selecting by name."""
+        mock_config.jira.affected_version = None
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
+            }
+        }
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "2.5.0")
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        assert result == "2.5.0"
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_prompt_with_allowed_versions_custom_version(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test prompting with allowed versions but entering custom version."""
+        mock_config.jira.affected_version = None
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
+            }
+        }
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "3.0.0-beta")
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        assert result == "3.0.0-beta"
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_prompt_without_allowed_versions_fallback(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test fallback to free-text prompt when no allowed_values."""
+        mock_config.jira.affected_version = None
+        mock_field_mapper.field_mappings = {}
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "v1.2.3")
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        assert result == "v1.2.3"
+        mock_config_loader.save_config.assert_called_once()
+
+    def test_prompt_with_invalid_number_selection(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
+        """Test handling invalid number selection."""
+        mock_config.jira.affected_version = None
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "allowed_values": ["2.5.0", "2.4.0", "2.3.0"]
+            }
+        }
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args, **kwargs: "99")
+
+        result = _get_affected_version(mock_config, mock_config_loader, mock_field_mapper, None)
+
+        # Should default to first version when invalid number
+        assert result == "2.5.0"
+        mock_config_loader.save_config.assert_called_once()
 
 
 class TestGetDescription:
