@@ -367,13 +367,65 @@ If this shows your JIRA tickets, the integration is working!
 daf init
 ```
 
-This launches an interactive wizard that prompts for:
-- **JIRA URL and project key** - Your JIRA instance details
-- **Comment visibility** - Control who can see DevAIFlow's JIRA comments (group or role)
-- **Workspace path** - Your main development directory
-- **Optional settings** - Keyword mappings for multi-repo suggestions, PR template URL
+This launches an interactive wizard that:
+- Creates **4-5 JSON configuration files** (automatically, no manual file creation needed):
+  - `backends/jira.json` - JIRA URL, transitions, field mappings
+  - `organization.json` - JIRA project key, sync filters
+  - `team.json` - Team defaults (workstream, component, comment visibility)
+  - `config.json` - Personal preferences (workspace, prompts, context files)
+  - `enterprise.json` - Enterprise-wide settings (optional)
+- Prompts for initial settings:
+  - **JIRA URL and project key** - Your JIRA instance details
+  - **Comment visibility** - Control who can see DevAIFlow's JIRA comments (group or role)
+  - **Workspace path** - Your main development directory
+  - **Optional settings** - Keyword mappings for multi-repo suggestions, PR template URL
 
 All settings can be changed later using `daf config tui`.
+
+#### Configuration Files Created
+
+| File | Purpose | Key Settings |
+|------|---------|--------------|
+| `backends/jira.json` | JIRA backend configuration | JIRA URL, authentication, field mappings, transitions |
+| `organization.json` | Organization settings | JIRA project key, sync filters, field aliases |
+| `team.json` | Team-specific settings | Default workstream, component, comment visibility |
+| `config.json` | User personal preferences | Workspace path, prompts, context files |
+
+#### Post-Init Configuration Checklist
+
+After running `daf init`, verify and customize your configuration:
+
+1. **Verify JIRA URL** in `backends/jira.json`
+   ```bash
+   # Check JIRA URL is correct
+   daf config show --format split | grep url
+   ```
+
+2. **Set JIRA project key** in `organization.json`
+   ```bash
+   # Verify your default project key
+   daf config show --format split | grep jira_project
+   ```
+
+3. **Configure team defaults** in `team.json` (optional)
+   ```bash
+   # Add default workstream, component, or other team-specific values
+   vim $DEVAIFLOW_HOME/team.json
+   ```
+
+4. **Set workspace path** in `config.json`
+   ```bash
+   # Verify your workspace path for repository discovery
+   daf config show --format split | grep workspace
+   ```
+
+5. **Test JIRA connection**
+   ```bash
+   # Verify JIRA integration works
+   daf sync --dry-run
+   ```
+
+For detailed configuration options and multi-file structure, see [Multi-File Configuration System](06-configuration.md#multi-file-configuration-system).
 
 ### 2. Install Claude Code Commands
 
