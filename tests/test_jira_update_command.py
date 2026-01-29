@@ -474,7 +474,8 @@ def test_get_ticket_pr_links_without_cached_field_mappings(mock_jira_client, mon
                 "fields": {
                     "customfield_12310220": {
                         "name": "Git Pull Request",
-                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
+                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
+                        "operations": ["set"]
                     }
                 }
             }
@@ -537,7 +538,8 @@ def test_get_ticket_pr_links_with_empty_field_mappings(mock_jira_client, monkeyp
                 "fields": {
                     "customfield_12310220": {
                         "name": "Git Pull Request",
-                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
+                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
+                        "operations": ["set"]
                     }
                 }
             }
@@ -632,7 +634,8 @@ def test_multiple_pr_creation_scenario(mock_jira_client, monkeypatch):
                 "fields": {
                     "customfield_12310220": {
                         "name": "Git Pull Request",
-                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
+                        "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
+                        "operations": ["set"]
                     }
                 }
             }
@@ -950,3 +953,82 @@ def test_transition_ticket_case_insensitive(mock_jira_client, monkeypatch):
     mock_jira_client.transition_ticket("PROJ-12345", "in progress")
 
     assert transition_performed
+
+
+def test_update_single_field_does_not_include_config_defaults():
+    """Test that updating a single field does not include system_field_defaults from config.
+
+    This tests the fix for AAP-64346: when updating a single custom field like acceptance_criteria,
+    the update should NOT include system_field_defaults from config (components, labels, etc.)
+    as those may be non-editable fields that would cause the update to fail.
+    """
+    from devflow.cli.commands.jira_update_command import update_jira_issue
+    from devflow.config.models import Config, JiraConfig, RepoConfig
+    from unittest.mock import patch, MagicMock
+
+    # Create a config with system_field_defaults
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            transitions={},  # Required field
+            system_field_defaults={
+                "components": [{"name": "ansible-saas"}],
+                "labels": ["backend"],
+                "attachment": []  # Non-editable field that would cause error
+            },
+            field_mappings={
+                "acceptance_criteria": {
+                    "id": "customfield_12315940",
+                    "name": "Acceptance Criteria",
+                    "type": "string"
+                }
+            }
+        ),
+        repos=RepoConfig(workspaces=[])  # Required field
+    )
+
+    # Track what fields are in the update payload
+    update_payload_fields = None
+
+    def mock_update_issue(issue_key, payload):
+        nonlocal update_payload_fields
+        update_payload_fields = list(payload["fields"].keys())
+
+    with patch('devflow.cli.commands.jira_update_command.ConfigLoader') as mock_config_loader, \
+         patch('devflow.cli.commands.jira_update_command.JiraClient') as mock_client_class, \
+         patch('devflow.cli.commands.jira_update_command.JiraFieldMapper') as mock_mapper_class:
+
+        # Mock ConfigLoader
+        mock_loader_instance = MagicMock()
+        mock_loader_instance.load_config.return_value = config
+        mock_config_loader.return_value = mock_loader_instance
+
+        # Mock JiraClient
+        mock_client = MagicMock()
+        mock_client.update_issue.side_effect = mock_update_issue
+        mock_client_class.return_value = mock_client
+
+        # Mock JiraFieldMapper
+        mock_mapper = MagicMock()
+        mock_mapper.discover_editable_fields.return_value = config.jira.field_mappings
+        mock_mapper.field_mappings = config.jira.field_mappings
+        mock_mapper_class.return_value = mock_mapper
+
+        # Update only acceptance_criteria field
+        # The bug would cause this to also try to update components, labels, and attachment from system_field_defaults
+        update_jira_issue(
+            issue_key="AAP-64346",
+            custom_fields={"acceptance_criteria": "- [] Test criterion"},
+            system_fields={}  # No system fields explicitly provided
+        )
+
+        # Verify that ONLY the acceptance_criteria field is in the payload
+        # NOT components, labels, or attachment from system_field_defaults
+        assert update_payload_fields is not None, "update_issue was not called"
+        assert "customfield_12315940" in update_payload_fields, "acceptance_criteria field should be in payload"
+        assert "components" not in update_payload_fields, "components from config defaults should NOT be in payload"
+        assert "labels" not in update_payload_fields, "labels from config defaults should NOT be in payload"
+        assert "attachment" not in update_payload_fields, "attachment from config defaults should NOT be in payload"
+
+        # Should only have the one custom field we specified
+        assert len(update_payload_fields) == 1, f"Expected 1 field, got {len(update_payload_fields)}: {update_payload_fields}"

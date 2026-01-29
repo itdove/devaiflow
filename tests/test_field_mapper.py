@@ -588,7 +588,8 @@ def test_discover_editable_fields_success(monkeypatch):
                     "type": "any",
                     "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiurl"
                 },
-                "required": False
+                "required": False,
+                "operations": ["set"]
             },
             "customfield_12319275": {
                 "name": "Workstream",
@@ -600,7 +601,8 @@ def test_discover_editable_fields_success(monkeypatch):
                 "allowedValues": [
                     {"value": "Platform"},
                     {"value": "Hosted Services"}
-                ]
+                ],
+                "operations": ["set"]
             }
         }
     }
@@ -713,7 +715,8 @@ def test_parse_editmeta():
                     "type": "any",
                     "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiurl"
                 },
-                "required": False
+                "required": False,
+                "operations": ["set"]
             },
             "customfield_12319275": {
                 "name": "Workstream",
@@ -725,7 +728,8 @@ def test_parse_editmeta():
                 "allowedValues": [
                     {"value": "Platform"},
                     {"value": "Tower"}
-                ]
+                ],
+                "operations": ["set"]
             }
         }
     }

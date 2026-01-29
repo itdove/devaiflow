@@ -309,6 +309,14 @@ class JiraFieldMapper:
         fields_data = editmeta.get("fields", {})
 
         for field_key, field_data in fields_data.items():
+            # CRITICAL: Skip fields that cannot be edited
+            # Fields with operations: [] have no edit operations and will fail if updated
+            # This prevents errors like "Field does not support update 'attachment'"
+            operations = field_data.get("operations", [])
+            if not operations:
+                # Skip non-editable fields (e.g., attachment, issuelinks, component/s)
+                continue
+
             # Get field name from all_fields or use the one from editmeta
             field_name = field_data.get("name", "")
             if not field_name:

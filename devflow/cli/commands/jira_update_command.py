@@ -179,17 +179,14 @@ def update_jira_issue(
             payload["fields"][git_pr_field] = merged_prs
 
         # Handle system fields (components, labels, etc.)
-        # Merge config defaults with CLI-provided values (CLI takes precedence)
-        merged_system_fields = {}
-        if config.jira.system_field_defaults:
-            merged_system_fields.update(config.jira.system_field_defaults)
+        # IMPORTANT: For updates, ONLY include system fields explicitly specified via CLI
+        # Do NOT merge with config defaults - that would attempt to update non-editable fields
+        # Config defaults are for create operations, not updates
         if system_fields:
-            merged_system_fields.update(system_fields)
-
-        # Add system fields to payload (use field IDs directly like "components", "labels")
-        for field_name, field_value in merged_system_fields.items():
-            # System fields use their original names (e.g., "components"), not customfield IDs
-            payload["fields"][field_name] = field_value
+            # Add system fields to payload (use field IDs directly like "components", "labels")
+            for field_name, field_value in system_fields.items():
+                # System fields use their original names (e.g., "components"), not customfield IDs
+                payload["fields"][field_name] = field_value
 
         # Handle dynamically discovered custom fields
         if custom_fields:
@@ -201,6 +198,19 @@ def update_jira_issue(
                 console.print(f"[yellow]⚠[/yellow] Could not discover editable fields: {e}")
                 console.print("  Using creation field mappings as fallback")
                 editable_mappings = config.jira.field_mappings or {}
+
+            # CRITICAL: Filter out fields that cannot be edited (only set during creation)
+            # These fields will cause "Field does not support update" errors
+            # Filter applies to BOTH discovered fields AND fallback fields
+            non_editable_fields = {
+                "attachment", "issuelinks", "linked_issues",
+                "component/s",  # Red Hat JIRA specific
+            }
+            editable_mappings = {
+                field_name: field_info
+                for field_name, field_info in editable_mappings.items()
+                if field_name not in non_editable_fields
+            }
 
             # Process each custom field
             for field_name, field_value in custom_fields.items():
