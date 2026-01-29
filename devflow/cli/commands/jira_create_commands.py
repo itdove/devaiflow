@@ -515,13 +515,14 @@ def _get_required_system_fields(
     return system_fields
 
 
-def _get_affected_version(config, config_loader, field_mapper, flag_value: Optional[str]) -> str:
+def _get_affected_version(config, config_loader, field_mapper, flag_value: Optional[str]) -> Optional[str]:
     """Get affected version value from flag, config, or prompt.
 
     Logic:
-    1. If --affected-version flag provided, use it (prompt to save if different from config)
-    2. Else if affected_version in config, use it
-    3. Else prompt user with version list (from field_mappings) or default value
+    1. If --affected-version flag provided, validate and use it
+    2. Else if affected_version in config, validate and use it
+    3. Else if field is required, prompt user
+    4. Else return None (field is optional and not provided)
 
     Args:
         config: Config object
@@ -530,10 +531,18 @@ def _get_affected_version(config, config_loader, field_mapper, flag_value: Optio
         flag_value: Value from --affected-version flag (or None)
 
     Returns:
-        Affected version to use (always returns a value)
+        Affected version to use, or None if field is optional and not provided
     """
     # Case 1: Flag provided
     if flag_value:
+        # Validate flag value against allowed_values
+        from devflow.jira.utils import validate_affected_version
+        if not validate_affected_version(flag_value, field_mapper):
+            console_print(f"[red]✗[/red] Invalid affected version: \"{flag_value}\"")
+            console_print(f"[dim]This version is not in the allowed versions list.[/dim]")
+            console_print(f"[dim]Please check the allowed versions in your JIRA project.[/dim]")
+            sys.exit(1)
+
         # Check if different from config
         if config.jira.affected_version and config.jira.affected_version != flag_value:
             console_print(f"[dim]ℹ Current affected version in config: \"{config.jira.affected_version}\"[/dim]")
@@ -545,61 +554,34 @@ def _get_affected_version(config, config_loader, field_mapper, flag_value: Optio
 
     # Case 2: Affected version in config
     if config.jira.affected_version:
-        console_print(f"[dim]Using affected version from config: \"{config.jira.affected_version}\"[/dim]")
-        return config.jira.affected_version
+        # Validate config value against allowed_values
+        from devflow.jira.utils import validate_affected_version
+        if not validate_affected_version(config.jira.affected_version, field_mapper):
+            console_print(f"[yellow]⚠[/yellow] Configured affected version \"{config.jira.affected_version}\" is not in the allowed versions list.")
+            console_print(f"[dim]Please select a valid version from the list below.[/dim]")
+            # Fall through to Case 3 (prompt user)
+        else:
+            console_print(f"[dim]Using affected version from config: \"{config.jira.affected_version}\"[/dim]")
+            return config.jira.affected_version
 
-    # Case 3: Prompt user with version list or default
+    # Case 3: Check if field is required before prompting
+    from devflow.jira.utils import is_version_field_required
+    field_required = is_version_field_required(field_mapper)
+
+    # Only prompt if field is required
+    if not field_required:
+        # Field is optional and not provided - return None
+        return None
+
+    # Field is required - prompt user
     # Skip prompt in mock mode (use default silently)
     from devflow.utils import is_mock_mode
     if is_mock_mode():
         affected_version = "v1.0.0"
     elif not is_json_mode():
-        # Try to get allowed_values from field_mappings
-        allowed_versions = []
-        if field_mapper and field_mapper.field_mappings:
-            # Check for various field names that might represent affected version
-            # JIRA uses different field names: affects_version/s, affected_version, versions
-            for field_name in ["affects_version/s", "affected_version", "versions", "affects_versions"]:
-                field_info = field_mapper.field_mappings.get(field_name, {})
-                allowed_vals = field_info.get("allowed_values", [])
-                if allowed_vals:
-                    allowed_versions = allowed_vals
-                    break
-
-        if allowed_versions:
-            # Display numbered list of versions
-            console_print("\n[bold]Available versions:[/bold]")
-            for i, version in enumerate(allowed_versions, 1):
-                console_print(f"  {i}. {version}")
-            console_print()
-
-            # Prompt for selection (by number or name)
-            console_print("[bold]Select version:[/bold]")
-            console_print("  • Enter a number to select from the list")
-            console_print("  • Enter a version name directly")
-            console_print()
-
-            selection = Prompt.ask("Selection", default="1" if allowed_versions else "v1.0.0")
-
-            # Parse selection: check if it's a number
-            if selection.isdigit():
-                version_index = int(selection) - 1
-                if 0 <= version_index < len(allowed_versions):
-                    affected_version = allowed_versions[version_index]
-                else:
-                    console_print(f"[yellow]⚠[/yellow] Invalid selection. Using default.")
-                    affected_version = allowed_versions[0] if allowed_versions else "v1.0.0"
-            else:
-                # Treat as version name (custom or from list)
-                affected_version = selection
-        else:
-            # No allowed_values available, fall back to free-text prompt
-            console_print("\n[yellow]⚠[/yellow] No affected version configured.")
-            console_print("[dim]Example: v1.0.0[/dim]")
-            affected_version = Prompt.ask(
-                "[bold]Enter affected version[/bold]",
-                default="v1.0.0"
-            )
+        # Use common prompt function
+        from devflow.jira.utils import prompt_for_affected_version
+        affected_version = prompt_for_affected_version(field_mapper)
     else:
         affected_version = "v1.0.0"
 

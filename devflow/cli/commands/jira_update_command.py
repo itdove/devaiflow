@@ -183,6 +183,23 @@ def update_jira_issue(
         # Do NOT merge with config defaults - that would attempt to update non-editable fields
         # Config defaults are for create operations, not updates
         if system_fields:
+            # Validate version fields before adding to payload
+            from devflow.jira.utils import validate_affected_version
+
+            # Check for version-related fields and validate them
+            for field_name in ["versions", "affects_versions", "affected_version"]:
+                if field_name in system_fields:
+                    version_value = system_fields[field_name]
+                    # Handle tuple from Click's multiple=True
+                    if isinstance(version_value, tuple) and len(version_value) > 0:
+                        version_value = version_value[0]
+
+                    if version_value and not validate_affected_version(version_value, field_mapper):
+                        console.print(f"[red]✗[/red] Invalid version: \"{version_value}\"")
+                        console.print(f"[dim]This version is not in the allowed versions list.[/dim]")
+                        console.print(f"[dim]Please check the allowed versions in your JIRA project.[/dim]")
+                        sys.exit(1)
+
             # Add system fields to payload (use field IDs directly like "components", "labels")
             for field_name, field_value in system_fields.items():
                 # System fields use their original names (e.g., "components"), not customfield IDs

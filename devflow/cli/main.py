@@ -1170,15 +1170,46 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    # Prompt for affects_versions if creating a bug and not provided
-    if issue_type == "bug" and not affects_versions:
-        # Skip prompt in mock mode (use default silently)
+    # Handle affects_versions for bugs
+    if issue_type == "bug":
+        from devflow.config.loader import ConfigLoader
+        from devflow.jira.field_mapper import JiraFieldMapper
+        from devflow.jira import JiraClient
+        from devflow.jira.utils import prompt_for_affected_version, validate_affected_version, is_version_field_required
         from devflow.utils import is_mock_mode
-        if is_mock_mode():
-            affects_versions = "v1.0.0"
+
+        # Load field mappings for validation
+        config_loader = ConfigLoader()
+        config = config_loader.load_config()
+        field_mapper = None
+
+        if config and config.jira:
+            try:
+                jira_client = JiraClient()
+                # Use cached field mappings if available
+                if config.jira.field_mappings:
+                    field_mapper = JiraFieldMapper(jira_client, config.jira.field_mappings)
+            except Exception:
+                # If field mapper fails, continue without it
+                pass
+
+        if affects_versions:
+            # Validate provided version
+            if not validate_affected_version(affects_versions, field_mapper):
+                console.print(f"[red]✗[/red] Invalid affected version: \"{affects_versions}\"")
+                console.print(f"[dim]This version is not in the allowed versions list.[/dim]")
+                console.print(f"[dim]Please check the allowed versions in your JIRA project.[/dim]")
+                raise click.Abort()
         else:
-            # Simple text prompt - no validation, no choices shown
-            affects_versions = click.prompt("Enter affected version for this bug")
+            # Only prompt if field is required
+            field_required = is_version_field_required(field_mapper)
+            if field_required:
+                # Prompt for version
+                if is_mock_mode():
+                    affects_versions = "v1.0.0"
+                else:
+                    affects_versions = prompt_for_affected_version(field_mapper)
+            # else: affects_versions stays None (field is optional)
 
     create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions)
 
