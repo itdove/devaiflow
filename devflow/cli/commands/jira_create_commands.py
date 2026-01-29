@@ -698,6 +698,12 @@ def create_issue(
         console.print(f"[red]✗[/red] Invalid issue type: {issue_type}")
         sys.exit(1)
 
+    # Normalize issue type to match JIRA's title-case convention
+    # JIRA returns issue types as title-case ("Bug", "Story", "Task") in field metadata
+    # CLI accepts lowercase ("bug", "story", "task")
+    # Normalize once here so all subsequent code uses the correct case
+    issue_type = type_config["jira_issue_type"]
+
     try:
         # Load config
         config_loader = ConfigLoader()
@@ -719,7 +725,7 @@ def create_issue(
         # Get all required system fields for this issue type
         # Pass system_fields from CLI options as flag values
         required_system_fields = _get_required_system_fields(
-            config, config_loader, field_mapper, type_config["jira_issue_type"], system_fields or {}
+            config, config_loader, field_mapper, issue_type, system_fields or {}
         )
         if required_system_fields is None:
             # User cancelled or required field missing
@@ -732,7 +738,7 @@ def create_issue(
         if summary:
             flag_values['summary'] = summary
         required_custom_fields = _get_required_custom_fields(
-            config, config_loader, field_mapper, type_config["jira_issue_type"], flag_values
+            config, config_loader, field_mapper, issue_type, flag_values
         )
         if required_custom_fields is None:
             # User cancelled or required field missing

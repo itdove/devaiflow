@@ -190,7 +190,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         filters={
             "sync": JiraFiltersConfig(
                 status=["New", "To Do", "In Progress"],
-                required_fields=["sprint", "story-points"],
+                required_fields=[],  # Configure in organization.json or team.json
                 assignee="currentUser()",
             )
         },

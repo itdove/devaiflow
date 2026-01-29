@@ -601,3 +601,64 @@ class TestCreateTask:
                                     interactive=False,
                                     create_session=False,
                                 )
+
+
+class TestIssueTypeCaseSensitivity:
+    """Tests for AAP-64472: Custom fields silently skipped due to case mismatch."""
+
+    def test_lowercase_issue_type_matches_titlecase_field_metadata(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test that lowercase 'bug' matches title-case 'Bug' in field metadata.
+
+        Regression test for AAP-64472: Custom fields were silently skipped when
+        comparing lowercase issue_type="bug" against title-case required_for=["Bug"].
+        The fix normalizes issue_type to title-case at the entry point.
+        """
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        # Set up field mappings with title-case "Bug" in required_for
+        mock_config.jira.field_mappings = {
+            "workstream": {
+                "id": "customfield_12345",
+                "name": "Workstream",
+                "type": "option",
+                "required_for": ["Bug", "Story", "Task"],  # Title-case
+                "available_for": ["Bug", "Story", "Task"],
+                "allowed_values": ["Platform", "SaaS"]
+            }
+        }
+
+        # Configure mock to return field value
+        mock_config.jira.custom_field_defaults = {"workstream": "Platform"}
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="v1.0.0"):
+                            mock_mapper = Mock()
+                            mock_mapper.field_mappings = mock_config.jira.field_mappings
+                            mock_ensure.return_value = mock_mapper
+
+                            # Call create_bug with lowercase "bug" issue type
+                            create_bug(
+                                summary="Test bug",
+                                priority="Major",
+                                parent="PROJ-100",
+                                affected_version="v1.0.0",
+                                description="Bug description",
+                                description_file=None,
+                                interactive=False,
+                                create_session=False,
+                                custom_fields={"workstream": "SaaS"},  # Explicitly provide custom field
+                            )
+
+                            # Verify the bug was created successfully
+                            assert mock_jira_client.create_bug.called
+
+                            # Verify workstream field was included in the call
+                            call_kwargs = mock_jira_client.create_bug.call_args[1]
+                            assert 'required_custom_fields' in call_kwargs
+                            # Workstream should have the value "SaaS" (from custom_fields parameter)
+                            # This proves that the issue_type was normalized correctly - if it wasn't,
+                            # the field wouldn't have been identified as required and wouldn't be here
+                            assert call_kwargs['required_custom_fields'].get('workstream') == "SaaS"

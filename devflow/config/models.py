@@ -21,13 +21,7 @@ class JiraFiltersConfig(BaseModel):
     """Configuration for issue tracker ticket filters."""
 
     status: List[str] = ["New", "To Do", "In Progress"]
-    required_fields: Union[List[str], Dict[str, List[str]]] = Field(default_factory=lambda: {
-        "Bug": ["sprint"],
-        "Story": ["sprint", "story_points"],
-        "Task": ["sprint", "story_points"],
-        "Epic": ["sprint"],
-        "Spike": ["sprint", "story_points"]
-    })
+    required_fields: Union[List[str], Dict[str, List[str]]] = Field(default_factory=dict)
     assignee: str = "currentUser()"
 
     def get_required_fields_for_type(self, issue_type: str) -> List[str]:
@@ -63,15 +57,7 @@ class JiraBackendConfig(BaseModel):
     field_cache_timestamp: Optional[str] = None  # ISO timestamp of last field discovery
     field_cache_auto_refresh: bool = True  # Auto-refresh field mappings when stale
     field_cache_max_age_hours: int = 24  # Maximum age in hours before cache is stale (default: 24h)
-    parent_field_mapping: Optional[Dict[str, str]] = Field(
-        default_factory=lambda: {
-            "story": "epic_link",
-            "task": "epic_link",
-            "bug": "epic_link",
-            "spike": "epic_link",
-            "sub-task": "parent"
-        }
-    )  # Maps issue types to logical field names
+    parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
 
 
 class EnterpriseConfig(BaseModel):
@@ -139,15 +125,7 @@ class JiraConfig(BaseModel):
     field_cache_max_age_hours: int = 24  # Maximum age in hours before cache is stale (default: 24h)
     comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'
     comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
-    parent_field_mapping: Optional[Dict[str, str]] = Field(
-        default_factory=lambda: {
-            "story": "epic_link",
-            "task": "epic_link",
-            "bug": "epic_link",
-            "spike": "epic_link",
-            "sub-task": "parent"
-        }
-    )  # Maps issue types to logical field names
+    parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
 
 
 class RepoDetectionConfig(BaseModel):
