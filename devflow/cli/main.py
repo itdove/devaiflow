@@ -1145,8 +1145,8 @@ jira.add_command(create_jira_update_command())
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
 @workspace_option()
-@click.option("--affected-version", help="Affected version for bugs (required for bug type)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str, workspace: str, affected_version: Optional[str]) -> None:
+@click.option("--affects-versions", help="Affected version for bugs (required for bug type)")
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str, workspace: str, affects_versions: Optional[str]) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1170,17 +1170,17 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    # Prompt for affected_version if creating a bug and not provided
-    if issue_type == "bug" and not affected_version:
+    # Prompt for affects_versions if creating a bug and not provided
+    if issue_type == "bug" and not affects_versions:
         # Skip prompt in mock mode (use default silently)
         from devflow.utils import is_mock_mode
         if is_mock_mode():
-            affected_version = "v1.0.0"
+            affects_versions = "v1.0.0"
         else:
             # Simple text prompt - no validation, no choices shown
-            affected_version = click.prompt("Enter affected version for this bug")
+            affects_versions = click.prompt("Enter affected version for this bug")
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affected_version)
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions)
 
 
 @jira.command(name="open")

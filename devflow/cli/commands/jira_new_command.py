@@ -138,7 +138,7 @@ def _create_mock_jira_ticket(
     goal: str,
     config,
     project_path: str,
-    affected_version: Optional[str] = None
+    affects_versions: Optional[str] = None
 ) -> str:
     """Create a mock issue tracker ticket in mock mode.
 
@@ -176,7 +176,7 @@ def _create_mock_jira_ticket(
     workspace_path = None
     if config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affected_version=affected_version)
+    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
 
     # Create mock Claude session with initial prompt
     ai_agent_session_id = mock_claude.create_session(
@@ -297,7 +297,7 @@ def create_jira_ticket_session(
     path: Optional[str] = None,
     branch: Optional[str] = None,
     workspace: Optional[str] = None,
-    affected_version: Optional[str] = None,
+    affects_versions: Optional[str] = None,
 ) -> None:
     """Create a new session for issue tracker ticket creation.
 
@@ -314,7 +314,7 @@ def create_jira_ticket_session(
         path: Optional project path (bypasses interactive selection if provided)
         branch: Optional git branch name
         workspace: Optional workspace name (overrides session default and config default)
-        affected_version: Optional affected version (required for bugs)
+        affects_versions: Optional affected version (required for bugs)
     """
     from devflow.session.manager import SessionManager
     from devflow.config.loader import ConfigLoader
@@ -458,7 +458,7 @@ def create_jira_ticket_session(
             goal=goal,
             config=config,
             project_path=project_path,
-            affected_version=affected_version
+            affects_versions=affects_versions
         )
 
         # Output JSON if in JSON mode
@@ -519,7 +519,7 @@ def create_jira_ticket_session(
     workspace_path = None
     if config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affected_version=affected_version)
+    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
 
     # Set up signal handlers for cleanup
     global _cleanup_session, _cleanup_session_manager, _cleanup_name, _cleanup_config, _cleanup_done
@@ -803,7 +803,7 @@ def _build_ticket_creation_prompt(
     session_name: str,
     project_path: Optional[str] = None,
     workspace: Optional[str] = None,
-    affected_version: Optional[str] = None,
+    affects_versions: Optional[str] = None,
 ) -> str:
     """Build the initial prompt for ticket creation sessions.
 
@@ -815,7 +815,7 @@ def _build_ticket_creation_prompt(
         session_name: Name of the session (unused, kept for backward compatibility)
         project_path: Unused, kept for backward compatibility
         workspace: Workspace path for skill discovery
-        affected_version: Affected version for bugs (optional)
+        affects_versions: Affected version for bugs (optional)
 
     Returns:
         Initial prompt string with analysis-only instructions
@@ -884,8 +884,8 @@ def _build_ticket_creation_prompt(
 
     # For bugs, add affects_versions parameter (required field)
     if issue_type == "bug":
-        # Use the provided affected_version or show placeholder
-        affected_ver = affected_version if affected_version else "VERSION"
+        # Use the provided affects_versions or show placeholder
+        affected_ver = affects_versions if affects_versions else "VERSION"
         example_cmd_parts.append(f'--affects-versions "{affected_ver}"')
 
     # Add system field defaults (components, labels, etc.)
