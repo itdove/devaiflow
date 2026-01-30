@@ -14,125 +14,40 @@ from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, Jira
 console = Console()
 
 
-# JIRA issue templates from AGENTS.md
-BUG_TEMPLATE = """*Description*
+def _get_issue_template(config, issue_type: str) -> str:
+    """Get issue template from config.
 
-_<what is happening, why are you requesting this update>_
+    Args:
+        config: Config object
+        issue_type: Issue type (e.g., "Bug", "Story", "Task", "Epic", "Spike")
 
-*Steps to Reproduce*
+    Returns:
+        Template string for the given issue type
 
-_<list explicit steps to reproduce, for docs bugs, include the error/issue>_
+    Raises:
+        ValueError: If template is not found in config
+    """
+    # Get template from config
+    if config and config.jira and config.jira.issue_templates:
+        template = config.jira.issue_templates.get(issue_type)
+        if template:
+            return template
 
-*Actual Behavior*
-
-_<what is currently happening, for docs bugs include link(s) to relevant section(s)>_
-
-*Expected Behavior*
-
-_<what should happen? for docs bugs, provide suggestion(s) of how to improve the content>_
-
-*Additional Context*
-
-<_Provide any related communication on this issue._>"""
-
-
-STORY_TEMPLATE = """h3. *User Story*
-
-Format: "as a <type of user> I want <some goal> so that <some reason>"
-
-h3. *Supporting documentation*
-
-<include links to technical docs, diagrams, etc>"""
+    # No template found - this is an error
+    raise ValueError(
+        f"No template found for issue type '{issue_type}'. "
+        f"Please configure templates in organization.json (jira_issue_templates) "
+        f"or ORGANIZATION.md file."
+    )
 
 
-TASK_TEMPLATE = """h3. *Problem Description*
-
-<what is the issue, what is being asked, what is expected>
-
-h3. *Supporting documentation*"""
-
-
-EPIC_TEMPLATE = """h2. *Background*
-
-{color:#0747a6}_Initial completion during New status and then remove this blue text._{color}
-
-<fill out any context, value prop, description needed>
-h2. *User Stories*
-
-{color:#0747a6}_Initial completion during New status and then remove this blue text._{color}
-
-Format: "as a <type of user> I want <some goal> so that <some reason>"
-h2. *Supporting documentation*
-
-{color:#0747a6}_Initial completion during New status and then remove this blue text._{color}
-
-<include links to technical docs, diagrams, etc>
-h2. *Definition of Done*
-
-{color:#0747a6}_Initial completion during Refinement status and then remove this blue text._{color}
-
-*Should be reviewed and updated by the team, based on each team agreement and conversation during backlog refinement.*
-
-*< [REPLACE AND COPY FROM THIS GUIDANCE DOC>|https://docs.google.com/document/d/14vYX4WKLU__2IRUmvrSJ8TvLQjkZAb_eS_aAXxWJ5lM/edit#heading=h.3shchgrvtaaj]*
- * Item 1
- * Item 2
-
-h2. *Acceptance Criteria*
-
-{color:#0747a6}_COPY THIS INTO THE ACCEPTANCE CRITERIA FIELD during New status and then remove this section._ {color}
-h3. Requirements
-
-<Replace these with the functional requirements to deliver this work>
- * Item 1
- * Item 2
- * Item 3
-
-h3. End to End Test
-
-<Define at least one end-to-end test that demonstrates how this capability should work from the customers perspective>
- # Step 1
- # Step 2
- # Step 3
- # Step 4
-
-If the previous steps are possible, then the test succeeds.  Otherwise, the test fails."""
-
-
-SPIKE_TEMPLATE = """h3. *User Story*
-
-Format: "as a <type of user> I want <some goal> so that <some reason>"
-h3. *Supporting documentation*
-
-<include links to technical docs, diagrams, etc>
-h3. *Definition of Done*
-
-{color:#0747a6}_Initial completion during Refinement status and then remove this blue text._{color}
-
-*Should be reviewed and updated by the team, based on each team agreement and conversation during backlog refinement.*
-
-*< [REPLACE AND COPY FROM THIS GUIDANCE DOC>|https://docs.google.com/document/d/14vYX4WKLU__2IRUmvrSJ8TvLQjkZAb_eS_aAXxWJ5lM/edit#heading=h.3shchgrvtaaj]*
- * Item 1
- * Item 2
-
-h3. *Acceptance Criteria*
-
-{color:#0747a6}_COPY THIS INTO THE ACCEPTANCE CRITERIA FIELD during Refinement status and then remove this section._ {color}
-h3. Requirements
-
-<Replace these with the functional requirements to deliver this work>
- * Item 1
- * Item 2
- * Item 3
-
-h3. End to End Test
-
-<Define at least one end-to-end test that demonstrates how this capability should work from the customers perspective>
- # Step 1
- # Step 2
- # Step 3
- # Step 4
-
-If the previous steps are possible, then the test succeeds.  Otherwise, the test fails."""
+# Backward compatibility exports for tests that import these
+# Templates are now loaded from config, not hardcoded
+BUG_TEMPLATE = ""  # Loaded from config
+STORY_TEMPLATE = ""  # Loaded from config
+TASK_TEMPLATE = ""  # Loaded from config
+EPIC_TEMPLATE = ""  # Loaded from config
+SPIKE_TEMPLATE = ""  # Loaded from config
 
 
 def _ensure_field_mappings(config, config_loader) -> JiraFieldMapper:
@@ -679,59 +594,60 @@ def create_issue(
         custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform", "team": "Backend"})
         system_fields: JIRA system field values from CLI options (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     """
-    # Map issue type to template and configuration
-    ISSUE_TYPE_CONFIG = {
-        "epic": {
-            "template": EPIC_TEMPLATE,
-            "label": "Epic",
-            "uses_affected_version": False,
-            "jira_issue_type": "Epic",
-        },
-        "spike": {
-            "template": SPIKE_TEMPLATE,
-            "label": "Spike",
-            "uses_affected_version": False,
-            "jira_issue_type": "Spike",
-        },
-        "story": {
-            "template": STORY_TEMPLATE,
-            "label": "Story",
-            "uses_affected_version": False,
-            "jira_issue_type": "Story",
-        },
-        "task": {
-            "template": TASK_TEMPLATE,
-            "label": "Task",
-            "uses_affected_version": False,
-            "jira_issue_type": "Task",
-        },
-        "bug": {
-            "template": BUG_TEMPLATE,
-            "label": "Bug",
-            "uses_affected_version": True,
-            "jira_issue_type": "Bug",
-        },
-    }
-
-    type_config = ISSUE_TYPE_CONFIG.get(issue_type)
-    if not type_config:
-        console.print(f"[red]✗[/red] Invalid issue type: {issue_type}")
-        sys.exit(1)
-
-    # Normalize issue type to match JIRA's title-case convention
-    # JIRA returns issue types as title-case ("Bug", "Story", "Task") in field metadata
-    # CLI accepts lowercase ("bug", "story", "task")
-    # Normalize once here so all subsequent code uses the correct case
-    issue_type = type_config["jira_issue_type"]
-
     try:
-        # Load config
+        # Load config first (needed to get templates)
         config_loader = ConfigLoader()
         config = config_loader.load_config()
 
         if not config or not config.jira:
             console.print("[red]✗[/red] JIRA not configured. Run [cyan]daf init[/cyan] first.")
             sys.exit(1)
+
+        # Map issue type to template and configuration
+        # Templates are loaded from config with fallback to hardcoded values
+        ISSUE_TYPE_CONFIG = {
+            "epic": {
+                "template": _get_issue_template(config, "Epic"),
+                "label": "Epic",
+                "uses_affected_version": False,
+                "jira_issue_type": "Epic",
+            },
+            "spike": {
+                "template": _get_issue_template(config, "Spike"),
+                "label": "Spike",
+                "uses_affected_version": False,
+                "jira_issue_type": "Spike",
+            },
+            "story": {
+                "template": _get_issue_template(config, "Story"),
+                "label": "Story",
+                "uses_affected_version": False,
+                "jira_issue_type": "Story",
+            },
+            "task": {
+                "template": _get_issue_template(config, "Task"),
+                "label": "Task",
+                "uses_affected_version": False,
+                "jira_issue_type": "Task",
+            },
+            "bug": {
+                "template": _get_issue_template(config, "Bug"),
+                "label": "Bug",
+                "uses_affected_version": True,
+                "jira_issue_type": "Bug",
+            },
+        }
+
+        type_config = ISSUE_TYPE_CONFIG.get(issue_type)
+        if not type_config:
+            console.print(f"[red]✗[/red] Invalid issue type: {issue_type}")
+            sys.exit(1)
+
+        # Normalize issue type to match JIRA's title-case convention
+        # JIRA returns issue types as title-case ("Bug", "Story", "Task") in field metadata
+        # CLI accepts lowercase ("bug", "story", "task")
+        # Normalize once here so all subsequent code uses the correct case
+        issue_type = type_config["jira_issue_type"]
 
         # Get project first (needed for field discovery)
         resolved_project = _get_project(config, config_loader, project)

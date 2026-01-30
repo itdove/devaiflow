@@ -83,6 +83,7 @@ class OrganizationConfig(BaseModel):
     status_grouping_field: Optional[str] = None  # Field to group by in status dashboard (e.g., "sprint", "iteration", "release") - None means no grouping
     status_totals_field: Optional[str] = None  # Field to sum for totals in status dashboard (e.g., "points", "story_points", "effort") - None means no totals
     hierarchical_config_source: Optional[str] = None  # URL or path to hierarchical config files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md). Supports file://, http://, https://. Example: "https://github.com/ansible-saas/devflow-for-red-hatters/configs" or "file:///path/to/configs"
+    jira_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
 
 
 class TeamConfig(BaseModel):
@@ -126,6 +127,7 @@ class JiraConfig(BaseModel):
     comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'
     comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
     parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
+    issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
 
 
 class RepoDetectionConfig(BaseModel):

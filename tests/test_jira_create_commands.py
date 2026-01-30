@@ -14,11 +14,10 @@ from devflow.cli.commands.jira_create_commands import (
     create_bug,
     create_story,
     create_task,
-    BUG_TEMPLATE,
-    STORY_TEMPLATE,
-    TASK_TEMPLATE,
-    EPIC_TEMPLATE,
 )
+
+# Test template for _get_description tests
+TEST_TEMPLATE = "*Description*\n\nTest template content"
 from devflow.config.models import Config, JiraConfig
 from devflow.jira.field_mapper import JiraFieldMapper
 from devflow.jira.exceptions import JiraValidationError, JiraAuthError, JiraApiError
@@ -36,6 +35,14 @@ def mock_config():
     config.jira.affected_version = "v1.0.0"
     config.jira.field_mappings = {}
     config.jira.field_cache_timestamp = None
+    # Add issue templates from config
+    config.jira.issue_templates = {
+        "Bug": "*Description*\n\nTest bug template",
+        "Story": "h3. *User Story*\n\nTest story template",
+        "Task": "h3. *Problem Description*\n\nTest task template",
+        "Epic": "h2. *Background*\n\nTest epic template",
+        "Spike": "h3. *User Story*\n\nTest spike template",
+    }
     return config
 
 
@@ -414,28 +421,28 @@ class TestGetDescription:
         desc_file = tmp_path / "desc.txt"
         desc_file.write_text("Description from file")
 
-        result = _get_description(None, str(desc_file), BUG_TEMPLATE, False)
+        result = _get_description(None, str(desc_file), TEST_TEMPLATE, False)
 
         assert result == "Description from file"
 
     def test_use_description_from_argument(self):
         """Test using description from argument."""
-        result = _get_description("Direct description", None, BUG_TEMPLATE, False)
+        result = _get_description("Direct description", None, TEST_TEMPLATE, False)
 
         assert result == "Direct description"
 
     def test_use_template_when_no_input(self):
         """Test using template when no input provided."""
-        result = _get_description(None, None, BUG_TEMPLATE, False)
+        result = _get_description(None, None, TEST_TEMPLATE, False)
 
-        assert result == BUG_TEMPLATE
+        assert result == TEST_TEMPLATE
 
     def test_file_read_error_exits(self, tmp_path):
         """Test that file read error causes exit."""
         nonexistent_file = tmp_path / "nonexistent.txt"
 
         with pytest.raises(SystemExit):
-            _get_description(None, str(nonexistent_file), BUG_TEMPLATE, False)
+            _get_description(None, str(nonexistent_file), TEST_TEMPLATE, False)
 
     def test_interactive_mode_reads_stdin(self, monkeypatch):
         """Test interactive mode reads from stdin."""
@@ -450,7 +457,7 @@ class TestGetDescription:
 
         monkeypatch.setattr('builtins.input', mock_input)
 
-        result = _get_description(None, None, BUG_TEMPLATE, True)
+        result = _get_description(None, None, TEST_TEMPLATE, True)
 
         assert result == "Line 1\nLine 2\nLine 3"
 
