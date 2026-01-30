@@ -679,40 +679,35 @@ def create_issue(
         custom_fields: Custom field values from --field options (e.g., {"workstream": "Platform", "team": "Backend"})
         system_fields: JIRA system field values from CLI options (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     """
-    # Map issue type to template and client method
+    # Map issue type to template and configuration
     ISSUE_TYPE_CONFIG = {
         "epic": {
             "template": EPIC_TEMPLATE,
             "label": "Epic",
-            "client_method": "create_epic",
             "uses_affected_version": False,
             "jira_issue_type": "Epic",
         },
         "spike": {
             "template": SPIKE_TEMPLATE,
             "label": "Spike",
-            "client_method": "create_spike",
             "uses_affected_version": False,
             "jira_issue_type": "Spike",
         },
         "story": {
             "template": STORY_TEMPLATE,
             "label": "Story",
-            "client_method": "create_story",
             "uses_affected_version": False,
             "jira_issue_type": "Story",
         },
         "task": {
             "template": TASK_TEMPLATE,
             "label": "Task",
-            "client_method": "create_task",
             "uses_affected_version": False,
             "jira_issue_type": "Task",
         },
         "bug": {
             "template": BUG_TEMPLATE,
             "label": "Bug",
-            "client_method": "create_bug",
             "uses_affected_version": True,
             "jira_issue_type": "Bug",
         },
@@ -819,22 +814,22 @@ def create_issue(
 
         # Create issue
         jira_client = JiraClient()
-        client_method = getattr(jira_client, type_config["client_method"])
 
-        # Build kwargs based on issue type
+        # Build kwargs for generic create_issue method
         create_kwargs = {
+            "issue_type": type_config["jira_issue_type"],
             "summary": summary,
             "description": issue_description,
             "priority": priority,
             "project_key": resolved_project,
             "field_mapper": field_mapper,
             "parent": parent,
-            "required_custom_fields": {},  # Empty - custom fields will be passed via **kwargs below
+            "required_custom_fields": {},  # Will be populated below
         }
 
-        # Add affected_version only for bugs
-        if type_config["uses_affected_version"]:
-            create_kwargs["affected_version"] = resolved_affected_version
+        # Add affected_version to required_custom_fields for bugs
+        if type_config["uses_affected_version"] and resolved_affected_version:
+            create_kwargs["required_custom_fields"]["affected_version"] = resolved_affected_version
 
         # Apply custom field defaults from team.json (merged with CLI --field options)
         # Merge in this order (later values override earlier):
@@ -1024,7 +1019,7 @@ def create_issue(
 
         # Create the issue with specific error handling
         try:
-            issue_key = client_method(**create_kwargs)
+            issue_key = jira_client.create_issue(**create_kwargs)
         except JiraValidationError as e:
             # JIRA validation error - show field errors and server messages
             error_msg = str(e)
@@ -1427,14 +1422,18 @@ def create_bug(
         # Create bug
         jira_client = JiraClient()
         try:
-            issue_key = jira_client.create_bug(
+            # Add affected_version to required_custom_fields
+            if affected_version:
+                required_custom_fields["affected_version"] = affected_version
+
+            issue_key = jira_client.create_issue(
+                issue_type="Bug",
                 summary=summary,
                 description=bug_description,
                 priority=priority,
                 project_key=resolved_project,
                 field_mapper=field_mapper,
                 parent=parent,
-                affected_version=affected_version,
                 required_custom_fields=required_custom_fields,  # Pass all required custom fields
             )
 
@@ -1576,7 +1575,8 @@ def create_story(
         # Create story
         jira_client = JiraClient()
         try:
-            issue_key = jira_client.create_story(
+            issue_key = jira_client.create_issue(
+                issue_type="Story",
                 summary=summary,
                 description=story_description,
                 priority=priority,
@@ -1721,7 +1721,8 @@ def create_task(
         # Create task
         jira_client = JiraClient()
         try:
-            issue_key = jira_client.create_task(
+            issue_key = jira_client.create_issue(
+                issue_type="Task",
                 summary=summary,
                 description=task_description,
                 priority=priority,

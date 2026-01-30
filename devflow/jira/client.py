@@ -1318,29 +1318,33 @@ class JiraClient(IssueTrackerClient):
         except Exception:
             return None
 
-    def create_bug(
+    def create_issue(
         self,
+        issue_type: str,
         summary: str,
         description: str,
         priority: str,
         project_key: str,
         field_mapper,
         parent: Optional[str] = None,
-        affected_version: Optional[str] = None,
         components: Optional[List[str]] = None,
         required_custom_fields: Optional[dict] = None,
         **custom_fields
     ) -> str:
-        """Create a JIRA bug issue.
+        """Generic method to create a JIRA issue of any type.
+
+        This method replaces the duplicated logic in create_bug(), create_story(),
+        create_task(), create_epic(), and create_spike(). It handles all issue types
+        generically using the field_mappings configuration.
 
         Args:
-            summary: Bug summary
-            description: Bug description (using template from AGENTS.md)
-            priority: Bug priority (Critical, Major, Normal, Minor)
+            issue_type: Issue type name (e.g., "Bug", "Story", "Task", "Epic", "Spike")
+            summary: Issue summary/title
+            description: Issue description (using template from AGENTS.md)
+            priority: Issue priority (Critical, Major, Normal, Minor)
             project_key: JIRA project key (e.g., "PROJ")
             field_mapper: JiraFieldMapper instance for field ID lookup
-            parent: Optional parent issue key (epic for bugs, uses parent_field_mapping from config)
-            affected_version: Affected version (optional, will prompt if not provided)
+            parent: Optional parent issue key (uses parent_field_mapping from config)
             components: List of component names (default: [])
             required_custom_fields: Dictionary of required custom fields {field_name: value}
             **custom_fields: Additional custom fields (field_id: value pairs)
@@ -1353,6 +1357,30 @@ class JiraClient(IssueTrackerClient):
             JiraApiError: If API request fails
             JiraAuthError: If authentication fails
             JiraConnectionError: If connection fails
+
+        Example:
+            # Create a bug
+            key = client.create_issue(
+                issue_type="Bug",
+                summary="Production API timeout",
+                description="...",
+                priority="Critical",
+                project_key="PROJ",
+                field_mapper=field_mapper,
+                parent="PROJ-1234",
+                required_custom_fields={"affected_version": "2.5.0"}
+            )
+
+            # Create a story
+            key = client.create_issue(
+                issue_type="Story",
+                summary="Add caching layer",
+                description="...",
+                priority="Major",
+                project_key="PROJ",
+                field_mapper=field_mapper,
+                parent="PROJ-1234"
+            )
         """
         if components is None:
             components = []
@@ -1360,18 +1388,17 @@ class JiraClient(IssueTrackerClient):
             required_custom_fields = {}
 
         # Get parent field ID based on parent_field_mapping from config
-        parent_field_id = self._get_parent_field_id("bug", field_mapper)
+        parent_field_id = self._get_parent_field_id(issue_type.lower(), field_mapper)
 
-        # Build payload
+        # Build base payload
         payload = {
             "fields": {
                 "project": {"key": project_key},
-                "issuetype": {"name": "Bug"},
+                "issuetype": {"name": issue_type},
                 "summary": summary,
                 "description": description,
                 "priority": {"name": priority},
                 "components": [{"name": comp} for comp in components],
-                "versions": [{"name": affected_version}],
             }
         }
 
@@ -1379,7 +1406,7 @@ class JiraClient(IssueTrackerClient):
         self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
 
         # Set required fields based on field_mappings metadata
-        self._set_required_fields(payload, "Bug", field_mapper)
+        self._set_required_fields(payload, issue_type, field_mapper)
 
         # Add parent link if provided and field is configured
         if parent and parent_field_id:
@@ -1402,7 +1429,7 @@ class JiraClient(IssueTrackerClient):
                 return data["key"]
             elif response.status_code == 401 or response.status_code == 403:
                 raise JiraAuthError(
-                    "Authentication failed when creating bug",
+                    f"Authentication failed when creating {issue_type.lower()}",
                     status_code=response.status_code
                 )
             elif response.status_code == 400:
@@ -1413,7 +1440,7 @@ class JiraClient(IssueTrackerClient):
                     field_errors = error_data.get("errors", {})
 
                     raise JiraValidationError(
-                        "Failed to create bug",
+                        f"Failed to create {issue_type.lower()}",
                         field_errors=field_errors,
                         error_messages=error_messages
                     )
@@ -1421,13 +1448,13 @@ class JiraClient(IssueTrackerClient):
                     raise
                 except Exception:
                     raise JiraApiError(
-                        "Failed to create bug",
+                        f"Failed to create {issue_type.lower()}",
                         status_code=response.status_code,
                         response_text=response.text
                     )
             else:
                 raise JiraApiError(
-                    "Failed to create bug",
+                    f"Failed to create {issue_type.lower()}",
                     status_code=response.status_code,
                     response_text=response.text
                 )
@@ -1437,487 +1464,8 @@ class JiraClient(IssueTrackerClient):
             raise
         except Exception as e:
             # Wrap unexpected errors
-            raise JiraApiError(f"Failed to create bug: {e}")
+            raise JiraApiError(f"Failed to create {issue_type.lower()}: {e}")
 
-    def create_story(
-        self,
-        summary: str,
-        description: str,
-        priority: str,
-        project_key: str,
-        field_mapper,
-        parent: Optional[str] = None,
-        components: Optional[List[str]] = None,
-        required_custom_fields: Optional[dict] = None,
-        **custom_fields
-    ) -> str:
-        """Create a JIRA story issue.
-
-        Args:
-            summary: Story summary
-            description: Story description (using template from AGENTS.md)
-            priority: Story priority (Critical, Major, Normal, Minor)
-            project_key: JIRA project key (e.g., "PROJ")
-            field_mapper: JiraFieldMapper instance for field ID lookup
-            parent: Optional parent issue key (epic for stories, uses parent_field_mapping from config)
-            components: List of component names (default: [])
-            required_custom_fields: Dictionary of required custom fields {field_name: value}
-            **custom_fields: Additional custom fields (field_id: value pairs)
-
-        Returns:
-            Created issue key (e.g., "PROJ-12345")
-
-        Raises:
-            JiraValidationError: If creation fails due to validation errors (400)
-            JiraApiError: If API request fails
-            JiraAuthError: If authentication fails
-            JiraConnectionError: If connection fails
-        """
-        if components is None:
-            components = []
-        if required_custom_fields is None:
-            required_custom_fields = {}
-
-        # Get parent field ID based on parent_field_mapping from config
-        parent_field_id = self._get_parent_field_id("story", field_mapper)
-
-        # Build payload
-        payload = {
-            "fields": {
-                "project": {"key": project_key},
-                "issuetype": {"name": "Story"},
-                "summary": summary,
-                "description": description,
-                "priority": {"name": priority},
-                "components": [{"name": comp} for comp in components],
-            }
-        }
-
-        # Add required custom fields generically
-        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
-
-        # Set required fields based on field_mappings metadata
-        self._set_required_fields(payload, "Story", field_mapper)
-
-        # Add parent link if provided and field is configured
-        if parent and parent_field_id:
-            payload["fields"][parent_field_id] = parent
-
-        # Add custom fields
-        for field_id, field_value in custom_fields.items():
-            if field_value is not None:
-                payload["fields"][field_id] = field_value
-
-        try:
-            response = self._api_request(
-                "POST",
-                "/rest/api/2/issue",
-                json=payload
-            )
-
-            if response.status_code == 201:
-                data = response.json()
-                return data["key"]
-            elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
-                    "Authentication failed when creating story",
-                    status_code=response.status_code
-                )
-            elif response.status_code == 400:
-                # Parse validation errors
-                try:
-                    error_data = response.json()
-                    error_messages = error_data.get("errorMessages", [])
-                    field_errors = error_data.get("errors", {})
-
-                    raise JiraValidationError(
-                        "Failed to create story",
-                        field_errors=field_errors,
-                        error_messages=error_messages
-                    )
-                except JiraValidationError:
-                    raise
-                except Exception:
-                    raise JiraApiError(
-                        "Failed to create story",
-                        status_code=response.status_code,
-                        response_text=response.text
-                    )
-            else:
-                raise JiraApiError(
-                    "Failed to create story",
-                    status_code=response.status_code,
-                    response_text=response.text
-                )
-
-        except (JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
-            # Re-raise JIRA-specific exceptions
-            raise
-        except Exception as e:
-            # Wrap unexpected errors
-            raise JiraApiError(f"Failed to create story: {e}")
-
-    def create_task(
-        self,
-        summary: str,
-        description: str,
-        priority: str,
-        project_key: str,
-        field_mapper,
-        parent: Optional[str] = None,
-        components: Optional[List[str]] = None,
-        required_custom_fields: Optional[dict] = None,
-        **custom_fields
-    ) -> str:
-        """Create a JIRA task issue.
-
-        Args:
-            summary: Task summary
-            description: Task description (using template from AGENTS.md)
-            priority: Task priority (Critical, Major, Normal, Minor)
-            project_key: JIRA project key (e.g., "PROJ")
-            field_mapper: JiraFieldMapper instance for field ID lookup
-            parent: Optional parent issue key (epic for tasks, uses parent_field_mapping from config)
-            components: List of component names (default: [])
-            required_custom_fields: Dictionary of required custom fields {field_name: value}
-            **custom_fields: Additional custom fields (field_id: value pairs)
-
-        Returns:
-            Created issue key (e.g., "PROJ-12345")
-
-        Raises:
-            JiraValidationError: If creation fails due to validation errors (400)
-            JiraApiError: If API request fails
-            JiraAuthError: If authentication fails
-            JiraConnectionError: If connection fails
-        """
-        if components is None:
-            components = []
-        if required_custom_fields is None:
-            required_custom_fields = {}
-
-        # Get parent field ID based on parent_field_mapping from config
-        parent_field_id = self._get_parent_field_id("task", field_mapper)
-
-        # Build payload
-        payload = {
-            "fields": {
-                "project": {"key": project_key},
-                "issuetype": {"name": "Task"},
-                "summary": summary,
-                "description": description,
-                "priority": {"name": priority},
-                "components": [{"name": comp} for comp in components],
-            }
-        }
-
-        # Add required custom fields generically
-        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
-
-        # Set required fields based on field_mappings metadata
-        self._set_required_fields(payload, "Task", field_mapper)
-
-        # Add parent link if provided and field is configured
-        if parent and parent_field_id:
-            payload["fields"][parent_field_id] = parent
-
-        # Add custom fields
-        for field_id, field_value in custom_fields.items():
-            if field_value is not None:
-                payload["fields"][field_id] = field_value
-
-        try:
-            response = self._api_request(
-                "POST",
-                "/rest/api/2/issue",
-                json=payload
-            )
-
-            if response.status_code == 201:
-                data = response.json()
-                return data["key"]
-            elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
-                    "Authentication failed when creating task",
-                    status_code=response.status_code
-                )
-            elif response.status_code == 400:
-                # Parse validation errors
-                try:
-                    error_data = response.json()
-                    error_messages = error_data.get("errorMessages", [])
-                    field_errors = error_data.get("errors", {})
-
-                    raise JiraValidationError(
-                        "Failed to create task",
-                        field_errors=field_errors,
-                        error_messages=error_messages
-                    )
-                except JiraValidationError:
-                    raise
-                except Exception:
-                    raise JiraApiError(
-                        "Failed to create task",
-                        status_code=response.status_code,
-                        response_text=response.text
-                    )
-            else:
-                raise JiraApiError(
-                    "Failed to create task",
-                    status_code=response.status_code,
-                    response_text=response.text
-                )
-
-        except (JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
-            # Re-raise JIRA-specific exceptions
-            raise
-        except Exception as e:
-            # Wrap unexpected errors
-            raise JiraApiError(f"Failed to create task: {e}")
-
-    def create_epic(
-        self,
-        summary: str,
-        description: str,
-        priority: str,
-        project_key: str,
-        field_mapper,
-        parent: Optional[str] = None,
-        components: Optional[List[str]] = None,
-        required_custom_fields: Optional[dict] = None,
-        **custom_fields
-    ) -> str:
-        """Create a JIRA epic issue.
-
-        Args:
-            summary: Epic summary
-            description: Epic description (using template from AGENTS.md)
-            priority: Epic priority (Critical, Major, Normal, Minor)
-            project_key: JIRA project key (e.g., "PROJ")
-            field_mapper: JiraFieldMapper instance for field ID lookup
-            parent: Optional parent issue key (not typically used for epics as they are top-level)
-            components: List of component names (default: [])
-            required_custom_fields: Dictionary of required custom fields {field_name: value}
-            **custom_fields: Additional custom fields (field_id: value pairs)
-
-        Returns:
-            Created issue key (e.g., "PROJ-12345")
-
-        Raises:
-            JiraValidationError: If creation fails due to validation errors (400)
-            JiraApiError: If API request fails
-            JiraAuthError: If authentication fails
-            JiraConnectionError: If connection fails
-
-        Note:
-            Epic Name custom field is optional in modern JIRA. If discovered via field_mapper,
-            it will be populated with the summary. Epics are typically top-level containers
-            and do not have parent links.
-        """
-        if components is None:
-            components = []
-        if required_custom_fields is None:
-            required_custom_fields = {}
-
-        # Build payload
-        payload = {
-            "fields": {
-                "project": {"key": project_key},
-                "issuetype": {"name": "Epic"},
-                "summary": summary,
-                "description": description,
-                "priority": {"name": priority},
-                "components": [{"name": comp} for comp in components],
-            }
-        }
-
-        # Add required custom fields generically
-        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
-
-        # Set required fields based on field_mappings metadata
-        self._set_required_fields(payload, "Epic", field_mapper)
-
-        # Note: Epics typically don't have parent links as they are top-level containers
-        # However, if parent is provided and a parent field exists, add it
-        if parent:
-            parent_field_id = self._get_parent_field_id("epic", field_mapper)
-            if parent_field_id:
-                payload["fields"][parent_field_id] = parent
-
-        # Add custom fields
-        for field_id, field_value in custom_fields.items():
-            if field_value is not None:
-                payload["fields"][field_id] = field_value
-
-        try:
-            response = self._api_request(
-                "POST",
-                "/rest/api/2/issue",
-                json=payload
-            )
-
-            if response.status_code == 201:
-                data = response.json()
-                return data["key"]
-            elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
-                    "Authentication failed when creating epic",
-                    status_code=response.status_code
-                )
-            elif response.status_code == 400:
-                # Parse validation errors
-                try:
-                    error_data = response.json()
-                    error_messages = error_data.get("errorMessages", [])
-                    field_errors = error_data.get("errors", {})
-
-                    raise JiraValidationError(
-                        "Failed to create epic",
-                        field_errors=field_errors,
-                        error_messages=error_messages
-                    )
-                except JiraValidationError:
-                    raise
-                except Exception:
-                    raise JiraApiError(
-                        "Failed to create epic",
-                        status_code=response.status_code,
-                        response_text=response.text
-                    )
-            else:
-                raise JiraApiError(
-                    "Failed to create epic",
-                    status_code=response.status_code,
-                    response_text=response.text
-                )
-
-        except (JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
-            # Re-raise JIRA-specific exceptions
-            raise
-        except Exception as e:
-            # Wrap unexpected errors
-            raise JiraApiError(f"Failed to create epic: {e}")
-
-    def create_spike(
-        self,
-        summary: str,
-        description: str,
-        priority: str,
-        project_key: str,
-        field_mapper,
-        parent: Optional[str] = None,
-        components: Optional[List[str]] = None,
-        required_custom_fields: Optional[dict] = None,
-        **custom_fields
-    ) -> str:
-        """Create a JIRA spike issue.
-
-        Args:
-            summary: Spike summary
-            description: Spike description (using template from AGENTS.md)
-            priority: Spike priority (Critical, Major, Normal, Minor)
-            project_key: JIRA project key (e.g., "PROJ")
-            field_mapper: JiraFieldMapper instance for field ID lookup
-            parent: Optional parent issue key (epic for spikes, uses parent_field_mapping from config)
-            components: List of component names (default: [])
-            required_custom_fields: Dictionary of required custom fields {field_name: value}
-            **custom_fields: Additional custom fields (field_id: value pairs)
-
-        Returns:
-            Created issue key (e.g., "PROJ-12345")
-
-        Raises:
-            JiraValidationError: If creation fails due to validation errors (400)
-            JiraApiError: If API request fails
-            JiraAuthError: If authentication fails
-            JiraConnectionError: If connection fails
-
-        Note:
-            Spikes should typically be linked to an Epic via the parent parameter.
-        """
-        if components is None:
-            components = []
-        if required_custom_fields is None:
-            required_custom_fields = {}
-
-        # Get parent field ID based on parent_field_mapping from config
-        parent_field_id = self._get_parent_field_id("spike", field_mapper)
-
-        # Build payload
-        payload = {
-            "fields": {
-                "project": {"key": project_key},
-                "issuetype": {"name": "Spike"},
-                "summary": summary,
-                "description": description,
-                "priority": {"name": priority},
-                "components": [{"name": comp} for comp in components],
-            }
-        }
-
-        # Add required custom fields generically
-        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
-
-        # Set required fields based on field_mappings metadata
-        self._set_required_fields(payload, "Spike", field_mapper)
-
-        # Add parent link if provided and field is configured
-        if parent and parent_field_id:
-            payload["fields"][parent_field_id] = parent
-
-        # Add custom fields
-        for field_id, field_value in custom_fields.items():
-            if field_value is not None:
-                payload["fields"][field_id] = field_value
-
-        try:
-            response = self._api_request(
-                "POST",
-                "/rest/api/2/issue",
-                json=payload
-            )
-
-            if response.status_code == 201:
-                data = response.json()
-                return data["key"]
-            elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
-                    "Authentication failed when creating spike",
-                    status_code=response.status_code
-                )
-            elif response.status_code == 400:
-                # Parse validation errors
-                try:
-                    error_data = response.json()
-                    error_messages = error_data.get("errorMessages", [])
-                    field_errors = error_data.get("errors", {})
-
-                    raise JiraValidationError(
-                        "Failed to create spike",
-                        field_errors=field_errors,
-                        error_messages=error_messages
-                    )
-                except JiraValidationError:
-                    raise
-                except Exception:
-                    raise JiraApiError(
-                        "Failed to create spike",
-                        status_code=response.status_code,
-                        response_text=response.text
-                    )
-            else:
-                raise JiraApiError(
-                    "Failed to create spike",
-                    status_code=response.status_code,
-                    response_text=response.text
-                )
-
-        except (JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
-            # Re-raise JIRA-specific exceptions
-            raise
-        except Exception as e:
-            # Wrap unexpected errors
-            raise JiraApiError(f"Failed to create spike: {e}")
 
     def _set_required_fields(
         self,
