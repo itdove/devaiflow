@@ -1163,6 +1163,9 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
     from devflow.cli.commands.jira_new_command import create_jira_ticket_session
     from devflow.cli.utils import resolve_goal_input
 
+    # Capitalize issue_type to match JIRA field_mappings format (e.g., "bug" -> "Bug")
+    issue_type = issue_type.capitalize()
+
     # Prompt for goal if not provided
     if not goal:
         goal = click.prompt("Enter goal/description for the ticket")
@@ -1170,46 +1173,46 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    # Handle affects_versions for bugs
-    if issue_type == "bug":
-        from devflow.config.loader import ConfigLoader
-        from devflow.jira.field_mapper import JiraFieldMapper
-        from devflow.jira import JiraClient
-        from devflow.jira.utils import prompt_for_affected_version, validate_affected_version, is_version_field_required
-        from devflow.utils import is_mock_mode
+    # Handle affects_versions - check if required for current issue type
+    from devflow.config.loader import ConfigLoader
+    from devflow.jira.field_mapper import JiraFieldMapper
+    from devflow.jira import JiraClient
+    from devflow.jira.utils import prompt_for_affected_version, validate_affected_version, is_version_field_required
+    from devflow.utils import is_mock_mode
 
-        # Load field mappings for validation
-        config_loader = ConfigLoader()
-        config = config_loader.load_config()
-        field_mapper = None
+    # Load field mappings to check if version field is required for this issue type
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+    field_mapper = None
 
-        if config and config.jira:
-            try:
-                jira_client = JiraClient()
-                # Use cached field mappings if available
-                if config.jira.field_mappings:
-                    field_mapper = JiraFieldMapper(jira_client, config.jira.field_mappings)
-            except Exception:
-                # If field mapper fails, continue without it
-                pass
+    if config and config.jira:
+        try:
+            jira_client = JiraClient()
+            # Use cached field mappings if available
+            if config.jira.field_mappings:
+                field_mapper = JiraFieldMapper(jira_client, config.jira.field_mappings)
+        except Exception:
+            # If field mapper fails, continue without it
+            pass
 
-        if affects_versions:
-            # Validate provided version
-            if not validate_affected_version(affects_versions, field_mapper):
-                console.print(f"[red]✗[/red] Invalid affected version: \"{affects_versions}\"")
-                console.print(f"[dim]This version is not in the allowed versions list.[/dim]")
-                console.print(f"[dim]Please check the allowed versions in your JIRA project.[/dim]")
-                raise click.Abort()
-        else:
-            # Only prompt if field is required
-            field_required = is_version_field_required(field_mapper)
-            if field_required:
-                # Prompt for version
-                if is_mock_mode():
-                    affects_versions = "v1.0.0"
-                else:
-                    affects_versions = prompt_for_affected_version(field_mapper)
-            # else: affects_versions stays None (field is optional)
+    if affects_versions:
+        # Validate provided version
+        if not validate_affected_version(affects_versions, field_mapper):
+            console.print(f"[red]✗[/red] Invalid affected version: \"{affects_versions}\"")
+            console.print(f"[dim]This version is not in the allowed versions list.[/dim]")
+            console.print(f"[dim]Please check the allowed versions in your JIRA project.[/dim]")
+            raise click.Abort()
+    else:
+        # Only prompt if field is required for this issue type
+        # Checks field_mappings['affects_version/s']['required_for'] to see if current issue_type is listed
+        field_required = is_version_field_required(field_mapper, issue_type=issue_type)
+        if field_required:
+            # Prompt for version
+            if is_mock_mode():
+                affects_versions = "v1.0.0"
+            else:
+                affects_versions = prompt_for_affected_version(field_mapper)
+        # else: affects_versions stays None (field is optional for this issue type)
 
     create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions)
 

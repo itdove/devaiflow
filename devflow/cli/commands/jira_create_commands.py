@@ -515,23 +515,24 @@ def _get_required_system_fields(
     return system_fields
 
 
-def _get_affected_version(config, config_loader, field_mapper, flag_value: Optional[str]) -> Optional[str]:
+def _get_affected_version(config, config_loader, field_mapper, flag_value: Optional[str], issue_type: str = "Bug") -> Optional[str]:
     """Get affected version value from flag, config, or prompt.
 
     Logic:
     1. If --affected-version flag provided, validate and use it
     2. Else if affected_version in config, validate and use it
-    3. Else if field is required, prompt user
-    4. Else return None (field is optional and not provided)
+    3. Else if field is required for this issue type, prompt user
+    4. Else return None (field is optional for this issue type and not provided)
 
     Args:
         config: Config object
         config_loader: ConfigLoader instance
         field_mapper: JiraFieldMapper instance (for accessing allowed_values)
         flag_value: Value from --affected-version flag (or None)
+        issue_type: JIRA issue type (e.g., "Bug", "Story", "Task")
 
     Returns:
-        Affected version to use, or None if field is optional and not provided
+        Affected version to use, or None if field is optional for this issue type and not provided
     """
     # Case 1: Flag provided
     if flag_value:
@@ -564,13 +565,14 @@ def _get_affected_version(config, config_loader, field_mapper, flag_value: Optio
             console_print(f"[dim]Using affected version from config: \"{config.jira.affected_version}\"[/dim]")
             return config.jira.affected_version
 
-    # Case 3: Check if field is required before prompting
+    # Case 3: Check if field is required for this issue type before prompting
+    # Checks field_mappings['affects_version/s']['required_for'] to see if issue_type is listed
     from devflow.jira.utils import is_version_field_required
-    field_required = is_version_field_required(field_mapper)
+    field_required = is_version_field_required(field_mapper, issue_type=issue_type)
 
-    # Only prompt if field is required
+    # Only prompt if field is required for this issue type
     if not field_required:
-        # Field is optional and not provided - return None
+        # Field is optional for this issue type and not provided - return None
         return None
 
     # Field is required - prompt user
@@ -767,10 +769,10 @@ def create_issue(
             # User cancelled or required field missing
             sys.exit(1)
 
-        # Get affected version (for bugs only)
+        # Get affected version (if uses_affected_version is True for this issue type)
         resolved_affected_version = None
         if type_config["uses_affected_version"]:
-            resolved_affected_version = _get_affected_version(config, config_loader, field_mapper, affected_version)
+            resolved_affected_version = _get_affected_version(config, config_loader, field_mapper, affected_version, issue_type=issue_type)
 
         # Validate parent ticket if provided
         if parent:

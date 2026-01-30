@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from devflow.jira.utils import merge_pr_urls, is_issue_key_pattern, validate_jira_ticket
+from devflow.jira.utils import merge_pr_urls, is_issue_key_pattern, validate_jira_ticket, is_version_field_required
 from devflow.jira.exceptions import JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError
 
 
@@ -430,3 +430,144 @@ class TestValidateJiraTicket:
         assert result is None
         # Verify error message was displayed
         assert mock_console.print.call_count >= 1
+
+class TestIsVersionFieldRequired:
+    """Test suite for is_version_field_required function."""
+
+    def test_no_issue_type_provided(self):
+        """Test returns False when issue_type is None."""
+        result = is_version_field_required(field_mapper=None, issue_type=None)
+        assert result is False
+
+    def test_no_field_mapper_provided(self):
+        """Test returns False when field_mapper is None."""
+        result = is_version_field_required(field_mapper=None, issue_type="Bug")
+        assert result is False
+
+    def test_field_mapper_no_mappings(self):
+        """Test returns False when field_mapper has no field_mappings."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = None
+        result = is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug")
+        assert result is False
+
+    def test_version_required_for_bug_strategy1(self):
+        """Test version field required for Bug using Strategy 1 (specific field name)."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "required_for": ["Bug"],
+                "allowed_values": ["v1.0.0", "v2.0.0"]
+            }
+        }
+        result = is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug")
+        assert result is True
+
+    def test_version_not_required_for_story_strategy1(self):
+        """Test version field not required for Story when only Bug is in required_for."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "required_for": ["Bug"],
+                "allowed_values": ["v1.0.0", "v2.0.0"]
+            }
+        }
+        result = is_version_field_required(field_mapper=mock_field_mapper, issue_type="Story")
+        assert result is False
+
+    def test_version_required_for_multiple_types(self):
+        """Test version field required for multiple issue types."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "required_for": ["Bug", "Story", "Task"],
+                "allowed_values": ["v1.0.0"]
+            }
+        }
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug") is True
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Story") is True
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Task") is True
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Epic") is False
+
+    def test_version_field_strategy2_generic_match(self):
+        """Test version field required using Strategy 2 (generic field name with 'version' or 'affect')."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affected_version": {
+                "id": "customfield_12345",
+                "name": "Affected Version",
+                "required_for": ["Bug"],
+                "allowed_values": ["v1.0.0"]
+            }
+        }
+        result = is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug")
+        assert result is True
+
+    def test_version_field_empty_required_for(self):
+        """Test version field with empty required_for list."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "required_for": [],
+                "allowed_values": ["v1.0.0"]
+            }
+        }
+        result = is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug")
+        assert result is False
+
+    def test_version_field_missing_required_for(self):
+        """Test version field without required_for field (defaults to empty list)."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "allowed_values": ["v1.0.0"]
+            }
+        }
+        result = is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug")
+        assert result is False
+
+    def test_multiple_version_fields_one_required(self):
+        """Test when multiple version-related fields exist but only one is required."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "required_for": [],
+                "allowed_values": ["v1.0.0"]
+            },
+            "affected_version": {
+                "id": "customfield_12345",
+                "name": "Affected Version",
+                "required_for": ["Bug"],
+                "allowed_values": ["v1.0.0"]
+            }
+        }
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug") is True
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Story") is False
+
+    def test_case_sensitive_issue_type(self):
+        """Test that issue_type matching is case-sensitive."""
+        mock_field_mapper = MagicMock()
+        mock_field_mapper.field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "required_for": ["Bug"],  # Capital B
+                "allowed_values": ["v1.0.0"]
+            }
+        }
+        # Should match with capital B
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug") is True
+        # Should not match with lowercase b
+        assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="bug") is False

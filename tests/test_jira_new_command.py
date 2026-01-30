@@ -506,7 +506,7 @@ class TestJiraNewMockMode:
         # Verify mock ticket was created
         assert "Created mock issue tracker ticket: PROJ-" in result.output
         assert "Summary: Add retry logic to subscription API" in result.output
-        assert "Type: story" in result.output
+        assert "Type: Story" in result.output
         assert "Parent: PROJ-59038" in result.output
         assert "Status: New" in result.output
 
@@ -544,7 +544,7 @@ class TestJiraNewMockMode:
         # Verify mock ticket was created
         assert "Created mock issue tracker ticket: PROJ-" in result.output
         assert "Summary: Fix timeout in backup operation" in result.output
-        assert "Type: bug" in result.output
+        assert "Type: Bug" in result.output
 
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_mock_mode_creates_ticket_task(self, temp_daf_home):
@@ -571,7 +571,7 @@ class TestJiraNewMockMode:
         # Verify mock ticket was created
         assert "Created mock issue tracker ticket: PROJ-" in result.output
         assert "Summary: Update documentation" in result.output
-        assert "Type: task" in result.output
+        assert "Type: Task" in result.output
 
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_mock_mode_creates_ticket_epic(self, temp_daf_home):
@@ -598,7 +598,7 @@ class TestJiraNewMockMode:
         # Verify mock ticket was created
         assert "Created mock issue tracker ticket: PROJ-" in result.output
         assert "Summary: Implement new backup feature" in result.output
-        assert "Type: epic" in result.output
+        assert "Type: Epic" in result.output
 
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_mock_mode_ticket_persists(self, temp_daf_home):
@@ -724,7 +724,8 @@ class TestJiraNewMockMode:
         # Verify initial prompt contains ticket creation instructions
         initial_prompt = claude_session["messages"][0]["content"]
         assert "ANALYSIS-ONLY" in initial_prompt
-        assert "daf jira create story" in initial_prompt
+        # Issue type is now capitalized (Story instead of story)
+        assert "daf jira create Story" in initial_prompt
 
         # Verify assistant response mentions ticket creation
         assistant_response = claude_session["messages"][1]["content"]
