@@ -506,6 +506,7 @@ class ConfigLoader:
             console.print("[dim]  Using default organization configuration[/dim]")
             return OrganizationConfig()
 
+
     def _load_team_config(self) -> Optional["TeamConfig"]:
         """Load team configuration from team.json.
 
@@ -624,6 +625,16 @@ class ConfigLoader:
         backend_dict = backend.model_dump(by_alias=True, exclude_none=False)
         merged_backend_dict = self._apply_backend_overrides(backend_dict, enterprise.backend_overrides)
 
+        # Merge templates from configuration hierarchy
+        # Priority: team.json > organization.json > enterprise.json
+        merged_templates = {}
+        if enterprise.jira_issue_templates:
+            merged_templates.update(enterprise.jira_issue_templates)
+        if org.jira_issue_templates:
+            merged_templates.update(org.jira_issue_templates)
+        if team.jira_issue_templates:
+            merged_templates.update(team.jira_issue_templates)
+
         # Reconstruct backend config from merged dict (to ensure type safety)
         # Note: We only override specific fields, not the entire backend object
         return JiraConfig(
@@ -638,6 +649,7 @@ class ConfigLoader:
             # From organization
             project=org.jira_project,
             filters=org.sync_filters,  # Renamed from 'filters' to 'sync_filters'
+            issue_templates=merged_templates if merged_templates else None,
             # From team
             custom_field_defaults=team.jira_custom_field_defaults,
             system_field_defaults=team.jira_system_field_defaults,

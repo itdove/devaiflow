@@ -69,6 +69,7 @@ class EnterpriseConfig(BaseModel):
 
     agent_backend: Optional[str] = None  # AI agent backend enforced by enterprise (e.g., "claude", "github-copilot")
     backend_overrides: Optional[Dict[str, Any]] = None  # Override any fields from backend configs (backends/*.json). Example: {"field_mappings": {"components": {"required_for": ["Bug", "Story"]}}}
+    jira_issue_templates: Optional[Dict[str, str]] = None  # Default issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
 
 
 class OrganizationConfig(BaseModel):
@@ -83,6 +84,7 @@ class OrganizationConfig(BaseModel):
     status_grouping_field: Optional[str] = None  # Field to group by in status dashboard (e.g., "sprint", "iteration", "release") - None means no grouping
     status_totals_field: Optional[str] = None  # Field to sum for totals in status dashboard (e.g., "points", "story_points", "effort") - None means no totals
     hierarchical_config_source: Optional[str] = None  # URL or path to hierarchical config files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md). Supports file://, http://, https://. Example: "https://github.com/ansible-saas/devflow-for-red-hatters/configs" or "file:///path/to/configs"
+    jira_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
 
 
 class TeamConfig(BaseModel):
@@ -98,6 +100,7 @@ class TeamConfig(BaseModel):
     jira_comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'
     jira_comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
     agent_backend: Optional[str] = None  # AI agent backend enforced by team (e.g., "claude", "github-copilot")
+    jira_issue_templates: Optional[Dict[str, str]] = None  # Team-specific issue template overrides (e.g., {"Bug": "...", "Story": "..."})
 
 
 class JiraConfig(BaseModel):
@@ -126,6 +129,7 @@ class JiraConfig(BaseModel):
     comment_visibility_type: Optional[str] = None  # Comment visibility type: 'group' or 'role'
     comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
     parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
+    issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
 
 
 class RepoDetectionConfig(BaseModel):
