@@ -506,42 +506,6 @@ class ConfigLoader:
             console.print("[dim]  Using default organization configuration[/dim]")
             return OrganizationConfig()
 
-    def _load_jira_templates_from_md(self) -> Optional[Dict[str, str]]:
-        """Load JIRA issue templates from ORGANIZATION.md file.
-
-        Parses the ORGANIZATION.md file looking for template sections marked by
-        ### <Type> Template code blocks.
-
-        Returns:
-            Dict mapping issue type to template string, or None if file doesn't exist
-        """
-        org_md_file = self.config_dir / "ORGANIZATION.md"
-
-        if not org_md_file.exists():
-            return None
-
-        try:
-            content = org_md_file.read_text(encoding='utf-8')
-            templates = {}
-
-            # Template types to look for
-            template_types = ["Bug", "Story", "Task", "Epic", "Spike"]
-
-            for template_type in template_types:
-                # Look for pattern: ### <Type> Template\n\n```\n<template content>\n```
-                import re
-                pattern = rf'###\s+{template_type}\s+Template\s*\n\s*\n\s*```\s*\n(.*?)\n```'
-                match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
-
-                if match:
-                    template_content = match.group(1)
-                    templates[template_type] = template_content
-
-            return templates if templates else None
-
-        except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to load templates from ORGANIZATION.md: {e}")
-            return None
 
     def _load_team_config(self) -> Optional["TeamConfig"]:
         """Load team configuration from team.json.
@@ -661,13 +625,15 @@ class ConfigLoader:
         backend_dict = backend.model_dump(by_alias=True, exclude_none=False)
         merged_backend_dict = self._apply_backend_overrides(backend_dict, enterprise.backend_overrides)
 
-        # Load templates from ORGANIZATION.md and merge with organization.json templates
-        # Priority: organization.json > ORGANIZATION.md
-        templates_from_md = self._load_jira_templates_from_md()
-        merged_templates = templates_from_md or {}
+        # Merge templates from configuration hierarchy
+        # Priority: team.json > organization.json > enterprise.json
+        merged_templates = {}
+        if enterprise.jira_issue_templates:
+            merged_templates.update(enterprise.jira_issue_templates)
         if org.jira_issue_templates:
-            # organization.json templates override ORGANIZATION.md templates
             merged_templates.update(org.jira_issue_templates)
+        if team.jira_issue_templates:
+            merged_templates.update(team.jira_issue_templates)
 
         # Reconstruct backend config from merged dict (to ensure type safety)
         # Note: We only override specific fields, not the entire backend object
