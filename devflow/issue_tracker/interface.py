@@ -116,28 +116,36 @@ class IssueTrackerClient(ABC):
         pass
 
     @abstractmethod
-    def create_bug(
+    def create_issue(
         self,
+        issue_type: str,
         summary: str,
         description: str,
-        project: str,
-        priority: Optional[str] = None,
-        affected_version: Optional[str] = None,
+        priority: str,
+        project_key: str,
+        field_mapper,
         parent: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
+        components: Optional[list] = None,
+        required_custom_fields: Optional[dict] = None,
+        **custom_fields
     ) -> str:
-        """Create a bug ticket.
+        """Generic method to create a ticket of any type.
+
+        This method provides a unified interface for creating issues across all types
+        (Bug, Story, Task, Epic, Spike). Issue-type-specific methods (create_bug,
+        create_story, etc.) are thin wrappers around this method for backward compatibility.
 
         Args:
-            summary: Brief title of the bug
+            issue_type: Type of issue to create (e.g., "Bug", "Story", "Task", "Epic", "Spike")
+            summary: Brief title of the issue
             description: Detailed description
-            project: Project key/ID
-            priority: Priority level (optional)
-            affected_version: Version where bug was found (optional)
-            parent: Parent epic/issue key (optional)
-            field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
+            priority: Priority level (e.g., "Critical", "Major", "Normal", "Minor")
+            project_key: Project key/ID
+            field_mapper: Field mapping helper (backend-specific)
+            parent: Parent epic/issue key (optional, uses parent_field_mapping from config)
+            components: List of component names (optional)
+            required_custom_fields: Dictionary of required custom fields {field_name: value}
+            **custom_fields: Additional custom fields (field_id: value pairs)
 
         Returns:
             Created ticket key/ID
@@ -147,128 +155,30 @@ class IssueTrackerClient(ABC):
             JiraValidationError: If validation fails (400 with field errors)
             JiraApiError: If API request fails
             JiraConnectionError: If connection fails
-        """
-        pass
 
-    @abstractmethod
-    def create_story(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        parent: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create a story ticket.
+        Example:
+            # Create a bug
+            key = client.create_issue(
+                issue_type="Bug",
+                summary="Production API timeout",
+                description="...",
+                priority="Critical",
+                project_key="PROJ",
+                field_mapper=field_mapper,
+                parent="PROJ-1234",
+                required_custom_fields={"affected_version": "2.5.0"}
+            )
 
-        Args:
-            summary: Brief title of the story
-            description: Detailed description with user story
-            project: Project key/ID
-            parent: Parent epic key (optional)
-            field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
-
-        Returns:
-            Created ticket key/ID
-
-        Raises:
-            JiraAuthError: If authentication fails
-            JiraValidationError: If validation fails (400 with field errors)
-            JiraApiError: If API request fails
-            JiraConnectionError: If connection fails
-        """
-        pass
-
-    @abstractmethod
-    def create_task(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        parent: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create a task ticket.
-
-        Args:
-            summary: Brief title of the task
-            description: Detailed description
-            project: Project key/ID
-            parent: Parent epic/issue key (optional)
-            field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
-
-        Returns:
-            Created ticket key/ID
-
-        Raises:
-            JiraAuthError: If authentication fails
-            JiraValidationError: If validation fails (400 with field errors)
-            JiraApiError: If API request fails
-            JiraConnectionError: If connection fails
-        """
-        pass
-
-    @abstractmethod
-    def create_epic(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create an epic ticket.
-
-        Args:
-            summary: Brief title of the epic
-            description: Detailed description with background
-            project: Project key/ID
-            field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields (field_name=value pairs)
-
-        Returns:
-            Created ticket key/ID
-
-        Raises:
-            JiraAuthError: If authentication fails
-            JiraValidationError: If validation fails (400 with field errors)
-            JiraApiError: If API request fails
-            JiraConnectionError: If connection fails
-        """
-        pass
-
-    @abstractmethod
-    def create_spike(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        parent: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create a spike ticket.
-
-        Args:
-            summary: Brief title of the spike
-            description: Detailed description with research questions
-            project: Project key/ID
-            parent: Parent epic key (optional)
-            field_mapper: Field mapping helper (backend-specific, optional)
-            **custom_fields: Additional custom fields (field_name=value pairs, e.g., acceptance_criteria="...")
-
-        Returns:
-            Created ticket key/ID
-
-        Raises:
-            JiraAuthError: If authentication fails
-            JiraValidationError: If validation fails (400 with field errors)
-            JiraApiError: If API request fails
-            JiraConnectionError: If connection fails
+            # Create a story
+            key = client.create_issue(
+                issue_type="Story",
+                summary="Add caching layer",
+                description="...",
+                priority="Major",
+                project_key="PROJ",
+                field_mapper=field_mapper,
+                parent="PROJ-1234"
+            )
         """
         pass
 

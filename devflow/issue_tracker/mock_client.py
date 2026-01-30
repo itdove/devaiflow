@@ -78,70 +78,42 @@ class MockIssueTrackerClient(IssueTrackerClient):
             results.append(ticket.copy())
         return results[start_at:start_at + max_results]
 
-    def create_bug(
+    def create_issue(
         self,
+        issue_type: str,
         summary: str,
         description: str,
-        project: str,
-        priority: Optional[str] = None,
-        affected_version: Optional[str] = None,
+        priority: str,
+        project_key: str,
+        field_mapper,
         parent: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
+        components: Optional[list] = None,
+        required_custom_fields: Optional[dict] = None,
+        **custom_fields
     ) -> str:
-        """Create a bug ticket."""
-        return self._create_ticket("Bug", summary, description, project, parent, acceptance_criteria, priority=priority, **custom_fields)
+        """Generic method to create a ticket of any type."""
+        if required_custom_fields is None:
+            required_custom_fields = {}
 
-    def create_story(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        parent: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create a story ticket."""
-        return self._create_ticket("Story", summary, description, project, parent, acceptance_criteria, **custom_fields)
+        # Merge required_custom_fields into custom_fields
+        all_custom_fields = {**required_custom_fields, **custom_fields}
 
-    def create_task(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        parent: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create a task ticket."""
-        return self._create_ticket("Task", summary, description, project, parent, acceptance_criteria, **custom_fields)
+        # Add priority to custom fields
+        all_custom_fields["priority"] = priority
 
-    def create_epic(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create an epic ticket."""
-        return self._create_ticket("Epic", summary, description, project, None, None, **custom_fields)
+        # Extract acceptance_criteria if present
+        acceptance_criteria = all_custom_fields.pop("acceptance_criteria", None)
 
-    def create_spike(
-        self,
-        summary: str,
-        description: str,
-        project: str,
-        parent: Optional[str] = None,
-        acceptance_criteria: Optional[str] = None,
-        field_mapper=None,
-        **custom_fields,
-    ) -> str:
-        """Create a spike ticket."""
-        return self._create_ticket("Spike", summary, description, project, parent, acceptance_criteria, **custom_fields)
+        return self._create_ticket(
+            issue_type,
+            summary,
+            description,
+            project_key,
+            parent,
+            acceptance_criteria,
+            **all_custom_fields
+        )
+
 
     def _create_ticket(
         self,
