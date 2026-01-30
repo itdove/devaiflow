@@ -211,28 +211,40 @@ def validate_affected_version(version: str, field_mapper: Optional['JiraFieldMap
     return version in allowed_versions
 
 
-def is_version_field_required(field_mapper: Optional['JiraFieldMapper'] = None) -> bool:
-    """Check if the version field is marked as required in field_mappings.
+def is_version_field_required(
+    field_mapper: Optional['JiraFieldMapper'] = None,
+    issue_type: str = None
+) -> bool:
+    """Check if the version field is marked as required for the given issue type.
+
+    Checks field_mappings['affects_version/s']['required_for'] to determine if the
+    version field is required for the specified issue type.
 
     Args:
         field_mapper: Optional JiraFieldMapper instance with field_mappings loaded
+        issue_type: JIRA issue type (e.g., "Bug", "Story", "Task"). Required parameter.
 
     Returns:
-        True if version field is required, False otherwise
+        True if version field is required for this issue type, False otherwise
     """
+    if not issue_type:
+        return False
     if not field_mapper or not field_mapper.field_mappings:
         return False
 
     # Strategy 1: Check specific field names
     for field_name in ["affects_version/s", "affected_version", "versions", "affects_versions"]:
         field_info = field_mapper.field_mappings.get(field_name, {})
-        if field_info and field_info.get("required", False):
-            return True
+        if field_info:
+            required_for = field_info.get("required_for", [])
+            if issue_type in required_for:
+                return True
 
     # Strategy 2: Search for any version-related field
     for field_name, field_info in field_mapper.field_mappings.items():
         if ("version" in field_name or "affect" in field_name):
-            if field_info.get("required", False):
+            required_for = field_info.get("required_for", [])
+            if issue_type in required_for:
                 return True
 
     return False

@@ -822,6 +822,18 @@ def _build_ticket_creation_prompt(
     """
     # Get JIRA project and field defaults from config
     project = config.jira.project if config.jira.project else "PROJ"
+
+    # Load field mappings to check if version field is required for this issue type
+    field_mapper = None
+    if config and config.jira and config.jira.field_mappings:
+        from devflow.jira.field_mapper import JiraFieldMapper
+        from devflow.jira import JiraClient
+        try:
+            jira_client = JiraClient()
+            field_mapper = JiraFieldMapper(jira_client, config.jira.field_mappings)
+        except Exception:
+            # If field mapper fails, continue without it
+            pass
     custom_fields = config.jira.custom_field_defaults if config.jira.custom_field_defaults else {}
     system_fields = config.jira.system_field_defaults if config.jira.system_field_defaults else {}
 
@@ -882,8 +894,10 @@ def _build_ticket_creation_prompt(
     if parent:
         example_cmd_parts.append(f'--parent {parent}')
 
-    # For bugs, add affects_versions parameter (required field)
-    if issue_type == "bug":
+    # If affects_versions is required for this issue type, add to example command
+    # Check field_mappings['affects_version/s']['required_for'] to see if issue_type is listed
+    from devflow.jira.utils import is_version_field_required
+    if is_version_field_required(field_mapper, issue_type=issue_type.capitalize()):
         # Use the provided affects_versions or show placeholder
         affected_ver = affects_versions if affects_versions else "VERSION"
         example_cmd_parts.append(f'--affects-versions "{affected_ver}"')
@@ -918,9 +932,10 @@ def _build_ticket_creation_prompt(
     # Build instruction strings
     parent_instruction = f"4. IMPORTANT: Link to parent using --parent {parent}" if parent else "4. (Optional) Link to a parent epic using --parent EPIC-KEY if desired"
 
-    # Add affects_versions note for bugs
-    if issue_type == "bug":
-        affected_version_note = f"IMPORTANT: For bugs, you MUST specify --affects-versions with the version this bug affects."
+    # Add affects_versions note if required for this issue type
+    # Check field_mappings['affects_version/s']['required_for'] to see if issue_type is listed
+    if is_version_field_required(field_mapper, issue_type=issue_type.capitalize()):
+        affected_version_note = f"IMPORTANT: For {issue_type}s, you MUST specify --affects-versions with the version affected."
     else:
         affected_version_note = None
 
