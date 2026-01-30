@@ -90,11 +90,13 @@ class TestMockIssueTrackerClient:
     def test_create_and_get_bug(self):
         """Test creating and retrieving a bug."""
         client = MockIssueTrackerClient()
-        key = client.create_bug(
+        key = client.create_issue(
+            issue_type="Bug",
             summary="Test bug",
             description="Bug description",
-            project="TEST",
             priority="Major",
+            project_key="TEST",
+            field_mapper=None,
         )
         assert key == "TEST-1"
 
@@ -109,10 +111,13 @@ class TestMockIssueTrackerClient:
     def test_create_and_get_story(self):
         """Test creating and retrieving a story."""
         client = MockIssueTrackerClient()
-        key = client.create_story(
+        key = client.create_issue(
+            issue_type="Story",
             summary="Test story",
             description="Story description",
-            project="TEST",
+            priority="Major",
+            project_key="TEST",
+            field_mapper=None,
             parent="TEST-100",
         )
         assert key == "TEST-1"
@@ -124,10 +129,13 @@ class TestMockIssueTrackerClient:
     def test_create_and_get_task(self):
         """Test creating and retrieving a task."""
         client = MockIssueTrackerClient()
-        key = client.create_task(
+        key = client.create_issue(
+            issue_type="Task",
             summary="Test task",
             description="Task description",
-            project="TEST",
+            priority="Normal",
+            project_key="TEST",
+            field_mapper=None,
         )
         assert key == "TEST-1"
 
@@ -137,10 +145,13 @@ class TestMockIssueTrackerClient:
     def test_create_and_get_epic(self):
         """Test creating and retrieving an epic."""
         client = MockIssueTrackerClient()
-        key = client.create_epic(
+        key = client.create_issue(
+            issue_type="Epic",
             summary="Test epic",
             description="Epic description",
-            project="TEST",
+            priority="Major",
+            project_key="TEST",
+            field_mapper=None,
         )
         assert key == "TEST-1"
 
@@ -151,10 +162,13 @@ class TestMockIssueTrackerClient:
     def test_create_and_get_spike(self):
         """Test creating and retrieving a spike."""
         client = MockIssueTrackerClient()
-        key = client.create_spike(
+        key = client.create_issue(
+            issue_type="Spike",
             summary="Test spike",
             description="Spike description",
-            project="TEST",
+            priority="Major",
+            project_key="TEST",
+            field_mapper=None,
             parent="TEST-100",
         )
         assert key == "TEST-1"
@@ -174,10 +188,13 @@ class TestMockIssueTrackerClient:
     def test_get_ticket_detailed(self):
         """Test getting detailed ticket information."""
         client = MockIssueTrackerClient()
-        key = client.create_bug(
+        key = client.create_issue(
+            issue_type="Bug",
             summary="Test bug",
             description="Bug description",
-            project="TEST",
+            priority="Major",
+            project_key="TEST",
+            field_mapper=None,
         )
 
         ticket = client.get_ticket_detailed(key, include_changelog=True)
@@ -188,9 +205,9 @@ class TestMockIssueTrackerClient:
     def test_list_tickets_all(self):
         """Test listing all tickets."""
         client = MockIssueTrackerClient()
-        client.create_bug("Bug 1", "Desc 1", "TEST")
-        client.create_story("Story 1", "Desc 2", "TEST")
-        client.create_task("Task 1", "Desc 3", "TEST")
+        client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
+        client.create_issue(issue_type="Story", summary="Story 1", description="Desc 2", priority="Major", project_key="TEST", field_mapper=None)
+        client.create_issue(issue_type="Task", summary="Task 1", description="Desc 3", priority="Normal", project_key="TEST", field_mapper=None)
 
         tickets = client.list_tickets()
         assert len(tickets) == 3
@@ -199,8 +216,8 @@ class TestMockIssueTrackerClient:
     def test_list_tickets_filter_by_project(self):
         """Test filtering tickets by project."""
         client = MockIssueTrackerClient()
-        client.create_bug("Bug 1", "Desc 1", "TEST")
-        client.create_bug("Bug 2", "Desc 2", "OTHER")
+        client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
+        client.create_issue(issue_type="Bug", summary="Bug 2", description="Desc 2", priority="Major", project_key="OTHER", field_mapper=None)
 
         tickets = client.list_tickets(project="TEST")
         assert len(tickets) == 1
@@ -209,8 +226,8 @@ class TestMockIssueTrackerClient:
     def test_list_tickets_filter_by_status(self):
         """Test filtering tickets by status."""
         client = MockIssueTrackerClient()
-        key1 = client.create_bug("Bug 1", "Desc 1", "TEST")
-        key2 = client.create_bug("Bug 2", "Desc 2", "TEST")
+        key1 = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
+        key2 = client.create_issue(issue_type="Bug", summary="Bug 2", description="Desc 2", priority="Major", project_key="TEST", field_mapper=None)
         client.transition_ticket(key1, "In Progress")
 
         tickets = client.list_tickets(status=["In Progress"])
@@ -220,8 +237,8 @@ class TestMockIssueTrackerClient:
     def test_list_tickets_filter_by_type(self):
         """Test filtering tickets by issue type."""
         client = MockIssueTrackerClient()
-        client.create_bug("Bug 1", "Desc 1", "TEST")
-        client.create_story("Story 1", "Desc 2", "TEST")
+        client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
+        client.create_issue(issue_type="Story", summary="Story 1", description="Desc 2", priority="Major", project_key="TEST", field_mapper=None)
 
         tickets = client.list_tickets(issue_type=["Bug"])
         assert len(tickets) == 1
@@ -231,7 +248,7 @@ class TestMockIssueTrackerClient:
         """Test ticket list pagination."""
         client = MockIssueTrackerClient()
         for i in range(5):
-            client.create_bug(f"Bug {i}", f"Desc {i}", "TEST")
+            client.create_issue(issue_type="Bug", summary=f"Bug {i}", description=f"Desc {i}", priority="Major", project_key="TEST", field_mapper=None)
 
         # Get first 2 tickets
         tickets = client.list_tickets(max_results=2, start_at=0)
@@ -244,7 +261,7 @@ class TestMockIssueTrackerClient:
     def test_update_issue(self):
         """Test updating an issue."""
         client = MockIssueTrackerClient()
-        key = client.create_bug("Bug 1", "Desc 1", "TEST")
+        key = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
 
         client.update_issue(key, {"summary": "Updated bug"})
         ticket = client.get_ticket(key)
@@ -259,7 +276,7 @@ class TestMockIssueTrackerClient:
     def test_update_ticket_field(self):
         """Test updating a single field."""
         client = MockIssueTrackerClient()
-        key = client.create_bug("Bug 1", "Desc 1", "TEST")
+        key = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
 
         client.update_ticket_field(key, "priority", "Critical")
         ticket = client.get_ticket(key)
@@ -274,7 +291,7 @@ class TestMockIssueTrackerClient:
     def test_transition_ticket(self):
         """Test transitioning ticket status."""
         client = MockIssueTrackerClient()
-        key = client.create_bug("Bug 1", "Desc 1", "TEST")
+        key = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
 
         client.transition_ticket(key, "In Progress")
         ticket = client.get_ticket(key)
@@ -289,7 +306,7 @@ class TestMockIssueTrackerClient:
     def test_add_comment(self):
         """Test adding comment to ticket."""
         client = MockIssueTrackerClient()
-        key = client.create_bug("Bug 1", "Desc 1", "TEST")
+        key = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
 
         # Should not raise
         client.add_comment(key, "Test comment")
@@ -303,7 +320,7 @@ class TestMockIssueTrackerClient:
     def test_attach_file(self):
         """Test attaching file to ticket."""
         client = MockIssueTrackerClient()
-        key = client.create_bug("Bug 1", "Desc 1", "TEST")
+        key = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc 1", priority="Major", project_key="TEST", field_mapper=None)
 
         # Should not raise
         client.attach_file(key, "/path/to/file.txt")
@@ -317,10 +334,10 @@ class TestMockIssueTrackerClient:
     def test_get_child_issues(self):
         """Test getting child issues."""
         client = MockIssueTrackerClient()
-        epic_key = client.create_epic("Epic 1", "Desc", "TEST")
-        story1_key = client.create_story("Story 1", "Desc", "TEST", parent=epic_key)
-        story2_key = client.create_story("Story 2", "Desc", "TEST", parent=epic_key)
-        client.create_bug("Bug 1", "Desc", "TEST")  # Not a child
+        epic_key = client.create_issue(issue_type="Epic", summary="Epic 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
+        story1_key = client.create_issue(issue_type="Story", summary="Story 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None, parent=epic_key)
+        story2_key = client.create_issue(issue_type="Story", summary="Story 2", description="Desc", priority="Major", project_key="TEST", field_mapper=None, parent=epic_key)
+        client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)  # Not a child
 
         children = client.get_child_issues(epic_key)
         assert len(children) == 2
@@ -329,9 +346,9 @@ class TestMockIssueTrackerClient:
     def test_get_child_issues_filter_by_type(self):
         """Test filtering child issues by type."""
         client = MockIssueTrackerClient()
-        epic_key = client.create_epic("Epic 1", "Desc", "TEST")
-        story_key = client.create_story("Story 1", "Desc", "TEST", parent=epic_key)
-        client.create_task("Task 1", "Desc", "TEST", parent=epic_key)
+        epic_key = client.create_issue(issue_type="Epic", summary="Epic 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
+        story_key = client.create_issue(issue_type="Story", summary="Story 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None, parent=epic_key)
+        client.create_issue(issue_type="Task", summary="Task 1", description="Desc", priority="Normal", project_key="TEST", field_mapper=None, parent=epic_key)
 
         children = client.get_child_issues(epic_key, issue_types=["Story"])
         assert len(children) == 1
@@ -356,8 +373,8 @@ class TestMockIssueTrackerClient:
     def test_link_issues(self):
         """Test linking two issues."""
         client = MockIssueTrackerClient()
-        key1 = client.create_bug("Bug 1", "Desc", "TEST")
-        key2 = client.create_bug("Bug 2", "Desc", "TEST")
+        key1 = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
+        key2 = client.create_issue(issue_type="Bug", summary="Bug 2", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
 
         # Should not raise
         client.link_issues(key1, "blocks", key2, comment="Test link")
@@ -365,7 +382,7 @@ class TestMockIssueTrackerClient:
     def test_link_issues_source_not_found(self):
         """Test linking non-existent source raises error."""
         client = MockIssueTrackerClient()
-        key2 = client.create_bug("Bug 2", "Desc", "TEST")
+        key2 = client.create_issue(issue_type="Bug", summary="Bug 2", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
 
         with pytest.raises(JiraNotFoundError):
             client.link_issues("TEST-999", "blocks", key2)
@@ -373,7 +390,7 @@ class TestMockIssueTrackerClient:
     def test_link_issues_target_not_found(self):
         """Test linking to non-existent target raises error."""
         client = MockIssueTrackerClient()
-        key1 = client.create_bug("Bug 1", "Desc", "TEST")
+        key1 = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
 
         with pytest.raises(JiraNotFoundError):
             client.link_issues(key1, "blocks", "TEST-999")
@@ -381,9 +398,9 @@ class TestMockIssueTrackerClient:
     def test_sequential_ticket_numbering(self):
         """Test tickets are numbered sequentially."""
         client = MockIssueTrackerClient()
-        key1 = client.create_bug("Bug 1", "Desc", "TEST")
-        key2 = client.create_story("Story 1", "Desc", "TEST")
-        key3 = client.create_task("Task 1", "Desc", "TEST")
+        key1 = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
+        key2 = client.create_issue(issue_type="Story", summary="Story 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
+        key3 = client.create_issue(issue_type="Task", summary="Task 1", description="Desc", priority="Normal", project_key="TEST", field_mapper=None)
 
         assert key1 == "TEST-1"
         assert key2 == "TEST-2"
@@ -392,8 +409,8 @@ class TestMockIssueTrackerClient:
     def test_different_projects_separate_numbering(self):
         """Test different projects don't share numbering."""
         client = MockIssueTrackerClient()
-        key1 = client.create_bug("Bug 1", "Desc", "TEST")
-        key2 = client.create_bug("Bug 2", "Desc", "OTHER")
+        key1 = client.create_issue(issue_type="Bug", summary="Bug 1", description="Desc", priority="Major", project_key="TEST", field_mapper=None)
+        key2 = client.create_issue(issue_type="Bug", summary="Bug 2", description="Desc", priority="Major", project_key="OTHER", field_mapper=None)
 
         # Both should be -1 since numbering is global in mock
         # (This is a limitation of the simple mock implementation)
@@ -421,11 +438,7 @@ class TestJiraClientImplementsInterface:
         assert hasattr(client, "get_ticket")
         assert hasattr(client, "get_ticket_detailed")
         assert hasattr(client, "list_tickets")
-        assert hasattr(client, "create_bug")
-        assert hasattr(client, "create_story")
-        assert hasattr(client, "create_task")
-        assert hasattr(client, "create_epic")
-        assert hasattr(client, "create_spike")
+        assert hasattr(client, "create_issue")
         assert hasattr(client, "update_issue")
         assert hasattr(client, "update_ticket_field")
         assert hasattr(client, "add_comment")
@@ -440,11 +453,7 @@ class TestJiraClientImplementsInterface:
         assert callable(client.get_ticket)
         assert callable(client.get_ticket_detailed)
         assert callable(client.list_tickets)
-        assert callable(client.create_bug)
-        assert callable(client.create_story)
-        assert callable(client.create_task)
-        assert callable(client.create_epic)
-        assert callable(client.create_spike)
+        assert callable(client.create_issue)
         assert callable(client.update_issue)
         assert callable(client.update_ticket_field)
         assert callable(client.add_comment)

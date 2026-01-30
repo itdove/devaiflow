@@ -62,11 +62,7 @@ def mock_field_mapper():
 def mock_jira_client():
     """Create a mock JIRA client."""
     client = Mock()
-    client.create_bug.return_value = "PROJ-12345"
-    client.create_story.return_value = "PROJ-12346"
-    client.create_task.return_value = "PROJ-12347"
-    client.create_epic.return_value = "PROJ-12348"
-    client.create_spike.return_value = "PROJ-12349"
+    client.create_issue.return_value = "PROJ-12345"
     client.get_ticket.return_value = {"status": "New"}
     client.link_issues = Mock()
     return client
@@ -489,7 +485,7 @@ class TestCreateIssue:
                                         create_session=False,
                                     )
 
-                                    mock_jira_client.create_bug.assert_called_once()
+                                    mock_jira_client.create_issue.assert_called_once()
 
     def test_create_story_successfully(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
         """Test successful story creation."""
@@ -508,7 +504,7 @@ class TestCreateIssue:
                                     summary="Test story",
                                     priority="Major",
                                     project="PROJ",
-                                                                        parent="PROJ-100",
+                                    parent="PROJ-100",
                                     affected_version="",
                                     description="Story description",
                                     description_file=None,
@@ -516,7 +512,7 @@ class TestCreateIssue:
                                     create_session=False,
                                 )
 
-                                mock_jira_client.create_story.assert_called_once()
+                                mock_jira_client.create_issue.assert_called_once()
 
     def test_create_task_successfully(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
         """Test successful task creation."""
@@ -535,7 +531,7 @@ class TestCreateIssue:
                                     summary="Test task",
                                     priority="Major",
                                     project="PROJ",
-                                                                        parent="PROJ-100",
+                                    parent="PROJ-100",
                                     affected_version="",
                                     description="Task description",
                                     description_file=None,
@@ -543,7 +539,7 @@ class TestCreateIssue:
                                     create_session=False,
                                 )
 
-                                mock_jira_client.create_task.assert_called_once()
+                                mock_jira_client.create_issue.assert_called_once()
 
     def test_invalid_issue_type_exits(self, mock_config, mock_config_loader):
         """Test that invalid issue type causes exit."""
@@ -714,7 +710,7 @@ class TestCreateBug:
                             create_bug(
                                 summary=None,
                                 priority="Major",
-                                                                parent=None,
+                                parent=None,
                                 affected_version="v1.0.0",
                                 description="Bug description",
                                 description_file=None,
@@ -723,7 +719,7 @@ class TestCreateBug:
                             )
 
                             # Verify bug was created with prompted summary
-                            call_args = mock_jira_client.create_bug.call_args
+                            call_args = mock_jira_client.create_issue.call_args
                             assert call_args[1]['summary'] == "Prompted bug summary"
 
 
@@ -744,14 +740,14 @@ class TestCreateStory:
                             create_story(
                                 summary="Test story",
                                 priority="Major",
-                                                                parent="PROJ-100",
+                                parent="PROJ-100",
                                 description="Story description",
                                 description_file=None,
                                 interactive=False,
                                 create_session=False,
                             )
 
-                            call_args = mock_jira_client.create_story.call_args
+                            call_args = mock_jira_client.create_issue.call_args
                             assert call_args[1]['parent'] == "PROJ-100"
 
 
@@ -762,8 +758,8 @@ class TestCreateTask:
         """Test that create_task handles validation errors properly."""
         monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
 
-        # Make create_task raise a validation error
-        mock_jira_client.create_task.side_effect = JiraValidationError(
+        # Make create_issue raise a validation error
+        mock_jira_client.create_issue.side_effect = JiraValidationError(
             "Validation failed",
             field_errors={"summary": "Summary is required"},
             error_messages=["Invalid data"]
@@ -838,10 +834,10 @@ class TestIssueTypeCaseSensitivity:
                             )
 
                             # Verify the bug was created successfully
-                            assert mock_jira_client.create_bug.called
+                            assert mock_jira_client.create_issue.called
 
                             # Verify workstream field was included in the call
-                            call_kwargs = mock_jira_client.create_bug.call_args[1]
+                            call_kwargs = mock_jira_client.create_issue.call_args[1]
                             assert 'required_custom_fields' in call_kwargs
                             # Workstream should have the value "SaaS" (from custom_fields parameter)
                             # This proves that the issue_type was normalized correctly - if it wasn't,
