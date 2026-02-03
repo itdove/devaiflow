@@ -209,6 +209,12 @@ def open_session(
     if selected_workspace_name:
         workspace_path = get_workspace_path(config, selected_workspace_name)
 
+        # AAP-64886: Save selected workspace to session if it changed
+        # This ensures the -w flag persists the workspace selection for future reopens
+        if selected_workspace_name != session.workspace_name:
+            session.workspace_name = selected_workspace_name
+            session_manager.update_session(session)
+
     # Handle --conversation-id flag
     # This allows resuming a specific archived conversation
     if conversation_id:

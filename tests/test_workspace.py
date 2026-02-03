@@ -218,3 +218,138 @@ def test_workspace_persistence_in_session():
     manager.delete_session("test-workspace-persist")
 
 
+def test_open_command_w_flag_persists_workspace(monkeypatch, tmp_path):
+    """Test that daf open -w flag persists workspace selection (AAP-64886)."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+    from devflow.cli.utils import select_workspace, get_workspace_path
+    from devflow.config.models import Config, JiraConfig, RepoConfig, WorkspaceDefinition
+
+    # Setup config with multiple workspaces
+    config_loader = ConfigLoader()
+
+    # Create config object with workspaces
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.com", transitions={}),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path=str(tmp_path / "primary")),
+                WorkspaceDefinition(name="product-a", path=str(tmp_path / "product-a")),
+            ]
+        )
+    )
+
+    # Mock the config loader to return our test config
+    monkeypatch.setattr(config_loader, 'load_config', lambda: config)
+
+    # Create session with initial workspace
+    manager = SessionManager(config_loader)
+    session = manager.create_session(
+        name="test-session-w-flag",
+        goal="Test -w flag persistence",
+        working_directory="repo",
+        project_path=str(tmp_path / "primary" / "repo"),
+        ai_agent_session_id="uuid-1"
+    )
+    session.workspace_name = "primary"
+    manager.update_session(session)
+
+    # Simulate daf open with -w flag selecting different workspace
+    # This mimics the code in open_command.py lines 197-218
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag="product-a",  # User specified -w product-a
+        session=session,
+        skip_prompt=False
+    )
+
+    workspace_path = None
+    if selected_workspace_name:
+        workspace_path = get_workspace_path(config, selected_workspace_name)
+
+        # AAP-64886: Save selected workspace to session if it changed
+        if selected_workspace_name != session.workspace_name:
+            session.workspace_name = selected_workspace_name
+            manager.update_session(session)
+
+    # Verify workspace was updated
+    assert session.workspace_name == "product-a"
+
+    # Reload session and verify persistence
+    loaded_session = manager.get_session("test-session-w-flag")
+    assert loaded_session is not None
+    assert loaded_session.workspace_name == "product-a"
+
+    # Verify workspace path was updated correctly
+    assert workspace_path == str(tmp_path / "product-a")
+
+    # Cleanup
+    manager.delete_session("test-session-w-flag")
+
+
+def test_open_command_w_flag_no_update_when_same_workspace(monkeypatch, tmp_path):
+    """Test that daf open -w doesn't update session if workspace unchanged (AAP-64886)."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+    from devflow.cli.utils import select_workspace, get_workspace_path
+    from devflow.config.models import Config, JiraConfig, RepoConfig, WorkspaceDefinition
+
+    # Setup config with multiple workspaces
+    config_loader = ConfigLoader()
+
+    # Create config object with workspaces
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.com", transitions={}),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path=str(tmp_path / "primary")),
+                WorkspaceDefinition(name="product-a", path=str(tmp_path / "product-a")),
+            ]
+        )
+    )
+
+    # Mock the config loader to return our test config
+    monkeypatch.setattr(config_loader, 'load_config', lambda: config)
+
+    # Create session with workspace
+    manager = SessionManager(config_loader)
+    session = manager.create_session(
+        name="test-session-no-update",
+        goal="Test no update when same workspace",
+        working_directory="repo",
+        project_path=str(tmp_path / "primary" / "repo"),
+        ai_agent_session_id="uuid-1"
+    )
+    session.workspace_name = "primary"
+    manager.update_session(session)
+
+    # Get last_active before simulated open
+    original_last_active = session.last_active
+
+    # Simulate daf open with -w flag selecting SAME workspace
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag="primary",  # Same workspace
+        session=session,
+        skip_prompt=False
+    )
+
+    workspace_path = None
+    if selected_workspace_name:
+        workspace_path = get_workspace_path(config, selected_workspace_name)
+
+        # AAP-64886: Only update if workspace changed
+        if selected_workspace_name != session.workspace_name:
+            session.workspace_name = selected_workspace_name
+            manager.update_session(session)
+
+    # Verify workspace is still primary
+    assert session.workspace_name == "primary"
+
+    # Verify last_active didn't change (no unnecessary update)
+    assert session.last_active == original_last_active
+
+    # Cleanup
+    manager.delete_session("test-session-no-update")
+
+

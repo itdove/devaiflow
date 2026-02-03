@@ -463,7 +463,7 @@ daf open <NAME-or-JIRA> [OPTIONS]
 ```
 
 **Options:**
-- `-w, --workspace` - Workspace name to use (overrides session stored workspace)
+- `-w, --workspace` - Workspace name to use (overrides and persists to session)
 - `--new-conversation` - Archive current Claude Code conversation and start fresh with a new one
 - `--json` - Return JSON output (non-interactive mode). Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Suitable for automation, CI/CD pipelines, and integration tests.
 
