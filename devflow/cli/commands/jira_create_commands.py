@@ -603,35 +603,29 @@ def create_issue(
             console.print("[red]✗[/red] JIRA not configured. Run [cyan]daf init[/cyan] first.")
             sys.exit(1)
 
-        # Map issue type to template and configuration
-        # Templates are loaded from config with fallback to hardcoded values
+        # Map issue type to configuration (templates loaded only when needed)
         ISSUE_TYPE_CONFIG = {
             "epic": {
-                "template": _get_issue_template(config, "Epic"),
                 "label": "Epic",
                 "uses_affected_version": False,
                 "jira_issue_type": "Epic",
             },
             "spike": {
-                "template": _get_issue_template(config, "Spike"),
                 "label": "Spike",
                 "uses_affected_version": False,
                 "jira_issue_type": "Spike",
             },
             "story": {
-                "template": _get_issue_template(config, "Story"),
                 "label": "Story",
                 "uses_affected_version": False,
                 "jira_issue_type": "Story",
             },
             "task": {
-                "template": _get_issue_template(config, "Task"),
                 "label": "Task",
                 "uses_affected_version": False,
                 "jira_issue_type": "Task",
             },
             "bug": {
-                "template": _get_issue_template(config, "Bug"),
                 "label": "Bug",
                 "uses_affected_version": True,
                 "jira_issue_type": "Bug",
@@ -725,8 +719,14 @@ def create_issue(
                 )
                 sys.exit(1)
 
-        # Get description
-        issue_description = _get_description(description, description_file, type_config["template"], interactive)
+        # Get description (only load template if needed - when no description provided)
+        if description or description_file:
+            # Description already provided - no need to load template
+            issue_description = _get_description(description, description_file, "", interactive)
+        else:
+            # No description provided - load template for fallback/interactive mode
+            template = _get_issue_template(config, issue_type)
+            issue_description = _get_description(description, description_file, template, interactive)
 
         # Create issue
         jira_client = JiraClient()
