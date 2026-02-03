@@ -223,17 +223,24 @@ def test_open_command_w_flag_persists_workspace(monkeypatch, tmp_path):
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
     from devflow.cli.utils import select_workspace, get_workspace_path
-    from devflow.config.models import RepoConfig, WorkspaceDefinition
+    from devflow.config.models import Config, JiraConfig, RepoConfig, WorkspaceDefinition
 
     # Setup config with multiple workspaces
     config_loader = ConfigLoader()
-    config = config_loader.load_config()
 
-    # Add workspaces to config
-    config.repos.workspaces = [
-        WorkspaceDefinition(name="primary", path=str(tmp_path / "primary")),
-        WorkspaceDefinition(name="product-a", path=str(tmp_path / "product-a")),
-    ]
+    # Create config object with workspaces
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.com", transitions={}),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path=str(tmp_path / "primary")),
+                WorkspaceDefinition(name="product-a", path=str(tmp_path / "product-a")),
+            ]
+        )
+    )
+
+    # Mock the config loader to return our test config
+    monkeypatch.setattr(config_loader, 'load_config', lambda: config)
 
     # Create session with initial workspace
     manager = SessionManager(config_loader)
@@ -285,17 +292,24 @@ def test_open_command_w_flag_no_update_when_same_workspace(monkeypatch, tmp_path
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
     from devflow.cli.utils import select_workspace, get_workspace_path
-    from devflow.config.models import RepoConfig, WorkspaceDefinition
+    from devflow.config.models import Config, JiraConfig, RepoConfig, WorkspaceDefinition
 
     # Setup config with multiple workspaces
     config_loader = ConfigLoader()
-    config = config_loader.load_config()
 
-    # Add workspaces to config
-    config.repos.workspaces = [
-        WorkspaceDefinition(name="primary", path=str(tmp_path / "primary")),
-        WorkspaceDefinition(name="product-a", path=str(tmp_path / "product-a")),
-    ]
+    # Create config object with workspaces
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.com", transitions={}),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path=str(tmp_path / "primary")),
+                WorkspaceDefinition(name="product-a", path=str(tmp_path / "product-a")),
+            ]
+        )
+    )
+
+    # Mock the config loader to return our test config
+    monkeypatch.setattr(config_loader, 'load_config', lambda: config)
 
     # Create session with workspace
     manager = SessionManager(config_loader)
