@@ -35,8 +35,14 @@ def build_field_value(field_info: Dict[str, Any], value: str, field_mapper: Jira
         # For URL fields, return as-is
         return value
     elif schema == "array" or field_type == "array":
+        # Check if this is a version field (affects_version/s, fix_version/s, etc.)
+        field_id = field_info.get("id", "")
+        field_name = field_info.get("name", "")
+        if field_id == "versions" or field_id == "fixVersions" or "version" in field_name.lower():
+            # Version fields expect array of objects with "name" property
+            return [{"name": value}]
         # Multi-select field (like workstream)
-        if "option" in schema or "select" in schema:
+        elif "option" in schema or "select" in schema:
             return [{"value": value}]
         else:
             # Array of strings
