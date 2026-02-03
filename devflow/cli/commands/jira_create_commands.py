@@ -652,10 +652,21 @@ def create_issue(
         # Ensure field mappings
         field_mapper = _ensure_field_mappings(config, config_loader)
 
+        # Get affected version first (if uses_affected_version is True for this issue type)
+        # This needs to be done before _get_required_system_fields so we can pass it through
+        resolved_affected_version = None
+        if type_config["uses_affected_version"]:
+            resolved_affected_version = _get_affected_version(config, config_loader, field_mapper, affected_version, issue_type=issue_type)
+
         # Get all required system fields for this issue type
         # Pass system_fields from CLI options as flag values
+        # Add resolved_affected_version to system_fields if applicable
+        system_fields_with_version = dict(system_fields or {})
+        if type_config["uses_affected_version"] and resolved_affected_version:
+            system_fields_with_version["versions"] = resolved_affected_version
+
         required_system_fields = _get_required_system_fields(
-            config, config_loader, field_mapper, issue_type, system_fields or {}
+            config, config_loader, field_mapper, issue_type, system_fields_with_version
         )
         if required_system_fields is None:
             # User cancelled or required field missing
@@ -673,11 +684,6 @@ def create_issue(
         if required_custom_fields is None:
             # User cancelled or required field missing
             sys.exit(1)
-
-        # Get affected version (if uses_affected_version is True for this issue type)
-        resolved_affected_version = None
-        if type_config["uses_affected_version"]:
-            resolved_affected_version = _get_affected_version(config, config_loader, field_mapper, affected_version, issue_type=issue_type)
 
         # Validate parent ticket if provided
         if parent:
@@ -742,10 +748,6 @@ def create_issue(
             "parent": parent,
             "required_custom_fields": {},  # Will be populated below
         }
-
-        # Add affected_version to required_custom_fields for bugs
-        if type_config["uses_affected_version"] and resolved_affected_version:
-            create_kwargs["required_custom_fields"]["affected_version"] = resolved_affected_version
 
         # Apply custom field defaults from team.json (merged with CLI --field options)
         # Merge in this order (later values override earlier):
@@ -932,6 +934,10 @@ def create_issue(
         # Add components from merged_system_fields to create_kwargs (has dedicated parameter)
         if "components" in merged_system_fields:
             create_kwargs["components"] = merged_system_fields["components"]
+
+        # Add versions from merged_system_fields to create_kwargs (has dedicated parameter)
+        if "versions" in merged_system_fields:
+            create_kwargs["versions"] = merged_system_fields["versions"]
 
         # Create the issue with specific error handling
         try:

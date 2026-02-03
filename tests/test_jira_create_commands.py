@@ -850,3 +850,69 @@ class TestIssueTypeCaseSensitivity:
                             # This proves that the issue_type was normalized correctly - if it wasn't,
                             # the field wouldn't have been identified as required and wouldn't be here
                             assert call_kwargs['required_custom_fields'].get('workstream') == "SaaS"
+
+    def test_versions_field_passed_to_jira_client(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+        """Test that versions field is correctly passed to JIRA client when creating a bug.
+
+        This test verifies the fix for the issue where --affects-versions was not being
+        passed to the JIRA API, causing "Affects Version/s is required" errors.
+        """
+        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+        # Configure field mappings
+        mock_config.jira.field_mappings = {
+            "component/s": {
+                "id": "components",
+                "name": "Component/s",
+                "type": "array",
+                "required_for": [],
+                "available_for": []  # Not available for any issue type to avoid requirement
+            },
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "type": "array",
+                "required_for": ["Bug"],
+                "available_for": ["Bug"],
+                "allowed_values": ["ansible-saas-ga", "2.5.0", "2.4.0"]
+            }
+        }
+
+        with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
+                with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="AAP"):
+                        with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={}):
+                            with patch('devflow.cli.commands.jira_create_commands._get_required_system_fields', return_value={}):
+                                with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "AAP-64025"}):
+                                    mock_mapper = Mock()
+                                    mock_mapper.field_mappings = mock_config.jira.field_mappings
+                                    mock_ensure.return_value = mock_mapper
+
+                                    # Simulate passing --affects-versions ansible-saas-ga via system_fields
+                                    # This is what jira_create_dynamic.py does on line 113-115
+                                    system_fields = {"versions": "ansible-saas-ga"}
+
+                                    # Call create_issue with system_fields containing versions
+                                    create_issue(
+                                        issue_type="bug",
+                                        summary="Test bug with version",
+                                        priority="Major",
+                                        project="AAP",
+                                        parent="AAP-64025",
+                                        affected_version="ansible-saas-ga",
+                                        description="Bug description",
+                                        description_file=None,
+                                        interactive=False,
+                                        create_session=False,
+                                        system_fields=system_fields,
+                                    )
+
+                                    # Verify the bug was created
+                                    assert mock_jira_client.create_issue.called
+
+                                    # Verify versions field was included in the call
+                                    call_kwargs = mock_jira_client.create_issue.call_args[1]
+                                    # The versions field should be present in the kwargs
+                                    assert 'versions' in call_kwargs, "versions field should be passed to JIRA client"
+                                    assert call_kwargs['versions'] == "ansible-saas-ga", "versions should have the correct value"
