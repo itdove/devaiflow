@@ -165,6 +165,12 @@ def _get_required_custom_fields(
         if issue_type not in required_for:
             continue
 
+        # Check if this field is available for the given issue type
+        # Some fields like "versions" are only available for Bug, not Story/Task/Epic
+        available_for = field_info.get("available_for", [])
+        if available_for and issue_type not in available_for:
+            continue
+
         # This field is required - get its value
         flag_value = flag_values.get(field_name)
         config_value = config_defaults.get(field_name)
@@ -368,6 +374,12 @@ def _get_required_system_fields(
         # Check if this field is required for the issue type
         required_for = field_info.get("required_for", [])
         if issue_type not in required_for:
+            continue
+
+        # Check if this field is available for the given issue type
+        # Some fields like "versions" are only available for Bug, not Story/Task/Epic
+        available_for = field_info.get("available_for", [])
+        if available_for and issue_type not in available_for:
             continue
 
         # This field is required - get its value
@@ -868,6 +880,33 @@ def create_issue(
         if system_fields:
             merged_system_fields.update(system_fields)
 
+        # Filter out system fields that are not available for this issue type
+        # Some fields like "versions" are only available for Bug, not Story/Task/Epic
+        if config.jira.field_mappings:
+            try:
+                mappings = dict(field_mapper.field_mappings) if field_mapper.field_mappings else {}
+                fields_to_remove = []
+                for field_id in list(merged_system_fields.keys()):
+                    # Find the field_info for this field_id
+                    field_info = None
+                    for fname, finfo in mappings.items():
+                        if finfo.get("id") == field_id:
+                            field_info = finfo
+                            break
+
+                    # If field has available_for constraint, check if current issue type is allowed
+                    if field_info:
+                        available_for = field_info.get("available_for", [])
+                        if available_for and issue_type not in available_for:
+                            fields_to_remove.append(field_id)
+
+                # Remove fields that aren't available for this issue type
+                for field_id in fields_to_remove:
+                    del merged_system_fields[field_id]
+            except (TypeError, AttributeError):
+                # field_mappings might be invalid - continue without filtering
+                pass
+
         # Validate that components are provided (required by most JIRA projects)
         # Check if components field exists in field_mappings and is available for this issue type
         components_available = False
@@ -909,12 +948,10 @@ def create_issue(
             sys.exit(1)
 
         # Add system fields to create_kwargs (use field IDs directly like "components", "labels")
-        # Skip fields that are already handled as dedicated parameters in create_* methods:
-        # - components: Dedicated parameter, already added to create_kwargs below
-        # - versions: Dedicated parameter (affected_version), already in create_kwargs
-        # - priority: Dedicated parameter, already in create_kwargs
-        # - description: Dedicated parameter, already in create_kwargs
-        DEDICATED_PARAM_FIELDS = {"components", "versions", "priority", "description"}
+        # Skip fields that are already handled as dedicated parameters in create_issue():
+        # These are actual parameters of JiraClient.create_issue() method
+        # See devflow/jira/client.py:1321 for the method signature
+        DEDICATED_PARAM_FIELDS = {"summary", "description", "priority", "components", "parent"}
 
         for field_name, field_value in merged_system_fields.items():
             # Skip fields with dedicated parameters
@@ -935,9 +972,8 @@ def create_issue(
         if "components" in merged_system_fields:
             create_kwargs["components"] = merged_system_fields["components"]
 
-        # Add versions from merged_system_fields to create_kwargs (has dedicated parameter)
-        if "versions" in merged_system_fields:
-            create_kwargs["versions"] = merged_system_fields["versions"]
+        # Note: All other system fields (like versions, labels, etc.) are already added
+        # via the generic loop above, filtered by available_for
 
         # Create the issue with specific error handling
         try:
