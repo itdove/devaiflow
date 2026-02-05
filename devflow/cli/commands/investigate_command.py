@@ -298,7 +298,7 @@ def create_investigation_session(
         branch=current_branch,
         temp_directory=temp_directory,
         original_project_path=original_project_path,
-        workspace=config.repos.get_default_workspace_path(),
+        workspace=get_workspace_path(config, session.workspace_name) if session.workspace_name else config.repos.get_default_workspace_path(),
     )
     session.working_directory = working_directory
 
@@ -308,7 +308,13 @@ def create_investigation_session(
     session_manager.update_session(session)
 
     # Build initial prompt with investigation-only constraints
-    workspace = config.repos.get_default_workspace_path() if config and config.repos else None
+    # AAP-64886: Get workspace path from session instead of using default
+    workspace = None
+    if session.workspace_name and config and config.repos:
+        from devflow.cli.utils import get_workspace_path
+        workspace = get_workspace_path(config, session.workspace_name)
+    elif config and config.repos:
+        workspace = config.repos.get_default_workspace_path()
     initial_prompt = _build_investigation_prompt(goal, parent, config, name, project_path=project_path, workspace=workspace)
 
     # Set up signal handlers for cleanup
@@ -339,9 +345,12 @@ def create_investigation_session(
         # Build command with all skills and context directories
         from devflow.utils.claude_commands import build_claude_command
 
-        # Get default workspace path for skills discovery
+        # AAP-64886: Get workspace path from session instead of using default
         workspace_path = None
-        if config and config.repos:
+        if session.workspace_name and config and config.repos:
+            from devflow.cli.utils import get_workspace_path
+            workspace_path = get_workspace_path(config, session.workspace_name)
+        elif config and config.repos:
             workspace_path = config.repos.get_default_workspace_path()
 
         cmd = build_claude_command(
