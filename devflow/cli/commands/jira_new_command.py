@@ -499,7 +499,7 @@ def create_jira_ticket_session(
 
     # Update session with Claude session ID
     # Get current branch from temp directory (or None if not a git repo)
-    current_branch = GitUtils.get_current_branch(Path(temp_directory)) if GitUtils.is_git_repository(Path(temp_directory)) else None
+    current_branch = GitUtils.get_current_branch(Path(temp_directory)) if temp_directory and GitUtils.is_git_repository(Path(temp_directory)) else None
 
     session.add_conversation(
         working_dir=working_directory,

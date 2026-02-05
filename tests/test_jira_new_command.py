@@ -361,6 +361,56 @@ class TestCreateJiraTicketSession:
             assert session.session_type == "ticket_creation"
             assert f"Create JIRA {issue_type}" in session.goal
 
+    @patch("devflow.cli.commands.jira_new_command.should_launch_claude_code")
+    @patch("devflow.cli.commands.jira_new_command.subprocess.run")
+    @patch("devflow.utils.temp_directory.prompt_and_clone_to_temp")
+    @patch("devflow.utils.temp_directory.should_clone_to_temp")
+    @patch("devflow.cli.commands.jira_new_command.console")
+    def test_user_declines_temp_directory(
+        self,
+        mock_console,
+        mock_should_clone,
+        mock_prompt_clone,
+        mock_subprocess,
+        mock_should_launch,
+        temp_daf_home,
+        mock_config,
+        tmp_path
+    ):
+        """Test that declining temp directory doesn't cause TypeError.
+
+        Regression test for bug where answering 'n' to temp directory prompt
+        caused TypeError: argument should be a str or an os.PathLike object
+        where __fspath__ returns a str, not 'NoneType'.
+        """
+        # Setup: Create a test directory to use as project path
+        project_dir = tmp_path / "test-project"
+        project_dir.mkdir()
+
+        # Setup mocks
+        mock_should_clone.return_value = True  # Indicate temp clone is available
+        mock_prompt_clone.return_value = None  # User declines temp directory
+        mock_should_launch.return_value = False  # Don't launch Claude
+
+        # Call the function - should NOT raise TypeError
+        create_jira_ticket_session(
+            issue_type="story",
+            parent="PROJ-59038",
+            goal="Test declining temp directory",
+            name="test-no-temp",
+            path=str(project_dir)  # Provide explicit path to avoid interactive prompt
+        )
+
+        # Verify session was created successfully
+        session_manager = SessionManager(config_loader=ConfigLoader())
+        session = session_manager.get_session("test-no-temp")
+
+        assert session is not None, "Session should be created"
+        assert session.session_type == "ticket_creation"
+        assert "Test declining temp directory" in session.goal
+        # Session created but Claude not launched, so no conversation yet
+        assert len(session.conversations) == 0
+
 
 class TestJiraNewCommandInteractivePrompts:
     """Test interactive prompting for daf jira new command."""
