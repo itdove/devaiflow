@@ -171,10 +171,13 @@ def _create_mock_jira_ticket(
     mock_jira = MockJiraClient(config=config)
 
     # Build initial prompt with session name
-    # Get default workspace path for skills discovery (mock mode doesn't select workspace interactively)
+    # AAP-64886: Get workspace path from session instead of using default
     from devflow.cli.utils import get_workspace_path
     workspace_path = None
-    if config and config.repos and config.repos.workspaces:
+    if session.workspace_name and config and config.repos:
+        workspace_path = get_workspace_path(config, session.workspace_name)
+    elif config and config.repos and config.repos.workspaces:
+        # Fallback to default if session doesn't have workspace
         workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
 
@@ -514,10 +517,13 @@ def create_jira_ticket_session(
     session_manager.update_session(session)
 
     # Build initial prompt with analysis-only constraints and session metadata
-    # Get default workspace path for skills discovery
+    # AAP-64886: Get workspace path from session instead of using default
     from devflow.cli.utils import get_workspace_path
     workspace_path = None
-    if config and config.repos and config.repos.workspaces:
+    if session.workspace_name and config and config.repos:
+        workspace_path = get_workspace_path(config, session.workspace_name)
+    elif config and config.repos and config.repos.workspaces:
+        # Fallback to default if session doesn't have workspace
         workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
 
@@ -550,16 +556,19 @@ def create_jira_ticket_session(
         # Build command with all skills and context directories
         from devflow.utils.claude_commands import build_claude_command
 
-        # Get default workspace path for skills discovery
-        default_workspace_path = None
-        if config and config.repos and config.repos.workspaces:
-            default_workspace_path = config.repos.get_default_workspace_path()
+        # AAP-64886: Get workspace path from session instead of using default
+        workspace_path_for_skills = None
+        if session.workspace_name and config and config.repos:
+            workspace_path_for_skills = get_workspace_path(config, session.workspace_name)
+        elif config and config.repos and config.repos.workspaces:
+            # Fallback to default if session doesn't have workspace
+            workspace_path_for_skills = config.repos.get_default_workspace_path()
 
         cmd = build_claude_command(
             session_id=ai_agent_session_id,
             initial_prompt=initial_prompt,
             project_path=project_path,
-            workspace_path=default_workspace_path,
+            workspace_path=workspace_path_for_skills,
             config=config
         )
 

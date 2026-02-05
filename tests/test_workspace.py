@@ -353,3 +353,68 @@ def test_open_command_w_flag_no_update_when_same_workspace(monkeypatch, tmp_path
     manager.delete_session("test-session-no-update")
 
 
+def test_new_command_w_flag_uses_correct_workspace(monkeypatch, tmp_path):
+    """Test that daf new -w flag uses correct workspace for repository discovery (AAP-64886)."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.cli.commands.new_command import _suggest_and_select_repository
+    from devflow.config.models import Config, JiraConfig, RepoConfig, WorkspaceDefinition
+    from devflow.git.utils import GitUtils
+    import subprocess
+
+    # Create two workspace directories with different repositories
+    primary_ws = tmp_path / "primary"
+    ai_ws = tmp_path / "ai"
+    primary_ws.mkdir()
+    ai_ws.mkdir()
+
+    # Create git repos in primary workspace
+    (primary_ws / "backend-api").mkdir()
+    (primary_ws / "frontend-app").mkdir()
+
+    # Create git repos in ai workspace
+    (ai_ws / "devaiflow").mkdir()
+    (ai_ws / "ml-models").mkdir()
+
+    # Initialize git repos (minimal setup)
+    def init_git_repo(path):
+        subprocess.run(["git", "init"], cwd=path, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=path, capture_output=True)
+
+    init_git_repo(primary_ws / "backend-api")
+    init_git_repo(primary_ws / "frontend-app")
+    init_git_repo(ai_ws / "devaiflow")
+    init_git_repo(ai_ws / "ml-models")
+
+    # Setup config with multiple workspaces
+    config_loader = ConfigLoader()
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.com", transitions={}),
+        repos=RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="primary", path=str(primary_ws)),
+                WorkspaceDefinition(name="ai", path=str(ai_ws)),
+            ]
+        )
+    )
+
+    # Mock the config loader
+    monkeypatch.setattr(config_loader, 'load_config', lambda: config)
+
+    # Mock Prompt.ask to select first repository automatically
+    from rich.prompt import Prompt
+    monkeypatch.setattr(Prompt, 'ask', lambda *args, **kwargs: "1")
+
+    # Test repository discovery with ai workspace
+    selected_path = _suggest_and_select_repository(
+        config_loader,
+        workspace_name="ai"
+    )
+
+    # Verify the selected path is from ai workspace, not primary
+    assert selected_path is not None
+    assert "devaiflow" in selected_path or "ml-models" in selected_path
+    assert str(ai_ws) in selected_path
+    assert str(primary_ws) not in selected_path
+
+

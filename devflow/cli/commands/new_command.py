@@ -539,6 +539,19 @@ def create_new_session(
     # Note: Session existence check moved to after working_directory is determined
     # This allows proper multi-conversation support (add conversation vs create new session)
 
+    # AAP-63377: Workspace selection BEFORE repository discovery
+    # Check if session already exists to get stored workspace preference
+    existing_session = session_manager.get_session(name)
+
+    # Select workspace using priority resolution
+    from devflow.cli.utils import select_workspace
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag=workspace_name,
+        session=existing_session,
+        skip_prompt=output_json
+    )
+
     # Determine project path
     if path is None:
         # Check if current directory is a git repository (indicates it's a project)
@@ -546,10 +559,12 @@ def create_new_session(
         is_current_dir_a_project = GitUtils.is_git_repository(current_dir)
 
         # Always offer intelligent repository suggestions (with or without JIRA)
+        # Pass selected workspace to ensure correct repository discovery
         suggested_path = _suggest_and_select_repository(
             config_loader,
             issue_metadata_dict=issue_metadata_dict,
             issue_key=issue_key,
+            workspace_name=selected_workspace_name,
         )
         if suggested_path:
             path = suggested_path
@@ -578,19 +593,6 @@ def create_new_session(
     # Determine working directory name
     if working_directory is None:
         working_directory = Path(project_path).name
-
-    # AAP-63377: Workspace selection
-    # Check if session already exists to get stored workspace preference
-    existing_session = session_manager.get_session(name)
-
-    # Select workspace using priority resolution
-    from devflow.cli.utils import select_workspace
-    selected_workspace_name = select_workspace(
-        config,
-        workspace_flag=workspace_name,
-        session=existing_session,
-        skip_prompt=output_json
-    )
 
     # Get workspace path (will be None if using old single workspace config)
     workspace_path = None
@@ -673,17 +675,21 @@ def create_new_session(
 
             # Add conversation to existing session
             console.print(f"\n[cyan]Adding conversation to existing session: {name}[/cyan]")
-            config = config_loader.load_config()
-            workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
+            # AAP-64886: Use selected workspace_path instead of default
             session.add_conversation(
                 working_dir=working_directory,
                 ai_agent_session_id=session_id,
                 project_path=project_path,
                 branch=branch or "",  # branch is required, use empty string if None
-                workspace=workspace,
+                workspace=workspace_path,
             )
             session.working_directory = working_directory
+
+            # AAP-64886: Update session's workspace if not already set
+            if not session.workspace_name and selected_workspace_name:
+                session.workspace_name = selected_workspace_name
+
             session_manager.update_session(session)
         else:
             # Multiple sessions exist - prompt user to select one or create new
@@ -896,6 +902,7 @@ def _suggest_and_select_repository(
     config_loader: ConfigLoader,
     issue_metadata_dict: Optional[dict] = None,
     issue_key: Optional[str] = None,
+    workspace_name: Optional[str] = None,
 ) -> Optional[str]:
     """Suggest repositories based on issue tracker ticket and let user select.
 
@@ -903,6 +910,7 @@ def _suggest_and_select_repository(
         config_loader: ConfigLoader instance
         issue_metadata_dict: issue tracker ticket metadata (if available)
         issue_key: issue tracker key (if available)
+        workspace_name: Optional workspace name to use (AAP-64886)
 
     Returns:
         Selected repository path or None if user cancelled
@@ -913,7 +921,12 @@ def _suggest_and_select_repository(
     available_repos = []
     workspace_path = None
     if config and config.repos:
-        workspace_path_str = config.repos.get_default_workspace_path()
+        # AAP-64886: Use selected workspace instead of default
+        if workspace_name:
+            from devflow.cli.utils import get_workspace_path
+            workspace_path_str = get_workspace_path(config, workspace_name)
+        else:
+            workspace_path_str = config.repos.get_default_workspace_path()
         if workspace_path_str:
             workspace_path = Path(workspace_path_str).expanduser()
             if workspace_path.exists() and workspace_path.is_dir():
