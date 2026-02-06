@@ -10,7 +10,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, is_json_mode, output_json, require_outside_claude, should_launch_claude_code
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, should_launch_claude_code
 from devflow.git.utils import GitUtils
 
 console = Console()
@@ -289,7 +289,7 @@ def create_investigation_session(
     ai_agent_session_id = str(uuid.uuid4())
 
     # Update session with Claude session ID
-    current_branch = GitUtils.get_current_branch(Path(temp_directory)) if GitUtils.is_git_repository(Path(temp_directory)) else None
+    current_branch = GitUtils.get_current_branch(Path(temp_directory)) if temp_directory and GitUtils.is_git_repository(Path(temp_directory)) else None
 
     session.add_conversation(
         working_dir=working_directory,
@@ -311,7 +311,6 @@ def create_investigation_session(
     # AAP-64886: Get workspace path from session instead of using default
     workspace = None
     if session.workspace_name and config and config.repos:
-        from devflow.cli.utils import get_workspace_path
         workspace = get_workspace_path(config, session.workspace_name)
     elif config and config.repos:
         workspace = config.repos.get_default_workspace_path()
@@ -348,7 +347,6 @@ def create_investigation_session(
         # AAP-64886: Get workspace path from session instead of using default
         workspace_path = None
         if session.workspace_name and config and config.repos:
-            from devflow.cli.utils import get_workspace_path
             workspace_path = get_workspace_path(config, session.workspace_name)
         elif config and config.repos:
             workspace_path = config.repos.get_default_workspace_path()
