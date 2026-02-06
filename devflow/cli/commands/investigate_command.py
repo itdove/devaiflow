@@ -289,7 +289,7 @@ def create_investigation_session(
     ai_agent_session_id = str(uuid.uuid4())
 
     # Update session with Claude session ID
-    current_branch = GitUtils.get_current_branch(Path(temp_directory)) if GitUtils.is_git_repository(Path(temp_directory)) else None
+    current_branch = GitUtils.get_current_branch(Path(temp_directory)) if temp_directory and GitUtils.is_git_repository(Path(temp_directory)) else None
 
     session.add_conversation(
         working_dir=working_directory,

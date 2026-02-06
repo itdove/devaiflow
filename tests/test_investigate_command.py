@@ -279,6 +279,60 @@ class TestInvestigateCommand:
         # Should fail
         assert result.exit_code != 0 or "does not exist" in result.output
 
+    @patch("devflow.cli.commands.investigate_command.should_launch_claude_code")
+    @patch("devflow.cli.commands.investigate_command.subprocess.run")
+    @patch("devflow.utils.temp_directory.prompt_and_clone_to_temp")
+    @patch("devflow.utils.temp_directory.should_clone_to_temp")
+    @patch("devflow.cli.commands.investigate_command.console")
+    def test_user_declines_temp_directory(
+        self,
+        mock_console,
+        mock_should_clone,
+        mock_prompt_clone,
+        mock_subprocess,
+        mock_should_launch,
+        temp_daf_home,
+        tmp_path
+    ):
+        """Test that declining temp directory doesn't cause TypeError.
+
+        Regression test for bug where answering 'n' to temp directory prompt
+        caused TypeError: argument should be a str or an os.PathLike object
+        where __fspath__ returns a str, not 'NoneType'.
+        """
+        # Setup: Create a test directory to use as project path
+        project_dir = tmp_path / "test-project"
+        project_dir.mkdir()
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        # Setup mocks
+        mock_should_clone.return_value = True  # Indicate temp clone is available
+        mock_prompt_clone.return_value = None  # User declines temp directory
+        mock_should_launch.return_value = False  # Don't launch Claude
+
+        # Call the function - should NOT raise TypeError
+        create_investigation_session(
+            goal="Test declining temp directory investigation",
+            parent=None,
+            name="test-no-temp-investigate",
+            path=str(project_dir),
+            workspace=None,
+        )
+
+        # Verify session was created successfully
+        session_manager = SessionManager(config_loader=config_loader)
+        session = session_manager.get_session("test-no-temp-investigate")
+
+        assert session is not None, "Session should be created"
+        assert session.session_type == "investigation"
+        assert "Test declining temp directory investigation" in session.goal
+        # Session created but Claude not launched, so no conversation yet
+        assert len(session.conversations) == 0
+
 
 class TestInvestigateCompleteIntegration:
     """Test complete_command.py integration with investigation sessions."""
