@@ -1503,6 +1503,12 @@ class JiraClient(IssueTrackerClient):
             if jira_issue_type not in required_for:
                 continue
 
+            # Check if this field is available for the given issue type
+            # Some fields like "versions" are only available for Bug, not Story/Task/Epic
+            available_for = field_info.get("available_for", [])
+            if available_for and jira_issue_type not in available_for:
+                continue
+
             # Get field ID
             field_id = field_info.get("id")
             if not field_id:
