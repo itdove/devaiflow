@@ -10,7 +10,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, is_json_mode, output_json, require_outside_claude, should_launch_claude_code
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, should_launch_claude_code
 from devflow.git.utils import GitUtils
 
 console = Console()
@@ -311,7 +311,6 @@ def create_investigation_session(
     # AAP-64886: Get workspace path from session instead of using default
     workspace = None
     if session.workspace_name and config and config.repos:
-        from devflow.cli.utils import get_workspace_path
         workspace = get_workspace_path(config, session.workspace_name)
     elif config and config.repos:
         workspace = config.repos.get_default_workspace_path()
