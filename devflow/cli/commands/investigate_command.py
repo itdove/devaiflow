@@ -347,7 +347,6 @@ def create_investigation_session(
         # AAP-64886: Get workspace path from session instead of using default
         workspace_path = None
         if session.workspace_name and config and config.repos:
-            from devflow.cli.utils import get_workspace_path
             workspace_path = get_workspace_path(config, session.workspace_name)
         elif config and config.repos:
             workspace_path = config.repos.get_default_workspace_path()
