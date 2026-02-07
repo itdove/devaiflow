@@ -9,7 +9,7 @@ from devflow.cli.commands.upgrade_command import (
     upgrade_all,
     _print_upgrade_table,
 )
-from devflow.config.models import Config, RepoConfig
+from devflow.config.models import Config, RepoConfig, WorkspaceDefinition
 
 
 @pytest.fixture
@@ -18,6 +18,11 @@ def mock_config(tmp_path):
     config = Mock(spec=Config)
     config.repos = Mock(spec=RepoConfig)
     config.repos.get_default_workspace_path.return_value = str(tmp_path)
+
+    # Add workspaces attribute for upgrade_all tests
+    workspace = WorkspaceDefinition(name="test-workspace", path=str(tmp_path))
+    config.repos.workspaces = [workspace]
+
     return config
 
 
@@ -177,6 +182,18 @@ class TestUpgradeAll:
         """Test upgrade all when no config exists."""
         mock_loader = Mock()
         mock_loader.load_config.return_value = None
+
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_loader):
+            upgrade_all()
+
+    def test_upgrade_all_no_workspaces(self):
+        """Test upgrade all when no workspaces are configured."""
+        mock_config = Mock(spec=Config)
+        mock_config.repos = Mock(spec=RepoConfig)
+        mock_config.repos.workspaces = []
+
+        mock_loader = Mock()
+        mock_loader.load_config.return_value = mock_config
 
         with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_loader):
             upgrade_all()
