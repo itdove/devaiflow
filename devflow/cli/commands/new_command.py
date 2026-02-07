@@ -600,6 +600,12 @@ def create_new_session(
         from devflow.cli.utils import get_workspace_path
         workspace_path = get_workspace_path(config, selected_workspace_name)
 
+        # Auto-upgrade skills and commands for this workspace if needed
+        from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
+        success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
+        if not success:
+            console.print(f"[yellow]⚠[/yellow] Warning: {error}")
+
     # Auto-create template if enabled and no template was used
 
     if config and config.templates.auto_create and not template:
@@ -807,7 +813,14 @@ def create_new_session(
 
         # Generate the initial prompt with context loading hints
         # Use session.goal which now contains the concatenated value
-        workspace = config.repos.get_default_workspace_path() if config and config.repos else None
+        # AAP-XXXXX: Use selected workspace instead of default workspace for skill discovery
+        workspace = None
+        if selected_workspace_name and config and config.repos:
+            from devflow.cli.utils import get_workspace_path
+            workspace = get_workspace_path(config, selected_workspace_name)
+        elif config and config.repos:
+            workspace = config.repos.get_default_workspace_path()
+
         initial_prompt = _generate_initial_prompt(
             name, session.goal, issue_key, issue_title,
             project_path=project_path, workspace=workspace
@@ -816,9 +829,13 @@ def create_new_session(
         # Build command with all skills and context directories
         from devflow.utils.claude_commands import build_claude_command
 
-        # Get default workspace path for skills discovery
+        # Get workspace path for skills discovery
+        # AAP-XXXXX: Use selected workspace instead of default workspace
         workspace_path = None
-        if config and config.repos:
+        if selected_workspace_name and config and config.repos:
+            from devflow.cli.utils import get_workspace_path
+            workspace_path = get_workspace_path(config, selected_workspace_name)
+        elif config and config.repos:
             workspace_path = config.repos.get_default_workspace_path()
 
         cmd = build_claude_command(
@@ -892,7 +909,13 @@ def create_new_session(
 
         console.print(f"\n[yellow]You can manually start with:[/yellow]")
         console.print(f"  cd {project_path}")
-        workspace = config.repos.get_default_workspace_path() if config and config.repos else None
+        # AAP-XXXXX: Use selected workspace instead of default workspace
+        workspace = None
+        if selected_workspace_name and config and config.repos:
+            from devflow.cli.utils import get_workspace_path
+            workspace = get_workspace_path(config, selected_workspace_name)
+        elif config and config.repos:
+            workspace = config.repos.get_default_workspace_path()
         initial_prompt = _generate_initial_prompt(name, session.goal, issue_key, issue_title,
                                                    project_path=project_path, workspace=workspace)
         console.print(f"  claude --session-id {session_id} \"{initial_prompt}\"")
