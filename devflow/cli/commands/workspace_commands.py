@@ -181,6 +181,14 @@ def add_workspace(name: str, path: str, set_default: bool = False) -> None:
     if set_default:
         console.print(f"[dim]Last used: Yes[/dim]")
 
+    # Auto-install skills and commands to new workspace
+    console.print(f"\n[cyan]Installing bundled skills and commands...[/cyan]")
+    from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
+    success, error = ensure_workspace_skills_and_commands(str(expanded_path), quiet=False)
+    if not success:
+        console.print(f"[yellow]⚠[/yellow] {error}")
+        console.print(f"[dim]You can manually install later with: daf upgrade[/dim]")
+
 
 @require_outside_claude
 def remove_workspace(name: str) -> None:
@@ -348,6 +356,14 @@ def set_default_workspace(name: str) -> None:
     config_loader.save_config(config)
 
     console.print(f"\n[green]✓[/green] Set '{name}' as last used workspace")
+
+    # Auto-upgrade skills and commands for this workspace
+    console.print(f"\n[cyan]Ensuring skills and commands are up-to-date...[/cyan]")
+    from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
+    success, error = ensure_workspace_skills_and_commands(workspace.path, quiet=False)
+    if not success:
+        console.print(f"[yellow]⚠[/yellow] {error}")
+        console.print(f"[dim]You can manually install later with: daf upgrade[/dim]")
 
 
 @require_outside_claude

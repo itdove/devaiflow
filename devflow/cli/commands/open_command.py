@@ -209,6 +209,12 @@ def open_session(
     if selected_workspace_name:
         workspace_path = get_workspace_path(config, selected_workspace_name)
 
+        # Auto-upgrade skills and commands for this workspace if needed
+        from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
+        success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
+        if not success:
+            console.print(f"[yellow]⚠[/yellow] Warning: {error}")
+
         # AAP-64886: Save selected workspace to session if it changed
         # This ensures the -w flag persists the workspace selection for future reopens
         if selected_workspace_name != session.workspace_name:
@@ -644,7 +650,13 @@ def open_session(
                     if working_dir != current_project
                 ]
 
-            workspace = config.repos.get_default_workspace_path() if config and config.repos else None
+            # AAP-XXXXX: Use selected workspace instead of default workspace for skill discovery
+            workspace = None
+            if selected_workspace_name and config and config.repos:
+                workspace = get_workspace_path(config, selected_workspace_name)
+            elif config and config.repos:
+                workspace = config.repos.get_default_workspace_path()
+
             initial_prompt = _generate_initial_prompt(
                 name=session.name,
                 goal=session.goal,
@@ -660,10 +672,13 @@ def open_session(
             # Build command with all skills and context directories
             from devflow.utils.claude_commands import build_claude_command
 
-            # Get default workspace path for skills discovery
-            workspace_path = None
-            if config and config.repos:
-                workspace_path = config.repos.get_default_workspace_path()
+            # Get workspace path for skills discovery
+            # AAP-XXXXX: Use selected workspace instead of default workspace
+            workspace_path_for_cmd = None
+            if selected_workspace_name and config and config.repos:
+                workspace_path_for_cmd = get_workspace_path(config, selected_workspace_name)
+            elif config and config.repos:
+                workspace_path_for_cmd = config.repos.get_default_workspace_path()
 
             # Get project path from active conversation
             project_path = active_conv.project_path if active_conv else None
@@ -672,7 +687,7 @@ def open_session(
                 session_id=active_conv.ai_agent_session_id,
                 initial_prompt=initial_prompt,
                 project_path=project_path,
-                workspace_path=workspace_path,
+                workspace_path=workspace_path_for_cmd,
                 config=config
             )
 
@@ -721,9 +736,16 @@ def open_session(
                 skills_dirs.append(str(user_skills))
 
             # 2. Workspace-level skills: <workspace>/.claude/skills/
-            if config and config.repos and config.repos.get_default_workspace_path():
+            # AAP-XXXXX: Use selected workspace instead of default workspace
+            workspace_for_skills = None
+            if selected_workspace_name and config and config.repos:
+                workspace_for_skills = get_workspace_path(config, selected_workspace_name)
+            elif config and config.repos:
+                workspace_for_skills = config.repos.get_default_workspace_path()
+
+            if workspace_for_skills:
                 from devflow.utils.claude_commands import get_workspace_skills_dir
-                workspace_skills = get_workspace_skills_dir(config.repos.get_default_workspace_path())
+                workspace_skills = get_workspace_skills_dir(workspace_for_skills)
                 if workspace_skills.exists():
                     skills_dirs.append(str(workspace_skills))
 
