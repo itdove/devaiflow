@@ -937,3 +937,174 @@ def get_workspace_path(config: Config, workspace_name: Optional[str]) -> Optiona
 
     workspace = config.repos.get_workspace_by_name(workspace_name)
     return workspace.path if workspace else None
+
+def resolve_workspace_path(
+    config: Config,
+    selected_workspace_name: Optional[str] = None
+) -> Optional[str]:
+    """Resolve workspace path using selected workspace or default.
+
+    This utility consolidates the common pattern:
+    ```python
+    if selected_workspace_name:
+        workspace_path = get_workspace_path(config, selected_workspace_name)
+    else:
+        workspace_path = config.repos.get_default_workspace_path()
+    ```
+
+    Args:
+        config: Configuration object
+        selected_workspace_name: Optional workspace name from workspace selection
+
+    Returns:
+        Workspace path string or None if no workspace found
+
+    Examples:
+        >>> resolve_workspace_path(config, "product-a")
+        '/Users/john/repos/product-a'
+
+        >>> resolve_workspace_path(config, None)  # Uses default
+        '/Users/john/repos/default-workspace'
+    """
+    if not config or not config.repos:
+        return None
+
+    if selected_workspace_name:
+        # Use selected workspace
+        return get_workspace_path(config, selected_workspace_name)
+    else:
+        # Fall back to default workspace
+        return config.repos.get_default_workspace_path()
+
+
+def scan_workspace_repositories(workspace_path: str) -> list[str]:
+    """Scan workspace directory for git repositories.
+
+    This utility consolidates the common pattern of scanning a workspace
+    for git repositories.
+
+    Args:
+        workspace_path: Path to workspace directory
+
+    Returns:
+        Sorted list of repository names (directory names)
+
+    Raises:
+        ValueError: If workspace path doesn't exist or isn't a directory
+        RuntimeError: If scanning fails
+
+    Examples:
+        >>> scan_workspace_repositories("/Users/john/repos")
+        ['backend-api', 'frontend-app', 'shared-lib']
+    """
+    workspace = Path(workspace_path).expanduser()
+
+    if not workspace.exists():
+        raise ValueError(f"Workspace directory does not exist: {workspace}")
+
+    if not workspace.is_dir():
+        raise ValueError(f"Workspace path is not a directory: {workspace}")
+
+    try:
+        from devflow.git.utils import GitUtils
+
+        # List all directories (excluding hidden ones)
+        directories = [
+            d for d in workspace.iterdir()
+            if d.is_dir() and not d.name.startswith('.')
+        ]
+
+        # Filter to only include git repositories
+        git_repos = [
+            d.name for d in directories
+            if GitUtils.is_git_repository(d)
+        ]
+
+        return sorted(git_repos)
+
+    except Exception as e:
+        raise RuntimeError(f"Failed to scan workspace: {e}")
+
+
+def prompt_repository_selection(
+    repo_options: list[str],
+    workspace_path: str,
+    allow_cancel: bool = True
+) -> Optional[str]:
+    """Prompt user to select a repository from a list.
+
+    This utility consolidates the common repository selection UI pattern.
+
+    Args:
+        repo_options: List of repository names to choose from
+        workspace_path: Workspace path (for constructing full paths)
+        allow_cancel: If True, allow user to cancel selection
+
+    Returns:
+        Full path to selected repository, or None if user cancelled
+
+    Examples:
+        >>> repos = ['backend-api', 'frontend-app']
+        >>> prompt_repository_selection(repos, "/Users/john/repos")
+        '/Users/john/repos/backend-api'  # If user selected option 1
+    """
+    from rich.prompt import Prompt
+
+    if not repo_options:
+        console.print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+        return None
+
+    workspace = Path(workspace_path).expanduser()
+
+    # Display available repositories
+    console.print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
+    for i, repo in enumerate(repo_options, 1):
+        console.print(f"  {i}. {repo}")
+
+    # Prompt for selection
+    console.print(f"\n[bold]Select repository:[/bold]")
+    console.print(f"  • Enter a number (1-{len(repo_options)}) to select from the list")
+    console.print(f"  • Enter a repository name")
+    if allow_cancel:
+        console.print(f"  • Enter 'cancel' or 'q' to exit")
+
+    selection = Prompt.ask("Selection")
+
+    # Validate input is not empty
+    if not selection or selection.strip() == "":
+        console.print(
+            f"[red]✗[/red] Empty selection not allowed. "
+            f"Please enter a number (1-{len(repo_options)}), repository name"
+            + (", or 'cancel'/'q'" if allow_cancel else "")
+        )
+        return None
+
+    # Handle cancel
+    if allow_cancel and selection.lower() in ["cancel", "q"]:
+        console.print(f"\n[yellow]Cancelled[/yellow]")
+        return None
+
+    # Check if it's a number (selecting from list)
+    if selection.isdigit():
+        repo_index = int(selection) - 1
+        if 0 <= repo_index < len(repo_options):
+            repo_name = repo_options[repo_index]
+            console_print(f"[dim]Selected: {repo_name}[/dim]")
+            return str(workspace / repo_name)
+        else:
+            console.print(f"[red]✗[/red] Invalid selection. Please choose 1-{len(repo_options)}")
+            return None
+
+    # Otherwise treat as repository name
+    repo_name = selection
+    project_path = workspace / repo_name
+
+    if not project_path.exists():
+        console.print(f"[yellow]⚠[/yellow] Repository not found: {project_path}")
+        if Confirm.ask("Use this path anyway?", default=False):
+            return str(project_path)
+        else:
+            console.print(f"\n[yellow]Cancelled[/yellow]")
+            return None
+
+    return str(project_path)

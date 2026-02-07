@@ -17,8 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from devflow.cli.commands.open_command import _cleanup_on_signal
-from devflow.cli.commands.new_command import _cleanup_on_signal as new_cleanup_on_signal
+from devflow.cli.signal_handler import _cleanup_on_signal, setup_signal_handlers
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 
@@ -46,13 +45,8 @@ def test_signal_handler_updates_session_status(temp_daf_home, monkeypatch):
     session.status = "in_progress"
     session_manager.update_session(session)
 
-    # Set up global cleanup variables (as done in open_command.py)
-    import devflow.cli.commands.open_command as open_cmd
-    open_cmd._cleanup_session = session
-    open_cmd._cleanup_session_manager = session_manager
-    open_cmd._cleanup_identifier = "test-signal-session"
-    open_cmd._cleanup_config = None
-    open_cmd._cleanup_done = False
+    # Set up signal handlers (as done in commands)
+    setup_signal_handlers(session, session_manager, "test-signal-session", None)
 
     # Mock _prompt_for_complete_on_exit to avoid user interaction
     with patch('devflow.cli.commands.open_command._prompt_for_complete_on_exit'):
@@ -91,13 +85,8 @@ def test_signal_handler_ends_work_session(temp_daf_home, monkeypatch):
     # Start a work session
     session_manager.start_work_session("test-work-session")
 
-    # Set up global cleanup variables
-    import devflow.cli.commands.open_command as open_cmd
-    open_cmd._cleanup_session = session
-    open_cmd._cleanup_session_manager = session_manager
-    open_cmd._cleanup_identifier = "test-work-session"
-    open_cmd._cleanup_config = None
-    open_cmd._cleanup_done = False
+    # Set up signal handlers
+    setup_signal_handlers(session, session_manager, "test-work-session", None)
 
     # Mock _prompt_for_complete_on_exit to avoid user interaction
     with patch('devflow.cli.commands.open_command._prompt_for_complete_on_exit'):
@@ -129,13 +118,8 @@ def test_signal_handler_sets_cleanup_done_flag(temp_daf_home):
         ai_agent_session_id="test-uuid-flag",
     )
 
-    # Set up global cleanup variables
-    import devflow.cli.commands.open_command as open_cmd
-    open_cmd._cleanup_session = session
-    open_cmd._cleanup_session_manager = session_manager
-    open_cmd._cleanup_identifier = "test-cleanup-flag"
-    open_cmd._cleanup_config = None
-    open_cmd._cleanup_done = False
+    # Set up signal handlers
+    setup_signal_handlers(session, session_manager, "test-cleanup-flag", None)
 
     # Mock dependencies
     with patch('devflow.cli.commands.open_command._prompt_for_complete_on_exit'):
@@ -147,7 +131,8 @@ def test_signal_handler_sets_cleanup_done_flag(temp_daf_home):
                     pass
 
     # Verify cleanup_done flag was set
-    assert open_cmd._cleanup_done is True, \
+    from devflow.cli.signal_handler import is_cleanup_done
+    assert is_cleanup_done() is True, \
         "_cleanup_done flag should be True after signal handler completes"
 
 
@@ -164,13 +149,8 @@ def test_signal_handler_handles_errors_gracefully(temp_daf_home, monkeypatch, ca
         ai_agent_session_id="test-uuid-error",
     )
 
-    # Set up global cleanup variables
-    import devflow.cli.commands.open_command as open_cmd
-    open_cmd._cleanup_session = session
-    open_cmd._cleanup_session_manager = session_manager
-    open_cmd._cleanup_identifier = "test-error-handling"
-    open_cmd._cleanup_config = None
-    open_cmd._cleanup_done = False
+    # Set up signal handlers
+    setup_signal_handlers(session, session_manager, "test-error-handling", None)
 
     # Mock update_session to raise an exception
     def mock_update_error(session):
@@ -207,19 +187,14 @@ def test_new_command_signal_handler_updates_session(temp_daf_home):
     session.status = "in_progress"
     session_manager.update_session(session)
 
-    # Set up global cleanup variables for new_command
-    import devflow.cli.commands.new_command as new_cmd
-    new_cmd._cleanup_session = session
-    new_cmd._cleanup_session_manager = session_manager
-    new_cmd._cleanup_name = "test-new-signal"
-    new_cmd._cleanup_config = None
-    new_cmd._cleanup_done = False
+    # Set up signal handlers (unified for all commands now)
+    setup_signal_handlers(session, session_manager, "test-new-signal", None)
 
     # Mock dependencies
     with patch('devflow.cli.commands.open_command._prompt_for_complete_on_exit'):
         with patch('sys.exit'):
             try:
-                new_cleanup_on_signal(signal.SIGTERM, None)
+                _cleanup_on_signal(signal.SIGTERM, None)
             except SystemExit:
                 pass
 
@@ -303,13 +278,8 @@ def test_signal_handler_cleanup_temp_directory(temp_daf_home):
     # Verify temp directory exists
     assert Path(temp_dir).exists(), "Temp directory should exist before cleanup"
 
-    # Set up global cleanup variables
-    import devflow.cli.commands.open_command as open_cmd
-    open_cmd._cleanup_session = session
-    open_cmd._cleanup_session_manager = session_manager
-    open_cmd._cleanup_identifier = "test-temp-cleanup"
-    open_cmd._cleanup_config = None
-    open_cmd._cleanup_done = False
+    # Set up signal handlers
+    setup_signal_handlers(session, session_manager, "test-temp-cleanup", None)
 
     # Mock dependencies
     with patch('devflow.cli.commands.open_command._prompt_for_complete_on_exit'):
@@ -336,13 +306,8 @@ def test_signal_handler_logging(temp_daf_home, monkeypatch):
         ai_agent_session_id="test-uuid-log",
     )
 
-    # Set up global cleanup variables
-    import devflow.cli.commands.open_command as open_cmd
-    open_cmd._cleanup_session = session
-    open_cmd._cleanup_session_manager = session_manager
-    open_cmd._cleanup_identifier = "test-logging"
-    open_cmd._cleanup_config = None
-    open_cmd._cleanup_done = False
+    # Set up signal handlers
+    setup_signal_handlers(session, session_manager, "test-logging", None)
 
     # Track log calls
     log_messages = []
@@ -351,7 +316,7 @@ def test_signal_handler_logging(temp_daf_home, monkeypatch):
         log_messages.append(message)
 
     # Mock _log_error function
-    with patch('devflow.cli.commands.open_command._log_error', side_effect=mock_log_error):
+    with patch('devflow.cli.signal_handler._log_error', side_effect=mock_log_error):
         with patch('devflow.cli.commands.open_command._prompt_for_complete_on_exit'):
             with patch('devflow.cli.commands.open_command._cleanup_temp_directory_on_exit'):
                 with patch('sys.exit'):
