@@ -10,89 +10,15 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, is_json_mode, output_json, require_outside_claude, should_launch_claude_code
+from devflow.cli.utils import console_print, is_json_mode, output_json, prompt_repository_selection, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code
 from devflow.git.utils import GitUtils
 
+# Import unified utilities
+from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
+from devflow.cli.skills_discovery import discover_skills
+from devflow.utils.context_files import load_hierarchical_context_files
+
 console = Console()
-
-# Global variables for signal handler cleanup
-_cleanup_session = None
-_cleanup_session_manager = None
-_cleanup_name = None
-_cleanup_config = None
-_cleanup_done = False
-
-
-def _cleanup_on_signal(signum, frame):
-    """Handle signals by performing cleanup before exit."""
-    global _cleanup_done
-
-    console_print(f"\n[yellow]Received signal {signum}, cleaning up...[/yellow]")
-
-    if _cleanup_session and _cleanup_session_manager and _cleanup_name:
-        console_print(f"[green]✓[/green] Claude session completed")
-
-        # Reload index from disk before checking for rename
-        # This is critical because the child process (Claude) may have renamed the session
-        # and we need to see the latest state from disk, not our stale in-memory index
-        _cleanup_session_manager.index = _cleanup_session_manager.config_loader.load_sessions()
-
-        # Check if session was renamed during execution
-        current_session = _cleanup_session_manager.get_session(_cleanup_name)
-        actual_name = _cleanup_name
-
-        if not current_session:
-            # Session not found with original name - it was likely renamed
-            console_print(f"[dim]Detecting renamed session...[/dim]")
-            all_sessions = _cleanup_session_manager.list_sessions()
-            # Match by Claude session ID which doesn't change during rename
-            cleanup_claude_id = (_cleanup_session.active_conversation.ai_agent_session_id
-                                if _cleanup_session.active_conversation else None)
-            for s in all_sessions:
-                s_claude_id = s.active_conversation.ai_agent_session_id if s.active_conversation else None
-                if (s_claude_id and cleanup_claude_id and
-                    s_claude_id == cleanup_claude_id and
-                    s.session_type == "ticket_creation" and
-                    s.name.startswith("creation-")):
-                    actual_name = s.name
-                    current_session = s
-                    console_print(f"[dim]Session was renamed to: {actual_name}[/dim]")
-                    break
-
-        # Catch only specific exceptions that are expected from rename failures
-        try:
-            _cleanup_session_manager.end_work_session(actual_name)
-        except ValueError as e:
-            # Session name or ID mismatch - log but continue cleanup
-            console_print(f"[yellow]⚠[/yellow] Could not end work session: {e}")
-
-        console_print(f"[dim]Resume anytime with: daf open {actual_name}[/dim]")
-
-        # Save conversation file to stable location before cleaning up temp directory
-        if current_session and current_session.active_conversation and current_session.active_conversation.temp_directory:
-            from devflow.cli.commands.open_command import _copy_conversation_from_temp
-            _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory)
-
-        # Clean up temporary directory if present
-        if _cleanup_session.active_conversation and _cleanup_session.active_conversation.temp_directory:
-            from devflow.utils.temp_directory import cleanup_temp_directory
-            cleanup_temp_directory(_cleanup_session.active_conversation.temp_directory)
-
-        # Call the complete prompt
-        # IMPORTANT: Do NOT wrap this in a broad exception handler
-        # KeyboardInterrupt and EOFError should propagate to allow proper cleanup
-        # Any exceptions from _prompt_for_complete_on_exit are already handled inside that function
-        from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
-        if current_session:
-            _prompt_for_complete_on_exit(current_session, _cleanup_config)
-        else:
-            _prompt_for_complete_on_exit(_cleanup_session, _cleanup_config)
-
-        # Mark cleanup as done so finally block doesn't repeat it
-        _cleanup_done = True
-
-    # Exit gracefully
-    sys.exit(0)
 
 
 def slugify_goal(goal: str) -> str:
@@ -527,20 +453,8 @@ def create_jira_ticket_session(
         workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
 
-    # Set up signal handlers for cleanup
-    global _cleanup_session, _cleanup_session_manager, _cleanup_name, _cleanup_config, _cleanup_done
-    _cleanup_session = session
-    _cleanup_session_manager = session_manager
-    _cleanup_name = name
-    _cleanup_config = config
-
-    # Register signal handlers for graceful shutdown
-    # SIGTERM is not available on Windows, use SIGBREAK instead
-    if sys.platform != "win32":
-        signal.signal(signal.SIGTERM, _cleanup_on_signal)
-    else:
-        signal.signal(signal.SIGBREAK, _cleanup_on_signal)
-    signal.signal(signal.SIGINT, _cleanup_on_signal)
+    # Set up signal handlers for cleanup (using unified utility)
+    setup_signal_handlers(session, session_manager, name, config)
 
     # Set CS_SESSION_NAME environment variable so daf jira create can find the active session
     # This is more reliable than depending on AI_AGENT_SESSION_ID which may not be exported
@@ -588,7 +502,7 @@ def create_jira_ticket_session(
             check=False
         )
     finally:
-        if not _cleanup_done:
+        if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] Claude session completed")
 
             # Reload index from disk before checking for rename
@@ -656,152 +570,6 @@ def create_jira_ticket_session(
                 _prompt_for_complete_on_exit(session, config)
 
 
-def _load_hierarchical_context_files(config: Optional['Config']) -> list:
-    """Load context files from hierarchical configuration.
-
-    Returns list of (path, description) tuples for context files that EXIST.
-
-    Checks for context files from:
-    - Backend: backends/JIRA.md
-    - Enterprise: ENTERPRISE.md
-    - Organization: ORGANIZATION.md
-    - Team: TEAM.md
-    - User: USER.md
-
-    Only returns files that physically exist on disk.
-    Paths are resolved relative to DEVAIFLOW_HOME.
-
-    Args:
-        config: Configuration object (may be None, not used currently but kept for future use)
-
-    Returns:
-        List of (absolute_path, description) tuples for existing files only
-    """
-    from devflow.utils.paths import get_cs_home
-
-    context_files = []
-    cs_home = get_cs_home()
-
-    # Backend context (JIRA backend specific)
-    backend_path = cs_home / "backends" / "JIRA.md"
-    if backend_path.exists() and backend_path.is_file():
-        # Use absolute path so Claude can read it with Read tool
-        context_files.append((str(backend_path), "JIRA backend integration rules"))
-
-    # Enterprise context
-    enterprise_path = cs_home / "ENTERPRISE.md"
-    if enterprise_path.exists() and enterprise_path.is_file():
-        context_files.append((str(enterprise_path), "enterprise-wide policies and standards"))
-
-    # Organization context
-    org_path = cs_home / "ORGANIZATION.md"
-    if org_path.exists() and org_path.is_file():
-        context_files.append((str(org_path), "organization-wide policies and requirements"))
-
-    # Team context
-    team_path = cs_home / "TEAM.md"
-    if team_path.exists() and team_path.is_file():
-        context_files.append((str(team_path), "team conventions and workflows"))
-
-    # User context
-    user_path = cs_home / "USER.md"
-    if user_path.exists() and user_path.is_file():
-        context_files.append((str(user_path), "personal notes and preferences"))
-
-    return context_files
-
-
-def _discover_all_skills(project_path: Optional[str] = None, workspace: Optional[str] = None) -> list[tuple[str, str]]:
-    """Discover all skills from user-level, workspace-level, hierarchical (DEVAIFLOW_HOME), and project-level locations.
-
-    Discovery order (guarantees load order - generic skills before organization-specific extensions):
-    1. User-level generic skills: ~/.claude/skills/ (alphabetical)
-    2. Workspace-level skills: <workspace>/.claude/skills/ (alphabetical) - generic tool skills (daf-cli, gh-cli, etc.)
-    3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (numbered: 01-enterprise, 02-organization, etc.) - extends generic skills
-    4. Project-level skills: <project>/.claude/skills/ (alphabetical)
-
-    Rationale: Hierarchical skills extend generic skills (see "Extends: daf-cli" in skill frontmatter),
-    so generic skills must be loaded first.
-
-    Args:
-        project_path: Project directory path (for project-level skills)
-        workspace: Workspace directory path (for workspace-level skills)
-
-    Returns:
-        List of tuples (skill_path, description) for all discovered skills in load order
-    """
-    discovered_skills = []
-
-    def _scan_skill_dir(skill_file: Path, skill_dir_name: str) -> Optional[tuple[str, str]]:
-        """Scan a single skill directory and extract description."""
-        if not skill_file.exists():
-            return None
-
-        description = f"{skill_dir_name} skill"
-        # Try to extract description from YAML frontmatter
-        try:
-            with open(skill_file, 'r') as f:
-                lines = f.readlines()
-                if lines and lines[0].strip() == '---':
-                    for line in lines[1:]:
-                        if line.strip() == '---':
-                            break
-                        if line.startswith('description:'):
-                            description = line.split('description:', 1)[1].strip()
-                            break
-        except Exception:
-            pass
-
-        return (str(skill_file.resolve()), description)
-
-    # 1. User-level skills: ~/.claude/skills/ (generic skills like daf-cli, git-cli)
-    user_skills_dir = Path.home() / ".claude" / "skills"
-    if user_skills_dir.exists():
-        for skill_dir in sorted(user_skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                result = _scan_skill_dir(skill_file, skill_dir.name)
-                if result:
-                    discovered_skills.append(result)
-
-    # 2. Workspace-level skills: <workspace>/.claude/skills/ (generic tool skills)
-    if workspace:
-        from devflow.utils.claude_commands import get_workspace_skills_dir
-        workspace_skills_dir = get_workspace_skills_dir(workspace)
-        if workspace_skills_dir.exists():
-            for skill_dir in sorted(workspace_skills_dir.iterdir()):
-                if skill_dir.is_dir():
-                    skill_file = skill_dir / "SKILL.md"
-                    result = _scan_skill_dir(skill_file, skill_dir.name)
-                    if result:
-                        discovered_skills.append(result)
-
-    # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (organization-specific skills that extend generic ones)
-    # These are numbered (01-enterprise, 02-organization, 03-team, 04-user) to guarantee order
-    from devflow.utils.paths import get_cs_home
-    cs_home = get_cs_home()
-    hierarchical_skills_dir = cs_home / ".claude" / "skills"
-    if hierarchical_skills_dir.exists():
-        # Sort to ensure numbered order (01-, 02-, 03-, 04-)
-        for skill_dir in sorted(hierarchical_skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                result = _scan_skill_dir(skill_file, skill_dir.name)
-                if result:
-                    discovered_skills.append(result)
-
-    # 4. Project-level skills: <project>/.claude/skills/
-    if project_path:
-        project_skills_dir = Path(project_path) / ".claude" / "skills"
-        if project_skills_dir.exists():
-            for skill_dir in sorted(project_skills_dir.iterdir()):
-                if skill_dir.is_dir():
-                    skill_file = skill_dir / "SKILL.md"
-                    result = _scan_skill_dir(skill_file, skill_dir.name)
-                    if result:
-                        discovered_skills.append(result)
-
-    return discovered_skills
 
 
 def _build_ticket_creation_prompt(
@@ -872,11 +640,11 @@ def _build_ticket_creation_prompt(
         configured_files = [(f.path, f.description) for f in config.context_files.files if not f.hidden]
 
     # Load hierarchical context files (only those that exist)
-    hierarchical_files = _load_hierarchical_context_files(config)
+    hierarchical_files = load_hierarchical_context_files(config)
 
     # Discover skills from filesystem (instead of loading from config)
     # This ensures we only reference skills that actually exist on disk
-    skill_files = _discover_all_skills(project_path=project_path, workspace=workspace)
+    skill_files = discover_skills(project_path=project_path, workspace=workspace)
 
     # Combine regular context files: defaults + hierarchical + configured (no skills from config)
     regular_files = default_files + hierarchical_files + configured_files
@@ -1013,9 +781,6 @@ def _prompt_for_repository_selection(config, workspace_flag: Optional[str] = Non
     Returns:
         Tuple of (project_path, workspace_name) if selected, (None, None) if cancelled
     """
-    from rich.prompt import Prompt
-    from devflow.cli.utils import select_workspace, get_workspace_path
-
     # Select workspace using priority resolution system
     selected_workspace_name = select_workspace(
         config,
@@ -1031,31 +796,20 @@ def _prompt_for_repository_selection(config, workspace_flag: Optional[str] = Non
         return str(Path.cwd()), None
 
     # Get workspace path from workspace name
+    from devflow.cli.utils import get_workspace_path
     workspace_path = get_workspace_path(config, selected_workspace_name)
     if not workspace_path:
         console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
         return str(Path.cwd()), None
 
-    workspace = Path(workspace_path).expanduser()
+    console_print(f"\n[cyan]Scanning workspace:[/cyan] {workspace_path}")
 
-    if not workspace.exists() or not workspace.is_dir():
-        console_print(f"[yellow]⚠[/yellow] Workspace directory does not exist: {workspace}")
-        console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd()), None
-
-    console_print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
-
-    # List all git repositories in workspace
-    repo_options = []
+    # Scan for git repositories in workspace
     try:
-        from devflow.git.utils import GitUtils
-        directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
-        # Filter to only include git repositories
-        git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
-        repo_options = sorted(git_repos)
-    except Exception as e:
-        console_print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
+        repo_options = scan_workspace_repositories(workspace_path)
+    except (ValueError, RuntimeError) as e:
+        console_print(f"[yellow]Warning: {e}[/yellow]")
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
         return str(Path.cwd()), None
 
@@ -1065,49 +819,9 @@ def _prompt_for_repository_selection(config, workspace_flag: Optional[str] = Non
         console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
         return str(Path.cwd()), None
 
-    # Display available repositories
-    console_print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
-    for i, repo in enumerate(repo_options, 1):
-        console_print(f"  {i}. {repo}")
-
-    # Prompt for selection
-    console_print(f"\n[bold]Select repository:[/bold]")
-    console_print(f"  • Enter a number (1-{len(repo_options)}) to select from the list")
-    console_print(f"  • Enter a repository name")
-    console_print(f"  • Enter 'cancel' or 'q' to exit")
-
-    selection = Prompt.ask("Selection")
-
-    # Validate input is not empty
-    if not selection or selection.strip() == "":
-        console_print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(repo_options)}), repository name, or 'cancel'/'q'")
+    # Prompt user to select repository
+    project_path = prompt_repository_selection(repo_options, workspace_path, allow_cancel=True)
+    if not project_path:
         return None, None
 
-    # Handle cancel
-    if selection.lower() in ["cancel", "q"]:
-        console_print(f"\n[yellow]Cancelled[/yellow]")
-        return None, None
-
-    # Check if it's a number (selecting from list)
-    if selection.isdigit():
-        repo_index = int(selection) - 1
-        if 0 <= repo_index < len(repo_options):
-            repo_name = repo_options[repo_index]
-            console_print(f"[dim]Selected: {repo_name}[/dim]")
-            project_path = workspace / repo_name
-            return str(project_path), selected_workspace_name
-        else:
-            console_print(f"[red]✗[/red] Invalid selection. Please choose 1-{len(repo_options)}")
-            return None, None
-
-    # Otherwise treat as repository name
-    repo_name = selection
-    project_path = workspace / repo_name
-
-    if not project_path.exists():
-        console_print(f"[yellow]⚠[/yellow] Repository not found: {project_path}")
-        if not Confirm.ask("Use this path anyway?", default=False):
-            console_print(f"\n[yellow]Cancelled[/yellow]")
-            return None, None
-
-    return str(project_path), selected_workspace_name
+    return project_path, selected_workspace_name

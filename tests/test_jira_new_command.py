@@ -1309,27 +1309,21 @@ class TestExceptionHandlingInCleanup:
         session.session_type = "ticket_creation"
         session_manager.update_session(session)
 
-        # Import and test the signal handler directly
-        from devflow.cli.commands import jira_new_command
-
-        # Set up cleanup globals
-        jira_new_command._cleanup_session = session
-        jira_new_command._cleanup_session_manager = session_manager
-        jira_new_command._cleanup_name = "test-signal-session"
-        jira_new_command._cleanup_config = config
-        jira_new_command._cleanup_done = False
+        # Set up signal handlers using unified utility
+        from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done, _cleanup_on_signal
+        setup_signal_handlers(session, session_manager, "test-signal-session", config)
 
         # Mock end_work_session to raise ValueError
         with patch.object(session_manager, "end_work_session", side_effect=ValueError("Session not found")):
             # Mock _prompt_for_complete_on_exit to do nothing
             with patch("devflow.cli.commands.open_command._prompt_for_complete_on_exit"):
                 # Mock sys.exit to prevent actual exit
-                with patch("devflow.cli.commands.jira_new_command.sys.exit"):
+                with patch("sys.exit"):
                     # Call signal handler - should not raise despite ValueError
-                    jira_new_command._cleanup_on_signal(15, None)
+                    _cleanup_on_signal(15, None)
 
         # Verify cleanup was marked as done
-        assert jira_new_command._cleanup_done is True
+        assert is_cleanup_done() is True
 
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_cleanup_signal_handler_allows_keyboard_interrupt_to_propagate(self, temp_daf_home):
@@ -1354,23 +1348,17 @@ class TestExceptionHandlingInCleanup:
         session.session_type = "ticket_creation"
         session_manager.update_session(session)
 
-        # Import and test the signal handler directly
-        from devflow.cli.commands import jira_new_command
-
-        # Set up cleanup globals
-        jira_new_command._cleanup_session = session
-        jira_new_command._cleanup_session_manager = session_manager
-        jira_new_command._cleanup_name = "test-signal-interrupt"
-        jira_new_command._cleanup_config = config
-        jira_new_command._cleanup_done = False
+        # Set up signal handlers using unified utility
+        from devflow.cli.signal_handler import setup_signal_handlers, _cleanup_on_signal
+        setup_signal_handlers(session, session_manager, "test-signal-interrupt", config)
 
         # Mock _prompt_for_complete_on_exit to raise KeyboardInterrupt
         with patch("devflow.cli.commands.open_command._prompt_for_complete_on_exit", side_effect=KeyboardInterrupt):
             # Mock sys.exit to prevent actual exit (but allow KeyboardInterrupt to propagate first)
-            with patch("devflow.cli.commands.jira_new_command.sys.exit"):
+            with patch("sys.exit"):
                 # Call signal handler - should raise KeyboardInterrupt
                 with pytest.raises(KeyboardInterrupt):
-                    jira_new_command._cleanup_on_signal(15, None)
+                    _cleanup_on_signal(15, None)
 
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_cleanup_finds_renamed_session_by_ai_agent_session_id(self, temp_daf_home):
@@ -1425,14 +1413,11 @@ class TestExceptionHandlingInCleanup:
         # Import the cleanup function
         from devflow.cli.commands import jira_new_command
 
-        # Set up cleanup globals with the ORIGINAL session object (before rename)
-        # This simulates what happens in real cleanup where _cleanup_session
+        # Set up signal handlers with the ORIGINAL session object (before rename)
+        # This simulates what happens in real cleanup where the session
         # was captured before the rename happened
-        jira_new_command._cleanup_session = session  # Has old name
-        jira_new_command._cleanup_session_manager = session_manager
-        jira_new_command._cleanup_name = original_name  # Old name that no longer exists
-        jira_new_command._cleanup_config = config
-        jira_new_command._cleanup_done = False
+        from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done, _cleanup_on_signal
+        setup_signal_handlers(session, session_manager, original_name, config)
 
         # Mock _prompt_for_complete_on_exit to track what session was passed
         captured_session = None
@@ -1442,9 +1427,9 @@ class TestExceptionHandlingInCleanup:
 
         with patch("devflow.cli.commands.open_command._prompt_for_complete_on_exit", side_effect=mock_prompt):
             # Mock sys.exit to prevent actual exit
-            with patch("devflow.cli.commands.jira_new_command.sys.exit"):
+            with patch("sys.exit"):
                 # Call signal handler
-                jira_new_command._cleanup_on_signal(15, None)
+                _cleanup_on_signal(15, None)
 
         # Verify that:
         # 1. The renamed session was found (not the original)
@@ -1457,4 +1442,4 @@ class TestExceptionHandlingInCleanup:
             "Session should have same Claude session ID"
 
         # Verify cleanup was marked as done
-        assert jira_new_command._cleanup_done is True
+        assert is_cleanup_done() is True

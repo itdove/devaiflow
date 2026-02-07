@@ -5,7 +5,8 @@ which is loaded via the hierarchical context system, not hardcoded in the prompt
 """
 
 import pytest
-from devflow.cli.commands.jira_new_command import _build_ticket_creation_prompt, _load_hierarchical_context_files
+from devflow.cli.commands.jira_new_command import _build_ticket_creation_prompt
+from devflow.utils.context_files import load_hierarchical_context_files as _load_hierarchical_context_files
 from devflow.config.loader import ConfigLoader
 
 
@@ -40,7 +41,7 @@ class TestLoadHierarchicalContextFiles:
         # Should find ORGANIZATION.md
         org_entries = [r for r in result if "ORGANIZATION.md" in r[0]]
         assert len(org_entries) == 1
-        assert org_entries[0][1] == "organization-wide policies and requirements"
+        assert org_entries[0][1] == "organization coding standards"
 
     def test_loads_team_md_when_exists(self, temp_daf_home):
         """Test that TEAM.md is loaded when it exists."""
@@ -146,7 +147,7 @@ class TestBuildTicketCreationPrompt:
 
         # Verify ORGANIZATION.md is listed in context files
         assert "ORGANIZATION.md" in prompt
-        assert "organization-wide policies and requirements" in prompt
+        assert "organization coding standards" in prompt
 
     def test_does_not_include_hardcoded_acceptance_criteria_warning(self, mock_config, temp_daf_home):
         """Test that the old hardcoded AC warning is NOT in the prompt."""

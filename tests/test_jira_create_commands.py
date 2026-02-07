@@ -11,9 +11,6 @@ from devflow.cli.commands.jira_create_commands import (
     _get_affected_version,
     _get_description,
     create_issue,
-    create_bug,
-    create_story,
-    create_task,
 )
 
 # Test template for _get_description tests
@@ -700,38 +697,42 @@ class TestCreateIssue:
 
 
 class TestCreateBug:
-    """Tests for create_bug function."""
+    """Tests for creating bugs using create_issue function."""
 
     def test_create_bug_prompts_for_summary(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
-        """Test that create_bug prompts for summary when not provided."""
+        """Test that create_issue for bugs prompts for summary when not provided."""
         monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args: "Prompted bug summary")
 
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={"workstream": "Platform"}):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
-                            mock_mapper = Mock()
-                            mock_ensure.return_value = mock_mapper
+                            with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="v1.0.0"):
+                                mock_mapper = Mock()
+                                mock_ensure.return_value = mock_mapper
 
-                            create_bug(
-                                summary=None,
-                                priority="Major",
-                                parent=None,
-                                affected_version="v1.0.0",
-                                description="Bug description",
-                                description_file=None,
-                                interactive=False,
-                                create_session=False,
-                            )
+                                create_issue(
+                                    issue_type="bug",
+                                    summary=None,
+                                    priority="Major",
+                                    project=None,
+                                    parent=None,
+                                    affected_version="v1.0.0",
+                                    description="Bug description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                )
 
-                            # Verify bug was created with prompted summary
-                            call_args = mock_jira_client.create_issue.call_args
-                            assert call_args[1]['summary'] == "Prompted bug summary"
+                                # Verify bug was created with prompted summary
+                                call_args = mock_jira_client.create_issue.call_args
+                                assert call_args[1]['summary'] == "Prompted bug summary"
 
 
 class TestCreateStory:
-    """Tests for create_story function."""
+    """Tests for creating stories using create_issue function."""
 
     def test_create_story_with_epic(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
         """Test creating a story linked to an epic."""
@@ -740,22 +741,27 @@ class TestCreateStory:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
+                    with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={"workstream": "Platform"}):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
-                            mock_mapper = Mock()
-                            mock_ensure.return_value = mock_mapper
+                            with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
+                                mock_mapper = Mock()
+                                mock_ensure.return_value = mock_mapper
 
-                            create_story(
-                                summary="Test story",
-                                priority="Major",
-                                parent="PROJ-100",
-                                description="Story description",
-                                description_file=None,
-                                interactive=False,
-                                create_session=False,
-                            )
+                                create_issue(
+                                    issue_type="story",
+                                    summary="Test story",
+                                    priority="Major",
+                                    project=None,
+                                    parent="PROJ-100",
+                                    affected_version=None,
+                                    description="Story description",
+                                    description_file=None,
+                                    interactive=False,
+                                    create_session=False,
+                                )
 
-                            call_args = mock_jira_client.create_issue.call_args
-                            assert call_args[1]['parent'] == "PROJ-100"
+                                call_args = mock_jira_client.create_issue.call_args
+                                assert call_args[1]['parent'] == "PROJ-100"
 
 
 class TestCreateTask:
@@ -780,10 +786,13 @@ class TestCreateTask:
                             mock_ensure.return_value = mock_mapper
 
                             with pytest.raises(SystemExit):
-                                create_task(
+                                create_issue(
+                                    issue_type="task",
                                     summary="Test task",
                                     priority="Major",
-                                                                        parent=None,
+                                    project=None,
+                                    parent=None,
+                                    affected_version=None,
                                     description="Task description",
                                     description_file=None,
                                     interactive=False,
@@ -821,35 +830,38 @@ class TestIssueTypeCaseSensitivity:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
-                        with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="v1.0.0"):
-                            mock_mapper = Mock()
-                            mock_mapper.field_mappings = mock_config.jira.field_mappings
-                            mock_ensure.return_value = mock_mapper
+                    with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={"workstream": "SaaS"}):
+                        with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
+                            with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="v1.0.0"):
+                                with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
+                                    mock_mapper = Mock()
+                                    mock_mapper.field_mappings = mock_config.jira.field_mappings
+                                    mock_ensure.return_value = mock_mapper
 
-                            # Call create_bug with lowercase "bug" issue type
-                            create_bug(
-                                summary="Test bug",
-                                priority="Major",
-                                parent="PROJ-100",
-                                affected_version="v1.0.0",
-                                description="Bug description",
-                                description_file=None,
-                                interactive=False,
-                                create_session=False,
-                                custom_fields={"workstream": "SaaS"},  # Explicitly provide custom field
-                            )
+                                    # Call create_issue with lowercase "bug" issue type
+                                    create_issue(
+                                        issue_type="bug",
+                                        summary="Test bug",
+                                        priority="Major",
+                                        project=None,
+                                        parent="PROJ-100",
+                                        affected_version="v1.0.0",
+                                        description="Bug description",
+                                        description_file=None,
+                                        interactive=False,
+                                        create_session=False,
+                                        custom_fields={"workstream": "SaaS"},  # Explicitly provide custom field
+                                    )
 
                             # Verify the bug was created successfully
                             assert mock_jira_client.create_issue.called
 
                             # Verify workstream field was included in the call
                             call_kwargs = mock_jira_client.create_issue.call_args[1]
-                            assert 'required_custom_fields' in call_kwargs
-                            # Workstream should have the value "SaaS" (from custom_fields parameter)
+                            # The workstream field should be added by its field ID (customfield_12345)
                             # This proves that the issue_type was normalized correctly - if it wasn't,
                             # the field wouldn't have been identified as required and wouldn't be here
-                            assert call_kwargs['required_custom_fields'].get('workstream') == "SaaS"
+                            assert call_kwargs.get('customfield_12345') == "SaaS"
 
     def test_versions_field_passed_to_jira_client(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
         """Test that versions field is correctly passed to JIRA client when creating a bug.

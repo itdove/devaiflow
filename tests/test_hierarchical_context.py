@@ -5,7 +5,7 @@ from typing import Optional
 
 import pytest
 
-from devflow.cli.commands.new_command import _load_hierarchical_context_files
+from devflow.utils.context_files import load_hierarchical_context_files as _load_hierarchical_context_files
 from devflow.config.models import Config, JiraConfig, RepoConfig, RepoDetectionConfig
 
 

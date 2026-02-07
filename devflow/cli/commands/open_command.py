@@ -22,14 +22,11 @@ from devflow.session.capture import SessionCapture
 from devflow.session.manager import SessionManager
 from devflow.session.summary import generate_session_summary
 
-console = Console()
+# Import unified utilities
+from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
+from devflow.utils.context_files import load_hierarchical_context_files
 
-# Global variables for signal handler cleanup
-_cleanup_session = None
-_cleanup_session_manager = None
-_cleanup_identifier = None
-_cleanup_config = None
-_cleanup_done = False
+console = Console()
 
 
 def _set_terminal_title(session) -> None:
@@ -55,54 +52,6 @@ def _set_terminal_title(session) -> None:
     sys.stdout.flush()
 
 
-def _cleanup_on_signal(signum, frame):
-    """Handle signals by performing cleanup before exit."""
-    global _cleanup_done
-
-    console.print(f"\n[yellow]Received signal {signum}, cleaning up...[/yellow]")
-
-    if _cleanup_session and _cleanup_session_manager and _cleanup_identifier:
-        try:
-            console.print(f"[green]✓[/green] Claude session completed")
-
-            # Update session status to paused
-            # CRITICAL: Explicitly set status before calling update_session
-            _cleanup_session.status = "paused"
-
-            # Log the update for debugging
-            _log_error(f"Signal handler: Updating session {_cleanup_session.name} to paused status")
-
-            # Update session (this now includes explicit fsync to prevent data loss)
-            _cleanup_session_manager.update_session(_cleanup_session)
-
-            # Verify the update was persisted (for debugging intermittent issues)
-            _log_error(f"Signal handler: Session update completed for {_cleanup_session.name}")
-
-            _cleanup_session_manager.end_work_session(_cleanup_identifier)
-            console.print(f"[dim]Resume anytime with: daf open {_cleanup_session.name}[/dim]")
-
-            # Save conversation file to stable location before cleaning up temp directory
-            if _cleanup_session.active_conversation and _cleanup_session.active_conversation.temp_directory:
-                _copy_conversation_from_temp(_cleanup_session, _cleanup_session.active_conversation.temp_directory)
-
-            # Clean up temporary directory if present (for ticket_creation sessions)
-            if _cleanup_session.active_conversation and _cleanup_session.active_conversation.temp_directory:
-                _cleanup_temp_directory_on_exit(_cleanup_session.active_conversation.temp_directory)
-
-            # Call the complete prompt
-            _prompt_for_complete_on_exit(_cleanup_session, _cleanup_config)
-
-            # Mark cleanup as done so finally block doesn't repeat it
-            _cleanup_done = True
-        except Exception as e:
-            console.print(f"[red]Error during cleanup: {e}[/red]")
-            import traceback
-            error_details = traceback.format_exc()
-            console.print(f"[dim]{error_details}[/dim]")
-            _log_error(f"Signal handler error: {e}\n{error_details}")
-
-    # Exit gracefully
-    sys.exit(0)
 
 
 @require_outside_claude
@@ -401,7 +350,7 @@ def open_session(
         console.print(f"\n[yellow]⚠ Session is missing working directory information[/yellow]")
         console.print(f"[dim]This can happen when sessions are created via 'daf sync'[/dim]")
 
-        if not _prompt_for_working_directory(session, config_loader, session_manager):
+        if not _prompt_for_working_directory(session, config_loader, session_manager, selected_workspace_name):
             # User cancelled or failed to set working directory
             # Error message already printed in _prompt_for_working_directory
             return
@@ -603,23 +552,8 @@ def open_session(
     jira_url = config.jira.url if config and config.jira else None
     _display_resume_banner(session, jira_url)
 
-    # Set up signal handlers for cleanup
-    global _cleanup_session, _cleanup_session_manager, _cleanup_identifier, _cleanup_config
-    _cleanup_session = session
-    _cleanup_session_manager = session_manager
-    _cleanup_identifier = identifier
-    _cleanup_config = config
-
-    # Register signal handlers for graceful shutdown
-    # SIGTERM is not available on Windows, use SIGBREAK instead
-    if sys.platform != "win32":
-        signal.signal(signal.SIGTERM, _cleanup_on_signal)
-    else:
-        signal.signal(signal.SIGBREAK, _cleanup_on_signal)
-    signal.signal(signal.SIGINT, _cleanup_on_signal)
-
-    # Declare global variable for cleanup tracking
-    global _cleanup_done
+    # Set up signal handlers for cleanup (using unified utility)
+    setup_signal_handlers(session, session_manager, identifier, config)
 
     # Validate that DAF_AGENTS.md exists before launching Claude
     if active_conv and not _validate_context_files(session, config_loader):
@@ -698,7 +632,7 @@ def open_session(
                 if active_conv:
                     subprocess.run(cmd, cwd=active_conv.project_path, env=env)
             finally:
-                if not _cleanup_done:
+                if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")
 
                     # Update session status to paused
@@ -761,11 +695,10 @@ def open_session(
 
             # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
             # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
-            from devflow.cli.commands.new_command import _load_hierarchical_context_files
             from devflow.utils.paths import get_cs_home
             cs_home = get_cs_home()
             if cs_home.exists():
-                hierarchical_files = _load_hierarchical_context_files(config)
+                hierarchical_files = load_hierarchical_context_files(config)
                 if hierarchical_files:
                     cmd.extend(["--add-dir", str(cs_home)])
 
@@ -780,7 +713,7 @@ def open_session(
                         env=env,
                     )
             finally:
-                if not _cleanup_done:
+                if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")
 
                     # Update session status to paused
@@ -1752,7 +1685,7 @@ def _create_conversation_for_current_directory(
     return True
 
 
-def _prompt_for_working_directory(session, config_loader, session_manager) -> bool:
+def _prompt_for_working_directory(session, config_loader, session_manager, selected_workspace_name=None) -> bool:
     """Prompt user to select a working directory for a session.
 
     This is used when opening sessions that were created via 'daf sync' without
@@ -1762,6 +1695,7 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
         session: Session object to update
         config_loader: ConfigLoader instance
         session_manager: SessionManager instance
+        selected_workspace_name: Optional workspace name selected via -w flag or session preference
 
     Returns:
         True if working directory was set successfully, False if user cancelled
@@ -1779,7 +1713,13 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
     repo_options = []
 
     if config and config.repos:
-        workspace_path = config.repos.get_default_workspace_path()
+        # Use selected workspace if provided, otherwise fall back to default
+        if selected_workspace_name:
+            from devflow.cli.utils import get_workspace_path
+            workspace_path = get_workspace_path(config, selected_workspace_name)
+        else:
+            workspace_path = config.repos.get_default_workspace_path()
+
         if workspace_path:
             workspace = Path(workspace_path).expanduser()
             console.print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
@@ -1835,7 +1775,12 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
             console.print(f"[dim]Selected: {repo_name}[/dim]")
 
             if config and config.repos:
-                workspace_path = config.repos.get_default_workspace_path()
+                # Use selected workspace if provided, otherwise fall back to default
+                if selected_workspace_name:
+                    from devflow.cli.utils import get_workspace_path
+                    workspace_path = get_workspace_path(config, selected_workspace_name)
+                else:
+                    workspace_path = config.repos.get_default_workspace_path()
 
                 if not workspace_path:
 
@@ -1865,7 +1810,12 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
         repo_name = selection
 
         if config and config.repos:
-            workspace_path = config.repos.get_default_workspace_path()
+            # Use selected workspace if provided, otherwise fall back to default
+            if selected_workspace_name:
+                from devflow.cli.utils import get_workspace_path
+                workspace_path = get_workspace_path(config, selected_workspace_name)
+            else:
+                workspace_path = config.repos.get_default_workspace_path()
 
             if not workspace_path:
 
@@ -1893,9 +1843,13 @@ def _prompt_for_working_directory(session, config_loader, session_manager) -> bo
         # Create initial conversation
         import uuid
 
-        # Get workspace for portable paths
+        # Get workspace for portable paths - use selected workspace if provided
         config = config_loader.load_config()
-        workspace = config.repos.get_default_workspace_path() if config and config.repos else None
+        if selected_workspace_name and config and config.repos:
+            from devflow.cli.utils import get_workspace_path
+            workspace = get_workspace_path(config, selected_workspace_name)
+        else:
+            workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
         session.add_conversation(
             working_dir=project_path.name,

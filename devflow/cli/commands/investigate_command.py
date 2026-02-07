@@ -10,66 +10,17 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, should_launch_claude_code
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, resolve_workspace_path, should_launch_claude_code
 from devflow.git.utils import GitUtils
+
+# Import unified utilities
+from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
+from devflow.cli.skills_discovery import discover_skills
+from devflow.utils.context_files import load_hierarchical_context_files
 
 console = Console()
 
-# Global variables for signal handler cleanup
-_cleanup_session = None
-_cleanup_session_manager = None
-_cleanup_name = None
-_cleanup_config = None
-_cleanup_done = False
 
-
-def _cleanup_on_signal(signum, frame):
-    """Handle signals by performing cleanup before exit."""
-    global _cleanup_done
-
-    console_print(f"\n[yellow]Received signal {signum}, cleaning up...[/yellow]")
-
-    if _cleanup_session and _cleanup_session_manager and _cleanup_name:
-        console_print(f"[green]✓[/green] Claude session completed")
-
-        # Reload index from disk
-        _cleanup_session_manager.index = _cleanup_session_manager.config_loader.load_sessions()
-
-        # Get current session
-        current_session = _cleanup_session_manager.get_session(_cleanup_name)
-        if not current_session:
-            current_session = _cleanup_session
-
-        # End work session
-        try:
-            _cleanup_session_manager.end_work_session(_cleanup_name)
-        except ValueError as e:
-            console_print(f"[yellow]⚠[/yellow] Could not end work session: {e}")
-
-        console_print(f"[dim]Resume anytime with: daf open {_cleanup_name}[/dim]")
-
-        # Save conversation file before cleaning up temp directory
-        if current_session and current_session.active_conversation and current_session.active_conversation.temp_directory:
-            from devflow.cli.commands.open_command import _copy_conversation_from_temp
-            _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory)
-
-        # Clean up temporary directory if present
-        if _cleanup_session.active_conversation and _cleanup_session.active_conversation.temp_directory:
-            from devflow.utils.temp_directory import cleanup_temp_directory
-            cleanup_temp_directory(_cleanup_session.active_conversation.temp_directory)
-
-        # Prompt for complete on exit
-        from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
-        if current_session:
-            _prompt_for_complete_on_exit(current_session, _cleanup_config)
-        else:
-            _prompt_for_complete_on_exit(_cleanup_session, _cleanup_config)
-
-        # Mark cleanup as done
-        _cleanup_done = True
-
-    # Exit gracefully
-    sys.exit(0)
 
 
 def slugify_goal(goal: str) -> str:
@@ -298,7 +249,7 @@ def create_investigation_session(
         branch=current_branch,
         temp_directory=temp_directory,
         original_project_path=original_project_path,
-        workspace=get_workspace_path(config, session.workspace_name) if session.workspace_name else config.repos.get_default_workspace_path(),
+        workspace=resolve_workspace_path(config, session.workspace_name),
     )
     session.working_directory = working_directory
 
@@ -309,27 +260,11 @@ def create_investigation_session(
 
     # Build initial prompt with investigation-only constraints
     # AAP-64886: Get workspace path from session instead of using default
-    workspace = None
-    if session.workspace_name and config and config.repos:
-        workspace = get_workspace_path(config, session.workspace_name)
-    elif config and config.repos:
-        workspace = config.repos.get_default_workspace_path()
+    workspace = resolve_workspace_path(config, session.workspace_name)
     initial_prompt = _build_investigation_prompt(goal, parent, config, name, project_path=project_path, workspace=workspace)
 
-    # Set up signal handlers for cleanup
-    global _cleanup_session, _cleanup_session_manager, _cleanup_name, _cleanup_config, _cleanup_done
-    _cleanup_session = session
-    _cleanup_session_manager = session_manager
-    _cleanup_name = name
-    _cleanup_config = config
-
-    # Register signal handlers for graceful shutdown
-    # SIGTERM is not available on Windows, use SIGBREAK instead
-    if sys.platform != "win32":
-        signal.signal(signal.SIGTERM, _cleanup_on_signal)
-    else:
-        signal.signal(signal.SIGBREAK, _cleanup_on_signal)
-    signal.signal(signal.SIGINT, _cleanup_on_signal)
+    # Set up signal handlers for cleanup (using unified utility)
+    setup_signal_handlers(session, session_manager, name, config)
 
     # Set CS_SESSION_NAME environment variable
     env = os.environ.copy()
@@ -345,11 +280,7 @@ def create_investigation_session(
         from devflow.utils.claude_commands import build_claude_command
 
         # AAP-64886: Get workspace path from session instead of using default
-        workspace_path = None
-        if session.workspace_name and config and config.repos:
-            workspace_path = get_workspace_path(config, session.workspace_name)
-        elif config and config.repos:
-            workspace_path = config.repos.get_default_workspace_path()
+        workspace_path = resolve_workspace_path(config, session.workspace_name)
 
         cmd = build_claude_command(
             session_id=ai_agent_session_id,
@@ -375,7 +306,7 @@ def create_investigation_session(
             check=False
         )
     finally:
-        if not _cleanup_done:
+        if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] Claude session completed")
 
             # Reload index from disk
@@ -412,135 +343,6 @@ def create_investigation_session(
                 _prompt_for_complete_on_exit(session, config)
 
 
-def _load_hierarchical_context_files(config: Optional['Config']) -> list:
-    """Load context files from hierarchical configuration.
-
-    Returns list of (path, description) tuples for context files that EXIST.
-    """
-    from devflow.utils.paths import get_cs_home
-
-    context_files = []
-    cs_home = get_cs_home()
-
-    # Backend context
-    backend_path = cs_home / "backends" / "JIRA.md"
-    if backend_path.exists() and backend_path.is_file():
-        context_files.append((str(backend_path), "JIRA backend integration rules"))
-
-    # Enterprise context
-    enterprise_path = cs_home / "ENTERPRISE.md"
-    if enterprise_path.exists() and enterprise_path.is_file():
-        context_files.append((str(enterprise_path), "enterprise-wide policies and standards"))
-
-    # Organization context
-    org_path = cs_home / "ORGANIZATION.md"
-    if org_path.exists() and org_path.is_file():
-        context_files.append((str(org_path), "organization-wide policies and requirements"))
-
-    # Team context
-    team_path = cs_home / "TEAM.md"
-    if team_path.exists() and team_path.is_file():
-        context_files.append((str(team_path), "team conventions and workflows"))
-
-    # User context
-    user_path = cs_home / "USER.md"
-    if user_path.exists() and user_path.is_file():
-        context_files.append((str(user_path), "personal notes and preferences"))
-
-    return context_files
-
-
-def _discover_all_skills(project_path: Optional[str] = None, workspace: Optional[str] = None) -> list[tuple[str, str]]:
-    """Discover all skills from user-level, workspace-level, hierarchical (DEVAIFLOW_HOME), and project-level locations.
-
-    Discovery order (guarantees load order - generic skills before organization-specific extensions):
-    1. User-level generic skills: ~/.claude/skills/ (alphabetical)
-    2. Workspace-level skills: <workspace>/.claude/skills/ (alphabetical) - generic tool skills (daf-cli, gh-cli, etc.)
-    3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (numbered: 01-enterprise, 02-organization, etc.) - extends generic skills
-    4. Project-level skills: <project>/.claude/skills/ (alphabetical)
-
-    Rationale: Hierarchical skills extend generic skills (see "Extends: daf-cli" in skill frontmatter),
-    so generic skills must be loaded first.
-
-    Args:
-        project_path: Project directory path (for project-level skills)
-        workspace: Workspace directory path (for workspace-level skills)
-
-    Returns:
-        List of tuples (skill_path, description) for all discovered skills in load order
-    """
-    discovered_skills = []
-
-    def _scan_skill_dir(skill_file: Path, skill_dir_name: str) -> Optional[tuple[str, str]]:
-        """Scan a single skill directory and extract description."""
-        if not skill_file.exists():
-            return None
-
-        description = f"{skill_dir_name} skill"
-        # Try to extract description from YAML frontmatter
-        try:
-            with open(skill_file, 'r') as f:
-                lines = f.readlines()
-                if lines and lines[0].strip() == '---':
-                    for line in lines[1:]:
-                        if line.strip() == '---':
-                            break
-                        if line.startswith('description:'):
-                            description = line.split('description:', 1)[1].strip()
-                            break
-        except Exception:
-            pass
-
-        return (str(skill_file.resolve()), description)
-
-    # 1. User-level skills: ~/.claude/skills/ (generic skills like daf-cli, git-cli)
-    user_skills_dir = Path.home() / ".claude" / "skills"
-    if user_skills_dir.exists():
-        for skill_dir in sorted(user_skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                result = _scan_skill_dir(skill_file, skill_dir.name)
-                if result:
-                    discovered_skills.append(result)
-
-    # 2. Workspace-level skills: <workspace>/.claude/skills/ (generic tool skills)
-    if workspace:
-        from devflow.utils.claude_commands import get_workspace_skills_dir
-        workspace_skills_dir = get_workspace_skills_dir(workspace)
-        if workspace_skills_dir.exists():
-            for skill_dir in sorted(workspace_skills_dir.iterdir()):
-                if skill_dir.is_dir():
-                    skill_file = skill_dir / "SKILL.md"
-                    result = _scan_skill_dir(skill_file, skill_dir.name)
-                    if result:
-                        discovered_skills.append(result)
-
-    # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (organization-specific skills that extend generic ones)
-    # These are numbered (01-enterprise, 02-organization, 03-team, 04-user) to guarantee order
-    from devflow.utils.paths import get_cs_home
-    cs_home = get_cs_home()
-    hierarchical_skills_dir = cs_home / ".claude" / "skills"
-    if hierarchical_skills_dir.exists():
-        # Sort to ensure numbered order (01-, 02-, 03-, 04-)
-        for skill_dir in sorted(hierarchical_skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                result = _scan_skill_dir(skill_file, skill_dir.name)
-                if result:
-                    discovered_skills.append(result)
-
-    # 4. Project-level skills: <project>/.claude/skills/
-    if project_path:
-        project_skills_dir = Path(project_path) / ".claude" / "skills"
-        if project_skills_dir.exists():
-            for skill_dir in sorted(project_skills_dir.iterdir()):
-                if skill_dir.is_dir():
-                    skill_file = skill_dir / "SKILL.md"
-                    result = _scan_skill_dir(skill_file, skill_dir.name)
-                    if result:
-                        discovered_skills.append(result)
-
-    return discovered_skills
 
 
 def _build_investigation_prompt(
@@ -588,10 +390,10 @@ def _build_investigation_prompt(
         configured_files = [(f.path, f.description) for f in config.context_files.files if not f.hidden]
 
     # Load hierarchical context files
-    hierarchical_files = _load_hierarchical_context_files(config)
+    hierarchical_files = load_hierarchical_context_files(config)
 
     # Discover skills
-    skill_files = _discover_all_skills(project_path=project_path, workspace=workspace)
+    skill_files = discover_skills(project_path=project_path, workspace=workspace)
 
     # Combine regular context files
     regular_files = default_files + hierarchical_files + configured_files
