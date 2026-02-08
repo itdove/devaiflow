@@ -503,8 +503,8 @@ def build_claude_command(
     # Add DEVAIFLOW_HOME for hierarchical context files (if they exist)
     # This allows reading ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
     if config:
-        from devflow.cli.commands.jira_new_command import _load_hierarchical_context_files
-        hierarchical_files = _load_hierarchical_context_files(config)
+        from devflow.utils.context_files import load_hierarchical_context_files
+        hierarchical_files = load_hierarchical_context_files(config)
         if hierarchical_files and cs_home.exists():
             # Only add if not already added (avoid duplication)
             if str(cs_home) not in skills_dirs:
