@@ -545,9 +545,10 @@ Which project? [1-3]: 2
      - Fetches branch from remote if missing locally
      - Merges remote changes if local branch is behind
      - Handles missing remote branches gracefully
-   - **Checks if branch is behind base branch (PROJ-59821)**
-     - Prompts to sync with base branch (merge or rebase)
+   - **Checks if branch is behind base branch (PROJ-59821, AAP-65177)**
+     - Prompts to sync with base branch (merge, rebase, or skip)
      - Auto-fetches to ensure up-to-date comparison
+     - Skip option allows deferring sync until later
    - Resumes time tracking
    - Shows recent notes and activity
 
@@ -2966,9 +2967,9 @@ When importing a session exported by a teammate:
    - When you run `daf open`, workspace is selected using standard priority: `--workspace` flag > default workspace > interactive prompt
    - After first open, session remembers your workspace choice for future opens
 4. Run `daf open <SESSION>` to select which conversation to work on
-5. Tool automatically syncs git branch for the selected conversation (PROJ-61023):
+5. Tool automatically syncs git branch for the selected conversation (PROJ-61023, AAP-65177):
    - **If branch doesn't exist locally**: Automatically fetches and checks out from remote (no prompt to create)
-   - **If branch exists locally but is behind**: Prompts to merge or rebase with remote changes
+   - **If branch exists locally but is behind**: Prompts to merge, rebase, or skip sync
    - **If merge conflicts occur**: Aborts operation with clear resolution instructions
    - Only prompts to create new branch if it doesn't exist on remote either
 6. Continue work where teammate left off, with full context from their notes

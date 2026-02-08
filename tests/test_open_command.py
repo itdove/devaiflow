@@ -651,6 +651,44 @@ def test_check_and_sync_with_base_branch_rebase_success(tmp_path):
     shutil.which("git") is None,
     reason="git not available"
 )
+def test_check_and_sync_with_base_branch_skip_strategy(tmp_path):
+    """Test AAP-65177: _check_and_sync_with_base_branch with skip strategy."""
+    from devflow.cli.commands.open_command import _check_and_sync_with_base_branch
+
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    # Create initial commit
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    current_branch = GitUtils.get_current_branch(tmp_path)
+
+    # Mock: fetch succeeds, branch is 3 commits behind, user accepts and chooses skip
+    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+         patch.object(GitUtils, 'commits_behind', return_value=3), \
+         patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
+         patch('rich.prompt.Prompt.ask', return_value='s'), \
+         patch.object(GitUtils, 'merge_branch') as mock_merge, \
+         patch.object(GitUtils, 'rebase_branch') as mock_rebase:
+
+        result = _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
+
+        # Should return True (continue with current branch state)
+        assert result is True
+
+        # Should NOT call merge or rebase
+        mock_merge.assert_not_called()
+        mock_rebase.assert_not_called()
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
 def test_check_and_sync_with_base_branch_merge_conflict(tmp_path):
     """Test PROJ-60408: _check_and_sync_with_base_branch returns False on merge conflict."""
     from devflow.cli.commands.open_command import _check_and_sync_with_base_branch

@@ -306,19 +306,54 @@ daf jira add-comment PROJ-12345 "Comment text" --json
 
 ## Session Notes
 
-```bash
-# Add progress note to current session
-daf note PROJ-12345 "Completed API implementation"
-daf note --latest "Fixed bug in authentication"
+**⚠️ IMPORTANT:** The `daf note` command (for adding notes) **CANNOT be used inside Claude Code sessions**. It is blocked for safety reasons.
 
-# View all notes for a session
+**Inside Claude sessions, use instead:**
+- ✅ **`daf jira add-comment`** - Add progress notes/comments to JIRA tickets (recommended)
+  - This is the primary way to document work and add notes inside Claude sessions
+  - Notes added this way appear as JIRA comments and are visible in the ticket
+  - Use this to track progress, document decisions, and update stakeholders
+- ✅ `daf notes` - View existing session notes (read-only)
+
+**Outside Claude sessions only:**
+- `daf note` - Add progress notes to local session files (must run in terminal, not in Claude)
+
+```bash
+# View existing session notes (works inside Claude sessions)
 daf notes PROJ-12345
 daf notes --latest
-
-# JSON output
-daf note PROJ-12345 "Note text" --json
 daf notes PROJ-12345 --json
+
+# ✅ Add notes/comments to JIRA ticket (works inside Claude sessions)
+# This is the recommended way to document your work and track progress
+daf jira add-comment PROJ-12345 "Completed API implementation"
+daf jira add-comment PROJ-12345 "Fixed bug in authentication flow"
+daf jira add-comment PROJ-12345 "$(cat <<'EOF'
+Updated implementation details:
+* Refactored authentication module
+* Added unit tests for edge cases
+* Verified performance meets requirements
+EOF
+)"
+
+# Add structured progress updates
+daf jira add-comment AAP-12345 "$(cat <<'EOF'
+*Progress Update*
+
+Completed:
+* Task 1: API endpoint implementation
+* Task 2: Unit tests added
+
+In Progress:
+* Task 3: Integration testing
+
+Blockers:
+* None
+EOF
+)"
 ```
+
+**Best Practice:** Use `daf jira add-comment` regularly to document your work as you progress through the ticket. This creates a clear audit trail and keeps stakeholders informed.
 
 ## Session Information
 
@@ -690,7 +725,7 @@ daf config refresh-jira-fields --json
    - System fields: `--reporter jdoe --assignee alice --components backend --labels urgent`
    - Custom fields: `--field acceptance_criteria="..." --field workstream="Platform"`
    - ❌ NEVER mix them: `--field reporter=jdoe` will EXIT WITH ERROR
-5. **Add notes regularly** - Track progress with `daf note`
+5. **Add notes to JIRA tickets with `daf jira add-comment`** - This is how you document work and track progress inside Claude sessions (note: `daf note` command is NOT available inside Claude sessions)
 6. **Check session type** - Read-only constraints enforced for ticket_creation and investigation
 7. **Discover available fields** - Run `daf jira create <type> --help` to see all options
 8. **Refer to DAF_AGENTS.md for templates** - Project-specific JIRA issue templates
