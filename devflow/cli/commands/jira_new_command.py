@@ -611,8 +611,35 @@ def _build_ticket_creation_prompt(
         except Exception:
             # If field mapper fails, continue without it
             pass
-    custom_fields = config.jira.custom_field_defaults if config.jira.custom_field_defaults else {}
-    system_fields = config.jira.system_field_defaults if config.jira.system_field_defaults else {}
+    # Get field defaults, but filter to only REQUIRED fields for this issue type
+    # This ensures optional fields (like labels) don't appear in session prompts
+    all_custom_fields = config.jira.custom_field_defaults if config.jira.custom_field_defaults else {}
+    all_system_fields = config.jira.system_field_defaults if config.jira.system_field_defaults else {}
+
+    # Filter to only required fields for this issue type
+    custom_fields = {}
+    system_fields = {}
+
+    if field_mapper and field_mapper.field_mappings:
+        # Filter custom field defaults to only required fields
+        for field_name, field_value in all_custom_fields.items():
+            field_info = field_mapper.field_mappings.get(field_name)
+            if field_info:
+                required_for = field_info.get("required_for", [])
+                if isinstance(required_for, list) and issue_type.capitalize() in required_for:
+                    custom_fields[field_name] = field_value
+
+        # Filter system field defaults to only required fields
+        for field_name, field_value in all_system_fields.items():
+            field_info = field_mapper.field_mappings.get(field_name)
+            if field_info:
+                required_for = field_info.get("required_for", [])
+                if isinstance(required_for, list) and issue_type.capitalize() in required_for:
+                    system_fields[field_name] = field_value
+    else:
+        # If no field mappings, use all defaults (fallback)
+        custom_fields = all_custom_fields
+        system_fields = all_system_fields
 
     # Build the "Work on" line based on whether parent is provided
     if parent:
