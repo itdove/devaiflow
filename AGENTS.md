@@ -521,6 +521,18 @@ When `--debug` is used with the test runner, it automatically propagates to all 
 - **ONLY** mark the task as complete when ALL 2000+ tests pass
 - If you encounter test failures, continue fixing them systematically until every test passes
 
+**⚠️ TEST DATA ANONYMIZATION REQUIREMENT**: ALL test data MUST be anonymized and MUST NOT contain organization-specific information:
+- **NEVER** use real organization names, project names, product names, or service names in test data
+- **NEVER** use values from current configuration files (e.g., component names, workstream names, version names)
+- **ALWAYS** use generic placeholder values:
+  - Components: `component-a`, `component-b`, `backend`, `frontend`
+  - Workstreams: `Platform`, `Cloud`, `Services`
+  - Versions: `version-1.0.0`, `version-2.5.0`, `v1.0.0`
+  - Projects: `PROJ`, `AAP`, `TEST`
+  - Workspaces: `project-a`, `project-b`, `workspace-1`
+- **RATIONALE**: Tests should be portable and not tied to any specific organization's configuration
+- **ENFORCEMENT**: When writing or modifying tests, search for organization-specific terms and replace with generic equivalents
+
 **IMPORTANT**: These testing requirements must be followed for all code changes:
 
 1. **Create Tests for New Methods**

@@ -476,7 +476,7 @@ class TestValidateJiraFieldsBeforeOperation:
                 "id": "versions",
                 "name": "Affects Version/s",
                 "available_for": ["Bug"],
-                "allowed_values": ["ansible-saas-ga", "2.5.20260106"]
+                "allowed_values": ["version-1.0.0", "version-2.5.0"]
             }
         }
 

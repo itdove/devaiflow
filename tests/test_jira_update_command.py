@@ -972,7 +972,7 @@ def test_update_single_field_does_not_include_config_defaults():
             url="https://jira.example.com",
             transitions={},  # Required field
             system_field_defaults={
-                "components": [{"name": "ansible-saas"}],
+                "components": [{"name": "component-a"}],
                 "labels": ["backend"],
                 "attachment": []  # Non-editable field that would cause error
             },

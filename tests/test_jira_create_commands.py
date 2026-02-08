@@ -820,7 +820,7 @@ class TestIssueTypeCaseSensitivity:
                 "type": "option",
                 "required_for": ["Bug", "Story", "Task"],  # Title-case
                 "available_for": ["Bug", "Story", "Task"],
-                "allowed_values": ["Platform", "SaaS"]
+                "allowed_values": ["Platform", "Cloud"]
             }
         }
 
@@ -830,7 +830,7 @@ class TestIssueTypeCaseSensitivity:
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):
             with patch('devflow.cli.commands.jira_create_commands.JiraClient', return_value=mock_jira_client):
                 with patch('devflow.cli.commands.jira_create_commands._ensure_field_mappings') as mock_ensure:
-                    with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={"workstream": "SaaS"}):
+                    with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={"workstream": "Cloud"}):
                         with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="PROJ"):
                             with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="v1.0.0"):
                                 with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "PROJ-100"}):
@@ -850,7 +850,7 @@ class TestIssueTypeCaseSensitivity:
                                         description_file=None,
                                         interactive=False,
                                         create_session=False,
-                                        custom_fields={"workstream": "SaaS"},  # Explicitly provide custom field
+                                        custom_fields={"workstream": "Cloud"},  # Explicitly provide custom field
                                     )
 
                             # Verify the bug was created successfully
@@ -861,7 +861,7 @@ class TestIssueTypeCaseSensitivity:
                             # The workstream field should be added by its field ID (customfield_12345)
                             # This proves that the issue_type was normalized correctly - if it wasn't,
                             # the field wouldn't have been identified as required and wouldn't be here
-                            assert call_kwargs.get('customfield_12345') == "SaaS"
+                            assert call_kwargs.get('customfield_12345') == "Cloud"
 
     def test_versions_field_passed_to_jira_client(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
         """Test that versions field is correctly passed to JIRA client when creating a bug.
@@ -886,7 +886,7 @@ class TestIssueTypeCaseSensitivity:
                 "type": "array",
                 "required_for": ["Bug"],
                 "available_for": ["Bug"],
-                "allowed_values": ["ansible-saas-ga", "2.5.0", "2.4.0"]
+                "allowed_values": ["version-1.0.0", "version-2.5.0", "version-2.4.0"]
             }
         }
 
@@ -896,35 +896,37 @@ class TestIssueTypeCaseSensitivity:
                     with patch('devflow.cli.commands.jira_create_commands._get_project', return_value="AAP"):
                         with patch('devflow.cli.commands.jira_create_commands._get_required_custom_fields', return_value={}):
                             with patch('devflow.cli.commands.jira_create_commands._get_required_system_fields', return_value={}):
-                                with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "AAP-64025"}):
-                                    mock_mapper = Mock()
-                                    mock_mapper.field_mappings = mock_config.jira.field_mappings
-                                    mock_ensure.return_value = mock_mapper
+                                with patch('devflow.cli.commands.jira_create_commands._get_affected_version', return_value="version-1.0.0"):
+                                    with patch('devflow.jira.utils.validate_jira_ticket', return_value={"key": "AAP-64025"}):
+                                        mock_mapper = Mock()
+                                        mock_mapper.field_mappings = mock_config.jira.field_mappings
+                                        mock_ensure.return_value = mock_mapper
 
-                                    # Simulate passing --affects-versions ansible-saas-ga via system_fields
-                                    # This is what jira_create_dynamic.py does on line 113-115
-                                    system_fields = {"versions": "ansible-saas-ga"}
+                                        # Simulate passing --affects-versions version-1.0.0 via system_fields
+                                        # This is what jira_create_dynamic.py does on line 113-115
+                                        system_fields = {"versions": "version-1.0.0"}
 
-                                    # Call create_issue with system_fields containing versions
-                                    create_issue(
-                                        issue_type="bug",
-                                        summary="Test bug with version",
-                                        priority="Major",
-                                        project="AAP",
-                                        parent="AAP-64025",
-                                        affected_version="ansible-saas-ga",
-                                        description="Bug description",
-                                        description_file=None,
-                                        interactive=False,
-                                        create_session=False,
-                                        system_fields=system_fields,
-                                    )
+                                        # Call create_issue with system_fields containing versions
+                                        create_issue(
+                                            issue_type="bug",
+                                            summary="Test bug with version",
+                                            priority="Major",
+                                            project="AAP",
+                                            parent="AAP-64025",
+                                            affected_version="version-1.0.0",
+                                            description="Bug description",
+                                            description_file=None,
+                                            interactive=False,
+                                            create_session=False,
+                                            system_fields=system_fields,
+                                        )
 
-                                    # Verify the bug was created
-                                    assert mock_jira_client.create_issue.called
+                                        # Verify the bug was created
+                                        assert mock_jira_client.create_issue.called
 
-                                    # Verify versions field was included in the call
-                                    call_kwargs = mock_jira_client.create_issue.call_args[1]
-                                    # The versions field should be present in the kwargs
-                                    assert 'versions' in call_kwargs, "versions field should be passed to JIRA client"
-                                    assert call_kwargs['versions'] == "ansible-saas-ga", "versions should have the correct value"
+                                        # Verify versions field was included in the call
+                                        call_kwargs = mock_jira_client.create_issue.call_args[1]
+                                        # The versions field should be present in the kwargs
+                                        assert 'versions' in call_kwargs, "versions field should be passed to JIRA client"
+                                        # Versions should be formatted as JIRA expects: array of objects with "name" property
+                                        assert call_kwargs['versions'] == [{"name": "version-1.0.0"}], "versions should be formatted correctly for JIRA API"
