@@ -1473,6 +1473,13 @@ class Session(BaseModel):
   - Only required fields get automatic defaults from team.json/organization.json
   - Reduces noise and confusion when creating JIRA tickets
   - Existing tests pass without modification
+- ✓ Session prompt filtering (daf jira new only shows required field defaults)
+  - Fixed jira_new_command.py to filter custom_field_defaults and system_field_defaults
+  - Session prompt now only shows required fields in "configured defaults" message
+  - Example command in prompt only includes required field parameters
+  - Prevents confusion where optional fields appear in session instructions
+  - Matches behavior of actual JIRA create command (only applies required defaults)
+  - All 36 tests pass in test_jira_new_command.py
 - ✓ Array field format documentation (comma-separated values)
   - Updated devflow/cli_skills/daf-cli/SKILL.md with clear examples
   - Added "Array Field Format (CRITICAL)" section showing correct/wrong syntax
