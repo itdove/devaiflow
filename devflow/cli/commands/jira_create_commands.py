@@ -968,6 +968,17 @@ def create_issue(
         # Note: All other system fields (like versions, labels, etc.) are already added
         # via the generic loop above, filtered by available_for
 
+        # PRE-FLIGHT VALIDATION: Validate ALL fields before API call
+        # Uses centralized validation function - same for create and update
+        from devflow.jira.validation import validate_jira_fields_before_operation
+        validate_jira_fields_before_operation(
+            issue_type=issue_type,
+            custom_fields=merged_custom_fields,
+            system_fields=merged_system_fields,
+            field_mappings=field_mapper.field_mappings,
+            output_json=output_json
+        )
+
         # Create the issue with specific error handling
         try:
             issue_key = jira_client.create_issue(**create_kwargs)

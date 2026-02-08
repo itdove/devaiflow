@@ -364,6 +364,17 @@ def update_jira_issue(
 
         # Only update fields if there are any to update
         if payload["fields"]:
+            # PRE-FLIGHT VALIDATION: Validate fields before API call
+            # Uses centralized validation - same as create command
+            from devflow.jira.validation import validate_update_payload
+            validate_update_payload(
+                issue_key=issue_key,
+                payload=payload,
+                jira_client=jira_client,
+                field_mapper=field_mapper,
+                output_json=output_json
+            )
+
             # Update the issue
             if not output_json:
                 console.print(f"\n[dim]Updating JIRA issue {issue_key}...[/dim]")
