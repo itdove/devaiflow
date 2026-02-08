@@ -756,7 +756,7 @@ def create_issue(
 
         # Apply custom field defaults from team.json (merged with CLI --field options)
         # Merge in this order (later values override earlier):
-        # 1. config.jira.custom_field_defaults
+        # 1. config.jira.custom_field_defaults (ONLY for required fields)
         # 2. required_custom_fields (from field_mappings required_for)
         # 3. custom_fields (from CLI --field options)
         # Filter out system fields that shouldn't be in custom_field_defaults
@@ -764,8 +764,23 @@ def create_issue(
                                 "priority", "reporter", "assignee", "created", "updated"}
         merged_custom_fields = {}
         if config.jira.custom_field_defaults:
+            # Get field mappings for validation
+            try:
+                mappings = dict(field_mapper.field_mappings) if field_mapper.field_mappings else {}
+            except (TypeError, AttributeError):
+                mappings = {}
+
             for field_name, field_value in config.jira.custom_field_defaults.items():
                 if field_name not in SYSTEM_FIELDS_FILTER:
+                    # Check if this field is required for this issue type
+                    # Skip optional field defaults (only apply required field defaults)
+                    field_info = mappings.get(field_name)
+                    if field_info:
+                        required_for = field_info.get("required_for", [])
+                        if isinstance(required_for, list) and issue_type not in required_for:
+                            # Field is optional for this issue type - skip default
+                            continue
+
                     merged_custom_fields[field_name] = field_value
         if required_custom_fields:
             merged_custom_fields.update(required_custom_fields)
@@ -851,6 +866,7 @@ def create_issue(
 
         # Normalize system_field_defaults keys from field names to field IDs
         # E.g., "component/s" → "components", "affects_version/s" → "versions"
+        # IMPORTANT: Only apply defaults for REQUIRED fields (skip optional field defaults)
         if config.jira.system_field_defaults:
             try:
                 mappings = dict(field_mapper.field_mappings) if field_mapper.field_mappings else {}
@@ -861,6 +877,13 @@ def create_issue(
                 # Try to find the field_id for this key
                 field_info = mappings.get(key)
                 if field_info and "id" in field_info:
+                    # Check if this field is required for this issue type
+                    # Skip optional field defaults (only apply required field defaults)
+                    required_for = field_info.get("required_for", [])
+                    if isinstance(required_for, list) and issue_type not in required_for:
+                        # Field is optional for this issue type - skip default
+                        continue
+
                     # Use field_id instead of field_name
                     normalized_key = field_info["id"]
                 else:

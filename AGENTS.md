@@ -395,7 +395,13 @@ devflow/
 - After adding/modifying daf CLI commands that work inside Claude sessions
 - After changing command options or behavior for in-session commands
 - After updating command examples or usage patterns
+- After fixing documentation bugs or clarifying usage (e.g., array field formats)
 - **Remember:** Only document commands that work inside Claude Code sessions
+
+**⚠️ CRITICAL: Always edit the SOURCE OF TRUTH**
+- **ONLY edit:** `devflow/cli_skills/daf-cli/SKILL.md` (bundled/primary version)
+- **NEVER edit:** `.claude/skills/daf-cli/SKILL.md` or `~/.claude/skills/daf-cli/SKILL.md` directly
+- Those are deployment targets and get overwritten by `daf upgrade`
 
 **Update workflow:**
 1. Edit `devflow/cli_skills/daf-cli/SKILL.md` (bundled/primary version) ✅
@@ -1444,6 +1450,37 @@ class Session(BaseModel):
   - All 2062 tests pass (3 skipped)
   - Documentation updated in docs/07-commands.md (export + import sections)
   - Enables flexible team collaboration with machine-specific workspace preferences
+- ✓ Pre-flight JIRA field validation before API calls
+  - Created centralized validation module (devflow/jira/validation.py)
+  - JiraFieldValidator class validates fields against config.jira.field_mappings
+  - Validates field availability (available_for - is field allowed for this issue type?)
+  - Validates allowed values (allowed_values - is the value valid?)
+  - Validates required fields (required_for - are all required fields present?)
+  - Shared validation function: validate_jira_fields_before_operation()
+  - Update-specific helper: validate_update_payload()
+  - Integration: 4-5 lines to add validation to any command
+  - Defensive against Mock objects (all existing 2092 tests pass)
+  - Clear error messages pointing to config.jira location
+  - Catches errors BEFORE API call with actionable troubleshooting steps
+  - Example error: "Field 'workstream' is not available for issue type 'Bug'. Available for: Story, Task. Check config.jira.field_mappings['workstream']['available_for']"
+  - Comprehensive test coverage (17 new tests in tests/test_jira_validation.py)
+  - All 2109 tests pass (2092 existing + 17 new)
+- ✓ Optional field defaults skipped (only required field defaults auto-applied)
+  - Modified jira_create_commands.py to check required_for before applying defaults
+  - Custom field defaults: skip if issue_type not in required_for list
+  - System field defaults: skip if issue_type not in required_for list
+  - Prevents optional fields (like labels) from being auto-added to every command
+  - Only required fields get automatic defaults from team.json/organization.json
+  - Reduces noise and confusion when creating JIRA tickets
+  - Existing tests pass without modification
+- ✓ Array field format documentation (comma-separated values)
+  - Updated devflow/cli_skills/daf-cli/SKILL.md with clear examples
+  - Added "Array Field Format (CRITICAL)" section showing correct/wrong syntax
+  - Example: --labels production,p1,urgent (✅) vs --labels production --labels p1 (❌)
+  - Updated organization and team skills with array field format guidance
+  - Prevents common mistake of using multiple flags for array fields
+  - Emphasizes that only REQUIRED fields should be in system_field_defaults
+  - Skills update workflow documented in AGENTS.md with source of truth reminder
 
 ## Release Management
 
