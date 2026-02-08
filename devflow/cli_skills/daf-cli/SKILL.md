@@ -42,7 +42,23 @@ daf jira view PROJ-12345 --json
 - If you use `--field reporter=jdoe`, the command will **EXIT WITH ERROR**
 - Error message will tell you: `✗ 'reporter' is a system field. Use --reporter option instead of --field`
 
-**Note:** Components are automatically used from team.json if configured. If required but not configured, you'll get a helpful error message with solutions.
+**Array Field Format (CRITICAL):**
+Array fields like `labels` and `components` use **comma-separated values**:
+```bash
+# ✅ CORRECT - Comma-separated (single flag)
+--labels production,p1,urgent
+--components ansible-saas,backend
+
+# ❌ WRONG - Multiple flags (only last value used)
+--labels production --labels p1      # Only "p1" will be used!
+--components ansible-saas --components backend  # Only "backend" will be used!
+
+# ✅ CORRECT - Single value (no comma needed)
+--labels production
+--components ansible-saas
+```
+
+**Note:** Components are automatically used from team.json if configured AND required for the issue type. Optional field defaults are NOT auto-applied.
 
 ```bash
 # Create issues (remember: use JIRA Wiki markup in descriptions!)
@@ -51,8 +67,9 @@ daf jira create story --summary "Story title" --parent PROJ-1234 --description "
 daf jira create task --summary "Task title" --parent PROJ-1234 --description "..."
 
 # Create with system fields (reporter, assignee, components, labels, etc.)
-daf jira create bug --summary "Production bug" --reporter jdoe --components backend --labels urgent
-daf jira create story --summary "New feature" --assignee alice --components ui --security-level Internal
+# IMPORTANT: Array fields use comma-separated values (see "Array Field Format" above)
+daf jira create bug --summary "Production bug" --reporter jdoe --components backend --labels urgent,production
+daf jira create story --summary "New feature" --assignee alice --components ui,backend --security-level Internal
 daf jira create task --summary "Maintenance task" --reporter jdoe --assignee bob --components backend
 
 # Create with acceptance criteria (use --field, NOT --acceptance-criteria which no longer exists)
