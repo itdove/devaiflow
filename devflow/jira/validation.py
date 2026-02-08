@@ -85,7 +85,7 @@ def validate_update_payload(
     # Get issue type to validate against
     try:
         issue_data = jira_client.get_ticket(issue_key)
-        issue_type = issue_data.get("issue_type", "")
+        issue_type = issue_data.get("type", "")
     except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError) as e:
         # If we can't fetch issue, we can't validate - but API will fail anyway
         if not output_json:

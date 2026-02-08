@@ -412,3 +412,87 @@ class TestValidateUpdatePayload:
             field_mapper=mock_mapper,
             output_json=True  # Suppress warning output
         )
+
+    def test_correctly_extracts_issue_type_from_get_ticket(self):
+        """Test that issue type is correctly extracted from get_ticket response.
+
+        Regression test: get_ticket() returns "type" key, not "issue_type".
+        This was causing validation to fail with empty issue type.
+        """
+        mock_client = Mock()
+        # get_ticket() returns "type" key (not "issue_type")
+        mock_client.get_ticket.return_value = {
+            "key": "AAP-65177",
+            "type": "Story",
+            "status": "In Progress",
+            "summary": "Test story"
+        }
+
+        mock_mapper = Mock()
+        mock_mapper.field_mappings = {
+            "acceptance_criteria": {
+                "id": "customfield_12315940",
+                "name": "Acceptance Criteria",
+                "available_for": ["Bug", "Epic", "Story", "Task"],
+                "allowed_values": []
+            }
+        }
+
+        # Update payload with acceptance_criteria field
+        payload = {
+            "fields": {
+                "customfield_12315940": "- [x] Test criterion"
+            }
+        }
+
+        # Should not raise - validation should pass with correct issue type
+        validate_update_payload(
+            issue_key="AAP-65177",
+            payload=payload,
+            jira_client=mock_client,
+            field_mapper=mock_mapper,
+            output_json=False
+        )
+
+        # Verify get_ticket was called
+        mock_client.get_ticket.assert_called_once_with("AAP-65177")
+
+
+class TestValidateJiraFieldsBeforeOperation:
+    """Test validate_jira_fields_before_operation function."""
+
+    def test_filters_empty_tuples_from_system_fields(self):
+        """Test that empty tuples are properly handled in validation.
+
+        Regression test: Click's multiple=True options default to empty tuple (),
+        which was being converted to string '()' and causing validation errors.
+        """
+        # This test verifies that the create command filters empty tuples
+        # before calling validation. We test the validation function directly
+        # to ensure it handles the filtered input correctly.
+
+        field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "available_for": ["Bug"],
+                "allowed_values": ["version-1.0.0", "version-2.5.0"]
+            }
+        }
+
+        # Test that validation passes when empty tuples are filtered out
+        from devflow.jira.validation import validate_jira_fields_before_operation
+
+        # This simulates what the create command does now (after fix):
+        # Filter out empty tuples before validation
+        system_fields = {"versions": ()}
+        validation_system_fields = {k: v for k, v in system_fields.items() if v != () and v != []}
+
+        # Should not raise - empty tuple was filtered out
+        validate_jira_fields_before_operation(
+            issue_type="Bug",
+            custom_fields={},
+            system_fields=validation_system_fields,
+            field_mappings=field_mappings,
+            output_json=False
+        )

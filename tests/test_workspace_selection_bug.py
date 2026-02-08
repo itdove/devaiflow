@@ -20,9 +20,9 @@ def mock_config_multi_workspace():
     mock_repos = MagicMock()
     mock_repos.workspaces = [
         WorkspaceDefinition(name="ai", path="/Users/test/development/ai"),
-        WorkspaceDefinition(name="ansible-saas", path="/Users/test/development/ansible-saas"),
+        WorkspaceDefinition(name="project-b", path="/Users/test/development/project-b"),
     ]
-    mock_repos.last_used_workspace = "ansible-saas"  # Default is ansible-saas
+    mock_repos.last_used_workspace = "project-b"  # Default is project-b
 
     # Mock get_workspace_by_name method
     def get_workspace_by_name(name):
@@ -79,7 +79,7 @@ def test_prompt_for_working_directory_uses_selected_workspace(
     """Test that _prompt_for_working_directory uses the selected workspace from -w flag.
     
     Bug: When user runs 'daf open AAP-12345 -w ai', the function should scan
-    /Users/test/development/ai, not the default workspace /Users/test/development/ansible-saas.
+    /Users/test/development/ai, not the default workspace /Users/test/development/project-b.
     """
     # Create session manager
     session_manager = SessionManager(mock_config_loader)
@@ -123,13 +123,13 @@ def test_prompt_for_working_directory_uses_selected_workspace(
             if len(call[0]) > 0 and "Scanning workspace:" in str(call[0][0])
         ]
         
-        # Should have printed the AI workspace path, not ansible-saas
+        # Should have printed the AI workspace path, not project-b
         assert len(scanning_calls) > 0, "Should have printed 'Scanning workspace:' message"
         scanning_message = str(scanning_calls[0][0][0])
         assert "/Users/test/development/ai" in scanning_message, \
             f"Should scan AI workspace, but got: {scanning_message}"
-        assert "/Users/test/development/ansible-saas" not in scanning_message, \
-            f"Should NOT scan ansible-saas workspace, but got: {scanning_message}"
+        assert "/Users/test/development/project-b" not in scanning_message, \
+            f"Should NOT scan project-b workspace, but got: {scanning_message}"
 
 
 def test_prompt_for_working_directory_uses_default_when_no_selection(
@@ -151,14 +151,14 @@ def test_prompt_for_working_directory_uses_default_when_no_selection(
     mock_default_workspace.expanduser.return_value = mock_default_workspace
     mock_default_workspace.exists.return_value = True
     mock_default_workspace.is_dir.return_value = True
-    mock_default_workspace.__str__.return_value = "/Users/test/development/ansible-saas"
+    mock_default_workspace.__str__.return_value = "/Users/test/development/project-b"
     
     # Mock iterdir to return empty list
     mock_default_workspace.iterdir.return_value = []
     
     # Mock Path constructor
     def mock_path_constructor(path_str):
-        if str(path_str) == "/Users/test/development/ansible-saas":
+        if str(path_str) == "/Users/test/development/project-b":
             return mock_default_workspace
         return MagicMock(spec=Path)
     
@@ -186,5 +186,5 @@ def test_prompt_for_working_directory_uses_default_when_no_selection(
         
         assert len(scanning_calls) > 0, "Should have printed 'Scanning workspace:' message"
         scanning_message = str(scanning_calls[0][0][0])
-        assert "/Users/test/development/ansible-saas" in scanning_message, \
-            f"Should scan default (ansible-saas) workspace, but got: {scanning_message}"
+        assert "/Users/test/development/project-b" in scanning_message, \
+            f"Should scan default (project-b) workspace, but got: {scanning_message}"

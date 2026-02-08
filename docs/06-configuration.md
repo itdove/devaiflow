@@ -1549,9 +1549,14 @@ This setting controls whether to accept that AI-generated message automatically 
 **Description:** Automatically sync session branch with base branch when opening
 
 **Values:**
-- `"always"` - Always sync with base branch
-- `"never"` - Never sync with base branch
-- `null` or `"prompt"` - Ask each time (default)
+- `"always"` - Always sync with base branch (using default strategy)
+- `"never"` - Never sync with base branch (skip prompt entirely)
+- `null` or `"prompt"` - Ask each time (default), with options to merge, rebase, or skip
+
+**Note (AAP-65177):** When `"prompt"` is set (or null), users are given three options:
+- `m` - Merge (preserves commit history)
+- `r` - Rebase (linear history)
+- `s` - Skip (continue without syncing)
 
 **Example:**
 ```json

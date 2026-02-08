@@ -1945,10 +1945,14 @@ def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch
     console.print(f"\n[bold]Sync strategy:[/bold]")
     console.print("  [cyan]m[/cyan] - Merge (preserves commit history)")
     console.print("  [cyan]r[/cyan] - Rebase (linear history)")
+    console.print("  [cyan]s[/cyan] - Skip (continue without syncing)")
 
-    strategy = Prompt.ask("Choose strategy", choices=["m", "r"], default="m")
+    strategy = Prompt.ask("Choose strategy", choices=["m", "r", "s"], default="m")
 
-    if strategy == "m":
+    if strategy == "s":
+        console.print(f"[dim]Continuing with current branch state[/dim]")
+        return True
+    elif strategy == "m":
         console.print(f"\n[cyan]Merging {base_branch} into {branch}...[/cyan]")
         success = GitUtils.merge_branch(path, f"origin/{base_branch}")
         if success:

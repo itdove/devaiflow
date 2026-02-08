@@ -894,7 +894,10 @@ def create_issue(
         if required_system_fields:
             merged_system_fields.update(required_system_fields)
         if system_fields:
-            merged_system_fields.update(system_fields)
+            # Filter out empty tuples before merging (Click's multiple=True options default to empty tuple)
+            # This prevents empty tuples from overwriting valid values set from config or required fields
+            filtered_system_fields = {k: v for k, v in system_fields.items() if v != () and v != []}
+            merged_system_fields.update(filtered_system_fields)
 
         # Filter out system fields that are not available for this issue type
         # Some fields like "versions" are only available for Bug, not Story/Task/Epic
@@ -981,8 +984,19 @@ def create_issue(
                 if not isinstance(field_value, (str, int, float, bool, list, tuple, dict)):
                     console_print(f"[yellow]⚠[/yellow] Skipping invalid system field '{field_name}': {type(field_value).__name__}")
                     continue
-                # System fields use their original names (e.g., "labels"), not customfield IDs
-                create_kwargs[field_name] = field_value
+
+                # Format version fields properly (JIRA expects array of objects with "name" property)
+                # affects_version/s field has field_id="versions", fixVersions field has field_id="fixVersions"
+                if field_name in ("versions", "fixVersions"):
+                    # If value is already a list, assume it's correctly formatted
+                    if isinstance(field_value, list):
+                        create_kwargs[field_name] = field_value
+                    else:
+                        # Convert string to array of objects with "name" property
+                        create_kwargs[field_name] = [{"name": field_value}]
+                else:
+                    # System fields use their original names (e.g., "labels"), not customfield IDs
+                    create_kwargs[field_name] = field_value
 
         # Add components from merged_system_fields to create_kwargs (has dedicated parameter)
         if "components" in merged_system_fields:
@@ -993,11 +1007,14 @@ def create_issue(
 
         # PRE-FLIGHT VALIDATION: Validate ALL fields before API call
         # Uses centralized validation function - same for create and update
+        # Filter out empty tuples before validation (Click's multiple=True options default to empty tuple)
+        validation_system_fields = {k: v for k, v in merged_system_fields.items() if v != () and v != []}
+
         from devflow.jira.validation import validate_jira_fields_before_operation
         validate_jira_fields_before_operation(
             issue_type=issue_type,
             custom_fields=merged_custom_fields,
-            system_fields=merged_system_fields,
+            system_fields=validation_system_fields,
             field_mappings=field_mapper.field_mappings,
             output_json=output_json
         )
