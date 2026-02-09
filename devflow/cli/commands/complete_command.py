@@ -768,6 +768,81 @@ def _get_pr_for_branch(working_dir: Path, branch_name: str) -> Optional[dict]:
     return None
 
 
+def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None) -> Optional[str]:
+    """Prompt user to select target branch for PR/MR.
+
+    Args:
+        working_dir: Working directory path
+        config: Config object
+        upstream_info: Upstream repository info if fork (optional)
+
+    Returns:
+        Selected branch name or None if skip/error
+    """
+    # Check auto_select_target_branch configuration
+    if config and config.prompts:
+        auto_select = config.prompts.auto_select_target_branch
+        if auto_select is False:
+            # Explicitly disabled - skip branch selection (backward compatible)
+            return None
+        elif auto_select is True:
+            # Auto-select default branch without prompting
+            default_branch = GitUtils.get_default_branch(working_dir)
+            if default_branch:
+                console.print(f"[dim]Automatically using default branch: {default_branch} (configured in prompts)[/dim]")
+                return default_branch
+
+    # Determine which remote to query (upstream if fork, otherwise origin)
+    remote_name = "origin"
+    if upstream_info:
+        # Check if upstream remote exists
+        upstream_url = upstream_info.get('upstream_url')
+        if upstream_url:
+            existing_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
+            if existing_remote:
+                remote_name = existing_remote
+
+    # Fetch remote branches
+    branches = GitUtils.list_remote_branches(working_dir, remote_name)
+
+    # Handle empty branch list
+    if not branches:
+        console.print(f"[yellow]⚠[/yellow] No branches found on remote '{remote_name}'")
+        console.print("[dim]Continuing without target branch selection[/dim]")
+        return None
+
+    # Get default branch to highlight it
+    default_branch = GitUtils.get_default_branch(working_dir)
+
+    # Show branch selection prompt
+    console.print(f"\n[cyan]Select target branch for PR/MR (remote: {remote_name}):[/cyan]")
+
+    # Create choices with default branch highlighted
+    choices = []
+    for branch in branches:
+        if branch == default_branch:
+            choices.append(f"{branch} [default]")
+        else:
+            choices.append(branch)
+
+    # Add "Skip" option
+    choices.append("(Skip - use repository default)")
+
+    from rich.prompt import Prompt
+    selected = Prompt.ask("Target branch", choices=choices, default=f"{default_branch} [default]" if default_branch else choices[0])
+
+    # Handle selection
+    if selected == "(Skip - use repository default)":
+        console.print("[dim]Using repository's default branch[/dim]")
+        return None
+    elif selected.endswith(" [default]"):
+        # Extract branch name without " [default]" suffix
+        branch_name = selected.replace(" [default]", "")
+        return branch_name
+    else:
+        return selected
+
+
 def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
     """Create PR or MR based on repository type.
 
@@ -825,6 +900,12 @@ def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
     # Generate PR/MR title from session and git data
     title = _generate_pr_title(session, working_dir)
 
+    # Detect if this is a fork (needed for both branch selection and PR/MR creation)
+    upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=False)
+
+    # Select target branch (respects auto_select_target_branch configuration)
+    target_branch = _select_target_branch(working_dir, config, upstream_info)
+
     # Create PR/MR with retry logic
     console.print(f"\n[cyan]Creating {repo_type.upper()} PR/MR...[/cyan]")
 
@@ -833,9 +914,9 @@ def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
 
     for attempt in range(max_retries):
         if repo_type == "github":
-            pr_url = _create_github_pr(session, title, description, working_dir, config)
+            pr_url = _create_github_pr(session, title, description, working_dir, config, target_branch, upstream_info)
         elif repo_type == "gitlab":
-            pr_url = _create_gitlab_mr(session, title, description, working_dir, config)
+            pr_url = _create_gitlab_mr(session, title, description, working_dir, config, target_branch, upstream_info)
         else:
             console.print(f"[yellow]⚠[/yellow] Unknown repository type: {repo_type}")
             return None
@@ -1522,7 +1603,7 @@ Format as markdown bullets. Return ONLY the bullet points, nothing else."""
         return None
 
 
-def _create_github_pr(session, title: str, description: str, working_dir: Path, config=None) -> Optional[str]:
+def _create_github_pr(session, title: str, description: str, working_dir: Path, config=None, target_branch: Optional[str] = None, upstream_info: Optional[dict] = None) -> Optional[str]:
     """Create GitHub PR using gh CLI.
 
     Automatically detects if working in a fork and creates PR to upstream repository.
@@ -1533,6 +1614,8 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
         description: PR description
         working_dir: Working directory path
         config: Config object (optional, used for auto_create_pr_status)
+        target_branch: Target branch for PR (optional, defaults to repository's default branch)
+        upstream_info: Upstream repository info if fork (optional, will be detected if not provided)
 
     Returns:
         PR URL if successful, None otherwise
@@ -1559,9 +1642,10 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
         else:  # "prompt"
             create_as_draft = Confirm.ask("Create PR as draft?", default=True)
 
-    # Detect if this is a fork and get upstream info
+    # Detect if this is a fork and get upstream info (if not already provided)
     # prompt_for_remote=True asks user which remote is upstream if auto-detection fails
-    upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=True)
+    if upstream_info is None:
+        upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=True)
 
     try:
         # Build command with or without --draft flag
@@ -1578,6 +1662,11 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
                 console.print(f"[dim]Creating PR to user-specified upstream: {base_repo}[/dim]")
             else:
                 console.print(f"[dim]Detected fork - creating PR to upstream: {base_repo}[/dim]")
+
+        # If target branch specified, add --base flag
+        if target_branch:
+            cmd.extend(["--base", target_branch])
+            console.print(f"[dim]Target branch: {target_branch}[/dim]")
 
         result = subprocess.run(
             cmd,
@@ -1607,7 +1696,7 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
         return None
 
 
-def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, config=None) -> Optional[str]:
+def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, config=None, target_branch: Optional[str] = None, upstream_info: Optional[dict] = None) -> Optional[str]:
     """Create GitLab MR using glab CLI.
 
     Automatically detects if working in a fork and creates MR to upstream repository.
@@ -1618,6 +1707,8 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
         description: MR description
         working_dir: Working directory path
         config: Config object (optional, used for auto_create_pr_status)
+        target_branch: Target branch for MR (optional, defaults to repository's default branch)
+        upstream_info: Upstream repository info if fork (optional, will be detected if not provided)
 
     Returns:
         MR URL if successful, None otherwise
@@ -1644,9 +1735,10 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
         else:  # "prompt"
             create_as_draft = Confirm.ask("Create MR as draft?", default=True)
 
-    # Detect if this is a fork and get upstream info
+    # Detect if this is a fork and get upstream info (if not already provided)
     # prompt_for_remote=True asks user which remote is upstream if auto-detection fails
-    upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=True)
+    if upstream_info is None:
+        upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=True)
 
     try:
         # Build command with or without --draft flag
@@ -1664,6 +1756,11 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
                 console.print(f"[dim]Creating MR to user-specified upstream: {target_project}[/dim]")
             else:
                 console.print(f"[dim]Detected fork - creating MR to upstream: {target_project}[/dim]")
+
+        # If target branch specified, add --target-branch flag
+        if target_branch:
+            cmd.extend(["--target-branch", target_branch])
+            console.print(f"[dim]Target branch: {target_branch}[/dim]")
 
         result = subprocess.run(
             cmd,

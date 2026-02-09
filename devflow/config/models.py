@@ -251,6 +251,7 @@ class PromptsConfig(BaseModel):
     auto_checkout_branch: Optional[bool] = None
     auto_sync_with_base: Optional[str] = None  # "always", "never", or None (prompt)
     auto_complete_on_exit: Optional[bool] = None  # Automatically run 'daf complete' when AI agent exits
+    auto_select_target_branch: Optional[bool] = None  # Auto-select target branch for PR/MR: True (use default branch), False (skip selection), None (prompt user)
     default_branch_strategy: Optional[str] = None  # "from_default" or "from_current"
     remember_last_repo_per_project: Dict[str, str] = Field(default_factory=dict)  # Map: {"PROJ": "backend-api"}
     show_prompt_unit_tests: bool = True  # Show testing instructions in initial prompt for development sessions

@@ -1178,3 +1178,139 @@ def test_has_unpushed_commits_up_to_date(tmp_path):
     result = GitUtils.has_unpushed_commits(tmp_path, current_branch)
 
     assert result is False
+
+
+def test_list_remote_branches_with_mock(monkeypatch, tmp_path):
+    """Test list_remote_branches with mocked git output."""
+    from unittest.mock import Mock
+
+    def mock_run(cmd, *args, **kwargs):
+        if cmd == ["git", "ls-remote", "--heads", "origin"]:
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stdout = (
+                "abc123\trefs/heads/main\n"
+                "def456\trefs/heads/release/2.5\n"
+                "ghi789\trefs/heads/release/3.0\n"
+                "jkl012\trefs/heads/develop\n"
+            )
+            return mock_result
+        return subprocess.run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+
+    assert branches == ["develop", "main", "release/2.5", "release/3.0"]
+
+
+def test_list_remote_branches_empty(monkeypatch, tmp_path):
+    """Test list_remote_branches with no branches."""
+    from unittest.mock import Mock
+
+    def mock_run(cmd, *args, **kwargs):
+        if cmd == ["git", "ls-remote", "--heads", "origin"]:
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            return mock_result
+        return subprocess.run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+
+    assert branches == []
+
+
+def test_list_remote_branches_error(monkeypatch, tmp_path):
+    """Test list_remote_branches with git command error."""
+    from unittest.mock import Mock
+
+    def mock_run(cmd, *args, **kwargs):
+        if cmd == ["git", "ls-remote", "--heads", "origin"]:
+            mock_result = Mock()
+            mock_result.returncode = 128
+            mock_result.stdout = ""
+            mock_result.stderr = "fatal: 'origin' does not appear to be a git repository"
+            return mock_result
+        return subprocess.run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+
+    assert branches == []
+
+
+def test_list_remote_branches_timeout(monkeypatch, tmp_path):
+    """Test list_remote_branches with timeout."""
+    def mock_run(cmd, *args, **kwargs):
+        if cmd == ["git", "ls-remote", "--heads", "origin"]:
+            raise subprocess.TimeoutExpired(cmd, 10)
+        return subprocess.run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+
+    assert branches == []
+
+
+def test_list_remote_branches_git_not_found(monkeypatch, tmp_path):
+    """Test list_remote_branches when git command is not found."""
+    def mock_run(cmd, *args, **kwargs):
+        if cmd == ["git", "ls-remote", "--heads", "origin"]:
+            raise FileNotFoundError("git command not found")
+        return subprocess.run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+
+    assert branches == []
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_list_remote_branches_with_real_git(tmp_path):
+    """Test list_remote_branches with actual git repo."""
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    # Create initial commit on main
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    # Create additional branches
+    subprocess.run(["git", "checkout", "-b", "release/2.5"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "test2.txt").write_text("test2")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Release 2.5"], cwd=tmp_path, capture_output=True)
+
+    subprocess.run(["git", "checkout", "-b", "develop"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "test3.txt").write_text("test3")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Develop branch"], cwd=tmp_path, capture_output=True)
+
+    # Create a bare repo to act as remote
+    remote_path = tmp_path.parent / "remote"
+    subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
+
+    # Add remote and push all branches
+    subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "push", "origin", "--all"], cwd=tmp_path, capture_output=True)
+
+    # List remote branches
+    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+
+    # Should have all three branches in sorted order
+    assert "develop" in branches
+    assert "release/2.5" in branches
+    # The initial branch might be "main" or "master" depending on git version
+    assert any(b in branches for b in ["main", "master"])
