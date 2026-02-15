@@ -1,4 +1,5 @@
 ---
+name: daf-notes
 description: View all progress notes for the current session
 ---
 

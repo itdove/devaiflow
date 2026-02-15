@@ -1,4 +1,5 @@
 ---
+name: daf-help
 description: Show available daf commands and quick reference
 ---
 

@@ -1,4 +1,5 @@
 ---
+name: daf-status
 description: Show status and progress dashboard
 ---
 

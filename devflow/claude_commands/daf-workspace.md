@@ -1,4 +1,5 @@
 ---
+name: daf-workspace
 description: List configured workspaces for multi-branch development
 ---
 

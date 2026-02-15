@@ -1,4 +1,5 @@
 ---
+name: daf-info
 description: Show detailed information about the current session
 ---
 

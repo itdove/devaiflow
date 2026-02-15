@@ -1,4 +1,5 @@
 ---
+name: daf-list
 description: List all DevAIFlow sessions
 ---
 

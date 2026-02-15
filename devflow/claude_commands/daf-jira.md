@@ -1,4 +1,5 @@
 ---
+name: daf-jira
 description: View JIRA ticket details for current session
 ---
 
