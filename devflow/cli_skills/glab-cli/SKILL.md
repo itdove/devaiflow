@@ -1,5 +1,4 @@
 ---
-name: glab-cli
 description: GitLab CLI (glab) tool for creating merge requests, managing MRs, fetching files from private repositories, and GitLab API operations used by daf tool
 ---
 

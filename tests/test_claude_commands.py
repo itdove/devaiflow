@@ -253,21 +253,29 @@ def test_yaml_frontmatter_preserved(temp_workspace):
     """Test that YAML frontmatter is preserved during installation."""
     install_or_upgrade_commands(temp_workspace, quiet=True)
 
-    # Check daf-list-conversations.md has frontmatter
+    # Check daf-list-conversations.md has frontmatter with name and description
     list_conv_path = get_workspace_commands_dir(temp_workspace) / "daf-list-conversations.md"
     list_conv_content = list_conv_path.read_text()
 
     assert list_conv_content.startswith("---\n")
+    assert "name: daf-list-conversations" in list_conv_content
     assert "description: List all conversations in the current multi-project session" in list_conv_content
-    assert list_conv_content.split("---\n")[1].strip() == "description: List all conversations in the current multi-project session"
+    # Verify frontmatter has both name and description fields
+    frontmatter = list_conv_content.split("---\n")[1].strip()
+    assert "name: daf-list-conversations" in frontmatter
+    assert "description: List all conversations in the current multi-project session" in frontmatter
 
-    # Check daf-read-conversation.md has frontmatter
+    # Check daf-read-conversation.md has frontmatter with name and description
     read_conv_path = get_workspace_commands_dir(temp_workspace) / "daf-read-conversation.md"
     read_conv_content = read_conv_path.read_text()
 
     assert read_conv_content.startswith("---\n")
+    assert "name: daf-read-conversation" in read_conv_content
     assert "description: Read the conversation history from another repository in this multi-project session" in read_conv_content
-    assert read_conv_content.split("---\n")[1].strip() == "description: Read the conversation history from another repository in this multi-project session"
+    # Verify frontmatter has both name and description fields
+    frontmatter = read_conv_content.split("---\n")[1].strip()
+    assert "name: daf-read-conversation" in frontmatter
+    assert "description: Read the conversation history from another repository in this multi-project session" in frontmatter
 
 
 def test_yaml_frontmatter_preserved_during_upgrade(temp_workspace):
@@ -278,7 +286,7 @@ def test_yaml_frontmatter_preserved_during_upgrade(temp_workspace):
     # Modify one command to simulate outdated version (but keep frontmatter structure)
     commands_dir = get_workspace_commands_dir(temp_workspace)
     cmd_file = commands_dir / "daf-list-conversations.md"
-    cmd_file.write_text("---\ndescription: Old description\n---\n\nOLD CONTENT")
+    cmd_file.write_text("---\nname: daf-list-conversations\ndescription: Old description\n---\n\nOLD CONTENT")
 
     # Upgrade should restore the correct frontmatter
     changed, up_to_date, failed = install_or_upgrade_commands(temp_workspace, quiet=True)
@@ -286,9 +294,10 @@ def test_yaml_frontmatter_preserved_during_upgrade(temp_workspace):
     assert "daf-list-conversations.md" in changed
     assert len(failed) == 0
 
-    # Verify frontmatter was restored correctly
+    # Verify frontmatter was restored correctly with both name and description
     content = cmd_file.read_text()
     assert content.startswith("---\n")
+    assert "name: daf-list-conversations" in content
     assert "description: List all conversations in the current multi-project session" in content
     assert "OLD CONTENT" not in content
 
