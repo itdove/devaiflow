@@ -330,7 +330,8 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
 
     # Validate goal if provided (distinguish between None and empty string)
     # None = not provided (OK, goal is optional), '' = explicitly empty (error)
-    if goal is not None and not goal.strip():
+    # Exception: empty goal is OK if JIRA is provided (goal will come from JIRA title)
+    if goal is not None and not goal.strip() and not jira:
         console.print("[red]✗[/red] Goal cannot be empty (omit --goal flag if not needed)")
         sys.exit(1)
 
