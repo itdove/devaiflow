@@ -486,7 +486,7 @@ def create_new_session(
             if session.get_conversation(working_directory):
                 console.print(f"\n[yellow]⚠ A conversation already exists for {working_directory} in session {name}[/yellow]")
                 console.print(f"[dim]Use 'daf open {name}' to resume the existing conversation[/dim]")
-                return
+                sys.exit(1)
 
             # Add conversation to existing session
             console.print(f"\n[cyan]Adding conversation to existing session: {name}[/cyan]")
@@ -541,7 +541,7 @@ def create_new_session(
                 if session.get_conversation(working_directory):
                     console.print(f"\n[yellow]⚠ A conversation already exists for {working_directory} in session [/yellow]")
                     console.print(f"[dim]Use 'daf open {name}' to resume the existing conversation[/dim]")
-                    return
+                    sys.exit(1)
 
                 console.print(f"\n[cyan]Adding conversation to session [/cyan]")
 

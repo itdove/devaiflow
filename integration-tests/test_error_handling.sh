@@ -143,7 +143,7 @@ echo ""
 
 # Clean start
 print_test "Clean mock data before tests"
-daf purge-mock-data --force > /dev/null 2>&1
+timeout 5 daf purge-mock-data --force > /dev/null 2>&1
 echo -e "  ${GREEN}✓${NC} Mock data cleaned successfully"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
@@ -167,7 +167,7 @@ print_section "Test 1: Non-Existent Session Errors"
 print_test "Try to open non-existent session"
 
 set +e  # Temporarily allow errors
-timeout 30 daf open "non-existent-session-12345" > /dev/null 2>&1
+timeout 5 daf open "non-existent-session-12345" > /dev/null 2>&1
 OPEN_EXIT=$?
 set -e  # Re-enable exit on error
 verify_failure "daf open non-existent" "Non-existent session error" $OPEN_EXIT
@@ -176,7 +176,7 @@ verify_failure "daf open non-existent" "Non-existent session error" $OPEN_EXIT
 print_test "Try to get info for non-existent session"
 
 set +e  # Temporarily allow errors
-timeout 30 daf info "non-existent-session-12345" > /dev/null 2>&1
+timeout 5 daf info "non-existent-session-12345" > /dev/null 2>&1
 INFO_EXIT=$?
 set -e  # Re-enable exit on error
 verify_failure "daf info non-existent" "Non-existent session info error" $INFO_EXIT
@@ -185,7 +185,7 @@ verify_failure "daf info non-existent" "Non-existent session info error" $INFO_E
 print_test "Try to delete non-existent session"
 
 set +e  # Temporarily allow errors
-timeout 30 daf delete "non-existent-session-12345" --force > /dev/null 2>&1
+timeout 5 daf delete "non-existent-session-12345" --force > /dev/null 2>&1
 DELETE_EXIT=$?
 set -e  # Re-enable exit on error
 verify_failure "daf delete non-existent" "Non-existent session delete error" $DELETE_EXIT
@@ -194,21 +194,25 @@ verify_failure "daf delete non-existent" "Non-existent session delete error" $DE
 print_section "Test 2: Invalid Input Validation"
 print_test "Try to create session with empty name"
 
-daf new --name "" --goal "Test" --path "." > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf new --name "" --goal "Test" --path "." > /dev/null 2>&1
 EMPTY_NAME_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf new --name ''" "Empty name validation" $EMPTY_NAME_EXIT
 
 # Test 5: Empty goal
 print_test "Try to create session with empty goal"
 
-daf new --name "test-session" --goal "" --path "." > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf new --name "test-session" --goal "" --path "." > /dev/null 2>&1
 EMPTY_GOAL_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf new --goal ''" "Empty goal validation" $EMPTY_GOAL_EXIT
 
 # Test 6: Create valid session for duplicate test
 print_test "Create valid session for duplicate testing"
 
-daf new --name "duplicate-test" --goal "Test duplicates" --path "." --branch test-branch --json > /dev/null 2>&1
+timeout 5 daf new --name "duplicate-test" --goal "Test duplicates" --path "." --branch test-branch --json > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo -e "  ${GREEN}✓${NC} Valid session created"
     TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -221,53 +225,67 @@ fi
 print_section "Test 3: Duplicate Session Name"
 print_test "Try to create session with duplicate name"
 
-daf new --name "duplicate-test" --goal "Another test" --path "." --branch test-branch --json > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf new --name "duplicate-test" --goal "Another test" --path "." --branch test-branch --json > /dev/null 2>&1
 DUPLICATE_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf new duplicate name" "Duplicate name rejection" $DUPLICATE_EXIT
 
 # Test 8: Empty note
 print_section "Test 4: Empty Note Validation"
 print_test "Try to add empty note"
 
-daf note "duplicate-test" "" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf note "duplicate-test" "" > /dev/null 2>&1
 EMPTY_NOTE_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf note empty" "Empty note validation" $EMPTY_NOTE_EXIT
 
 # Test 9: Note for non-existent session
 print_test "Try to add note to non-existent session"
 
-daf note "non-existent" "Some note" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf note "non-existent" "Some note" > /dev/null 2>&1
 NOTE_NONEXISTENT_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf note non-existent" "Note for non-existent session" $NOTE_NONEXISTENT_EXIT
 
 # Test 10: Template from non-existent session
 print_section "Test 5: Template Errors"
 print_test "Try to create template from non-existent session"
 
-daf template save "non-existent" "test-template" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf template save "non-existent" "test-template" > /dev/null 2>&1
 TEMPLATE_NONEXISTENT_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf template save non-existent" "Template from non-existent session" $TEMPLATE_NONEXISTENT_EXIT
 
 # Test 11: Use non-existent template
 print_test "Try to use non-existent template"
 
-daf new --name "from-template" --goal "Test" --template "non-existent-template" --path "." > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf new --name "from-template" --goal "Test" --template "non-existent-template" --path "." > /dev/null 2>&1
 TEMPLATE_USE_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf new --template non-existent" "Use non-existent template" $TEMPLATE_USE_EXIT
 
 # Test 12: Delete non-existent template
 print_test "Try to delete non-existent template"
 
-daf template delete "non-existent-template" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf template delete "non-existent-template" > /dev/null 2>&1
 TEMPLATE_DELETE_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf template delete non-existent" "Delete non-existent template" $TEMPLATE_DELETE_EXIT
 
 # Test 13: Link to invalid JIRA key
 print_section "Test 6: JIRA Integration Errors"
 print_test "Try to link session to invalid JIRA key format"
 
-daf link "duplicate-test" --jira "INVALID" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf link "duplicate-test" --jira "INVALID" > /dev/null 2>&1
 LINK_INVALID_EXIT=$?
+set -e  # Re-enable exit on error
 
 # This might succeed or fail depending on validation
 if [ $LINK_INVALID_EXIT -ne 0 ]; then
@@ -281,23 +299,29 @@ fi
 # Test 14: View non-existent JIRA ticket
 print_test "Try to view non-existent JIRA ticket"
 
+set +e  # Temporarily allow errors
 daf jira view "PROJ-99999999" > /dev/null 2>&1
 JIRA_VIEW_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf jira view non-existent" "View non-existent JIRA ticket" $JIRA_VIEW_EXIT
 
 # Test 15: Update non-existent JIRA ticket
 print_test "Try to update non-existent JIRA ticket"
 
+set +e  # Temporarily allow errors
 daf jira update "PROJ-99999999" --description "Test" > /dev/null 2>&1
 JIRA_UPDATE_EXIT=$?
+set -e  # Re-enable exit on error
 verify_failure "daf jira update non-existent" "Update non-existent JIRA ticket" $JIRA_UPDATE_EXIT
 
 # Test 16: Unlink session that's not linked
 print_section "Test 7: Unlink Errors"
 print_test "Try to unlink session with no JIRA association"
 
-daf unlink "duplicate-test" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf unlink "duplicate-test" > /dev/null 2>&1
 UNLINK_EXIT=$?
+set -e  # Re-enable exit on error
 
 # This might succeed (no-op) or fail depending on implementation
 if [ $UNLINK_EXIT -eq 0 ]; then
@@ -312,14 +336,18 @@ fi
 print_section "Test 8: Complete Already Completed Session"
 print_test "Complete the test session"
 
-daf complete "duplicate-test" --no-commit --no-pr --no-issue-update > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf complete "duplicate-test" --no-commit --no-pr --no-issue-update > /dev/null 2>&1
+set -e  # Re-enable exit on error
 echo -e "  ${GREEN}✓${NC} Session completed"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
 print_test "Try to complete already completed session"
 
-daf complete "duplicate-test" --no-commit --no-pr --no-issue-update > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf complete "duplicate-test" --no-commit --no-pr --no-issue-update > /dev/null 2>&1
 COMPLETE_AGAIN_EXIT=$?
+set -e  # Re-enable exit on error
 
 if [ $COMPLETE_AGAIN_EXIT -ne 0 ]; then
     echo -e "  ${GREEN}✓${NC} Cannot complete already completed session"
@@ -334,8 +362,10 @@ print_section "Test 9: JSON Output Validation"
 print_test "Request JSON output and verify it's valid JSON"
 
 # Create a new session for testing
-daf new --name "json-test" --goal "Test JSON" --path "." --branch test-branch --json > /tmp/daf-json-test.json 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf new --name "json-test" --goal "Test JSON" --path "." --branch test-branch --json > /tmp/daf-json-test.json 2>&1
 JSON_CREATE_EXIT=$?
+set -e  # Re-enable exit on error
 
 if [ $JSON_CREATE_EXIT -eq 0 ]; then
     # Try to parse JSON
@@ -358,8 +388,10 @@ rm -f /tmp/daf-json-test.json
 print_section "Test 10: Sync Validation"
 print_test "Try to sync with both --sprint and --tickets (conflicting params)"
 
-daf sync --sprint current --tickets PROJ-123 > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf sync --sprint current --tickets PROJ-123 > /dev/null 2>&1
 SYNC_CONFLICT_EXIT=$?
+set -e  # Re-enable exit on error
 
 if [ $SYNC_CONFLICT_EXIT -ne 0 ]; then
     echo -e "  ${GREEN}✓${NC} Conflicting parameters rejected"
@@ -372,8 +404,10 @@ fi
 # Test 20: Invalid status filter
 print_test "Try to sync with invalid status"
 
-daf sync --sprint current --status "InvalidStatus" > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf sync --sprint current --status "InvalidStatus" > /dev/null 2>&1
 SYNC_INVALID_STATUS_EXIT=$?
+set -e  # Re-enable exit on error
 
 # This might succeed (ignore invalid) or fail (validate)
 if [ $SYNC_INVALID_STATUS_EXIT -eq 0 ]; then
@@ -389,8 +423,10 @@ print_section "Test 11: Edge Cases"
 print_test "Try to create session with very long name (>255 chars)"
 
 LONG_NAME=$(python3 -c "print('a' * 300)")
-daf new --name "$LONG_NAME" --goal "Test" --path "." > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf new --name "$LONG_NAME" --goal "Test" --path "." > /dev/null 2>&1
 LONG_NAME_EXIT=$?
+set -e  # Re-enable exit on error
 
 if [ $LONG_NAME_EXIT -ne 0 ]; then
     echo -e "  ${GREEN}✓${NC} Very long name rejected"
@@ -403,15 +439,19 @@ fi
 # Test 22: Special characters in session name
 print_test "Try to create session with special characters"
 
-daf new --name "test/$pecial*chars" --goal "Test" --path "." > /dev/null 2>&1
+set +e  # Temporarily allow errors
+timeout 5 daf new --name "test/$pecial*chars" --goal "Test" --path "." > /dev/null 2>&1
 SPECIAL_CHARS_EXIT=$?
+set -e  # Re-enable exit on error
 
 # This might succeed (sanitized) or fail (rejected)
 if [ $SPECIAL_CHARS_EXIT -eq 0 ]; then
     echo -e "  ${YELLOW}ℹ${NC}  Special characters accepted (may be sanitized)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
     # Cleanup if created
-    daf delete "test/\$pecial*chars" --force > /dev/null 2>&1 || true
+    set +e
+    timeout 5 daf delete "test/\$pecial*chars" --force > /dev/null 2>&1 || true
+    set -e
 else
     echo -e "  ${GREEN}✓${NC} Special characters rejected"
     TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -421,8 +461,8 @@ fi
 print_section "Cleanup"
 print_test "Clean up test sessions"
 
-daf delete "duplicate-test" --force > /dev/null 2>&1 || true
-daf delete "json-test" --force > /dev/null 2>&1 || true
+timeout 5 daf delete "duplicate-test" --force > /dev/null 2>&1 || true
+timeout 5 daf delete "json-test" --force > /dev/null 2>&1 || true
 
 echo -e "  ${GREEN}✓${NC} Cleanup complete"
 TESTS_PASSED=$((TESTS_PASSED + 1))
