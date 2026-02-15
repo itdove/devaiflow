@@ -113,7 +113,7 @@ def test_template_save_nonexistent_session(temp_daf_home):
         ["template", "save", "nonexistent", "my-template"],
     )
 
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "Session 'nonexistent' not found" in result.output
 
 
@@ -245,7 +245,7 @@ def test_template_delete_nonexistent(temp_daf_home):
     runner = CliRunner()
     result = runner.invoke(cli, ["template", "delete", "nonexistent"])
 
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "Template 'nonexistent' not found" in result.output
 
 
@@ -373,5 +373,5 @@ def test_template_delete_with_file_not_found_error(temp_daf_home, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(cli, ["template", "delete", "delete-error", "--force"])
 
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "not found" in result.output

@@ -1,6 +1,7 @@
 """Main CLI entry point for DevAIFlow."""
 
 import functools
+import sys
 from typing import Optional
 import click
 from rich.console import Console
@@ -317,14 +318,35 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
     from devflow.cli.commands.new_command import create_new_session
     from devflow.cli.utils import resolve_goal_input
     from rich.prompt import Prompt
+    from rich.console import Console
+
+    console = Console()
+
+    # Validate name if provided (distinguish between None and empty string)
+    # None = not provided (prompt user), '' = explicitly empty (error)
+    if name is not None and not name.strip():
+        console.print("[red]✗[/red] Session name cannot be empty")
+        sys.exit(1)
+
+    # Validate goal if provided (distinguish between None and empty string)
+    # None = not provided (OK, goal is optional), '' = explicitly empty (error)
+    # Exception: empty goal is OK if JIRA is provided (goal will come from JIRA title)
+    if goal is not None and not goal.strip() and not jira:
+        console.print("[red]✗[/red] Goal cannot be empty (omit --goal flag if not needed)")
+        sys.exit(1)
 
     # Prompt for name if not provided
-    if not name:
+    if name is None:
         if jira:
             # Suggest issue key as name
             name = Prompt.ask("Session group name", default=jira)
         else:
             name = Prompt.ask("Session group name")
+
+        # Validate prompted name is not empty
+        if not name or not name.strip():
+            console.print("[red]✗[/red] Session name cannot be empty")
+            sys.exit(1)
 
     # Prompt for goal if not provided (allow empty input since goal is optional for daf new)
     if not goal and not jira:

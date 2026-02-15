@@ -1,5 +1,6 @@
 """Implementation of template management commands."""
 
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -36,7 +37,7 @@ def save_template(
     sessions = session_manager.index.get_sessions(identifier)
     if not sessions:
         console.print(f"[red]✗[/red] Session '{identifier}' not found")
-        return
+        sys.exit(1)
 
     # If multiple sessions, ask which one to use as template
     session = None
@@ -168,7 +169,7 @@ def delete_template(template_name: str, force: bool = False) -> None:
     template = template_manager.get_template(template_name)
     if not template:
         console.print(f"[red]✗[/red] Template '{template_name}' not found")
-        return
+        sys.exit(1)
 
     # Confirm deletion unless --force
     if not force:
@@ -188,3 +189,4 @@ def delete_template(template_name: str, force: bool = False) -> None:
         console.print(f"\n[green]✓[/green] Template '{template_name}' deleted")
     except FileNotFoundError:
         console.print(f"[red]✗[/red] Template '{template_name}' not found")
+        sys.exit(1)
