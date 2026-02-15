@@ -34,7 +34,7 @@ def ensure_workspace_skills_and_commands(
         >>> if not success:
         ...     console.print(f"[red]✗[/red] {error}")
     """
-    from devflow.utils.claude_commands import install_or_upgrade_commands, install_or_upgrade_skills
+    from devflow.utils.claude_commands import install_or_upgrade_skills
 
     workspace = Path(workspace_path).expanduser().resolve()
 
@@ -43,14 +43,7 @@ def ensure_workspace_skills_and_commands(
         return False, f"Workspace directory does not exist: {workspace_path}"
 
     try:
-        # Install/upgrade commands (quiet mode)
-        changed_cmds, _, failed_cmds = install_or_upgrade_commands(
-            str(workspace),
-            dry_run=False,
-            quiet=quiet
-        )
-
-        # Install/upgrade skills (quiet mode)
+        # Install/upgrade skills (commands and skills are now unified)
         changed_skills, _, failed_skills = install_or_upgrade_skills(
             str(workspace),
             dry_run=False,
@@ -58,16 +51,12 @@ def ensure_workspace_skills_and_commands(
         )
 
         # Check for failures
-        if failed_cmds or failed_skills:
-            failed = failed_cmds + failed_skills
-            return False, f"Failed to install/upgrade: {', '.join(failed)}"
+        if failed_skills:
+            return False, f"Failed to install/upgrade: {', '.join(failed_skills)}"
 
         # If anything was changed, report it (unless quiet)
-        if not quiet and (changed_cmds or changed_skills):
-            if changed_cmds:
-                console.print(f"[green]✓[/green] Installed/upgraded {len(changed_cmds)} commands")
-            if changed_skills:
-                console.print(f"[green]✓[/green] Installed/upgraded {len(changed_skills)} skills")
+        if not quiet and changed_skills:
+            console.print(f"[green]✓[/green] Installed/upgraded {len(changed_skills)} skills")
 
         return True, None
 
