@@ -1202,6 +1202,46 @@ class GitUtils:
             return []
 
     @staticmethod
+    def list_remote_branches(path: Path, remote: str = "origin") -> list[str]:
+        """List all branches from a remote repository.
+
+        Uses `git ls-remote --heads <remote>` to fetch remote branches.
+
+        Args:
+            path: Repository path
+            remote: Remote name (default: "origin")
+
+        Returns:
+            Sorted list of branch names (empty list if error or no branches)
+
+        Example:
+            branches = GitUtils.list_remote_branches(Path("/path/to/repo"), "origin")
+            # Returns: ["main", "release/2.5", "release/3.0", "develop"]
+        """
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", "--heads", remote],
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                # Parse output: "commit_sha\trefs/heads/branch_name"
+                branches = []
+                for line in result.stdout.strip().split('\n'):
+                    if line and '\t' in line:
+                        # Extract branch name from "refs/heads/branch_name"
+                        ref = line.split('\t')[1]
+                        if ref.startswith('refs/heads/'):
+                            branch_name = ref.replace('refs/heads/', '')
+                            branches.append(branch_name)
+                return sorted(branches)
+            return []
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return []
+
+    @staticmethod
     def get_fork_upstream_info(path: Path, prompt_for_remote: bool = False) -> Optional[dict]:
         """Get upstream repository information for a fork.
 
