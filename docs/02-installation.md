@@ -18,9 +18,10 @@ DevAIFlow officially supports:
 
   **Note:** Python 3.9 may work but is not officially tested. Python 3.13+ has not been tested yet.
 
-- **Claude Code CLI**
+- **Claude Code CLI (version 2.1.3 or higher)**
   - Install from: https://docs.claude.com/en/docs/claude-code/installation
   - Verify: `claude --version`
+  - **IMPORTANT**: Version 2.1.3+ is required for slash commands and skills support
 
 - **Git**
   ```bash
@@ -427,17 +428,17 @@ After running `daf init`, verify and customize your configuration:
 
 For detailed configuration options and multi-file structure, see [Multi-File Configuration System](06-configuration.md#multi-file-configuration-system).
 
-### 2. Install Claude Code Commands
+### 2. Install Claude Code Skills
 
-After initializing configuration, install the DevAIFlow slash commands and skills into Claude Code:
+After initializing configuration, install the DevAIFlow skills into Claude Code:
 
 ```bash
 daf upgrade
 ```
 
-This installs:
-- **Slash commands** (`/daf-*`) into `<workspace>/.claude/commands/`
-- **Skills** into `<workspace>/.claude/skills/`
+This installs all bundled skills globally to `~/.claude/skills/`:
+- **Slash commands** (`/daf-*`) - Skills with `name:` field in frontmatter (e.g., `/daf-help`, `/daf-list`, `/daf-status`)
+- **Reference skills** - Skills without `name:` field that are auto-loaded (e.g., `daf-cli`, `gh-cli`, `git-cli`, `glab-cli`)
 
 These enable you to use DevAIFlow features directly within Claude Code sessions.
 
@@ -446,12 +447,11 @@ These enable you to use DevAIFlow features directly within Claude Code sessions.
 # Preview what would be installed
 daf upgrade --dry-run
 
-# Install both commands and skills
+# Install all skills (slash commands + reference skills)
 daf upgrade
-
-# Install only commands
-daf upgrade --commands-only
 ```
+
+**Note:** Skills are installed globally to `~/.claude/skills/` and are available in all Claude Code sessions. Claude Code 2.1.3+ is required for slash command support.
 
 ### 3. Edit Configuration (Optional)
 

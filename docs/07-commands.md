@@ -4127,9 +4127,9 @@ You can also use `daf config refresh-jira-fields` to refresh field mappings spec
 
 ---
 
-### daf upgrade - Upgrade Bundled Slash Commands
+### daf upgrade - Upgrade Bundled Skills
 
-Install or upgrade the bundled Claude Code slash commands to your workspace.
+Install or upgrade the bundled Claude Code skills globally.
 
 ```bash
 daf upgrade [OPTIONS]
@@ -4137,21 +4137,25 @@ daf upgrade [OPTIONS]
 
 **Options:**
 - `--dry-run` - Preview what would be upgraded without making changes
-- `--commands-only` - Upgrade only bundled slash commands (default for now)
+- `--commands-only` - (Deprecated) Legacy flag, now installs slash commands only
+- `--skills-only` - (Deprecated) Legacy flag, now installs reference skills only
 
 **What This Does:**
 
-The `daf upgrade` command manages bundled slash commands that provide helpful prompts for multi-conversation sessions:
-- **Installs** commands if they don't exist yet
-- **Upgrades** commands if they're outdated
-- **Skips** commands that are already up-to-date
+The `daf upgrade` command manages bundled skills that provide helpful prompts and reference documentation:
+- **Installs** skills if they don't exist yet
+- **Upgrades** skills if they're outdated
+- **Skips** skills that are already up-to-date
 
-Commands are installed to `<workspace>/.claude/commands/` directory.
+Skills are installed globally to `~/.claude/skills/` directory and are available in all Claude Code sessions.
+
+**Requirements:**
+- **Claude Code 2.1.3 or higher** is required for slash command support
 
 **Examples:**
 
 ```bash
-# Upgrade all commands
+# Upgrade all skills
 daf upgrade
 
 # Preview what would be upgraded
@@ -4161,82 +4165,103 @@ daf upgrade --dry-run
 **Sample Output:**
 
 ```
-Upgrading bundled slash commands...
-Workspace: ~/development/myproject
+Upgrading bundled skills...
 
-Results:
+Slash Commands:
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Command                   ┃ Status Before ┃ Status After ┃
+┃ Skill                     ┃ Status Before ┃ Status After ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
-│ cs-list-conversations.md  │ not installed │ installed   │
-│ cs-read-conversation.md   │ not installed │ installed   │
+│ daf-help                  │ not installed │ installed   │
+│ daf-list                  │ not installed │ installed   │
+│ daf-active                │ not installed │ installed   │
 └───────────────────────────┴───────────────┴─────────────┘
 
-✓ Updated 2 command(s)
-Commands location: ~/development/myproject/.claude/commands
+Reference Skills:
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Skill                     ┃ Status Before ┃ Status After ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ daf-cli                   │ not installed │ installed   │
+│ gh-cli                    │ not installed │ installed   │
+└───────────────────────────┴───────────────┴─────────────┘
+
+✓ Updated 11 slash command(s)
+✓ Updated 4 reference skill(s)
+Skills location: ~/.claude/skills/
 ```
 
-**Bundled Commands:**
+**Bundled Skills:**
 
-The following slash commands are bundled with the tool (PROJ-60516):
+DevAIFlow includes two types of skills:
+
+**1. Slash Commands** (invokable with `/daf-*` in Claude Code):
 
 **Multi-Conversation Commands:**
-1. **`/daf list-conversations`** - List all conversations in multi-project session
-2. **`/daf read-conversation`** - Read conversation history from other repositories
+- **`/daf-list-conversations`** - List all conversations in multi-project session
+- **`/daf-read-conversation`** - Read conversation history from other repositories
 
 **Session Management Commands:**
-3. **`/daf list`** - List all sessions with status and time tracking
-4. **`/daf info`** - Show detailed information about current session
-5. **`/daf active`** - Show currently active conversation details
-6. **`/daf notes`** - View all progress notes for current session (read-only)
+- **`/daf-list`** - List all sessions with status and time tracking
+- **`/daf-info`** - Show detailed information about current session
+- **`/daf-active`** - Show currently active conversation details
+- **`/daf-notes`** - View all progress notes for current session (read-only)
 
 **JIRA & Sprint Commands:**
-7. **`/daf jira`** - View JIRA ticket details for current session
-8. **`/daf status`** - Show sprint status and progress dashboard
+- **`/daf-jira`** - View JIRA ticket details for current session
+- **`/daf-status`** - Show sprint status and progress dashboard
+
+**Workspace & Configuration:**
+- **`/daf-workspace`** - List configured workspaces for multi-branch development
+- **`/daf-config`** - View current configuration (JIRA, workspace, prompts)
 
 **Help & Reference:**
-9. **`/daf help`** - Show available daf commands and quick reference
-10. **`/daf config`** - View current configuration (JIRA, workspace, prompts)
+- **`/daf-help`** - Show available daf commands and quick reference
 
-All commands are READ-ONLY and safe to run inside Claude Code sessions.
+**2. Reference Skills** (auto-loaded, not invokable):
 
-**Note:** These commands follow Claude Code plugin documentation standards with YAML frontmatter metadata, ensuring proper integration with Claude Code's `/help` command and future plugin features.
+These skills provide reference documentation that Claude reads automatically:
+- **`daf-cli`** - Complete daf tool command reference
+- **`gh-cli`** - GitHub CLI reference for PR operations
+- **`git-cli`** - Git workflow guidance
+- **`glab-cli`** - GitLab CLI reference for MR operations
 
-**Alternative: Upgrade via TUI**
+All slash commands are READ-ONLY and safe to run inside Claude Code sessions.
 
-You can also upgrade commands using the interactive TUI:
+**How Skills Work:**
 
-```bash
-daf config tui
-```
+**Slash Commands vs Reference Skills:**
+- **Slash commands** have a `name:` field in their YAML frontmatter → invokable as `/daf-help`
+- **Reference skills** have NO `name:` field → auto-loaded as context, not invokable
 
-Navigate to the **Claude & AI** tab and click the **Upgrade Commands** button.
+**Skills vs Commands:**
+- Claude Code 2.1.3+ unified slash commands and skills into a single system
+- Legacy `.claude/commands/` directory is no longer used
+- All skills use the `.claude/skills/` directory structure with `SKILL.md` files
 
-**Managing Commands:**
+**Managing Skills:**
 
 **Installation:**
-- Commands are installed automatically when you run `daf upgrade`
-- No configuration needed - commands are installed to `<workspace>/.claude/commands/`
-- Workspace must be configured first (via `daf init` or `daf config tui`)
+- Skills are installed globally to `~/.claude/skills/`
+- Available in all Claude Code sessions automatically
+- No per-project or per-workspace configuration needed
 
 **Removal:**
-If you want to remove the bundled commands:
+If you want to remove the bundled skills:
 
 ```bash
-# Remove all bundled commands
-rm <workspace>/.claude/commands/cs-*.md
+# Remove all bundled slash commands
+rm -rf ~/.claude/skills/daf-*
 
-# Or remove specific command
-rm <workspace>/.claude/commands/cs-list-conversations.md
+# Or remove specific skill
+rm -rf ~/.claude/skills/daf-help
 
-# Example (replace with your workspace path):
-rm ~/development/myproject/.claude/commands/cs-*.md
+# Remove all reference skills
+rm -rf ~/.claude/skills/gh-cli ~/.claude/skills/git-cli ~/.claude/skills/glab-cli
 ```
 
-**Custom Commands:**
-You can also create your own custom slash commands by adding `.md` files to the `.claude/commands/` directory. See the [Claude Code documentation](https://docs.anthropic.com/claude/docs/claude-code) for details on command syntax.
+**Custom Skills:**
+You can create your own custom skills by adding skill directories to `~/.claude/skills/`. See the [Agent Skills Documentation](https://agentskills.io) for the open standard, or the [Claude Code documentation](https://docs.anthropic.com/claude/docs/claude-code) for Claude-specific details.
 
-**Note:** In the future, `daf upgrade` will also upgrade the daf tool itself. For now, it only manages bundled slash commands.
+**Note:** Skills are only loaded when Claude Code sessions start. Changes to skills require restarting the session (closing and reopening with `daf open`) to take effect - they are NOT hot-reloaded on `--resume`.
 
 ---
 
