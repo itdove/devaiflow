@@ -56,57 +56,93 @@ def list_bundled_skills() -> List[Path]:
     return sorted([d for d in bundled_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()])
 
 
-def install_or_upgrade_skills(
-    workspace: str,
+def _skill_has_name_field(skill_path: Path) -> bool:
+    """Check if a skill has a 'name:' field in its SKILL.md frontmatter.
+
+    Args:
+        skill_path: Path to skill directory
+
+    Returns:
+        True if skill has 'name:' field, False otherwise
+    """
+    skill_md = skill_path / "SKILL.md"
+    if not skill_md.exists():
+        return False
+
+    content = skill_md.read_text()
+    # Check for YAML frontmatter with name field
+    if content.startswith("---\n"):
+        try:
+            # Extract frontmatter (between first two ---)
+            parts = content.split("---\n", 2)
+            if len(parts) >= 2:
+                frontmatter = parts[1]
+                # Simple check for name: field
+                return "name:" in frontmatter
+        except Exception:
+            pass
+    return False
+
+
+def list_slash_command_skills() -> List[Path]:
+    """List bundled skills that are slash commands (have 'name:' field).
+
+    Returns:
+        List of Path objects for slash command skill directories
+    """
+    all_skills = list_bundled_skills()
+    return [s for s in all_skills if _skill_has_name_field(s)]
+
+
+def list_reference_skills() -> List[Path]:
+    """List bundled skills that are reference skills (no 'name:' field).
+
+    Returns:
+        List of Path objects for reference skill directories
+    """
+    all_skills = list_bundled_skills()
+    return [s for s in all_skills if not _skill_has_name_field(s)]
+
+
+def install_or_upgrade_slash_commands(
     dry_run: bool = False,
     quiet: bool = False
 ) -> Tuple[List[str], List[str], List[str]]:
-    """Install or upgrade bundled skills to workspace .claude/skills directory.
+    """Install or upgrade bundled slash commands to user-level ~/.claude/skills directory.
 
-    This function installs skill directories with all their contents and also
-    registers them as hidden context files in the configuration.
+    Slash commands are skills with a 'name:' field in their frontmatter that should be
+    globally available across all projects.
 
     Args:
-        workspace: Workspace root directory path
         dry_run: If True, only report what would be changed without actually changing
         quiet: If True, suppress console output (errors still shown)
 
     Returns:
         Tuple of (installed/upgraded, up_to_date, failed) skill names
-
-    Raises:
-        FileNotFoundError: If workspace directory doesn't exist
     """
-    from devflow.config.loader import ConfigLoader
-    from devflow.config.models import ContextFile
-
-    workspace_path = Path(workspace).expanduser().resolve()
-    if not workspace_path.exists():
-        raise FileNotFoundError(f"Workspace directory does not exist: {workspace}")
-
-    bundled_skills = list_bundled_skills()
-    if not bundled_skills:
+    slash_commands = list_slash_command_skills()
+    if not slash_commands:
         return ([], [], [])
 
-    # Ensure .claude/skills directory exists
-    skills_dir = get_workspace_skills_dir(workspace)
+    # Install to user-level ~/.claude/skills/
+    user_home = Path.home()
+    skills_dir = user_home / ".claude" / "skills"
+
     if not dry_run:
         skills_dir.mkdir(parents=True, exist_ok=True)
 
-    changed: List[str] = []  # Installed or upgraded
-    up_to_date: List[str] = []  # Already up-to-date
+    changed: List[str] = []
+    up_to_date: List[str] = []
     failed: List[str] = []
 
-    for src_dir in bundled_skills:
+    for src_dir in slash_commands:
         skill_name = src_dir.name
         dest_dir = skills_dir / skill_name
 
         try:
             # Check if skill directory exists and compare contents
             if dest_dir.exists():
-                # Compare by checking if all files in source exist in dest with same content
                 is_up_to_date = _are_skill_dirs_identical(src_dir, dest_dir)
-
                 if is_up_to_date:
                     up_to_date.append(skill_name)
                     continue
@@ -116,7 +152,6 @@ def install_or_upgrade_skills(
                 # Remove old version if exists
                 if dest_dir.exists():
                     shutil.rmtree(dest_dir)
-
                 # Copy entire directory tree
                 shutil.copytree(src_dir, dest_dir)
 
@@ -127,13 +162,67 @@ def install_or_upgrade_skills(
                 console.print(f"[red]✗[/red] Failed to process {skill_name}: {e}")
             failed.append(skill_name)
 
-    # After installing/upgrading skills, register them as hidden context files
-    if not dry_run and (changed or up_to_date):
+    return (changed, up_to_date, failed)
+
+
+def install_or_upgrade_reference_skills(
+    dry_run: bool = False,
+    quiet: bool = False
+) -> Tuple[List[str], List[str], List[str]]:
+    """Install or upgrade bundled reference skills to user-level ~/.claude/skills directory.
+
+    Reference skills are skills WITHOUT a 'name:' field that provide context and
+    documentation (like daf-cli, gh-cli, git-cli, glab-cli).
+
+    Args:
+        dry_run: If True, only report what would be changed without actually changing
+        quiet: If True, suppress console output (errors still shown)
+
+    Returns:
+        Tuple of (installed/upgraded, up_to_date, failed) skill names
+    """
+    # Only install reference skills (those without 'name:' field)
+    bundled_skills = list_reference_skills()
+    if not bundled_skills:
+        return ([], [], [])
+
+    # Install to user-level ~/.claude/skills/
+    user_home = Path.home()
+    skills_dir = user_home / ".claude" / "skills"
+
+    if not dry_run:
+        skills_dir.mkdir(parents=True, exist_ok=True)
+
+    changed: List[str] = []
+    up_to_date: List[str] = []
+    failed: List[str] = []
+
+    for src_dir in bundled_skills:
+        skill_name = src_dir.name
+        dest_dir = skills_dir / skill_name
+
         try:
-            _register_skills_as_context_files(workspace, bundled_skills)
+            # Check if skill directory exists and compare contents
+            if dest_dir.exists():
+                is_up_to_date = _are_skill_dirs_identical(src_dir, dest_dir)
+                if is_up_to_date:
+                    up_to_date.append(skill_name)
+                    continue
+
+            # Install or upgrade skill directory
+            if not dry_run:
+                # Remove old version if exists
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir)
+                # Copy entire directory tree
+                shutil.copytree(src_dir, dest_dir)
+
+            changed.append(skill_name)
+
         except Exception as e:
             if not quiet:
-                console.print(f"[yellow]⚠[/yellow] Warning: Could not register skills in config: {e}")
+                console.print(f"[red]✗[/red] Failed to process {skill_name}: {e}")
+            failed.append(skill_name)
 
     return (changed, up_to_date, failed)
 

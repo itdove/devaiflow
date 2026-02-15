@@ -6,8 +6,8 @@ from rich.table import Table
 
 from devflow.config.loader import ConfigLoader
 from devflow.utils.claude_commands import (
-    install_or_upgrade_skills,
-    get_all_skill_statuses,
+    install_or_upgrade_reference_skills,
+    install_or_upgrade_slash_commands,
 )
 
 console = Console()
@@ -19,23 +19,24 @@ def upgrade_all(
     upgrade_skills: bool = True,
     upgrade_hierarchical_skills: bool = True
 ) -> None:
-    """Upgrade bundled Claude Code skills in ALL configured workspaces.
+    """Upgrade bundled Claude Code skills.
 
     This command will:
-    - Install skills in ALL workspaces if they don't exist yet
-    - Upgrade skills in ALL workspaces if they are outdated
-    - Skip skills that are already up-to-date
+    - Install slash commands (daf-*) to ~/.claude/skills/ (global, available everywhere)
+    - Install reference skills (daf-cli, gh-cli, etc.) to ~/.claude/skills/ (global)
     - Install organization-specific skills from hierarchical config files
+    - Skip items that are already up-to-date
 
     Args:
         dry_run: If True, only report what would be changed without actually changing
         quiet: If True, suppress console output (errors still shown)
-        upgrade_skills: If True, upgrade bundled skills (including slash commands)
+        upgrade_skills: If True, upgrade bundled skills (slash commands + reference skills)
         upgrade_hierarchical_skills: If True, install hierarchical skills from config files
 
     Note:
-        As of Claude Code 2.1.3, slash commands are now skills with SKILL.md files.
-        All slash commands are installed as skills under .claude/skills/ directories.
+        All bundled skills are installed globally to ~/.claude/skills/ so they're
+        available in any project. Hierarchical skills are installed to
+        ~/.daf-sessions/.claude/skills/ for organization-specific context.
     """
     config_loader = ConfigLoader()
     config = config_loader.load_config()
@@ -52,65 +53,69 @@ def upgrade_all(
 
     if not quiet:
         if dry_run:
-            console.print("[cyan]Checking for updates in ALL workspaces (dry run)...[/cyan]")
+            console.print("[cyan]Checking for updates (dry run)...[/cyan]")
         else:
-            console.print("[cyan]Upgrading bundled skills in ALL workspaces...[/cyan]")
-        console.print(f"[dim]Workspaces: {len(config.repos.workspaces)} configured[/dim]")
+            console.print("[cyan]Upgrading bundled skills...[/cyan]")
         console.print()
 
-    # Track overall results across all workspaces
+    # Track overall results
     all_changed = []
     all_up_to_date = []
     all_failed = []
 
-    # Upgrade each workspace
-    for workspace_def in config.repos.workspaces:
-        workspace = workspace_def.path
-        workspace_name = workspace_def.name
-
-        # Verify workspace exists
-        workspace_path = Path(workspace).expanduser().resolve()
-        if not workspace_path.exists():
-            if not quiet:
-                console.print(f"[yellow]⚠[/yellow] Skipping '{workspace_name}': directory does not exist: {workspace}")
-            continue
-
+    # Install slash commands globally
+    if upgrade_skills:
         if not quiet:
-            console.print(f"\n[bold cyan]Workspace: {workspace_name}[/bold cyan]")
-            console.print(f"[dim]Path: {workspace}[/dim]")
+            console.print("[bold]Slash Commands:[/bold]")
+            console.print(f"[dim]Installing to: ~/.claude/skills/[/dim]")
             console.print()
 
-        # Upgrade skills (including slash commands) if requested
-        if upgrade_skills:
-            if not quiet:
-                console.print("[bold]Skills:[/bold]")
+        try:
+            changed, up_to_date, failed = install_or_upgrade_slash_commands(
+                dry_run=dry_run,
+                quiet=quiet
+            )
+            all_changed.extend([f"slash:{name}" for name in changed])
+            all_up_to_date.extend([f"slash:{name}" for name in up_to_date])
+            all_failed.extend([f"slash:{name}" for name in failed])
 
-            statuses_before = get_all_skill_statuses(workspace)
+            _print_upgrade_table(
+                changed, up_to_date, failed, {},
+                item_type="slash command", dry_run=dry_run, quiet=quiet
+            )
 
-            try:
-                changed, up_to_date, failed = install_or_upgrade_skills(
-                    workspace,
-                    dry_run=dry_run,
-                    quiet=quiet
-                )
-                all_changed.extend([f"{workspace_name}:skill:{name}" for name in changed])
-                all_up_to_date.extend([f"{workspace_name}:skill:{name}" for name in up_to_date])
-                all_failed.extend([f"{workspace_name}:skill:{name}" for name in failed])
+        except Exception as e:
+            console.print(f"[red]✗[/red] Slash command installation failed: {e}")
 
-                _print_upgrade_table(
-                    changed, up_to_date, failed, statuses_before,
-                    item_type="skill", dry_run=dry_run, quiet=quiet
-                )
+        if not quiet:
+            console.print()
 
-            except FileNotFoundError as e:
-                console.print(f"[red]✗[/red] {e}")
-                continue  # Continue with next workspace
-            except Exception as e:
-                console.print(f"[red]✗[/red] Upgrade failed: {e}")
-                continue  # Continue with next workspace
+    # Install reference skills globally
+    if upgrade_skills:
+        if not quiet:
+            console.print("[bold]Reference Skills:[/bold]")
+            console.print(f"[dim]Installing to: ~/.claude/skills/[/dim]")
+            console.print()
 
-            if not quiet:
-                console.print()
+        try:
+            changed, up_to_date, failed = install_or_upgrade_reference_skills(
+                dry_run=dry_run,
+                quiet=quiet
+            )
+            all_changed.extend([f"ref:{name}" for name in changed])
+            all_up_to_date.extend([f"ref:{name}" for name in up_to_date])
+            all_failed.extend([f"ref:{name}" for name in failed])
+
+            _print_upgrade_table(
+                changed, up_to_date, failed, {},
+                item_type="reference skill", dry_run=dry_run, quiet=quiet
+            )
+
+        except Exception as e:
+            console.print(f"[red]✗[/red] Reference skill installation failed: {e}")
+
+        if not quiet:
+            console.print()
 
     # Upgrade hierarchical skills if requested (only once, they're global)
     if upgrade_hierarchical_skills:
@@ -150,29 +155,27 @@ def upgrade_all(
         console.print("\n[bold]Summary:[/bold]")
         if dry_run:
             if all_changed:
-                console.print(f"[yellow]Would change {len(all_changed)} item(s) across {len(config.repos.workspaces)} workspace(s)[/yellow]")
+                console.print(f"[yellow]Would change {len(all_changed)} item(s)[/yellow]")
                 console.print("[dim]Run without --dry-run to apply changes[/dim]")
             else:
-                console.print("[green]✓[/green] All items are up-to-date across all workspaces")
+                console.print("[green]✓[/green] All items are up-to-date")
         else:
             if all_changed:
-                console.print(f"[green]✓[/green] Updated {len(all_changed)} item(s) across {len(config.repos.workspaces)} workspace(s)")
+                console.print(f"[green]✓[/green] Updated {len(all_changed)} item(s)")
             elif all_up_to_date:
-                console.print("[green]✓[/green] All items are up-to-date across all workspaces")
+                console.print("[green]✓[/green] All items are up-to-date")
 
             if all_failed:
                 console.print(f"[red]✗[/red] Failed to update {len(all_failed)} item(s)")
 
-        # Show locations for each workspace
+        # Show locations
         if upgrade_skills:
-            console.print(f"\n[dim]Updated {len(config.repos.workspaces)} workspace(s):[/dim]")
-            for ws in config.repos.workspaces:
-                console.print(f"[dim]  - {ws.name}: {ws.path}/.claude/skills/[/dim]")
+            console.print(f"\n[dim]Bundled skills: ~/.claude/skills/[/dim]")
 
         if upgrade_hierarchical_skills:
             from devflow.utils.paths import get_cs_home
             hierarchical_skills_dir = get_cs_home() / ".claude" / "skills"
-            console.print(f"[dim]Hierarchical skills location: {hierarchical_skills_dir}[/dim]")
+            console.print(f"[dim]Hierarchical skills: {hierarchical_skills_dir}[/dim]")
 
 
 def _print_upgrade_table(

@@ -2688,15 +2688,16 @@ def completion(ctx: click.Context, shell: str) -> None:
 @click.option("--skills-only", is_flag=True, help="Upgrade only bundled skills")
 @json_option
 def upgrade(ctx: click.Context, dry_run: bool, commands_only: bool, skills_only: bool) -> None:
-    """Upgrade bundled Claude Code skills (including slash commands).
+    """Upgrade bundled Claude Code skills.
 
-    This command will install or upgrade the bundled skills to your configured workspace
-    directory: <workspace>/.claude/skills/
+    This command installs all skills to ~/.claude/skills/ (global):
+    - Slash commands: /daf-active, /daf-help, /daf-info, etc.
+    - Reference skills: daf-cli, gh-cli, git-cli, glab-cli
+    - Hierarchical skills from organization config (to ~/.daf-sessions/)
 
     Items that are already up-to-date will be skipped.
 
-    Note: As of Claude Code 2.1.3, slash commands and skills have been unified.
-    All slash commands are now skills with SKILL.md files.
+    Note: All skills are installed globally so they work in any project.
 
     Examples:
         daf upgrade           # Upgrade all skills
