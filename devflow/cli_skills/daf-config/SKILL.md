@@ -1,4 +1,5 @@
 ---
+name: daf-config
 description: View current configuration (read-only)
 ---
 

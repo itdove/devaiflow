@@ -92,10 +92,11 @@ Settings and skills follow this priority order:
 
 When Claude Code starts, skills are loaded in this order:
 
-1. **User-level skills** (`~/.claude/skills/`) - Personal skills
+1. **User-level skills** (`~/.claude/skills/`) - Personal skills and bundled daf skills
 2. **Hierarchical skills** (`$DEVAIFLOW_HOME/.claude/skills/01-*`, `02-*`, etc.) - Organization skills
-3. **Workspace skills** (`workspace/.claude/skills/`) - Workspace-specific
-4. **Project skills** (`project/.claude/skills/`) - Project-specific
+3. **Project skills** (`project/.claude/skills/`) - Project-specific
+
+**Note:** Workspace-level skills are no longer supported. All bundled daf skills are installed globally to `~/.claude/skills/` via `daf upgrade`.
 
 ---
 

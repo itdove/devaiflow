@@ -215,7 +215,11 @@ All core features work across platforms with automatic platform-specific handlin
 ## Requirements
 
 - **Python 3.10, 3.11, or 3.12** - For the `daf` tool (older versions like 3.9 may work but are not officially tested)
-- **AI Assistant CLI** - At least one supported AI assistant (Claude Code, GitHub Copilot, Cursor, or Windsurf) must be installed
+- **AI Assistant CLI** - At least one supported AI assistant must be installed:
+  - **Claude Code** (version 2.1.3 or higher) - Required for slash commands and skills support
+  - **GitHub Copilot** (experimental)
+  - **Cursor** (experimental)
+  - **Windsurf** (experimental)
 - **Git** - For branch management features
 - **GitHub CLI (`gh`)** (optional) - Required for creating GitHub PRs and fetching PR templates from private repos
 - **GitLab CLI (`glab`)** (optional) - Required for creating GitLab MRs and fetching MR templates from private repos

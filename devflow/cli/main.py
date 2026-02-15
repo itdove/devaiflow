@@ -2688,36 +2688,30 @@ def completion(ctx: click.Context, shell: str) -> None:
 @click.option("--skills-only", is_flag=True, help="Upgrade only bundled skills")
 @json_option
 def upgrade(ctx: click.Context, dry_run: bool, commands_only: bool, skills_only: bool) -> None:
-    """Upgrade bundled Claude Code slash commands and skills.
+    """Upgrade bundled Claude Code skills.
 
-    This command will install or upgrade the bundled slash commands and skills to your
-    configured workspace directory:
-    - Commands: <workspace>/.claude/commands/
-    - Skills: <workspace>/.claude/skills/
+    This command installs all skills to ~/.claude/skills/ (global):
+    - Slash commands: /daf-active, /daf-help, /daf-info, etc.
+    - Reference skills: daf-cli, gh-cli, git-cli, glab-cli
+    - Hierarchical skills from organization config (to ~/.daf-sessions/)
 
     Items that are already up-to-date will be skipped.
 
-    By default, both commands and skills are upgraded. Use --commands-only or
-    --skills-only to upgrade just one type.
+    Note: All skills are installed globally so they work in any project.
 
     Examples:
-        daf upgrade                  # Upgrade both commands and skills
-        daf upgrade --dry-run        # Preview what would be upgraded
-        daf upgrade --commands-only  # Upgrade only commands
-        daf upgrade --skills-only    # Upgrade only skills
+        daf upgrade           # Upgrade all skills
+        daf upgrade --dry-run # Preview what would be upgraded
     """
     from devflow.cli.commands.upgrade_command import upgrade_all
 
-    # Validate flags - can't use both
-    if commands_only and skills_only:
-        console.print("[red]✗[/red] Cannot use --commands-only and --skills-only together")
-        ctx.exit(1)
+    # commands_only and skills_only are deprecated but kept for backward compatibility
+    if commands_only or skills_only:
+        console.print("[yellow]⚠[/yellow] Note: --commands-only and --skills-only are deprecated.")
+        console.print("[dim]All slash commands are now skills. Upgrading all skills...[/dim]")
+        console.print()
 
-    # Determine what to upgrade
-    upgrade_commands = not skills_only  # Upgrade commands unless skills-only
-    upgrade_skills = not commands_only  # Upgrade skills unless commands-only
-
-    upgrade_all(dry_run=dry_run, upgrade_commands=upgrade_commands, upgrade_skills=upgrade_skills)
+    upgrade_all(dry_run=dry_run, upgrade_skills=True)
 
 
 # Note: 'import' is a Python keyword, so we name the function import_cmd

@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shows full request/response details for all JIRA API calls
   - Helps troubleshoot field validation and API errors
   - Automatically disabled in JSON output mode
+- Claude Code 2.1.3+ version requirement for slash commands and skills support
+
+### Changed
+- **BREAKING**: Migrated from `.claude/commands/` to `.claude/skills/` directory structure
+  - Skills now install globally to `~/.claude/skills/` instead of per-workspace
+  - Slash commands now require `name:` field in YAML frontmatter
+  - Reference skills (without `name:` field) are auto-loaded but not invokable
+  - Workspace-level skills are no longer supported
+  - Run `daf upgrade` to migrate to the new structure
+- Renamed command files to skill directories (e.g., `daf-help.md` → `daf-help/SKILL.md`)
+- Simplified upgrade command to install all skills globally in one operation
 
 ### Improved
 - Enhanced `daf init` wizard with better user guidance and explanations

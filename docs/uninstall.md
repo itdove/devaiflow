@@ -61,14 +61,16 @@ find ~/workspace -name "organization.json" -o -name "team.json" -o -name "backen
 
 ### Step 3: Remove Claude Code Integration (If Installed)
 
-If you installed DevAIFlow commands in Claude Code:
+If you installed DevAIFlow skills in Claude Code:
 
 ```bash
-# Remove from workspace .claude directory
-rm -rf ~/workspace/*/.claude/commands/daf-*
-rm -rf ~/workspace/*/.claude/commands/cs-*
+# Remove bundled slash commands
+rm -rf ~/.claude/skills/daf-*
 
-# Remove from global Claude Code commands
+# Remove bundled reference skills
+rm -rf ~/.claude/skills/gh-cli ~/.claude/skills/git-cli ~/.claude/skills/glab-cli ~/.claude/skills/daf-cli
+
+# (Legacy) Remove old commands directory if it exists
 rm -rf ~/.claude/commands/daf-*
 rm -rf ~/.claude/commands/cs-*
 ```
@@ -171,10 +173,10 @@ $DEVAIFLOW_HOME/
 ~/workspace/*/
 ├── organization.json             # Shared team config
 ├── team.json                     # Shared team config
-├── backends/jira.json           # Shared backend config
-└── .claude/
-    └── commands/daf-*.md        # DevAIFlow commands
+└── backends/jira.json           # Shared backend config
 ```
+
+**Note:** Skills are installed globally to `~/.claude/skills/` and are no longer per-workspace.
 
 ## Reinstalling Later
 

@@ -11,22 +11,22 @@ def ensure_workspace_skills_and_commands(
     workspace_path: str,
     quiet: bool = True
 ) -> Tuple[bool, Optional[str]]:
-    """Ensure workspace has up-to-date skills and commands installed.
+    """Ensure global skills are up-to-date.
 
-    This function checks if the workspace has bundled skills and commands installed,
-    and installs/upgrades them if necessary. It's used to automatically maintain
-    workspace skills/commands when:
-    - Creating a new workspace (daf workspace add)
-    - Setting default workspace (daf workspace set-default)
-    - Using -w flag with session commands
+    This function installs/upgrades bundled skills globally to ~/.claude/skills/.
+    Skills are now installed globally (not per-workspace) since Claude Code 2.1.3+
+    unified slash commands and skills into a single system.
+
+    Note: The workspace_path parameter is kept for backwards compatibility but is
+    only used to verify the workspace exists. Skills are installed globally.
 
     Args:
-        workspace_path: Path to workspace directory
+        workspace_path: Path to workspace directory (for validation only)
         quiet: If True, suppress console output (default: True for auto-operations)
 
     Returns:
         Tuple of (success: bool, error_message: Optional[str])
-        - (True, None) if skills/commands are up-to-date or were successfully installed
+        - (True, None) if skills are up-to-date or were successfully installed
         - (False, error_message) if installation failed
 
     Example:
@@ -34,7 +34,10 @@ def ensure_workspace_skills_and_commands(
         >>> if not success:
         ...     console.print(f"[red]✗[/red] {error}")
     """
-    from devflow.utils.claude_commands import install_or_upgrade_commands, install_or_upgrade_skills
+    from devflow.utils.claude_commands import (
+        install_or_upgrade_slash_commands,
+        install_or_upgrade_reference_skills
+    )
 
     workspace = Path(workspace_path).expanduser().resolve()
 
@@ -43,33 +46,31 @@ def ensure_workspace_skills_and_commands(
         return False, f"Workspace directory does not exist: {workspace_path}"
 
     try:
-        # Install/upgrade commands (quiet mode)
-        changed_cmds, _, failed_cmds = install_or_upgrade_commands(
-            str(workspace),
+        # Install/upgrade slash commands globally to ~/.claude/skills/
+        changed_slash, _, failed_slash = install_or_upgrade_slash_commands(
             dry_run=False,
             quiet=quiet
         )
 
-        # Install/upgrade skills (quiet mode)
-        changed_skills, _, failed_skills = install_or_upgrade_skills(
-            str(workspace),
+        # Install/upgrade reference skills globally to ~/.claude/skills/
+        changed_ref, _, failed_ref = install_or_upgrade_reference_skills(
             dry_run=False,
             quiet=quiet
         )
+
+        # Combine results
+        changed_skills = changed_slash + changed_ref
+        failed_skills = failed_slash + failed_ref
 
         # Check for failures
-        if failed_cmds or failed_skills:
-            failed = failed_cmds + failed_skills
-            return False, f"Failed to install/upgrade: {', '.join(failed)}"
+        if failed_skills:
+            return False, f"Failed to install/upgrade: {', '.join(failed_skills)}"
 
         # If anything was changed, report it (unless quiet)
-        if not quiet and (changed_cmds or changed_skills):
-            if changed_cmds:
-                console.print(f"[green]✓[/green] Installed/upgraded {len(changed_cmds)} commands")
-            if changed_skills:
-                console.print(f"[green]✓[/green] Installed/upgraded {len(changed_skills)} skills")
+        if not quiet and changed_skills:
+            console.print(f"[green]✓[/green] Installed/upgraded {len(changed_skills)} skills globally to ~/.claude/skills/")
 
         return True, None
 
     except Exception as e:
-        return False, f"Error installing skills/commands: {e}"
+        return False, f"Error installing skills: {e}"

@@ -1,4 +1,5 @@
 ---
+name: daf-active
 description: Show information about the currently active conversation
 ---
 
