@@ -149,6 +149,180 @@ def test_link_updates_all_sessions_in_group(mock_jira_cli, temp_daf_home):
     assert sessions[0].issue_key == "PROJ-12345"
 
 
+def test_link_with_force_flag(mock_jira_cli, temp_daf_home):
+    """Test linking with --force flag skips confirmation."""
+    # Setup tickets
+    mock_jira_cli.set_ticket("PROJ-111", {"key": "PROJ-111", "fields": {"summary": "Original"}})
+    mock_jira_cli.set_ticket("PROJ-222", {"key": "PROJ-222", "fields": {"summary": "Replacement"}})
+
+    runner = CliRunner()
+
+    # Create session with JIRA
+    result = runner.invoke(cli, ["new", "--name", "test", "--goal", "Test", "--jira", "PROJ-111", "--path", str(temp_daf_home / "project")], input="n\n")
+    assert result.exit_code == 0
+
+    # Replace with --force (no confirmation prompt)
+    result = runner.invoke(cli, ["link", "test", "--jira", "PROJ-222", "--force"])
+
+    assert result.exit_code == 0
+    # Should not prompt for confirmation
+    assert "?" not in result.output
+
+    # Verify replacement
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("test")
+    assert sessions[0].issue_key == "PROJ-222"
+
+
+def test_link_replace_existing_jira_confirmed(mock_jira_cli, temp_daf_home):
+    """Test replacing existing JIRA link with confirmation."""
+    mock_jira_cli.set_ticket("PROJ-111", {"key": "PROJ-111", "fields": {"summary": "Original"}})
+    mock_jira_cli.set_ticket("PROJ-222", {"key": "PROJ-222", "fields": {"summary": "Replacement"}})
+
+    runner = CliRunner()
+
+    # Create session with JIRA
+    result = runner.invoke(cli, ["new", "--name", "test", "--goal", "Test", "--jira", "PROJ-111", "--path", str(temp_daf_home / "project")], input="n\n")
+    assert result.exit_code == 0
+
+    # Replace with confirmation
+    result = runner.invoke(cli, ["link", "test", "--jira", "PROJ-222"], input="y\n")
+
+    assert result.exit_code == 0
+    assert "Replace" in result.output or "replace" in result.output
+
+    # Verify replacement
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("test")
+    assert sessions[0].issue_key == "PROJ-222"
+
+
+def test_link_replace_existing_jira_cancelled(mock_jira_cli, temp_daf_home):
+    """Test cancelling replacement of existing JIRA link."""
+    mock_jira_cli.set_ticket("PROJ-111", {"key": "PROJ-111", "fields": {"summary": "Original"}})
+    mock_jira_cli.set_ticket("PROJ-222", {"key": "PROJ-222", "fields": {"summary": "Replacement"}})
+
+    runner = CliRunner()
+
+    # Create session with JIRA
+    result = runner.invoke(cli, ["new", "--name", "test", "--goal", "Test", "--jira", "PROJ-111", "--path", str(temp_daf_home / "project")], input="n\n")
+    assert result.exit_code == 0
+
+    # Cancel replacement
+    result = runner.invoke(cli, ["link", "test", "--jira", "PROJ-222"], input="n\n")
+
+    assert result.exit_code == 0
+    assert "cancelled" in result.output.lower() or "canceled" in result.output.lower()
+
+    # Verify original remains
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("test")
+    assert sessions[0].issue_key == "PROJ-111"
+
+
+def test_link_session_not_found(mock_jira_cli, temp_daf_home):
+    """Test linking to non-existent session."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["link", "nonexistent", "--jira", "PROJ-123"])
+
+    assert result.exit_code != 0
+    assert "not found" in result.output.lower()
+
+
+def test_unlink_with_force_flag(mock_jira_cli, temp_daf_home):
+    """Test unlinking with --force flag skips confirmation."""
+    mock_jira_cli.set_ticket("PROJ-12345", {"key": "PROJ-12345", "fields": {"summary": "Test"}})
+
+    runner = CliRunner()
+
+    # Create session with JIRA
+    result = runner.invoke(cli, ["new", "--name", "test", "--goal", "Test", "--jira", "PROJ-12345", "--path", str(temp_daf_home / "project")], input="n\n")
+    assert result.exit_code == 0
+
+    # Unlink with --force
+    result = runner.invoke(cli, ["unlink", "test", "--force"])
+
+    assert result.exit_code == 0
+    # Should not prompt
+    assert "?" not in result.output
+
+    # Verify unlinked
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("test")
+    assert sessions[0].issue_key is None
+
+
+def test_unlink_session_not_found(temp_daf_home):
+    """Test unlinking non-existent session."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["unlink", "nonexistent"])
+
+    assert result.exit_code != 0
+    assert "not found" in result.output.lower()
+
+
+def test_unlink_session_without_jira(mock_jira_cli, temp_daf_home):
+    """Test unlinking session that has no JIRA."""
+    runner = CliRunner()
+
+    # Create session without JIRA
+    result = runner.invoke(cli, ["new", "--name", "test", "--goal", "Test", "--path", str(temp_daf_home / "project")], input="n\n")
+    assert result.exit_code == 0
+
+    # Try to unlink
+    result = runner.invoke(cli, ["unlink", "test"])
+
+    assert result.exit_code == 0
+    assert "no JIRA" in result.output or "no jira" in result.output
+
+
+def test_unlink_cancelled(mock_jira_cli, temp_daf_home):
+    """Test cancelling unlink operation."""
+    mock_jira_cli.set_ticket("PROJ-12345", {"key": "PROJ-12345", "fields": {"summary": "Test"}})
+
+    runner = CliRunner()
+
+    # Create session with JIRA
+    result = runner.invoke(cli, ["new", "--name", "test", "--goal", "Test", "--jira", "PROJ-12345", "--path", str(temp_daf_home / "project")], input="n\n")
+    assert result.exit_code == 0
+
+    # Cancel unlink
+    result = runner.invoke(cli, ["unlink", "test"], input="n\n")
+
+    assert result.exit_code == 0
+    assert "cancelled" in result.output.lower() or "canceled" in result.output.lower()
+
+    # Verify still linked
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("test")
+    assert sessions[0].issue_key == "PROJ-12345"
+
+
+def test_link_updates_session_goal(mock_jira_cli, temp_daf_home):
+    """Test that linking updates session goal with JIRA summary."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {"summary": "Implement amazing feature", "status": {"name": "New"}}
+    })
+
+    runner = CliRunner()
+
+    # Create session with simple goal
+    result = runner.invoke(cli, ["new", "--name", "feature", "--goal", "Simple goal", "--path", str(temp_daf_home / "project")], input="n\n")
+    assert result.exit_code == 0
+
+    # Link JIRA
+    result = runner.invoke(cli, ["link", "feature", "--jira", "PROJ-12345"])
+    assert result.exit_code == 0
+
+    # Verify goal updated with concatenated format
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("feature")
+    assert sessions[0].goal == "PROJ-12345: Implement amazing feature"
+
+
 def test_link_updates_goal_with_issue_info(mock_jira_cli, temp_daf_home):
     """Test that linking JIRA updates the goal field with concatenated issue key and title (PROJ-59070)."""
     # Setup: Configure a mock issue tracker ticket

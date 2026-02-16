@@ -8,6 +8,43 @@ import pytest
 from devflow.templates.models import NameExtractionConfig, SessionTemplate, TemplateIndex
 
 
+def test_add_template_duplicate_name():
+    """Test that adding duplicate template raises ValueError."""
+    index = TemplateIndex()
+
+    template1 = SessionTemplate(
+        name="test-template",
+        working_directory="test",
+        last_used=datetime.now(),
+    )
+
+    index.add_template(template1)
+
+    # Try to add another template with same name
+    template2 = SessionTemplate(
+        name="test-template",
+        working_directory="other",
+        last_used=datetime.now(),
+    )
+
+    with pytest.raises(ValueError, match="Template 'test-template' already exists"):
+        index.add_template(template2)
+
+
+def test_update_template_not_found():
+    """Test that updating non-existent template raises ValueError."""
+    index = TemplateIndex()
+
+    template = SessionTemplate(
+        name="nonexistent",
+        working_directory="test",
+        last_used=datetime.now(),
+    )
+
+    with pytest.raises(ValueError, match="Template 'nonexistent' not found"):
+        index.update_template(template)
+
+
 def test_find_matching_template_by_working_directory():
     """Test finding template by working directory match."""
     index = TemplateIndex()

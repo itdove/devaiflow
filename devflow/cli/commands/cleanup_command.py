@@ -325,7 +325,8 @@ def _extract_message_time(message: dict) -> Optional[datetime]:
                 # Remove 'Z' and parse
                 timestamp_str = timestamp_str.rstrip("Z")
                 return datetime.fromisoformat(timestamp_str)
-        except Exception:
+        except (ValueError, TypeError):
+            # Invalid timestamp format - return None
             pass
 
     return None
@@ -401,8 +402,10 @@ def _display_backup_summary(backup_dir: Path) -> None:
         console.print(f"  Total size: {_format_size(total_size)}")
         console.print(f"  Location: {backup_dir.relative_to(Path.home())}")
 
-    except Exception:
-        # Silently ignore if we can't display the summary
+    except (OSError, ValueError):
+        # OSError: directory/file access issues
+        # ValueError: backup_dir not under home directory
+        # Silently ignore - backup summary is informational only
         pass
 
 
@@ -452,7 +455,8 @@ def _list_backups(ai_agent_session_id: str, session) -> None:
         try:
             dt = datetime.strptime(timestamp, "%Y%m%d-%H%M%S")
             readable_time = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
+        except ValueError:
+            # Invalid timestamp format - use raw value
             readable_time = timestamp
 
         console.print(f"  [cyan]{timestamp}[/cyan]")

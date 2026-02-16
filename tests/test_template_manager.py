@@ -19,6 +19,23 @@ def test_template_manager_initialization(temp_daf_home):
     assert manager.templates_file == temp_daf_home / "templates.json"
 
 
+def test_template_manager_load_corrupted_file(temp_daf_home, capsys):
+    """Test TemplateManager handles corrupted templates.json gracefully."""
+    # Create corrupted JSON file
+    templates_file = temp_daf_home / "templates.json"
+    templates_file.write_text("{invalid json content}")
+
+    # Should not raise exception, just print warning
+    manager = TemplateManager()
+
+    # Should have empty index
+    assert len(manager.index.templates) == 0
+
+    # Should have printed warning
+    captured = capsys.readouterr()
+    assert "Warning: Failed to load templates" in captured.out
+
+
 def test_save_and_get_template(temp_daf_home):
     """Test saving and retrieving a template."""
     manager = TemplateManager()

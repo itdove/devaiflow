@@ -22,6 +22,7 @@ from datetime import datetime
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import Screen, ModalScreen
 from textual.widgets import (
     Button,
@@ -1187,7 +1188,7 @@ class ConfigTUI(App):
                             # If it's already a dict
                             elif isinstance(comp, dict) and "name" in comp:
                                 component_choices.append((comp["name"], comp["name"]))
-                        except:
+                        except (KeyError, TypeError, ValueError):
                             # If parsing fails, skip this component
                             pass
 
@@ -2029,7 +2030,7 @@ class ConfigTUI(App):
             # Update API key visibility (depends on both agent and summary mode)
             self._update_api_key_visibility()
 
-        except Exception:
+        except NoMatches:
             # Sections might not exist yet during initial composition
             pass
 
@@ -2059,7 +2060,7 @@ class ConfigTUI(App):
             try:
                 summary_mode_select = self.query_one("#select_session_summary_mode", Select)
                 summary_mode = summary_mode_select.value if summary_mode_select.value != Select.BLANK else "local"
-            except:
+            except NoMatches:
                 # Fallback to config value if widget not found
                 summary_mode = self.config.session_summary.mode
 
@@ -2071,7 +2072,7 @@ class ConfigTUI(App):
             api_key_field = self.query_one("#session_summary_api_key_field", ConfigInput)
             api_key_field.display = should_show
 
-        except Exception:
+        except NoMatches:
             # Field might not exist yet during initial composition
             pass
 
@@ -2225,7 +2226,7 @@ class ConfigTUI(App):
                     elif self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
                         # Clear components if blank selected
                         del self.config.jira.system_field_defaults["components"]
-                except:
+                except NoMatches:
                     # Fallback to text input (ConfigInput) if dropdown not found
                     try:
                         components_val = self.query_one(key_to_id("input", "jira.components"), Input).value.strip()
@@ -2237,7 +2238,7 @@ class ConfigTUI(App):
                         elif self.config.jira.system_field_defaults and "components" in self.config.jira.system_field_defaults:
                             # Clear components if empty
                             del self.config.jira.system_field_defaults["components"]
-                    except:
+                    except NoMatches:
                         # Neither widget found - skip
                         pass
 
@@ -2263,7 +2264,7 @@ class ConfigTUI(App):
                                     elif field_key in self.config.jira.custom_field_defaults:
                                         # Clear if blank selected
                                         del self.config.jira.custom_field_defaults[field_key]
-                                except:
+                                except NoMatches:
                                     # Try text input
                                     try:
                                         value = self.query_one(key_to_id("input", config_key), Input).value.strip()
@@ -2272,7 +2273,7 @@ class ConfigTUI(App):
                                         elif field_key in self.config.jira.custom_field_defaults:
                                             # Clear if empty
                                             del self.config.jira.custom_field_defaults[field_key]
-                                    except:
+                                    except NoMatches:
                                         # Widget not found - skip this field
                                         pass
 
@@ -2403,7 +2404,7 @@ class ConfigTUI(App):
                     api_key_env_val = api_key_field.get_value()
                     if api_key_env_val:
                         self.config.session_summary.api_key_env = api_key_env_val
-                except:
+                except NoMatches:
                     # Keep existing value if field not found
                     pass
 
@@ -2451,14 +2452,14 @@ class ConfigTUI(App):
                         org_data['jira_project'] = jira_project_val
                         # Also update the merged config for consistency
                         self.config.jira.project = jira_project_val
-                except Exception:
+                except NoMatches:
                     pass  # Field not found, skip
 
                 # Collect organization.hierarchical_config_source
                 try:
                     hierarchical_config_val = self.query_one(key_to_id("input", "organization.hierarchical_config_source"), Input).value.strip()
                     org_data['hierarchical_config_source'] = hierarchical_config_val if hierarchical_config_val else None
-                except Exception:
+                except NoMatches:
                     pass  # Field not found, skip
 
                 # Save updated organization.json
@@ -2527,8 +2528,11 @@ class ConfigTUI(App):
                     severity="information",
                     timeout=3
                 )
-        except Exception:
-            pass  # Ignore errors during typing
+        except (OSError, RuntimeError):
+            # OSError: permission denied, file not found, etc.
+            # RuntimeError: directory deleted during iteration
+            # Ignore errors during live typing
+            pass
 
     def _compose_enterprise_tab(self) -> ComposeResult:
         """Compose Enterprise configuration tab (Advanced Mode)."""

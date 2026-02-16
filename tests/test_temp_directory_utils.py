@@ -118,6 +118,17 @@ class TestPromptAndCloneToTemp:
             # Verify cleanup was attempted
             mock_rmtree.assert_called_once_with("/tmp/test-temp-dir")
 
+    def test_returns_none_when_clone_fails_and_cleanup_fails(self, mock_git_repo):
+        """Test that function returns None when clone fails and cleanup also fails."""
+        with patch("devflow.utils.temp_directory.Confirm.ask", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_url", return_value="https://example.com/repo.git"), \
+             patch("tempfile.mkdtemp", return_value="/tmp/test-temp-dir"), \
+             patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=False), \
+             patch("shutil.rmtree", side_effect=PermissionError("Permission denied")):
+            # Should handle cleanup failure gracefully
+            result = prompt_and_clone_to_temp(mock_git_repo)
+            assert result is None
+
     def test_successful_clone_with_default_branch(self, mock_git_repo, tmp_path):
         """Test successful clone operation with default branch checkout."""
         temp_dir = str(tmp_path / "test-temp-clone")
@@ -154,6 +165,28 @@ class TestPromptAndCloneToTemp:
 
             assert result is not None
             # Verify checkout was called to fix branch mismatch
+            mock_checkout.assert_called_once_with(Path(temp_dir), "main")
+
+    def test_successful_clone_with_failed_branch_checkout(self, mock_git_repo, tmp_path):
+        """Test successful clone even when branch checkout fails."""
+        temp_dir = str(tmp_path / "test-temp-clone")
+
+        with patch("devflow.utils.temp_directory.Confirm.ask", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_url", return_value="https://example.com/repo.git"), \
+             patch("tempfile.mkdtemp", return_value=temp_dir), \
+             patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
+             patch("devflow.utils.temp_directory.GitUtils.get_current_branch", return_value="develop"), \
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=False) as mock_checkout, \
+             patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True):
+
+            # Should still succeed even if checkout fails
+            result = prompt_and_clone_to_temp(mock_git_repo)
+
+            assert result is not None
+            temp_directory, original_project_path = result
+            assert temp_directory == temp_dir
+            # Verify checkout was attempted but failed
             mock_checkout.assert_called_once_with(Path(temp_dir), "main")
 
     def test_successful_clone_fallback_to_common_branches(self, mock_git_repo, tmp_path):

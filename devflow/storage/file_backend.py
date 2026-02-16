@@ -137,6 +137,17 @@ class FileBackend(StorageBackend):
         project_path = active_conv.project_path if active_conv else None
         branch = active_conv.branch if active_conv else None
 
+        # Serialize conversations to dict format (Pydantic models need to be converted)
+        conversations_dict = {}
+        for repo_key, conversation in session.conversations.items():
+            if hasattr(conversation, 'model_dump'):
+                conversations_dict[repo_key] = conversation.model_dump()
+            elif isinstance(conversation, dict):
+                conversations_dict[repo_key] = conversation
+            else:
+                # Fallback: try to convert to dict
+                conversations_dict[repo_key] = dict(conversation)
+
         metadata = {
             "name": session.name,
             "issue_key": session.issue_key,
@@ -155,10 +166,12 @@ class FileBackend(StorageBackend):
             "branch": branch,
             "status": session.status,
             "conversation_count": len(session.conversations),
+            # Store full conversations structure for reliable rebuilds
+            "conversations": conversations_dict,
         }
 
         with open(metadata_file, "w") as f:
-            json.dump(metadata, f, indent=2)
+            json.dump(metadata, f, indent=2, default=str)
             f.flush()  # Explicitly flush to ensure data is written
             os.fsync(f.fileno())  # Force OS to write to disk (prevents data loss on signal)
 

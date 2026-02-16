@@ -366,3 +366,41 @@ class TestSuggestionHistory:
 
         repo = history.get_repository_by_issue_key("PROJ-999")
         assert repo is None
+
+    def test_add_mapping_cleanup_empty_type_frequencies(self):
+        """Test that empty type frequency dicts are cleaned up when mappings exceed 1000."""
+        history = SuggestionHistory()
+
+        # Add 1001 mappings with same type to single repo
+        # When the oldest is removed, it should clean up the empty dict
+        for i in range(1001):
+            history.add_mapping(
+                issue_key=f"PROJ-{i}",
+                repository="single-repo",
+                ticket_type="UniqueType" if i == 0 else "CommonType",
+                keywords=[f"kw-{i}"],
+            )
+
+        # The oldest mapping (PROJ-0) with UniqueType should be removed
+        # and UniqueType should be cleaned from type_frequencies
+        assert "UniqueType" not in history.type_frequencies
+        assert "CommonType" in history.type_frequencies
+        assert len(history.mappings) == 1000
+
+    def test_add_mapping_cleanup_empty_keyword_frequencies(self):
+        """Test that empty keyword frequency dicts are cleaned up."""
+        history = SuggestionHistory()
+
+        # Add 1001 mappings with unique keywords
+        for i in range(1001):
+            history.add_mapping(
+                issue_key=f"PROJ-{i}",
+                repository=f"repo-{i}",
+                ticket_type="Story",
+                keywords=[f"unique-keyword-{i}"],
+            )
+
+        # The oldest keyword (unique-keyword-0) should be cleaned up
+        assert "unique-keyword-0" not in history.keyword_frequencies
+        assert "unique-keyword-1000" in history.keyword_frequencies
+        assert len(history.mappings) == 1000

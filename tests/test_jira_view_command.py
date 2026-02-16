@@ -1214,3 +1214,438 @@ def test_view_jira_ticket_without_comments(mock_jira_cli, temp_daf_home, monkeyp
 
     # Check comments are NOT present
     assert "Comments:" not in captured.out
+
+
+def test_format_ticket_with_url_fields():
+    """Test formatting ticket with URL fields (git_pull_request, *_url)."""
+    ticket_data = {
+        "key": "PROJ-123",
+        "summary": "Test",
+        "type": "Story",
+        "status": "New",
+        "git_pull_request": "https://github.com/org/repo/pull/123, https://github.com/org/repo/pull/124",
+        "documentation_url": "https://docs.example.com"
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Git Pull Requests:" in result
+    assert "  - https://github.com/org/repo/pull/123" in result
+    assert "  - https://github.com/org/repo/pull/124" in result
+    assert "Documentation Url: https://docs.example.com" in result
+
+
+def test_format_ticket_with_url_fields_list_format():
+    """Test formatting ticket with URL fields as list."""
+    ticket_data = {
+        "key": "PROJ-123",
+        "summary": "Test",
+        "type": "Story",
+        "status": "New",
+        "git_pull_request": ["https://github.com/org/repo/pull/123", "https://github.com/org/repo/pull/124"],
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Git Pull Requests:" in result
+    assert "  - https://github.com/org/repo/pull/123" in result
+    assert "  - https://github.com/org/repo/pull/124" in result
+
+
+def test_format_ticket_with_long_text_fields():
+    """Test formatting ticket with long text custom fields."""
+    long_text = "A" * 150
+    ticket_data = {
+        "key": "PROJ-123",
+        "summary": "Test",
+        "type": "Story",
+        "status": "New",
+        "technical_details": long_text
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Technical Details:" in result
+    assert long_text in result
+
+
+def test_format_ticket_skips_empty_values():
+    """Test that empty and None values are skipped."""
+    ticket_data = {
+        "key": "PROJ-123",
+        "summary": "Test",
+        "type": "Story",
+        "status": "New",
+        "empty_field": "",
+        "none_field": None,
+        "valid_field": "Value"
+    }
+
+    result = format_ticket_for_claude(ticket_data)
+
+    assert "Empty Field:" not in result
+    assert "None Field:" not in result
+    assert "Valid Field: Value" in result
+
+
+def test_format_changelog_missing_timestamp():
+    """Test changelog formatting when timestamp is missing."""
+    changelog = {
+        "histories": [
+            {
+                "created": "",
+                "author": {"displayName": "John Doe"},
+                "items": [
+                    {
+                        "field": "status",
+                        "fromString": "New",
+                        "toString": "Done"
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = format_changelog_for_claude(changelog)
+
+    assert "Unknown time" in result
+    assert "John Doe" in result
+
+
+def test_format_changelog_invalid_timestamp():
+    """Test changelog formatting with invalid timestamp format."""
+    changelog = {
+        "histories": [
+            {
+                "created": "invalid-timestamp",
+                "author": {"displayName": "John Doe"},
+                "items": [
+                    {
+                        "field": "status",
+                        "fromString": "New",
+                        "toString": "Done"
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = format_changelog_for_claude(changelog)
+
+    # Should fallback to first 19 characters
+    assert "invalid-timestamp" in result
+
+
+def test_format_comments_missing_timestamp():
+    """Test comments formatting when timestamp is missing."""
+    comments = [
+        {
+            "created": "",
+            "author": "John Doe",
+            "body": "Comment with no timestamp"
+        }
+    ]
+
+    result = format_comments_for_claude(comments)
+
+    assert "Unknown time" in result
+    assert "John Doe" in result
+    assert "  Comment with no timestamp" in result
+
+
+def test_format_comments_invalid_timestamp():
+    """Test comments formatting with invalid timestamp format."""
+    comments = [
+        {
+            "created": "invalid-timestamp",
+            "author": "John Doe",
+            "body": "Comment with invalid timestamp"
+        }
+    ]
+
+    result = format_comments_for_claude(comments)
+
+    # Should fallback to first 19 characters
+    assert "invalid-timestamp" in result
+
+
+def test_view_jira_ticket_json_output_success(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for successful ticket view."""
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+        }
+    })
+
+    view_jira_ticket("PROJ-12345", output_json=True)
+
+    captured = capsys.readouterr()
+    output = json.loads(captured.out)
+
+    assert output["success"] is True
+    assert output["data"]["ticket"]["key"] == "PROJ-12345"
+    assert output["data"]["ticket"]["summary"] == "Test ticket"
+
+
+def test_view_jira_ticket_json_output_with_changelog(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output with changelog data."""
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        },
+        "changelog": {
+            "histories": [
+                {
+                    "created": "2025-12-05T20:13:45.380+0000",
+                    "author": {"displayName": "John Doe"},
+                    "items": [
+                        {
+                            "field": "status",
+                            "fromString": "New",
+                            "toString": "Done"
+                        }
+                    ]
+                }
+            ]
+        }
+    }, expand_changelog=True)
+
+    view_jira_ticket("PROJ-12345", show_history=True, output_json=True)
+
+    captured = capsys.readouterr()
+    output = json.loads(captured.out)
+
+    assert output["success"] is True
+    assert "changelog" in output["data"]
+    assert len(output["data"]["changelog"]) == 1
+    assert output["data"]["changelog"][0]["field"] == "status"
+
+
+def test_view_jira_ticket_json_output_not_found(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for not found error."""
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    with pytest.raises(SystemExit) as exc_info:
+        view_jira_ticket("PROJ-99999", output_json=True)
+
+    assert exc_info.value.code == 1
+
+    captured = capsys.readouterr()
+    output = json.loads(captured.out)
+
+    assert output["success"] is False
+    assert output["error"]["code"] == "NOT_FOUND"
+
+
+def test_view_jira_ticket_auth_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for auth error."""
+    from devflow.jira.exceptions import JiraAuthError
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    with patch('devflow.jira.client.JiraClient.get_ticket_detailed', side_effect=JiraAuthError("Auth failed", status_code=401)):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "AUTH_ERROR"
+
+
+def test_view_jira_ticket_api_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for API error."""
+    from devflow.jira.exceptions import JiraApiError
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    with patch('devflow.jira.client.JiraClient.get_ticket_detailed', side_effect=JiraApiError("API error", status_code=500, response_text="Error")):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "API_ERROR"
+        assert output["error"]["status_code"] == 500
+
+
+def test_view_jira_ticket_connection_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for connection error."""
+    from devflow.jira.exceptions import JiraConnectionError
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    with patch('devflow.jira.client.JiraClient.get_ticket_detailed', side_effect=JiraConnectionError("Connection failed")):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+
+def test_view_jira_ticket_runtime_error(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test handling of RuntimeError."""
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    with patch('devflow.config.loader.ConfigLoader.load_config', side_effect=RuntimeError("Config error")):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", output_json=False)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        assert "Config error" in captured.out
+
+
+def test_view_jira_ticket_runtime_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for RuntimeError."""
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    with patch('devflow.config.loader.ConfigLoader.load_config', side_effect=RuntimeError("Config error")):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "RUNTIME_ERROR"
+
+
+def test_view_jira_ticket_unexpected_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for unexpected error."""
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    with patch('devflow.config.loader.ConfigLoader.load_config', side_effect=ValueError("Unexpected")):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "UNEXPECTED_ERROR"
+
+
+def test_view_jira_ticket_children_auth_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for auth error when fetching children."""
+    from devflow.jira.exceptions import JiraAuthError
+    from unittest.mock import patch, MagicMock
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+
+    with patch('devflow.jira.client.JiraClient.get_child_issues', side_effect=JiraAuthError("Auth failed", status_code=401)):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", show_children=True, output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "AUTH_ERROR"
+
+
+def test_view_jira_ticket_children_api_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for API error when fetching children."""
+    from devflow.jira.exceptions import JiraApiError
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+
+    with patch('devflow.jira.client.JiraClient.get_child_issues', side_effect=JiraApiError("API error", status_code=500, response_text="Error")):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", show_children=True, output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "API_ERROR"
+        assert output["error"]["status_code"] == 500
+
+
+def test_view_jira_ticket_children_connection_error_json(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test JSON output for connection error when fetching children."""
+    from devflow.jira.exceptions import JiraConnectionError
+    from unittest.mock import patch
+
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+
+    with patch('devflow.jira.client.JiraClient.get_child_issues', side_effect=JiraConnectionError("Connection failed")):
+        with pytest.raises(SystemExit) as exc_info:
+            view_jira_ticket("PROJ-12345", show_children=True, output_json=True)
+
+        assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["success"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"

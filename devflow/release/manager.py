@@ -466,6 +466,10 @@ class ReleaseManager:
 
         Returns:
             Current branch name or None if not in a git repo
+
+        Raises:
+            subprocess.TimeoutExpired: If git command times out
+            FileNotFoundError: If git is not installed
         """
         try:
             result = subprocess.run(
@@ -474,41 +478,50 @@ class ReleaseManager:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,  # Don't raise on non-zero exit
             )
 
             if result.returncode == 0:
                 return result.stdout.strip()
+            # Non-zero exit (not a git repo) - return None
             return None
 
-        except Exception:
-            return None
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            # Re-raise these - they indicate real problems
+            raise
 
     def has_uncommitted_changes(self) -> bool:
         """Check if there are uncommitted changes.
 
         Returns:
             True if there are uncommitted changes
+
+        Raises:
+            subprocess.TimeoutExpired: If git command times out
+            FileNotFoundError: If git is not installed
+            subprocess.CalledProcessError: If git command fails
         """
-        try:
-            result = subprocess.run(
-                ["git", "status", "--porcelain"],
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,  # Raise on non-zero exit
+        )
 
-            # If output is non-empty, there are changes
-            return bool(result.stdout.strip())
-
-        except Exception:
-            return False
+        # If output is non-empty, there are changes
+        return bool(result.stdout.strip())
 
     def get_latest_tag(self) -> Optional[str]:
         """Get the latest git tag.
 
         Returns:
             Latest tag name or None if no tags exist
+
+        Raises:
+            subprocess.TimeoutExpired: If git command times out
+            FileNotFoundError: If git is not installed
         """
         try:
             result = subprocess.run(
@@ -517,15 +530,18 @@ class ReleaseManager:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,  # Don't raise on non-zero exit (no tags is normal)
             )
 
             if result.returncode == 0:
                 tag = result.stdout.strip()
                 return tag if tag else None
+            # Non-zero exit (no tags) - return None
             return None
 
-        except Exception:
-            return None
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            # Re-raise these - they indicate real problems
+            raise
 
     def analyze_commits_since_tag(self, tag: str) -> Dict[str, List[str]]:
         """Analyze commits since a given tag using conventional commit format.
@@ -535,6 +551,10 @@ class ReleaseManager:
 
         Returns:
             Dictionary with keys: 'breaking', 'features', 'fixes', 'other'
+
+        Raises:
+            subprocess.TimeoutExpired: If git command times out
+            FileNotFoundError: If git is not installed
         """
         analysis = {
             'breaking': [],
@@ -543,47 +563,44 @@ class ReleaseManager:
             'other': []
         }
 
-        try:
-            result = subprocess.run(
-                ["git", "log", f"{tag}..HEAD", "--oneline"],
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
+        result = subprocess.run(
+            ["git", "log", f"{tag}..HEAD", "--oneline"],
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,  # Don't raise on non-zero exit
+        )
 
-            if result.returncode != 0:
-                return analysis
+        if result.returncode != 0:
+            return analysis
 
-            for line in result.stdout.strip().split('\n'):
-                if not line:
-                    continue
+        for line in result.stdout.strip().split('\n'):
+            if not line:
+                continue
 
-                # Parse conventional commit format
-                # Git log --oneline format: "<hash> <message>"
-                # Split to get message part after hash
-                parts = line.split(None, 1)  # Split on first whitespace
-                if len(parts) < 2:
-                    analysis['other'].append(line)
-                    continue
+            # Parse conventional commit format
+            # Git log --oneline format: "<hash> <message>"
+            # Split to get message part after hash
+            parts = line.split(None, 1)  # Split on first whitespace
+            if len(parts) < 2:
+                analysis['other'].append(line)
+                continue
 
-                message = parts[1]
-                message_lower = message.lower()
+            message = parts[1]
+            message_lower = message.lower()
 
-                # Check for breaking changes (! in type or BREAKING CHANGE in message)
-                if 'breaking change' in message_lower or ('!' in message and ':' in message and message.index('!') < message.index(':')):
-                    analysis['breaking'].append(line)
-                # Check for features
-                elif message_lower.startswith(('feat:', 'feat(', 'feature:', 'feature(')):
-                    analysis['features'].append(line)
-                # Check for fixes
-                elif message_lower.startswith(('fix:', 'fix(')):
-                    analysis['fixes'].append(line)
-                else:
-                    analysis['other'].append(line)
-
-        except Exception:
-            pass
+            # Check for breaking changes (! in type or BREAKING CHANGE in message)
+            if 'breaking change' in message_lower or ('!' in message and ':' in message and message.index('!') < message.index(':')):
+                analysis['breaking'].append(line)
+            # Check for features
+            elif message_lower.startswith(('feat:', 'feat(', 'feature:', 'feature(')):
+                analysis['features'].append(line)
+            # Check for fixes
+            elif message_lower.startswith(('fix:', 'fix(')):
+                analysis['fixes'].append(line)
+            else:
+                analysis['other'].append(line)
 
         return analysis
 
@@ -709,65 +726,66 @@ class ReleaseManager:
 
         Returns:
             List of commit dictionaries with PR/MR information
+
+        Raises:
+            subprocess.TimeoutExpired: If git command times out
+            FileNotFoundError: If git is not installed
         """
-        try:
-            # Use a unique delimiter that's unlikely to appear in commit messages
-            delimiter = "|||COMMIT_DELIMITER|||"
-            result = subprocess.run(
-                ["git", "log", f"{from_tag}..{to_ref}", f"--format=%H|||%s|||%b{delimiter}"],
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+        # Use a unique delimiter that's unlikely to appear in commit messages
+        delimiter = "|||COMMIT_DELIMITER|||"
+        result = subprocess.run(
+            ["git", "log", f"{from_tag}..{to_ref}", f"--format=%H|||%s|||%b{delimiter}"],
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,  # Don't raise on non-zero exit
+        )
 
-            if result.returncode != 0:
-                return []
-
-            commits = []
-            # Split by our unique delimiter to separate commits
-            commit_blocks = result.stdout.strip().split(delimiter)
-
-            for block in commit_blocks:
-                block = block.strip()
-                if not block:
-                    continue
-
-                # Now split by ||| to get hash, subject, and body
-                # Only split on the first two occurrences to preserve ||| in the body
-                parts = block.split('|||', 2)
-                if len(parts) < 2:
-                    continue
-
-                commit_hash = parts[0]
-                subject = parts[1]
-                body = parts[2] if len(parts) > 2 else ""
-
-                # Extract PR number from GitHub merge commit
-                # Format: "Merge pull request #123 from user/branch"
-                github_pr = re.search(r'Merge pull request #(\d+)', subject)
-
-                # Extract MR number from GitLab merge commit
-                # Format in body: "See merge request !123" or "See merge request owner/repo!123"
-                gitlab_mr = re.search(r'See merge request (?:[\w-]+/[\w-]+)?!(\d+)', body)
-
-                pr_mr_info = None
-                if github_pr:
-                    pr_mr_info = {'type': 'github_pr', 'number': github_pr.group(1)}
-                elif gitlab_mr:
-                    pr_mr_info = {'type': 'gitlab_mr', 'number': gitlab_mr.group(1)}
-
-                commits.append({
-                    'hash': commit_hash,
-                    'subject': subject,
-                    'body': body,
-                    'pr_mr': pr_mr_info
-                })
-
-            return commits
-
-        except Exception:
+        if result.returncode != 0:
             return []
+
+        commits = []
+        # Split by our unique delimiter to separate commits
+        commit_blocks = result.stdout.strip().split(delimiter)
+
+        for block in commit_blocks:
+            block = block.strip()
+            if not block:
+                continue
+
+            # Now split by ||| to get hash, subject, and body
+            # Only split on the first two occurrences to preserve ||| in the body
+            parts = block.split('|||', 2)
+            if len(parts) < 2:
+                continue
+
+            commit_hash = parts[0]
+            subject = parts[1]
+            body = parts[2] if len(parts) > 2 else ""
+
+            # Extract PR number from GitHub merge commit
+            # Format: "Merge pull request #123 from user/branch"
+            github_pr = re.search(r'Merge pull request #(\d+)', subject)
+
+            # Extract MR number from GitLab merge commit
+            # Format in body: "See merge request !123" or "See merge request owner/repo!123"
+            gitlab_mr = re.search(r'See merge request (?:[\w-]+/[\w-]+)?!(\d+)', body)
+
+            pr_mr_info = None
+            if github_pr:
+                pr_mr_info = {'type': 'github_pr', 'number': github_pr.group(1)}
+            elif gitlab_mr:
+                pr_mr_info = {'type': 'gitlab_mr', 'number': gitlab_mr.group(1)}
+
+            commits.append({
+                'hash': commit_hash,
+                'subject': subject,
+                'body': body,
+                'pr_mr': pr_mr_info
+            })
+
+        return commits
 
     def fetch_pr_metadata(self, pr_number: str) -> Optional[Dict]:
         """Fetch GitHub PR metadata using gh CLI.
@@ -1043,26 +1061,25 @@ class ReleaseManager:
 
         Returns:
             Changelog content for the version, or None if not found
+
+        Raises:
+            OSError: If changelog file cannot be read
         """
         if not self.changelog_file.exists():
             return None
 
-        try:
-            changelog_content = self.changelog_file.read_text()
-            version_str = str(version)
+        changelog_content = self.changelog_file.read_text()
+        version_str = str(version)
 
-            # Find the version section: ## [X.Y.Z] - YYYY-MM-DD
-            pattern = rf'## \[{re.escape(version_str)}\].*?\n(.*?)(?=\n## \[|$)'
-            match = re.search(pattern, changelog_content, re.DOTALL)
+        # Find the version section: ## [X.Y.Z] - YYYY-MM-DD
+        pattern = rf'## \[{re.escape(version_str)}\].*?\n(.*?)(?=\n## \[|$)'
+        match = re.search(pattern, changelog_content, re.DOTALL)
 
-            if match:
-                content = match.group(1).strip()
-                return content if content else None
+        if match:
+            content = match.group(1).strip()
+            return content if content else None
 
-            return None
-
-        except Exception:
-            return None
+        return None
 
     def create_github_release(
         self,

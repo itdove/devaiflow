@@ -77,6 +77,23 @@ class TestIssueTrackerFactory:
         backend = get_default_backend()
         assert backend == "jira"
 
+    def test_get_backend_from_config_mock_mode_env(self, monkeypatch):
+        """Test get_backend_from_config returns mock when DAF_MOCK_MODE=1."""
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        backend = get_backend_from_config()
+        assert backend == "mock"
+
+    def test_get_backend_from_config_exception_handling(self, monkeypatch):
+        """Test get_backend_from_config handles exceptions gracefully."""
+        from unittest.mock import patch
+
+        # Mock ConfigLoader to raise exception during import
+        with patch("devflow.config.loader.ConfigLoader", side_effect=Exception("Config error")):
+            # Should fall back to default "jira"
+            backend = get_backend_from_config()
+            assert backend == "jira"
+
 
 class TestMockIssueTrackerClient:
     """Tests for mock issue tracker client."""

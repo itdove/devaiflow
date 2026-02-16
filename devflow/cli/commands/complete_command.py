@@ -1010,8 +1010,8 @@ def _fetch_github_with_gh_cli(owner: str, repo: str, file_path: str) -> Optional
     except FileNotFoundError:
         # gh CLI not installed - caller will try other methods
         return None
-    except Exception:
-        # Other errors - log but don't fail completely
+    except (subprocess.TimeoutExpired, UnicodeDecodeError, ValueError):
+        # Timeout, bad encoding, or bad base64 - return None to try other methods
         return None
 
 
@@ -1051,7 +1051,11 @@ def _fetch_github_with_api(owner: str, repo: str, file_path: str, branch: str) -
         # Rate limit, not found, or other error - return None
         return None
 
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
+        # requests library not installed
+        return None
+    except (requests.RequestException, ValueError, UnicodeDecodeError):
+        # Network error, bad JSON/base64, or bad encoding
         return None
 
 
@@ -1080,7 +1084,11 @@ def _fetch_github_raw(owner: str, repo: str, file_path: str, branch: str) -> Opt
 
         return None
 
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
+        # requests library not installed
+        return None
+    except requests.RequestException:
+        # Network error or timeout
         return None
 
 
@@ -2047,63 +2055,6 @@ Return ONLY the commit message."""
 
         return None
 
-    except Exception:
-        return None
-
-
-def _convert_summary_to_commit_message(prose_summary: str, summary_data) -> Optional[str]:
-    """Convert prose summary into commit message format using claude CLI.
-
-    DEPRECATED: This function is no longer used. Commit messages are now generated
-    from git diff instead of conversation history.
-
-    Args:
-        prose_summary: Prose summary from generate_prose_summary
-        summary_data: SessionSummary object
-
-    Returns:
-        Formatted commit message or None if conversion fails
-    """
-    try:
-        # Get files changed for context
-        files_changed = list(summary_data.files_created) + list(summary_data.files_modified)
-        files_context = f"Files modified: {', '.join(files_changed[:10])}" if files_changed else ""
-
-        # Build prompt for Claude CLI to convert summary to commit message
-        prompt = f"""Based on this session summary, generate a git commit message in conventional commit format.
-
-Session Summary:
-{prose_summary[:500]}
-
-{files_context}
-
-Generate a commit message with:
-- First line: Imperative verb + brief description (max 72 chars)
-- Blank line
-- 2-4 bullet points describing what changed
-- NO JIRA keys or ticket numbers
-
-Return ONLY the commit message."""
-
-        # Call Claude CLI
-        result = subprocess.run(
-            ["claude"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-
-        if result.returncode == 0:
-            commit_text = result.stdout.strip()
-            return commit_text
-
-        return None
-
-    except FileNotFoundError:
-        # Claude CLI not installed, return None to use fallback
-        return None
     except Exception:
         return None
 

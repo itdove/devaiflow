@@ -444,3 +444,150 @@ def test_sync_ignores_ticket_creation_sessions_and_creates_development_session(t
 # simulate the JiraClient.list_tickets() field extraction logic. Manual testing confirms
 # the feature works correctly with real JIRA data.
 
+
+def test_sync_no_configuration(temp_daf_home, capsys):
+    """Test sync when no configuration exists."""
+    # Don't run init - no config file
+    sync_jira()
+
+    captured = capsys.readouterr()
+    assert "No configuration found" in captured.out
+
+
+def test_sync_no_sync_filters(temp_daf_home, mock_jira_cli, capsys):
+    """Test sync when sync filters not configured."""
+    from unittest.mock import patch
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    # Initialize but without sync filters
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Remove sync filters from config
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+    if config and config.jira and config.jira.filters:
+        config.jira.filters.pop("sync", None)
+        config_loader.save_config(config)
+
+    sync_jira()
+
+    captured = capsys.readouterr()
+    assert "No sync filters configured" in captured.out
+
+
+def test_sync_jira_auth_error(temp_daf_home, mock_jira_cli, capsys):
+    """Test sync handles JIRA authentication error."""
+    from unittest.mock import patch
+    from click.testing import CliRunner
+    from devflow.jira.exceptions import JiraAuthError
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock JIRA client to raise auth error
+    with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.list_tickets.side_effect = JiraAuthError("Invalid credentials", status_code=401)
+
+        sync_jira()
+
+        captured = capsys.readouterr()
+        assert "Authentication failed" in captured.out
+
+
+def test_sync_jira_api_error(temp_daf_home, mock_jira_cli, capsys):
+    """Test sync handles JIRA API error."""
+    from unittest.mock import patch
+    from click.testing import CliRunner
+    from devflow.jira.exceptions import JiraApiError
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock JIRA client to raise API error
+    with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.list_tickets.side_effect = JiraApiError("API error", status_code=500, response_text="Error")
+
+        sync_jira()
+
+        captured = capsys.readouterr()
+        assert "JIRA API error" in captured.out
+
+
+def test_sync_jira_connection_error(temp_daf_home, mock_jira_cli, capsys):
+    """Test sync handles JIRA connection error."""
+    from unittest.mock import patch
+    from click.testing import CliRunner
+    from devflow.jira.exceptions import JiraConnectionError
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock JIRA client to raise connection error
+    with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.list_tickets.side_effect = JiraConnectionError("Connection failed")
+
+        sync_jira()
+
+        captured = capsys.readouterr()
+        assert "Connection error" in captured.out
+
+
+def test_sync_no_tickets_found(temp_daf_home, mock_jira_cli, capsys):
+    """Test sync when no tickets match filters."""
+    from unittest.mock import patch
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock client to return empty list
+    with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.list_tickets.return_value = []
+
+        sync_jira()
+
+        captured = capsys.readouterr()
+        assert "Sync complete" in captured.out
+        assert "No tickets found matching filters" in captured.out
+
+
+def test_sync_ticket_missing_issue_type(temp_daf_home, mock_jira_cli, capsys):
+    """Test sync skips tickets without issue type."""
+    from unittest.mock import patch
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Set up ticket without type field
+    mock_jira_cli.set_ticket("PROJ-999", {
+        "key": "PROJ-999",
+        "updated": "2025-12-09T10:00:00.000+0000",
+        "fields": {
+            # No issuetype field
+            "status": {"name": "To Do"},
+            "summary": "Test ticket",
+            "assignee": {"displayName": "Test User"},
+        }
+    })
+
+    sync_jira()
+
+    captured = capsys.readouterr()
+    assert "Skipping PROJ-999: No issue type found" in captured.out
+
+
+# NOTE: JSON output tests require complex mocking of JiraClient that interacts with
+# the full sync flow. The core functionality is tested in the standard sync tests above.
+
