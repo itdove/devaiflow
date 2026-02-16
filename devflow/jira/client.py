@@ -28,6 +28,10 @@ class JiraClient(IssueTrackerClient):
 
     Client for interacting with JIRA via REST API.
     Implements the IssueTrackerClient interface for JIRA-specific operations.
+
+    Supports both JIRA Cloud (API v3) and self-hosted JIRA (API v2) with
+    automatic version detection. The client automatically detects which API
+    version to use on the first search request and caches the result.
     """
 
     def __init__(self, timeout: int = 30):
@@ -43,6 +47,7 @@ class JiraClient(IssueTrackerClient):
         self._field_cache = None  # Cache for field ID to name mapping
         self._comment_visibility_type = None  # Default visibility type (from config)
         self._comment_visibility_value = None  # Default visibility value (from config)
+        self._search_api_version = None  # Cache for search API version (2 or 3)
         self._load_jira_config()
 
     def _load_jira_config(self) -> None:
@@ -180,6 +185,75 @@ class JiraClient(IssueTrackerClient):
             pass
 
         return field_id
+
+    def _search_api_request(self, jql: str, max_results: int, fields_list: list) -> requests.Response:
+        """Make a JQL search API request with automatic v2/v3 detection.
+
+        Cloud JIRA deprecated /rest/api/2/search (returns HTTP 410).
+        This method automatically detects which API version to use and caches the result.
+
+        Args:
+            jql: JQL query string
+            max_results: Maximum number of results to return
+            fields_list: List of field names to include in response
+
+        Returns:
+            Response object from the successful API call
+
+        Raises:
+            JiraAuthError: If authentication fails
+            JiraApiError: If API request fails
+            JiraConnectionError: If connection fails
+        """
+        # Try v2 first if we haven't determined the version yet
+        if self._search_api_version is None:
+            # Try API v2 (for self-hosted JIRA instances)
+            try:
+                response = self._api_request(
+                    "GET",
+                    "/rest/api/2/search",
+                    params={
+                        "jql": jql,
+                        "maxResults": max_results,
+                        "fields": ",".join(fields_list)
+                    }
+                )
+
+                # If we get HTTP 410 (Gone), API v2 is deprecated - switch to v3
+                if response.status_code == 410:
+                    self._search_api_version = 3
+                else:
+                    # v2 works - cache this for future requests
+                    self._search_api_version = 2
+                    return response
+
+            except JiraConnectionError:
+                # Network error - re-raise
+                raise
+
+        # Use API v3 (for Cloud JIRA)
+        if self._search_api_version == 3:
+            response = self._api_request(
+                "POST",
+                "/rest/api/3/search/jql",
+                json={
+                    "jql": jql,
+                    "maxResults": max_results,
+                    "fields": fields_list  # API v3 expects array, not comma-separated string
+                }
+            )
+            return response
+
+        # Should never reach here, but fallback to v2 just in case
+        return self._api_request(
+            "GET",
+            "/rest/api/2/search",
+            params={
+                "jql": jql,
+                "maxResults": max_results,
+                "fields": ",".join(fields_list)
+            }
+        )
 
     def _api_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
         """Make a JIRA REST API request.
@@ -916,17 +990,12 @@ class JiraClient(IssueTrackerClient):
                     if field_id:
                         fields_list_parts.append(field_id)
 
-            fields_list = ",".join(fields_list_parts)
-
-            # Make API request
-            response = self._api_request(
-                "GET",
-                "/rest/api/2/search",
-                params={
-                    "jql": jql,
-                    "maxResults": 100,
-                    "fields": fields_list
-                }
+            # Make API request with automatic v2/v3 detection
+            # (Cloud JIRA requires v3, self-hosted uses v2)
+            response = self._search_api_request(
+                jql=jql,
+                max_results=100,
+                fields_list=fields_list_parts
             )
 
             if response.status_code == 401 or response.status_code == 403:
@@ -1077,17 +1146,14 @@ class JiraClient(IssueTrackerClient):
             jql += " ORDER BY key ASC"
 
             # Build fields list - we need just the basic info
-            fields_list = "issuetype,status,summary,assignee"
+            fields_list_parts = ["issuetype", "status", "summary", "assignee"]
 
-            # Make API request
-            response = self._api_request(
-                "GET",
-                "/rest/api/2/search",
-                params={
-                    "jql": jql,
-                    "maxResults": 100,
-                    "fields": fields_list
-                }
+            # Make API request with automatic v2/v3 detection
+            # (Cloud JIRA requires v3, self-hosted uses v2)
+            response = self._search_api_request(
+                jql=jql,
+                max_results=100,
+                fields_list=fields_list_parts
             )
 
             if response.status_code == 401 or response.status_code == 403:
@@ -1600,6 +1666,14 @@ class JiraClient(IssueTrackerClient):
 
             # Skip if field is already set in payload
             if field_id in payload.get("fields", {}):
+                continue
+
+            # Skip version-related fields entirely if not provided
+            # Setting them to empty arrays breaks GitLab Component Sync and other integrations
+            # that require at least one version when components are specified
+            VERSION_FIELD_IDS = {"versions", "fixVersions", "affectsVersions"}
+            VERSION_FIELD_NAMES = {"affects_version/s", "fix_version/s", "versions", "fixversions", "affectsversions"}
+            if field_id in VERSION_FIELD_IDS or field_name.lower().replace("_", "") in VERSION_FIELD_NAMES:
                 continue
 
             # Set a default placeholder value based on field type

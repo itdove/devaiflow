@@ -77,6 +77,25 @@ The JIRA backend implements `IssueTrackerClient` interface and provides JIRA-spe
 - JIRA-specific transitions and workflows
 - Comment visibility controls
 - PR/MR link tracking
+- **Automatic API version detection** (v2 for self-hosted, v3 for Cloud)
+
+**API Version Compatibility**:
+
+The JIRA client supports both self-hosted and Cloud JIRA instances with automatic API version detection:
+
+- **JIRA Cloud** (Atlassian Cloud): Uses JIRA REST API v3 (`/rest/api/3/search/jql`)
+- **Self-Hosted JIRA** (Server/Data Center): Uses JIRA REST API v2 (`/rest/api/2/search`)
+
+**Implementation Details**:
+
+The `_search_api_request()` method in `devflow/jira/client.py` handles automatic version detection:
+
+1. First request attempts API v2 (for self-hosted JIRA)
+2. If HTTP 410 (Gone) is returned, switches to API v3 (for Cloud JIRA)
+3. Caches the working version in `_search_api_version` for subsequent requests
+4. No configuration required - version detection is transparent
+
+This ensures compatibility with both deployment types and handles Atlassian's API v2 deprecation (CHANGE-2046) seamlessly
 
 **Example**:
 ```python

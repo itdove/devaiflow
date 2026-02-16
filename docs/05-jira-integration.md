@@ -12,6 +12,34 @@ JIRA integration is **completely optional**. The tool works perfectly fine for l
 - **Sprint dashboard** - View sprint progress with time tracking
 - **Ticket metadata** - Enrich sessions with JIRA data
 
+## API Version Compatibility
+
+DevAIFlow supports **both JIRA Cloud and self-hosted JIRA instances** with automatic API version detection:
+
+### Supported Versions
+
+- ✅ **JIRA Cloud (Atlassian Cloud)** - Uses JIRA REST API v3
+- ✅ **Self-Hosted JIRA (Server/Data Center)** - Uses JIRA REST API v2
+
+### Automatic Detection
+
+The tool automatically detects which API version to use:
+
+1. **First Request**: Attempts to use API v2 (for self-hosted JIRA)
+2. **Cloud Detection**: If the server returns HTTP 410 (endpoint deprecated), automatically switches to API v3
+3. **Caching**: The detected version is cached for subsequent requests within the same session
+
+This means you don't need to configure which API version to use - it's handled automatically based on your JIRA instance type.
+
+### Migration from Deprecated Endpoints
+
+As of August 2025, Atlassian Cloud has deprecated the `/rest/api/2/search` endpoint ([CHANGE-2046](https://developer.atlassian.com/changelog/#CHANGE-2046)). DevAIFlow handles this deprecation automatically:
+
+- **Self-hosted JIRA**: Continues using API v2 (`/rest/api/2/search`)
+- **Cloud JIRA**: Automatically uses API v3 (`/rest/api/3/search/jql`)
+
+No configuration changes are needed - the migration is transparent to users.
+
 ## Prerequisites
 
 ### Required for JIRA Features
