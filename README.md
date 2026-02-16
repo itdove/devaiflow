@@ -16,6 +16,7 @@ A CLI tool to manage AI coding assistant sessions with optional issue tracker in
 > - **Claude Code**: Fully tested and production-ready ✅
 > - **Other AI Assistants**: Experimental - basic functionality works, full testing in progress ⚠️
 > - **JIRA**: Currently the only supported issue tracker ✅
+>   - **API Compatibility**: Supports both JIRA Cloud (API v3) and self-hosted JIRA (API v2) with automatic version detection
 > - **Other Issue Trackers**: Planned for future releases 🔮
 
 ## Overview

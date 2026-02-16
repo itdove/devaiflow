@@ -129,6 +129,8 @@ def create_jira_create_command():
         # --affects-versions creates a tuple like ('ansible-saas-ga',) even with single value
         if affected_version and isinstance(affected_version, tuple) and len(affected_version) > 0:
             affected_version = affected_version[0]
+            # Also update system_fields so validation sees the unwrapped value
+            system_fields['versions'] = affected_version
 
         # Convert components tuple to list (Click's multiple=True creates tuples)
         # --components ansible-saas creates ('ansible-saas',) but we need ['ansible-saas']
