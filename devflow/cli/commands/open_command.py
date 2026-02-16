@@ -170,6 +170,37 @@ def open_session(
             session.workspace_name = selected_workspace_name
             session_manager.update_session(session)
 
+    # AAP-64497: Workspace mismatch confirmation
+    # If opening session from different workspace context than session was previously used in,
+    # prompt user to confirm: use session workspace, switch to current workspace, or cancel
+    # Only check if:
+    # - Workspace was selected (not None)
+    # - User did NOT explicitly provide --workspace flag (intentional override)
+    # - Session has a workspace_name (not a new/old session without workspace)
+    if selected_workspace_name and not workspace and session.workspace_name:
+        # Detect current workspace from cwd
+        current_dir = Path.cwd()
+        detected_workspace_name = _detect_workspace_from_cwd(current_dir, config_loader)
+
+        # If detected workspace differs from selected workspace, prompt for confirmation
+        if detected_workspace_name and detected_workspace_name != selected_workspace_name:
+            if not _handle_workspace_mismatch(
+                session,
+                session_manager,
+                selected_workspace_name,
+                detected_workspace_name,
+                skip_prompt=output_json
+            ):
+                # User cancelled - exit without opening session
+                return
+
+            # Re-fetch selected workspace name in case user switched
+            # (session.workspace_name was updated by _handle_workspace_mismatch)
+            selected_workspace_name = session.workspace_name
+            if selected_workspace_name:
+                from devflow.cli.utils import get_workspace_path
+                workspace_path = get_workspace_path(config, selected_workspace_name)
+
     # Handle --conversation-id flag
     # This allows resuming a specific archived conversation
     if conversation_id:
@@ -1199,6 +1230,108 @@ def _detect_working_directory_from_cwd(current_dir: Path, config_loader) -> Opti
         repo_name = current_dir.name
         console.print(f"[dim]Detected repository (no workspace configured): {repo_name}[/dim]")
         return repo_name
+
+
+def _detect_workspace_from_cwd(current_dir: Path, config_loader) -> Optional[str]:
+    """Detect which workspace contains the current working directory.
+
+    This function checks if the current directory is within any configured workspace.
+
+    Args:
+        current_dir: Current working directory path
+        config_loader: ConfigLoader instance
+
+    Returns:
+        Workspace name if detected, None otherwise
+    """
+    # Get configuration to check workspaces
+    try:
+        config = config_loader.load_config()
+    except Exception:
+        return None
+
+    if not config or not config.repos or not config.repos.workspaces:
+        return None
+
+    # Check if current_dir is within ANY of the configured workspaces
+    for workspace_def in config.repos.workspaces:
+        workspace = Path(workspace_def.path).expanduser().absolute()
+
+        # Check if current_dir is within the workspace
+        try:
+            # This will raise ValueError if current_dir is not relative to workspace
+            current_dir.relative_to(workspace)
+            # Current dir is within this workspace
+            return workspace_def.name
+        except ValueError:
+            # current_dir is not within this workspace, try next one
+            continue
+
+    # Not in any workspace
+    return None
+
+
+def _handle_workspace_mismatch(
+    session,
+    session_manager,
+    selected_workspace_name: str,
+    detected_workspace_name: str,
+    skip_prompt: bool = False
+) -> bool:
+    """Handle workspace mismatch confirmation when opening session from different context.
+
+    This function prompts the user to confirm what to do when the detected workspace
+    (from current directory) differs from the session's stored workspace.
+
+    Args:
+        session: Session object
+        session_manager: SessionManager instance
+        selected_workspace_name: Workspace name selected for this session
+        detected_workspace_name: Workspace name detected from current directory
+        skip_prompt: If True (e.g., --json mode), default to session workspace without prompt
+
+    Returns:
+        True if should continue (user chose workspace or switched), False if user cancelled
+    """
+    from rich.prompt import IntPrompt
+
+    # Non-interactive mode: default to session workspace without prompt
+    if skip_prompt:
+        return True
+
+    # Display workspace mismatch warning
+    console.print(f"\n[yellow]⚠ Workspace mismatch detected[/yellow]")
+    console.print(f"[dim]Session workspace:[/dim] [cyan]{selected_workspace_name}[/cyan]")
+    console.print(f"[dim]Current workspace:[/dim] [cyan]{detected_workspace_name}[/cyan]")
+    console.print()
+
+    # Prompt user for action
+    console.print("[bold]What would you like to do?[/bold]")
+    console.print(f"  [cyan]1.[/cyan] Use session workspace ([cyan]{selected_workspace_name}[/cyan])")
+    console.print(f"  [cyan]2.[/cyan] Switch to current workspace ([cyan]{detected_workspace_name}[/cyan])")
+    console.print(f"  [cyan]3.[/cyan] Cancel")
+    console.print()
+
+    try:
+        choice = IntPrompt.ask("Enter choice", choices=["1", "2", "3"], default="1")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled[/yellow]")
+        return False
+
+    if choice == 1:
+        # Use session workspace - no change needed
+        console.print(f"[green]✓[/green] Using session workspace: [cyan]{selected_workspace_name}[/cyan]")
+        return True
+    elif choice == 2:
+        # Switch to current workspace - update session
+        console.print(f"[green]✓[/green] Switching to current workspace: [cyan]{detected_workspace_name}[/cyan]")
+        session.workspace_name = detected_workspace_name
+        session_manager.update_session(session)
+        return True
+    else:
+        # User chose to cancel
+        console.print("[yellow]Cancelled[/yellow] - session not opened")
+        return False
 
 
 def _handle_conversation_selection_without_detection(
