@@ -176,13 +176,73 @@ def format_child_issues_for_claude(children: List[Dict]) -> str:
     return "\n".join(lines)
 
 
-def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: bool = False, output_json: bool = False) -> None:
+def format_comments_for_claude(comments: List[Dict]) -> str:
+    """Format JIRA comments in a Claude-friendly text format.
+
+    Args:
+        comments: List of comment dicts from JiraClient.get_comments()
+                 Each dict contains: id, author, created, body, visibility (optional)
+
+    Returns:
+        Formatted string with comments, or empty string if no comments
+    """
+    if not comments:
+        return ""
+
+    lines = []
+    lines.append("")
+    lines.append("Comments:")
+    lines.append("-" * 80)
+
+    for comment in comments:
+        # Parse timestamp
+        created = comment.get("created", "")
+        if created:
+            try:
+                # JIRA format: 2025-12-05T20:13:45.380+0000
+                dt = datetime.fromisoformat(created.replace("+0000", "+00:00"))
+                timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+            except:
+                timestamp = created[:19]  # Fallback to just date/time part
+        else:
+            timestamp = "Unknown time"
+
+        # Get author
+        author = comment.get("author", "Unknown")
+
+        # Get comment body
+        body = comment.get("body", "")
+
+        # Format as: timestamp | author
+        # Body (on separate lines for readability)
+        lines.append(f"{timestamp} | {author}")
+
+        # Add visibility info if present and restricted
+        if "visibility" in comment:
+            visibility = comment["visibility"]
+            vis_type = visibility.get("type", "")
+            vis_value = visibility.get("value", "")
+            if vis_type and vis_value:
+                lines.append(f"  [Visibility: {vis_type}={vis_value}]")
+
+        # Add comment body with indentation for clarity
+        for line in body.split('\n'):
+            lines.append(f"  {line}")
+
+        # Add separator between comments
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: bool = False, show_comments: bool = False, output_json: bool = False) -> None:
     """View a issue tracker ticket in Claude-friendly format.
 
     Args:
         issue_key: issue tracker key (e.g., PROJ-12345)
         show_history: If True, include changelog/history display
         show_children: If True, include child issues display
+        show_comments: If True, include comments display
         output_json: If True, output in JSON format
     """
     try:
@@ -199,12 +259,13 @@ def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: 
         else:
             jira_client = JiraClient()
 
-        # Fetch ticket with full details and changelog if requested
+        # Fetch ticket with full details and changelog/comments if requested
         try:
             ticket_data = jira_client.get_ticket_detailed(
                 issue_key,
                 field_mappings=field_mappings,
-                include_changelog=show_history
+                include_changelog=show_history,
+                include_comments=show_comments
             )
         except JiraNotFoundError as e:
             if output_json:
@@ -318,6 +379,11 @@ def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: 
             if children_data is not None:
                 output_data["children"] = children_data
 
+            # Comments already included in ticket_data if requested
+            # Extract for separate output section (similar to changelog)
+            if show_comments and ticket_data.get("comments"):
+                output_data["comments"] = ticket_data["comments"]
+
             json_output(
                 success=True,
                 data=output_data
@@ -332,6 +398,12 @@ def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: 
         if show_children and children_data is not None:
             formatted_children = format_child_issues_for_claude(children_data)
             console.print(formatted_children)
+
+        # Format and print comments if requested
+        if show_comments and ticket_data.get("comments"):
+            formatted_comments = format_comments_for_claude(ticket_data["comments"])
+            if formatted_comments:
+                console.print(formatted_comments)
 
         # Format and print changelog if requested
         if show_history and ticket_data.get("changelog"):

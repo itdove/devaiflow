@@ -16,6 +16,8 @@ The command will automatically detect the current Claude Code session and displa
 ```bash
 daf jira view PROJ-12345
 daf jira view PROJ-12345 --history    # Include changelog
+daf jira view PROJ-12345 --comments   # Include comments
+daf jira view PROJ-12345 --history --comments  # Include both
 ```
 
 **What it shows:**
@@ -27,6 +29,7 @@ daf jira view PROJ-12345 --history    # Include changelog
 - Full description
 - Acceptance criteria
 - Pull request links
+- Comments (with `--comments` flag)
 - Changelog/history (with `--history` flag)
 
 **Example output:**

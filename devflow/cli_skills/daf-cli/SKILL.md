@@ -17,8 +17,14 @@ daf jira view PROJ-12345
 # View with changelog/history
 daf jira view PROJ-12345 --history
 
+# View with comments
+daf jira view PROJ-12345 --comments
+
 # View with child issues
 daf jira view PROJ-12345 --children
+
+# Combine options
+daf jira view PROJ-12345 --history --comments --children
 
 # JSON output
 daf jira view PROJ-12345 --json
@@ -28,6 +34,7 @@ daf jira view PROJ-12345 --json
 - Formats data for Claude to read easily
 - Handles authentication automatically
 - Shows all relevant fields including custom fields
+- Can include comments, changelog, and child issues
 
 ### Create JIRA Issues
 
