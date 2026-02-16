@@ -964,6 +964,70 @@ The tool will automatically use whichever detection method succeeds first.
 
 ---
 
+**Target Branch Selection:**
+
+When creating a PR/MR, `daf complete` allows you to select which branch to target (e.g., `main`, `release/2.5`, `release/3.0`) instead of always using the repository's default branch. This is particularly useful for teams working on multiple release branches.
+
+**How it works:**
+
+1. Before creating the PR/MR, the tool lists all available remote branches
+2. The default branch is highlighted as recommended
+3. You select the target branch interactively
+4. The appropriate flag is added to the `gh`/`glab` command:
+   - **GitHub**: `--base <branch>` flag
+   - **GitLab**: `--target-branch <branch>` flag
+
+**Example with target branch selection:**
+```bash
+daf complete PROJ-12345
+
+Create a PR/MR now? [Y/n]: y
+Repository type detected: GITHUB
+
+Select target branch for PR:
+  1. main (default)
+  2. release/2.5
+  3. release/3.0
+  4. develop
+
+Select [1-4]: 2
+
+Pushing branch to origin...
+✓ Pushed branch to origin
+
+Creating draft GITHUB PR...
+✓ Created PR: https://github.com/org/myproject/pull/123
+# ↑ Note: PR targets release/2.5 branch
+```
+
+**Configuration:**
+
+You can configure automatic target branch selection using the `prompts.auto_select_target_branch` setting:
+
+- **`null`** (default) - Always prompt to select target branch
+- **`true`** - Automatically use the default branch without prompting
+- **`false`** - Skip target branch selection entirely (backward compatible, no `--base`/`--target-branch` flag)
+
+**Example configuration:**
+```json
+{
+  "prompts": {
+    "auto_select_target_branch": true
+  }
+}
+```
+
+**Why this matters:**
+- **Without target selection**: PRs always target the repository's default branch (usually `main`)
+- **With target selection**: You can create PRs to any branch (e.g., `release/2.5`, `hotfix/1.0.1`, `develop`)
+- Eliminates the need to manually change the target branch in GitHub/GitLab UI after PR creation
+
+**Edge cases:**
+- If the remote branch list is empty, the tool gracefully falls back to not specifying a target branch
+- For fork scenarios, branch selection happens after fork detection, so you can select from upstream branches
+
+---
+
 **Session Type Behavior:**
 
 The completion workflow varies based on session type:

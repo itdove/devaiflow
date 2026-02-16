@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Target branch selection when creating PRs/MRs (AAP-65187)
+  - Interactive prompt to select which branch to target (e.g., `main`, `release/2.5`, `release/3.0`)
+  - Adds `--base <branch>` flag for GitHub PRs or `--target-branch <branch>` flag for GitLab MRs
+  - Configurable via `prompts.auto_select_target_branch` setting (null=prompt, true=auto-default, false=skip)
+  - Lists all available remote branches with default branch highlighted
+  - Eliminates need to manually change target branch in UI after PR creation
+  - Useful for teams working on multiple release branches simultaneously
 - JIRA API debug logging with `DEVAIFLOW_DEBUG=1` environment variable
   - Shows full request/response details for all JIRA API calls
   - Helps troubleshoot field validation and API errors

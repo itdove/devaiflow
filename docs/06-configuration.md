@@ -1663,6 +1663,42 @@ daf config tui --show-prompt-unit-tests no
 daf config unset-prompts --show-prompt-unit-tests
 ```
 
+### prompts.auto_select_target_branch
+
+**Type:** boolean (optional)
+**Required:** No
+**Default:** null (prompt each time)
+**Used by:** `daf complete`
+**Description:** Automatically select target branch when creating PR/MR
+
+When creating a PR/MR during `daf complete`, this setting controls whether you're prompted to select which branch to target (e.g., `main`, `release/2.5`, `release/3.0`) or whether the default branch is automatically used.
+
+**Values:**
+- `true` - Always use the default branch without prompting
+- `false` - Skip target branch selection entirely (backward compatible, no `--base`/`--target-branch` flag)
+- `null` - Prompt to select target branch each time (default)
+
+**Why this is useful:**
+- Teams working on multiple release branches can easily target the correct branch
+- Eliminates need to manually change target branch in GitHub/GitLab UI after PR creation
+- Provides visibility into all available branches during PR creation
+
+**Example:**
+```json
+{
+  "prompts": {
+    "auto_select_target_branch": null
+  }
+}
+```
+
+**Workflow:**
+- When `null` (default): Lists all remote branches and prompts you to select one
+- When `true`: Automatically uses the repository's default branch (same as `false` but more explicit)
+- When `false`: Creates PR/MR without `--base` or `--target-branch` flag (relies on CLI default)
+
+**Note:** This setting only applies when `auto_create_pr_on_complete` is enabled or when you confirm to create a PR/MR during `daf complete`.
+
 ### Complete Prompts Example
 
 ```json
@@ -1672,12 +1708,14 @@ daf config unset-prompts --show-prompt-unit-tests
     "auto_accept_ai_commit_message": true,
     "auto_create_pr_on_complete": false,
     "auto_add_issue_summary": true,
+    "auto_update_jira_pr_url": true,
     "auto_launch_claude": true,
     "auto_checkout_branch": true,
     "auto_sync_with_base": "always",
     "auto_complete_on_exit": true,
     "default_branch_strategy": "from_default",
-    "show_prompt_unit_tests": true
+    "show_prompt_unit_tests": true,
+    "auto_select_target_branch": null
   }
 }
 ```

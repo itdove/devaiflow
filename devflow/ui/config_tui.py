@@ -1510,6 +1510,19 @@ class ConfigTUI(App):
                 allow_blank=False,
             )
 
+            yield ConfigSelect(
+                "Auto-select target branch",
+                "prompts.auto_select_target_branch",
+                choices=[
+                    ("Always use default branch", "true"),
+                    ("Never select target branch", "false"),
+                    ("Prompt each time", "prompt"),
+                ],
+                value=_bool_to_choice(self.config.prompts.auto_select_target_branch),
+                help_text="Select target branch (e.g., release/2.5) when creating PR/MR",
+                allow_blank=False,
+            )
+
     def _compose_claude_tab(self) -> ComposeResult:
         """Compose AI configuration tab content."""
         with VerticalScroll():
@@ -2323,6 +2336,10 @@ class ConfigTUI(App):
 
                 self.config.prompts.auto_push_to_remote = _choice_to_bool(
                     self.query_one(key_to_id("select", "prompts.auto_push_to_remote"), Select).value
+                )
+
+                self.config.prompts.auto_select_target_branch = _choice_to_bool(
+                    self.query_one(key_to_id("select", "prompts.auto_select_target_branch"), Select).value
                 )
 
                 # Use auto_launch_agent (new field) instead of auto_launch_claude (deprecated)
