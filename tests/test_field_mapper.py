@@ -38,7 +38,7 @@ def test_discover_fields_success(monkeypatch):
     issuetypes_response = Mock()
     issuetypes_response.status_code = 200
     issuetypes_response.json.return_value = {
-        "values": [
+        "issueTypes": [
             {"id": "1", "name": "Bug"},
             {"id": "17", "name": "Story"},
             {"id": "3", "name": "Task"}
@@ -49,7 +49,7 @@ def test_discover_fields_success(monkeypatch):
     bug_fields_response = Mock()
     bug_fields_response.status_code = 200
     bug_fields_response.json.return_value = {
-        "values": [
+        "fields": [
             {
                 "fieldId": "customfield_12319275",
                 "name": "Workstream",
@@ -68,7 +68,7 @@ def test_discover_fields_success(monkeypatch):
     story_fields_response = Mock()
     story_fields_response.status_code = 200
     story_fields_response.json.return_value = {
-        "values": [
+        "fields": [
             {
                 "fieldId": "customfield_12311140",
                 "name": "Epic Link",
