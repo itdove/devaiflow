@@ -157,9 +157,9 @@ def test_generate_initial_prompt_with_jira_and_context_files(temp_daf_home):
     assert "DAF_AGENTS.md (daf tool usage guide)" in prompt
     assert "ARCHITECTURE.md (system architecture)" in prompt
 
-    # Verify JIRA instruction
-    assert "Also read the issue tracker ticket:" in prompt
-    assert "daf jira view PROJ-12345" in prompt
+    # Verify JIRA instruction with comments
+    assert "Also read the issue tracker ticket with comments:" in prompt
+    assert "daf jira view PROJ-12345 --comments" in prompt
 
 
 def test_generate_initial_prompt_no_config(temp_daf_home):
@@ -282,8 +282,8 @@ def test_generate_initial_prompt_ticket_creation_with_jira(temp_daf_home):
     assert "ANALYSIS-ONLY" in prompt
     assert "DO NOT modify any code" in prompt
 
-    # Verify JIRA reading instruction is included
-    assert "daf jira view PROJ-59038" in prompt
+    # Verify JIRA reading instruction is included with comments
+    assert "daf jira view PROJ-59038 --comments" in prompt
 
     # Verify goal line includes JIRA
     assert "PROJ-59038: Implement backup and restore" in prompt
