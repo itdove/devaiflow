@@ -10,6 +10,7 @@ from devflow.config.loader import ConfigLoader
 from devflow.jira.client import JiraClient
 from devflow.jira.field_mapper import JiraFieldMapper
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
+from devflow.jira.utils import get_field_with_alias
 
 console = Console()
 
@@ -142,8 +143,8 @@ def _get_required_custom_fields(
     system_fields = {
         "summary", "project",
         "issue_type", "issuetype", "reporter", "assignee",
-        "affected_version", "fixVersions", "versions", "affects_version/s",  # Version fields
-        "components", "component/s", "labels", "label/s",  # System fields with dedicated CLI options
+        "affected_version", "fixVersions", "versions", "affects_version/s", "affects_versions",  # Version fields (server & cloud)
+        "components", "component/s", "labels", "label/s",  # System fields with dedicated CLI options (server & cloud)
         "description", "priority"  # Already handled as parameters to create_issue
     }
 
@@ -865,7 +866,8 @@ def create_issue(
         merged_system_fields = {}
 
         # Normalize system_field_defaults keys from field names to field IDs
-        # E.g., "component/s" → "components", "affects_version/s" → "versions"
+        # E.g., "component/s" → "components" (server → cloud), "affects_version/s" → "versions"
+        # Handles both server and cloud field name variants for backward compatibility
         # IMPORTANT: Only apply defaults for REQUIRED fields (skip optional field defaults)
         if config.jira.system_field_defaults:
             try:
@@ -928,13 +930,16 @@ def create_issue(
 
         # Validate that components are provided (required by most JIRA projects)
         # Check if components field exists in field_mappings and is available for this issue type
+        # Note: Field name varies between server (component/s) and cloud (components)
         components_available = False
         try:
-            if config.jira.field_mappings and "component/s" in config.jira.field_mappings:
-                components_info = config.jira.field_mappings["component/s"]
-                available_for = components_info.get("available_for", [])
-                if issue_type.title() in available_for:
-                    components_available = True
+            if config.jira.field_mappings:
+                # Check for either component/s (server) or components (cloud)
+                components_info = get_field_with_alias(config.jira.field_mappings, "components")
+                if components_info:
+                    available_for = components_info.get("available_for", [])
+                    if issue_type.title() in available_for:
+                        components_available = True
         except (TypeError, AttributeError):
             # field_mappings might be a Mock or not iterable
             pass

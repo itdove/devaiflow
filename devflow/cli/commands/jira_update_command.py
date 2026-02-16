@@ -227,7 +227,7 @@ def update_jira_issue(
             # Filter applies to BOTH discovered fields AND fallback fields
             non_editable_fields = {
                 "attachment", "issuelinks", "linked_issues",
-                "component/s",  # Red Hat JIRA specific
+                "component/s", "components",  # Server & cloud variants (both non-editable during update)
             }
             editable_mappings = {
                 field_name: field_info

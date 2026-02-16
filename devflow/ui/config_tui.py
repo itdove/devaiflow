@@ -45,6 +45,7 @@ from rich.text import Text
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Config, JiraTransitionConfig, ContextFile, WorkspaceDefinition
 from devflow.jira.client import JiraClient
+from devflow.jira.utils import get_field_with_alias
 
 
 console = Console()
@@ -1165,7 +1166,8 @@ class ConfigTUI(App):
             # Get available components from field mappings
             component_choices = []
             if self.config.jira.field_mappings:
-                component_field = self.config.jira.field_mappings.get("component/s") or self.config.jira.field_mappings.get("components")
+                # Check for either component/s (server) or components (cloud)
+                component_field = get_field_with_alias(self.config.jira.field_mappings, "components")
                 if component_field and "allowed_values" in component_field:
                     # Extract component names from allowed_values
                     # allowed_values can be simple strings, dicts, or JSON-serialized strings

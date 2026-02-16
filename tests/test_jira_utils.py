@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from devflow.jira.utils import merge_pr_urls, is_issue_key_pattern, validate_jira_ticket, is_version_field_required
+from devflow.jira.utils import merge_pr_urls, is_issue_key_pattern, validate_jira_ticket, is_version_field_required, get_field_with_alias
 from devflow.jira.exceptions import JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError
 
 
@@ -571,3 +571,121 @@ class TestIsVersionFieldRequired:
         assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="Bug") is True
         # Should not match with lowercase b
         assert is_version_field_required(field_mapper=mock_field_mapper, issue_type="bug") is False
+
+
+class TestGetFieldWithAlias:
+    """Test suite for get_field_with_alias function - backward compatibility for server/cloud field names."""
+
+    def test_field_exists_with_old_name(self):
+        """Test getting field when it exists with old server name (component/s)."""
+        field_mappings = {
+            "component/s": {
+                "id": "components",
+                "name": "Component/s",
+                "allowed_values": ["backend", "frontend"]
+            }
+        }
+        # Should find it when searching with old name
+        result = get_field_with_alias(field_mappings, "component/s")
+        assert result is not None
+        assert result["id"] == "components"
+
+        # Should find it when searching with new name (alias lookup)
+        result = get_field_with_alias(field_mappings, "components")
+        assert result is not None
+        assert result["id"] == "components"
+
+    def test_field_exists_with_new_name(self):
+        """Test getting field when it exists with new cloud name (components)."""
+        field_mappings = {
+            "components": {
+                "id": "components",
+                "name": "Components",
+                "allowed_values": ["backend", "frontend"]
+            }
+        }
+        # Should find it when searching with new name
+        result = get_field_with_alias(field_mappings, "components")
+        assert result is not None
+        assert result["id"] == "components"
+
+        # Should find it when searching with old name (reverse alias lookup)
+        result = get_field_with_alias(field_mappings, "component/s")
+        assert result is not None
+        assert result["id"] == "components"
+
+    def test_affects_versions_old_name(self):
+        """Test getting affects_versions field with old server name."""
+        field_mappings = {
+            "affects_version/s": {
+                "id": "versions",
+                "name": "Affects Version/s",
+                "allowed_values": ["v1.0.0", "v2.0.0"]
+            }
+        }
+        # Should find it when searching with old name
+        result = get_field_with_alias(field_mappings, "affects_version/s")
+        assert result is not None
+        assert result["id"] == "versions"
+
+        # Should find it when searching with new name (alias lookup)
+        result = get_field_with_alias(field_mappings, "affects_versions")
+        assert result is not None
+        assert result["id"] == "versions"
+
+    def test_affects_versions_new_name(self):
+        """Test getting affects_versions field with new cloud name."""
+        field_mappings = {
+            "affects_versions": {
+                "id": "versions",
+                "name": "Affects Versions",
+                "allowed_values": ["v1.0.0", "v2.0.0"]
+            }
+        }
+        # Should find it when searching with new name
+        result = get_field_with_alias(field_mappings, "affects_versions")
+        assert result is not None
+        assert result["id"] == "versions"
+
+        # Should find it when searching with old name (reverse alias lookup)
+        result = get_field_with_alias(field_mappings, "affects_version/s")
+        assert result is not None
+        assert result["id"] == "versions"
+
+    def test_field_not_found(self):
+        """Test when field doesn't exist in mappings."""
+        field_mappings = {
+            "other_field": {
+                "id": "customfield_12345",
+                "name": "Other Field"
+            }
+        }
+        # Should return None when field not found
+        result = get_field_with_alias(field_mappings, "components")
+        assert result is None
+
+        result = get_field_with_alias(field_mappings, "component/s")
+        assert result is None
+
+    def test_empty_field_mappings(self):
+        """Test with empty field mappings."""
+        field_mappings = {}
+        result = get_field_with_alias(field_mappings, "components")
+        assert result is None
+
+    def test_non_aliased_field(self):
+        """Test getting a field that doesn't have an alias."""
+        field_mappings = {
+            "priority": {
+                "id": "priority",
+                "name": "Priority"
+            }
+        }
+        # Should still work for non-aliased fields
+        result = get_field_with_alias(field_mappings, "priority")
+        assert result is not None
+        assert result["id"] == "priority"
+
+        # Should return None for non-existent field
+        result = get_field_with_alias(field_mappings, "nonexistent")
+        assert result is None
