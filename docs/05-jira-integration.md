@@ -43,6 +43,157 @@ JIRA integration is **completely optional**. The tool works perfectly fine for l
 
 See [Installation Guide](02-installation.md) for detailed setup instructions.
 
+## Authentication Setup
+
+DevAIFlow supports two authentication methods depending on your JIRA deployment type.
+
+### Atlassian Cloud (Cloud-Hosted JIRA)
+
+Atlassian Cloud requires **Basic Authentication** with base64-encoded credentials.
+
+**Step 1: Get Your JIRA Email Address**
+
+Use the email address associated with your Atlassian account (e.g., `user@company.com`).
+
+**Step 2: Generate API Token**
+
+1. Go to: https://id.atlassian.com/manage-profile/security/api-tokens
+2. Click **Create API token**
+3. Give it a name (e.g., "DevAIFlow CLI")
+4. Copy the generated token (you won't see it again)
+
+**Step 3: Create Base64-Encoded Credentials**
+
+Combine your email and API token with a colon, then encode to base64:
+
+```bash
+echo -n "user@company.com:your-api-token" | base64
+```
+
+This outputs a base64 string (this becomes your JIRA_API_TOKEN).
+
+**Step 4: Configure Environment Variables**
+
+```bash
+# Set authentication type to basic
+export JIRA_AUTH_TYPE=basic
+
+# Set the base64-encoded credentials (paste output from step 3)
+export JIRA_API_TOKEN="your-jira-token"
+
+# Set your Atlassian Cloud URL
+export JIRA_URL="https://yourcompany.atlassian.net"
+```
+
+**Step 5: Add to Shell Profile (Permanent)**
+
+Add these to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# JIRA Configuration (Atlassian Cloud)
+export JIRA_AUTH_TYPE=basic
+export JIRA_API_TOKEN="your-jira-token"
+export JIRA_URL="https://yourcompany.atlassian.net"
+```
+
+Then reload:
+```bash
+source ~/.zshrc  # or source ~/.bashrc
+```
+
+**Step 6: Verify Authentication**
+
+```bash
+# Test API access
+curl -H "Authorization: Basic $JIRA_API_TOKEN" \
+     "$JIRA_URL/rest/api/2/myself"
+```
+
+If successful, you'll see your user profile data.
+
+### Self-Hosted JIRA (On-Premise)
+
+Self-hosted JIRA uses **Bearer Authentication** with Personal Access Tokens.
+
+**Step 1: Generate Personal Access Token**
+
+1. Log into your JIRA instance
+2. Go to: `https://jira.example.com` → **Profile** → **Personal Access Tokens**
+3. Click **Create token**
+4. Give it a name (e.g., "DevAIFlow CLI")
+5. Set expiration (recommend 1 year)
+6. Grant scopes: `read:jira-work`, `write:jira-work`
+7. Copy the generated token
+
+**Step 2: Configure Environment Variables**
+
+```bash
+# Set authentication type to bearer (default)
+export JIRA_AUTH_TYPE=bearer
+
+# Set your Personal Access Token
+export JIRA_API_TOKEN="your-jira-token"
+
+# Set your self-hosted JIRA URL
+export JIRA_URL="https://jira.example.com"
+```
+
+**Step 3: Add to Shell Profile (Permanent)**
+
+Add these to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# JIRA Configuration (Self-Hosted)
+export JIRA_AUTH_TYPE=bearer
+export JIRA_API_TOKEN="your-jira-token"
+export JIRA_URL="https://jira.example.com"
+```
+
+Then reload:
+```bash
+source ~/.zshrc  # or source ~/.bashrc
+```
+
+**Step 4: Verify Authentication**
+
+```bash
+# Test API access
+curl -H "Authorization: Bearer $JIRA_API_TOKEN" \
+     "$JIRA_URL/rest/api/2/myself"
+```
+
+If successful, you'll see your user profile data.
+
+### Authentication Type Summary
+
+| JIRA Type | Auth Type | Token Format | Environment Variable |
+|-----------|-----------|--------------|---------------------|
+| **Atlassian Cloud** | `basic` | Base64 of `email:api-token` | `JIRA_AUTH_TYPE=basic` |
+| **Self-Hosted** | `bearer` | Personal Access Token | `JIRA_AUTH_TYPE=bearer` |
+
+### Security Best Practices
+
+1. **Never commit tokens to git** - Add `.env` files to `.gitignore`
+2. **Rotate tokens regularly** - Regenerate every 90-180 days
+3. **Use minimal scopes** - Only grant required permissions
+4. **Store securely** - Consider using a password manager
+5. **Revoke unused tokens** - Clean up old tokens from your profile
+
+### Troubleshooting Authentication
+
+**Error: "Failed to parse Connect Session Auth Token"**
+- You're using Atlassian Cloud but `JIRA_AUTH_TYPE` is not set to `basic`
+- Solution: `export JIRA_AUTH_TYPE=basic`
+
+**Error: "401 Unauthorized"**
+- Token is invalid or expired
+- For cloud: Regenerate base64 credentials with fresh API token
+- For self-hosted: Generate new Personal Access Token
+
+**Error: "Invalid token format"**
+- For cloud: Verify base64 encoding is correct
+- Test: `echo "$JIRA_API_TOKEN" | base64 -d` should show `email:api-token`
+
 ### How It Works
 
 The tool uses the **JIRA REST API** for most operations:

@@ -147,7 +147,7 @@ class JiraFieldMapper:
             List of field dictionaries with id, name, schema info
 
         Raises:
-            RuntimeError: If API request fails
+            RuntimeError: If API request fails or returns empty field list
         """
         response = self.client._api_request("GET", "/rest/api/2/field")
 
@@ -156,7 +156,24 @@ class JiraFieldMapper:
                 f"Failed to fetch JIRA fields: HTTP {response.status_code} - {response.text}"
             )
 
-        return response.json()
+        fields = response.json()
+
+        # Check if the response is empty or invalid
+        if not isinstance(fields, list):
+            raise RuntimeError(
+                f"JIRA API returned invalid response format. Expected a list of fields, got: {type(fields).__name__}"
+            )
+
+        if len(fields) == 0:
+            raise RuntimeError(
+                "JIRA API returned 0 fields. This may indicate:\n"
+                "  - Insufficient permissions to access field metadata\n"
+                "  - JIRA instance configuration restricts field discovery\n"
+                "  - API endpoint is not available on this JIRA version\n"
+                "Please check your JIRA permissions and instance configuration."
+            )
+
+        return fields
 
     def _fetch_editmeta(self, issue_key: str) -> Dict:
         """Fetch editable field metadata for a specific issue.
@@ -239,7 +256,10 @@ class JiraFieldMapper:
             )
 
         issue_types_data = response.json()
-        all_issue_types = issue_types_data.get("values", [])
+        # Support both JIRA API versions:
+        # - Newer JIRA (Cloud/9.0+): returns "issueTypes"
+        # - Older JIRA: returns "values"
+        all_issue_types = issue_types_data.get("issueTypes", issue_types_data.get("values", []))
 
         # Step 2: Filter to requested issue types and fetch fields for each
         filtered_issue_types = []
@@ -266,8 +286,10 @@ class JiraFieldMapper:
 
             fields_data = fields_response.json()
 
-            # The new API returns fields as an array in "values", need to convert to dict
-            field_values = fields_data.get("values", [])
+            # Support both JIRA API versions:
+            # - Newer JIRA (Cloud/9.0+): returns "fields"
+            # - Older JIRA: returns "values"
+            field_values = fields_data.get("fields", fields_data.get("values", []))
             fields_dict = {}
             for field in field_values:
                 field_id = field.get("fieldId")
