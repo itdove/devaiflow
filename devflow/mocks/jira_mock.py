@@ -43,16 +43,17 @@ class MockJiraClient:
         """
         return self.store.get_jira_ticket(key)
 
-    def get_ticket_detailed(self, key: str, field_mappings: Optional[Dict] = None, include_changelog: bool = False) -> Optional[Dict[str, Any]]:
-        """Get detailed issue tracker ticket including changelog.
+    def get_ticket_detailed(self, key: str, field_mappings: Optional[Dict] = None, include_changelog: bool = False, include_comments: bool = False) -> Optional[Dict[str, Any]]:
+        """Get detailed issue tracker ticket including changelog and comments.
 
         Args:
             key: issue tracker key
             field_mappings: Optional field mappings dict (ignored in mock)
             include_changelog: If True, include changelog/history data
+            include_comments: If True, include comments data
 
         Returns:
-            Ticket data dict with changelog or None if not found
+            Ticket data dict with changelog and/or comments or None if not found
         """
         ticket = self.store.get_jira_ticket(key)
         if ticket:
@@ -61,6 +62,10 @@ class MockJiraClient:
                 ticket["changelog"] = {
                     "histories": []
                 }
+            # Add comments if requested
+            if include_comments:
+                comments = self.get_comments(key)
+                ticket["comments"] = comments
         return ticket
 
     def create_ticket(
@@ -168,22 +173,46 @@ class MockJiraClient:
         # Store updated ticket
         self.store.set_jira_ticket(issue_key, ticket)
 
-    def add_comment(self, key: str, comment: str) -> bool:
+    def get_comments(self, key: str) -> List[Dict[str, Any]]:
+        """Get all comments for a JIRA ticket.
+
+        Args:
+            key: JIRA key
+
+        Returns:
+            List of comment dictionaries
+
+        Raises:
+            JiraNotFoundError: If ticket not found
+        """
+        from devflow.jira.exceptions import JiraNotFoundError
+
+        ticket = self.store.get_jira_ticket(key)
+        if not ticket:
+            raise JiraNotFoundError(f"Ticket {key} not found")
+
+        # Get comments from store
+        comments_data = self.store.get_jira_comments(key)
+        return comments_data if comments_data else []
+
+    def add_comment(self, key: str, comment: str, public: bool = False) -> None:
         """Add a comment to a issue tracker ticket.
 
         Args:
             key: issue tracker key
             comment: Comment text
+            public: If True, make comment public (ignored in mock)
 
-        Returns:
-            True if successful, False if ticket not found
+        Raises:
+            JiraNotFoundError: If ticket not found
         """
+        from devflow.jira.exceptions import JiraNotFoundError
+
         ticket = self.store.get_jira_ticket(key)
         if not ticket:
-            return False
+            raise JiraNotFoundError(f"Ticket {key} not found")
 
         self.store.add_jira_comment(key, comment)
-        return True
 
     def add_attachment(self, key: str, filepath: str) -> bool:
         """Add an attachment to a issue tracker ticket.

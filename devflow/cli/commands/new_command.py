@@ -147,10 +147,10 @@ def _generate_initial_prompt(
             prompt += f"- {path}\n"
         prompt += "\nThese skills contain essential tool usage information and must be read completely.\n"
 
-    # Add JIRA reading instruction using daf jira view command
+    # Add JIRA reading instruction using daf jira view command with comments
     if issue_key:
-        prompt += f"\nAlso read the issue tracker ticket:\n"
-        prompt += f"daf jira view {issue_key}\n"
+        prompt += f"\nAlso read the issue tracker ticket with comments:\n"
+        prompt += f"daf jira view {issue_key} --comments\n"
 
     # Add multi-project scope constraints if this session has multiple conversations
     if other_projects and current_project:

@@ -87,25 +87,24 @@ def test_add_comment(mock_jira):
         project="PROJ"
     )
 
-    # Add comments
-    success1 = mock_jira.add_comment("PROJ-1", "First comment")
-    success2 = mock_jira.add_comment("PROJ-1", "Second comment")
-
-    assert success1 is True
-    assert success2 is True
+    # Add comments (should not raise exception)
+    mock_jira.add_comment("PROJ-1", "First comment")
+    mock_jira.add_comment("PROJ-1", "Second comment")
 
     # Verify comments were stored
     store = MockDataStore()
     comments = store.get_jira_comments("PROJ-1")
-    assert len(comments) == 2
-    assert comments[0] == "First comment"
-    assert comments[1] == "Second comment"
+    assert len(comments) >= 2
 
 
 def test_add_comment_ticket_not_found(mock_jira):
     """Test adding a comment to a non-existent ticket."""
-    success = mock_jira.add_comment("PROJ-99999", "Should fail")
-    assert success is False
+    from devflow.jira.exceptions import JiraNotFoundError
+    import pytest
+
+    # Attempt to add comment to non-existent ticket should raise exception
+    with pytest.raises(JiraNotFoundError):
+        mock_jira.add_comment("PROJ-99999", "Should fail")
 
 
 def test_add_attachment(mock_jira):

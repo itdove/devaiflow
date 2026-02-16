@@ -1096,7 +1096,8 @@ def jira(ctx: click.Context) -> None:
 @click.argument("issue_key")
 @click.option("--history", is_flag=True, help="Show changelog/history of status transitions")
 @click.option("--children", is_flag=True, help="Show child issues (subtasks and epic children)")
-def jira_view(ctx: click.Context, issue_key: str, history: bool, children: bool) -> None:
+@click.option("--comments", is_flag=True, help="Show comments on the ticket")
+def jira_view(ctx: click.Context, issue_key: str, history: bool, children: bool, comments: bool) -> None:
     """View a issue tracker ticket in Claude-friendly format.
 
     ISSUE_KEY is the ticket key (e.g., PROJ-12345).
@@ -1109,11 +1110,14 @@ def jira_view(ctx: click.Context, issue_key: str, history: bool, children: bool)
 
     Use --children to display all child issues (subtasks and stories/tasks
     linked via Epic Link) with their key, type, status, summary, and assignee.
+
+    Use --comments to display all comments on the ticket with author, timestamp,
+    and comment text.
     """
     from devflow.cli.commands.jira_view_command import view_jira_ticket
 
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    view_jira_ticket(issue_key, show_history=history, show_children=children, output_json=output_json)
+    view_jira_ticket(issue_key, show_history=history, show_children=children, show_comments=comments, output_json=output_json)
 
 
 @jira.command(name="add-comment")

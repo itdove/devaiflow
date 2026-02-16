@@ -251,6 +251,16 @@ class MockJiraCLI:
                 self.tickets_with_changelog = {}
             self.tickets_with_changelog[key] = data["changelog"]
 
+    def set_comments(self, key: str, comments_data: Dict[str, Any]) -> None:
+        """Configure mock comments for a ticket.
+
+        Args:
+            key: issue tracker key
+            comments_data: Comments data dictionary with "comments" key
+                          Example: {"comments": [{"id": "1", "author": {...}, "created": "...", "body": "..."}]}
+        """
+        self.comments[key] = comments_data
+
     def add_comment(self, key: str, comment: str) -> None:
         """Add a comment to a ticket (for verification).
 
@@ -260,7 +270,14 @@ class MockJiraCLI:
         """
         if key not in self.comments:
             self.comments[key] = []
-        self.comments[key].append(comment)
+        if isinstance(self.comments[key], dict):
+            # If comments are in JIRA API format, append to the list
+            if "comments" not in self.comments[key]:
+                self.comments[key]["comments"] = []
+            self.comments[key]["comments"].append(comment)
+        else:
+            # Legacy format: list of strings
+            self.comments[key].append(comment)
 
     def add_attachment(self, key: str, filename: str) -> None:
         """Add an attachment to a ticket (for verification).
@@ -568,6 +585,18 @@ class MockJiraCLI:
                         response.status_code = 404
                         response.text = f"Issue {key} not found"
                         return response
+
+                # Handle GET /rest/api/2/issue/{key}/comment
+                elif method == "GET" and "/comment" in endpoint:
+                    if key in self.tickets:
+                        # Return comments for this ticket
+                        comments_data = self.comments.get(key, {"comments": []})
+                        response.status_code = 200
+                        response.json.return_value = comments_data
+                    else:
+                        response.status_code = 404
+                        response.text = f"Issue {key} not found"
+                    return response
 
                 # Handle POST /rest/api/2/issue/{key}/comment
                 elif method == "POST" and "/comment" in endpoint:

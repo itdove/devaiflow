@@ -34,7 +34,7 @@ daf complete --latest        # Complete most recent session
 
 **JIRA Integration:**
 ```bash
-daf jira view PROJ-12345              # View ticket details
+daf jira view PROJ-12345 --comments   # View ticket details with comments
 daf jira create bug --summary "..."   # Create new JIRA bug
 daf jira create story --summary "..." # Create new JIRA story
 daf jira update PROJ-12345 --priority Major  # Update ticket

@@ -8,6 +8,7 @@ from devflow.cli.commands.jira_view_command import (
     format_ticket_for_claude,
     format_changelog_for_claude,
     format_child_issues_for_claude,
+    format_comments_for_claude,
     view_jira_ticket,
 )
 
@@ -978,3 +979,238 @@ def test_view_jira_ticket_without_children(mock_jira_cli, temp_daf_home, monkeyp
     # Check child issues are NOT present
     assert "Child Issues:" not in captured.out
     assert "No child issues found" not in captured.out
+
+
+def test_format_comments_basic():
+    """Test formatting comments with basic data."""
+    comments = [
+        {
+            "id": "10001",
+            "author": "John Doe",
+            "created": "2025-12-05T20:13:45.380+0000",
+            "body": "This is a comment",
+        },
+        {
+            "id": "10002",
+            "author": "Jane Smith",
+            "created": "2025-12-05T20:14:00.401+0000",
+            "body": "This is another comment\nwith multiple lines",
+        }
+    ]
+
+    result = format_comments_for_claude(comments)
+
+    assert "Comments:" in result
+    assert "2025-12-05 20:13:45 | John Doe" in result
+    assert "  This is a comment" in result
+    assert "2025-12-05 20:14:00 | Jane Smith" in result
+    assert "  This is another comment" in result
+    assert "  with multiple lines" in result
+
+
+def test_format_comments_with_visibility():
+    """Test formatting comments with visibility restrictions."""
+    comments = [
+        {
+            "id": "10001",
+            "author": "John Doe",
+            "created": "2025-12-05T20:13:45.380+0000",
+            "body": "Restricted comment",
+            "visibility": {
+                "type": "group",
+                "value": "developers"
+            }
+        }
+    ]
+
+    result = format_comments_for_claude(comments)
+
+    assert "Comments:" in result
+    assert "[Visibility: group=developers]" in result
+    assert "  Restricted comment" in result
+
+
+def test_format_comments_empty():
+    """Test formatting empty comments list."""
+    comments = []
+
+    result = format_comments_for_claude(comments)
+
+    assert result == ""
+
+
+def test_get_comments(mock_jira_cli):
+    """Test fetching comments from a JIRA ticket."""
+    # First create the ticket
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+
+    mock_jira_cli.set_comments("PROJ-12345", {
+        "comments": [
+            {
+                "id": "10001",
+                "author": {"displayName": "John Doe"},
+                "created": "2025-12-05T20:13:45.380+0000",
+                "body": "First comment",
+            },
+            {
+                "id": "10002",
+                "author": {"displayName": "Jane Smith"},
+                "created": "2025-12-05T20:14:00.401+0000",
+                "body": "Second comment",
+                "visibility": {
+                    "type": "group",
+                    "value": "developers"
+                }
+            }
+        ]
+    })
+
+    client = JiraClient()
+    comments = client.get_comments("PROJ-12345")
+
+    assert len(comments) == 2
+    assert comments[0]["id"] == "10001"
+    assert comments[0]["author"] == "John Doe"
+    assert comments[0]["body"] == "First comment"
+    assert "visibility" not in comments[0]
+
+    assert comments[1]["id"] == "10002"
+    assert comments[1]["author"] == "Jane Smith"
+    assert comments[1]["body"] == "Second comment"
+    assert comments[1]["visibility"]["type"] == "group"
+    assert comments[1]["visibility"]["value"] == "developers"
+
+
+def test_get_comments_no_comments(mock_jira_cli):
+    """Test fetching comments when there are none."""
+    # First create the ticket
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+        }
+    })
+
+    mock_jira_cli.set_comments("PROJ-12345", {
+        "comments": []
+    })
+
+    client = JiraClient()
+    comments = client.get_comments("PROJ-12345")
+
+    assert len(comments) == 0
+
+
+def test_get_ticket_detailed_with_comments(mock_jira_cli):
+    """Test fetching a ticket with comments included."""
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+        }
+    })
+
+    mock_jira_cli.set_comments("PROJ-12345", {
+        "comments": [
+            {
+                "id": "10001",
+                "author": {"displayName": "John Doe"},
+                "created": "2025-12-05T20:13:45.380+0000",
+                "body": "Test comment",
+            }
+        ]
+    })
+
+    client = JiraClient()
+    ticket = client.get_ticket_detailed("PROJ-12345", include_comments=True)
+
+    assert ticket is not None
+    assert "comments" in ticket
+    assert len(ticket["comments"]) == 1
+    assert ticket["comments"][0]["author"] == "John Doe"
+
+
+def test_view_jira_ticket_with_comments(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test viewing a JIRA ticket with comments."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "In Progress"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+            "priority": {"name": "Major"},
+        }
+    })
+
+    mock_jira_cli.set_comments("PROJ-12345", {
+        "comments": [
+            {
+                "id": "10001",
+                "author": {"displayName": "John Doe"},
+                "created": "2025-12-05T20:13:45.380+0000",
+                "body": "First comment",
+            },
+            {
+                "id": "10002",
+                "author": {"displayName": "Jane Smith"},
+                "created": "2025-12-05T20:14:00.000+0000",
+                "body": "Second comment",
+            }
+        ]
+    })
+
+    view_jira_ticket("PROJ-12345", show_comments=True)
+
+    captured = capsys.readouterr()
+    # Check ticket info is present
+    assert "Key: PROJ-12345" in captured.out
+    assert "Summary: Test ticket" in captured.out
+
+    # Check comments are present
+    assert "Comments:" in captured.out
+    assert "2025-12-05 20:13:45 | John Doe" in captured.out
+    assert "  First comment" in captured.out
+    assert "2025-12-05 20:14:00 | Jane Smith" in captured.out
+    assert "  Second comment" in captured.out
+
+
+def test_view_jira_ticket_without_comments(mock_jira_cli, temp_daf_home, monkeypatch, capsys):
+    """Test that comments are not shown when show_comments=False."""
+    # Use DEVAIFLOW_HOME to point to temp directory
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
+
+    mock_jira_cli.set_ticket("PROJ-12345", {
+        "key": "PROJ-12345",
+        "fields": {
+            "summary": "Test ticket",
+            "status": {"name": "New"},
+            "issuetype": {"name": "Story"},
+            "description": "Test description",
+        }
+    })
+
+    view_jira_ticket("PROJ-12345", show_comments=False)
+
+    captured = capsys.readouterr()
+    # Check ticket info is present
+    assert "Key: PROJ-12345" in captured.out
+    assert "Summary: Test ticket" in captured.out
+
+    # Check comments are NOT present
+    assert "Comments:" not in captured.out
