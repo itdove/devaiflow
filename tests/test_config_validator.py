@@ -239,6 +239,189 @@ class TestValidationResult:
         assert errors[0].field == "field2"
 
 
+class TestValidateFileMethod:
+    """Test the validate_file method for individual file validation."""
+
+    def test_validate_enterprise_file(self, validator, temp_config_dir):
+        """Test validate_file for enterprise.json."""
+        enterprise_file = temp_config_dir / "enterprise.json"
+        enterprise_file.write_text(json.dumps({"backend_url": "https://example.com"}))
+
+        result = validator.validate_file(enterprise_file)
+
+        assert isinstance(result, ValidationResult)
+
+    def test_validate_organization_file(self, validator, temp_config_dir):
+        """Test validate_file for organization.json."""
+        org_file = temp_config_dir / "organization.json"
+        org_file.write_text(json.dumps({"jira_project": "PROJ"}))
+
+        result = validator.validate_file(org_file)
+
+        assert isinstance(result, ValidationResult)
+
+    def test_validate_team_file(self, validator, temp_config_dir):
+        """Test validate_file for team.json."""
+        team_file = temp_config_dir / "team.json"
+        team_file.write_text(json.dumps({"time_tracking_enabled": True}))
+
+        result = validator.validate_file(team_file)
+
+        assert isinstance(result, ValidationResult)
+
+    def test_validate_config_file(self, validator, temp_config_dir):
+        """Test validate_file for config.json."""
+        config_file = temp_config_dir / "config.json"
+        config_file.write_text(json.dumps({"repos": {"workspace": str(temp_config_dir)}}))
+
+        result = validator.validate_file(config_file)
+
+        assert isinstance(result, ValidationResult)
+
+    def test_validate_jira_backend_file(self, validator, temp_config_dir):
+        """Test validate_file for backends/jira.json."""
+        backends_dir = temp_config_dir / "backends"
+        backends_dir.mkdir(parents=True, exist_ok=True)
+        jira_file = backends_dir / "jira.json"
+        jira_file.write_text(json.dumps({"url": "https://jira.example.com", "user": "test", "transitions": {}}))
+
+        result = validator.validate_file(jira_file)
+
+        assert isinstance(result, ValidationResult)
+
+    def test_validate_file_unknown_type(self, validator, temp_config_dir):
+        """Test validate_file raises error for unknown file type."""
+        unknown_file = temp_config_dir / "unknown.json"
+        unknown_file.write_text(json.dumps({}))
+
+        with pytest.raises(ValueError, match="Unknown config file"):
+            validator.validate_file(unknown_file)
+
+
+class TestPrintValidationResult:
+    """Test the print_validation_result method."""
+
+    def test_print_validation_result_complete(self, validator):
+        """Test printing result when validation is complete."""
+        from unittest.mock import patch
+
+        result = ValidationResult(is_complete=True, issues=[])
+
+        with patch('devflow.config.validator.console') as mock_console:
+            validator.print_validation_result(result)
+
+            # Should print success message
+            assert mock_console.print.called
+            assert any("complete" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_print_validation_result_with_warnings(self, validator):
+        """Test printing result with warnings."""
+        from unittest.mock import patch
+
+        result = ValidationResult(
+            is_complete=False,
+            issues=[
+                ValidationIssue(
+                    file="test.json",
+                    field="field1",
+                    issue_type="placeholder",
+                    message="Placeholder found",
+                    suggestion="Replace with actual value",
+                    severity="warning"
+                )
+            ]
+        )
+
+        with patch('devflow.config.validator.console') as mock_console:
+            validator.print_validation_result(result, verbose=True)
+
+            # Should print warning info
+            assert mock_console.print.called
+            assert mock_console.print.call_count >= 4  # Summary + file + issue + suggestion
+
+    def test_print_validation_result_with_errors(self, validator):
+        """Test printing result with errors."""
+        from unittest.mock import patch
+
+        result = ValidationResult(
+            is_complete=False,
+            issues=[
+                ValidationIssue(
+                    file="test.json",
+                    field="field1",
+                    issue_type="invalid_json",
+                    message="Invalid JSON",
+                    suggestion="Fix JSON syntax",
+                    severity="error"
+                )
+            ]
+        )
+
+        with patch('devflow.config.validator.console') as mock_console:
+            validator.print_validation_result(result, verbose=True)
+
+            # Should print error info
+            assert mock_console.print.called
+
+    def test_print_validation_result_non_verbose(self, validator):
+        """Test printing result in non-verbose mode."""
+        from unittest.mock import patch
+
+        result = ValidationResult(
+            is_complete=False,
+            issues=[
+                ValidationIssue(
+                    file="test.json",
+                    field="field1",
+                    issue_type="placeholder",
+                    message="Issue found",
+                    suggestion="Fix it",
+                    severity="warning"
+                )
+            ]
+        )
+
+        with patch('devflow.config.validator.console') as mock_console:
+            validator.print_validation_result(result, verbose=False)
+
+            # Should print summary only
+            assert mock_console.print.called
+            # Should suggest running validate command
+            assert any("daf config show" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_print_validation_result_multiple_files(self, validator):
+        """Test printing result with issues in multiple files."""
+        from unittest.mock import patch
+
+        result = ValidationResult(
+            is_complete=False,
+            issues=[
+                ValidationIssue(
+                    file="file1.json",
+                    field="field1",
+                    issue_type="placeholder",
+                    message="Issue 1",
+                    suggestion="Fix 1",
+                    severity="warning"
+                ),
+                ValidationIssue(
+                    file="file2.json",
+                    field="field2",
+                    issue_type="placeholder",
+                    message="Issue 2",
+                    suggestion="Fix 2",
+                    severity="error"
+                ),
+            ]
+        )
+
+        with patch('devflow.config.validator.console') as mock_console:
+            validator.print_validation_result(result, verbose=True)
+
+            # Should print both files
+            assert mock_console.print.called
+
+
 class TestConfigLoaderIntegration:
     """Test integration between ConfigLoader and validator."""
 

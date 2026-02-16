@@ -628,6 +628,100 @@ cd integration-tests && ./run_all_integration_tests.sh
 # 6. Only mark task as complete if ALL tests pass (unit + integration)
 ```
 
+### Test Coverage Strategy
+
+**Target**: Maintain >80% code coverage (currently targeting 70% for open source release)
+
+When working on improving test coverage, follow this systematic approach to efficiently reach the target:
+
+1. **Run Initial Coverage Analysis**
+   ```bash
+   pytest --cov=devflow --cov-report=json --cov-report=term
+   ```
+   This generates `coverage.json` with detailed line-by-line coverage information.
+
+2. **Calculate Missing Lines**
+   - Check current coverage percentage and total lines
+   - Calculate how many additional lines need to be covered to reach the target
+   - Example: If at 68% (13,714/20,028 lines) and targeting 70% (14,020 lines needed), you need 306 more lines
+
+3. **Identify Most Promising Files**
+   a. **Priority 1: High-impact files** - Files with many missing lines (30+ uncovered lines) that are critical to functionality
+   b. **Priority 2: Medium-impact files** - Files with 15-30 missing lines
+   c. **Priority 3: Low-hanging fruit** - Files with 5-15 missing lines that are easy to test
+
+   Focus on files where you can cover the most lines with the least effort. Skip:
+   - Complex integration code that requires extensive mocking
+   - Edge cases in rarely-used features
+   - Legacy code that will be refactored
+
+4. **Create Targeted Tests**
+   - For each target file, create a `test_<module>_extended.py` file
+   - Write tests that specifically target uncovered lines identified in step 3
+   - Aim to create tests for **10+ modules** before running coverage again
+   - Target **400+ total lines** of missing coverage in a single batch to minimize coverage recalculation time
+
+   Example test file naming:
+   ```
+   tests/test_info_command_extended.py
+   tests/test_context_commands_extended.py
+   tests/test_sync_command_extended.py
+   ```
+
+5. **Run Individual Test Files**
+   - Before running full coverage, test each new file individually:
+   ```bash
+   pytest tests/test_info_command_extended.py -v
+   pytest tests/test_context_commands_extended.py -v
+   ```
+   - Fix any failing tests immediately
+   - This prevents wasting time on coverage calculation if tests don't pass
+
+6. **Run Coverage Again**
+   ```bash
+   pytest --cov=devflow --cov-report=json --cov-report=term
+   ```
+   - Verify that coverage has increased
+   - If not at target yet, repeat from step 2
+
+7. **Iterate Until Target Reached**
+   - Continue the cycle: analyze → identify → create tests → validate → measure
+   - Track progress: document coverage percentage after each iteration
+   - **IMPORTANT**: Run coverage calculation sparingly (every 10+ modules) as it's time-consuming
+
+**Example Workflow**:
+```bash
+# Step 1: Initial coverage
+pytest --cov=devflow --cov-report=json --cov-report=term
+# Result: 68.19% (13,658/20,028), need 361 more lines
+
+# Step 2: Identify high-priority files from coverage.json
+# - info_command.py: 38 missing lines
+# - claude_commands.py: 38 missing lines
+# - permissions.py: 23 missing lines
+# - context_commands.py: 19 missing lines
+# ... (select 10+ files targeting 400+ total lines)
+
+# Step 3: Create comprehensive test files for all targets
+# (Create 10+ test files in one batch)
+
+# Step 4: Run individual tests to validate
+pytest tests/test_info_command_extended.py -v
+pytest tests/test_permissions_extended.py -v
+# ... (fix any failures)
+
+# Step 5: Run coverage once after all tests pass
+pytest --cov=devflow --cov-report=json --cov-report=term
+# Check if target reached, if not repeat from step 2
+```
+
+**Efficiency Tips**:
+- **Batch your work**: Create tests for 10-15 modules at once, then run coverage ONCE
+- **Don't run coverage after every test**: Coverage calculation takes 2-3 minutes
+- **Focus on high-value targets**: 5 files with 30 missing lines each = 150 lines in one batch
+- **Validate tests first**: Always run individual test files before running full coverage
+- **Use coverage.json**: Parse it to programmatically identify best targets
+
 ### Documentation Updates
 
 **IMPORTANT**: When completing a task that adds new features or changes existing functionality, you MUST update the relevant documentation:

@@ -83,6 +83,7 @@
         "custom_field_defaults": {
           "anyOf": [
             {
+              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -91,6 +92,19 @@
           ],
           "default": null,
           "title": "Custom Field Defaults"
+        },
+        "system_field_defaults": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "System Field Defaults"
         },
         "affected_version": {
           "anyOf": [
@@ -108,6 +122,7 @@
           "anyOf": [
             {
               "additionalProperties": {
+                "additionalProperties": true,
                 "type": "object"
               },
               "type": "object"
@@ -177,14 +192,23 @@
               "type": "null"
             }
           ],
-          "default": {
-            "story": "epic_link",
-            "task": "epic_link",
-            "bug": "epic_link",
-            "spike": "epic_link",
-            "sub-task": "parent"
-          },
+          "default": null,
           "title": "Parent Field Mapping"
+        },
+        "issue_templates": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issue Templates"
         }
       },
       "required": [
@@ -210,15 +234,24 @@
           "type": "array"
         },
         "required_fields": {
-          "default": [
-            "sprint",
-            "story-points"
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            }
           ],
-          "items": {
-            "type": "string"
-          },
-          "title": "Required Fields",
-          "type": "array"
+          "title": "Required Fields"
         },
         "assignee": {
           "default": "currentUser()",
@@ -444,6 +477,18 @@
           ],
           "default": null,
           "title": "Auto Complete On Exit"
+        },
+        "auto_select_target_branch": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Select Target Branch"
         },
         "default_branch_strategy": {
           "anyOf": [

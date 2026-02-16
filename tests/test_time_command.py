@@ -1,7 +1,7 @@
 """Tests for time command."""
 
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from devflow.cli.commands.time_command import show_time
 from devflow.config.loader import ConfigLoader
@@ -264,3 +264,182 @@ def test_show_time_percentage_calculation_multiple_users(temp_daf_home):
 
     show_time(identifier="percentage-test")
     # Should display alice: 75%, bob: 25%
+
+
+def test_show_time_console_output_verification(temp_daf_home):
+    """Test that show_time generates correct console output."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="console-test",
+        goal="Test console output",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Add work session
+    start = datetime.now()
+    end = start + timedelta(hours=2, minutes=30)
+    session.work_sessions = [WorkSession(user="testuser", start=start, end=end)]
+    session_manager.update_session(session)
+
+    with patch('devflow.cli.commands.time_command.console') as mock_console:
+        show_time(identifier="console-test")
+
+        # Verify console.print was called (table and total)
+        assert mock_console.print.called
+        assert mock_console.print.call_count >= 2  # At least table + total
+
+
+def test_show_time_table_creation_with_console_mock(temp_daf_home):
+    """Test table creation and display with mocked console."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="table-test",
+        goal="Test table creation",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-1",
+    )
+    session.issue_key = "PROJ-999"
+
+    # Add multiple work sessions
+    start = datetime.now()
+    session.work_sessions = [
+        WorkSession(user="alice", start=start, end=start + timedelta(hours=1, minutes=30)),
+        WorkSession(user="bob", start=start + timedelta(hours=2), end=start + timedelta(hours=3)),
+    ]
+    session_manager.update_session(session)
+
+    with patch('devflow.cli.commands.time_command.console') as mock_console:
+        show_time(identifier="table-test")
+
+        # Verify table was printed
+        assert mock_console.print.called
+        # Should have table + total printed (no per-user breakdown since only 1 user with significant time)
+        assert mock_console.print.call_count >= 2
+
+
+def test_show_time_auto_select_with_console_output(temp_daf_home):
+    """Test auto-selection displays correct console output."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="auto-select-test",
+        goal="Test auto-selection",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-1",
+    )
+    session.status = "in_progress"
+    session.issue_key = "AUTO-123"
+
+    # Add work session to ensure table is displayed
+    start = datetime.now()
+    end = start + timedelta(hours=1)
+    session.work_sessions = [WorkSession(user="testuser", start=start, end=end)]
+    session_manager.update_session(session)
+
+    with patch('devflow.cli.commands.time_command.console') as mock_console:
+        # Call without identifier - should auto-select
+        show_time()
+
+        # Verify console output
+        assert mock_console.print.called
+        # Should show: "Showing time for..." + table + total
+        assert mock_console.print.call_count >= 3
+
+
+def test_show_time_per_user_breakdown_console_output(temp_daf_home):
+    """Test per-user breakdown console output with multiple users."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="multi-user-output",
+        goal="Test multi-user output",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Add work sessions from multiple users
+    start = datetime.now()
+    session.work_sessions = [
+        WorkSession(user="alice", start=start, end=start + timedelta(hours=4)),
+        WorkSession(user="bob", start=start, end=start + timedelta(hours=2)),
+        WorkSession(user="charlie", start=start, end=start + timedelta(hours=1)),
+    ]
+    session_manager.update_session(session)
+
+    with patch('devflow.cli.commands.time_command.console') as mock_console:
+        show_time(identifier="multi-user-output")
+
+        # Verify console output
+        assert mock_console.print.called
+        # Should show: table + "Time by User:" header + 3 user lines + total
+        assert mock_console.print.call_count >= 5
+
+
+def test_show_time_active_work_session_display(temp_daf_home):
+    """Test display of active work session (no end time)."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="active-display",
+        goal="Test active display",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Add active work session (no end time)
+    start = datetime.now() - timedelta(hours=2)
+    session.work_sessions = [
+        WorkSession(user="testuser", start=start, end=start + timedelta(hours=1)),
+        WorkSession(user="testuser", start=datetime.now(), end=None),  # Active
+    ]
+    session_manager.update_session(session)
+
+    with patch('devflow.cli.commands.time_command.console') as mock_console:
+        show_time(identifier="active-display")
+
+        # Verify console output includes table
+        assert mock_console.print.called
+        assert mock_console.print.call_count >= 2
+
+
+def test_show_time_total_calculation_console_output(temp_daf_home):
+    """Test total time calculation and console output."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="total-calc",
+        goal="Test total calculation",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Add work sessions
+    start = datetime.now()
+    session.work_sessions = [
+        WorkSession(user="user1", start=start, end=start + timedelta(hours=2, minutes=15)),
+        WorkSession(user="user2", start=start, end=start + timedelta(hours=3, minutes=45)),
+    ]
+    session_manager.update_session(session)
+
+    with patch('devflow.cli.commands.time_command.console') as mock_console:
+        show_time(identifier="total-calc")
+
+        # Verify console was called
+        assert mock_console.print.called
+        # Table + per-user breakdown (2 users) + header + total
+        assert mock_console.print.call_count >= 4

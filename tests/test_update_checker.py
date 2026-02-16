@@ -17,6 +17,8 @@ from devflow.utils.update_checker import (
     _read_cache,
     _write_cache,
     check_for_updates,
+    show_update_notification,
+    show_network_warning,
 )
 
 
@@ -429,3 +431,120 @@ def test_check_for_updates_uses_config_timeout(mock_is_dev, mock_get_timeout, mo
     mock_get_timeout.assert_called_once()
     # Verify timeout was passed to _fetch_latest_version_from_github
     mock_fetch.assert_called_once_with(timeout=15)
+
+
+def test_write_cache_io_error(mock_cache_file, monkeypatch):
+    """Test _write_cache handles IOError gracefully."""
+    # Make the cache file unwritable by mocking open to raise IOError
+    def mock_open_error(*args, **kwargs):
+        raise IOError("Permission denied")
+
+    monkeypatch.setattr("builtins.open", mock_open_error)
+
+    # Should not raise exception
+    data = {"timestamp": "2025-01-15T10:00:00"}
+    _write_cache(data)  # Should fail silently
+
+
+def test_is_cache_valid_invalid_timestamp_format():
+    """Test _is_cache_valid with invalid timestamp format."""
+    cache = {"timestamp": "invalid-date-format"}
+    assert _is_cache_valid(cache) is False
+
+
+def test_is_cache_valid_type_error():
+    """Test _is_cache_valid with non-string timestamp causing TypeError."""
+    cache = {"timestamp": 12345}  # Not a string
+    assert _is_cache_valid(cache) is False
+
+
+def test_get_timeout_from_config_error():
+    """Test _get_timeout_from_config returns default on error."""
+    with patch("devflow.config.loader.ConfigLoader", side_effect=Exception("Config error")):
+        timeout = _get_timeout_from_config()
+        assert timeout == 10  # Should return default
+
+
+@patch("devflow.utils.update_checker.requests.get")
+def test_fetch_latest_version_json_decode_error(mock_get):
+    """Test handling JSON decode errors in API response."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+    mock_get.return_value = mock_response
+
+    version, network_error = _fetch_latest_version_from_github()
+    assert version is None
+    assert network_error is False
+
+
+@patch("devflow.utils.update_checker.requests.get")
+def test_fetch_latest_version_key_error(mock_get):
+    """Test handling KeyError in API response."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    # Return a dict that will cause KeyError when accessing nested keys
+    mock_response.json.return_value = {"unexpected_key": "value"}
+    mock_get.return_value = mock_response
+
+    version, network_error = _fetch_latest_version_from_github()
+    # Should handle missing tag_name gracefully
+    assert version is None
+    assert network_error is False
+
+
+@patch("devflow.utils.update_checker.requests.get")
+def test_fetch_latest_version_non_dict_response(mock_get):
+    """Test handling non-dict API response."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = ["not", "a", "dict"]  # List instead of dict
+    mock_get.return_value = mock_response
+
+    version, network_error = _fetch_latest_version_from_github()
+    assert version is None
+    assert network_error is False
+
+
+@patch("devflow.utils.update_checker.__version__", "1.5.0")
+@patch("devflow.utils.update_checker._is_development_install")
+def test_check_for_updates_cached_version_none(mock_is_dev, mock_cache_file):
+    """Test check_for_updates when cached latest_version is None."""
+    mock_is_dev.return_value = False
+
+    # Write cache with None latest_version
+    cache_data = {
+        "timestamp": datetime.now().isoformat(),
+        "latest_version": None,
+        "current_version": "1.0.0"
+    }
+    _write_cache(cache_data)
+
+    # Should return None, False (no update available)
+    with patch("devflow.utils.update_checker._fetch_latest_version_from_github") as mock_fetch:
+        latest, network_error = check_for_updates()
+        assert latest is None
+        assert network_error is False
+        # Should not call _fetch since cache is valid (even though latest_version is None)
+        mock_fetch.assert_not_called()
+
+
+def test_show_update_notification(capsys):
+    """Test show_update_notification displays correct message."""
+    show_update_notification("2.0.0")
+
+    captured = capsys.readouterr()
+    assert "Update Available" in captured.out
+    assert "2.0.0" in captured.out
+    assert "pip install --upgrade --force-reinstall" in captured.out
+
+
+def test_show_network_warning(capsys):
+    """Test show_network_warning displays warning."""
+    show_network_warning()
+
+    captured = capsys.readouterr()
+    assert "Unable to check for updates" in captured.out
+    assert "GitHub not reachable" in captured.out
+
+

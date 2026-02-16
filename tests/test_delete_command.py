@@ -467,3 +467,140 @@ def test_delete_session_prevents_orphaned_metadata(temp_daf_home):
     # Verify we have a clean slate
         # Old metadata file should not exist (even though session manager creates new directory)
     assert not old_metadata_file.exists()
+
+
+def test_delete_with_latest_flag_no_sessions(temp_daf_home, capsys):
+    """Test delete --latest when no sessions exist."""
+    with pytest.raises(SystemExit) as exc_info:
+        delete_session(latest=True)
+    assert exc_info.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "No sessions found" in captured.out
+
+
+def test_delete_with_latest_flag_selects_most_recent(temp_daf_home):
+    """Test delete --latest selects the most recent session."""
+    from datetime import datetime, timedelta
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create multiple sessions with different last_active times
+    old_session = session_manager.create_session(
+        name="old-session",
+        goal="Old work",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-1",
+    )
+    old_session.last_active = datetime.now() - timedelta(days=5)
+    session_manager.update_session(old_session)
+
+    recent_session = session_manager.create_session(
+        name="recent-session",
+        goal="Recent work",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-2",
+        issue_key="PROJ-123",
+    )
+    recent_session.last_active = datetime.now()
+    session_manager.update_session(recent_session)
+
+    # Delete with --latest (should delete recent-session)
+    delete_session(latest=True, force=True)
+
+    # Reload and verify recent session was deleted
+    session_manager = SessionManager(config_loader)
+    assert session_manager.get_session("recent-session") is None
+    assert session_manager.get_session("old-session") is not None
+
+
+def test_delete_all_in_group_with_force(temp_daf_home):
+    """Test delete all sessions in group with force flag."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create session
+    session = session_manager.create_session(
+        name="multi-group",
+        goal="Group session",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Create session directory
+    session_dir = config_loader.get_session_dir("multi-group")
+    session_dir.mkdir(parents=True, exist_ok=True)
+    (session_dir / "notes.md").write_text("Group notes")
+
+    # Mock get_session_with_delete_all_option to return delete_all_in_group=True
+    with patch("devflow.cli.utils.get_session_with_delete_all_option", return_value=(session, True)):
+        delete_session(identifier="multi-group", force=True)
+
+    # Reload and verify session deleted
+    session_manager = SessionManager(config_loader)
+    assert session_manager.get_session("multi-group") is None
+    # Directory should be deleted
+    assert not session_dir.exists()
+
+
+def test_delete_all_in_group_confirmed_by_user(temp_daf_home):
+    """Test delete all in group with user confirmation."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create session
+    session = session_manager.create_session(
+        name="confirm-group",
+        goal="Group session",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Create session directory
+    session_dir = config_loader.get_session_dir("confirm-group")
+    session_dir.mkdir(parents=True, exist_ok=True)
+
+    # Mock get_session_with_delete_all_option and user confirms
+    with patch("devflow.cli.utils.get_session_with_delete_all_option", return_value=(session, True)):
+        with patch("devflow.cli.commands.delete_command.Confirm.ask", return_value=True):
+            delete_session(identifier="confirm-group")
+
+    # Reload and verify session deleted
+    session_manager = SessionManager(config_loader)
+    assert session_manager.get_session("confirm-group") is None
+
+
+def test_delete_all_in_group_with_keep_metadata_flag(temp_daf_home):
+    """Test delete all in group with --keep-metadata flag."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create session
+    session = session_manager.create_session(
+        name="keep-group",
+        goal="Keep metadata",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Create session directory with notes
+    session_dir = config_loader.get_session_dir("keep-group")
+    session_dir.mkdir(parents=True, exist_ok=True)
+    (session_dir / "notes.md").write_text("Important group notes")
+
+    # Mock get_session_with_delete_all_option to return delete_all_in_group=True
+    with patch("devflow.cli.utils.get_session_with_delete_all_option", return_value=(session, True)):
+        delete_session(identifier="keep-group", force=True, keep_metadata=True)
+
+    # Reload and verify session deleted
+    session_manager = SessionManager(config_loader)
+    assert session_manager.get_session("keep-group") is None
+
+    # Directory should be kept with --keep-metadata
+    assert session_dir.exists()
+    assert (session_dir / "notes.md").read_text() == "Important group notes"

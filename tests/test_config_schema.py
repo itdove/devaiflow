@@ -288,3 +288,105 @@ def test_validate_config_with_null_optional_fields():
     is_valid, error_message = config_loader.validate_config_dict(config_dict)
     assert is_valid is True
     assert error_message is None
+
+
+# Direct tests for schema module functions
+
+
+def test_validate_config_dict_direct():
+    """Test validate_config_dict function directly."""
+    config_dict = {
+        "jira": {
+            "url": "https://jira.example.com",
+            "user": "test-user",
+            "transitions": {}
+        },
+        "repos": {
+            "workspace": "/tmp/test"
+        }
+    }
+
+    is_valid, error = validate_config_dict(config_dict)
+    assert is_valid is True
+    assert error is None
+
+
+def test_validate_config_dict_validation_error():
+    """Test validate_config_dict with validation error."""
+    config_dict = {
+        "jira": {
+            "url": "not a valid url format maybe",
+            "user": 12345,  # Should be string
+            "transitions": {}
+        }
+    }
+
+    is_valid, error = validate_config_dict(config_dict)
+    assert is_valid is False
+    assert error is not None
+    assert "validation failed" in error.lower()
+
+
+def test_validate_config_dict_unexpected_exception():
+    """Test validate_config_dict handles unexpected exceptions."""
+    # Pass something that will cause unexpected error
+    config_dict = {"jira": {"transitions": "invalid"}}
+
+    is_valid, error = validate_config_dict(config_dict)
+    assert is_valid is False
+    assert error is not None
+
+
+def test_validate_config_file_direct_not_found(tmp_path):
+    """Test validate_config_file with non-existent file."""
+    config_path = tmp_path / "missing.json"
+
+    is_valid, error = validate_config_file(config_path)
+    assert is_valid is False
+    assert "not found" in error.lower()
+
+
+def test_validate_config_file_direct_invalid_json(tmp_path):
+    """Test validate_config_file with invalid JSON."""
+    config_path = tmp_path / "bad.json"
+    config_path.write_text("{ not valid json")
+
+    is_valid, error = validate_config_file(config_path)
+    assert is_valid is False
+    assert "json" in error.lower()
+
+
+def test_validate_config_file_direct_valid(tmp_path):
+    """Test validate_config_file with valid config."""
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "jira": {
+            "url": "https://jira.example.com",
+            "user": "test",
+            "transitions": {}
+        },
+        "repos": {"workspace": "/tmp/test"}
+    }))
+
+    is_valid, error = validate_config_file(config_path)
+    assert is_valid is True
+    assert error is None
+
+
+def test_validate_config_file_direct_read_error(tmp_path):
+    """Test validate_config_file with file read error."""
+    config_path = tmp_path / "unreadable.json"
+    # Write binary data that will fail JSON parsing
+    config_path.write_bytes(b'\x80\x81\x82')
+
+    is_valid, error = validate_config_file(config_path)
+    assert is_valid is False
+    assert error is not None
+
+
+def test_save_schema_default_path():
+    """Test save_schema without specifying output path."""
+    # This will use the default path
+    # Just verify it doesn't crash and returns a Path
+    result = save_schema()
+    assert isinstance(result, Path)

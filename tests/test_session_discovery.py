@@ -441,3 +441,24 @@ class TestSessionDiscovery:
         assert sessions[0].first_message == "First message"
         assert sessions[0].project_path == "/path/to/project"
         assert sessions[0].message_count == 101  # All messages counted
+
+    def test_discover_sessions_parse_exception_handling(self, temp_claude_dir, sample_session_messages):
+        """Test that parse exceptions are handled gracefully."""
+        from unittest.mock import patch
+
+        project_dir = temp_claude_dir / "projects" / "project1"
+        project_dir.mkdir(parents=True)
+
+        # Create a valid session file
+        session_file = project_dir / "test-uuid.jsonl"
+        with open(session_file, "w") as f:
+            for msg in sample_session_messages:
+                f.write(json.dumps(msg) + "\n")
+
+        discovery = SessionDiscovery(claude_dir=temp_claude_dir)
+
+        # Mock _parse_session_file to raise an exception
+        with patch.object(discovery, '_parse_session_file', side_effect=Exception("Parse error")):
+            # Should handle the exception and return empty list
+            sessions = discovery.discover_sessions()
+            assert sessions == []
