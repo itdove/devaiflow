@@ -101,7 +101,8 @@ def test_export_sessions_with_output_path(temp_daf_home, capsys):
 
         captured = capsys.readouterr()
         assert "Export created successfully" in captured.out
-        assert "custom_export.tar.gz" in captured.out
+        # Remove newlines to handle Rich console line wrapping
+        assert "custom_export.tar.gz" in captured.out.replace("\n", "")
 
 
 def test_export_sessions_value_error(temp_daf_home, capsys):
