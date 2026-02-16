@@ -952,16 +952,6 @@ class ReleaseManager:
         except Exception as e:
             return False, f"Error checking tag: {e}", None
 
-        # Verify version files match the release version
-        try:
-            init_version, setup_version = self.read_current_version()
-            if init_version != version_str and init_version != f"{version_str}-dev":
-                return False, f"Version mismatch: devflow/__init__.py has {init_version}, expected {version_str} or {version_str}-dev", None
-            if setup_version != version_str and setup_version != f"{version_str}-dev":
-                return False, f"Version mismatch: setup.py has {setup_version}, expected {version_str} or {version_str}-dev", None
-        except Exception as e:
-            return False, f"Error reading version files: {e}", None
-
         # Detect release type to determine if we have a release branch
         release_type = None
         release_branch = None
@@ -975,6 +965,23 @@ class ReleaseManager:
         else:
             release_type = "patch"
             release_branch = None
+
+        # Calculate the next dev version that 'daf release' would have set
+        next_dev_version = get_next_dev_version(version, release_type)
+        next_dev_version_str = str(next_dev_version)
+
+        # Verify version files match acceptable versions
+        # Accept: version_str (1.0.0), version_str-dev (1.0.0-dev), or next_dev_version (1.1.0-dev)
+        try:
+            init_version, setup_version = self.read_current_version()
+            acceptable_versions = [version_str, f"{version_str}-dev", next_dev_version_str]
+
+            if init_version not in acceptable_versions:
+                return False, f"Version mismatch: devflow/__init__.py has {init_version}, expected one of {', '.join(acceptable_versions)}", None
+            if setup_version not in acceptable_versions:
+                return False, f"Version mismatch: setup.py has {setup_version}, expected one of {', '.join(acceptable_versions)}", None
+        except Exception as e:
+            return False, f"Error reading version files: {e}", None
 
         # If release branch expected, verify it exists
         if release_branch:
