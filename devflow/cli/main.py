@@ -970,6 +970,37 @@ def cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None
     cleanup_sessions(dry_run=dry_run, force=force)
 
 
+@cli.command(name="rebuild-index")
+@click.option("--dry-run", is_flag=True, help="Show what would be rebuilt without actually rebuilding")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@json_option
+def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
+    """Rebuild sessions.json index from session directories.
+
+    Scans all session directories and rebuilds the sessions.json index file
+    from their metadata.json files. This is useful when:
+    - The sessions.json file was corrupted or deleted
+    - Sessions exist but don't appear in 'daf list'
+    - The index got out of sync with actual session data
+
+    \b
+    What it does:
+        - Scans all session directories
+        - Reads metadata.json from each directory
+        - Rebuilds sessions.json with all valid sessions
+        - Creates backup of existing sessions.json
+
+    \b
+    Examples:
+        daf rebuild-index --dry-run    # Preview what would be rebuilt
+        daf rebuild-index              # Rebuild with confirmation
+        daf rebuild-index --force      # Rebuild without confirmation
+    """
+    from devflow.cli.commands.rebuild_index_command import rebuild_index
+
+    rebuild_index(dry_run=dry_run, force=force)
+
+
 @cli.command(name="repair-conversation")
 @click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
 @click.option("--conversation-id", type=int, help="Repair specific conversation by number (1, 2, 3...)")
