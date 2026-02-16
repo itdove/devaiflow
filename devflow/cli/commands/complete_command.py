@@ -817,30 +817,41 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     # Show branch selection prompt
     console.print(f"\n[cyan]Select target branch for PR/MR (remote: {remote_name}):[/cyan]")
 
-    # Create choices with default branch highlighted
-    choices = []
-    for branch in branches:
+    # Display branch options as numbered list
+    console.print("\n[bold]Available branches:[/bold]")
+    for i, branch in enumerate(branches, 1):
         if branch == default_branch:
-            choices.append(f"{branch} [default]")
+            console.print(f"{i}. {branch} [green](default)[/green]")
         else:
-            choices.append(branch)
+            console.print(f"{i}. {branch}")
 
     # Add "Skip" option
-    choices.append("(Skip - use repository default)")
+    skip_option_number = len(branches) + 1
+    console.print(f"{skip_option_number}. Skip - use repository default")
 
+    # Create numeric choices for prompt
     from rich.prompt import Prompt
-    selected = Prompt.ask("Target branch", choices=choices, default=f"{default_branch} [default]" if default_branch else choices[0])
+    numeric_choices = [str(i) for i in range(1, skip_option_number + 1)]
+
+    # Find default choice number (default branch if available, otherwise first branch)
+    if default_branch and default_branch in branches:
+        default_choice = str(branches.index(default_branch) + 1)
+    else:
+        default_choice = "1"
+
+    # Prompt for selection
+    choice = Prompt.ask("Select option", choices=numeric_choices, default=default_choice)
 
     # Handle selection
-    if selected == "(Skip - use repository default)":
+    choice_num = int(choice)
+    if choice_num == skip_option_number:
+        # Skip option selected
         console.print("[dim]Using repository's default branch[/dim]")
         return None
-    elif selected.endswith(" [default]"):
-        # Extract branch name without " [default]" suffix
-        branch_name = selected.replace(" [default]", "")
-        return branch_name
     else:
-        return selected
+        # Branch selected - return branch name (accounting for 1-based indexing)
+        selected_branch = branches[choice_num - 1]
+        return selected_branch
 
 
 def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:

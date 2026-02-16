@@ -984,13 +984,16 @@ daf complete PROJ-12345
 Create a PR/MR now? [Y/n]: y
 Repository type detected: GITHUB
 
-Select target branch for PR:
-  1. main (default)
-  2. release/2.5
-  3. release/3.0
-  4. develop
+Select target branch for PR/MR (remote: origin):
 
-Select [1-4]: 2
+Available branches:
+1. main (default)
+2. release/2.5
+3. release/3.0
+4. develop
+5. Skip - use repository default
+
+Select option [1/2/3/4/5] (1): 2
 
 Pushing branch to origin...
 ✓ Pushed branch to origin
