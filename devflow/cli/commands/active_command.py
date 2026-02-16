@@ -123,7 +123,7 @@ def show_active(output_json: bool = False) -> None:
         lines.append("")
         lines.append(f"[bold]Other conversations in this session:[/bold]")
         for other_wd, other_conv in other_convos:
-            lines.append(f"  • {other_wd} (branch: {other_conv.branch})")
+            lines.append(f"  • {other_wd} (branch: {other_conv.active_session.branch})")
 
     panel_content = "\n".join(lines)
     panel = Panel(
