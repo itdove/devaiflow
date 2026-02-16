@@ -2617,6 +2617,27 @@ class ConfigTUI(App):
                 if sync_filter.assignee:
                     yield Static(f"[dim]Assignee Filter:[/dim] {sync_filter.assignee}")
 
+            yield Static("\n[dim]Advanced: Workflow Configuration[/dim]", classes="subsection-title")
+            yield Static(
+                "[dim]Transitions and parent field mapping are configured in organization.json[/dim]",
+                classes="section-help"
+            )
+
+            # Show current transitions configuration
+            if org_config and org_config.transitions:
+                yield Static(f"[dim]Configured transitions:[/dim] {', '.join(org_config.transitions.keys())}")
+            else:
+                yield Static("[dim]No custom transitions configured (using defaults)[/dim]")
+
+            # Show current parent field mapping
+            if org_config and org_config.parent_field_mapping:
+                yield Static(f"[dim]Parent field mapping:[/dim] {len(org_config.parent_field_mapping)} issue types configured")
+            else:
+                yield Static("[dim]No parent field mapping configured[/dim]")
+
+            yield Static("[dim]To edit transitions or parent_field_mapping, edit organization.json directly[/dim]")
+            yield Static("[dim]See docs/05-jira-integration.md for configuration syntax and examples[/dim]")
+
             yield Static("\n[yellow]💡 See ORGANIZATION.md for detailed policies and templates[/yellow]")
 
     def _compose_team_tab(self) -> ComposeResult:

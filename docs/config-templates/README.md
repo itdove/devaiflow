@@ -13,11 +13,11 @@
 
 ### backends/jira.json
 - `url`: Your JIRA instance URL (e.g., `https://jira.example.com`)
-- `transitions.on_start.to`: Status to transition to when starting work (or leave empty to prompt)
-- `transitions.on_complete.to`: Status to transition to when completing work (or leave empty to prompt)
 
 ### organization.json
 - `jira_project`: Your JIRA project key (e.g., `MYAPP`, `ENG`, `PROJ`)
+- `transitions.on_start.to`: Status to transition to when starting work (or leave empty to prompt)
+- `transitions.on_complete.to`: Status to transition to when completing work (or leave empty to prompt)
 
 All other fields are optional and will use sensible defaults.
 
@@ -46,7 +46,7 @@ Example manual field mapping:
 
 ### Parent Field Mapping
 
-Maps issue types to their parent link field names. Example:
+Maps issue types to their parent link field names. Configure in `organization.json`:
 ```json
 {
   "parent_field_mapping": {
@@ -59,7 +59,7 @@ Maps issue types to their parent link field names. Example:
 }
 ```
 
-Leave null for auto-discovery.
+This is organization-specific hierarchy policy. Leave null for auto-discovery.
 
 ### Sync Filters
 
@@ -203,7 +203,7 @@ daf jira view MYAPP-123
 - Check field name in JIRA admin settings
 
 ### "Transition failed"
-- Verify `transitions.on_start.to` and `transitions.on_complete.to` match your JIRA workflow
+- Verify `transitions.on_start.to` and `transitions.on_complete.to` in `organization.json` match your JIRA workflow
 - Use `prompt: true` to manually select status during transitions
 
 ### "Configuration not loaded"

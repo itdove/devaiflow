@@ -477,3 +477,178 @@ def test_optional_fields_with_none_in_json(temp_daf_home):
     config2 = loader.load_config()
     assert config2 is not None
     assert config2.pr_template_url is None
+
+
+def test_transitions_sourced_from_organization_config(temp_daf_home):
+    """Test that transitions are sourced from organization.json in new format.
+
+    This verifies the migration from backends/jira.json to organization.json.
+    """
+    loader = ConfigLoader()
+
+    # Create new format config files
+    backends_dir = loader.config_dir / "backends"
+    backends_dir.mkdir(exist_ok=True)
+
+    # Backend config (NO transitions)
+    backend_data = {
+        "url": "https://test-jira.example.com",
+        "field_mappings": None,
+        "field_cache_timestamp": None,
+        "field_cache_auto_refresh": True,
+        "field_cache_max_age_hours": 24,
+    }
+    with open(backends_dir / "jira.json", "w") as f:
+        json.dump(backend_data, f, indent=2)
+
+    # Organization config (WITH transitions)
+    org_data = {
+        "jira_project": "TEST",
+        "transitions": {
+            "on_start": {
+                "from": ["To Do", "New"],
+                "to": "In Progress",
+                "prompt": False,
+                "on_fail": "warn"
+            },
+            "on_complete": {
+                "from": ["In Progress"],
+                "to": "Done",
+                "prompt": False,
+                "on_fail": "warn"
+            }
+        },
+        "sync_filters": {
+            "sync": {
+                "status": ["To Do", "In Progress"],
+                "required_fields": [],
+                "assignee": "currentUser()"
+            }
+        }
+    }
+    with open(loader.config_dir / "organization.json", "w") as f:
+        json.dump(org_data, f, indent=2)
+
+    # User config (minimal)
+    user_data = {
+        "backend_config_source": "local",
+        "repos": {
+            "workspaces": [
+                {
+                    "name": "primary",
+                    "path": str(Path.home() / "development")
+                }
+            ]
+        }
+    }
+    with open(loader.config_file, "w") as f:
+        json.dump(user_data, f, indent=2)
+
+    # Load config
+    config = loader.load_config()
+
+    # Verify transitions come from organization.json
+    assert config is not None
+    assert config.jira.transitions is not None
+    assert "on_start" in config.jira.transitions
+    assert "on_complete" in config.jira.transitions
+    assert config.jira.transitions["on_start"].to == "In Progress"
+    assert config.jira.transitions["on_complete"].to == "Done"
+
+
+def test_parent_field_mapping_sourced_from_organization_config(temp_daf_home):
+    """Test that parent_field_mapping is sourced from organization.json in new format.
+
+    This verifies the migration from backends/jira.json to organization.json.
+    """
+    loader = ConfigLoader()
+
+    # Create new format config files
+    backends_dir = loader.config_dir / "backends"
+    backends_dir.mkdir(exist_ok=True)
+
+    # Backend config (NO parent_field_mapping)
+    backend_data = {
+        "url": "https://test-jira.example.com",
+        "field_mappings": None,
+        "field_cache_timestamp": None,
+        "field_cache_auto_refresh": True,
+        "field_cache_max_age_hours": 24,
+    }
+    with open(backends_dir / "jira.json", "w") as f:
+        json.dump(backend_data, f, indent=2)
+
+    # Organization config (WITH parent_field_mapping)
+    org_data = {
+        "jira_project": "TEST",
+        "parent_field_mapping": {
+            "story": "epic_link",
+            "task": "epic_link",
+            "sub-task": "parent"
+        },
+        "sync_filters": {
+            "sync": {
+                "status": ["To Do", "In Progress"],
+                "required_fields": [],
+                "assignee": "currentUser()"
+            }
+        }
+    }
+    with open(loader.config_dir / "organization.json", "w") as f:
+        json.dump(org_data, f, indent=2)
+
+    # User config (minimal)
+    user_data = {
+        "backend_config_source": "local",
+        "repos": {
+            "workspaces": [
+                {
+                    "name": "primary",
+                    "path": str(Path.home() / "development")
+                }
+            ]
+        }
+    }
+    with open(loader.config_file, "w") as f:
+        json.dump(user_data, f, indent=2)
+
+    # Load config
+    config = loader.load_config()
+
+    # Verify parent_field_mapping comes from organization.json
+    assert config is not None
+    assert config.jira.parent_field_mapping is not None
+    assert config.jira.parent_field_mapping["story"] == "epic_link"
+    assert config.jira.parent_field_mapping["sub-task"] == "parent"
+
+
+def test_save_new_format_preserves_transitions_in_organization_config(temp_daf_home):
+    """Test that saving config preserves transitions in organization.json.
+
+    Verifies that transitions are saved to organization.json, not backends/jira.json.
+    """
+    loader = ConfigLoader()
+
+    # Create default config
+    config = loader.create_default_config()
+
+    # Modify transitions
+    config.jira.transitions["on_start"].to = "Working"
+    config.jira.transitions["on_complete"].to = "Review"
+
+    # Save config
+    loader.save_config(config)
+
+    # Verify backend config does NOT have transitions
+    backend_file = loader.config_dir / "backends" / "jira.json"
+    with open(backend_file, "r") as f:
+        backend_data = json.load(f)
+    assert "transitions" not in backend_data
+
+    # Verify organization config HAS transitions
+    org_file = loader.config_dir / "organization.json"
+    with open(org_file, "r") as f:
+        org_data = json.load(f)
+    assert "transitions" in org_data
+    assert org_data["transitions"]["on_start"]["to"] == "Working"
+    assert org_data["transitions"]["on_complete"]["to"] == "Review"

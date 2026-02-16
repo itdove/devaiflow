@@ -67,9 +67,9 @@ daf config show
 ```
 
 This shows the final merged configuration from all 5 sources:
-1. `backends/jira.json` - Backend configuration (JIRA API settings, transitions, field mappings)
+1. `backends/jira.json` - Backend configuration (JIRA API settings, field mappings)
 2. `ENTERPRISE.md` - Enterprise-level overrides
-3. `organization.json` - Organization settings (project, sync filters)
+3. `organization.json` - Organization settings (project, transitions, parent_field_mapping, sync filters)
 4. `team.json` - Team settings (custom/system field defaults, components, labels)
 5. `USER.md` - User preferences (workspace, affected version)
 
@@ -225,6 +225,7 @@ For other organizations, simply replace with your own JIRA URL, project keys, an
 
 **Type:** object
 **Required:** No
+**Configuration File:** `organization.json` (organization workflow policy)
 **Description:** Configure automatic JIRA status transitions
 
 #### transitions.on_start
@@ -240,7 +241,7 @@ For other organizations, simply replace with your own JIRA URL, project keys, an
 
 **Examples:**
 
-Automatic transition without prompt:
+Automatic transition without prompt (in `organization.json`):
 ```json
 {
   "transitions": {
@@ -254,7 +255,7 @@ Automatic transition without prompt:
 }
 ```
 
-Prompt before transition:
+Prompt before transition (in `organization.json`):
 ```json
 {
   "transitions": {
@@ -280,7 +281,7 @@ Prompt before transition:
 
 **Examples:**
 
-**Option 1: Interactive prompt with dynamic transitions (recommended)**
+**Option 1: Interactive prompt with dynamic transitions (recommended)** (in `organization.json`):
 ```json
 {
   "transitions": {
@@ -299,7 +300,7 @@ When `prompt: true`, the tool will:
 
 **Note:** Available transitions are dynamically fetched from the JIRA API, so you always see only valid options for the ticket's current state.
 
-**Option 2: Automatic transition to a specific status**
+**Option 2: Automatic transition to a specific status** (in `organization.json`):
 ```json
 {
   "transitions": {
