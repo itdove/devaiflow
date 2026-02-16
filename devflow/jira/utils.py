@@ -10,6 +10,50 @@ if TYPE_CHECKING:
 
 console = Console()
 
+# Field name aliases for backward compatibility
+# Maps old JIRA server field names to new JIRA cloud field names
+FIELD_NAME_ALIASES = {
+    "component/s": "components",
+    "affects_version/s": "affects_versions",
+}
+
+
+def get_field_with_alias(field_mappings: Dict, field_name: str) -> Optional[Dict]:
+    """Get field info from field_mappings, checking both the field name and its alias.
+
+    This function provides backward compatibility for JIRA field names that changed
+    between server and cloud versions:
+    - component/s → components
+    - affects_version/s → affects_versions
+
+    Args:
+        field_mappings: Dictionary of field mappings
+        field_name: Field name to look up (can be old or new variant)
+
+    Returns:
+        Field info dictionary if found (checking both name and alias), None otherwise
+
+    Examples:
+        >>> field_mappings = {"component/s": {...}, "other": {...}}
+        >>> get_field_with_alias(field_mappings, "components")  # Returns field_mappings["component/s"]
+        >>> get_field_with_alias(field_mappings, "component/s")  # Returns field_mappings["component/s"]
+    """
+    # Try the field name directly first
+    if field_name in field_mappings:
+        return field_mappings[field_name]
+
+    # Try reverse lookup: check if field_name is an alias (new name) for an old name
+    for old_name, new_name in FIELD_NAME_ALIASES.items():
+        if field_name == new_name and old_name in field_mappings:
+            return field_mappings[old_name]
+
+    # Try forward lookup: check if field_name is an old name with a new alias
+    alias = FIELD_NAME_ALIASES.get(field_name)
+    if alias and alias in field_mappings:
+        return field_mappings[alias]
+
+    return None
+
 
 def merge_pr_urls(existing_urls: Union[str, List[str], None], new_urls: Union[str, List[str]]) -> str:
     """Merge new PR URLs with existing ones, avoiding duplicates.

@@ -336,7 +336,8 @@ class JiraFieldMapper:
             # This prevents errors like "Field does not support update 'attachment'"
             operations = field_data.get("operations", [])
             if not operations:
-                # Skip non-editable fields (e.g., attachment, issuelinks, component/s)
+                # Skip non-editable fields (e.g., attachment, issuelinks, component/s or components)
+                # Note: component/s (server) was renamed to components (cloud), both are non-editable during update
                 continue
 
             # Get field name from all_fields or use the one from editmeta
