@@ -919,3 +919,146 @@ class TestUpdateChangelogWithAutoGenerate:
 
             # Verify version section was added (just without generated content)
             assert "## [0.1.0] - 2026-01-20" in updated_content
+
+
+class TestValidateReleasePrepared:
+    """Test validate_release_prepared() version validation.
+
+    Bug: AAP-64004
+    After 'daf release 1.0.0', version files are set to 1.1.0-dev (next minor dev).
+    The 'daf release 1.0.0 approve' command should accept this version.
+    """
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.repo_path = Path("/test/repo")
+        self.manager = ReleaseManager(self.repo_path)
+
+    @patch("subprocess.run")
+    def test_validate_release_prepared_accepts_next_minor_dev_for_minor_release(self, mock_run):
+        """Test that validation accepts 1.1.0-dev when approving 1.0.0 minor release.
+
+        Acceptance Criteria:
+        - For minor/major releases: accept next_minor_dev (1.1.0-dev)
+        - Test passes for minor releases (0.Y.0 versions)
+        """
+        # Mock git tag verification
+        mock_run.return_value = Mock(returncode=0, stdout="v1.0.0\n")
+
+        # Mock version files showing 1.1.0-dev (what 'daf release 1.0.0' sets)
+        with patch.object(self.manager, 'read_current_version', return_value=("1.1.0-dev", "1.1.0-dev")):
+            version = Version.parse("1.0.0")
+            success, message, release_branch = self.manager.validate_release_prepared(version)
+
+        assert success is True, f"Expected validation to pass, but got: {message}"
+        assert release_branch == "release/1.0"
+
+    @patch("subprocess.run")
+    def test_validate_release_prepared_accepts_next_patch_dev_for_patch_release(self, mock_run):
+        """Test that validation accepts 1.0.2-dev when approving 1.0.1 patch release.
+
+        Acceptance Criteria:
+        - For patch releases: accept next_patch_dev (1.0.2-dev)
+        - Test passes for patch releases (X.Y.Z where Z > 0)
+        """
+        # Mock git tag verification
+        mock_run.return_value = Mock(returncode=0, stdout="v1.0.1\n")
+
+        # Mock version files showing 1.0.2-dev (what 'daf release 1.0.1' sets)
+        with patch.object(self.manager, 'read_current_version', return_value=("1.0.2-dev", "1.0.2-dev")):
+            version = Version.parse("1.0.1")
+            success, message, release_branch = self.manager.validate_release_prepared(version)
+
+        assert success is True, f"Expected validation to pass, but got: {message}"
+        assert release_branch is None  # Patch releases don't have release branches
+
+    @patch("subprocess.run")
+    def test_validate_release_prepared_accepts_release_version(self, mock_run):
+        """Test that validation accepts 1.0.0 (release version itself).
+
+        Acceptance Criteria:
+        - For minor/major releases: accept version_str (1.0.0)
+        """
+        # Mock git tag verification
+        mock_run.return_value = Mock(returncode=0, stdout="v1.0.0\n")
+
+        # Mock version files showing 1.0.0 (exact release version)
+        with patch.object(self.manager, 'read_current_version', return_value=("1.0.0", "1.0.0")):
+            version = Version.parse("1.0.0")
+            success, message, release_branch = self.manager.validate_release_prepared(version)
+
+        assert success is True, f"Expected validation to pass, but got: {message}"
+        assert release_branch == "release/1.0"
+
+    @patch("subprocess.run")
+    def test_validate_release_prepared_accepts_release_dev_version(self, mock_run):
+        """Test that validation accepts 1.0.0-dev (release version with -dev).
+
+        Acceptance Criteria:
+        - For minor/major releases: accept version_str-dev (1.0.0-dev)
+        """
+        # Mock git tag verification
+        mock_run.return_value = Mock(returncode=0, stdout="v1.0.0\n")
+
+        # Mock version files showing 1.0.0-dev (preparing for release)
+        with patch.object(self.manager, 'read_current_version', return_value=("1.0.0-dev", "1.0.0-dev")):
+            version = Version.parse("1.0.0")
+            success, message, release_branch = self.manager.validate_release_prepared(version)
+
+        assert success is True, f"Expected validation to pass, but got: {message}"
+        assert release_branch == "release/1.0"
+
+    @patch("subprocess.run")
+    def test_validate_release_prepared_accepts_next_minor_dev_for_major_release(self, mock_run):
+        """Test that validation accepts 2.1.0-dev when approving 2.0.0 major release.
+
+        Acceptance Criteria:
+        - For minor/major releases: accept next_minor_dev (2.1.0-dev)
+        - Test passes for major releases (X.0.0 versions)
+        """
+        # Mock git tag verification
+        mock_run.return_value = Mock(returncode=0, stdout="v2.0.0\n")
+
+        # Mock version files showing 2.1.0-dev (what 'daf release 2.0.0' sets)
+        with patch.object(self.manager, 'read_current_version', return_value=("2.1.0-dev", "2.1.0-dev")):
+            version = Version.parse("2.0.0")
+            success, message, release_branch = self.manager.validate_release_prepared(version)
+
+        assert success is True, f"Expected validation to pass, but got: {message}"
+        assert release_branch == "release/2.0"
+
+    @patch("subprocess.run")
+    def test_validate_release_prepared_rejects_incorrect_version(self, mock_run):
+        """Test that validation rejects incorrect version (e.g., 1.2.0-dev for 1.0.0 release)."""
+        # Mock git tag verification
+        mock_run.return_value = Mock(returncode=0, stdout="v1.0.0\n")
+
+        # Mock version files showing 1.2.0-dev (incorrect version)
+        with patch.object(self.manager, 'read_current_version', return_value=("1.2.0-dev", "1.2.0-dev")):
+            version = Version.parse("1.0.0")
+            success, message, release_branch = self.manager.validate_release_prepared(version)
+
+        assert success is False
+        assert "Version mismatch" in message
+        assert "1.2.0-dev" in message
+
+    @patch("subprocess.run")
+    def test_validate_release_prepared_error_message_shows_acceptable_versions(self, mock_run):
+        """Test that error message lists all acceptable versions.
+
+        Acceptance Criteria:
+        - Validation error messages updated to reflect acceptable version values
+        """
+        # Mock git tag verification
+        mock_run.return_value = Mock(returncode=0, stdout="v1.0.0\n")
+
+        # Mock version files showing 1.2.0-dev (incorrect version)
+        with patch.object(self.manager, 'read_current_version', return_value=("1.2.0-dev", "1.2.0-dev")):
+            version = Version.parse("1.0.0")
+            success, message, release_branch = self.manager.validate_release_prepared(version)
+
+        assert success is False
+        # Error message should show all three acceptable versions
+        assert "1.0.0" in message
+        assert "1.0.0-dev" in message
+        assert "1.1.0-dev" in message
