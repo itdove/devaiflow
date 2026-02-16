@@ -120,32 +120,61 @@ class MockDataStore:
             self._data["jira"]["tickets"][key] = data
             self._save_service("jira")
 
-    def get_jira_comments(self, key: str) -> List[str]:
+    def get_jira_comments(self, key: str) -> List[Dict[str, Any]]:
         """Get comments for a issue tracker ticket.
 
         Args:
             key: issue tracker key
 
         Returns:
-            List of comment strings
+            List of comment dictionaries with id, author, created, body, and optional visibility
         """
         with self._lock:
             comments = self._data["jira"].get("comments", {})
             return comments.get(key, [])
+
+    def set_jira_comments(self, key: str, comments: List[Dict[str, Any]]) -> None:
+        """Set comments for a JIRA ticket (for testing).
+
+        Args:
+            key: JIRA key
+            comments: List of comment dictionaries
+        """
+        with self._lock:
+            if "comments" not in self._data["jira"]:
+                self._data["jira"]["comments"] = {}
+            self._data["jira"]["comments"][key] = comments
+            self._save_service("jira")
 
     def add_jira_comment(self, key: str, comment: str) -> None:
         """Add a comment to a issue tracker ticket.
 
         Args:
             key: issue tracker key
-            comment: Comment text
+            comment: Comment text (string for backward compatibility)
         """
         with self._lock:
             if "comments" not in self._data["jira"]:
                 self._data["jira"]["comments"] = {}
             if key not in self._data["jira"]["comments"]:
                 self._data["jira"]["comments"][key] = []
-            self._data["jira"]["comments"][key].append(comment)
+
+            # If existing comments are dictionaries, add as dictionary
+            # Otherwise, add as string for backward compatibility
+            existing_comments = self._data["jira"]["comments"][key]
+            if existing_comments and isinstance(existing_comments[0], dict):
+                # Add as dictionary format
+                comment_dict = {
+                    "id": str(len(existing_comments) + 1),
+                    "author": "Mock User",
+                    "created": datetime.now().isoformat(),
+                    "body": comment,
+                }
+                self._data["jira"]["comments"][key].append(comment_dict)
+            else:
+                # Add as string (backward compatibility)
+                self._data["jira"]["comments"][key].append(comment)
+
             self._save_service("jira")
 
     def get_jira_attachments(self, key: str) -> List[str]:

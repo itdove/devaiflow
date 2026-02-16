@@ -430,6 +430,78 @@ class JiraClient(IssueTrackerClient):
                 response_text=response.text
             )
 
+    def get_comments(self, issue_key: str) -> List[Dict]:
+        """Fetch all comments from a JIRA ticket.
+
+        Args:
+            issue_key: JIRA key (e.g., PROJ-12345)
+
+        Returns:
+            List of comment dictionaries with keys:
+            - id: Comment ID
+            - author: Author display name
+            - created: Creation timestamp (ISO format)
+            - body: Comment text
+            - visibility: Visibility restrictions (optional)
+
+        Raises:
+            JiraNotFoundError: If ticket not found
+            JiraApiError: If API request fails
+            JiraAuthError: If authentication fails
+            JiraConnectionError: If connection fails
+        """
+        try:
+            response = self._api_request(
+                "GET",
+                f"/rest/api/2/issue/{issue_key}/comment"
+            )
+
+            if response.status_code == 404:
+                raise JiraNotFoundError(
+                    f"Cannot fetch comments: issue tracker ticket {issue_key} not found",
+                    resource_type="issue",
+                    resource_id=issue_key
+                )
+            elif response.status_code == 401 or response.status_code == 403:
+                raise JiraAuthError(
+                    f"Authentication failed when fetching comments for {issue_key}",
+                    status_code=response.status_code
+                )
+            elif response.status_code != 200:
+                raise JiraApiError(
+                    f"Failed to fetch comments for {issue_key}",
+                    status_code=response.status_code,
+                    response_text=response.text
+                )
+
+            data = response.json()
+            comments = data.get("comments", [])
+
+            # Extract relevant fields from each comment
+            formatted_comments = []
+            for comment in comments:
+                formatted_comment = {
+                    "id": comment.get("id"),
+                    "author": comment.get("author", {}).get("displayName", "Unknown"),
+                    "created": comment.get("created"),
+                    "body": comment.get("body", ""),
+                }
+
+                # Include visibility if present
+                if "visibility" in comment:
+                    formatted_comment["visibility"] = comment["visibility"]
+
+                formatted_comments.append(formatted_comment)
+
+            return formatted_comments
+
+        except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError):
+            # Re-raise JIRA-specific exceptions
+            raise
+        except Exception as e:
+            # Wrap unexpected errors
+            raise JiraApiError(f"Failed to fetch comments for {issue_key}: {e}")
+
     def transition_ticket(self, issue_key: str, status: str) -> None:
         """Transition a issue tracker ticket to a new status using REST API.
 
@@ -626,7 +698,7 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to attach file {file_path} to {issue_key}: {e}")
 
-    def get_ticket_detailed(self, issue_key: str, field_mappings: Optional[Dict] = None, include_changelog: bool = False) -> Dict:
+    def get_ticket_detailed(self, issue_key: str, field_mappings: Optional[Dict] = None, include_changelog: bool = False, include_comments: bool = False) -> Dict:
         """Fetch a issue tracker ticket with full details including description.
 
         Args:
@@ -634,10 +706,12 @@ class JiraClient(IssueTrackerClient):
             field_mappings: Optional field mappings dict from config to resolve custom field IDs
                           (e.g., {"acceptance_criteria": {"id": "customfield_12315940"}})
             include_changelog: If True, include changelog/history data
+            include_comments: If True, include comments data
 
         Returns:
             Dictionary with full ticket data.
             If include_changelog is True, includes a "changelog" key with history data.
+            If include_comments is True, includes a "comments" key with list of comments.
 
         Raises:
             JiraNotFoundError: If ticket not found (404)
@@ -736,6 +810,11 @@ class JiraClient(IssueTrackerClient):
             if include_changelog:
                 changelog = data.get("changelog", {})
                 ticket_data["changelog"] = changelog
+
+            # Comments (if requested)
+            if include_comments:
+                comments = self.get_comments(issue_key)
+                ticket_data["comments"] = comments
 
             return ticket_data
 
