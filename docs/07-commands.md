@@ -539,6 +539,16 @@ Which project? [1-3]: 2
    - Starts time tracking
 
 2. **Resuming existing:**
+   - **Checks workspace context (AAP-64497)**
+     - If current directory is in a different workspace than session's saved workspace:
+       - Prompts with three options:
+         1. Use session workspace (continue with workspace where session was created)
+         2. Switch to current workspace (update session to use current workspace)
+         3. Cancel (exit without opening session)
+     - Workspace mismatch check is skipped when:
+       - `--workspace` flag is explicitly provided (intentional override)
+       - `--json` flag is used (non-interactive mode defaults to session workspace)
+       - Session doesn't have a saved workspace (old sessions or new sessions)
    - Loads Claude conversation
    - Checks out git branch
    - **Syncs branch with remote (for imported sessions - PROJ-59820)**

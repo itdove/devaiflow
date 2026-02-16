@@ -756,6 +756,26 @@ daf open AAP-123  # Uses remembered workspace
 3. Last used workspace (last_used_workspace)
 4. Interactive prompt
 
+**Workspace Mismatch Confirmation (AAP-64497):**
+
+When opening a session from a different workspace context than where the session was previously used, `daf open` will prompt you to confirm what to do:
+
+```
+⚠ Workspace mismatch detected
+Session workspace: primary
+Current workspace: feat-caching
+
+What would you like to do?
+  1. Use session workspace (primary)
+  2. Switch to current workspace (feat-caching)
+  3. Cancel
+```
+
+This helps prevent accidentally working in the wrong workspace. The prompt is automatically skipped when:
+- Using `--workspace` flag (explicit override)
+- Using `--json` flag (non-interactive mode defaults to session workspace)
+- Session doesn't have a saved workspace
+
 **Use Cases:**
 - Work on same project in different workspaces simultaneously
 - Separate experimental branches from main development
