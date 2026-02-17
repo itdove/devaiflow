@@ -425,27 +425,15 @@ class ConfigLoader:
         Returns:
             JiraBackendConfig object with defaults if file doesn't exist
         """
-        from .models import JiraBackendConfig, JiraTransitionConfig
+        from .models import JiraBackendConfig
 
         backends_dir = self.config_dir / "backends"
         backend_file = backends_dir / "jira.json"
 
         if not backend_file.exists():
-            # Return default backend config
+            # Return default backend config (only URL and field cache settings)
             return JiraBackendConfig(
                 url="https://jira.example.com",
-                transitions={
-                    "on_start": JiraTransitionConfig(
-                        from_status=["New", "To Do"],
-                        to="In Progress",
-                        prompt=False,
-                    ),
-                    "on_complete": JiraTransitionConfig(
-                        from_status=["In Progress"],
-                        to="",
-                        prompt=True,
-                    ),
-                },
             )
 
         try:
@@ -457,7 +445,6 @@ class ConfigLoader:
             console.print("[dim]  Using default backend configuration[/dim]")
             return JiraBackendConfig(
                 url="https://jira.example.com",
-                transitions={},
             )
 
     def _load_enterprise_config(self) -> Optional["EnterpriseConfig"]:
@@ -489,13 +476,26 @@ class ConfigLoader:
         Returns:
             OrganizationConfig object with defaults if file doesn't exist
         """
-        from .models import OrganizationConfig
+        from .models import OrganizationConfig, JiraTransitionConfig
 
         org_file = self.config_dir / "organization.json"
 
         if not org_file.exists():
-            # Return default organization config
-            return OrganizationConfig()
+            # Return default organization config with default workflow transitions
+            return OrganizationConfig(
+                transitions={
+                    "on_start": JiraTransitionConfig(
+                        from_status=["New", "To Do"],
+                        to="In Progress",
+                        prompt=False,
+                    ),
+                    "on_complete": JiraTransitionConfig(
+                        from_status=["In Progress"],
+                        to="",
+                        prompt=True,
+                    ),
+                },
+            )
 
         try:
             with open(org_file, "r") as f:
@@ -640,13 +640,13 @@ class ConfigLoader:
         return JiraConfig(
             # From backend (with organization overrides applied)
             url=merged_backend_dict.get("url", backend.url),
-            transitions=merged_backend_dict.get("transitions", backend.transitions),
             field_mappings=merged_backend_dict.get("field_mappings", backend.field_mappings),
             field_cache_timestamp=merged_backend_dict.get("field_cache_timestamp", backend.field_cache_timestamp),
             field_cache_auto_refresh=merged_backend_dict.get("field_cache_auto_refresh", backend.field_cache_auto_refresh),
             field_cache_max_age_hours=merged_backend_dict.get("field_cache_max_age_hours", backend.field_cache_max_age_hours),
-            parent_field_mapping=merged_backend_dict.get("parent_field_mapping", backend.parent_field_mapping),
-            # From organization
+            # From organization (workflow policies)
+            transitions=org.transitions,
+            parent_field_mapping=org.parent_field_mapping,
             project=org.jira_project,
             filters=org.sync_filters,  # Renamed from 'filters' to 'sync_filters'
             issue_templates=merged_templates if merged_templates else None,
@@ -811,15 +811,13 @@ class ConfigLoader:
         with open(self.config_file, "w") as f:
             json.dump(user_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
 
-        # Extract backend config
+        # Extract backend config (only API metadata and technical settings)
         backend_config = JiraBackendConfig(
             url=config.jira.url,
-            transitions=config.jira.transitions,
             field_mappings=config.jira.field_mappings,
             field_cache_timestamp=config.jira.field_cache_timestamp,
             field_cache_auto_refresh=config.jira.field_cache_auto_refresh,
             field_cache_max_age_hours=config.jira.field_cache_max_age_hours,
-            parent_field_mapping=config.jira.parent_field_mapping,
         )
 
         # Save backend config (backends/jira.json)
@@ -854,9 +852,11 @@ class ConfigLoader:
         with open(self.config_dir / "enterprise.json", "w") as f:
             json.dump(enterprise_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
 
-        # Extract organization config
+        # Extract organization config (workflow policies and project settings)
         org_config = OrganizationConfig(
             jira_project=config.jira.project,
+            transitions=config.jira.transitions,
+            parent_field_mapping=config.jira.parent_field_mapping,
             sync_filters=config.jira.filters,  # Renamed from 'filters' to 'sync_filters'
             status_grouping_field=None,  # Preserve existing if file exists
             status_totals_field=None,  # Preserve existing if file exists

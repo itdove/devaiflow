@@ -16,30 +16,59 @@ def mock_jira_client(monkeypatch, tmp_path):
     daf_home = test_home / ".devaiflow"
     daf_home.mkdir()
 
-    # Create test config with parent_field_mapping
+    # Create test config with new split-file format
     config_file = daf_home / "config.json"
     config_file.write_text('''{
-        "jira": {
-            "url": "https://jira.example.com",
-            "user": "test-user",
-            "project": "PROJ",
-            "transitions": {},
-            "parent_field_mapping": {
-                "bug": "epic_link",
-                "story": "epic_link",
-                "task": "epic_link",
-                "spike": "epic_link",
-                "epic": "epic_link",
-                "sub-task": "parent"
-            }
-        },
+        "backend_config_source": "local",
         "repos": {
             "workspaces": [{"name": "primary", "path": "/tmp"}],
             "last_used_workspace": "primary",
             "detection": {"method": "keyword_match", "fallback": "prompt"},
             "keywords": {}
-        }
+        },
+        "time_tracking": {},
+        "session_summary": {},
+        "templates": {},
+        "context_files": {},
+        "prompts": {},
+        "pr_template_url": null,
+        "storage": {},
+        "mock_services": null,
+        "gcp_vertex_region": null,
+        "update_checker_timeout": 10
     }''')
+
+    # Create backends/jira.json
+    backends_dir = daf_home / "backends"
+    backends_dir.mkdir()
+    backend_file = backends_dir / "jira.json"
+    backend_file.write_text('''{
+        "url": "https://jira.example.com",
+        "field_mappings": null,
+        "field_cache_timestamp": null,
+        "field_cache_auto_refresh": true,
+        "field_cache_max_age_hours": 24
+    }''')
+
+    # Create organization.json with parent_field_mapping
+    org_file = daf_home / "organization.json"
+    org_file.write_text('''{
+        "jira_project": "PROJ",
+        "transitions": {},
+        "parent_field_mapping": {
+            "bug": "epic_link",
+            "story": "epic_link",
+            "task": "epic_link",
+            "spike": "epic_link",
+            "epic": "epic_link",
+            "sub-task": "parent"
+        },
+        "sync_filters": {}
+    }''')
+
+    # Create team.json
+    team_file = daf_home / "team.json"
+    team_file.write_text('''{}''')
 
     # Set environment to use test directory
     monkeypatch.setenv("DEVAIFLOW_HOME", str(daf_home))

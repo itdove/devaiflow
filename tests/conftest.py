@@ -109,7 +109,6 @@ def temp_daf_home(tmp_path, monkeypatch):
     jira_config.write_text(json.dumps({
         "url": "https://jira.test.com",
         "user": "test-user",
-        "transitions": {},
         "field_mappings": {
             "story_points": {
                 "id": "customfield_12310243",
@@ -134,6 +133,7 @@ def temp_daf_home(tmp_path, monkeypatch):
     org_config = daf_home / "organization.json"
     org_config.write_text(json.dumps({
         "jira_project": "TEST",
+        "transitions": {},
         "sync_filters": {
             "sync": {
                 "status": [],
@@ -176,7 +176,6 @@ def temp_daf_home_no_patches(tmp_path, monkeypatch):
     jira_config.write_text(json.dumps({
         "url": "https://jira.test.com",
         "user": "test-user",
-        "transitions": {},
         "field_mappings": {
             "story_points": {
                 "id": "customfield_12310243",
@@ -201,6 +200,7 @@ def temp_daf_home_no_patches(tmp_path, monkeypatch):
     org_config = daf_home / "organization.json"
     org_config.write_text(json.dumps({
         "jira_project": "TEST",
+        "transitions": {},
         "sync_filters": {
             "sync": {
                 "status": [],
