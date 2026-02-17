@@ -2174,13 +2174,13 @@ Configuration is split across 4 separate files based on purpose:
 
 **backends/jira.json** - JIRA Backend Configuration
 - JIRA instance URL and authentication
-- Field mappings (custom field IDs)
-- JIRA workflow transitions
+- Field mappings (custom field IDs discovered from JIRA API)
 - Field cache settings
-- Parent field mappings
 
 **organization.json** - Organization Settings
 - JIRA project key
+- JIRA workflow transitions (on_start, on_complete)
+- Parent field mappings (issue type hierarchy policy)
 - Field aliases (acceptance criteria, epic link)
 - Sync filters (which tickets to sync)
 - Affected version defaults
@@ -2233,8 +2233,8 @@ Team-shared configuration stored in your workspace directory and committed to gi
 cp -r /path/to/devaiflow/docs/config-templates/* ~/workspace/myproject/
 
 # Edit for your team
-vim ~/workspace/myproject/backends/jira.json      # JIRA URL, transitions
-vim ~/workspace/myproject/organization.json       # Project key
+vim ~/workspace/myproject/backends/jira.json      # JIRA URL, field mappings
+vim ~/workspace/myproject/organization.json       # Project key, transitions
 vim ~/workspace/myproject/team.json               # Workstream
 
 # Commit to git

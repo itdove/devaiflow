@@ -211,6 +211,73 @@ daf jira view MYAPP-123
 - Check JSON syntax is valid: `python -m json.tool < organization.json`
 - Ensure files are named exactly: `organization.json`, `team.json`, `backends/jira.json`
 
+## Migration Guide
+
+### From v0.1.x to v0.2.0: Transitions and Parent Field Mapping
+
+In v0.2.0, `transitions` and `parent_field_mapping` were moved from `backends/jira.json` to `organization.json` to better reflect their purpose as organization-specific workflow policies (not backend API metadata).
+
+**If you have existing config files with these fields in `backends/jira.json`:**
+
+1. **Copy transitions section** from `backends/jira.json` to `organization.json`:
+   ```bash
+   # In backends/jira.json, remove the "transitions" section
+   # Add it to organization.json instead
+   ```
+
+2. **Copy parent_field_mapping** from `backends/jira.json` to `organization.json`:
+   ```bash
+   # In backends/jira.json, remove the "parent_field_mapping" section
+   # Add it to organization.json instead
+   ```
+
+3. **Example migration:**
+
+   **Before (backends/jira.json):**
+   ```json
+   {
+     "url": "https://jira.example.com",
+     "transitions": {
+       "on_start": {"from": ["To Do"], "to": "In Progress", "prompt": false},
+       "on_complete": {"from": ["In Progress"], "to": "", "prompt": true}
+     },
+     "parent_field_mapping": {
+       "story": "epic_link",
+       "sub-task": "parent"
+     }
+   }
+   ```
+
+   **After (backends/jira.json):**
+   ```json
+   {
+     "url": "https://jira.example.com",
+     "field_mappings": null
+   }
+   ```
+
+   **After (organization.json):**
+   ```json
+   {
+     "jira_project": "PROJ",
+     "transitions": {
+       "on_start": {"from": ["To Do"], "to": "In Progress", "prompt": false},
+       "on_complete": {"from": ["In Progress"], "to": "", "prompt": true}
+     },
+     "parent_field_mapping": {
+       "story": "epic_link",
+       "sub-task": "parent"
+     },
+     "sync_filters": {}
+   }
+   ```
+
+4. **Verify migration:**
+   ```bash
+   daf config show
+   # Check that transitions and parent_field_mapping appear in the output
+   ```
+
 ## Support
 
 - Documentation: https://github.com/itdove/devaiflow
