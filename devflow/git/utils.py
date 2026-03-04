@@ -1202,6 +1202,35 @@ class GitUtils:
             return []
 
     @staticmethod
+    def list_local_branches(path: Path) -> list[str]:
+        """List all local branches in a repository.
+
+        Args:
+            path: Repository path
+
+        Returns:
+            Sorted list of branch names (empty list if error or no branches)
+
+        Example:
+            branches = GitUtils.list_local_branches(Path("/path/to/repo"))
+            # Returns: ["main", "feature/new-ui", "bugfix/critical"]
+        """
+        try:
+            result = subprocess.run(
+                ["git", "branch", "--format=%(refname:short)"],
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                branches = [line.strip() for line in result.stdout.strip().split('\n') if line.strip()]
+                return sorted(branches)
+            return []
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return []
+
+    @staticmethod
     def list_remote_branches(path: Path, remote: str = "origin") -> list[str]:
         """List all branches from a remote repository.
 

@@ -1123,7 +1123,8 @@ def _handle_branch_creation(
                 console.print("\n[bold]Branch creation strategy:[/bold]")
                 console.print("1. From current state (stay on current branch)")
                 console.print("2. From default branch (checkout main/master first)")
-                strategy = Prompt.ask("Select", choices=["1", "2"], default="2")
+                console.print("3. From specific branch (select and pull)")
+                strategy = Prompt.ask("Select", choices=["1", "2", "3"], default="2")
 
     try:
         # If user chose to use existing branch, just checkout to it
@@ -1151,6 +1152,61 @@ def _handle_branch_creation(
                     GitUtils.pull_current_branch(path)
             else:
                 console.print("[yellow]Warning: Could not determine default branch[/yellow]")
+
+        elif strategy == "3":
+            # Strategy: From specific branch (user selection)
+            # CRITICAL: Check for uncommitted changes and abort if any exist
+            if GitUtils.has_uncommitted_changes(path):
+                console.print("\n[red]✗ Error: Cannot switch branches with uncommitted changes[/red]")
+
+                # Show status summary
+                status_summary = GitUtils.get_status_summary(path)
+                if status_summary:
+                    console.print("\n[dim]Uncommitted changes:[/dim]")
+                    for line in status_summary.split('\n'):
+                        console.print(f"  {line}")
+
+                console.print("\n[yellow]Please commit, stash, or discard your changes before creating a branch from a specific source.[/yellow]")
+                console.print("[dim]Options:[/dim]")
+                console.print("[dim]  - Commit: git commit -am \"Your message\"[/dim]")
+                console.print("[dim]  - Stash: git stash[/dim]")
+                console.print("[dim]  - Discard: git reset --hard HEAD[/dim]")
+                return None
+
+            # Fetch latest from origin
+            console.print("\n[cyan]Fetching latest from origin...[/cyan]")
+            GitUtils.fetch_origin(path)
+
+            # Get list of local branches
+            local_branches = GitUtils.list_local_branches(path)
+            if not local_branches:
+                console.print("[red]✗[/red] No local branches found")
+                return None
+
+            # Display available branches
+            console.print("\n[bold]Available branches:[/bold]")
+            for idx, branch in enumerate(local_branches, 1):
+                current_marker = " (current)" if branch == GitUtils.get_current_branch(path) else ""
+                console.print(f"{idx}. {branch}{current_marker}")
+
+            # Let user select a branch
+            branch_choice = Prompt.ask(
+                "\nSelect source branch",
+                choices=[str(i) for i in range(1, len(local_branches) + 1)],
+                default="1"
+            )
+            selected_branch = local_branches[int(branch_choice) - 1]
+
+            # Checkout the selected branch
+            console.print(f"\n[cyan]Checking out {selected_branch}...[/cyan]")
+            if not GitUtils.checkout_branch(path, selected_branch):
+                console.print(f"[red]✗[/red] Failed to checkout branch: {selected_branch}")
+                return None
+
+            # Pull latest changes
+            console.print(f"[cyan]Pulling latest {selected_branch}...[/cyan]")
+            if not GitUtils.pull_current_branch(path):
+                console.print(f"[yellow]⚠ Warning: Failed to pull latest changes for {selected_branch}[/yellow]")
 
         # Create and checkout the new branch
         console.print(f"\n[cyan]Creating branch: {branch_name}...[/cyan]")
