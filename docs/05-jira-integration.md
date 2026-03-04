@@ -242,43 +242,61 @@ This hybrid approach provides:
 
 ## Configuration
 
-Edit `$DEVAIFLOW_HOME/config.json`:
+Edit backend and organization configuration files:
 
+**JIRA Backend (`$DEVAIFLOW_HOME/backends/jira.json`):**
 ```json
 {
-  "jira": {
-    "url": "https://jira.example.com",
-    "user": "your-username",
-    "transitions": {
-      "on_start": {
-        "from": ["New", "To Do"],
-        "to": "In Progress",
-        "prompt": false,
-        "on_fail": "warn"
-      },
-      "on_complete": {
-        "prompt": true
-      }
+  "url": "https://jira.example.com",
+  "field_mappings": null,
+  "field_cache_auto_refresh": true
+}
+```
+
+**Organization Configuration (`$DEVAIFLOW_HOME/organization.json`):**
+```json
+{
+  "jira_project": "PROJ",
+  "transitions": {
+    "on_start": {
+      "from": ["New", "To Do"],
+      "to": "In Progress",
+      "prompt": false,
+      "on_fail": "warn"
     },
-    "time_tracking": true
+    "on_complete": {
+      "prompt": true
+    }
+  },
+  "parent_field_mapping": {
+    "story": "epic_link",
+    "task": "epic_link",
+    "sub-task": "parent"
   }
 }
 ```
 
 ### Configuration Options
 
-- **url** - Your JIRA instance URL
-- **user** - Your JIRA username
-- **project** - JIRA project key (e.g., "PROJ") - used for creating issues
-- **workstream** - JIRA workstream value (e.g., "Platform") - used for creating issues
-- **transitions.on_start** - Auto-transition when opening session
+**Backend Configuration (backends/jira.json):**
+- **url** - Your JIRA instance URL (e.g., "https://jira.example.com")
+- **field_mappings** - Auto-discovered JIRA field metadata (managed by `daf config refresh-jira-fields`)
+- **field_cache_auto_refresh** - Auto-refresh field mappings when stale (true/false)
+
+**Organization Configuration (organization.json):**
+- **jira_project** - JIRA project key (e.g., "PROJ") - used for creating issues
+- **transitions.on_start** - Auto-transition when opening session (workflow policy)
   - **from** - List of statuses to transition from
   - **to** - Target status
   - **prompt** - Ask before transitioning (true/false)
   - **on_fail** - What to do if transition fails ("warn" or "block")
-- **transitions.on_complete** - Auto-transition when completing session
+- **transitions.on_complete** - Auto-transition when completing session (workflow policy)
   - **prompt** - Ask for target status (true/false)
-- **time_tracking** - Enable time tracking for JIRA tickets (true/false)
+- **parent_field_mapping** - Maps issue types to parent field names (hierarchy policy)
+
+**Team Configuration (team.json):**
+- **jira_custom_field_defaults** - Default values for custom fields (e.g., {"workstream": "Platform"})
+- **time_tracking_enabled** - Enable time tracking for JIRA tickets (true/false)
 
 **Note:** To control whether session summaries are automatically added to JIRA, use `prompts.auto_add_issue_summary` - see [Prompts Configuration](06-configuration.md#prompts-configuration)
 
@@ -342,7 +360,7 @@ daf config tui
   --to "Done"
 ```
 
-**Note:** For organization-specific JIRA workflows, these settings are pre-configured in organization configuration files. You only need to adjust them if your workflow differs.
+**Note:** Transitions are organization workflow policies configured in `organization.json`. For organization-specific JIRA workflows, these settings are pre-configured in organization configuration files. You only need to adjust them if your workflow differs from your organization's standard.
 
 ## Creating JIRA Issues
 
@@ -790,7 +808,7 @@ When configured, opening a session transitions the ticket:
 daf open PROJ-12345
 ```
 
-With this config:
+With this config in `organization.json`:
 ```json
 {
   "transitions": {
@@ -859,7 +877,7 @@ daf complete PROJ-12345
 
 #### Interactive Transition (prompt: true)
 
-With this config:
+With this config in `organization.json`:
 ```json
 {
   "transitions": {
@@ -893,7 +911,7 @@ Select target status [1/2/3/4/5/6/7] (1):
 
 #### Automatic Transition (prompt: false)
 
-For automatic transitions without user interaction:
+For automatic transitions without user interaction, configure in `organization.json`:
 
 ```json
 {

@@ -47,17 +47,18 @@ class JiraFiltersConfig(BaseModel):
 class JiraBackendConfig(BaseModel):
     """JIRA backend-specific configuration (backends/jira.json).
 
-    Contains JIRA instance settings that are common across an organization
-    using the same JIRA instance (URL, field mappings, transitions).
+    Contains JIRA instance settings and API metadata discovered from JIRA
+    (URL, field mappings from API, field cache settings).
+
+    Note: Organization workflow policies (transitions, parent_field_mapping)
+    are now stored in OrganizationConfig, not here.
     """
 
     url: str
-    transitions: Dict[str, JiraTransitionConfig] = Field(default_factory=dict)
     field_mappings: Optional[Dict[str, Dict[str, Any]]] = None  # Cached field mappings (creation fields only)
     field_cache_timestamp: Optional[str] = None  # ISO timestamp of last field discovery
     field_cache_auto_refresh: bool = True  # Auto-refresh field mappings when stale
     field_cache_max_age_hours: int = 24  # Maximum age in hours before cache is stale (default: 24h)
-    parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
 
 
 class EnterpriseConfig(BaseModel):
@@ -76,10 +77,12 @@ class OrganizationConfig(BaseModel):
     """Organization/Project-specific JIRA configuration (organization.json).
 
     Contains organization or project-specific settings that should be
-    shared across teams (project key, field aliases, sync filters).
+    shared across teams (project key, workflow policies, sync filters).
     """
 
     jira_project: Optional[str] = None  # JIRA project key (e.g., "PROJ")
+    transitions: Dict[str, JiraTransitionConfig] = Field(default_factory=dict)  # Organization workflow transition policies
+    parent_field_mapping: Optional[Dict[str, str]] = None  # Organization issue hierarchy policy - maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
     sync_filters: Dict[str, JiraFiltersConfig] = Field(default_factory=dict)  # Renamed from 'filters'
     status_grouping_field: Optional[str] = None  # Field to group by in status dashboard (e.g., "sprint", "iteration", "release") - None means no grouping
     status_totals_field: Optional[str] = None  # Field to sum for totals in status dashboard (e.g., "points", "story_points", "effort") - None means no totals

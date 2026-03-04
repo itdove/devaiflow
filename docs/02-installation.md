@@ -370,8 +370,8 @@ daf init
 
 This launches an interactive wizard that:
 - Creates **4-5 JSON configuration files** (automatically, no manual file creation needed):
-  - `backends/jira.json` - JIRA URL, transitions, field mappings
-  - `organization.json` - JIRA project key, sync filters
+  - `backends/jira.json` - JIRA URL and field mappings (API metadata)
+  - `organization.json` - JIRA project key, transitions, parent_field_mapping, sync filters
   - `team.json` - Team defaults (workstream, component, comment visibility)
   - `config.json` - Personal preferences (workspace, prompts, context files)
   - `enterprise.json` - Enterprise-wide settings (optional)
@@ -387,8 +387,8 @@ All settings can be changed later using `daf config tui`.
 
 | File | Purpose | Key Settings |
 |------|---------|--------------|
-| `backends/jira.json` | JIRA backend configuration | JIRA URL, authentication, field mappings, transitions |
-| `organization.json` | Organization settings | JIRA project key, sync filters, field aliases |
+| `backends/jira.json` | JIRA backend configuration | JIRA URL, field mappings (API metadata) |
+| `organization.json` | Organization settings | JIRA project key, transitions, parent_field_mapping, sync filters |
 | `team.json` | Team-specific settings | Default workstream, component, comment visibility |
 | `config.json` | User personal preferences | Workspace path, prompts, context files |
 
@@ -491,9 +491,8 @@ Edit `$DEVAIFLOW_HOME/config.json`:
 
 **Key Settings:**
 
-- `jira.url` - Your JIRA instance URL
-- `jira.user` - Your JIRA username
-- `jira.transitions` - Auto-transition configuration
+- `jira.url` - Your JIRA instance URL (in `backends/jira.json`)
+- `jira.transitions` - Auto-transition configuration (in `organization.json`)
 - `repos.workspace` - Your main development directory
 - `repos.keywords` - Keywords for smart repository detection
 

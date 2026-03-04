@@ -584,28 +584,31 @@ def test_get_child_issues_with_subtasks_and_epic_children(mock_jira_cli, temp_da
     with open(temp_daf_home / "config.json", "w") as f:
         json.dump(config_data, f)
 
-    # Create jira.json with parent_field_mapping
+    # Create jira.json (backend config - only technical settings)
     backends_dir = temp_daf_home / "backends"
     backends_dir.mkdir(parents=True, exist_ok=True)
     jira_config = {
         "url": "https://test.jira.com",
         "user": "test_user",
-        "transitions": {},
-        "parent_field_mapping": {
-            "bug": "epic_link",
-            "story": "epic_link",
-            "task": "epic_link",
-            "spike": "epic_link",
-            "epic": "epic_link",
-            "sub-task": "parent"
-        }
     }
     with open(backends_dir / "jira.json", "w") as f:
         json.dump(jira_config, f)
 
-    # Create organization.json
+    # Create organization.json (workflow policies)
     with open(temp_daf_home / "organization.json", "w") as f:
-        json.dump({"jira_project": "TEST", "sync_filters": {}}, f)
+        json.dump({
+            "jira_project": "TEST",
+            "sync_filters": {},
+            "transitions": {},
+            "parent_field_mapping": {
+                "bug": "epic_link",
+                "story": "epic_link",
+                "task": "epic_link",
+                "spike": "epic_link",
+                "epic": "epic_link",
+                "sub-task": "parent"
+            }
+        }, f)
 
     # Set up JQL search response
     mock_jira_cli.set_search_results({
@@ -794,20 +797,11 @@ def test_view_jira_ticket_with_children(mock_jira_cli, temp_daf_home, monkeypatc
     jira_config = {
         "url": "https://test.jira.com",
         "user": "test_user",
-        "transitions": {},
         "field_mappings": {
             "epic_link": {
                 "id": "customfield_12311140",
                 "name": "Epic Link"
             }
-        },
-        "parent_field_mapping": {
-            "bug": "epic_link",
-            "story": "epic_link",
-            "task": "epic_link",
-            "spike": "epic_link",
-            "epic": "epic_link",
-            "sub-task": "parent"
         }
     }
 
@@ -816,7 +810,19 @@ def test_view_jira_ticket_with_children(mock_jira_cli, temp_daf_home, monkeypatc
 
     # Create minimal organization.json and team.json
     with open(temp_daf_home / "organization.json", "w") as f:
-        json.dump({"jira_project": "TEST", "sync_filters": {}}, f)
+        json.dump({
+            "jira_project": "TEST",
+            "sync_filters": {},
+            "transitions": {},
+            "parent_field_mapping": {
+                "bug": "epic_link",
+                "story": "epic_link",
+                "task": "epic_link",
+                "spike": "epic_link",
+                "epic": "epic_link",
+                "sub-task": "parent"
+            }
+        }, f)
 
     with open(temp_daf_home / "team.json", "w") as f:
         json.dump({"jira_custom_field_defaults": None}, f)
@@ -900,20 +906,11 @@ def test_view_jira_ticket_with_children_no_children(mock_jira_cli, temp_daf_home
     jira_config = {
         "url": "https://test.jira.com",
         "user": "test_user",
-        "transitions": {},
         "field_mappings": {
             "epic_link": {
                 "id": "customfield_12311140",
                 "name": "Epic Link"
             }
-        },
-        "parent_field_mapping": {
-            "bug": "epic_link",
-            "story": "epic_link",
-            "task": "epic_link",
-            "spike": "epic_link",
-            "epic": "epic_link",
-            "sub-task": "parent"
         }
     }
 
@@ -922,7 +919,19 @@ def test_view_jira_ticket_with_children_no_children(mock_jira_cli, temp_daf_home
 
     # Create minimal organization.json and team.json
     with open(temp_daf_home / "organization.json", "w") as f:
-        json.dump({"jira_project": "TEST", "sync_filters": {}}, f)
+        json.dump({
+            "jira_project": "TEST",
+            "sync_filters": {},
+            "transitions": {},
+            "parent_field_mapping": {
+                "bug": "epic_link",
+                "story": "epic_link",
+                "task": "epic_link",
+                "spike": "epic_link",
+                "epic": "epic_link",
+                "sub-task": "parent"
+            }
+        }, f)
 
     with open(temp_daf_home / "team.json", "w") as f:
         json.dump({"jira_custom_field_defaults": None}, f)

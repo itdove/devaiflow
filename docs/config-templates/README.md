@@ -13,11 +13,11 @@
 
 ### backends/jira.json
 - `url`: Your JIRA instance URL (e.g., `https://jira.example.com`)
-- `transitions.on_start.to`: Status to transition to when starting work (or leave empty to prompt)
-- `transitions.on_complete.to`: Status to transition to when completing work (or leave empty to prompt)
 
 ### organization.json
 - `jira_project`: Your JIRA project key (e.g., `MYAPP`, `ENG`, `PROJ`)
+- `transitions.on_start.to`: Status to transition to when starting work (or leave empty to prompt)
+- `transitions.on_complete.to`: Status to transition to when completing work (or leave empty to prompt)
 
 All other fields are optional and will use sensible defaults.
 
@@ -46,7 +46,7 @@ Example manual field mapping:
 
 ### Parent Field Mapping
 
-Maps issue types to their parent link field names. Example:
+Maps issue types to their parent link field names. Configure in `organization.json`:
 ```json
 {
   "parent_field_mapping": {
@@ -59,7 +59,7 @@ Maps issue types to their parent link field names. Example:
 }
 ```
 
-Leave null for auto-discovery.
+This is organization-specific hierarchy policy. Leave null for auto-discovery.
 
 ### Sync Filters
 
@@ -203,13 +203,80 @@ daf jira view MYAPP-123
 - Check field name in JIRA admin settings
 
 ### "Transition failed"
-- Verify `transitions.on_start.to` and `transitions.on_complete.to` match your JIRA workflow
+- Verify `transitions.on_start.to` and `transitions.on_complete.to` in `organization.json` match your JIRA workflow
 - Use `prompt: true` to manually select status during transitions
 
 ### "Configuration not loaded"
 - Verify files are in the correct location (workspace root or `$DEVAIFLOW_HOME/`)
 - Check JSON syntax is valid: `python -m json.tool < organization.json`
 - Ensure files are named exactly: `organization.json`, `team.json`, `backends/jira.json`
+
+## Migration Guide
+
+### From v0.1.x to v0.2.0: Transitions and Parent Field Mapping
+
+In v0.2.0, `transitions` and `parent_field_mapping` were moved from `backends/jira.json` to `organization.json` to better reflect their purpose as organization-specific workflow policies (not backend API metadata).
+
+**If you have existing config files with these fields in `backends/jira.json`:**
+
+1. **Copy transitions section** from `backends/jira.json` to `organization.json`:
+   ```bash
+   # In backends/jira.json, remove the "transitions" section
+   # Add it to organization.json instead
+   ```
+
+2. **Copy parent_field_mapping** from `backends/jira.json` to `organization.json`:
+   ```bash
+   # In backends/jira.json, remove the "parent_field_mapping" section
+   # Add it to organization.json instead
+   ```
+
+3. **Example migration:**
+
+   **Before (backends/jira.json):**
+   ```json
+   {
+     "url": "https://jira.example.com",
+     "transitions": {
+       "on_start": {"from": ["To Do"], "to": "In Progress", "prompt": false},
+       "on_complete": {"from": ["In Progress"], "to": "", "prompt": true}
+     },
+     "parent_field_mapping": {
+       "story": "epic_link",
+       "sub-task": "parent"
+     }
+   }
+   ```
+
+   **After (backends/jira.json):**
+   ```json
+   {
+     "url": "https://jira.example.com",
+     "field_mappings": null
+   }
+   ```
+
+   **After (organization.json):**
+   ```json
+   {
+     "jira_project": "PROJ",
+     "transitions": {
+       "on_start": {"from": ["To Do"], "to": "In Progress", "prompt": false},
+       "on_complete": {"from": ["In Progress"], "to": "", "prompt": true}
+     },
+     "parent_field_mapping": {
+       "story": "epic_link",
+       "sub-task": "parent"
+     },
+     "sync_filters": {}
+   }
+   ```
+
+4. **Verify migration:**
+   ```bash
+   daf config show
+   # Check that transitions and parent_field_mapping appear in the output
+   ```
 
 ## Support
 

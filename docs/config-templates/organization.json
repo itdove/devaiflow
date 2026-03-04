@@ -1,7 +1,31 @@
 {
-  "_comment": "Organization/Project-specific JIRA configuration",
+  "_comment": "Organization/Project-specific JIRA configuration - Contains workflow policies and project settings",
   "jira_project": "TODO: YOUR_PROJECT_KEY",
   "_jira_project_comment": "Your JIRA project key (e.g., 'PROJ', 'MYAPP', 'ENG'). Required for ticket creation.",
+  "transitions": {
+    "on_start": {
+      "from": ["To Do", "New", "Refinement"],
+      "_from_comment": "TODO: Customize statuses that trigger transition when starting work",
+      "to": "",
+      "_to_comment": "TODO: Set the target status when starting work (e.g., 'In Progress'), or leave empty to prompt",
+      "prompt": false,
+      "_prompt_comment": "If true, prompts for status selection instead of auto-transitioning",
+      "on_fail": "warn",
+      "_on_fail_comment": "Action on transition failure: 'warn' (show warning) or 'error' (stop execution)"
+    },
+    "on_complete": {
+      "from": ["In Progress"],
+      "_from_comment": "TODO: Customize statuses that trigger transition when completing work",
+      "to": "",
+      "_to_comment": "TODO: Set the target status when completing work (e.g., 'Review', 'Done'), or leave empty to prompt",
+      "prompt": true,
+      "_prompt_comment": "If true, prompts for status selection instead of auto-transitioning",
+      "on_fail": "warn"
+    }
+  },
+  "_transitions_comment": "Organization workflow transition policies - defines when and how to transition tickets. See docs/05-jira-integration.md for details.",
+  "parent_field_mapping": null,
+  "_parent_field_mapping_comment": "Organization issue hierarchy policy - maps issue types to parent field names. Example: {'story': 'epic_link', 'task': 'epic_link', 'sub-task': 'parent'}",
   "sync_filters": {
     "sync": {
       "status": ["To Do", "In Progress"],
