@@ -207,52 +207,83 @@ def git_create(
 
         console_print(f"\n[green]✓[/green] Created GitHub issue: {issue_key}")
 
-        # If we're in a ticket_creation session, rename it to match the issue
-        renamed_session_name = None
-        try:
-            from devflow.session.manager import SessionManager
-            from devflow.session.capture import SessionCapture
+        # Auto-rename ticket_creation sessions to creation-<issue_key>
+        renamed_session_name = None  # Track if session was renamed for JSON output
+        from devflow.session.manager import SessionManager
+        from devflow.cli.utils import get_active_session_name
+        import logging
+        import re
 
-            config_loader = ConfigLoader()
-            session_manager = SessionManager(config_loader)
-            capture = SessionCapture()
+        logger = logging.getLogger(__name__)
 
-            # Check if we're in a session
-            current_session_id = capture.get_current_session_id()
-            if current_session_id:
-                # Find session by Claude session ID
-                all_sessions = session_manager.list_sessions()
-                current_session = next(
-                    (s for s in all_sessions
-                     if s.active_conversation and s.active_conversation.ai_agent_session_id == current_session_id),
-                    None
-                )
+        # Get active session name (None if called outside Claude session)
+        active_session_name = get_active_session_name()
+        logger.debug(f"get_active_session_name() returned: {active_session_name}")
 
-                if current_session and current_session.session_type == "ticket_creation":
-                    # Convert issue key to session name format (e.g., "owner/repo#123" -> "owner-repo-123")
-                    base_name = issue_key_to_session_name(issue_key)
+        if active_session_name:  # Only rename if inside a Claude session
+            try:
+                config_loader = ConfigLoader()
+                session_manager = SessionManager(config_loader=config_loader)
+                session = session_manager.get_session(active_session_name)
+                logger.debug(f"Retrieved session: {session.name if session else None}")
+
+                if session:
+                    logger.debug(f"Session type: {session.session_type}")
+                    # For GitHub/GitLab, pattern allows hyphens in owner-repo names
+                    creation_pattern = r'^creation-[\w-]+-\d+$'
+                    matches_pattern = bool(re.match(creation_pattern, active_session_name))
+                    logger.debug(f"Session name matches creation pattern: {matches_pattern}")
+
+                # Only rename if:
+                # 1. Session exists and is ticket_creation type
+                # 2. Doesn't already match creation-* pattern (prevent double-rename)
+                creation_pattern = r'^creation-[\w-]+-\d+$'
+                if (session and
+                    session.session_type == "ticket_creation" and
+                    not re.match(creation_pattern, active_session_name)):
+
+                    # Convert issue key to session name format
+                    base_name = issue_key_to_session_name(issue_key)  # owner/repo#123 → owner-repo-123
                     new_name = f"creation-{base_name}"
+                    logger.info(f"Attempting to rename session '{active_session_name}' to '{new_name}'")
 
-                    # Rename session
-                    old_name = current_session.name
-                    session_manager.rename_session(old_name, new_name)
+                    try:
+                        session_manager.rename_session(active_session_name, new_name)
 
-                    # Update session metadata
-                    renamed_session = session_manager.get_session(new_name)
-                    if renamed_session:
-                        renamed_session.issue_key = issue_key
-                        if not renamed_session.issue_metadata:
-                            renamed_session.issue_metadata = {}
-                        renamed_session.issue_metadata["summary"] = summary
-                        renamed_session.issue_metadata["type"] = issue_type_lower if issue_type_lower else "task"
-                        renamed_session.issue_metadata["status"] = "open"
-                        session_manager.update_session(renamed_session)
+                        # Verify the rename was successful
+                        renamed_session = session_manager.get_session(new_name)
+                        if renamed_session and renamed_session.name == new_name:
+                            # Set issue metadata on renamed session
+                            renamed_session.issue_key = issue_key
+                            if not renamed_session.issue_metadata:
+                                renamed_session.issue_metadata = {}
+                            renamed_session.issue_metadata["summary"] = summary
+                            renamed_session.issue_metadata["type"] = issue_type_lower if issue_type_lower else "task"
+                            renamed_session.issue_metadata["status"] = "open"
 
-                        renamed_session_name = new_name
-                        console_print(f"[green]✓[/green] Renamed session to: [bold]{new_name}[/bold]")
-        except Exception as e:
-            # Don't fail the whole command if session rename fails
-            console_print(f"[yellow]⚠[/yellow] Could not rename session: {e}")
+                            # Save the updated session
+                            session_manager.update_session(renamed_session)
+
+                            renamed_session_name = new_name  # Set for JSON output
+                            console_print(f"[green]✓[/green] Renamed session to: [bold]{new_name}[/bold]")
+                            console_print(f"   Reopen with: [bold]daf open {new_name}[/bold]")
+                            logger.info(f"Successfully renamed session to '{new_name}' and set issue metadata")
+                        else:
+                            # Rename may have failed silently
+                            console_print(f"[yellow]⚠[/yellow] Session rename may have failed")
+                            console_print(f"   Expected: [bold]{new_name}[/bold]")
+                            console_print(f"   Actual: [bold]{active_session_name}[/bold]")
+                            console_print(f"   Reopen with: [bold]daf open {active_session_name}[/bold]")
+                            logger.warning(f"Rename verification failed: expected '{new_name}', session still named '{active_session_name}'")
+                    except ValueError as e:
+                        # Session name already exists - warn but continue
+                        console_print(f"[yellow]⚠[/yellow] Could not rename session: {e}")
+                        console_print(f"   Session name: [bold]{active_session_name}[/bold]")
+                        logger.warning(f"Rename failed for session '{active_session_name}': {e}")
+            except Exception as e:
+                # Don't fail the entire command if rename fails
+                console_print(f"[yellow]⚠[/yellow] Could not rename session: {e}")
+                logger.exception(f"Unexpected error during session rename: {e}")
 
         # JSON output mode
         if output_json:

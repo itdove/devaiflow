@@ -51,9 +51,13 @@ def mock_session_manager():
         # Mock session list
         mock_manager.list_sessions.return_value = [mock_session]
 
-        # Mock get_session to return renamed session
+        # Mock get_session to return appropriate session based on name
         def get_session_side_effect(name):
-            if name.startswith("creation-"):
+            if name == "test-session-abc123":
+                # Return the original session before rename
+                return mock_session
+            elif name.startswith("creation-"):
+                # Return renamed session
                 renamed = Mock()
                 renamed.name = name
                 renamed.issue_key = None
@@ -67,13 +71,11 @@ def mock_session_manager():
 
 
 @pytest.fixture
-def mock_session_capture():
-    """Mock SessionCapture to simulate being in a session."""
-    with patch('devflow.session.capture.SessionCapture') as mock_capture_class:
-        mock_capture = Mock()
-        mock_capture_class.return_value = mock_capture
-        mock_capture.get_current_session_id.return_value = "claude-session-id"
-        yield mock_capture
+def mock_get_active_session_name():
+    """Mock get_active_session_name to simulate being in a session."""
+    with patch('devflow.cli.utils.get_active_session_name') as mock_func:
+        mock_func.return_value = "test-session-abc123"
+        yield mock_func
 
 
 @pytest.fixture
@@ -106,7 +108,7 @@ class TestGitCreateSessionRename:
         mock_config_loader,
         mock_github_client,
         mock_session_manager,
-        mock_session_capture
+        mock_get_active_session_name
     ):
         """Test that session is renamed to creation-owner-repo-123 format for GitHub."""
         # Setup
@@ -132,7 +134,7 @@ class TestGitCreateSessionRename:
         mock_config_loader,
         mock_github_client,
         mock_session_manager,
-        mock_session_capture
+        mock_get_active_session_name
     ):
         """Test that session is renamed to creation-owner-repo-456 format for GitLab."""
         # Setup
@@ -157,7 +159,7 @@ class TestGitCreateSessionRename:
         mock_config_loader,
         mock_github_client,
         mock_session_manager,
-        mock_session_capture
+        mock_get_active_session_name
     ):
         """Test that session metadata is updated after successful rename."""
         # Setup
@@ -188,7 +190,7 @@ class TestGitCreateSessionRename:
         self,
         mock_config_loader,
         mock_github_client,
-        mock_session_capture
+        mock_get_active_session_name
     ):
         """Test that rename only applies to ticket_creation session type."""
         # Setup - create a development session (not ticket_creation)
