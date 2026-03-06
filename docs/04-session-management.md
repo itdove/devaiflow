@@ -348,7 +348,7 @@ daf sync
 
 This automatically creates sessions for all your JIRA tickets. No need to manually create sessions!
 
-See the [JIRA Integration Guide](05-jira-integration.md) for complete sync documentation.
+See the [JIRA Integration Guide](05-2-jira-integration.md) for complete sync documentation.
 
 ### Basic Session (No JIRA)
 
@@ -1067,6 +1067,6 @@ daf resume session-name
 
 ## Next Steps
 
-- [JIRA Integration](05-jira-integration.md) - Learn JIRA workflows
+- [JIRA Integration](05-2-jira-integration.md) - Learn JIRA workflows
 - [Configuration Reference](06-configuration.md) - Configure session behavior
 - [Commands Reference](07-commands.md) - All available commands

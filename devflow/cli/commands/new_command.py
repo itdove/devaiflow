@@ -922,6 +922,221 @@ def _suggest_and_select_repository(
             return None
 
 
+def _get_default_source_branch(path: Path) -> str:
+    """Determine the smart default source branch.
+
+    Priority:
+    1. upstream/main (if upstream remote exists)
+    2. origin/main (if origin remote exists)
+    3. main (local)
+
+    Args:
+        path: Repository path
+
+    Returns:
+        Default source branch name
+    """
+    # Check if upstream remote exists
+    remotes = GitUtils.get_remote_names(path)
+
+    if 'upstream' in remotes:
+        # Check if upstream/main exists
+        if GitUtils.branch_exists(path, 'upstream/main'):
+            return 'upstream/main'
+        # Try upstream/master
+        if GitUtils.branch_exists(path, 'upstream/master'):
+            return 'upstream/master'
+
+    if 'origin' in remotes:
+        # Check if origin/main exists
+        if GitUtils.branch_exists(path, 'origin/main'):
+            return 'origin/main'
+        # Try origin/master
+        if GitUtils.branch_exists(path, 'origin/master'):
+            return 'origin/master'
+
+    # Fallback to local main
+    if GitUtils.branch_exists(path, 'main'):
+        return 'main'
+    if GitUtils.branch_exists(path, 'master'):
+        return 'master'
+
+    # Last resort: return current branch
+    current = GitUtils.get_current_branch(path)
+    return current if current else 'main'
+
+
+def _show_branch_suggestions(path: Path, attempted_branch: str) -> None:
+    """Show helpful branch suggestions when user enters invalid branch.
+
+    Args:
+        path: Repository path
+        attempted_branch: The branch name that failed validation
+    """
+    # Extract remote name if present
+    if '/' in attempted_branch:
+        remote, branch_part = attempted_branch.split('/', 1)
+
+        # Check if remote exists
+        remotes = GitUtils.get_remote_names(path)
+        if remote not in remotes:
+            console.print(f"[dim]Available remotes: {', '.join(remotes)}[/dim]")
+            return
+
+        # Show branches on that remote
+        import subprocess
+        result = subprocess.run(
+            ['git', 'branch', '-r'],
+            cwd=path,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            remote_branches = [
+                line.strip().replace('origin/', '').replace('upstream/', '')
+                for line in result.stdout.split('\n')
+                if remote in line and '->' not in line
+            ]
+
+            # Find similar branches (fuzzy match)
+            similar = [b for b in remote_branches if branch_part.lower() in b.lower()]
+
+            if similar:
+                console.print(f"\n[dim]Available branches on '{remote}':[/dim]")
+                for branch in similar[:5]:  # Show max 5
+                    console.print(f"  • {remote}/{branch}")
+
+
+def _prompt_for_source_branch(path: Path, default_base: str) -> Optional[str]:
+    """Prompt user for source branch with validation.
+
+    Args:
+        path: Repository path
+        default_base: Default source branch suggestion
+
+    Returns:
+        Source branch name if valid, None if user cancelled
+    """
+    from rich.prompt import IntPrompt
+
+    console.print("\nCreate branch from which base?")
+    console.print(f"[dim]Default: {default_base}[/dim]")
+    console.print(f"[dim]Or enter any branch name (e.g., upstream/develop, origin/feature/api)[/dim]")
+
+    while True:
+        source_branch = Prompt.ask("Enter source branch", default=default_base)
+
+        # Allow cancel
+        if source_branch.lower() in ['cancel', 'q']:
+            return None
+
+        # Validate branch exists
+        if GitUtils.branch_exists(path, source_branch):
+            console.print(f"[green]✓[/green] Branch '{source_branch}' exists")
+            return source_branch
+        else:
+            console.print(f"[red]✗[/red] Branch '{source_branch}' does not exist")
+
+            # Show helpful suggestions
+            _show_branch_suggestions(path, source_branch)
+
+            # Ask again
+            console.print("[dim]Please try again or type 'cancel' to quit[/dim]")
+
+
+def _handle_existing_branch(
+    path: Path,
+    branch_name: str,
+    default_source: str,
+    config: Optional[any] = None
+) -> Optional[str]:
+    """Handle case where branch already exists.
+
+    Args:
+        path: Repository path
+        branch_name: Branch name that already exists
+        default_source: Default source branch for merging
+        config: Configuration object
+
+    Returns:
+        Branch name if successful, None if user cancelled
+    """
+    from rich.prompt import IntPrompt
+
+    console.print(f"\n[yellow]⚠[/yellow] Branch '{branch_name}' already exists locally")
+    console.print("\nWhat would you like to do?")
+    console.print("  1. Switch to it and merge with another branch (sync it)")
+    console.print("  2. Switch to it without merging (use as-is)")
+    console.print("  3. Choose a different branch name")
+    console.print("  4. Cancel")
+
+    choice = IntPrompt.ask("Selection", choices=[1, 2, 3, 4], default=1)
+
+    if choice == 1:
+        # Switch and merge
+        if not GitUtils.checkout_branch(path, branch_name):
+            console.print(f"[red]✗[/red] Failed to switch to branch '{branch_name}'")
+            return None
+
+        console.print(f"[green]✓[/green] Switched to '{branch_name}'")
+
+        # Prompt for merge source
+        source = _prompt_for_source_branch(path, default_source)
+        if not source:
+            # User cancelled - stay on branch but don't merge
+            console.print("[yellow]Cancelled merge - staying on current branch[/yellow]")
+            return branch_name
+
+        # Attempt merge
+        console.print(f"\nMerging '{source}' into '{branch_name}'...")
+        if GitUtils.merge_branch(path, source):
+            console.print(f"[green]✓[/green] Successfully merged")
+            return branch_name
+        else:
+            console.print(f"[red]✗[/red] Merge conflicts detected")
+            console.print("\n[yellow]Conflicting files:[/yellow]")
+
+            # Show conflicting files
+            import subprocess
+            result = subprocess.run(
+                ['git', 'diff', '--name-only', '--diff-filter=U'],
+                cwd=path,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0 and result.stdout:
+                for file in result.stdout.split('\n'):
+                    if file:
+                        console.print(f"  • {file}")
+
+            console.print("\n[dim]Please resolve conflicts manually:[/dim]")
+            console.print("[dim]  1. Fix conflicts in the files above[/dim]")
+            console.print("[dim]  2. Run: git add <files>[/dim]")
+            console.print("[dim]  3. Run: git commit[/dim]")
+            console.print("[dim]  4. Run: daf open <session> (to continue)[/dim]")
+
+            return None
+
+    elif choice == 2:
+        # Just switch, no merge
+        if GitUtils.checkout_branch(path, branch_name):
+            console.print(f"[green]✓[/green] Switched to '{branch_name}' (no merge)")
+            return branch_name
+        else:
+            console.print(f"[red]✗[/red] Failed to switch to branch")
+            return None
+
+    elif choice == 3:
+        # Choose different name - return special value to trigger retry
+        return False  # Signal to caller to prompt for new name
+
+    else:  # choice == 4
+        console.print("[yellow]Cancelled[/yellow]")
+        return None
+
+
 def _handle_branch_conflict(path: Path, suggested_branch: str) -> Optional[str]:
     """Handle branch name conflict when suggested branch already exists.
 
@@ -1014,15 +1229,23 @@ def _handle_branch_creation(
     auto_from_default: bool = False,
     config: Optional[any] = None
 ) -> Optional[str] | bool:
-    """Handle git branch creation if in a git repository.
+    """Handle git branch creation with enhanced UX.
+
+    Enhanced workflow:
+    1. Check git repository
+    2. Check uncommitted changes
+    3. Prompt to create branch (show suggested name)
+    4. Allow user to customize branch name
+    5. Check if branch exists
+       - If exists: offer merge/switch/rename options
+       - If new: prompt for source branch with validation
+    6. If user declines: offer to sync with upstream/main
 
     Args:
         project_path: Project directory path
         issue_key: issue tracker key
         goal: Session goal (optional)
-        auto_from_default: If True, automatically create branch from default branch
-            with latest changes (used by daf open). If False, prompt user for strategy
-            (used by daf new).
+        auto_from_default: If True, use automatic mode with defaults
         config: Configuration object (optional, will load if not provided)
 
     Returns:
@@ -1030,6 +1253,8 @@ def _handle_branch_creation(
         None if no git repo or user chose not to create a branch (continue anyway)
         False if user explicitly cancelled due to uncommitted changes (don't continue)
     """
+    from rich.prompt import IntPrompt
+
     path = Path(project_path)
 
     # Check if this is a git repository
@@ -1071,150 +1296,105 @@ def _handle_branch_creation(
         config_loader = ConfigLoader()
         config = config_loader.load_config()
 
-    # Ask if user wants to create a branch (unless auto mode or JSON mode)
+    # Generate suggested branch name
+    suggested_branch = GitUtils.generate_branch_name(issue_key, goal)
+
+    # Get smart default source branch
+    default_source = _get_default_source_branch(path)
+
+    # === STEP 1: Ask if user wants to create a branch ===
     if not auto_from_default:
-        # In JSON mode, use default value (True) without prompting
         if is_json_mode():
-            # Default to creating branch in JSON mode
             should_create = True
         else:
-            should_create = Confirm.ask("Create git branch for this session?", default=True)
+            should_create = Confirm.ask("\nWould you like to create a new branch?", default=True)
 
         if not should_create:
-            return None
+            # User declined - offer to sync with upstream/main
+            console_print("\n[dim]No new branch will be created.[/dim]")
 
-    # Generate default branch name
-    suggested_branch = GitUtils.generate_branch_name(issue_key, goal)
-    console_print(f"\n[dim]Suggested branch name: {suggested_branch}[/dim]")
+            if Confirm.ask(f"Would you like to sync current branch with {default_source}?", default=True):
+                console_print(f"\nPulling latest changes from {default_source}...")
 
-    # Check if suggested branch already exists
-    if GitUtils.branch_exists(path, suggested_branch):
-        console_print(f"\n[yellow]⚠ Branch '{suggested_branch}' already exists[/yellow]")
+                # Fetch first
+                console_print("[cyan]Fetching latest from remote...[/cyan]")
+                GitUtils.fetch_origin(path)
 
-        # Handle branch conflict
-        branch_name = _handle_branch_conflict(path, suggested_branch)
-        if not branch_name:
-            # User chose to skip or cancel
-            return None
-    else:
+                # Try to merge
+                if GitUtils.merge_branch(path, default_source):
+                    console_print(f"[green]✓[/green] Successfully synced with {default_source}")
+                else:
+                    console_print(f"[yellow]⚠[/yellow] Could not merge {default_source} automatically")
+
+            return None  # No branch created, but that's OK
+
+    # === STEP 2: Prompt for branch name (with suggestion) ===
+    console_print(f"\n[bold]Suggested branch name:[/bold] {suggested_branch}")
+
+    if is_json_mode() or auto_from_default:
         branch_name = suggested_branch
-
-    # Determine strategy
-    if auto_from_default:
-        # Auto mode: always create from default branch with latest changes
-        strategy = "2"
-        console.print("[cyan]Creating branch from default branch (with latest changes)...[/cyan]")
     else:
-        # Check if default_branch_strategy is configured in prompts
-        if config and config.prompts and config.prompts.default_branch_strategy:
-            # Use configured strategy
-            if config.prompts.default_branch_strategy == "from_default":
-                strategy = "2"
-                console.print("[cyan]Using configured strategy: from default branch[/cyan]")
-            else:  # "from_current"
-                strategy = "1"
-                console.print("[cyan]Using configured strategy: from current branch[/cyan]")
-        else:
-            # Interactive mode: ask for branch creation strategy
-            # In JSON mode, use default strategy (option 2) without prompting
-            if is_json_mode():
-                strategy = "2"  # Default to from default branch
-            else:
-                console.print("\n[bold]Branch creation strategy:[/bold]")
-                console.print("1. From current state (stay on current branch)")
-                console.print("2. From default branch (checkout main/master first)")
-                console.print("3. From specific branch (select and pull)")
-                strategy = Prompt.ask("Select", choices=["1", "2", "3"], default="2")
+        branch_name = Prompt.ask("Enter branch name", default=suggested_branch)
 
+    # === STEP 3: Check if branch exists ===
+    while True:
+        if GitUtils.branch_exists(path, branch_name):
+            # Branch exists - handle with enhanced UX
+            result = _handle_existing_branch(path, branch_name, default_source, config)
+
+            if result is False:
+                # User chose "Choose different name" - prompt again
+                branch_name = Prompt.ask("Enter branch name")
+                continue  # Loop to check new name
+            elif result is None:
+                # User cancelled
+                return None
+            else:
+                # User switched to branch (with or without merge)
+                return result
+
+        # Branch doesn't exist - break loop and create it
+        break
+
+    # === STEP 4: Prompt for source branch ===
+    if is_json_mode() or auto_from_default:
+        source_branch = default_source
+        console_print(f"[dim]Creating branch from: {source_branch}[/dim]")
+    else:
+        source_branch = _prompt_for_source_branch(path, default_source)
+
+        if not source_branch:
+            # User cancelled
+            console_print("[yellow]Branch creation cancelled[/yellow]")
+            return None
+
+    # === STEP 5: Create the branch from source ===
     try:
-        # If user chose to use existing branch, just checkout to it
-        if branch_name == suggested_branch and GitUtils.branch_exists(path, branch_name):
-            # Branch exists and user wants to use it
-            console.print(f"\n[cyan]Switching to existing branch: {branch_name}...[/cyan]")
-            if GitUtils.checkout_branch(path, branch_name):
-                console.print(f"[green]✓[/green] Switched to branch: [bold]{branch_name}[/bold]")
-                return branch_name
-            else:
-                console.print(f"[red]✗[/red] Failed to checkout branch")
+        console_print(f"\n[cyan]Creating branch '{branch_name}' from '{source_branch}'...[/cyan]")
+
+        # Fetch latest to ensure we have up-to-date remote branches
+        console_print("[cyan]Fetching latest from remote...[/cyan]")
+        GitUtils.fetch_origin(path)
+
+        # Checkout source branch first
+        current_branch = GitUtils.get_current_branch(path)
+        if current_branch != source_branch:
+            console_print(f"[cyan]Checking out {source_branch}...[/cyan]")
+            if not GitUtils.checkout_branch(path, source_branch):
+                console_print(f"[red]✗[/red] Failed to checkout {source_branch}")
                 return None
 
-        # Otherwise, create new branch
-        if strategy == "2":
-            # Strategy: From default branch (fresh start)
-            console.print("\n[cyan]Fetching latest from origin...[/cyan]")
-            GitUtils.fetch_origin(path)
+            # Pull latest if it's a tracking branch
+            if '/' not in source_branch:  # Local branch
+                console_print(f"[cyan]Pulling latest {source_branch}...[/cyan]")
+                GitUtils.pull_current_branch(path)
 
-            default_branch = GitUtils.get_default_branch(path)
-            if default_branch:
-                console.print(f"[cyan]Checking out {default_branch}...[/cyan]")
-                if GitUtils.checkout_branch(path, default_branch):
-                    console.print(f"[cyan]Pulling latest {default_branch}...[/cyan]")
-                    GitUtils.pull_current_branch(path)
-            else:
-                console.print("[yellow]Warning: Could not determine default branch[/yellow]")
-
-        elif strategy == "3":
-            # Strategy: From specific branch (user selection)
-            # CRITICAL: Check for uncommitted changes and abort if any exist
-            if GitUtils.has_uncommitted_changes(path):
-                console.print("\n[red]✗ Error: Cannot switch branches with uncommitted changes[/red]")
-
-                # Show status summary
-                status_summary = GitUtils.get_status_summary(path)
-                if status_summary:
-                    console.print("\n[dim]Uncommitted changes:[/dim]")
-                    for line in status_summary.split('\n'):
-                        console.print(f"  {line}")
-
-                console.print("\n[yellow]Please commit, stash, or discard your changes before creating a branch from a specific source.[/yellow]")
-                console.print("[dim]Options:[/dim]")
-                console.print("[dim]  - Commit: git commit -am \"Your message\"[/dim]")
-                console.print("[dim]  - Stash: git stash[/dim]")
-                console.print("[dim]  - Discard: git reset --hard HEAD[/dim]")
-                return None
-
-            # Fetch latest from origin
-            console.print("\n[cyan]Fetching latest from origin...[/cyan]")
-            GitUtils.fetch_origin(path)
-
-            # Get list of local branches
-            local_branches = GitUtils.list_local_branches(path)
-            if not local_branches:
-                console.print("[red]✗[/red] No local branches found")
-                return None
-
-            # Display available branches
-            console.print("\n[bold]Available branches:[/bold]")
-            for idx, branch in enumerate(local_branches, 1):
-                current_marker = " (current)" if branch == GitUtils.get_current_branch(path) else ""
-                console.print(f"{idx}. {branch}{current_marker}")
-
-            # Let user select a branch
-            branch_choice = Prompt.ask(
-                "\nSelect source branch",
-                choices=[str(i) for i in range(1, len(local_branches) + 1)],
-                default="1"
-            )
-            selected_branch = local_branches[int(branch_choice) - 1]
-
-            # Checkout the selected branch
-            console.print(f"\n[cyan]Checking out {selected_branch}...[/cyan]")
-            if not GitUtils.checkout_branch(path, selected_branch):
-                console.print(f"[red]✗[/red] Failed to checkout branch: {selected_branch}")
-                return None
-
-            # Pull latest changes
-            console.print(f"[cyan]Pulling latest {selected_branch}...[/cyan]")
-            if not GitUtils.pull_current_branch(path):
-                console.print(f"[yellow]⚠ Warning: Failed to pull latest changes for {selected_branch}[/yellow]")
-
-        # Create and checkout the new branch
-        console.print(f"\n[cyan]Creating branch: {branch_name}...[/cyan]")
+        # Create new branch
         if GitUtils.create_branch(path, branch_name):
-            console.print(f"[green]✓[/green] Created and switched to branch: [bold]{branch_name}[/bold]")
+            console_print(f"[green]✓[/green] Created and switched to branch: [bold]{branch_name}[/bold]")
             return branch_name
         else:
-            console.print(f"[red]✗[/red] Failed to create branch")
+            console_print(f"[red]✗[/red] Failed to create branch")
             return None
 
     except Exception as e:

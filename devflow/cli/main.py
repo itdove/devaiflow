@@ -763,8 +763,16 @@ def active(ctx: click.Context) -> None:
 @click.option("--epic", help="Filter by epic")
 @json_option
 def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str) -> None:
-    """Sync with issue tracker tickets."""
-    from devflow.cli.commands.sync_command import sync_jira
+    """Sync with all configured issue trackers (JIRA, GitHub, GitLab).
+
+    Automatically:
+    - Syncs JIRA tickets assigned to you (if configured)
+    - Scans workspaces for git repositories
+    - Syncs GitHub/GitLab issues assigned to you from detected repos
+
+    Creates sessions for issues that don't already have them.
+    """
+    from devflow.cli.commands.sync_command import sync_multi_backend
 
     # Parse field filters from tuple of "field_name=value" strings
     field_filters = {}
@@ -774,7 +782,7 @@ def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str) -> None:
             field_filters[field_name.strip()] = field_value.strip()
 
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    sync_jira(field_filters=field_filters, ticket_type=ticket_type, epic=epic, output_json=output_json)
+    sync_multi_backend(field_filters=field_filters, ticket_type=ticket_type, epic=epic, output_json=output_json)
 
 
 @cli.command()
@@ -1292,6 +1300,184 @@ def jira_open(ctx: click.Context, issue_key: str) -> None:
     from devflow.cli.commands.jira_open_command import jira_open_session
 
     jira_open_session(issue_key)
+
+
+@cli.group()
+@json_option
+def git(ctx: click.Context) -> None:
+    """Git-based issue tracker commands (GitHub/GitLab).
+
+    Commands for managing GitHub Issues and GitLab Issues workflows in DevAIFlow.
+    Automatically detects the platform from your repository.
+
+    Requirements:
+    - GitHub: GitHub CLI (gh) installed and authenticated
+    - GitLab: GitLab CLI (glab) installed and authenticated
+    """
+    pass
+
+
+@git.command(name="view")
+@json_option
+@click.argument("issue_key", required=False)
+@click.option("--comments", is_flag=True, help="Show comments on the issue")
+@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
+def git_view(ctx: click.Context, issue_key: Optional[str], comments: bool, repository: Optional[str]) -> None:
+    """View a GitHub/GitLab issue in Claude-friendly format.
+
+    ISSUE_KEY is the issue key (#123 or owner/repo#123).
+    If not provided, auto-detects from current session.
+
+    This command fetches the issue from GitHub/GitLab and displays it in a format
+    optimized for Claude to read.
+
+    Use --comments to display all comments on the issue.
+
+    Examples:
+        daf git view           # Auto-detect from current session
+        daf git view 123       # View issue #123 in current repo
+        daf git view owner/repo#123  # View issue in specific repo
+        daf git view 123 --comments  # Include comments
+    """
+    from devflow.cli.commands.git_view_command import git_view
+
+    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+    git_view(issue_key, comments, repository, output_json)
+
+
+@git.command(name="create")
+@json_option
+@click.option("--type", "issue_type", type=click.Choice(["bug", "enhancement", "task"], case_sensitive=False), help="Issue type (optional, uses labels)")
+@click.option("--summary", required=True, help="Issue summary/title")
+@click.option("--description", help="Issue description")
+@click.option("--priority", type=click.Choice(["low", "medium", "high", "critical"], case_sensitive=False), help="Priority (uses labels)")
+@click.option("--points", type=int, help="Story points (uses labels)")
+@click.option("--labels", help="Additional labels (comma-separated)")
+@click.option("--assignee", help="Assign to username")
+@click.option("--milestone", help="Milestone name or number")
+@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
+@click.option("--acceptance-criteria", multiple=True, help="Acceptance criteria (can be used multiple times)")
+def git_create(ctx: click.Context, issue_type: Optional[str], summary: str, description: Optional[str], priority: Optional[str], points: Optional[int], labels: Optional[str], assignee: Optional[str], milestone: Optional[str], repository: Optional[str], acceptance_criteria: tuple) -> None:
+    """Create a new GitHub/GitLab issue.
+
+    Creates an issue with convention-based labels for type, priority, and points.
+
+    Examples:
+        daf git create --summary "Add feature X" --type enhancement
+        daf git create --summary "Fix bug" --type bug --priority high --points 5
+        daf git create --summary "Task" --assignee username --milestone v1.0
+        daf git create --summary "Feature" \\
+            --acceptance-criteria "Tests pass" \\
+            --acceptance-criteria "Docs updated"
+    """
+    from devflow.cli.commands.git_create_command import git_create
+
+    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+    git_create(summary, issue_type, description, priority, points, labels, assignee, milestone, repository, acceptance_criteria, output_json)
+
+
+@git.command(name="update")
+@json_option
+@click.argument("issue_key")
+@click.option("--state", type=click.Choice(["open", "closed"], case_sensitive=False), help="New state")
+@click.option("--title", help="New title")
+@click.option("--description", help="New description")
+@click.option("--labels", help="New labels (comma-separated, replaces all labels)")
+@click.option("--assignee", help="Assign to username")
+@click.option("--milestone", help="Set milestone")
+@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
+def git_update(ctx: click.Context, issue_key: str, state: Optional[str], title: Optional[str], description: Optional[str], labels: Optional[str], assignee: Optional[str], milestone: Optional[str], repository: Optional[str]) -> None:
+    """Update a GitHub/GitLab issue.
+
+    ISSUE_KEY is the issue key (#123 or owner/repo#123).
+
+    Examples:
+        daf git update 123 --state closed
+        daf git update 123 --labels "bug,priority: high"
+        daf git update 123 --assignee username --milestone v1.0
+    """
+    from devflow.cli.commands.git_update_command import git_update
+
+    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+    git_update(issue_key, state, title, description, labels, assignee, milestone, repository, output_json)
+
+
+@git.command(name="add-comment")
+@json_option
+@click.argument("issue_key")
+@click.argument("comment")
+@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
+def git_add_comment(ctx: click.Context, issue_key: str, comment: str, repository: Optional[str]) -> None:
+    """Add a comment to a GitHub/GitLab issue.
+
+    ISSUE_KEY is the issue key (#123 or owner/repo#123).
+
+    Examples:
+        daf git add-comment 123 "Work in progress"
+        daf git add-comment owner/repo#123 "Fixed the issue"
+    """
+    from devflow.cli.commands.git_add_comment_command import git_add_comment
+
+    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+    git_add_comment(issue_key, comment, repository, output_json)
+
+
+@git.command(name="open")
+@json_option
+@click.argument("issue_key")
+@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
+def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> None:
+    """Open or create session for GitHub/GitLab issue.
+
+    Validates that the issue exists, then either:
+    - Opens the existing session if one exists for this issue
+    - Creates a new session if no session exists
+
+    ISSUE_KEY is the issue key (#123 or owner/repo#123).
+
+    Examples:
+        daf git open 123
+        daf git open owner/repo#123
+    """
+    from devflow.cli.commands.git_open_command import git_open_session
+
+    git_open_session(issue_key, repository)
+
+
+@git.command(name="new")
+@json_option
+@click.option("--goal", help="Goal/description for the issue (supports file:// paths and http(s):// URLs)")
+@click.option("--type", "issue_type", type=click.Choice(["bug", "enhancement", "task"], case_sensitive=False), help="Issue type (optional, uses labels)")
+@click.option("--name", help="Session name (auto-generated from goal if not provided)")
+@click.option("--path", help="Project path (bypasses interactive selection)")
+@click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
+@workspace_option()
+@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
+def git_new(ctx: click.Context, goal: Optional[str], issue_type: Optional[str], name: str, path: str, branch: str, workspace: str, repository: Optional[str]) -> None:
+    """Create GitHub/GitLab issue with analysis-only session.
+
+    Creates a session with session_type="ticket_creation" that:
+    - Skips branch creation automatically
+    - Provides analysis-only constraints in the initial prompt
+    - Persists the session type for reopening
+
+    Examples:
+        daf git new --type enhancement  (prompts for goal)
+        daf git new --goal "Add retry logic to API" --type enhancement
+        daf git new --goal "Fix timeout in operation" --type bug
+        daf git new --goal "file:///path/to/requirements.md"
+    """
+    from devflow.cli.commands.git_new_command import create_git_issue_session
+    from devflow.cli.utils import resolve_goal_input
+
+    # Prompt for goal if not provided
+    if not goal:
+        goal = click.prompt("Enter goal/description for the issue")
+
+    # Resolve goal input (file:// or http(s):// URL)
+    goal = resolve_goal_input(goal)
+
+    create_git_issue_session(goal, issue_type, name, path, branch, workspace, repository)
 
 
 @cli.command(name="investigate")

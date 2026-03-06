@@ -276,7 +276,7 @@ A Python CLI/TUI tool to manage AI coding assistant sessions with issue tracker 
 ### Core Components
 - **CLI Layer** (`devflow/cli/`) - Command-line interface using Click
 - **Session Management** (`devflow/session/`) - Core session CRUD operations, session ID capture
-- **JIRA Integration** (`devflow/jira/`) - JIRA REST API client for ticket operations
+- **Issue Tracker Integration** (`devflow/issue_tracker/`, `devflow/jira/`, `devflow/github/`) - Multi-backend support for JIRA, GitHub Issues, GitLab Issues
 - **Configuration** (`devflow/config/`) - Config file loading and validation
 - **UI Components** (`devflow/ui/`) - TUI using Textual (Phase 4)
 - **Utilities** (`devflow/utils/`) - Helper functions (file ops, formatting, time tracking)
@@ -1007,7 +1007,16 @@ pip install --upgrade .
 - Resume command: `claude --resume {uuid}`
 - Launch command: `claude code` (in project directory)
 
-### JIRA REST API
+### Issue Tracker Backends
+
+DevAIFlow uses a multi-backend architecture supporting multiple issue trackers. See [Issue Tracker Architecture](docs/issue-tracker-architecture.md) for complete documentation.
+
+**Supported Backends:**
+- **JIRA** (`devflow/jira/`) - JIRA REST API (v2/v3 auto-detection)
+- **GitHub Issues** (`devflow/github/`) - GitHub CLI (`gh`)
+- **Mock** (`devflow/issue_tracker/mock_client.py`) - In-memory testing
+
+**JIRA REST API:**
 - Authentication: API token via `JIRA_API_TOKEN` environment variable
 - Base URL: Configurable via `JIRA_URL` (e.g., `https://jira.example.com`)
 - Endpoints used:
@@ -1016,6 +1025,11 @@ pip install --upgrade .
   - POST `/rest/api/2/issue/{key}/transitions` - Transition status
   - POST `/rest/api/2/issue/{key}/attachments` - Upload files
   - POST `/rest/api/2/search` - Search/list tickets
+
+**GitHub Issues:**
+- Authentication: GitHub CLI (`gh auth login`)
+- API: GitHub CLI (`gh issue view`, `gh issue create`, etc.)
+- Auto-detection: Repository from git remotes (upstream → origin)
 
 ### Git
 - Create branch: `git checkout -b {branch-name}`

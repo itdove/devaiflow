@@ -137,8 +137,16 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None) -> None:
             return
 
     # Create the session
+    # Sanitize session name to remove characters that cause issues in bash (#, /)
+    # JIRA keys (AAP-123) are fine as-is, but GitHub keys (owner/repo#123) need conversion
+    session_name = issue_key
+    if '#' in issue_key or '/' in issue_key:
+        # GitHub/GitLab issue key - convert to dash-separated format
+        from devflow.cli.commands.sync_command import issue_key_to_session_name
+        session_name = issue_key_to_session_name(issue_key)
+
     session = session_manager.create_session(
-        name=issue_key,
+        name=session_name,
         issue_key=issue_key,
         goal=goal,
         working_directory=working_directory,

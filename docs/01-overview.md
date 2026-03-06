@@ -2,20 +2,20 @@
 
 ## What is DevAIFlow?
 
-DevAIFlow (`daf`) is a command-line tool that helps you manage Claude Code sessions with optional JIRA ticket integration. It solves the problem of managing multiple concurrent coding tasks by organizing each piece of work into isolated sessions with full context preservation.
+DevAIFlow (`daf`) is a command-line tool that helps you manage Claude Code sessions with optional issue tracker integration (GitHub Issues, GitLab Issues, or JIRA). It solves the problem of managing multiple concurrent coding tasks by organizing each piece of work into isolated sessions with full context preservation.
 
 ## Quick Decision Guide
 
 ### ✅ Use This Tool If You...
 
-- **Work on multiple JIRA tickets** and want to keep Claude conversations separate per ticket
+- **Work with GitHub Issues, GitLab Issues, or JIRA** and want to keep Claude conversations separate per issue/ticket
 - **Switch between tasks frequently** and need to resume with full context
 - **Work across multiple repositories** for the same feature (backend + frontend + infrastructure)
 - **Need time tracking** to understand how long tasks actually take
-- **Want automated JIRA updates** (status transitions, time logging, comments)
+- **Want automated issue tracker updates** (status transitions, comments)
+- **Use GitHub or GitLab** and want automated issue tracking with PR/MR creation
 - **Share work with teammates** and need to export conversation history
 - **Use Claude Code regularly** and want better organization
-- **Use GitHub or GitLab** and want automated PR/MR creation with AI-filled templates
 
 ### ❌ Don't Use This Tool If You...
 
@@ -26,16 +26,16 @@ DevAIFlow (`daf`) is a command-line tool that helps you manage Claude Code sessi
 
 ### 🤔 Still Deciding?
 
-Start simple: `daf new --name "test" --goal "Try out the tool"`. You don't need JIRA or any special setup. Create a session, work on it, then decide if the organization helps you.
+Start simple: `daf new --name "test" --goal "Try out the tool"`. You don't need any issue tracker or special setup. Create a session, work on it, then decide if the organization helps you.
 
 ## The Problem It Solves
 
-When working on multiple tasks or JIRA tickets, you face several challenges:
+When working on multiple tasks or issues, you face several challenges:
 
 1. **Context Switching** - Losing mental context when jumping between tasks
-2. **Session Confusion** - Mixing work from different tickets in the same Claude session
-3. **Lost History** - Difficulty tracking what was done for each ticket
-4. **No JIRA Integration** - Manually updating JIRA tickets and tracking time
+2. **Session Confusion** - Mixing work from different issues in the same Claude session
+3. **Lost History** - Difficulty tracking what was done for each issue
+4. **Manual Issue Updates** - Manually updating GitHub/GitLab/JIRA and tracking time
 5. **Poor Organization** - No systematic way to organize Claude sessions
 
 ## How It Helps
@@ -47,11 +47,11 @@ DevAIFlow provides:
 - Keep conversations focused and organized
 - Resume exactly where you left off
 
-### 🔗 Optional JIRA Integration
-- Link sessions to JIRA tickets (or don't - it's optional!)
-- Automatic status transitions (New → In Progress → Done)
-- Sync assigned tickets to create sessions automatically
-- Add session notes as JIRA comments
+### 🔗 Optional Issue Tracker Integration
+- Link sessions to GitHub Issues, GitLab Issues, or JIRA (or don't - it's optional!)
+- Automatic status transitions and label updates
+- Sync assigned issues to create sessions automatically
+- Add session notes as issue comments
 
 ### ⏱️ Automatic Time Tracking
 - Track time spent on each session
@@ -67,7 +67,9 @@ DevAIFlow provides:
 ### 🌿 Git Integration
 - Auto-create git branches per session
 - Checkout the right branch when resuming
-- Branch naming based on JIRA keys
+- Branch naming based on issue keys
+- Automated PR/MR creation with AI-filled templates
+- Auto-link PRs/MRs to issues
 
 ### 🧹 Conversation Cleanup
 - Manage conversation history to avoid "413 Prompt too long" errors
@@ -76,13 +78,13 @@ DevAIFlow provides:
 
 ## Core Concepts
 
-Understanding the relationship between JIRA tickets, sessions, conversations, and Claude Code is key to using this tool effectively.
+Understanding the relationship between issues, sessions, conversations, and Claude Code is key to using this tool effectively.
 
-### The Hierarchy: JIRA → Session → Conversations → Claude Code
+### The Hierarchy: Issue → Session → Conversations → Claude Code
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ JIRA Ticket (PROJ-12345)                                         │
+│ Issue (owner/repo#60 or PROJ-12345)                            │
 │ "Implement user authentication"                                 │
 │                                                                  │
 │   ┌─────────────────────────────────────────────────────┐      │
@@ -120,10 +122,10 @@ Understanding the relationship between JIRA tickets, sessions, conversations, an
 A **session** is the core organizational unit - it represents one piece of work:
 
 **What's Included:**
-- **Metadata** - Goal, JIRA key, branch name, created date
+- **Metadata** - Goal, issue key, branch name, created date
 - **Conversations** - One or more Claude Code conversation UUIDs
 - **Time Tracking** - Work sessions with start/stop times
-- **Progress Notes** - Local notes, optionally synced to JIRA
+- **Progress Notes** - Local notes, optionally synced to issue tracker
 - **Git Branch** - Associated branch (auto-created if needed)
 
 **Storage Location:** `$DEVAIFLOW_HOME/sessions/{session-name}/metadata.json`
@@ -136,10 +138,10 @@ A **session** is the core organizational unit - it represents one piece of work:
 - **Conversation** = The actual Claude Code `.jsonl` file with message history
 
 **One Session, Multiple Conversations:**
-When working on the same JIRA ticket across multiple repositories, you create one conversation per repository, all linked to the same session.
+When working on the same issue across multiple repositories, you create one conversation per repository, all linked to the same session.
 
 ```
-Session "PROJ-12345" contains:
+Session "owner-repo-60" or "PROJ-12345" contains:
   Conversation 1: Backend work (~/backend/.claude/...abc.jsonl)
   Conversation 2: Frontend work (~/frontend/.claude/...xyz.jsonl)
   Conversation 3: Docs work (~/docs/.claude/...123.jsonl)
@@ -163,26 +165,26 @@ Session "PROJ-12345" contains:
 
 **Lifecycle Commands:**
 
-1. **Create** - `daf new` or `daf sync`
+1. **Create** - `daf new`, `daf sync`, or `daf git new`
    - Initialize session metadata
    - Create git branch (optional)
-   - Transition JIRA to "In Progress" (if linked)
+   - Transition issue to "In Progress" (if linked)
 
 2. **Work** - `daf open`
    - Launch Claude Code with conversation
    - Start time tracking
-   - Auto-load context (AGENTS.md, CLAUDE.md, JIRA ticket)
+   - Auto-load context (AGENTS.md, CLAUDE.md, issue details)
 
 3. **Track Progress** - `daf note`, `daf pause`, `daf resume`
    - Add notes (exit Claude Code first)
    - Pause/resume time tracking
-   - Optionally sync notes to JIRA comments
+   - Optionally sync notes to issue tracker
 
 4. **Complete** - `daf complete`
    - Mark session as done
    - Generate or add summary
-   - Transition JIRA ticket status
-   - Optionally create PR/MR
+   - Transition issue status or add labels
+   - Optionally create PR/MR with issue linking
    - Export for team handoff (optional)
 
 ## Key Features
@@ -196,12 +198,12 @@ Session "PROJ-12345" contains:
 - Session summaries (local stats or AI-powered)
 - Search and filter sessions
 
-**JIRA Integration (Optional):**
-- Link/unlink JIRA tickets
-- Auto-sync assigned tickets
-- Auto-transition ticket status
-- Add notes as JIRA comments
-- Sprint dashboard
+**Issue Tracker Integration (Optional):**
+- GitHub Issues, GitLab Issues, or JIRA support
+- Auto-sync assigned issues
+- Auto-transition issue status or update labels
+- Add notes as issue comments
+- Sprint dashboard (JIRA only)
 
 **Time Tracking:**
 - Automatic tracking on open/close
@@ -215,7 +217,7 @@ Session "PROJ-12345" contains:
 - Configurable branch naming
 - GitHub PR creation with AI-filled templates
 - GitLab MR creation with AI-filled templates
-- Automatic PR/MR linking to JIRA tickets
+- Automatic PR/MR linking to issues
 
 **Export & Backup:**
 - Export sessions (always includes conversations + git sync)
@@ -243,22 +245,23 @@ DevAIFlow integrates with your existing tools without replacing them:
 ```
 Your Workflow              DAF Tool Integration           What It Does
 ─────────────────────────────────────────────────────────────────────
-JIRA Board                 daf sync                       Pull assigned tickets
-  │                          │                            Create sessions auto
-  │                          ▼
-  └──> Ticket PROJ-12345    daf open PROJ-12345             Launch Claude Code
-                             │                            Load ticket context
-                             ▼                            Start time tracking
+GitHub Issues              daf sync                       Pull assigned issues
+GitLab Issues                │                            Create sessions auto
+JIRA Board                   ▼
+  │                       daf open owner-repo-60          Launch Claude Code
+  └──> Issue #60          or daf open PROJ-12345          Load issue context
+                             │                            Start time tracking
+                             ▼
        Claude Code         (works normally)              AI pair programming
          │                   │
          ▼                   ▼
        Git commits         daf note "progress"            Track what you did
          │                   │                            (exit Claude first)
-         │                   │                            Optional JIRA comment
+         │                   │                            Optional issue comment
          ▼                   ▼
        Push branch         daf complete                   Generate summary
-         │                   │                            Transition JIRA
-         └──────────────────┴───> Create PR/MR           Link PR to ticket
+         │                   │                            Update issue status
+         └──────────────────┴───> Create PR/MR           Link PR to issue
                                    │
                                    ▼
                                  Code Review              Normal git workflow
@@ -266,10 +269,19 @@ JIRA Board                 daf sync                       Pull assigned tickets
 
 ### Integration Points
 
-**1. JIRA (Optional)**
-- **Reads:** Ticket summary, description, acceptance criteria
-- **Writes:** Status transitions, comments, time logs, PR links
-- **When:** On `daf sync`, `daf open`, `daf note --sync`, `daf complete`
+**1. Issue Trackers (Optional)**
+- **GitHub Issues:**
+  - **Reads:** Issue title, description, labels
+  - **Writes:** Status updates, labels, comments
+  - **When:** On `daf sync`, `daf git open`, `daf git add-comment`, `daf complete`
+- **GitLab Issues:**
+  - **Reads:** Issue title, description, labels
+  - **Writes:** Status updates, labels, comments
+  - **When:** On `daf sync`, `daf git open`, `daf git add-comment`, `daf complete`
+- **JIRA:**
+  - **Reads:** Ticket summary, description, acceptance criteria
+  - **Writes:** Status transitions, comments, time logs
+  - **When:** On `daf sync`, `daf jira open`, `daf note --jira`, `daf complete`
 
 **2. Claude Code (Required)**
 - **Reads:** Conversation history from `.jsonl` files
@@ -281,14 +293,14 @@ JIRA Board                 daf sync                       Pull assigned tickets
 - **Writes:** Creates branches, commits (during `daf complete`)
 - **When:** On `daf new`, `daf open`, `daf complete --commit`
 
-**4. GitHub/GitLab (Optional)**
+**4. GitHub/GitLab PR/MR (Optional)**
 - **Reads:** Existing PRs/MRs for the branch, PR/MR templates from repositories
-- **Writes:** Creates PRs/MRs with AI-filled templates, links PRs/MRs to JIRA tickets
+- **Writes:** Creates PRs/MRs with AI-filled templates, links PRs/MRs to issues
 - **When:** On `daf complete --create-pr` or `daf complete --create-mr`
 - **Features:**
   - Automatic PR/MR creation with template support
   - AI-powered template filling using session context and git changes
-  - Automatic JIRA ticket linking in PR/MR description
+  - Automatic issue linking in PR/MR description
   - Support for both GitHub (via `gh` CLI) and GitLab (via `glab` CLI)
 
 ### What DAF Does NOT Do
@@ -297,7 +309,7 @@ To avoid confusion, here's what the tool explicitly does **not** do:
 
 - ❌ **Replace Claude Code** - You still use Claude Code normally, DAF just organizes it
 - ❌ **Modify conversations** - It tracks them but doesn't change message content
-- ❌ **Manage JIRA tickets** - It updates status/comments but doesn't create/delete tickets
+- ❌ **Manage issues/tickets** - It updates status/comments but doesn't replace your issue tracker
 - ❌ **Replace git commands** - You still commit/push normally, DAF just automates branch creation
 - ❌ **Lock you in** - Sessions are just JSON metadata, your code/conversations are untouched
 
@@ -313,8 +325,24 @@ daf open redis-cache-test
 daf complete redis-cache-test
 ```
 
-### JIRA-Driven Development
+### Issue-Driven Development
 
+**With GitHub Issues:**
+```bash
+# Sync assigned issues
+daf sync
+
+# Work on the session (use session name - no quotes!)
+daf open owner-repo-60
+
+# Add progress notes
+daf note owner-repo-60 "Completed backend API, starting UI"
+
+# Complete and optionally close issue
+daf complete owner-repo-60
+```
+
+**With JIRA:**
 ```bash
 # Start work on a JIRA ticket
 daf new --jira PROJ-12345 --goal "Implement backup feature"
@@ -325,11 +353,8 @@ daf sync --sprint current
 # Work on the session
 daf open PROJ-12345
 
-# Add progress notes
-daf note PROJ-12345 "Completed backend API, starting UI"
-
 # Complete and auto-transition JIRA
-daf complete PROJ-12345 --status "Code Review"
+daf complete PROJ-12345
 ```
 
 ### Multi-Repository Work
@@ -425,24 +450,24 @@ Claude Code's conversation files remain in their original location:
 ## Why Use This Tool?
 
 ### ✅ Better Organization
-- Stop mixing work from different tickets
-- Find sessions easily by name or JIRA key
+- Stop mixing work from different issues
+- Find sessions easily by name or issue key
 - See what you worked on and when
 
 ### ✅ Save Time
 - Auto-create git branches
-- Auto-transition JIRA tickets
+- Auto-transition issues or update labels
 - Auto-track time spent
 - Resume with full context
 
 ### ✅ Team Benefits
 - Export sessions for handoffs
 - Share templates for common setups
-- Track time for sprint planning
+- Track time for sprint planning (JIRA)
 - Document work with session summaries
 
 ### ✅ Flexibility
-- Works with or without JIRA
+- Works with GitHub, GitLab, JIRA, or no issue tracker
 - Use as much or as little as you need
 - Doesn't lock you in - sessions are just metadata
 

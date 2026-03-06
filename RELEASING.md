@@ -243,16 +243,14 @@ git push origin main
 
 #### 8. (Optional) Publish to PyPI
 
-**Note**: PyPI publishing is planned for the future. For now, skip this step.
+**Note**: PyPI publishing is fully documented in [docs/publishing-to-pypi.md](docs/publishing-to-pypi.md).
 
-When ready:
-```bash
-# Build distribution
-python setup.py sdist bdist_wheel
-
-# Upload to PyPI
-twine upload dist/*
-```
+See the guide for complete instructions on:
+- Generating and securing PyPI API tokens
+- Building distribution packages
+- Publishing to Test PyPI and PyPI
+- Verifying installation
+- Troubleshooting common issues
 
 ## Hotfix Workflow
 

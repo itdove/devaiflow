@@ -10,20 +10,22 @@ A CLI tool to manage AI coding assistant sessions with optional issue tracker in
 ![Alt DevAIFlow](https://raw.githubusercontent.com/itdove/devaiflow/main/images/daf-logo-160x160.png)
 
 **AI Assistants:** Claude Code (fully tested) | GitHub Copilot, Cursor, Windsurf (experimental)
-**Issue Trackers:** JIRA (currently supported) | Others (planned)
+**Issue Trackers:** GitHub Issues, GitLab Issues, JIRA (all fully supported)
 
 > **Note on Support Status:**
 > - **Claude Code**: Fully tested and production-ready ✅
 > - **Other AI Assistants**: Experimental - basic functionality works, full testing in progress ⚠️
-> - **JIRA**: Currently the only supported issue tracker ✅
->   - **API Compatibility**: Supports both JIRA Cloud (API v3) and self-hosted JIRA (API v2) with automatic version detection
-> - **Other Issue Trackers**: Planned for future releases 🔮
+> - **Issue Trackers**:
+>   - **GitHub Issues**: Production-ready via GitHub CLI (`gh`) ✅
+>   - **GitLab Issues**: Production-ready via GitLab CLI (`glab`) ✅
+>   - **JIRA**: Production-ready ✅
+>     - **API Compatibility**: Supports both JIRA Cloud (API v3) and self-hosted JIRA (API v2) with automatic version detection
 
 ## Overview
 
-DevAIFlow helps you organize your AI assistant development work into focused sessions. Each session can optionally link to an issue tracker ticket (JIRA currently supported), track time automatically, and maintain context across work sessions. Perfect for managing multiple features, bugs, or experiments without losing context.
+DevAIFlow helps you organize your AI assistant development work into focused sessions. Each session can optionally link to an issue tracker (GitHub Issues, GitLab Issues, or JIRA), track time automatically, and maintain context across work sessions. Perfect for managing multiple features, bugs, or experiments without losing context.
 
-The tool integrates seamlessly with GitHub and GitLab to automate PR/MR creation with AI-powered template filling, automatically linking pull requests to JIRA tickets and reducing manual overhead.
+The tool integrates seamlessly with GitHub and GitLab for issue tracking, automated PR/MR creation with AI-powered template filling, and automatic linking between issues and pull requests.
 
 ### The Problem
 
@@ -62,10 +64,10 @@ Each session is an **isolated workspace** with its own:
 - Resume exactly where you left off with complete conversation history
 
 **⏱️ Save Time**
-- Auto-creates git branches from JIRA keys
-- Auto-transitions issue tracker tickets (JIRA) (New → In Progress → Done)
+- Auto-creates git branches from issue keys
+- Auto-transitions issue tracker tickets (GitHub, GitLab, or JIRA)
 - Tracks time automatically when you open/close sessions
-- Auto-creates PRs/MRs with AI-filled templates and JIRA linking
+- Auto-creates PRs/MRs with AI-filled templates and issue linking
 - No more manual ticket updates
 
 **📤 Enable Collaboration**
@@ -74,54 +76,75 @@ Each session is an **isolated workspace** with its own:
 - Share session templates for common workflows
 
 **🔧 Works Your Way**
-- JIRA integration is completely optional
+- Issue tracker integration is completely optional
 - Use for personal experiments without any ticket
+- Supports GitHub Issues, GitLab Issues, or JIRA - choose what works for you
 - Gradually adopt features as needed
 
 **Key Features:**
 - 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf
 - 📂 **Multi-Repository Workflows** - Work on one ticket across multiple repositories with unified time tracking (one session, multiple conversations)
 - 🏢 **Named Workspaces** - Multiple workspaces for concurrent multi-branch development
-- 🎫 **Optional Issue Tracker** - Link issue tracker tickets (JIRA supported), or never (your choice)
+- 🎫 **Optional Issue Tracker** - GitHub Issues, GitLab Issues, or JIRA (your choice, or none at all)
 - ⏱️ **Time Tracking** - Automatic tracking with pause/resume
 - 🔄 **Context Loading** - Automatically reads AGENTS.md, CLAUDE.md, and issue tracker tickets
 - 🌿 **Git Integration** - Auto-create branches and manage git workflow
-- 🔗 **GitHub/GitLab Integration** - Automated PR/MR creation with AI-filled templates
+- 🔗 **GitHub/GitLab Integration** - Automated issue tracking and PR/MR creation with AI-filled templates
 - 📝 **Progress Notes** - Track progress with local-first notes
 - 📤 **Export/Import** - Share sessions or backup your work
 - ⚙️ **Interactive Configuration** - Full-featured TUI for easy configuration management
 
 ## Quick Start
 
+### With GitHub Issues (Recommended)
+
 ```bash
 # Install
 pip install .
 
-# Export environment variables for issue tracker (JIRA example)
-export JIRA_URL="https://jira.example.com"  # Currently supports JIRA only
-export JIRA_API_TOKEN=<YOUR_JIRA_PAT>
+# Authenticate GitHub CLI
+gh auth login
 
 # Initialize configuration (interactive wizard)
-daf init  # Configures JIRA URL, comment visibility, workspace path, etc.
+daf init  # Configures workspaces, GitHub settings, etc.
 
 # Install Claude Code commands and skills
 daf upgrade  # Installs /daf-* slash commands into Claude Code
 
-# Sync JIRA tickets
+# Sync GitHub issues from your repositories
 daf sync
 
-# Open a session for your ticket
-daf open PROJ-12345
+# Open a session for your issue (use session name - no quotes!)
+daf open owner-repo-123
 
 # Work in your AI assistant...
 # Add progress notes
-daf note PROJ-12345 "Completed API implementation"
+daf note owner-repo-123 "Completed API implementation"
 
 # Complete the session
+daf complete owner-repo-123
+```
+
+### With JIRA (Alternative)
+
+```bash
+# Export environment variables for JIRA
+export JIRA_URL="https://jira.example.com"
+export JIRA_API_TOKEN=<YOUR_JIRA_PAT>
+
+# Initialize and sync
+daf init
+daf upgrade
+daf sync
+
+# Open a session
+daf open PROJ-12345
+daf note PROJ-12345 "Completed API implementation"
 daf complete PROJ-12345
 ```
 
-**Alternative:** Create sessions without JIRA:
+### Without Issue Tracker
+
 ```bash
 daf new --name "fix-login-bug" --goal "Fix login timeout issue"
 daf open fix-login-bug
@@ -185,7 +208,8 @@ The TUI provides:
 **Core Documentation:**
 - **[Installation Guide](docs/02-installation.md)** - Setup instructions and requirements
 - **[Session Management](docs/04-session-management.md)** - Understanding sessions and lifecycle
-- **[JIRA Integration](docs/05-jira-integration.md)** - Issue tracker integration (JIRA)
+- **[GitHub Issue Integration](docs/05-1-github-issue-integration.md)** - GitHub/GitLab issue tracking
+- **[JIRA Integration](docs/05-2-jira-integration.md)** - JIRA issue tracking
 - **[Command Reference](docs/07-commands.md)** - Complete CLI command documentation
 - **[Configuration](docs/06-configuration.md)** - Customizing the tool for your workflow (includes JSON Schema validation)
 - **[Troubleshooting](docs/11-troubleshooting.md)** - Common issues and solutions
@@ -230,7 +254,7 @@ See the [Installation Guide](docs/02-installation.md) for detailed setup instruc
 
 ## For Other Organizations
 
-**DevAIFlow is fully generic and works with any JIRA instance.** Configuration is file-based and can be customized for your organization.
+**DevAIFlow is fully generic and works with GitHub, GitLab, or JIRA.** Configuration is file-based and can be customized for your organization.
 
 1. **Quick Setup**: Use configuration templates to get started
    ```bash

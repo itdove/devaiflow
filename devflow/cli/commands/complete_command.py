@@ -15,10 +15,14 @@ from devflow.exceptions import ToolNotFoundError
 from devflow.export.manager import ExportManager
 from devflow.git.pr_template import fill_pr_template_with_ai
 from devflow.git.utils import GitUtils
-from devflow.jira import transition_on_complete
+from devflow.jira import transition_on_complete as jira_transition_on_complete
 from devflow.jira.client import JiraClient
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.jira.utils import merge_pr_urls
+from devflow.github import transition_on_complete as github_transition_on_complete
+from devflow.issue_tracker.factory import create_issue_tracker_client
+from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError, IssueTrackerValidationError
+from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.manager import SessionManager
 from devflow.utils.dependencies import require_tool
 
@@ -297,7 +301,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                             console.print(f"[dim]Branch is up to date with remote - no push needed[/dim]")
                         # Update issue tracker ticket with MR URL if not already present
                         if session.issue_key and pr_status['url']:
-                            _update_jira_pr_field(session.issue_key, pr_status['url'], no_issue_update)
+                            _update_issue_pr_field(session, config, pr_status['url'], no_issue_update)
                     elif pr_status and pr_status['state'] in ['merged', 'closed']:
                         # PR exists but is merged/closed
                         # Only prompt to create new PR if we have new work (commits or uncommitted changes)
@@ -319,7 +323,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
                                 # Update issue tracker ticket with PR URL if created successfully
                                 if pr_url and session.issue_key:
-                                    _update_jira_pr_field(session.issue_key, pr_url, no_issue_update)
+                                    _update_issue_pr_field(session, config, pr_url, no_issue_update)
                         else:
                             console.print(f"\n[dim]Previous PR/MR was {pr_status['state']} and no new commits - skipping PR creation.[/dim]")
                     else:
@@ -344,7 +348,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
                                 # Update issue tracker ticket with PR URL if created successfully
                                 if pr_url and session.issue_key:
-                                    _update_jira_pr_field(session.issue_key, pr_url, no_issue_update)
+                                    _update_issue_pr_field(session, config, pr_url, no_issue_update)
                         else:
                             console.print("\n[dim]No new commits - skipping PR creation.[/dim]")
                 else:
@@ -374,26 +378,61 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                 should_add_summary = Confirm.ask("\nAdd session summary to JIRA?", default=True)
 
             if should_add_summary:
-                _add_session_summary_to_jira(session.issue_key, session.name, session, hours, minutes, config_loader)
+                _add_session_summary_to_issue(session, config, session.name, hours, minutes, config_loader)
         else:
             console.print(f"[dim]Skipping JIRA summary - session has minimal activity (0h {minutes}m, no Claude interaction)[/dim]")
     else:
         console.print(f"[dim]Session has no issue key - skipping JIRA summary[/dim]")
 
-    # Export and attach to JIRA if requested
+    # Export and attach to issue tracker if requested
     if attach_to_issue:
         if session.issue_key:
-            _export_and_attach_to_issue(session.issue_key, session.name, config_loader)
+            _export_and_attach_to_issue(session, config, session.name, config_loader)
         else:
-            console.print(f"[yellow]⚠[/yellow] Cannot attach to JIRA - session has no issue key")
+            console.print(f"[yellow]⚠[/yellow] Cannot attach to issue tracker - session has no issue key")
 
-    # JIRA auto-transition: In Progress → Code Review/Done/Testing (LAST STEP)
+    # Issue tracker auto-transition: In Progress → Code Review/Done/Testing (LAST STEP)
     # This is done last, after all work is complete (commits, PR, summary, export)
     # Skip for ticket_creation and investigation sessions - they only analyze code, don't work on the parent ticket
     if config and session.issue_key and session.session_type == "development":
-        transition_on_complete(session, config)
-        # Save updated session (JIRA status may have changed)
+        # Detect backend for this session
+        backend = get_issue_tracker_backend(session, config)
+
+        if backend == "jira":
+            jira_transition_on_complete(session, config)
+        elif backend == "github":
+            github_transition_on_complete(session, config, no_issue_update=no_issue_update)
+        else:
+            console.print(f"[dim]Skipping transition for unknown backend: {backend}[/dim]")
+
+        # Save updated session (status may have changed)
         session_manager.update_session(session)
+
+
+def _add_session_summary_to_issue(session, config, session_name: str, hours: int, minutes: int, config_loader) -> None:
+    """Add session summary to issue tracker (backend-agnostic).
+
+    Args:
+        session: Session object with issue_key and backend info
+        config: Configuration object
+        session_name: Session group name
+        hours: Total hours worked
+        minutes: Total minutes worked
+        config_loader: ConfigLoader instance
+    """
+    issue_key = session.issue_key
+    if not issue_key:
+        return
+
+    # Detect backend for this session
+    backend = get_issue_tracker_backend(session, config)
+
+    if backend == "jira":
+        _add_session_summary_to_jira(issue_key, session_name, session, hours, minutes, config_loader)
+    elif backend == "github":
+        _add_session_summary_to_github(issue_key, session_name, session, hours, minutes, config_loader)
+    else:
+        console.print(f"[dim]Session summary not implemented for backend: {backend}[/dim]")
 
 
 def _add_session_summary_to_jira(issue_key: str, session_name: str, session, hours: int, minutes: int, config_loader) -> None:
@@ -470,6 +509,86 @@ _Generated by DevAIFlow_"""
         # Add comment using common utility
         if add_jira_comment(issue_key, summary, silent_success=True):
             console.print(f"[green]✓[/green] Session summary added to JIRA")
+
+    except Exception as e:
+        console.print(f"[yellow]⚠[/yellow] Failed to generate session summary: {e}")
+
+
+def _add_session_summary_to_github(issue_key: str, session_name: str, session, hours: int, minutes: int, config_loader) -> None:
+    """Add session summary to GitHub issue as a comment.
+
+    Args:
+        issue_key: GitHub issue key (#123 or owner/repo#123)
+        session_name: Session group name
+        session: Session object
+        hours: Total hours worked
+        minutes: Total minutes worked
+        config_loader: ConfigLoader instance
+    """
+    # Get active conversation for accessing conversation-specific fields
+    active_conv = session.active_conversation
+
+    try:
+        from devflow.session.summary import generate_session_summary, generate_prose_summary
+
+        # Generate AI-powered summary
+        prose_summary = ""
+        if active_conv and active_conv.ai_agent_session_id:
+            try:
+                summary_data = generate_session_summary(session)
+                config = config_loader.load_config()
+                prose_summary = generate_prose_summary(
+                    summary_data,
+                    mode="ai",
+                    agent_backend=config.agent_backend if config else None
+                )
+                if prose_summary:
+                    prose_summary = f"\n\n{prose_summary}\n"
+            except Exception as e:
+                console.print(f"[yellow]⚠[/yellow] Could not generate AI summary: {e}")
+
+        # Read notes if they exist
+        notes_section = ""
+        session_dir = config_loader.get_session_dir(session_name)
+        notes_file = session_dir / "notes.md"
+
+        if notes_file.exists():
+            with open(notes_file, "r") as f:
+                notes_content = f.read()
+                notes_section = f"\n\n**Session Notes:**\n{notes_content}"
+
+        # Build time summary
+        time_by_user = session.time_by_user()
+        if len(time_by_user) > 1:
+            time_breakdown = f"{hours}h {minutes}m total\n"
+            for user, user_seconds in sorted(time_by_user.items(), key=lambda x: x[1], reverse=True):
+                u_hours = int(user_seconds // 3600)
+                u_minutes = int((user_seconds % 3600) // 60)
+                time_breakdown += f"  - {user}: {u_hours}h {u_minutes}m\n"
+            time_summary = f"**Time Spent:**\n{time_breakdown}"
+        else:
+            time_summary = f"**Time Spent:** {hours}h {minutes}m"
+
+        # Build summary comment (GitHub uses Markdown)
+        summary = f"""✅ **Session Complete**
+
+**Project:** {session.working_directory}
+**Goal:** {session.goal}
+{time_summary}**Branch:** {active_conv.branch if active_conv else 'N/A'}{prose_summary}{notes_section}
+
+_Generated by DevAIFlow_"""
+
+        # Add comment to GitHub issue
+        try:
+            client = create_issue_tracker_client('github')
+            client.add_comment(issue_key, summary, public=True)
+            console.print(f"[green]✓[/green] Session summary added to GitHub issue")
+        except IssueTrackerAuthError as e:
+            console.print(f"[yellow]⚠[/yellow] GitHub authentication failed: {e}")
+        except IssueTrackerNotFoundError as e:
+            console.print(f"[yellow]⚠[/yellow] GitHub issue not found: {e}")
+        except IssueTrackerApiError as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to add comment to GitHub: {e}")
 
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Failed to generate session summary: {e}")
@@ -557,11 +676,38 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
             console.print(f"[yellow]Your teammate may not have the latest changes[/yellow]")
 
 
-def _export_and_attach_to_issue(issue_key: str, session_name: str, config_loader) -> None:
-    """Export session group and attach to issue tracker ticket.
+def _export_and_attach_to_issue(session, config, session_name: str, config_loader) -> None:
+    """Export session group and attach to issue tracker (backend-agnostic).
 
     Args:
-        issue_key: issue tracker key
+        session: Session object with issue_key and backend info
+        config: Configuration object
+        session_name: Session group name
+        config_loader: ConfigLoader instance
+    """
+    issue_key = session.issue_key
+    if not issue_key:
+        return
+
+    # Detect backend for this session
+    backend = get_issue_tracker_backend(session, config)
+
+    if backend == "jira":
+        _export_and_attach_to_jira(issue_key, session_name, config_loader)
+    elif backend == "github":
+        # GitHub doesn't support file attachments
+        console.print(f"[yellow]ℹ[/yellow] GitHub Issues don't support file attachments")
+        console.print(f"[dim]Export will be created locally instead[/dim]")
+        _export_session_locally(issue_key, session_name, config_loader)
+    else:
+        console.print(f"[dim]Export/attach not implemented for backend: {backend}[/dim]")
+
+
+def _export_and_attach_to_jira(issue_key: str, session_name: str, config_loader) -> None:
+    """Export session group and attach to JIRA ticket.
+
+    Args:
+        issue_key: JIRA issue key
         session_name: Session group name
         config_loader: ConfigLoader instance
     """
@@ -662,6 +808,70 @@ _Generated by DevAIFlow_"""
 
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Failed to export and attach: {e}")
+
+
+def _export_session_locally(issue_key: str, session_name: str, config_loader) -> None:
+    """Export session group locally (for backends that don't support file attachments).
+
+    Args:
+        issue_key: Issue key
+        session_name: Session group name
+        config_loader: ConfigLoader instance
+    """
+    try:
+        from datetime import datetime
+
+        export_manager = ExportManager(config_loader)
+        session_manager = SessionManager(config_loader)
+
+        # Get all sessions in this group
+        sessions = session_manager.index.get_sessions(session_name)
+        if not sessions:
+            console.print(f"[yellow]⚠[/yellow] No sessions found for export")
+            return
+
+        console.print(f"\n[cyan]Exporting session group: {session_name}[/cyan]")
+        console.print(f"[dim]Sessions: {len(sessions)}[/dim]")
+        console.print(f"[dim]Issue: {issue_key}[/dim]")
+
+        # Sync branch before export
+        session_with_branch = next(
+            (s for s in sessions
+             if s.active_conversation and s.active_conversation.project_path and s.active_conversation.branch),
+            None
+        )
+        if session_with_branch:
+            _sync_branch_for_export(session_with_branch, issue_key, config_loader)
+
+        # Export to current directory
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        export_filename = f"{session_name}-{timestamp}.tar.gz"
+        export_file = export_manager.export_sessions(
+            identifiers=[session_name],
+            output_path=Path(export_filename),
+        )
+
+        # Show export details
+        size_mb = export_file.stat().st_size / (1024 * 1024)
+        console.print(f"[green]✓[/green] Exported session group to: {export_file}")
+        console.print(f"  Size: {size_mb:.2f} MB")
+        console.print(f"  Includes conversation history")
+
+        total_time = sum(
+            sum((ws.end - ws.start).total_seconds() for ws in s.work_sessions if ws.end)
+            for s in sessions
+        )
+        hours = int(total_time // 3600)
+        minutes = int((total_time % 3600) // 60)
+
+        console.print(f"\n[cyan]To share this work:[/cyan]")
+        console.print(f"1. Share the export file: {export_filename}")
+        console.print(f"2. Teammate runs: daf import {export_filename}")
+        console.print(f"3. Teammate resumes with: daf open {session_name}")
+        console.print(f"\n[dim]Total time tracked: {hours}h {minutes}m[/dim]")
+
+    except Exception as e:
+        console.print(f"[yellow]⚠[/yellow] Failed to export: {e}")
 
 
 def _get_pr_for_branch(working_dir: Path, branch_name: str) -> Optional[dict]:
@@ -2276,32 +2486,67 @@ Return ONLY the commit message in this exact format, nothing else."""
         return None
 
 
-def _update_jira_pr_field(issue_key: str, pr_url: str, no_issue_update: bool = False) -> None:
-    """Update JIRA Git Pull Request field with PR/MR URL.
+def _update_issue_pr_field(session, config, pr_url: str, no_issue_update: bool = False) -> None:
+    """Update issue tracker with PR/MR URL (backend-agnostic).
 
     Args:
-        issue_key: issue tracker key
+        session: Session object with issue_key and backend info
+        config: Configuration object
         pr_url: PR/MR URL to add
-        no_issue_update: If True, skip JIRA update
+        no_issue_update: If True, skip issue tracker update
     """
+    issue_key = session.issue_key
+    if not issue_key:
+        return
+
+    # Detect backend for this session
+    backend = get_issue_tracker_backend(session, config)
+
     # Check if we should update (or use configured default)
     should_update = True
-    config_loader = ConfigLoader()
-    config = config_loader.load_config()
 
     if no_issue_update:
         should_update = False
-        console.print("\n[dim]Skipping JIRA PR update (--no-issue-update flag)[/dim]")
+        console.print(f"\n[dim]Skipping {backend.upper()} PR update (--no-issue-update flag)[/dim]")
     elif config and config.prompts and config.prompts.auto_update_jira_pr_url is not None:
         should_update = config.prompts.auto_update_jira_pr_url
         if should_update:
-            console.print("\nAutomatically updating JIRA with PR URL (configured in prompts)")
+            console.print(f"\n[dim]Automatically updating {backend.upper()} with PR URL (configured in prompts)[/dim]")
     else:
-        should_update = Confirm.ask(f"\nUpdate issue tracker ticket {issue_key} with PR URL?", default=True)
+        should_update = Confirm.ask(f"\nUpdate {backend} issue {issue_key} with PR URL?", default=True)
 
     if not should_update:
         return
 
+    if backend == "jira":
+        _update_jira_pr_field(issue_key, pr_url, config)
+    elif backend == "github":
+        # GitHub auto-links PRs via mentions (e.g., "Fixes #123" in PR body)
+        # No explicit field update needed - just add a comment with the PR link
+        console.print(f"[dim]GitHub auto-links PRs via mentions - adding comment with PR link[/dim]")
+        try:
+            client = create_issue_tracker_client('github')
+            comment = f"Pull request created: {pr_url}"
+            client.add_comment(issue_key, comment, public=True)
+            console.print(f"[green]✓[/green] Added PR link comment to GitHub issue")
+        except IssueTrackerAuthError as e:
+            console.print(f"[yellow]⚠[/yellow] GitHub authentication failed: {e}")
+        except IssueTrackerApiError as e:
+            console.print(f"[yellow]⚠[/yellow] Failed to add comment: {e}")
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] Unexpected error: {e}")
+    else:
+        console.print(f"[dim]PR linking not implemented for backend: {backend}[/dim]")
+
+
+def _update_jira_pr_field(issue_key: str, pr_url: str, config) -> None:
+    """Update JIRA Git Pull Request field with PR/MR URL.
+
+    Args:
+        issue_key: JIRA issue key
+        pr_url: PR/MR URL to add
+        config: Configuration object
+    """
     try:
         # Get field mappings from config
         field_mappings = config.jira.field_mappings if config else None
@@ -2340,7 +2585,7 @@ def _update_jira_pr_field(issue_key: str, pr_url: str, no_issue_update: bool = F
                 console.print(f"[dim]You can add the PR URL manually in JIRA[/dim]")
                 return
 
-        # Update issue tracker ticket
+        # Update JIRA ticket
         try:
             client.update_ticket_field(issue_key, git_pr_field, updated_pr_urls)
             console.print(f"[green]✓[/green] Updated JIRA Git Pull Request field")

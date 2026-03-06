@@ -85,6 +85,7 @@ NC='\033[0m'  # No Color
 # Test suite configuration
 TESTS=(
     "test_jira_green_path.sh"
+    "test_github_green_path.sh"
     "test_collaboration_workflow.sh"
     "test_time_tracking.sh"
     "test_templates.sh"
@@ -98,6 +99,7 @@ TESTS=(
 
 TEST_DESCRIPTIONS=(
     "Complete JIRA workflow (new → update → open → complete)"
+    "Complete GitHub Issues workflow (new → create → view → comment → complete)"
     "Export/import and multi-session support"
     "Time tracking features (pause, resume, time command)"
     "Template system (save, list, use, delete)"

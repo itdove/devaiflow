@@ -46,11 +46,14 @@ DevAIFlow officially supports:
     - Fetching MR templates from private GitLab repositories
   - Setup: `glab auth login`
 
-### Optional (for JIRA Integration)
+### Optional (for Issue Tracker Integration)
 
-- **JIRA API Token**
+- **GitHub CLI (`gh`)** - For GitHub Issues integration (see above)
+- **GitLab CLI (`glab`)** - For GitLab Issues integration (see above)
+- **JIRA API Token** - For JIRA integration
   - Only needed if you want JIRA integration
-  - Without it, the tool works for local session management only
+  - GitHub and GitLab use their respective CLIs instead
+  - Without any issue tracker, the tool works for local session management only
 
 ## Installation Methods
 
@@ -309,9 +312,37 @@ Get-Command claude -ErrorAction SilentlyContinue
 
 For more troubleshooting, see [Windows Troubleshooting Guide](11-troubleshooting.md#windows-specific-issues).
 
-## Setting Up JIRA Integration (Optional)
+## Setting Up Issue Tracker Integration (Optional)
 
-Skip this section if you don't plan to use JIRA integration.
+### GitHub Issues (Recommended - Easiest Setup)
+
+If you authenticated the GitHub CLI (`gh auth login`) as shown in the Prerequisites section, you're already set up! No additional configuration needed.
+
+```bash
+# Verify authentication
+gh auth status
+
+# Test by viewing your issues
+gh issue list --assignee @me
+```
+
+See the [GitHub Issue Integration Guide](05-1-github-issue-integration.md) for complete documentation.
+
+### GitLab Issues
+
+If you authenticated the GitLab CLI (`glab auth login`), you're ready to go!
+
+```bash
+# Verify authentication
+glab auth status
+
+# Test by viewing your issues
+glab issue list --assignee @me
+```
+
+### JIRA Integration
+
+Skip this section if you're using GitHub or GitLab Issues instead.
 
 The tool uses the JIRA REST API directly - no additional CLI tools are needed!
 
@@ -369,16 +400,17 @@ daf init
 ```
 
 This launches an interactive wizard that:
-- Creates **4-5 JSON configuration files** (automatically, no manual file creation needed):
-  - `backends/jira.json` - JIRA URL and field mappings (API metadata)
-  - `organization.json` - JIRA project key, transitions, parent_field_mapping, sync filters
+- Creates **configuration files** (automatically, no manual file creation needed):
+  - `config.json` - Personal preferences (workspace, prompts, GitHub/GitLab settings)
+  - `backends/jira.json` - JIRA URL and field mappings (if using JIRA)
+  - `organization.json` - JIRA project key and transitions (if using JIRA)
   - `team.json` - Team defaults (workstream, component, comment visibility)
-  - `config.json` - Personal preferences (workspace, prompts, context files)
   - `enterprise.json` - Enterprise-wide settings (optional)
 - Prompts for initial settings:
-  - **JIRA URL and project key** - Your JIRA instance details
-  - **Comment visibility** - Control who can see DevAIFlow's JIRA comments (group or role)
+  - **Issue tracker selection** - GitHub, GitLab, JIRA, or none
   - **Workspace path** - Your main development directory
+  - **GitHub/GitLab settings** - API URL, default labels (if using GitHub/GitLab)
+  - **JIRA settings** - URL, project key, comment visibility (if using JIRA)
   - **Optional settings** - Keyword mappings for multi-repo suggestions, PR template URL
 
 All settings can be changed later using `daf config tui`.
