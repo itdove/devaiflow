@@ -514,6 +514,17 @@ cd integration-tests
 ```
 When `--debug` is used with the test runner, it automatically propagates to all sub-test scripts, showing detailed command execution traces to help identify where tests are hanging or failing.
 
+**Test Duration Benchmarks** (for detecting hanging tests):
+- **Full test suite** (`pytest tests/`): ~2-3 minutes (2827+ tests)
+- **Single test file**: Usually <5 seconds (exceptions: integration-heavy files may take 10-20 seconds)
+- **Integration tests** (`./run_all_integration_tests.sh`): ~30-60 seconds
+
+**If tests are taking significantly longer**:
+- Tests may be hanging on user input prompts (need mock for `Confirm.ask`, `Prompt.ask`, `IntPrompt.ask`)
+- Tests may be waiting for external services (need proper mocking)
+- Use `pytest -x --tb=line -v` to see which test is running and stop on first failure
+- Check for missing input sequences in `CliRunner().invoke(..., input="...")` calls
+
 **⚠️ CRITICAL TESTING REQUIREMENT**: ALL TESTS MUST BE SUCCESSFUL before marking any task as complete. When tests fail:
 - **DO NOT** ask the user for permission to continue fixing tests
 - **DO NOT** stop after fixing some tests - continue fixing ALL failing tests

@@ -1849,19 +1849,20 @@ def test_complete_session_updates_jira_with_existing_mr_url(temp_daf_home, tmp_p
 
         return original_run(cmd, *args, **kwargs)
 
-    # Track if _update_jira_pr_field was called
+    # Track if _update_issue_pr_field was called
     jira_update_called = []
     original_update = None
 
-    def mock_update_jira(issue_key, pr_url, no_issue_update=False):
-        jira_update_called.append((issue_key, pr_url))
+    def mock_update_issue_pr(session, config, pr_url, no_issue_update=False):
+        if session.issue_key:
+            jira_update_called.append((session.issue_key, pr_url))
 
     # Import the function to mock it
     import devflow.cli.commands.complete_command as cc
-    original_update = cc._update_jira_pr_field
+    original_update = cc._update_issue_pr_field
 
     monkeypatch.setattr("subprocess.run", mock_run)
-    monkeypatch.setattr("devflow.cli.commands.complete_command._update_jira_pr_field", mock_update_jira)
+    monkeypatch.setattr("devflow.cli.commands.complete_command._update_issue_pr_field", mock_update_issue_pr)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
     monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
@@ -2780,7 +2781,7 @@ def test_update_jira_pr_field_success(temp_daf_home, monkeypatch, capsys):
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     # Verify update was called
@@ -2833,7 +2834,7 @@ def test_update_jira_pr_field_failure(temp_daf_home, monkeypatch, capsys):
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     # Verify error message is displayed
@@ -2884,7 +2885,7 @@ def test_update_jira_pr_field_validation_error_with_field_errors(temp_daf_home, 
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     # Verify detailed error messages
@@ -2933,7 +2934,7 @@ def test_update_jira_pr_field_validation_error_with_error_messages_only(temp_daf
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -2979,7 +2980,7 @@ def test_update_jira_pr_field_not_found_error(temp_daf_home, monkeypatch, capsys
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -3022,7 +3023,7 @@ def test_update_jira_pr_field_auth_error(temp_daf_home, monkeypatch, capsys):
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -3069,7 +3070,7 @@ def test_update_jira_pr_field_api_error_with_status_code(temp_daf_home, monkeypa
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -3116,7 +3117,7 @@ def test_update_jira_pr_field_connection_error(temp_daf_home, monkeypatch, capsy
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()

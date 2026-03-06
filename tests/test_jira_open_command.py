@@ -372,7 +372,7 @@ def test_jira_open_does_not_transition_ticket_status(temp_daf_home, mock_git_rep
     with patch("devflow.jira.JiraClient", return_value=mock_jira_instance), \
          patch("devflow.cli.commands.open_command.should_launch_claude_code", return_value=False), \
          patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=True), \
-         patch("devflow.cli.commands.open_command.transition_on_start") as mock_transition, \
+         patch("devflow.cli.commands.open_command.jira_transition_on_start") as mock_transition, \
          patch("pathlib.Path.cwd", return_value=mock_git_repo):
 
         result = runner.invoke(cli, ["jira", "open", "PROJ-77777"], catch_exceptions=False)
@@ -400,7 +400,7 @@ def test_jira_open_does_not_transition_ticket_status(temp_daf_home, mock_git_rep
             f"Session type should remain ticket_creation, but got: {updated_session.session_type}"
 
         # Verify output shows transition was skipped
-        assert "Skipping JIRA status transition (session_type: ticket_creation)" in result.output, \
+        assert "Skipping issue tracker status transition (session_type: ticket_creation)" in result.output, \
             f"Should show message about skipping transition for ticket_creation. Got:\n{result.output}"
 
 
