@@ -89,7 +89,7 @@ def test_jira_api_error_with_json_response_error_messages():
     error_str = str(error)
     assert "Validation failed" in error_str
     assert "(HTTP 400)" in error_str
-    assert "JIRA errors:" in error_str
+    assert "API errors:" in error_str  # Generic naming for backend-agnostic exceptions
     assert "Field 'summary' is required" in error_str
     assert "Invalid issue type" in error_str
 

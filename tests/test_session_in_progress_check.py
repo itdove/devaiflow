@@ -270,8 +270,9 @@ def test_daf_new_allows_same_session_in_different_project(temp_daf_home, mock_gi
 
     # Mock prompts and should_launch_claude_code
     with patch("devflow.cli.commands.new_command.should_launch_claude_code", return_value=False), \
-         patch("devflow.cli.commands.new_command.Confirm.ask", return_value=True), \
-         patch("devflow.cli.commands.new_command.Prompt.ask", return_value="2"):
+         patch("devflow.cli.commands.new_command.Confirm.ask", return_value=False), \
+         patch("devflow.cli.commands.new_command.Prompt.ask", return_value="2"), \
+         patch("rich.prompt.IntPrompt.ask", return_value=2):
         # Attempt to create session A in repo 2 (should succeed - adds conversation to existing session)
         create_new_session(
             name="session-a",

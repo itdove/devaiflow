@@ -1,0 +1,73 @@
+"""Implementation of 'daf git add-comment' command."""
+
+import sys
+from typing import Optional
+from rich.console import Console
+
+from devflow.cli.utils import output_json as json_output, console_print, require_outside_claude
+from devflow.github.issues_client import GitHubClient
+from devflow.issue_tracker.exceptions import (
+    IssueTrackerError,
+    IssueTrackerAuthError,
+    IssueTrackerApiError,
+    IssueTrackerNotFoundError,
+)
+
+console = Console()
+
+
+@require_outside_claude
+def git_add_comment(
+    issue_key: str,
+    comment: str,
+    repository: Optional[str] = None,
+    output_json: bool = False,
+) -> None:
+    """Add a comment to a GitHub/GitLab issue.
+
+    Args:
+        issue_key: Issue key (#123 or owner/repo#123)
+        comment: Comment text
+        repository: Repository in owner/repo format (optional, will auto-detect)
+        output_json: Output in JSON format
+    """
+    if not comment or not comment.strip():
+        console.print("[red]✗[/red] Comment text is required")
+        sys.exit(1)
+
+    try:
+        # Create client (automatically returns mock in mock mode)
+        client = GitHubClient(repository=repository)
+
+        # Add comment
+        console_print(f"[cyan]Adding comment to {issue_key}...[/cyan]")
+        client.add_comment(issue_key, comment, public=True)
+
+        console_print(f"[green]✓[/green] Comment added to {issue_key}")
+
+        # JSON output mode
+        if output_json:
+            json_output(success=True, data={"issue_key": issue_key})
+            return
+
+    except IssueTrackerNotFoundError as e:
+        console.print(f"[red]✗[/red] Issue not found: {issue_key}")
+        if output_json:
+            json_output(success=False, error=str(e))
+        sys.exit(1)
+    except IssueTrackerAuthError as e:
+        console.print(f"[red]✗[/red] Authentication failed")
+        console.print(f"[dim]Run 'gh auth login' or 'glab auth login' to authenticate[/dim]")
+        if output_json:
+            json_output(success=False, error=str(e))
+        sys.exit(1)
+    except IssueTrackerApiError as e:
+        console.print(f"[red]✗[/red] API error: {e}")
+        if output_json:
+            json_output(success=False, error=str(e))
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]✗[/red] Unexpected error: {e}")
+        if output_json:
+            json_output(success=False, error=str(e))
+        sys.exit(1)

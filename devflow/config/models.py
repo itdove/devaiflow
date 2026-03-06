@@ -61,6 +61,18 @@ class JiraBackendConfig(BaseModel):
     field_cache_max_age_hours: int = 24  # Maximum age in hours before cache is stale (default: 24h)
 
 
+class GitHubBackendConfig(BaseModel):
+    """GitHub backend-specific configuration (backends/github.json).
+
+    Contains GitHub instance settings and API configuration.
+    Unlike JIRA, GitHub uses convention-based labels instead of custom fields.
+    """
+
+    api_url: str = "https://api.github.com"  # GitHub API URL (default: public GitHub, can be GitHub Enterprise)
+    default_labels: List[str] = Field(default_factory=list)  # Default labels to add to all created issues
+    label_conventions: Optional[Dict[str, str]] = None  # Custom label conventions (e.g., {"bug": "type:bug", "priority_high": "priority:high"})
+
+
 class EnterpriseConfig(BaseModel):
     """Enterprise-wide configuration (enterprise.json).
 
@@ -74,12 +86,14 @@ class EnterpriseConfig(BaseModel):
 
 
 class OrganizationConfig(BaseModel):
-    """Organization/Project-specific JIRA configuration (organization.json).
+    """Organization/Project-specific configuration (organization.json).
 
     Contains organization or project-specific settings that should be
     shared across teams (project key, workflow policies, sync filters).
+    Supports both JIRA and GitHub backends.
     """
 
+    # JIRA-specific fields
     jira_project: Optional[str] = None  # JIRA project key (e.g., "PROJ")
     transitions: Dict[str, JiraTransitionConfig] = Field(default_factory=dict)  # Organization workflow transition policies
     parent_field_mapping: Optional[Dict[str, str]] = None  # Organization issue hierarchy policy - maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
@@ -89,14 +103,22 @@ class OrganizationConfig(BaseModel):
     hierarchical_config_source: Optional[str] = None  # URL or path to hierarchical config files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md). Supports file://, http://, https://. Example: "https://github.com/ansible-saas/devflow-for-red-hatters/configs" or "file:///path/to/configs"
     jira_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
 
+    # GitHub-specific fields
+    github_repository: Optional[str] = None  # GitHub repository in owner/repo format (e.g., "ansible-saas/devaiflow")
+    github_auto_close_on_complete: bool = False  # Auto-close GitHub issues when session completes
+    github_default_labels: List[str] = Field(default_factory=list)  # Organization-level default labels for GitHub issues
+    github_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
+
 
 class TeamConfig(BaseModel):
-    """Team-specific JIRA configuration (team.json).
+    """Team-specific configuration (team.json).
 
     Contains team-specific settings that may vary between teams
     (custom field defaults, comment visibility, time tracking preferences).
+    Supports both JIRA and GitHub backends.
     """
 
+    # JIRA-specific fields
     jira_custom_field_defaults: Optional[Dict[str, Any]] = None  # Default values for custom fields (e.g., {"workstream": "Platform"})
     jira_system_field_defaults: Optional[Dict[str, Any]] = None  # Default values for JIRA system fields (e.g., {"components": ["ansible-saas"], "labels": ["backend"]})
     time_tracking_enabled: bool = True  # Team-wide time tracking preference
@@ -104,6 +126,10 @@ class TeamConfig(BaseModel):
     jira_comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
     agent_backend: Optional[str] = None  # AI agent backend enforced by team (e.g., "claude", "github-copilot")
     jira_issue_templates: Optional[Dict[str, str]] = None  # Team-specific issue template overrides (e.g., {"Bug": "...", "Story": "..."})
+
+    # GitHub-specific fields
+    github_default_labels: List[str] = Field(default_factory=list)  # Team-level default labels for GitHub issues
+    github_issue_templates: Optional[Dict[str, str]] = None  # Team-specific GitHub issue template overrides (e.g., {"Bug": "...", "Story": "..."})
 
 
 class JiraConfig(BaseModel):
@@ -133,6 +159,27 @@ class JiraConfig(BaseModel):
     comment_visibility_value: Optional[str] = None  # Comment visibility value (group/role name)
     parent_field_mapping: Optional[Dict[str, str]] = None  # Maps issue types to parent field names (e.g., {"story": "epic_link", "sub-task": "parent"})
     issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
+
+
+class GitHubConfig(BaseModel):
+    """GitHub integration configuration (merged view from backend/org/team configs).
+
+    This is the unified configuration model that combines data from:
+    - GitHubBackendConfig (backends/github.json)
+    - OrganizationConfig (organization.json)
+    - TeamConfig (team.json)
+
+    Unlike JIRA, GitHub uses convention-based labels instead of custom fields.
+    """
+
+    api_url: str = "https://api.github.com"  # GitHub API URL
+    repository: Optional[str] = None  # GitHub repository in owner/repo format (e.g., "ansible-saas/devaiflow")
+    default_labels: List[str] = Field(default_factory=list)  # Merged default labels from all config levels
+    auto_close_on_complete: bool = False  # Auto-close issues when session completes
+    add_status_labels: bool = False  # Add status labels (status: in-progress, status: in-review) when starting/completing sessions
+    completion_label: str = "status: in-review"  # Label to add when completing a session (only if add_status_labels=true)
+    label_conventions: Optional[Dict[str, str]] = None  # Custom label conventions (e.g., {"bug": "type:bug", "priority_high": "priority:high"})
+    issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
 
 
 class RepoDetectionConfig(BaseModel):
@@ -327,6 +374,7 @@ class Config(BaseModel):
     In the new format, it combines data from:
     - config.json (user preferences)
     - backends/jira.json (backend settings)
+    - backends/github.json (backend settings)
     - organization.json (org settings)
     - team.json (team settings)
 
@@ -334,6 +382,7 @@ class Config(BaseModel):
     """
 
     jira: JiraConfig
+    github: Optional[GitHubConfig] = None  # GitHub configuration (optional, only if using GitHub backend)
     repos: RepoConfig
     time_tracking: TimeTrackingConfig = Field(default_factory=TimeTrackingConfig)
     session_summary: SessionSummaryConfig = Field(default_factory=SessionSummaryConfig)
@@ -601,7 +650,7 @@ class Session(BaseModel):
 
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure
-    issue_tracker: str = "jira"  # "jira" | "github" | "gitlab" | etc.
+    issue_tracker: Optional[str] = "jira"  # "jira" | "github" | "gitlab" | etc. | None (use pattern detection)
     issue_key: Optional[str] = None  # Tracker issue identifier (e.g., "PROJ-12345", "org/repo#123")
     issue_updated: Optional[str] = None  # ISO timestamp of last issue update (for sync)
     issue_metadata: Dict[str, Any] = Field(default_factory=dict)  # Tracker-specific metadata

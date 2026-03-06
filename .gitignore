@@ -58,3 +58,8 @@ dmypy.json
 
 # Claude Code session files (should not be committed to repo)
 .claude/
+
+# DevAIFlow test artifacts (session metadata files created during testing)
+tests/*.md
+/test_*.sh
+integration-tests/*.bak

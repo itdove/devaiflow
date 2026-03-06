@@ -276,7 +276,7 @@ A Python CLI/TUI tool to manage AI coding assistant sessions with issue tracker 
 ### Core Components
 - **CLI Layer** (`devflow/cli/`) - Command-line interface using Click
 - **Session Management** (`devflow/session/`) - Core session CRUD operations, session ID capture
-- **JIRA Integration** (`devflow/jira/`) - JIRA REST API client for ticket operations
+- **Issue Tracker Integration** (`devflow/issue_tracker/`, `devflow/jira/`, `devflow/github/`) - Multi-backend support for JIRA, GitHub Issues, GitLab Issues
 - **Configuration** (`devflow/config/`) - Config file loading and validation
 - **UI Components** (`devflow/ui/`) - TUI using Textual (Phase 4)
 - **Utilities** (`devflow/utils/`) - Helper functions (file ops, formatting, time tracking)
@@ -513,6 +513,17 @@ cd integration-tests
 ./test_jira_green_path.sh --debug
 ```
 When `--debug` is used with the test runner, it automatically propagates to all sub-test scripts, showing detailed command execution traces to help identify where tests are hanging or failing.
+
+**Test Duration Benchmarks** (for detecting hanging tests):
+- **Full test suite** (`pytest tests/`): ~2-3 minutes (2827+ tests)
+- **Single test file**: Usually <5 seconds (exceptions: integration-heavy files may take 10-20 seconds)
+- **Integration tests** (`./run_all_integration_tests.sh`): ~30-60 seconds
+
+**If tests are taking significantly longer**:
+- Tests may be hanging on user input prompts (need mock for `Confirm.ask`, `Prompt.ask`, `IntPrompt.ask`)
+- Tests may be waiting for external services (need proper mocking)
+- Use `pytest -x --tb=line -v` to see which test is running and stop on first failure
+- Check for missing input sequences in `CliRunner().invoke(..., input="...")` calls
 
 **⚠️ CRITICAL TESTING REQUIREMENT**: ALL TESTS MUST BE SUCCESSFUL before marking any task as complete. When tests fail:
 - **DO NOT** ask the user for permission to continue fixing tests
@@ -1007,7 +1018,16 @@ pip install --upgrade .
 - Resume command: `claude --resume {uuid}`
 - Launch command: `claude code` (in project directory)
 
-### JIRA REST API
+### Issue Tracker Backends
+
+DevAIFlow uses a multi-backend architecture supporting multiple issue trackers. See [Issue Tracker Architecture](docs/issue-tracker-architecture.md) for complete documentation.
+
+**Supported Backends:**
+- **JIRA** (`devflow/jira/`) - JIRA REST API (v2/v3 auto-detection)
+- **GitHub Issues** (`devflow/github/`) - GitHub CLI (`gh`)
+- **Mock** (`devflow/issue_tracker/mock_client.py`) - In-memory testing
+
+**JIRA REST API:**
 - Authentication: API token via `JIRA_API_TOKEN` environment variable
 - Base URL: Configurable via `JIRA_URL` (e.g., `https://jira.example.com`)
 - Endpoints used:
@@ -1016,6 +1036,11 @@ pip install --upgrade .
   - POST `/rest/api/2/issue/{key}/transitions` - Transition status
   - POST `/rest/api/2/issue/{key}/attachments` - Upload files
   - POST `/rest/api/2/search` - Search/list tickets
+
+**GitHub Issues:**
+- Authentication: GitHub CLI (`gh auth login`)
+- API: GitHub CLI (`gh issue view`, `gh issue create`, etc.)
+- Auto-detection: Repository from git remotes (upstream → origin)
 
 ### Git
 - Create branch: `git checkout -b {branch-name}`

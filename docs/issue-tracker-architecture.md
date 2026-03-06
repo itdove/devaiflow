@@ -150,9 +150,9 @@ ticket = client.get_ticket(key)
 **Default**: `"jira"` (for backward compatibility)
 
 **Supported values**:
-- `"jira"` - JIRA REST API backend
-- `"mock"` - Mock in-memory backend (for testing)
-- `"github"` - GitHub Issues (not yet implemented)
+- `"jira"` - JIRA REST API backend ✅
+- `"github"` - GitHub Issues backend ✅
+- `"mock"` - Mock in-memory backend (for testing) ✅
 - `"gitlab"` - GitLab Issues (not yet implemented)
 
 ## Backward Compatibility
@@ -171,13 +171,28 @@ The interface layer is fully backward compatible:
 
 4. **No breaking changes** to existing CLI commands or workflows
 
+## GitHub Backend (Example Implementation)
+
+**Location**: `devflow/github/issues_client.py`
+
+GitHub Issues is a complete implementation of the `IssueTrackerClient` interface, serving as a reference for other backends.
+
+**Key Implementation Details**:
+- Uses GitHub CLI (`gh`) for API operations
+- Supports GitHub.com and GitHub Enterprise
+- Auto-detects repository from git remotes (upstream → origin)
+- Convention-based labels for metadata (priority, points, status)
+- Binary state model (open/closed) with optional status labels
+
+**See**: `devflow/github/issues_client.py` for complete implementation
+
 ## Adding New Backends
 
-To add support for a new issue tracking system (e.g., GitHub Issues):
+To add support for a new issue tracking system (e.g., GitLab Issues):
 
 ### 1. Create Implementation
 
-Create `devflow/github/issues_client.py`:
+Follow the GitHub example in `devflow/github/issues_client.py`:
 
 ```python
 from devflow.issue_tracker.interface import IssueTrackerClient
@@ -187,15 +202,15 @@ from devflow.jira.exceptions import (
     JiraNotFoundError,
 )
 
-class GitHubIssuesClient(IssueTrackerClient):
-    """GitHub Issues implementation of IssueTrackerClient."""
+class GitLabClient(IssueTrackerClient):
+    """GitLab Issues implementation of IssueTrackerClient."""
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        # Initialize GitHub API client
+        # Initialize GitLab API client (e.g., using glab CLI)
 
     def get_ticket(self, issue_key: str, field_mappings=None) -> Dict:
-        # Implement using GitHub API
+        # Implement using GitLab API
         pass
 
     # Implement all other abstract methods...
@@ -203,15 +218,22 @@ class GitHubIssuesClient(IssueTrackerClient):
 
 ### 2. Register in Factory
 
-Update `devflow/issue_tracker/factory.py`:
+Update `devflow/issue_tracker/factory.py` (see GitHub example):
 
 ```python
 def create_issue_tracker_client(backend: Optional[str] = None, timeout: int = 30):
     # ... existing code ...
 
     elif backend == "github":
-        from devflow.github.issues_client import GitHubIssuesClient
-        return GitHubIssuesClient(timeout=timeout)
+        # GitHub backend (implemented)
+        from devflow.github.issues_client import GitHubClient
+        # ... repository detection logic ...
+        return GitHubClient(timeout=timeout, repository=repository)
+
+    elif backend == "gitlab":
+        # GitLab backend (your implementation here)
+        from devflow.gitlab.issues_client import GitLabClient
+        return GitLabClient(timeout=timeout)
 ```
 
 ### 3. Update Configuration
@@ -279,12 +301,28 @@ pytest tests/ -k "jira" -v
 5. **Future-proof**: Architecture ready for additional backends
 6. **Backward compatible**: Existing code continues to work
 
+## Implemented Backends
+
+### ✅ JIRA
+- Location: `devflow/jira/client.py`
+- API: JIRA REST API (v2 for self-hosted, v3 for Cloud)
+- Features: Full workflow automation, custom fields, attachments, hierarchies
+
+### ✅ GitHub Issues
+- Location: `devflow/github/issues_client.py`
+- API: GitHub CLI (`gh`)
+- Features: Label-based metadata, fork workflows, multi-repo sync
+
+### ✅ Mock
+- Location: `devflow/issue_tracker/mock_client.py`
+- Purpose: Testing without external services
+- Features: In-memory storage, sequential numbering
+
 ## Future Enhancements
 
 Potential future backends:
 
-- **GitHub Issues**: Use GitHub GraphQL API
-- **GitLab Issues**: Use GitLab REST API
+- **GitLab Issues**: Use GitLab CLI (`glab`) or REST API
 - **Linear**: Use Linear GraphQL API
 - **Asana**: Use Asana REST API
 - **Azure DevOps**: Use Azure DevOps REST API

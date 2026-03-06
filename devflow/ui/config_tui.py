@@ -1102,6 +1102,9 @@ class ConfigTUI(App):
                 with TabPane("JIRA Integration", id="tab_jira"):
                     yield from self._compose_jira_tab()
 
+                with TabPane("GitHub/GitLab", id="tab_github"):
+                    yield from self._compose_github_tab()
+
                 with TabPane("Repository & VCS", id="tab_repo"):
                     yield from self._compose_repo_tab()
 
@@ -1353,6 +1356,92 @@ class ConfigTUI(App):
                 value=_bool_to_choice(self.config.prompts.auto_update_jira_pr_url),
                 help_text="Automatically update issue tracker ticket with PR URL when PR is created",
                 allow_blank=False,
+            )
+
+    def _compose_github_tab(self) -> ComposeResult:
+        """Compose GitHub/GitLab configuration tab content."""
+        with VerticalScroll():
+            yield Static("[bold cyan]GitHub/GitLab Configuration[/bold cyan]", classes="section-title")
+            yield Static(
+                "Configure GitHub Issues and GitLab Issues integration for git-based issue tracking",
+                classes="section-help",
+            )
+
+            yield Static(
+                "[dim]Note: Most settings are auto-detected from git remotes. "
+                "Repository is optional (defaults to git remote detection).[/dim]",
+                classes="section-help",
+            )
+
+            yield ConfigInput(
+                "GitHub API URL",
+                "github.api_url",
+                value=self.config.github.api_url if self.config.github else "https://api.github.com",
+                help_text="GitHub API URL (default: https://api.github.com, or GitHub Enterprise URL)",
+                required=False,
+            )
+
+            yield ConfigInput(
+                "Default Repository",
+                "github.repository",
+                value=self.config.github.repository if self.config.github and self.config.github.repository else "",
+                help_text="Default repository in owner/repo format (optional, auto-detects from git remote)",
+            )
+
+            # Default labels as comma-separated string
+            default_labels_value = ""
+            if self.config.github and self.config.github.default_labels:
+                default_labels_value = ",".join(self.config.github.default_labels)
+
+            yield ConfigInput(
+                "Default Labels",
+                "github.default_labels",
+                value=default_labels_value,
+                help_text="Comma-separated labels to add to all created issues (e.g., backend,devaiflow)",
+            )
+
+            yield Static("[bold]GitHub Workflow Settings[/bold]", classes="subsection-title")
+
+            yield ConfigCheckbox(
+                "Auto-close issues on complete",
+                "github.auto_close_on_complete",
+                value=self.config.github.auto_close_on_complete if self.config.github else False,
+                help_text="Automatically close GitHub issues when session completes",
+            )
+
+            yield ConfigCheckbox(
+                "Add status labels",
+                "github.add_status_labels",
+                value=self.config.github.add_status_labels if self.config.github else False,
+                help_text="Add status labels (status: in-progress, status: in-review) when starting/completing sessions",
+            )
+
+            yield ConfigInput(
+                "Completion Label",
+                "github.completion_label",
+                value=self.config.github.completion_label if self.config.github else "status: in-review",
+                help_text="Label to add when completing a session (only if 'Add status labels' is enabled)",
+            )
+
+            yield Static("[bold]Label Conventions[/bold]", classes="subsection-title")
+            yield Static(
+                "[dim]GitHub uses convention-based labels (optional, manually add via --labels flag):\n"
+                "  • Issue types: bug, enhancement, task\n"
+                "  • Priority: priority: high, priority: critical, priority: medium, priority: low\n"
+                "  • Story points: points: 1, points: 2, points: 3, points: 5, points: 8\n"
+                "  • Status: status: in-progress, status: in-review, status: blocked[/dim]",
+                classes="section-help",
+            )
+
+            yield Static("[bold]GitHub/GitLab Differences[/bold]", classes="subsection-title")
+            yield Static(
+                "[dim]Compared to JIRA:\n"
+                "  • No custom fields - uses labels for metadata\n"
+                "  • Binary state (open/closed) + status labels\n"
+                "  • Milestones instead of sprints\n"
+                "  • No native hierarchy - use labels for epic tracking\n"
+                "  • Repository auto-detected from git remote (upstream → origin priority)[/dim]",
+                classes="section-help",
             )
 
     def _compose_repo_tab(self) -> ComposeResult:
@@ -2289,6 +2378,49 @@ class ConfigTUI(App):
 
             except Exception as e:
                 self.notify(f"Error collecting JIRA values: {e}", severity="error")
+
+        # GitHub/GitLab settings (only in Simple mode)
+        if not self.advanced_mode:
+            try:
+                # Ensure github config exists
+                if not hasattr(self.config, 'github') or self.config.github is None:
+                    from devflow.config.models import GitHubConfig
+                    self.config.github = GitHubConfig()
+
+                # GitHub API URL
+                api_url_val = self.query_one(key_to_id("input", "github.api_url"), Input).value.strip()
+                if api_url_val:
+                    self.config.github.api_url = api_url_val
+                else:
+                    self.config.github.api_url = "https://api.github.com"
+
+                # Default repository
+                repo_val = self.query_one(key_to_id("input", "github.repository"), Input).value.strip()
+                self.config.github.repository = repo_val if repo_val else None
+
+                # Default labels (comma-separated)
+                labels_val = self.query_one(key_to_id("input", "github.default_labels"), Input).value.strip()
+                if labels_val:
+                    # Split by comma and strip whitespace
+                    self.config.github.default_labels = [label.strip() for label in labels_val.split(",") if label.strip()]
+                else:
+                    self.config.github.default_labels = []
+
+                # Auto-close on complete
+                self.config.github.auto_close_on_complete = self.query_one(key_to_id("checkbox", "github.auto_close_on_complete"), Checkbox).value
+
+                # Add status labels
+                self.config.github.add_status_labels = self.query_one(key_to_id("checkbox", "github.add_status_labels"), Checkbox).value
+
+                # Completion label
+                completion_label_val = self.query_one(key_to_id("input", "github.completion_label"), Input).value.strip()
+                if completion_label_val:
+                    self.config.github.completion_label = completion_label_val
+                else:
+                    self.config.github.completion_label = "status: in-review"
+
+            except Exception as e:
+                self.notify(f"Error collecting GitHub values: {e}", severity="error")
 
         # Repository settings (only in Simple mode)
         if not self.advanced_mode:

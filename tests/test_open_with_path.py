@@ -85,9 +85,14 @@ def test_open_with_path_creates_new_conversation(temp_daf_home, temp_workspace, 
     # Mock should_launch_claude_code to prevent launching Claude Code
     with patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False):
         # Open with --path pointing to repo2 (doesn't exist in session yet)
-        # Input: n to skip creating git branch
-        result = runner.invoke(cli, ["open", "test-session", "--path", str(repo2_path)], input="n\n")
+        # Input: n to skip creating git branch, n to skip syncing with main
+        result = runner.invoke(cli, ["open", "test-session", "--path", str(repo2_path)], input="n\nn\n")
 
+    if result.exit_code != 0:
+        print(f"Exit code: {result.exit_code}")
+        print(f"Output: {result.output}")
+        if result.exception:
+            print(f"Exception: {result.exception}")
     assert result.exit_code == 0
     assert "Creating new conversation" in result.output or "repo2" in result.output
 

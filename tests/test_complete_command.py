@@ -69,7 +69,7 @@ def test_complete_session_with_jira(temp_daf_home, monkeypatch, capsys):
     session_manager.end_work_session("jira-complete")
 
     # Mock JIRA transition and confirm
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
 
     # Complete the session
@@ -110,7 +110,7 @@ def test_complete_session_with_summary_to_jira(temp_daf_home, monkeypatch, capsy
     session_manager.update_session(session)
 
     # Mock functions
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: True)  # Accept summary
     monkeypatch.setattr("devflow.cli.commands.complete_command.add_jira_comment", lambda *args, **kwargs: True)
 
@@ -159,7 +159,7 @@ def test_complete_session_with_notes(temp_daf_home, monkeypatch, capsys):
         captured_comment.append(comment)
         return True
 
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: True)
     monkeypatch.setattr("devflow.cli.commands.complete_command.add_jira_comment", mock_add_comment)
 
@@ -189,7 +189,7 @@ def test_complete_session_skips_minimal_activity_jira_comment(temp_daf_home, mon
     # No work session added - 0h 0m
 
     # Mock functions
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
     # Track if add_jira_comment was called
     comment_added = []
@@ -248,7 +248,7 @@ def test_complete_session_multiple_users(temp_daf_home, monkeypatch, capsys):
         captured_comment.append(comment)
         return True
 
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: True)
     monkeypatch.setattr("devflow.cli.commands.complete_command.add_jira_comment", mock_add_comment)
 
@@ -306,7 +306,7 @@ def test_complete_session_attach_to_issue(temp_daf_home, monkeypatch, capsys):
     session_manager.end_work_session("attach-test")
 
     # Mock functions
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
 
     # Mock JiraClient.attach_file() to succeed (returns None)
@@ -346,7 +346,7 @@ def test_complete_session_attach_without_issue_key(temp_daf_home, monkeypatch, c
     complete_session("attach-no-jira", attach_to_issue=True)
 
     captured = capsys.readouterr()
-    assert "Cannot attach to JIRA - session has no issue key" in captured.out
+    assert "Cannot attach to issue tracker - session has no issue key" in captured.out
 
 
 def test_complete_session_jira_attach_failure(temp_daf_home, monkeypatch, capsys):
@@ -369,7 +369,7 @@ def test_complete_session_jira_attach_failure(temp_daf_home, monkeypatch, capsys
     session_manager.end_work_session("attach-fail")
 
     # Mock functions
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
 
     # Mock JiraClient.attach_file() to fail (raises exception)
@@ -405,7 +405,7 @@ def test_complete_session_jira_cli_not_found(temp_daf_home, monkeypatch, capsys)
     session_manager.end_work_session("no-cli")
 
     # Mock functions
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
 
     # Mock JiraClient.attach_file() to raise JiraApiError (JIRA not configured)
@@ -441,7 +441,7 @@ def test_complete_session_jira_timeout(temp_daf_home, monkeypatch, capsys):
     session_manager.end_work_session("timeout-test")
 
     # Mock functions
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
 
     # Mock JiraClient.attach_file() to raise a timeout-like error
@@ -496,7 +496,7 @@ def test_complete_session_summary_error_handling(temp_daf_home, monkeypatch, cap
     session_manager.update_session(session)
 
     # Mock functions
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: True)
 
     # Mock add_jira_comment to raise exception
@@ -793,7 +793,7 @@ def test_complete_session_skips_pr_after_merge_to_base(temp_daf_home, tmp_path, 
 
     # Mock Confirm.ask to avoid interactive prompts
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
     # Complete the session
     complete_session("merged-test")
@@ -852,7 +852,7 @@ def test_complete_session_skips_pr_when_on_different_branch(temp_daf_home, tmp_p
 
     # Mock Confirm.ask to avoid interactive prompts
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
     # Complete the session (while on other-feature branch, no uncommitted changes)
     complete_session("branch-mismatch-test")
@@ -1223,7 +1223,7 @@ def test_complete_session_with_latest_flag(temp_daf_home, monkeypatch, capsys):
 
     # Mock Confirm.ask to confirm completion
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: True)
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
     # Complete using --latest flag
     complete_session(latest=True)
@@ -1849,21 +1849,22 @@ def test_complete_session_updates_jira_with_existing_mr_url(temp_daf_home, tmp_p
 
         return original_run(cmd, *args, **kwargs)
 
-    # Track if _update_jira_pr_field was called
+    # Track if _update_issue_pr_field was called
     jira_update_called = []
     original_update = None
 
-    def mock_update_jira(issue_key, pr_url, no_issue_update=False):
-        jira_update_called.append((issue_key, pr_url))
+    def mock_update_issue_pr(session, config, pr_url, no_issue_update=False):
+        if session.issue_key:
+            jira_update_called.append((session.issue_key, pr_url))
 
     # Import the function to mock it
     import devflow.cli.commands.complete_command as cc
-    original_update = cc._update_jira_pr_field
+    original_update = cc._update_issue_pr_field
 
     monkeypatch.setattr("subprocess.run", mock_run)
-    monkeypatch.setattr("devflow.cli.commands.complete_command._update_jira_pr_field", mock_update_jira)
+    monkeypatch.setattr("devflow.cli.commands.complete_command._update_issue_pr_field", mock_update_issue_pr)
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
     # Complete the session
     complete_session("mr-jira-update")
@@ -1987,7 +1988,7 @@ def test_complete_session_auto_checkout_on_wrong_branch_without_uncommitted_chan
 
     # Mock Confirm.ask to avoid interactive prompts
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
     # Complete the session - should auto-checkout
     complete_session("auto-checkout-test")
@@ -2107,7 +2108,7 @@ def test_complete_session_correct_branch_no_check_needed(temp_daf_home, tmp_path
 
     # Mock Confirm.ask to avoid interactive prompts
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", lambda s, c: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", lambda s, c: None)
 
     # Complete the session - should work normally
     complete_session("correct-branch-test")
@@ -2356,7 +2357,7 @@ def test_complete_ticket_creation_session_skips_git_operations(temp_daf_home, tm
         transition_called.append(True)
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", mock_transition_on_complete)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", mock_transition_on_complete)
     monkeypatch.setattr("devflow.cli.commands.complete_command.add_jira_comment", lambda *args, **kwargs: True)
 
     # Complete the session
@@ -2478,7 +2479,7 @@ def test_complete_development_session_calls_jira_transition(temp_daf_home, tmp_p
     def mock_transition_on_complete(s, c):
         transition_called.append(True)
 
-    monkeypatch.setattr("devflow.cli.commands.complete_command.transition_on_complete", mock_transition_on_complete)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.jira_transition_on_complete", mock_transition_on_complete)
     monkeypatch.setattr("devflow.cli.commands.complete_command.add_jira_comment", lambda *args, **kwargs: True)
 
     # Complete the session
@@ -2780,7 +2781,7 @@ def test_update_jira_pr_field_success(temp_daf_home, monkeypatch, capsys):
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     # Verify update was called
@@ -2833,7 +2834,7 @@ def test_update_jira_pr_field_failure(temp_daf_home, monkeypatch, capsys):
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     # Verify error message is displayed
@@ -2884,7 +2885,7 @@ def test_update_jira_pr_field_validation_error_with_field_errors(temp_daf_home, 
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     # Verify detailed error messages
@@ -2933,7 +2934,7 @@ def test_update_jira_pr_field_validation_error_with_error_messages_only(temp_daf
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -2979,7 +2980,7 @@ def test_update_jira_pr_field_not_found_error(temp_daf_home, monkeypatch, capsys
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -3022,7 +3023,7 @@ def test_update_jira_pr_field_auth_error(temp_daf_home, monkeypatch, capsys):
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -3069,7 +3070,7 @@ def test_update_jira_pr_field_api_error_with_status_code(temp_daf_home, monkeypa
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()
@@ -3116,7 +3117,7 @@ def test_update_jira_pr_field_connection_error(temp_daf_home, monkeypatch, capsy
     _update_jira_pr_field(
         issue_key="PROJ-12345",
         pr_url="https://github.com/org/repo/pull/123",
-        no_issue_update=False
+        config=mock_config
     )
 
     captured = capsys.readouterr()

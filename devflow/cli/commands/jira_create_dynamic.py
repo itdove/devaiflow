@@ -96,6 +96,28 @@ def create_jira_create_command():
         interactive: bool,
         **kwargs  # Capture ALL dynamic options (description, priority, components, labels, versions, etc.)
     ):
+        """Create a new JIRA issue.
+
+        Creates a JIRA issue with the specified type, summary, and optional fields.
+        Supports both system fields (description, priority, components) and custom fields.
+
+        ISSUE_TYPE: Type of issue to create (epic, spike, story, task, bug)
+
+        Examples:
+            daf jira create story --summary "Add feature X" --parent PROJ-123
+            daf jira create bug --summary "Fix timeout" --priority Critical
+            daf jira create task --summary "Update docs" --components backend
+            daf jira create epic --summary "Q1 Initiative"
+
+        Custom Fields:
+            Use --field name=value for custom fields:
+            daf jira create story --summary "Task" --field workstream=Platform
+
+        Advanced:
+            --create-session: Create daf session immediately after creating issue
+            --interactive: Use interactive template mode
+            --linked-issue: Link to another issue (e.g., "blocks", "relates to")
+        """
         from devflow.cli.commands.jira_create_commands import create_issue
         from rich.console import Console
 

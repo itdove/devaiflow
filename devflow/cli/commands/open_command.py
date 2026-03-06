@@ -16,8 +16,11 @@ from devflow.cli.commands.new_command import _generate_initial_prompt
 from devflow.cli.utils import check_concurrent_session, get_session_with_prompt, get_status_display, require_outside_claude, should_launch_claude_code
 from devflow.config.loader import ConfigLoader
 from devflow.git.utils import GitUtils
-from devflow.jira import transition_on_start
+from devflow.jira import transition_on_start as jira_transition_on_start
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
+from devflow.github import transition_on_start as github_transition_on_start
+from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError
+from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.capture import SessionCapture
 from devflow.session.manager import SessionManager
 from devflow.session.summary import generate_session_summary
@@ -527,43 +530,59 @@ def open_session(
             _display_conflict_resolution_help(active_conv.project_path, session.name)
             return
 
-    # JIRA auto-transition: New/To Do → In Progress
+    # Issue tracker auto-transition: New/To Do → In Progress
     # Skip for ticket_creation sessions (analysis-only, no status changes)
     # Skip if skip_jira_transition flag is set (e.g., from daf jira open command)
     if skip_jira_transition:
-        console.print(f"[dim]Skipping JIRA status transition (opened via daf jira open)[/dim]")
+        console.print(f"[dim]Skipping issue tracker status transition (opened via daf jira open)[/dim]")
     elif config and session.issue_key and session.session_type != "ticket_creation":
-        # Fetch current JIRA status before attempting transition
-        from devflow.jira import JiraClient
-        jira_client = JiraClient()
-        try:
-            ticket_data = jira_client.get_ticket(session.issue_key)
-            if not session.issue_metadata:
-                session.issue_metadata = {}
-            session.issue_metadata["status"] = ticket_data.get("status")
-            console.print(f"[dim]Current JIRA status: {session.issue_metadata.get('status')}[/dim]")
-        except JiraNotFoundError as e:
-            console.print(f"[yellow]⚠[/yellow] issue tracker ticket not found: {e}")
-        except (JiraAuthError, JiraApiError, JiraConnectionError) as e:
-            console.print(f"[dim]Could not fetch JIRA status: {e}[/dim]")
+        # Detect backend for this session
+        backend = get_issue_tracker_backend(session, config)
+        console.print(f"[dim]Detected issue tracker backend: {backend}[/dim]")
 
-        # Check if ticket is in a closed/done state and handle reopening
-        current_status = session.issue_metadata.get("status") if session.issue_metadata else None
-        if current_status and _is_closed_status(current_status):
-            if not _handle_closed_ticket_reopen(session, jira_client):
-                # User declined to reopen or reopen failed
+        if backend == "jira":
+            # JIRA-specific transition logic (strict, blocking)
+            from devflow.jira import JiraClient
+            jira_client = JiraClient()
+            try:
+                ticket_data = jira_client.get_ticket(session.issue_key)
+                if not session.issue_metadata:
+                    session.issue_metadata = {}
+                session.issue_metadata["status"] = ticket_data.get("status")
+                console.print(f"[dim]Current JIRA status: {session.issue_metadata.get('status')}[/dim]")
+            except JiraNotFoundError as e:
+                console.print(f"[yellow]⚠[/yellow] JIRA ticket not found: {e}")
+            except (JiraAuthError, JiraApiError, JiraConnectionError) as e:
+                console.print(f"[dim]Could not fetch JIRA status: {e}[/dim]")
+
+            # Check if ticket is in a closed/done state and handle reopening
+            current_status = session.issue_metadata.get("status") if session.issue_metadata else None
+            if current_status and _is_closed_status(current_status):
+                if not _handle_closed_ticket_reopen(session, jira_client):
+                    # User declined to reopen or reopen failed
+                    return
+
+            # Attempt JIRA transition and stop if it fails (JIRA is strict)
+            if not jira_transition_on_start(session, config):
+                console.print(f"\n[red]Cannot continue without successful JIRA transition[/red]")
+                console.print(f"[yellow]Please update the required fields in JIRA and try again[/yellow]")
                 return
 
-        # Attempt JIRA transition and stop if it fails
-        if not transition_on_start(session, config):
-            console.print(f"\n[red]Cannot continue without successful JIRA transition[/red]")
-            console.print(f"[yellow]Please update the required fields in JIRA and try again[/yellow]")
-            return
+            # Save updated session (JIRA status may have changed)
+            session_manager.update_session(session)
 
-        # Save updated session (JIRA status may have changed)
-        session_manager.update_session(session)
+        elif backend == "github":
+            # GitHub-specific transition logic (non-blocking, advisory)
+            # GitHub transitions are less strict - we don't block session start
+            github_transition_on_start(session, config)
+            session_manager.update_session(session)
+
+        else:
+            # Unknown backend - skip transition
+            console.print(f"[dim]Skipping transition for unknown backend: {backend}[/dim]")
+
     elif session.session_type == "ticket_creation":
-        console.print(f"[dim]Skipping JIRA status transition (session_type: ticket_creation)[/dim]")
+        console.print(f"[dim]Skipping issue tracker status transition (session_type: ticket_creation)[/dim]")
 
     # Check if we should launch Claude Code (after all prerequisites)
     if not should_launch_claude_code(config=config, mock_mode=True):

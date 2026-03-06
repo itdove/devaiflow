@@ -41,7 +41,7 @@ def test_list_local_branches(tmp_path):
 
 
 def test_handle_branch_creation_from_specific_branch_with_uncommitted_changes(tmp_path):
-    """Test that creating branch from specific source aborts when there are uncommitted changes."""
+    """Test that creating branch aborts when user declines to continue with uncommitted changes."""
     # Initialize a git repo
     subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
@@ -64,14 +64,12 @@ def test_handle_branch_creation_from_specific_branch_with_uncommitted_changes(tm
     mock_config.prompts = Mock()
     mock_config.prompts.default_branch_strategy = None
 
-    # Mock user selecting strategy 3 (from specific branch)
-    with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
-         patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
+    # Mock user declining to continue with uncommitted changes
+    with patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'):
 
-        # User says yes to create branch, then selects strategy 3
-        mock_confirm.return_value = True
-        mock_prompt.return_value = "3"  # Strategy 3: from specific branch
+        # User declines to continue with uncommitted changes
+        mock_confirm.return_value = False
 
         result = _handle_branch_creation(
             str(tmp_path),
@@ -81,8 +79,8 @@ def test_handle_branch_creation_from_specific_branch_with_uncommitted_changes(tm
             config=mock_config
         )
 
-        # Should return None because of uncommitted changes
-        assert result is None
+        # Should return False because user declined to continue with uncommitted changes
+        assert result is False
 
 
 def test_handle_branch_creation_from_specific_branch_success(tmp_path):
@@ -111,16 +109,18 @@ def test_handle_branch_creation_from_specific_branch_success(tmp_path):
     mock_config.prompts = Mock()
     mock_config.prompts.default_branch_strategy = None
 
-    # Mock user selecting strategy 3 (from specific branch) and selecting develop (branch index 1)
+    # Mock user creating branch from develop
     with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
          patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'), \
          patch.object(GitUtils, 'fetch_origin', return_value=True), \
          patch.object(GitUtils, 'pull_current_branch', return_value=True):
 
-        # User says yes to create branch, selects strategy 3, then selects branch 1 (develop)
+        # User says yes to create branch, accepts suggested name, selects develop as source
         mock_confirm.return_value = True
-        mock_prompt.side_effect = ["3", "1"]  # Strategy 3, then branch choice 1
+        # First Prompt.ask: branch name (accept default)
+        # Second Prompt.ask: source branch (select develop)
+        mock_prompt.side_effect = ["aap-12345-test-feature", "develop"]
 
         result = _handle_branch_creation(
             str(tmp_path),
@@ -141,8 +141,8 @@ def test_handle_branch_creation_from_specific_branch_success(tmp_path):
         assert (tmp_path / "develop.txt").exists()
 
 
-def test_handle_branch_creation_strategy_options(tmp_path):
-    """Test that all three strategy options are available."""
+def test_handle_branch_creation_from_current_branch(tmp_path):
+    """Test branch creation from current branch (auto mode)."""
     # Initialize a git repo
     subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
@@ -158,39 +158,27 @@ def test_handle_branch_creation_strategy_options(tmp_path):
     mock_config.prompts = Mock()
     mock_config.prompts.default_branch_strategy = None
 
-    # Test that strategy prompt accepts choices "1", "2", and "3"
-    with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
-         patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
-         patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test'), \
+    # Test auto mode (uses default source branch)
+    with patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test'), \
          patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'get_default_branch', return_value='main'), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True), \
          patch.object(GitUtils, 'pull_current_branch', return_value=True), \
          patch.object(GitUtils, 'create_branch', return_value=True):
 
-        mock_confirm.return_value = True
-        mock_prompt.return_value = "1"  # Strategy 1: from current
-
+        # Use auto_from_default=True to skip prompts
         result = _handle_branch_creation(
             str(tmp_path),
             "AAP-12345",
             "test",
-            auto_from_default=False,
+            auto_from_default=True,
             config=mock_config
         )
 
-        # Check that Prompt.ask was called with choices including "3"
-        strategy_call = None
-        for call in mock_prompt.call_args_list:
-            if call[1].get('choices') == ["1", "2", "3"]:
-                strategy_call = call
-                break
-
-        assert strategy_call is not None, "Strategy prompt should include choices ['1', '2', '3']"
+        # Should successfully create branch in auto mode
+        assert result == "aap-12345-test"
 
 
 def test_handle_branch_creation_works_for_daf_open(tmp_path):
-    """Test that branch creation with strategy 3 works when called from daf open (no auto_from_default param)."""
+    """Test that branch creation works when called from daf open (interactive mode)."""
     # Initialize a git repo
     subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
@@ -222,9 +210,11 @@ def test_handle_branch_creation_works_for_daf_open(tmp_path):
          patch.object(GitUtils, 'pull_current_branch', return_value=True), \
          patch.object(GitUtils, 'create_branch', return_value=True):
 
-        # Simulate user choosing: yes to create branch, strategy 3, select develop (branch 1)
+        # Simulate user choosing: yes to create branch, accept suggested name, select develop as source
         mock_confirm.return_value = True
-        mock_prompt.side_effect = ["3", "1"]  # Strategy 3, branch 1 (develop)
+        # First Prompt.ask: branch name (accept default)
+        # Second Prompt.ask: source branch (select develop)
+        mock_prompt.side_effect = ["aap-12345-from-open", "develop"]
 
         # Call without auto_from_default (like daf open does)
         result = _handle_branch_creation(
@@ -238,11 +228,5 @@ def test_handle_branch_creation_works_for_daf_open(tmp_path):
         # Should successfully create branch
         assert result == "aap-12345-from-open"
 
-        # Verify strategy prompt was called with all 3 options
-        strategy_call = None
-        for call in mock_prompt.call_args_list:
-            if call[1].get('choices') == ["1", "2", "3"]:
-                strategy_call = call
-                break
-
-        assert strategy_call is not None, "Strategy prompt should be shown with all 3 choices"
+        # Verify Prompt.ask was called for branch name and source branch
+        assert mock_prompt.call_count == 2

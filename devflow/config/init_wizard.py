@@ -84,6 +84,46 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
 
     visibility_value = Prompt.ask(f"{visibility_type_choice.capitalize()} name", default=default_value)
 
+    console.print("\n[bold]=== GitHub/GitLab Integration ===[/bold]\n")
+    console.print("[dim]Optional: Configure GitHub Issues or GitLab Issues integration.[/dim]")
+    console.print("[dim]Most settings are auto-detected from git remotes. Only configure if:[/dim]")
+    console.print("[dim]  - Using GitHub Enterprise (custom API URL)[/dim]")
+    console.print("[dim]  - Want default labels on all created issues[/dim]")
+    console.print("[dim]  - Want to auto-close issues when sessions complete[/dim]")
+    console.print("[dim]Can be set later via 'daf config tui'.[/dim]\n")
+
+    # GitHub configuration (optional)
+    github_api_url = None
+    github_default_labels = []
+    github_auto_close = False
+
+    configure_github = Confirm.ask("Configure GitHub/GitLab integration now?", default=False)
+
+    if configure_github:
+        # GitHub API URL (only for Enterprise)
+        default_api_url = current_config.github.api_url if current_config and current_config.github else "https://api.github.com"
+        console.print("\n[dim]GitHub API URL (default: https://api.github.com for public GitHub)[/dim]")
+        console.print("[dim]Only change this for GitHub Enterprise: https://github.company.com/api/v3[/dim]")
+        api_url_input = Prompt.ask("GitHub API URL", default=default_api_url)
+        github_api_url = api_url_input if api_url_input != "https://api.github.com" else "https://api.github.com"
+
+        # Default labels (optional)
+        default_labels_str = ""
+        if current_config and current_config.github and current_config.github.default_labels:
+            default_labels_str = ",".join(current_config.github.default_labels)
+
+        console.print("\n[dim]Default labels to add to all created issues (optional)[/dim]")
+        console.print("[dim]Example: backend,devaiflow,automation[/dim]")
+        labels_input = Prompt.ask("Default labels (comma-separated, or Enter to skip)", default=default_labels_str or "")
+        if labels_input:
+            github_default_labels = [label.strip() for label in labels_input.split(",") if label.strip()]
+
+        # Auto-close on complete
+        default_auto_close = current_config.github.auto_close_on_complete if current_config and current_config.github else False
+        console.print("\n[dim]Auto-close issues when session completes?[/dim]")
+        console.print("[dim]If disabled, DevAIFlow uses status labels (status: completed) instead[/dim]")
+        github_auto_close = Confirm.ask("Auto-close issues on complete", default=default_auto_close)
+
     console.print("\n[bold]=== Repository Workspace ===[/bold]\n")
 
     # Workspace path
@@ -217,9 +257,24 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         keywords=keywords,
     )
 
+    # Build GitHub config (optional)
+    github_config = None
+    if configure_github or (current_config and current_config.github):
+        from devflow.config.models import GitHubConfig
+        github_config = GitHubConfig(
+            api_url=github_api_url if github_api_url else "https://api.github.com",
+            repository=None,  # Auto-detected from git remote
+            default_labels=github_default_labels,
+            auto_close_on_complete=github_auto_close,
+        )
+        # Preserve existing repository setting if present
+        if current_config and current_config.github and current_config.github.repository:
+            github_config.repository = current_config.github.repository
+
     # Build new config
     new_config = Config(
         jira=jira_config,
+        github=github_config,
         repos=repos_config,
         time_tracking=TimeTrackingConfig(),
         session_summary=SessionSummaryConfig(),

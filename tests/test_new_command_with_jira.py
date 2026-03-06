@@ -225,6 +225,7 @@ def test_daf_new_sets_status_paused_after_claude_exits(temp_daf_home, monkeypatc
     # Execute: Create session and launch Claude Code
     # Input sequence:
     #  - "n\n" = Don't create git branch
+    #  - "n\n" = Don't sync with main
     #  - "y\n" = Launch Claude Code
     runner = CliRunner()
     result = runner.invoke(cli, [
@@ -232,7 +233,7 @@ def test_daf_new_sets_status_paused_after_claude_exits(temp_daf_home, monkeypatc
         "--name", "status-test",
         "--goal", "Test status update",
         "--path", str(temp_daf_home / "test-project")
-    ], input="n\ny\n")  # Don't create branch, launch Claude Code
+    ], input="n\nn\ny\n")  # Don't create branch, don't sync, launch Claude Code
 
     # Verify: Command succeeded
     if result.exit_code != 0:

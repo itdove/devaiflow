@@ -239,11 +239,11 @@ def test_handle_branch_creation_detects_conflict(tmp_path):
     subprocess.run(["git", "checkout", "-b", "aap-12345-test-feature"], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "checkout", "main"], cwd=tmp_path, capture_output=True)
 
-    # Mock user choosing to use existing branch
-    with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
+    # Mock user choosing to use existing branch (option 2: switch without merging)
+    with patch("rich.prompt.IntPrompt.ask") as mock_int_prompt, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'), \
          patch.object(GitUtils, 'checkout_branch', return_value=True):
-        mock_prompt.return_value = "2"  # Use existing branch
+        mock_int_prompt.return_value = 2  # Use existing branch
 
         result = _handle_branch_creation(
             str(tmp_path),
@@ -257,7 +257,7 @@ def test_handle_branch_creation_detects_conflict(tmp_path):
 
 
 def test_handle_branch_creation_creates_new_with_suffix(tmp_path):
-    """Test that _handle_branch_creation creates new branch with suffix on conflict."""
+    """Test that _handle_branch_creation creates new branch with different name on conflict."""
     # Initialize a git repo
     subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
@@ -272,15 +272,16 @@ def test_handle_branch_creation_creates_new_with_suffix(tmp_path):
     subprocess.run(["git", "checkout", "-b", "aap-12345-test-feature"], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "checkout", "main"], cwd=tmp_path, capture_output=True)
 
-    # Mock user choosing to add suffix
-    with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
+    # Mock user choosing to use different name (option 3)
+    with patch("rich.prompt.IntPrompt.ask") as mock_int_prompt, \
+         patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'), \
          patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'get_default_branch', return_value='main'), \
          patch.object(GitUtils, 'checkout_branch', return_value=True), \
          patch.object(GitUtils, 'pull_current_branch', return_value=True), \
          patch.object(GitUtils, 'create_branch', return_value=True):
-        mock_prompt.side_effect = ["1", "retry"]  # Add suffix, use "retry"
+        mock_int_prompt.return_value = 3  # Choose different name
+        mock_prompt.side_effect = ["aap-12345-test-feature-retry", "main"]  # New branch name, then source branch
 
         result = _handle_branch_creation(
             str(tmp_path),
@@ -289,7 +290,7 @@ def test_handle_branch_creation_creates_new_with_suffix(tmp_path):
             auto_from_default=True
         )
 
-        # Should create new branch with suffix
+        # Should create new branch with different name
         assert result == "aap-12345-test-feature-retry"
 
 
@@ -309,10 +310,10 @@ def test_handle_branch_creation_skip_on_conflict(tmp_path):
     subprocess.run(["git", "checkout", "-b", "aap-12345-test-feature"], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "checkout", "main"], cwd=tmp_path, capture_output=True)
 
-    # Mock user choosing to skip
-    with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
+    # Mock user choosing to cancel (option 4)
+    with patch("rich.prompt.IntPrompt.ask") as mock_int_prompt, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'):
-        mock_prompt.return_value = "4"  # Skip
+        mock_int_prompt.return_value = 4  # Cancel
 
         result = _handle_branch_creation(
             str(tmp_path),
@@ -321,5 +322,5 @@ def test_handle_branch_creation_skip_on_conflict(tmp_path):
             auto_from_default=True
         )
 
-        # Should return None (skip)
+        # Should return None (cancelled)
         assert result is None

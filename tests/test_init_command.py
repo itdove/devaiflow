@@ -268,11 +268,12 @@ def test_init_first_time_with_jira_discovery(temp_daf_home, mock_jira_cli, monke
          patch("devflow.cli.main._validate_jira_url", return_value=True):
         # Confirm prompts:
         # 1. Enable JIRA integration: Yes
-        # 2. Configure keywords (in wizard): No
-        # 3. Configure PR/MR template URL (in wizard): No
-        # 4. Discover JIRA fields: Yes
-        # 5. Configure workstream: No
-        mock_confirm.side_effect = [True, False, False, True, False]
+        # 2. Configure GitHub/GitLab integration now?: No
+        # 3. Configure keywords (in wizard): No
+        # 4. Configure PR/MR template URL (in wizard): No
+        # 5. Discover JIRA fields: Yes
+        # 6. Configure workstream: No
+        mock_confirm.side_effect = [True, False, False, False, True, False]
 
         # Wizard prompts for JIRA config:
         # 1. JIRA URL
@@ -320,8 +321,11 @@ def test_init_first_time_with_invalid_jira_url(temp_daf_home, monkeypatch):
          patch("devflow.cli.main._validate_jira_url", return_value=False):
         # Confirm prompts:
         # 1. Enable JIRA integration: Yes
-        # 2. Update keywords (in wizard): No
-        mock_confirm.side_effect = [True, False, False, False]
+        # 2. Configure GitHub/GitLab integration now?: No
+        # 3. Configure keywords (in wizard): No
+        # 4. Configure hierarchical config source now?: No
+        # 5. Configure PR/MR template URL (in wizard): No
+        mock_confirm.side_effect = [True, False, False, False, False]
 
         # Wizard prompts - user provides example.com URL (should be detected as invalid)
         mock_prompt.side_effect = [

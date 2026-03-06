@@ -563,9 +563,9 @@ def test_reopen_ticket_creation_session_skips_jira_transition(temp_daf_home, moc
         # This proves that JIRA status transitions were completely skipped
         mock_jira_client_class.assert_not_called()
 
-        # Verify output shows we're skipping JIRA transitions
-        assert "Skipping JIRA status transition (session_type: ticket_creation)" in result.output, \
-            f"Expected JIRA transition skip message. Got:\n{result.output}"
+        # Verify output shows we're skipping issue tracker transitions
+        assert "Skipping issue tracker status transition (session_type: ticket_creation)" in result.output, \
+            f"Expected issue tracker transition skip message. Got:\n{result.output}"
 
         # Verify session status remained unchanged
         updated_session = session_manager.get_session("test-jira-transition-skip")
