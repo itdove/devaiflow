@@ -42,6 +42,82 @@
       "title": "ContextFilesConfig",
       "type": "object"
     },
+    "GitHubConfig": {
+      "description": "GitHub integration configuration (merged view from backend/org/team configs).\n\nThis is the unified configuration model that combines data from:\n- GitHubBackendConfig (backends/github.json)\n- OrganizationConfig (organization.json)\n- TeamConfig (team.json)\n\nUnlike JIRA, GitHub uses convention-based labels instead of custom fields.",
+      "properties": {
+        "api_url": {
+          "default": "https://api.github.com",
+          "title": "Api Url",
+          "type": "string"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository"
+        },
+        "default_labels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Default Labels",
+          "type": "array"
+        },
+        "auto_close_on_complete": {
+          "default": false,
+          "title": "Auto Close On Complete",
+          "type": "boolean"
+        },
+        "add_status_labels": {
+          "default": false,
+          "title": "Add Status Labels",
+          "type": "boolean"
+        },
+        "completion_label": {
+          "default": "status: in-review",
+          "title": "Completion Label",
+          "type": "string"
+        },
+        "label_conventions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label Conventions"
+        },
+        "issue_templates": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issue Templates"
+        }
+      },
+      "title": "GitHubConfig",
+      "type": "object"
+    },
     "JiraConfig": {
       "description": "JIRA integration configuration (merged view from backend/org/team configs).\n\nThis is the unified configuration model that combines data from:\n- JiraBackendConfig (backends/jira.json)\n- OrganizationConfig (organization.json)\n- TeamConfig (team.json)\n\nUsed for backward compatibility with existing code.",
       "properties": {
@@ -689,6 +765,17 @@
   "properties": {
     "jira": {
       "$ref": "#/$defs/JiraConfig"
+    },
+    "github": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GitHubConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "repos": {
       "$ref": "#/$defs/RepoConfig"

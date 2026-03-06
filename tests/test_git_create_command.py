@@ -83,7 +83,8 @@ def test_git_create_enhancement(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--type', 'enhancement',
-        '--summary', 'Add caching'
+        '--summary', 'Add caching',
+        '--description', 'Add caching layer for better performance'
     ])
 
     assert result.exit_code == 0
@@ -98,7 +99,8 @@ def test_git_create_with_priority(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--summary', 'Critical bug',
-        '--priority', 'critical'
+        '--priority', 'critical',
+        '--description', 'Critical issue that needs immediate attention'
     ])
 
     assert result.exit_code == 0
@@ -114,7 +116,8 @@ def test_git_create_with_story_points(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--summary', 'Medium task',
-        '--points', '5'
+        '--points', '5',
+        '--description', 'Medium complexity task'
     ])
 
     assert result.exit_code == 0
@@ -130,7 +133,8 @@ def test_git_create_with_labels(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--summary', 'Backend task',
-        '--labels', 'backend,api'
+        '--labels', 'backend,api',
+        '--description', 'Backend API task'
     ])
 
     assert result.exit_code == 0
@@ -149,7 +153,8 @@ def test_git_create_with_assignee(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--summary', 'Assigned task',
-        '--assignee', 'johndoe'
+        '--assignee', 'johndoe',
+        '--description', 'Task assigned to johndoe'
     ])
 
     assert result.exit_code == 0
@@ -167,7 +172,8 @@ def test_git_create_with_milestone(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--summary', 'Sprint task',
-        '--milestone', 'Sprint 24'
+        '--milestone', 'Sprint 24',
+        '--description', 'Task for Sprint 24'
     ])
 
     assert result.exit_code == 0
@@ -186,7 +192,8 @@ def test_git_create_with_acceptance_criteria(runner, mock_github_client, mock_co
         'git', 'create',
         '--summary', 'Feature request',
         '--acceptance-criteria', 'Tests pass',
-        '--acceptance-criteria', 'Documentation updated'
+        '--acceptance-criteria', 'Documentation updated',
+        '--description', 'Feature request with acceptance criteria'
     ])
 
     assert result.exit_code == 0
@@ -242,11 +249,12 @@ def test_git_create_validation_error(runner, mock_github_client, mock_config):
 
     result = runner.invoke(cli, [
         'git', 'create',
-        '--summary', 'Test'
+        '--summary', 'Test',
+        '--description', 'Test description'
     ])
 
     assert result.exit_code == 1
-    assert 'Invalid' in result.output or 'error' in result.output.lower()
+    assert 'Invalid' in result.output or 'Validation error' in result.output
 
 
 def test_git_create_authentication_error(runner, mock_github_client, mock_config):
@@ -255,11 +263,12 @@ def test_git_create_authentication_error(runner, mock_github_client, mock_config
 
     result = runner.invoke(cli, [
         'git', 'create',
-        '--summary', 'Test'
+        '--summary', 'Test',
+        '--description', 'Test description'
     ])
 
     assert result.exit_code == 1
-    assert 'Authentication' in result.output or 'auth' in result.output.lower()
+    assert 'authentication failed' in result.output.lower() or 'gh auth login' in result.output.lower()
 
 
 def test_git_create_api_error(runner, mock_github_client, mock_config):
@@ -281,6 +290,7 @@ def test_git_create_json_output(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--summary', 'Test Issue',
+        '--description', 'Test description',
         '--json'
     ])
 
@@ -297,6 +307,7 @@ def test_git_create_with_repository(runner, mock_github_client, mock_config):
     result = runner.invoke(cli, [
         'git', 'create',
         '--summary', 'Test',
+        '--description', 'Test description',
         '--repository', 'other/repo'
     ])
 

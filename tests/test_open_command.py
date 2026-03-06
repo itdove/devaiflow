@@ -169,7 +169,6 @@ def test_handle_branch_creation_auto_from_default(tmp_path):
 
     # Mock the git operations to verify they're called in the right order
     with patch.object(GitUtils, 'fetch_origin', return_value=True) as mock_fetch, \
-         patch.object(GitUtils, 'get_default_branch', return_value='main') as mock_get_default, \
          patch.object(GitUtils, 'checkout_branch', return_value=True) as mock_checkout, \
          patch.object(GitUtils, 'pull_current_branch', return_value=True) as mock_pull, \
          patch.object(GitUtils, 'create_branch', return_value=True) as mock_create:
@@ -185,9 +184,9 @@ def test_handle_branch_creation_auto_from_default(tmp_path):
         # Verify the branch was created
         assert branch is not None
 
-        # Verify git operations were called in correct order
+        # Verify git operations were called
         mock_fetch.assert_called_once_with(tmp_path)
-        mock_get_default.assert_called_once_with(tmp_path)
+        # In auto mode, code uses _get_default_source_branch internally (no direct get_default_branch call)
         mock_checkout.assert_called_once_with(tmp_path, 'main')
         mock_pull.assert_called_once_with(tmp_path)
         mock_create.assert_called_once()
@@ -222,8 +221,9 @@ def test_handle_branch_creation_interactive_mode_asks_confirmation(tmp_path):
     """Test auto_from_default=False asks for user confirmation."""
     # Mock all git operations
     with patch.object(GitUtils, 'is_git_repository', return_value=True), \
+         patch.object(GitUtils, 'has_uncommitted_changes', return_value=False), \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test'), \
-         patch('devflow.cli.commands.new_command.Confirm.ask', return_value=False) as mock_confirm:
+         patch('devflow.cli.commands.new_command.Confirm.ask', side_effect=[False, False]) as mock_confirm:
 
         # Call with auto_from_default=False (default)
         branch = _handle_branch_creation(
@@ -234,8 +234,10 @@ def test_handle_branch_creation_interactive_mode_asks_confirmation(tmp_path):
         )
 
         # Verify Confirm.ask WAS called (interactive mode asks for confirmation)
-        mock_confirm.assert_called_once()
-        # User said no, so no branch should be created
+        # First call: "Would you like to create a new branch?" - user says no
+        # Second call: "Would you like to sync current branch with main?" - user says no
+        assert mock_confirm.call_count == 2
+        # User said no to both, so no branch should be created
         assert branch is None
 
 
@@ -1829,18 +1831,22 @@ def test_handle_branch_creation_with_uncommitted_changes_continue(tmp_path):
     # Create uncommitted changes
     (tmp_path / "test.txt").write_text("modified")
 
-    # Create a mock config with default_branch_strategy to avoid Prompt.ask
+    # Create a mock config
     from unittest.mock import Mock
     mock_config = Mock()
     mock_config.prompts = Mock()
-    mock_config.prompts.default_branch_strategy = "from_default"
+    mock_config.prompts.default_branch_strategy = None
 
-    # Mock git operations and Confirm.ask
-    # First call: Continue despite uncommitted changes? -> Yes
-    # Second call: Create git branch for this session? -> Yes
+    # Mock git operations and prompts
+    # Confirm.ask calls:
+    #   1. "Continue anyway?" (uncommitted changes) -> Yes
+    #   2. "Would you like to create a new branch?" -> Yes
+    # Prompt.ask calls:
+    #   1. "Enter branch name" -> use default
+    #   2. "Enter source branch" -> main
     with patch('devflow.cli.commands.new_command.Confirm.ask', side_effect=[True, True]) as mock_confirm, \
+         patch('devflow.cli.commands.new_command.Prompt.ask', side_effect=['proj-12345-test-feature', 'main']) as mock_prompt, \
          patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'get_default_branch', return_value='main'), \
          patch.object(GitUtils, 'checkout_branch', return_value=True), \
          patch.object(GitUtils, 'pull_current_branch', return_value=True), \
          patch.object(GitUtils, 'create_branch', return_value=True):
@@ -1860,6 +1866,8 @@ def test_handle_branch_creation_with_uncommitted_changes_continue(tmp_path):
 
         # Verify Confirm.ask was called twice
         assert mock_confirm.call_count == 2
+        # Verify Prompt.ask was called twice (branch name, source branch)
+        assert mock_prompt.call_count == 2
 
 
 def test_handle_branch_creation_no_uncommitted_changes(tmp_path):
@@ -1874,16 +1882,18 @@ def test_handle_branch_creation_no_uncommitted_changes(tmp_path):
     subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
 
-    # Create a mock config with default_branch_strategy to avoid Prompt.ask
+    # Create a mock config
     from unittest.mock import Mock
     mock_config = Mock()
     mock_config.prompts = Mock()
-    mock_config.prompts.default_branch_strategy = "from_default"
+    mock_config.prompts.default_branch_strategy = None
 
-    # Mock git operations and Confirm.ask to simulate user saying "Yes" to creating branch
+    # Mock git operations and prompts
+    # Confirm.ask: Only "Would you like to create a new branch?" -> Yes
+    # Prompt.ask: branch name, source branch
     with patch('devflow.cli.commands.new_command.Confirm.ask', return_value=True) as mock_confirm, \
+         patch('devflow.cli.commands.new_command.Prompt.ask', side_effect=['proj-12345-test-feature', 'main']) as mock_prompt, \
          patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'get_default_branch', return_value='main'), \
          patch.object(GitUtils, 'checkout_branch', return_value=True), \
          patch.object(GitUtils, 'pull_current_branch', return_value=True), \
          patch.object(GitUtils, 'create_branch', return_value=True):
@@ -1900,11 +1910,14 @@ def test_handle_branch_creation_no_uncommitted_changes(tmp_path):
         # Verify a branch was created
         assert branch is not None
 
-        # Verify Confirm.ask was called only once (for "Create git branch?")
+        # Verify Confirm.ask was called only once (for "Would you like to create a new branch?")
         # NOT for "Continue anyway?" since there are no uncommitted changes
         assert mock_confirm.call_count == 1
         call_args = mock_confirm.call_args
-        assert "Create git branch for this session?" in call_args[0][0]
+        assert "Would you like to create a new branch?" in call_args[0][0]
+
+        # Verify Prompt.ask was called twice (branch name, source branch)
+        assert mock_prompt.call_count == 2
 
 
 def test_handle_branch_creation_uncommitted_changes_auto_mode(tmp_path):

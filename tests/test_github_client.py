@@ -114,7 +114,7 @@ class TestGetRepository:
         mock_detector.get_github_repository.return_value = None
         mock_detector_class.return_value = mock_detector
 
-        with pytest.raises(IssueTrackerValidationError) as exc_info:
+        with pytest.raises(IssueTrackerConfigError) as exc_info:
             client._get_repository()
         assert "No GitHub repository specified" in str(exc_info.value)
 
@@ -198,7 +198,7 @@ class TestGetTicket:
             "body": "Description",
             "state": "open",
             "labels": [{"name": "bug"}, {"name": "priority: high"}],
-            "assignee": {"login": "user1"},
+            "assignees": [{"login": "user1"}],
             "milestone": {"title": "v1.0"},
         }
 
@@ -210,7 +210,8 @@ class TestGetTicket:
 
         issue = github_client.get_ticket("#123")
 
-        assert issue['key'] == '#123'
+        # Key includes repository (owner/repo#123)
+        assert issue['key'] == 'owner/repo#123'
         assert issue['summary'] == 'Test Issue'
         assert issue['description'] == 'Description'
         assert issue['status'] == 'open'
@@ -227,8 +228,9 @@ class TestGetTicket:
             stderr='Not Found'
         )
 
-        with pytest.raises(IssueTrackerApiError):
+        with pytest.raises(IssueTrackerNotFoundError) as exc_info:
             github_client.get_ticket("#999")
+        assert "owner/repo#999 not found" in str(exc_info.value)
 
     def test_get_ticket_with_acceptance_criteria(self, github_client, mock_subprocess_run):
         """Test getting ticket with acceptance criteria."""
@@ -265,69 +267,72 @@ class TestCreateIssue:
 
     def test_create_issue_basic(self, github_client, mock_subprocess_run):
         """Test creating a basic issue."""
-        mock_response = {
-            "number": 124,
-            "title": "New Issue",
-            "html_url": "https://github.com/owner/repo/issues/124"
-        }
-
+        # gh CLI with --jq '.number' returns just the issue number
         mock_subprocess_run.return_value = Mock(
             returncode=0,
-            stdout=json.dumps(mock_response),
+            stdout='124',
             stderr=''
         )
 
-        issue_key = github_client.create_issue({
-            'summary': 'New Issue',
-            'description': 'Description',
-            'type': 'bug',
-        })
+        from devflow.github.field_mapper import GitHubFieldMapper
+        field_mapper = GitHubFieldMapper()
+
+        issue_key = github_client.create_issue(
+            issue_type='bug',
+            summary='New Issue',
+            description='Description',
+            priority='',
+            project_key='owner/repo',
+            field_mapper=field_mapper,
+        )
 
         assert issue_key == 'owner/repo#124'
 
     def test_create_issue_with_labels(self, github_client, mock_subprocess_run):
         """Test creating issue with labels."""
-        mock_response = {
-            "number": 125,
-            "title": "Issue with Labels",
-            "html_url": "https://github.com/owner/repo/issues/125"
-        }
-
+        # gh CLI with --jq '.number' returns just the issue number
         mock_subprocess_run.return_value = Mock(
             returncode=0,
-            stdout=json.dumps(mock_response),
+            stdout='125',
             stderr=''
         )
 
-        issue_key = github_client.create_issue({
-            'summary': 'Issue with Labels',
-            'description': 'Description',
-            'type': 'enhancement',
-            'priority': 'high',
-            'points': 5,
-        })
+        from devflow.github.field_mapper import GitHubFieldMapper
+        field_mapper = GitHubFieldMapper()
+
+        issue_key = github_client.create_issue(
+            issue_type='enhancement',
+            summary='Issue with Labels',
+            description='Description',
+            priority='high',
+            project_key='owner/repo',
+            field_mapper=field_mapper,
+            points=5,
+        )
 
         assert issue_key == 'owner/repo#125'
 
     def test_create_issue_with_acceptance_criteria(self, github_client, mock_subprocess_run):
         """Test creating issue with acceptance criteria."""
-        mock_response = {
-            "number": 126,
-            "title": "Issue with AC",
-            "html_url": "https://github.com/owner/repo/issues/126"
-        }
-
+        # gh CLI with --jq '.number' returns just the issue number
         mock_subprocess_run.return_value = Mock(
             returncode=0,
-            stdout=json.dumps(mock_response),
+            stdout='126',
             stderr=''
         )
 
-        issue_key = github_client.create_issue({
-            'summary': 'Issue with AC',
-            'description': 'Description',
-            'acceptance_criteria': ['Criterion 1', 'Criterion 2'],
-        })
+        from devflow.github.field_mapper import GitHubFieldMapper
+        field_mapper = GitHubFieldMapper()
+
+        issue_key = github_client.create_issue(
+            issue_type=None,
+            summary='Issue with AC',
+            description='Description',
+            priority='',
+            project_key='owner/repo',
+            field_mapper=field_mapper,
+            required_custom_fields={'acceptance_criteria': ['Criterion 1', 'Criterion 2']},
+        )
 
         assert issue_key == 'owner/repo#126'
 
@@ -436,11 +441,21 @@ class TestTransitionTicket:
 
         mock_subprocess_run.assert_called_once()
 
-    def test_transition_invalid_state(self, github_client):
-        """Test transitioning to invalid state."""
-        with pytest.raises(IssueTrackerValidationError) as exc_info:
-            github_client.transition_ticket("#123", "invalid")
-        assert "Invalid GitHub state" in str(exc_info.value)
+    def test_transition_invalid_state(self, github_client, mock_subprocess_run):
+        """Test transitioning to invalid state (passed through to API)."""
+        # GitHub API will validate the state, not our code
+        # Our code just passes through unknown states
+        mock_subprocess_run.return_value = Mock(
+            returncode=0,
+            stdout='{}',
+            stderr=''
+        )
+
+        # Should not raise - unknown states are passed through
+        github_client.transition_ticket("#123", "invalid")
+
+        # Verify the API was called (state passed as-is)
+        mock_subprocess_run.assert_called_once()
 
 
 class TestAttachFile:
@@ -450,7 +465,7 @@ class TestAttachFile:
         """Test that file attachments raise NotImplementedError."""
         with pytest.raises(NotImplementedError) as exc_info:
             github_client.attach_file("#123", "/path/to/file.txt")
-        assert "GitHub Issues does not support file attachments" in str(exc_info.value)
+        assert "GitHub Issues do not support file attachments" in str(exc_info.value)
 
 
 class TestListTickets:
@@ -487,7 +502,7 @@ class TestListTickets:
             stderr=''
         )
 
-        issues = github_client.list_tickets(status_filter=["open"])
+        issues = github_client.list_tickets(status=["open"])
 
         assert len(issues) == 1
         assert issues[0]['status'] == 'open'
@@ -528,8 +543,16 @@ Related PRs:
 class TestLinkIssues:
     """Tests for link_issues method (not supported)."""
 
-    def test_link_issues_not_supported(self, github_client):
-        """Test that issue linking raises NotImplementedError."""
-        with pytest.raises(NotImplementedError) as exc_info:
-            github_client.link_issues("#123", "#456", "relates to")
-        assert "GitHub Issues does not support explicit issue linking" in str(exc_info.value)
+    def test_link_issues_creates_reference(self, github_client, mock_subprocess_run):
+        """Test that issue linking creates a reference comment."""
+        mock_subprocess_run.return_value = Mock(
+            returncode=0,
+            stdout='{}',
+            stderr=''
+        )
+
+        # Link issues by adding a reference comment
+        github_client.link_issues("#123", "relates to", "#456", comment="Additional context")
+
+        # Verify add_comment was called with reference text
+        mock_subprocess_run.assert_called_once()

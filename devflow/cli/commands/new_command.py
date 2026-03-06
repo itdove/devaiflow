@@ -1071,7 +1071,7 @@ def _handle_existing_branch(
     console.print("  3. Choose a different branch name")
     console.print("  4. Cancel")
 
-    choice = IntPrompt.ask("Selection", choices=[1, 2, 3, 4], default=1)
+    choice = IntPrompt.ask("Selection", choices=["1", "2", "3", "4"], default=1)
 
     if choice == 1:
         # Switch and merge

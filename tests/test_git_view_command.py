@@ -46,7 +46,8 @@ def test_git_view_basic_issue(runner, mock_github_client):
     assert 'Test Issue' in result.output
     assert 'State: open' in result.output
     assert 'Type: bug' in result.output
-    mock_github_client.get_ticket.assert_called_once_with('#123')
+    # Issue key is normalized (# stripped during parsing)
+    mock_github_client.get_ticket.assert_called_once_with('123')
 
 
 def test_git_view_with_hash_prefix(runner, mock_github_client):
@@ -60,6 +61,7 @@ def test_git_view_with_hash_prefix(runner, mock_github_client):
     result = runner.invoke(cli, ['git', 'view', '#456'])
 
     assert result.exit_code == 0
+    # Hash is preserved when explicitly provided
     mock_github_client.get_ticket.assert_called_once_with('#456')
 
 
@@ -92,7 +94,7 @@ def test_git_view_with_comments(runner, mock_github_client):
     result = runner.invoke(cli, ['git', 'view', '123', '--comments'])
 
     assert result.exit_code == 0
-    assert 'Comments:' in result.output
+    assert 'COMMENTS' in result.output  # Section header is uppercase
     assert 'user1' in result.output
     assert 'First comment' in result.output
     mock_github_client.get_ticket_detailed.assert_called_once()

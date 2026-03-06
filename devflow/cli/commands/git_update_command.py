@@ -58,8 +58,8 @@ def git_update(
     if description:
         payload['body'] = description
 
-    if labels:
-        label_list = [label.strip() for label in labels.split(',')]
+    if labels is not None:
+        label_list = [label.strip() for label in labels.split(',') if label.strip()]
         payload['labels'] = label_list
 
     if assignee:
@@ -78,9 +78,17 @@ def git_update(
         client = GitHubClient(repository=repository)
 
         # Update issue
-        console_print(f"[cyan]Updating issue {issue_key}...[/cyan]")
+        if not output_json:
+            console_print(f"[cyan]Updating issue {issue_key}...[/cyan]")
+
         client.update_issue(issue_key, payload)
 
+        # JSON output mode
+        if output_json:
+            json_output(success=True, data={"issue_key": issue_key, "updated_fields": payload})
+            return
+
+        # Console output mode
         console_print(f"[green]✓[/green] Updated issue {issue_key}")
 
         # Show what was updated
@@ -91,11 +99,6 @@ def git_update(
             elif field == 'labels':
                 value = ', '.join(value)
             console.print(f"  {field}: {value}")
-
-        # JSON output mode
-        if output_json:
-            json_output(success=True, data={"issue_key": issue_key, "updated_fields": payload})
-            return
 
     except IssueTrackerNotFoundError as e:
         console.print(f"[red]✗[/red] Issue not found: {issue_key}")
