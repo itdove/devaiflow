@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
 from devflow.cli.utils import console_print, is_json_mode, output_json, prompt_repository_selection, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code
+from devflow.cli.commands.sync_command import issue_key_to_session_name
 from devflow.git.utils import GitUtils
 
 # Import unified utilities
@@ -98,6 +99,10 @@ def _create_mock_git_issue(
     mock_issue_number = random.randint(100, 999)
     mock_issue_key = f"#{mock_issue_number}"
 
+    # Construct full issue key (e.g., "owner/repo#123")
+    repo_owner_repo = repository or "mock-owner/mock-repo"
+    full_issue_key = f"{repo_owner_repo}{mock_issue_key}"  # Concatenate repo and #123
+
     # Create the mock issue in the data store so it can be retrieved later
     from devflow.mocks.persistence import MockDataStore
     store = MockDataStore()
@@ -107,7 +112,7 @@ def _create_mock_git_issue(
     description = f"Mock issue created for: {goal}"
 
     mock_issue = {
-        "key": mock_issue_key,
+        "key": full_issue_key,
         "summary": summary,
         "description": description,
         "type": issue_type or "task",
@@ -122,7 +127,7 @@ def _create_mock_git_issue(
         "points": None,
         "acceptance_criteria": None,
     }
-    store.set_jira_ticket(mock_issue_key, mock_issue)
+    store.set_jira_ticket(full_issue_key, mock_issue)
 
     # Build initial prompt with session name
     from devflow.cli.utils import get_workspace_path
@@ -144,7 +149,7 @@ def _create_mock_git_issue(
     mock_claude.add_message(
         session_id=ai_agent_session_id,
         role="assistant",
-        content=f"I've created mock GitHub issue {mock_issue_key} with the following details:\n\n"
+        content=f"I've created mock GitHub issue {full_issue_key} with the following details:\n\n"
                 f"Summary: {summary}\n"
                 f"{type_info}"
     )
@@ -165,16 +170,16 @@ def _create_mock_git_issue(
 
     session_manager.update_session(session)
 
-    # Auto-rename session to creation-<issue_key>
-    # For GitHub, use format like "creation-123" (without #)
-    issue_num = mock_issue_key.lstrip('#')
-    new_name = f"creation-{issue_num}"
+    # Auto-rename session to creation-<base_name>
+    # For GitHub, use format like "creation-owner-repo-123"
+    base_name = issue_key_to_session_name(full_issue_key)
+    new_name = f"creation-{base_name}"
     try:
         session_manager.rename_session(name, new_name)
         renamed_session = session_manager.get_session(new_name)
         if renamed_session and renamed_session.name == new_name:
             # Set GitHub metadata on renamed session
-            renamed_session.issue_key = mock_issue_key
+            renamed_session.issue_key = full_issue_key
             renamed_session.issue_tracker = "github"  # or "gitlab" based on detection
             if not renamed_session.issue_metadata:
                 renamed_session.issue_metadata = {}
@@ -184,16 +189,16 @@ def _create_mock_git_issue(
             renamed_session.issue_metadata["status"] = "open"
             session_manager.update_session(renamed_session)
 
-            console_print(f"[green]✓[/green] Created mock GitHub issue: [bold]{mock_issue_key}[/bold]")
+            console_print(f"[green]✓[/green] Created mock GitHub issue: [bold]{full_issue_key}[/bold]")
             console_print(f"[green]✓[/green] Renamed session to: [bold]{new_name}[/bold]")
         else:
-            console_print(f"[green]✓[/green] Created mock GitHub issue: [bold]{mock_issue_key}[/bold]")
+            console_print(f"[green]✓[/green] Created mock GitHub issue: [bold]{full_issue_key}[/bold]")
             console_print(f"[yellow]⚠[/yellow] Session rename may have failed")
             console_print(f"   Expected: [bold]{new_name}[/bold]")
             console_print(f"   Actual: [bold]{name}[/bold]")
             new_name = name
     except ValueError as e:
-        console_print(f"[green]✓[/green] Created mock GitHub issue: [bold]{mock_issue_key}[/bold]")
+        console_print(f"[green]✓[/green] Created mock GitHub issue: [bold]{full_issue_key}[/bold]")
         console_print(f"[yellow]⚠[/yellow] Could not rename session: {e}")
         console_print(f"   Session name: [bold]{name}[/bold]")
         new_name = name
@@ -203,11 +208,11 @@ def _create_mock_git_issue(
         console_print(f"[dim]Type: {issue_type}[/dim]")
     console_print(f"[dim]Status: open[/dim]")
     console_print()
-    console_print(f"[dim]View with: daf git view {mock_issue_key}[/dim]")
+    console_print(f"[dim]View with: daf git view {full_issue_key}[/dim]")
     console_print(f"[dim]Reopen session with: daf open {new_name}[/dim]")
     console_print()
 
-    return mock_issue_key
+    return full_issue_key
 
 
 @require_outside_claude

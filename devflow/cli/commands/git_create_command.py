@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
 from devflow.cli.utils import output_json as json_output, console_print, require_outside_claude
+from devflow.cli.commands.sync_command import issue_key_to_session_name
 from devflow.config.loader import ConfigLoader
 from devflow.github.issues_client import GitHubClient
 from devflow.github.field_mapper import GitHubFieldMapper
@@ -86,7 +87,6 @@ def _get_issue_template(config, issue_type: str) -> str:
     return default_templates.get(issue_type_lower, "")
 
 
-@require_outside_claude
 def git_create(
     summary: str,
     issue_type: Optional[str] = None,
@@ -229,30 +229,27 @@ def git_create(
                 )
 
                 if current_session and current_session.session_type == "ticket_creation":
-                    # Extract issue number from issue_key (e.g., "owner/repo#123" or "test-owner/test-repo-1")
-                    import re
-                    number_match = re.search(r'[-#](\d+)$', issue_key)
-                    if number_match:
-                        issue_number = number_match.group(1)
-                        new_name = f"creation-{issue_number}"
+                    # Convert issue key to session name format (e.g., "owner/repo#123" -> "owner-repo-123")
+                    base_name = issue_key_to_session_name(issue_key)
+                    new_name = f"creation-{base_name}"
 
-                        # Rename session
-                        old_name = current_session.name
-                        session_manager.rename_session(old_name, new_name)
+                    # Rename session
+                    old_name = current_session.name
+                    session_manager.rename_session(old_name, new_name)
 
-                        # Update session metadata
-                        renamed_session = session_manager.get_session(new_name)
-                        if renamed_session:
-                            renamed_session.issue_key = issue_key
-                            if not renamed_session.issue_metadata:
-                                renamed_session.issue_metadata = {}
-                            renamed_session.issue_metadata["summary"] = summary
-                            renamed_session.issue_metadata["type"] = issue_type_lower if issue_type_lower else "task"
-                            renamed_session.issue_metadata["status"] = "open"
-                            session_manager.update_session(renamed_session)
+                    # Update session metadata
+                    renamed_session = session_manager.get_session(new_name)
+                    if renamed_session:
+                        renamed_session.issue_key = issue_key
+                        if not renamed_session.issue_metadata:
+                            renamed_session.issue_metadata = {}
+                        renamed_session.issue_metadata["summary"] = summary
+                        renamed_session.issue_metadata["type"] = issue_type_lower if issue_type_lower else "task"
+                        renamed_session.issue_metadata["status"] = "open"
+                        session_manager.update_session(renamed_session)
 
-                            renamed_session_name = new_name
-                            console_print(f"[green]✓[/green] Renamed session to: [bold]{new_name}[/bold]")
+                        renamed_session_name = new_name
+                        console_print(f"[green]✓[/green] Renamed session to: [bold]{new_name}[/bold]")
         except Exception as e:
             # Don't fail the whole command if session rename fails
             console_print(f"[yellow]⚠[/yellow] Could not rename session: {e}")
