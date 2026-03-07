@@ -11,25 +11,11 @@ daf --help
 
 **Core Session Commands:**
 
-**Starting work:**
-```bash
-daf sync --field <field_name>=<value>  # Filter by custom field (name from field_mappings)
-daf new --name "..." --goal "..."      # Create new session
-daf open PROJ-12345                    # Open/resume session
-```
-
 **During work:**
 ```bash
-daf note "..."               # Add progress note
 daf status                   # Check progress dashboard
 daf active                   # Show currently active conversation
 daf list                     # List all sessions
-```
-
-**Finishing work:**
-```bash
-daf complete PROJ-12345       # Complete session (commit, PR, JIRA update)
-daf complete --latest        # Complete most recent session
 ```
 
 **JIRA Integration:**
@@ -48,11 +34,7 @@ daf jira update PROJ-12345 --priority Major  # Update ticket
 
 **Configuration:**
 ```bash
-daf init                     # Initialize configuration
-daf config tui
-daf config tui
-daf config tui
-daf upgrade                  # Upgrade slash commands
+daf config show              # View current configuration
 ```
 
 **Getting Help:**
@@ -70,22 +52,11 @@ daf jira create bug --help   # See available options
 
 **Common Workflows:**
 
-**Daily workflow:**
-```bash
-daf sync --field <field_name>=<value>  # Filter by field name (from field_mappings)
-daf open PROJ-12345                    # Open a ticket to work on
-# ... do work in Claude Code ...
-daf note "Milestone reached"            # Add progress note
-daf complete PROJ-12345                # End of work: commit, PR, update JIRA
-```
-
 **Multi-repo feature:**
 ```bash
-daf new --name PROJ-12345 --goal "..." --path ~/backend
-# ... work in backend ...
-daf new --name PROJ-12345 --goal "..." --path ~/frontend  # Add conversation
-/daf read-conversation      # Read backend work
-# ... work in frontend with backend context ...
+# Work in current repository
+/daf read-conversation      # Read work from other repositories in this session
+# ... work in current repository with context from other repos ...
 ```
 
 **Full documentation:**

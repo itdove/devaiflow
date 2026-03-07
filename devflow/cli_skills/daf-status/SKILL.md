@@ -64,7 +64,6 @@ daf list --field status_field="In Progress"  # Field names configured in organiz
 
 **Related commands:**
 ```bash
-daf sync --field <field_name>=<value>   # Sync tickets (field name from field_mappings)
 daf list --active                       # List only active sessions
 daf time PROJ-12345                     # Detailed time tracking for ticket
 ```
