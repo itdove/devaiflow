@@ -1306,10 +1306,14 @@ def _handle_branch_creation(
 
     # Generate suggested branch name
     backend = detect_backend_from_key(issue_key, config)
+    # Get use_issue_key_only setting with safe fallback
+    use_issue_key_only = True  # Default value
+    if config and hasattr(config, 'prompts') and config.prompts:
+        use_issue_key_only = config.prompts.use_issue_key_as_branch
     suggested_branch = GitUtils.generate_branch_name(
         issue_key,
         goal,
-        use_issue_key_only=config.prompts.use_issue_key_as_branch,
+        use_issue_key_only=use_issue_key_only,
         backend=backend
     )
 
