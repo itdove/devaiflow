@@ -11,7 +11,7 @@ from devflow.utils.paths import get_cs_home
 
 from .models import Config, SessionIndex
 
-console = Console()
+console = Console(stderr=True)
 
 
 class ConfigLoader:
