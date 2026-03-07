@@ -1367,9 +1367,10 @@ def git_view(ctx: click.Context, issue_key: Optional[str], comments: bool, repos
 @click.option("--labels", help="Additional labels (comma-separated)")
 @click.option("--assignee", help="Assign to username")
 @click.option("--milestone", help="Milestone name or number")
+@click.option("--parent", help="Parent issue key (owner/repo#123 or #123)")
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
 @click.option("--acceptance-criteria", multiple=True, help="Acceptance criteria (can be used multiple times)")
-def git_create(ctx: click.Context, issue_type: Optional[str], summary: str, description: Optional[str], priority: Optional[str], points: Optional[int], labels: Optional[str], assignee: Optional[str], milestone: Optional[str], repository: Optional[str], acceptance_criteria: tuple) -> None:
+def git_create(ctx: click.Context, issue_type: Optional[str], summary: str, description: Optional[str], priority: Optional[str], points: Optional[int], labels: Optional[str], assignee: Optional[str], milestone: Optional[str], parent: Optional[str], repository: Optional[str], acceptance_criteria: tuple) -> None:
     """Create a new GitHub/GitLab issue.
 
     Creates an issue with convention-based labels for type, priority, and points.
@@ -1385,11 +1386,13 @@ def git_create(ctx: click.Context, issue_type: Optional[str], summary: str, desc
         daf git create enhancement --summary "Feature" \\
             --acceptance-criteria "Tests pass" \\
             --acceptance-criteria "Docs updated"
+        daf git create task --summary "Implement auth" --parent "#123"
+        daf git create task --summary "Add validation" --parent "owner/repo#456"
     """
     from devflow.cli.commands.git_create_command import git_create
 
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    git_create(summary, issue_type, description, priority, points, labels, assignee, milestone, repository, acceptance_criteria, output_json)
+    git_create(summary, issue_type, description, priority, points, labels, assignee, milestone, parent, repository, acceptance_criteria, output_json)
 
 
 @git.command(name="update")
@@ -1401,8 +1404,9 @@ def git_create(ctx: click.Context, issue_type: Optional[str], summary: str, desc
 @click.option("--labels", help="New labels (comma-separated, replaces all labels)")
 @click.option("--assignee", help="Assign to username")
 @click.option("--milestone", help="Set milestone")
+@click.option("--parent", help="Link to parent issue (owner/repo#123 or #123)")
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_update(ctx: click.Context, issue_key: str, state: Optional[str], title: Optional[str], description: Optional[str], labels: Optional[str], assignee: Optional[str], milestone: Optional[str], repository: Optional[str]) -> None:
+def git_update(ctx: click.Context, issue_key: str, state: Optional[str], title: Optional[str], description: Optional[str], labels: Optional[str], assignee: Optional[str], milestone: Optional[str], parent: Optional[str], repository: Optional[str]) -> None:
     """Update a GitHub/GitLab issue.
 
     ISSUE_KEY is the issue key (#123 or owner/repo#123).
@@ -1411,11 +1415,12 @@ def git_update(ctx: click.Context, issue_key: str, state: Optional[str], title: 
         daf git update 123 --state closed
         daf git update 123 --labels "bug,priority: high"
         daf git update 123 --assignee username --milestone v1.0
+        daf git update 123 --parent "#456"
     """
     from devflow.cli.commands.git_update_command import git_update
 
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    git_update(issue_key, state, title, description, labels, assignee, milestone, repository, output_json)
+    git_update(issue_key, state, title, description, labels, assignee, milestone, parent, repository, output_json)
 
 
 @git.command(name="add-comment")
@@ -1467,9 +1472,10 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> N
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
+@click.option("--parent", help="Parent issue key (owner/repo#123 or #123)")
 @workspace_option()
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], name: str, path: str, branch: str, workspace: str, repository: Optional[str]) -> None:
+def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, repository: Optional[str]) -> None:
     """Create GitHub/GitLab issue with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1485,6 +1491,8 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
         daf git new bug --goal "Fix timeout in operation"
         daf git new --goal "General investigation"  (no type)
         daf git new --goal "file:///path/to/requirements.md"
+        daf git new task --goal "Implement auth" --parent "#123"
+        daf git new enhancement --goal "Add caching" --parent "owner/repo#456"
     """
     from devflow.cli.commands.git_new_command import create_git_issue_session
     from devflow.cli.utils import resolve_goal_input
@@ -1496,7 +1504,7 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    create_git_issue_session(goal, issue_type, name, path, branch, workspace, repository)
+    create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository)
 
 
 @cli.command(name="investigate")

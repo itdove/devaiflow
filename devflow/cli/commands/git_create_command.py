@@ -15,6 +15,7 @@ from devflow.issue_tracker.exceptions import (
     IssueTrackerAuthError,
     IssueTrackerApiError,
     IssueTrackerValidationError,
+    IssueTrackerNotFoundError,
 )
 
 console = Console()
@@ -96,6 +97,7 @@ def git_create(
     labels: Optional[str] = None,
     assignee: Optional[str] = None,
     milestone: Optional[str] = None,
+    parent: Optional[str] = None,
     repository: Optional[str] = None,
     acceptance_criteria: tuple = (),
     output_json: bool = False,
@@ -111,6 +113,7 @@ def git_create(
         labels: Additional labels (comma-separated)
         assignee: GitHub username to assign
         milestone: Milestone name
+        parent: Parent issue key (owner/repo#123 or #123)
         repository: Repository in owner/repo format (optional, will auto-detect)
         acceptance_criteria: List of acceptance criteria
         output_json: Output in JSON format
@@ -187,6 +190,29 @@ def git_create(
         client = GitHubClient(repository=repository)
         field_mapper = GitHubFieldMapper()
 
+        # Validate parent issue exists if provided
+        if parent:
+            console_print(f"\n[cyan]Validating parent issue {parent}...[/cyan]")
+            try:
+                parent_issue = client.get_issue(parent)
+                if not parent_issue:
+                    console.print(f"[red]✗[/red] Parent issue {parent} not found")
+                    if output_json:
+                        json_output(success=False, error={"message": f"Parent issue {parent} not found", "code": "PARENT_NOT_FOUND"})
+                    sys.exit(1)
+                console_print(f"[dim]Parent issue found: {parent_issue.get('summary', 'N/A')}[/dim]")
+            except IssueTrackerValidationError as e:
+                console.print(f"[red]✗[/red] Invalid parent issue key format: {parent}")
+                console.print(f"[dim]Expected '#123' or 'owner/repo#123'[/dim]")
+                if output_json:
+                    json_output(success=False, error={"message": str(e), "code": "INVALID_PARENT_FORMAT"})
+                sys.exit(1)
+            except IssueTrackerNotFoundError:
+                console.print(f"[red]✗[/red] Parent issue {parent} not found")
+                if output_json:
+                    json_output(success=False, error={"message": f"Parent issue {parent} not found", "code": "PARENT_NOT_FOUND"})
+                sys.exit(1)
+
         # Build required custom fields
         required_custom_fields = {}
 
@@ -209,6 +235,7 @@ def git_create(
             priority=priority or "",
             project_key=effective_repository,  # Will auto-detect if not provided
             field_mapper=field_mapper,
+            parent=parent,
             required_custom_fields=required_custom_fields,
             points=points,
         )

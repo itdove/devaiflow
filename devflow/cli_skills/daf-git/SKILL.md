@@ -60,6 +60,10 @@ daf git new --goal "General investigation work"
 
 # With custom name and branch
 daf git new enhancement --goal "API refactor" --name "api-work" --branch "feature/api"
+
+# With parent issue
+daf git new task --goal "Implement auth" --parent "#123"
+daf git new enhancement --goal "Add caching" --parent "owner/repo#456"
 ```
 
 **Standard Agile Issue Types:**
@@ -135,6 +139,10 @@ daf git create enhancement --summary "Auth feature" \
 
 # Without type (no type label added)
 daf git create --summary "General issue"
+
+# With parent issue
+daf git create task --summary "Implement auth" --parent "#123"
+daf git create enhancement --summary "Add caching" --parent "owner/repo#456"
 ```
 
 **Note:** Use `daf git new` instead if you want to start working on the issue immediately.
@@ -191,6 +199,10 @@ daf git update 123 --milestone "v2.0"
 
 # Update multiple fields
 daf git update 123 --labels "critical" --assignee user --milestone "Sprint 5"
+
+# Link to parent issue
+daf git update 123 --parent "#456"
+daf git update 123 --parent "owner/repo#789"
 ```
 
 ## Typical Workflows
