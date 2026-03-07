@@ -15,6 +15,7 @@ from devflow.cli.utils import (
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session, WorkSession
 from devflow.jira.exceptions import JiraApiError
+from devflow.issue_tracker.exceptions import IssueTrackerError
 from devflow.session.manager import SessionManager
 
 
@@ -345,3 +346,58 @@ def test_add_jira_comment_custom_timeout(mock_jira_class):
 
     assert result is True
     mock_jira_class.assert_called_once_with(timeout=30)
+
+
+@patch("devflow.github.issues_client.GitHubClient")
+def test_add_jira_comment_github_issue_success(mock_github_class):
+    """Test adding comment to GitHub issue successfully."""
+    # Mock GitHub client
+    mock_client = MagicMock()
+    mock_client.add_comment.return_value = None
+    mock_github_class.return_value = mock_client
+
+    result = add_jira_comment("owner/repo#123", "Test comment")
+
+    assert result is True
+    mock_client.add_comment.assert_called_once_with("owner/repo#123", "Test comment")
+
+
+@patch("devflow.github.issues_client.GitHubClient")
+def test_add_jira_comment_github_hash_format(mock_github_class):
+    """Test adding comment to GitHub issue in hash format (#123)."""
+    # Mock GitHub client
+    mock_client = MagicMock()
+    mock_client.add_comment.return_value = None
+    mock_github_class.return_value = mock_client
+
+    result = add_jira_comment("#456", "Test comment")
+
+    assert result is True
+    mock_client.add_comment.assert_called_once_with("#456", "Test comment")
+
+
+@patch("devflow.github.issues_client.GitHubClient")
+def test_add_jira_comment_github_issue_failure(mock_github_class):
+    """Test GitHub comment addition failure."""
+    # Mock GitHub client with error
+    mock_client = MagicMock()
+    mock_client.add_comment.side_effect = IssueTrackerError("Failed to add comment")
+    mock_github_class.return_value = mock_client
+
+    result = add_jira_comment("owner/repo#789", "Test comment")
+
+    assert result is False
+
+
+@patch("devflow.cli.utils.JiraClient")
+def test_add_jira_comment_jira_issue_still_works(mock_jira_class):
+    """Test that JIRA issues still use JiraClient (no regression)."""
+    # Mock JIRA client
+    mock_client = MagicMock()
+    mock_client.add_comment.return_value = None
+    mock_jira_class.return_value = mock_client
+
+    result = add_jira_comment("AAP-12345", "Test comment")
+
+    assert result is True
+    mock_client.add_comment.assert_called_once_with("AAP-12345", "Test comment")

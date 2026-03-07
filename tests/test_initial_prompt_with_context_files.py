@@ -379,3 +379,83 @@ def test_generate_initial_prompt_ticket_creation_no_unit_tests_even_if_enabled(t
 
     # Should still include defaults
     assert "AGENTS.md (agent-specific instructions)" in prompt
+
+
+def test_generate_initial_prompt_with_github_issue(temp_daf_home):
+    """Test generating initial prompt with GitHub issue key suggests daf git view."""
+    from devflow.config.loader import ConfigLoader
+
+    # Create default config
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    config_loader.save_config(config)
+
+    # Generate prompt with GitHub issue
+    prompt = _generate_initial_prompt(
+        name="test-session",
+        goal="Fix bug in API",
+        issue_key="owner/repo#123",
+        issue_title="Fix timeout in subscription endpoint",
+    )
+
+    # Verify goal line includes GitHub issue
+    assert "owner/repo#123: Fix timeout in subscription endpoint" in prompt
+
+    # Verify GitHub command is suggested (NOT JIRA)
+    assert "daf git view owner/repo#123 --comments" in prompt
+    assert "daf jira view" not in prompt
+
+    # Verify context files are included
+    assert "AGENTS.md (agent-specific instructions)" in prompt
+    assert "CLAUDE.md (project guidelines and standards)" in prompt
+    assert "DAF_AGENTS.md (daf tool usage guide)" in prompt
+
+
+def test_generate_initial_prompt_with_github_hash_format(temp_daf_home):
+    """Test generating initial prompt with GitHub issue in hash format (#123)."""
+    from devflow.config.loader import ConfigLoader
+
+    # Create default config
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    config_loader.save_config(config)
+
+    # Generate prompt with GitHub issue in hash format
+    prompt = _generate_initial_prompt(
+        name="test-session",
+        goal="Add new feature",
+        issue_key="#456",
+        issue_title="Implement caching layer",
+    )
+
+    # Verify goal line includes GitHub issue
+    assert "#456: Implement caching layer" in prompt
+
+    # Verify GitHub command is suggested (NOT JIRA)
+    assert "daf git view #456 --comments" in prompt
+    assert "daf jira view" not in prompt
+
+
+def test_generate_initial_prompt_jira_still_uses_jira_view(temp_daf_home):
+    """Test that JIRA issues still use daf jira view (no regression)."""
+    from devflow.config.loader import ConfigLoader
+
+    # Create default config
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    config_loader.save_config(config)
+
+    # Generate prompt with JIRA issue
+    prompt = _generate_initial_prompt(
+        name="test-session",
+        goal="Implement feature",
+        issue_key="AAP-12345",
+        issue_title="Add backup functionality",
+    )
+
+    # Verify goal line includes JIRA issue
+    assert "AAP-12345: Add backup functionality" in prompt
+
+    # Verify JIRA command is suggested (NOT GitHub)
+    assert "daf jira view AAP-12345 --comments" in prompt
+    assert "daf git view" not in prompt
