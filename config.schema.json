@@ -113,9 +113,40 @@
           ],
           "default": null,
           "title": "Issue Templates"
+        },
+        "issue_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issue Types",
+          "type": "array"
         }
       },
       "title": "GitHubConfig",
+      "type": "object"
+    },
+    "HttpClientConfig": {
+      "description": "HTTP client configuration for all requests.\n\nControls SSL verification and timeout behavior for all HTTP requests\nmade by DevAIFlow (hierarchical config downloads, JIRA API, update checks, etc.).",
+      "properties": {
+        "ssl_verify": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": true,
+          "title": "Ssl Verify"
+        },
+        "timeout": {
+          "default": 10,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "title": "HttpClientConfig",
       "type": "object"
     },
     "JiraConfig": {
@@ -793,6 +824,9 @@
     },
     "context_files": {
       "$ref": "#/$defs/ContextFilesConfig"
+    },
+    "http_client": {
+      "$ref": "#/$defs/HttpClientConfig"
     },
     "prompts": {
       "$ref": "#/$defs/PromptsConfig"

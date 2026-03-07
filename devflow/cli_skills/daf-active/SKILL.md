@@ -38,7 +38,6 @@ daf active
 └────────────────────────────────────────────────────┘
 
 To pause: Exit Claude Code
-To switch: daf open PROJ-12345 (and select different conversation)
 ```
 
 **When no active conversation:**
@@ -48,8 +47,6 @@ No active conversation
 Recent conversations:
   PROJ-12345#1 (backend) - paused 15m ago
   PROJ-12346#1 (frontend) - paused 2h ago
-
-To resume: daf open <name>
 ```
 
 **Use this to:**

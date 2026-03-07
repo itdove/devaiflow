@@ -71,15 +71,6 @@ daf config context list         # List available context files
 daf config context show         # Show context file contents
 ```
 
-**Modify configuration (must run OUTSIDE Claude Code):**
-```bash
-# Exit Claude Code first, then:
-daf config tui
-daf config tui
-daf config tui
-daf config edit               # Interactive TUI editor
-```
-
 **Related commands:**
 ```bash
 /daf help                     # Quick reference of all daf commands

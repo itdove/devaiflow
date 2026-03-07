@@ -42,6 +42,5 @@ Total: 2 sessions | 6h tracked
 
 **Use this to:**
 - Check which sessions are active
-- Find a session to resume with `daf open`
 - See time spent on each task
 - Filter sessions by sprint or repository

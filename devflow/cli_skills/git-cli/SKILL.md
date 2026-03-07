@@ -354,46 +354,6 @@ The daf tool uses git commands for:
 
 ## Common Git Workflows in DAF
 
-### Opening a Session (daf open)
-
-```bash
-# 1. Check if in git repo
-git rev-parse --git-dir
-
-# 2. Get current branch
-git rev-parse --abbrev-ref HEAD
-
-# 3. Check if branch exists
-git rev-parse --verify <branch-name>
-
-# 4. Create branch if needed
-git checkout -b <jira-key>-<description>
-
-# 5. Pull latest if existing branch
-git fetch origin
-git pull
-```
-
-### Completing a Session (daf complete)
-
-```bash
-# 1. Check for uncommitted changes
-git status --porcelain
-
-# 2. View changes
-git diff --cached  # Staged
-git diff          # Unstaged
-
-# 3. Stage all changes
-git add -A
-
-# 4. Create commit
-git commit -m "..."
-
-# 5. Push to remote
-git push -u origin <branch-name>
-```
-
 ### Branch Synchronization
 
 ```bash

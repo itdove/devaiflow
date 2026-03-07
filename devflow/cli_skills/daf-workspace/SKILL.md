@@ -40,9 +40,4 @@ daf workspace list
 - Verify workspace paths are correct
 - Find workspace names to use with `--workspace` flag
 
-**Related commands:**
-- `daf new -w <name>` - Create session in specific workspace (quick switch)
-- `daf open <session> -w <name>` - Override session workspace (quick switch)
-- Note: `-w` is a shortcut for `--workspace`
-
-**Note:** Workspace management commands (add/remove/set-default) cannot run inside AI sessions. Exit Claude Code first to modify workspace configuration.
+**Note:** This is a READ-ONLY command showing configured workspaces. Workspace configuration is managed outside Claude Code sessions.

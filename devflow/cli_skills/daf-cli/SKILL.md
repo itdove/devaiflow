@@ -403,23 +403,6 @@ daf sessions list --latest
 daf sessions list PROJ-12345 --json
 ```
 
-## Linking JIRA to Sessions
-
-```bash
-# Link JIRA ticket to existing session
-daf link session-name --jira PROJ-12345
-
-# Replace existing link without confirmation
-daf link session-name --jira PROJ-67890 --force
-
-# JSON output
-daf link session-name --jira PROJ-12345 --json
-
-# Unlink JIRA from session
-daf unlink session-name
-daf unlink session-name --json
-```
-
 ## Session Summary
 
 ```bash
@@ -443,14 +426,6 @@ daf summary PROJ-12345 --json
 # Show time tracking
 daf time PROJ-12345
 daf time --latest
-
-# Pause time tracking
-daf pause PROJ-12345
-daf pause --latest
-
-# Resume time tracking
-daf resume PROJ-12345
-daf resume --latest
 
 # JSON output
 daf time PROJ-12345 --json
@@ -524,30 +499,7 @@ h3. End to End Test
 # Step 3: Verify cache hit on second call..."
 ```
 
-## Syncing JIRA Tickets
-
-The `daf sync` command creates daf sessions for JIRA tickets that match filter criteria configured in organization.json.
-
-```bash
-# Sync tickets based on configured filters
-daf sync
-
-# Filter by custom fields (uses field names from field_mappings)
-daf sync --field workstream="Platform"
-daf sync --field sprint="Sprint 2025-02"
-
-# Filter by ticket type
-daf sync --type story
-daf sync --type bug
-
-# Filter by epic
-daf sync --epic AAP-12345
-
-# JSON output
-daf sync --json
-```
-
-### Understanding Sync Filters
+## Understanding Sync Filters
 
 Sync filters are configured in `organization.json` under `jira.filters.sync` section:
 
@@ -593,11 +545,6 @@ daf config show --sync-filters --json
 - **Legacy example:** If `required_fields: ["sprint", "workstream"]`, ALL tickets without sprint OR workstream will be skipped
 - Use `daf config show --fields` to see available field names
 
-**Command-line filters:**
-- Command-line `--field` filters are ADDED to the configured filters
-- Example: `daf sync --field severity="Critical"` will sync only tickets that:
-  - Match configured status/assignee/required_fields filters
-  - AND have severity="Critical"
 
 ## Understanding JIRA Field Types
 
@@ -743,5 +690,4 @@ daf config refresh-jira-fields --json
 - Git operations: See git-cli skill
 - GitHub PR creation: See gh-cli skill
 - GitLab MR creation: See glab-cli skill
-- Session launching: Use `daf open`, `daf new`, `daf investigate` (outside Claude)
 - Full documentation: `docs/07-commands.md` in project repository

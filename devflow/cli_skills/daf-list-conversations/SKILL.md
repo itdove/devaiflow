@@ -20,9 +20,4 @@ Look for the "Conversations" section in the output. Each conversation has:
 - Claude Code session UUID
 - PR/MR links (if created)
 
-To switch to a different conversation:
-1. Exit this Claude Code session
-2. Run: `daf open <session-name>`
-3. Select the conversation/repository when prompted
-
 IMPORTANT: You are currently working in ONE repository. Do NOT attempt to modify files in other repositories - each has its own branch and conversation context.
