@@ -68,14 +68,14 @@ def test_slugify_collapse_hyphens():
 
 def test_generate_branch_name():
     """Test generating branch name from issue key and goal."""
-    result = GitUtils.generate_branch_name("PROJ-12345", "Implement backup feature")
+    result = GitUtils.generate_branch_name("PROJ-12345", "Implement backup feature", use_issue_key_only=False)
 
     assert result == "proj-12345-implement-backup-feature"
 
 
 def test_generate_branch_name_with_special_chars():
     """Test branch name generation with special characters in goal."""
-    result = GitUtils.generate_branch_name("PROJ-99999", "Fix bug: auth failed!")
+    result = GitUtils.generate_branch_name("PROJ-99999", "Fix bug: auth failed!", use_issue_key_only=False)
 
     assert result == "proj-99999-fix-bug-auth-failed"
 
@@ -85,7 +85,8 @@ def test_generate_branch_name_custom_pattern():
     result = GitUtils.generate_branch_name(
         "PROJ-12345",
         "Feature",
-        pattern="feature/{issue_key}/{goal_slug}"
+        pattern="feature/{issue_key}/{goal_slug}",
+        use_issue_key_only=False
     )
 
     assert result == "feature/proj-12345/feature"
@@ -93,7 +94,7 @@ def test_generate_branch_name_custom_pattern():
 
 def test_generate_branch_name_with_issue_key_in_goal():
     """Test branch name generation when goal contains issue key prefix."""
-    result = GitUtils.generate_branch_name("PROJ-12345", "PROJ-12345: Fix login bug")
+    result = GitUtils.generate_branch_name("PROJ-12345", "PROJ-12345: Fix login bug", use_issue_key_only=False)
 
     # Should strip the duplicate issue key from goal
     assert result == "proj-12345-fix-login-bug"
@@ -101,7 +102,7 @@ def test_generate_branch_name_with_issue_key_in_goal():
 
 def test_generate_branch_name_with_issue_key_in_goal_no_space():
     """Test branch name generation when goal has issue key with no space after colon."""
-    result = GitUtils.generate_branch_name("PROJ-99999", "PROJ-99999:Refactor authentication")
+    result = GitUtils.generate_branch_name("PROJ-99999", "PROJ-99999:Refactor authentication", use_issue_key_only=False)
 
     # Should strip the issue key even without space
     assert result == "proj-99999-refactor-authentication"
@@ -109,7 +110,7 @@ def test_generate_branch_name_with_issue_key_in_goal_no_space():
 
 def test_generate_branch_name_without_issue_key_in_goal():
     """Test branch name generation when goal does not contain issue key."""
-    result = GitUtils.generate_branch_name("PROJ-12345", "Fix login bug")
+    result = GitUtils.generate_branch_name("PROJ-12345", "Fix login bug", use_issue_key_only=False)
 
     # Should work normally without issue key in goal
     assert result == "proj-12345-fix-login-bug"
@@ -117,7 +118,7 @@ def test_generate_branch_name_without_issue_key_in_goal():
 
 def test_generate_branch_name_different_issue_key_in_goal():
     """Test branch name generation when goal contains a different issue key."""
-    result = GitUtils.generate_branch_name("PROJ-12345", "Related to PROJ-99999: Fix bug")
+    result = GitUtils.generate_branch_name("PROJ-12345", "Related to PROJ-99999: Fix bug", use_issue_key_only=False)
 
     # Should only strip issue key at the beginning
     assert result == "proj-12345-related-to-proj-99999-fix-bug"
@@ -125,7 +126,7 @@ def test_generate_branch_name_different_issue_key_in_goal():
 
 def test_generate_branch_name_issue_key_in_middle_of_goal():
     """Test that issue key in middle of goal is not stripped."""
-    result = GitUtils.generate_branch_name("PROJ-12345", "Fix PROJ-99999 related bug")
+    result = GitUtils.generate_branch_name("PROJ-12345", "Fix PROJ-99999 related bug", use_issue_key_only=False)
 
     # Should only strip issue key at the start, not in middle
     assert result == "proj-12345-fix-proj-99999-related-bug"
@@ -133,10 +134,164 @@ def test_generate_branch_name_issue_key_in_middle_of_goal():
 
 def test_generate_branch_name_multiple_colons_in_goal():
     """Test branch name generation with multiple colons in goal."""
-    result = GitUtils.generate_branch_name("PROJ-12345", "PROJ-12345: Fix bug: authentication failed")
+    result = GitUtils.generate_branch_name("PROJ-12345", "PROJ-12345: Fix bug: authentication failed", use_issue_key_only=False)
 
     # Should strip the issue key prefix but keep other colons
     assert result == "proj-12345-fix-bug-authentication-failed"
+
+
+# Tests for use_issue_key_as_branch feature
+
+
+def test_generate_branch_name_jira_issue_key_only():
+    """Test JIRA branch name generation with use_issue_key_only=True."""
+    result = GitUtils.generate_branch_name(
+        "PROJ-12345",
+        "Add caching layer",
+        use_issue_key_only=True,
+        backend="jira"
+    )
+
+    # Should return lowercase issue key only
+    assert result == "proj-12345"
+
+
+def test_generate_branch_name_github_hash_format():
+    """Test GitHub branch name generation with #123 format."""
+    result = GitUtils.generate_branch_name(
+        "#123",
+        "Add feature",
+        use_issue_key_only=True,
+        backend="github"
+    )
+
+    # Should extract just the number
+    assert result == "123"
+
+
+def test_generate_branch_name_github_owner_repo_format():
+    """Test GitHub branch name generation with owner/repo#123 format."""
+    result = GitUtils.generate_branch_name(
+        "owner/repo#123",
+        "Fix bug",
+        use_issue_key_only=True,
+        backend="github"
+    )
+
+    # Should extract just the number
+    assert result == "123"
+
+
+def test_generate_branch_name_github_plain_number():
+    """Test GitHub branch name generation with plain number format."""
+    result = GitUtils.generate_branch_name(
+        "123",
+        "Refactor code",
+        use_issue_key_only=True,
+        backend="github"
+    )
+
+    # Should return the number as-is
+    assert result == "123"
+
+
+def test_generate_branch_name_gitlab_hash_format():
+    """Test GitLab branch name generation with #456 format."""
+    result = GitUtils.generate_branch_name(
+        "#456",
+        "Update docs",
+        use_issue_key_only=True,
+        backend="gitlab"
+    )
+
+    # Should extract just the number
+    assert result == "456"
+
+
+def test_generate_branch_name_gitlab_owner_repo_format():
+    """Test GitLab branch name generation with owner/repo#456 format."""
+    result = GitUtils.generate_branch_name(
+        "owner/repo#456",
+        "Fix typo",
+        use_issue_key_only=True,
+        backend="gitlab"
+    )
+
+    # Should extract just the number
+    assert result == "456"
+
+
+def test_generate_branch_name_fallback_with_use_issue_key_only_false():
+    """Test fallback behavior when use_issue_key_only=False."""
+    result = GitUtils.generate_branch_name(
+        "PROJ-12345",
+        "Add feature",
+        use_issue_key_only=False,
+        backend="jira"
+    )
+
+    # Should use original behavior with goal slug
+    assert result == "proj-12345-add-feature"
+
+
+def test_generate_branch_name_github_fallback_with_use_issue_key_only_false():
+    """Test GitHub fallback behavior when use_issue_key_only=False."""
+    result = GitUtils.generate_branch_name(
+        "#123",
+        "Add feature",
+        use_issue_key_only=False,
+        backend="github"
+    )
+
+    # Should use original behavior (lowercase issue key + goal slug)
+    assert result == "#123-add-feature"
+
+
+def test_generate_branch_name_no_goal_use_issue_key_only_true():
+    """Test branch name generation without goal when use_issue_key_only=True."""
+    result = GitUtils.generate_branch_name(
+        "PROJ-12345",
+        use_issue_key_only=True,
+        backend="jira"
+    )
+
+    # Should return lowercase issue key
+    assert result == "proj-12345"
+
+
+def test_generate_branch_name_no_goal_github():
+    """Test GitHub branch name generation without goal."""
+    result = GitUtils.generate_branch_name(
+        "#123",
+        use_issue_key_only=True,
+        backend="github"
+    )
+
+    # Should extract just the number
+    assert result == "123"
+
+
+def test_generate_branch_name_default_parameters():
+    """Test that default parameters maintain backward compatibility."""
+    # Default use_issue_key_only=True, backend="jira"
+    result_with_goal = GitUtils.generate_branch_name("PROJ-12345", "Add feature")
+
+    # With use_issue_key_only=True (default), should return just the issue key
+    assert result_with_goal == "proj-12345"
+
+
+def test_generate_branch_name_custom_pattern_ignored_when_use_issue_key_only():
+    """Test that custom pattern is ignored when use_issue_key_only=True."""
+    result = GitUtils.generate_branch_name(
+        "PROJ-12345",
+        "Add feature",
+        pattern="feature/{issue_key}/{goal_slug}",
+        use_issue_key_only=True,
+        backend="jira"
+    )
+
+    # Pattern should be ignored when use_issue_key_only=True
+    assert result == "proj-12345"
 
 
 def test_is_git_repository_not_git(tmp_path):

@@ -1305,7 +1305,13 @@ def _handle_branch_creation(
         config = config_loader.load_config()
 
     # Generate suggested branch name
-    suggested_branch = GitUtils.generate_branch_name(issue_key, goal)
+    backend = detect_backend_from_key(issue_key, config)
+    suggested_branch = GitUtils.generate_branch_name(
+        issue_key,
+        goal,
+        use_issue_key_only=config.prompts.use_issue_key_as_branch,
+        backend=backend
+    )
 
     # Get smart default source branch
     default_source = _get_default_source_branch(path)

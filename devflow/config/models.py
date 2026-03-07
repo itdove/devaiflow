@@ -306,6 +306,7 @@ class PromptsConfig(BaseModel):
     remember_last_repo_per_project: Dict[str, str] = Field(default_factory=dict)  # Map: {"PROJ": "backend-api"}
     show_prompt_unit_tests: bool = True  # Show testing instructions in initial prompt for development sessions
     auto_load_related_conversations: bool = False  # Auto-prompt AI agent to read other conversations in multi-project sessions
+    use_issue_key_as_branch: bool = True  # Use issue key as branch name (default: true)
 
     @field_validator('auto_create_pr_status', mode='before')
     @classmethod
