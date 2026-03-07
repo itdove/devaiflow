@@ -46,6 +46,7 @@ NC='\033[0m'  # No Color
 
 # Test counters
 TESTS_PASSED=0
+TESTS_FAILED=0
 TESTS_TOTAL=0
 
 # Function to print section headers
@@ -74,6 +75,7 @@ verify_success() {
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "  ${RED}✗${NC} ${description} FAILED"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
         echo -e "  ${RED}Command:${NC} ${cmd}"
         exit 1
     fi
@@ -658,10 +660,13 @@ fi
 
 # Final summary
 print_section "Test Summary"
-echo -e "${BOLD}Tests Passed:${NC} ${GREEN}${TESTS_PASSED}${NC} / ${TESTS_TOTAL}"
+echo -e "${BOLD}Tests Passed:${NC} ${GREEN}${TESTS_PASSED}${NC}"
+if [ $TESTS_FAILED -gt 0 ]; then
+    echo -e "${BOLD}Tests Failed:${NC} ${RED}${TESTS_FAILED}${NC}"
+fi
 echo ""
 
-if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
+if [ $TESTS_FAILED -eq 0 ]; then
     echo -e "${BOLD}${GREEN}✓ All tests passed!${NC}"
     echo ""
     echo "Successfully tested the complete installation workflow:"
@@ -678,7 +683,7 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo ""
     exit 0
 else
-    echo -e "${BOLD}${RED}✗ Some tests failed${NC}"
+    echo -e "${BOLD}${RED}✗ ${TESTS_FAILED} test(s) failed${NC}"
     echo ""
     exit 1
 fi
