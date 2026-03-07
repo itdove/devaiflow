@@ -576,14 +576,17 @@ print_test "Complete session with auto-close enabled"
 COMPLETE_OUTPUT=$(daf complete "$SESSION_NAME" --no-commit --no-pr 2>&1)
 COMPLETE_EXIT_CODE=$?
 
+# Debug: Show full output for troubleshooting
+echo -e "  ${YELLOW}Debug:${NC} Full completion output:"
+echo "$COMPLETE_OUTPUT" | sed 's/^/    /'
+echo ""
+
 if [ $COMPLETE_EXIT_CODE -eq 0 ]; then
     echo -e "  ${GREEN}✓${NC} Session completed successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${RED}✗${NC} Session completion failed with exit code $COMPLETE_EXIT_CODE"
     echo -e "  ${RED}Command:${NC} daf complete \"$SESSION_NAME\" --no-commit --no-pr"
-    echo -e "  ${RED}Output:${NC}"
-    echo "$COMPLETE_OUTPUT" | sed 's/^/    /'
     exit 1
 fi
 
