@@ -523,6 +523,12 @@ verify_success "gh issue edit --add-assignee" "Issue assigned to $GITHUB_USER"
 
 # Test 9: Sync issue using daf sync
 print_section "Test 9: Sync Issue with daf sync"
+print_test "Wait for GitHub API to index the issue"
+# Small delay to allow GitHub's API to index the newly assigned issue
+sleep 3
+echo -e "  ${GREEN}✓${NC} Waited 3 seconds for GitHub API indexing"
+TESTS_PASSED=$((TESTS_PASSED + 1))
+
 print_test "Sync issues from test repository"
 
 # Change to test repo directory for sync
