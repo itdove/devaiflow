@@ -492,6 +492,8 @@ def sync_multi_backend(
     field_filters: Optional[Dict[str, str]] = None,
     ticket_type: Optional[str] = None,
     epic: Optional[str] = None,
+    workspace_filter: Optional[str] = None,
+    repository_filter: Optional[str] = None,
     output_json: bool = False,
 ) -> None:
     """Sync issues from all configured backends (JIRA + GitHub + GitLab).
@@ -505,6 +507,8 @@ def sync_multi_backend(
         field_filters: JIRA-specific field filters
         ticket_type: JIRA ticket type filter
         epic: JIRA epic filter
+        workspace_filter: Limit sync to specific workspace (name from config)
+        repository_filter: Limit sync to specific repository (format: owner/repo)
         output_json: Output results as JSON
     """
     config_loader = ConfigLoader()
@@ -627,7 +631,22 @@ def sync_multi_backend(
     seen_repos = set()  # Track unique repositories by owner/repo
 
     if config.repos and config.repos.workspaces:
-        for workspace in config.repos.workspaces:
+        workspaces_to_scan = config.repos.workspaces
+
+        # Apply workspace filter if provided
+        if workspace_filter:
+            workspaces_to_scan = [w for w in config.repos.workspaces if w.name == workspace_filter]
+            if not workspaces_to_scan:
+                console_print(f"[yellow]⚠[/yellow] Workspace '{workspace_filter}' not found in configuration")
+                console_print("[dim]Available workspaces:[/dim]")
+                for w in config.repos.workspaces:
+                    console_print(f"  [dim]• {w.name}: {w.path}[/dim]")
+                # Continue with JIRA sync results (if any)
+                if not output_json:
+                    console_print()
+                    console_print("[dim]Use 'daf workspace list' to see all configured workspaces[/dim]")
+
+        for workspace in workspaces_to_scan:
             workspace_path = workspace.path
             console_print(f"[dim]Scanning {workspace_path}...[/dim]")
 
@@ -653,6 +672,20 @@ def sync_multi_backend(
     # Phase 3: Sync GitHub/GitLab issues
     github_repos = [r for r in all_repositories if r['backend'] == 'github']
     gitlab_repos = [r for r in all_repositories if r['backend'] == 'gitlab']
+
+    # Apply repository filter if provided
+    if repository_filter:
+        github_repos = [r for r in github_repos if r['repository'] == repository_filter]
+        gitlab_repos = [r for r in gitlab_repos if r['repository'] == repository_filter]
+
+        # Warning if no repositories match filter
+        if not github_repos and not gitlab_repos and all_repositories:
+            console_print()
+            console_print(f"[yellow]⚠[/yellow] Repository '{repository_filter}' not found in scanned workspaces")
+            console_print("[dim]Discovered repositories:[/dim]")
+            for r in all_repositories:
+                console_print(f"  [dim]• {r['repository']} ({r['backend']})[/dim]")
+            # Continue (JIRA already synced, if configured)
 
     if github_repos:
         console_print()

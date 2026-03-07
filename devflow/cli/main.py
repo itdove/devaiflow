@@ -761,8 +761,10 @@ def active(ctx: click.Context) -> None:
 @click.option("--field", multiple=True, help="Filter by custom field (format: field_name=value, can be specified multiple times)")
 @click.option("--type", "ticket_type", help="Filter by ticket type")
 @click.option("--epic", help="Filter by epic")
+@click.option("-w", "--workspace", help="Limit sync to specific workspace (name from config)")
+@click.option("--repository", "--repo", help="Limit sync to specific repository (format: owner/repo)")
 @json_option
-def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str) -> None:
+def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str, workspace: str, repository: str) -> None:
     """Sync with all configured issue trackers (JIRA, GitHub, GitLab).
 
     Automatically:
@@ -771,6 +773,9 @@ def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str) -> None:
     - Syncs GitHub/GitLab issues assigned to you from detected repos
 
     Creates sessions for issues that don't already have them.
+
+    Use --workspace to limit which workspaces are scanned for repositories.
+    Use --repository to limit which repositories' issues are synced.
     """
     from devflow.cli.commands.sync_command import sync_multi_backend
 
@@ -782,7 +787,14 @@ def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str) -> None:
             field_filters[field_name.strip()] = field_value.strip()
 
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    sync_multi_backend(field_filters=field_filters, ticket_type=ticket_type, epic=epic, output_json=output_json)
+    sync_multi_backend(
+        field_filters=field_filters,
+        ticket_type=ticket_type,
+        epic=epic,
+        workspace_filter=workspace,
+        repository_filter=repository,
+        output_json=output_json
+    )
 
 
 @cli.command()

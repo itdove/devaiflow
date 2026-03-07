@@ -591,3 +591,242 @@ def test_sync_ticket_missing_issue_type(temp_daf_home, mock_jira_cli, capsys):
 # NOTE: JSON output tests require complex mocking of JiraClient that interacts with
 # the full sync flow. The core functionality is tested in the standard sync tests above.
 
+
+def test_sync_multi_backend_with_workspace_filter(temp_daf_home, capsys):
+    """Test sync_multi_backend filters workspaces correctly."""
+    from unittest.mock import patch, MagicMock
+    from click.testing import CliRunner
+    from devflow.cli.commands.sync_command import sync_multi_backend
+    from devflow.config.models import WorkspaceDefinition
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock config with multiple workspaces
+    with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
+        with patch('devflow.cli.commands.sync_command.SessionManager') as mock_session_manager_class:
+            mock_config = MagicMock()
+            mock_config.jira = None  # Skip JIRA sync
+            mock_config.repos.workspaces = [
+                WorkspaceDefinition(name="primary", path="/tmp/primary"),
+                WorkspaceDefinition(name="experiments", path="/tmp/experiments"),
+            ]
+
+            mock_loader = MagicMock()
+            mock_loader.load_config.return_value = mock_config
+            mock_loader_class.return_value = mock_loader
+
+            # Mock SessionManager
+            mock_session_manager = MagicMock()
+            mock_session_manager_class.return_value = mock_session_manager
+
+            # Mock scan_workspace_for_repositories to track which workspaces were scanned
+            scanned_workspaces = []
+            def mock_scan(workspace_path):
+                scanned_workspaces.append(workspace_path)
+                return []
+
+            with patch('devflow.cli.commands.sync_command.scan_workspace_for_repositories', side_effect=mock_scan):
+                # Test filtering to specific workspace
+                sync_multi_backend(workspace_filter="primary")
+
+                # Verify only primary workspace was scanned
+                assert len(scanned_workspaces) == 1
+                assert "/tmp/primary" in scanned_workspaces
+
+
+def test_sync_multi_backend_with_invalid_workspace_filter(temp_daf_home, capsys):
+    """Test sync_multi_backend shows helpful message when workspace not found."""
+    from unittest.mock import patch, MagicMock
+    from click.testing import CliRunner
+    from devflow.cli.commands.sync_command import sync_multi_backend
+    from devflow.config.models import WorkspaceDefinition
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock config with workspaces
+    with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
+        with patch('devflow.cli.commands.sync_command.SessionManager') as mock_session_manager_class:
+            mock_config = MagicMock()
+            mock_config.jira = None  # Skip JIRA sync
+            mock_config.repos.workspaces = [
+                WorkspaceDefinition(name="primary", path="/tmp/primary"),
+                WorkspaceDefinition(name="experiments", path="/tmp/experiments"),
+            ]
+
+            mock_loader = MagicMock()
+            mock_loader.load_config.return_value = mock_config
+            mock_loader_class.return_value = mock_loader
+
+            # Mock SessionManager
+            mock_session_manager = MagicMock()
+            mock_session_manager_class.return_value = mock_session_manager
+
+            # Test filtering to non-existent workspace
+            sync_multi_backend(workspace_filter="nonexistent")
+
+            captured = capsys.readouterr()
+            assert "Workspace 'nonexistent' not found" in captured.out
+            assert "Available workspaces:" in captured.out
+            assert "primary" in captured.out
+            assert "experiments" in captured.out
+
+
+def test_sync_multi_backend_with_repository_filter(temp_daf_home, capsys):
+    """Test sync_multi_backend filters repositories correctly."""
+    from unittest.mock import patch, MagicMock
+    from click.testing import CliRunner
+    from devflow.cli.commands.sync_command import sync_multi_backend
+    from devflow.config.models import WorkspaceDefinition
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock config with workspace
+    with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
+        with patch('devflow.cli.commands.sync_command.SessionManager') as mock_session_manager_class:
+            mock_config = MagicMock()
+            mock_config.jira = None  # Skip JIRA sync
+            mock_config.repos.workspaces = [
+                WorkspaceDefinition(name="primary", path="/tmp/primary"),
+            ]
+
+            mock_loader = MagicMock()
+            mock_loader.load_config.return_value = mock_config
+            mock_loader_class.return_value = mock_loader
+
+            # Mock SessionManager
+            mock_session_manager = MagicMock()
+            mock_session_manager_class.return_value = mock_session_manager
+
+            # Mock scan to return multiple repositories
+            def mock_scan(workspace_path):
+                return [
+                    {'repository': 'owner/repo1', 'backend': 'github', 'path': '/tmp/repo1', 'remote': 'origin', 'url': 'https://github.com/owner/repo1'},
+                    {'repository': 'owner/repo2', 'backend': 'github', 'path': '/tmp/repo2', 'remote': 'origin', 'url': 'https://github.com/owner/repo2'},
+                ]
+
+            # Mock sync_github_repository to track which repos were synced
+            synced_repos = []
+            def mock_sync(repository, *args, **kwargs):
+                synced_repos.append(repository)
+                return {'created_count': 0, 'updated_count': 0}
+
+            with patch('devflow.cli.commands.sync_command.scan_workspace_for_repositories', side_effect=mock_scan):
+                with patch('devflow.cli.commands.sync_command.sync_github_repository', side_effect=mock_sync):
+                    # Test filtering to specific repository
+                    sync_multi_backend(repository_filter="owner/repo1")
+
+                    # Verify only repo1 was synced
+                    assert len(synced_repos) == 1
+                    assert synced_repos[0] == "owner/repo1"
+
+
+def test_sync_multi_backend_with_invalid_repository_filter(temp_daf_home, capsys):
+    """Test sync_multi_backend shows helpful message when repository not found."""
+    from unittest.mock import patch, MagicMock
+    from click.testing import CliRunner
+    from devflow.cli.commands.sync_command import sync_multi_backend
+    from devflow.config.models import WorkspaceDefinition
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock config with workspace
+    with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
+        with patch('devflow.cli.commands.sync_command.SessionManager') as mock_session_manager_class:
+            mock_config = MagicMock()
+            mock_config.jira = None  # Skip JIRA sync
+            mock_config.repos.workspaces = [
+                WorkspaceDefinition(name="primary", path="/tmp/primary"),
+            ]
+
+            mock_loader = MagicMock()
+            mock_loader.load_config.return_value = mock_config
+            mock_loader_class.return_value = mock_loader
+
+            # Mock SessionManager
+            mock_session_manager = MagicMock()
+            mock_session_manager_class.return_value = mock_session_manager
+
+            # Mock scan to return repositories
+            def mock_scan(workspace_path):
+                return [
+                    {'repository': 'owner/repo1', 'backend': 'github', 'path': '/tmp/repo1', 'remote': 'origin', 'url': 'https://github.com/owner/repo1'},
+                    {'repository': 'owner/repo2', 'backend': 'github', 'path': '/tmp/repo2', 'remote': 'origin', 'url': 'https://github.com/owner/repo2'},
+                ]
+
+            with patch('devflow.cli.commands.sync_command.scan_workspace_for_repositories', side_effect=mock_scan):
+                # Test filtering to non-existent repository
+                sync_multi_backend(repository_filter="owner/nonexistent")
+
+                captured = capsys.readouterr()
+                assert "Repository 'owner/nonexistent' not found" in captured.out
+                assert "Discovered repositories:" in captured.out
+                assert "owner/repo1" in captured.out
+                assert "owner/repo2" in captured.out
+
+
+def test_sync_multi_backend_with_workspace_and_repository_filters(temp_daf_home, capsys):
+    """Test sync_multi_backend with both workspace and repository filters."""
+    from unittest.mock import patch, MagicMock
+    from click.testing import CliRunner
+    from devflow.cli.commands.sync_command import sync_multi_backend
+    from devflow.config.models import WorkspaceDefinition
+
+    runner = CliRunner()
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Mock config with multiple workspaces
+    with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
+        with patch('devflow.cli.commands.sync_command.SessionManager') as mock_session_manager_class:
+            mock_config = MagicMock()
+            mock_config.jira = None  # Skip JIRA sync
+            mock_config.repos.workspaces = [
+                WorkspaceDefinition(name="primary", path="/tmp/primary"),
+                WorkspaceDefinition(name="experiments", path="/tmp/experiments"),
+            ]
+
+            mock_loader = MagicMock()
+            mock_loader.load_config.return_value = mock_config
+            mock_loader_class.return_value = mock_loader
+
+            # Mock SessionManager
+            mock_session_manager = MagicMock()
+            mock_session_manager_class.return_value = mock_session_manager
+
+            # Mock scan to return different repos for different workspaces
+            scanned_workspaces = []
+            def mock_scan(workspace_path):
+                scanned_workspaces.append(workspace_path)
+                if workspace_path == "/tmp/primary":
+                    return [
+                        {'repository': 'owner/repo1', 'backend': 'github', 'path': '/tmp/repo1', 'remote': 'origin', 'url': 'https://github.com/owner/repo1'},
+                    ]
+                return []
+
+            # Mock sync_github_repository to track which repos were synced
+            synced_repos = []
+            def mock_sync(repository, *args, **kwargs):
+                synced_repos.append(repository)
+                return {'created_count': 0, 'updated_count': 0}
+
+            with patch('devflow.cli.commands.sync_command.scan_workspace_for_repositories', side_effect=mock_scan):
+                with patch('devflow.cli.commands.sync_command.sync_github_repository', side_effect=mock_sync):
+                    # Test filtering to specific workspace and repository
+                    sync_multi_backend(workspace_filter="primary", repository_filter="owner/repo1")
+
+                    # Verify only primary workspace was scanned
+                    assert len(scanned_workspaces) == 1
+                    assert "/tmp/primary" in scanned_workspaces
+
+                    # Verify only repo1 was synced
+                    assert len(synced_repos) == 1
+                    assert synced_repos[0] == "owner/repo1"
+
