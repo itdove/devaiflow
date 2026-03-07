@@ -523,11 +523,10 @@ verify_success "gh issue edit --add-assignee" "Issue assigned to $GITHUB_USER"
 
 # Test 9: Sync issue using daf sync
 print_section "Test 9: Sync Issue with daf sync"
-print_test "Wait for GitHub API to index the issue"
-# Small delay to allow GitHub's API to index the newly assigned issue
+# Wait for GitHub API to index (not counted as a test)
+echo -e "${YELLOW}→${NC} Waiting 3 seconds for GitHub API indexing..."
 sleep 3
-echo -e "  ${GREEN}✓${NC} Waited 3 seconds for GitHub API indexing"
-TESTS_PASSED=$((TESTS_PASSED + 1))
+echo -e "  ${GREEN}✓${NC} Waited 3 seconds"
 
 print_test "Sync issues from test repository"
 
@@ -559,13 +558,13 @@ echo -e "  ${GREEN}✓${NC} Session name: ${BOLD}$SESSION_NAME${NC}"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Debug: Verify session was created
-print_test "Verify session exists in DEVAIFLOW_HOME"
-echo -e "  ${YELLOW}Debug:${NC} DEVAIFLOW_HOME=$DEVAIFLOW_HOME"
-echo -e "  ${YELLOW}Debug:${NC} Listing sessions:"
+# Debug: Show session information (not counted as a test)
+echo -e "${YELLOW}Debug:${NC} DEVAIFLOW_HOME=$DEVAIFLOW_HOME"
+echo -e "${YELLOW}Debug:${NC} Listing sessions:"
 daf list 2>&1 | sed 's/^/    /'
-echo -e "  ${YELLOW}Debug:${NC} Session directory contents:"
+echo -e "${YELLOW}Debug:${NC} Session directory contents:"
 ls -la "$DEVAIFLOW_HOME/" 2>&1 | sed 's/^/    /'
-TESTS_PASSED=$((TESTS_PASSED + 1))
+echo ""
 
 # Test 10: Verify issue is open
 print_section "Test 10: Verify Issue Status Before Complete"
