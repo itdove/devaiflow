@@ -4607,6 +4607,114 @@ Discovering JIRA custom fields for project PROJ...
 
 ---
 
+### daf config export - Export Configuration for Team Onboarding
+
+Export all configuration files to a tar.gz archive for sharing with teammates.
+
+```bash
+daf config export [--output PATH] [--force]
+```
+
+**Options:**
+- `-o, --output PATH` - Output file path (default: `~/config-export.tar.gz`)
+- `-f, --force` - Skip confirmation prompts
+
+**What it exports:**
+- `config.json` - User preferences
+- `enterprise.json` - Enterprise settings
+- `organization.json` - Organization settings
+- `team.json` - Team defaults
+- `backends/jira.json` - JIRA backend configuration
+
+**What it does:**
+1. Scans for local paths that won't work on other machines
+2. Displays warnings about `file://` URLs and absolute workspace paths
+3. Suggests converting to GitHub/GitLab URLs
+4. Creates tar.gz archive with all config files
+5. Includes metadata with warnings and suggestions
+
+**Examples:**
+```bash
+# Export with default path
+daf config export
+
+# Export to specific location
+daf config export --output /tmp/team-config.tar.gz
+
+# Skip confirmation prompts (for automation)
+daf config export --force
+```
+
+**Security:**
+- API tokens (JIRA_API_TOKEN, GITHUB_TOKEN) are NOT exported
+- Only configuration files are included (no secrets)
+
+**When to use:**
+- Onboarding new team members
+- Sharing organization/team standards
+- Creating backup of configuration
+
+---
+
+### daf config import - Import Configuration from Export
+
+Import configuration files from an export archive.
+
+```bash
+daf config import EXPORT_FILE [--merge|--replace] [--force]
+```
+
+**Options:**
+- `--merge` - Merge with existing config, preserving workspace paths (default)
+- `--replace` - Replace existing config entirely
+- `-f, --force` - Skip confirmation prompts
+
+**Import modes:**
+
+**Merge mode (default):**
+- Imports organization policies and field mappings
+- Preserves your local workspace paths
+- Deep merges JSON objects
+
+**Replace mode:**
+- Replaces all configuration files
+- Use for fresh setup or complete reset
+
+**What it does:**
+1. Validates export file
+2. Shows preview of what will be imported
+3. Prompts for confirmation
+4. Imports configuration files
+5. Suggests running `daf upgrade` to install skills
+
+**Examples:**
+```bash
+# Import and merge (preserves workspace paths)
+daf config import config-export.tar.gz
+
+# Import and replace everything
+daf config import config-export.tar.gz --replace
+
+# Skip confirmation prompts
+daf config import config-export.tar.gz --force
+
+# After import, install skills
+daf upgrade
+```
+
+**Typical onboarding workflow:**
+1. Team member exports: `daf config export --output team-config.tar.gz`
+2. New user imports: `daf config import team-config.tar.gz`
+3. New user adjusts workspace paths: `daf config tui`
+4. New user installs skills: `daf upgrade`
+
+**When to use:**
+- Onboarding to a new project
+- Restoring configuration
+- Syncing team settings
+
+---
+
 ### Essential Commands (Daily Use)
 
 ```bash
@@ -4739,6 +4847,100 @@ vi $DEVAIFLOW_HOME/config.json
 | Transition On Start | JIRA Transitions → On Start | `.jira.transitions.on_start` | JiraTransitionConfig object |
 | Transition On Complete | JIRA Transitions → On Complete | `.jira.transitions.on_complete` | JiraTransitionConfig object |
 | Prompts | Prompts → Various | `.prompts.*` | Multiple fields |
+
+### Configuration Export and Import
+
+For user onboarding and team collaboration, DevAIFlow provides commands to export and import configuration files.
+
+#### daf config export - Export Configuration
+
+Export all configuration files to a tar.gz archive for sharing with teammates.
+
+```bash
+daf config export [OPTIONS]
+```
+
+**Options:**
+- `-o, --output PATH` - Output file path (default: `~/config-export.tar.gz`)
+- `-f, --force` - Skip confirmation prompts
+
+**What it exports:**
+- `config.json` - User preferences
+- `enterprise.json` - Enterprise settings
+- `organization.json` - Organization settings
+- `team.json` - Team defaults
+- `backends/jira.json` - JIRA backend configuration
+
+**What it scans for:**
+- Absolute workspace paths (e.g., `/Users/alice/development`)
+- `file://` URLs in `context_files`, `pr_template_url`, `hierarchical_config_source`
+- Displays warnings with suggestions to convert to GitHub/GitLab URLs
+
+**Examples:**
+```bash
+# Export with default path
+daf config export
+
+# Export to specific location
+daf config export --output /tmp/team-config.tar.gz
+
+# Skip confirmation prompts (for automation)
+daf config export --force
+```
+
+**Important Notes:**
+- API tokens (JIRA_API_TOKEN, GITHUB_TOKEN) are NOT exported (they're in environment variables)
+- Warns about local paths that won't work on other machines
+- Suggests converting `file://` URLs to repository URLs
+
+#### daf config import - Import Configuration
+
+Import configuration from an export archive.
+
+```bash
+daf config import EXPORT_FILE [OPTIONS]
+```
+
+**Options:**
+- `--merge` - Merge with existing config, preserving workspace paths (default)
+- `--replace` - Replace existing config entirely
+- `-f, --force` - Skip confirmation prompts
+
+**Import modes:**
+
+**Merge mode (default):**
+- Imports organization policies and field mappings
+- Preserves your local workspace paths
+- Merges with existing configuration
+
+**Replace mode:**
+- Replaces all configuration files
+- Use for fresh setup or complete reset
+
+**Examples:**
+```bash
+# Import and merge (preserves workspace paths)
+daf config import config-export.tar.gz
+
+# Import and replace everything
+daf config import config-export.tar.gz --replace
+
+# Skip confirmation prompts
+daf config import config-export.tar.gz --force
+```
+
+**After importing:**
+```bash
+# Install skills and update field mappings
+daf upgrade
+```
+
+**Typical onboarding workflow:**
+1. Team member exports their config: `daf config export --output team-config.tar.gz`
+2. New user receives the archive
+3. New user imports: `daf config import team-config.tar.gz`
+4. New user adjusts workspace paths if needed: `daf config tui`
+5. New user installs skills: `daf upgrade`
 
 ### Configuration Examples
 

@@ -2336,6 +2336,57 @@ def config_generate_schema(ctx: click.Context, output: str) -> None:
         raise click.exceptions.Exit(1)
 
 
+@config.command(name="export")
+@click.option("--output", "-o", help="Output file path (default: ~/config-export.tar.gz)")
+@click.option("--force", "-f", is_flag=True, help="Skip confirmation prompts")
+def config_export(output: str, force: bool) -> None:
+    """Export configuration files for user onboarding.
+
+    Exports all configuration files (config.json, organization.json, team.json,
+    enterprise.json, backends/jira.json) to a tar.gz archive that can be shared
+    with teammates for quick onboarding.
+
+    The export command will:
+    - Scan for local file paths that won't work on other machines
+    - Display warnings about file:// URLs and absolute paths
+    - Suggest converting to GitHub/GitLab URLs
+    - Ask for confirmation before exporting
+
+    Example:
+        daf config export
+        daf config export --output /tmp/my-config.tar.gz
+        daf config export --force  # Skip confirmation
+    """
+    from devflow.cli.commands.config_export_command import export_config
+    export_config(output=output, force=force)
+
+
+@config.command(name="import")
+@click.argument("export_file", type=click.Path(exists=True))
+@click.option("--merge", is_flag=True, default=True, help="Merge with existing config (default)")
+@click.option("--replace", is_flag=True, help="Replace existing config entirely")
+@click.option("--force", "-f", is_flag=True, help="Skip confirmation prompts")
+def config_import(export_file: str, merge: bool, replace: bool, force: bool) -> None:
+    """Import configuration from export file.
+
+    Imports configuration files from a tar.gz archive created by 'daf config export'.
+
+    Import modes:
+    - --merge (default): Merge with existing config, preserving workspace paths
+    - --replace: Replace existing config entirely
+
+    After importing, you should run 'daf upgrade' to install skills and update
+    field mappings.
+
+    Example:
+        daf config import config-export.tar.gz
+        daf config import config-export.tar.gz --replace
+        daf config import config-export.tar.gz --force  # Skip confirmation
+    """
+    from devflow.cli.commands.config_import_command import import_config
+    import_config(export_file=export_file, merge=merge, replace=replace, force=force)
+
+
 @cli.group()
 @json_option
 def template(ctx: click.Context) -> None:
