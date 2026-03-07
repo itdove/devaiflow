@@ -163,11 +163,11 @@ def transition_on_complete(session: Session, config: Config, client: Optional[Gi
         # Determine if we should close the issue
         should_close = False
 
-        # Check if auto_close is configured
-        if config.github and hasattr(config.github, 'auto_close_on_complete'):
-            should_close = config.github.auto_close_on_complete
-            if should_close:
-                console.print("[dim]Automatically closing issue (configured in config.github.auto_close_on_complete)[/dim]")
+        # Check if auto_close is explicitly enabled (True)
+        # Only auto-close when explicitly set to True, otherwise prompt
+        if config.github and getattr(config.github, 'auto_close_on_complete', False) is True:
+            should_close = True
+            console.print("[dim]Automatically closing issue (configured in config.github.auto_close_on_complete)[/dim]")
         else:
             # Prompt user only if issue is currently open
             if current_state == 'open':
