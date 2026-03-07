@@ -1046,14 +1046,14 @@ daf config edit
 **Required:** No
 **Default:** 10
 **Range:** 1-60 seconds
-**Description:** Timeout in seconds for checking GitLab for new version releases
+**Description:** Timeout in seconds for checking PyPI for new version releases
 
-The update checker runs automatically before each command to notify you of new versions. This setting controls how long to wait for the GitLab API to respond before timing out.
+The update checker runs automatically before each command to notify you of new versions. This setting controls how long to wait for the PyPI API to respond before timing out.
 
 **Use Cases:**
 - **Slow network connections:** Increase timeout to 15-30 seconds to prevent false "VPN not connected" warnings
 - **Fast network connections:** Reduce timeout to 5 seconds for quicker command execution
-- **VPN/corporate networks:** Adjust based on your network latency to GitLab
+- **VPN/corporate networks:** Adjust based on your network latency to PyPI
 
 **Configuration via TUI:**
 1. Run `daf config tui`

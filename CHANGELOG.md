@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Run `daf upgrade` to migrate to the new structure
 - Renamed command files to skill directories (e.g., `daf-help.md` → `daf-help/SKILL.md`)
 - Simplified upgrade command to install all skills globally in one operation
+- Update checker now uses PyPI JSON API instead of GitLab/GitHub releases API (AAP-65842)
+  - Follows standard Python package conventions
+  - Works regardless of Git hosting platform
+  - Maintains 24-hour cache behavior
+  - Preserves non-intrusive notification banner
+  - Development installation detection unchanged
 
 ### Improved
 - Enhanced `daf init` wizard with better user guidance and explanations

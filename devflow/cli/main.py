@@ -229,7 +229,7 @@ def _check_for_updates() -> None:
         latest_version, network_error = check_for_updates()
 
         if network_error:
-            # GitHub unreachable - network connectivity issue
+            # PyPI unreachable - network connectivity issue
             show_network_warning()
         elif latest_version:
             # Update available
