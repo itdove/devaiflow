@@ -323,6 +323,19 @@ def create_git_issue_session(
     # Set session_type to "ticket_creation"
     session.session_type = "ticket_creation"
 
+    # Set issue tracker backend (github or gitlab)
+    # Detect from repository remote URL
+    from devflow.utils.git_remote import GitRemoteDetector
+    detector = GitRemoteDetector(project_path)
+    repo_info = detector.parse_repository_info()
+
+    if repo_info:
+        backend = repo_info[0]  # 'github' or 'gitlab'
+        session.issue_tracker = backend
+    else:
+        # Fallback to github if can't detect
+        session.issue_tracker = "github"
+
     # Store selected workspace in session
     if selected_workspace_name:
         session.workspace_name = selected_workspace_name
