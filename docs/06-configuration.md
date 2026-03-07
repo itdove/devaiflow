@@ -1479,12 +1479,17 @@ This setting controls whether to accept that AI-generated message automatically 
 **Required:** No
 **Default:** null (prompt each time)
 **Used by:** `daf complete`
-**Description:** Automatically add session summary as a JIRA comment when completing
+**Description:** Automatically add session summary to issue tracker when completing (works for JIRA, GitHub, and GitLab)
 
 **Values:**
 - `true` - Always add summary without asking
 - `false` - Never add summary, skip the prompt
 - `null` - Ask each time (default)
+
+**Backend Support:**
+- **JIRA**: Adds summary as a comment to the JIRA ticket
+- **GitHub**: Adds summary as a comment to the GitHub issue
+- **GitLab**: Adds summary as a comment to the GitLab issue
 
 **Example:**
 ```json
@@ -1501,12 +1506,19 @@ This setting controls whether to accept that AI-generated message automatically 
 **Required:** No
 **Default:** null (prompt each time)
 **Used by:** `daf complete`
-**Description:** Automatically update JIRA ticket with PR URL when PR is created
+**Description:** Automatically update issue tracker with PR/MR URL when created (works for JIRA, GitHub, and GitLab)
+
+**Note:** Despite the parameter name containing "jira", this setting is backend-agnostic and works for all issue trackers.
 
 **Values:**
-- `true` - Always update JIRA ticket with PR URL without asking
-- `false` - Never update JIRA ticket, skip the prompt
+- `true` - Always update issue tracker with PR/MR URL without asking
+- `false` - Never update issue tracker, skip the prompt
 - `null` - Ask each time (default)
+
+**Backend Support:**
+- **JIRA**: Updates the Git Pull Request custom field with the PR/MR URL
+- **GitHub**: Adds a comment to the issue with the PR URL
+- **GitLab**: Adds a comment to the issue with the MR URL
 
 **Example:**
 ```json

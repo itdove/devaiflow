@@ -1262,7 +1262,7 @@ class Session(BaseModel):
   - Added prompts configuration section in config
   - auto_commit_on_complete: Skip commit prompt during completion
   - auto_accept_ai_commit_message: Auto-accept AI-generated commit messages
-  - auto_add_issue_summary: Auto-add session summary to JIRA
+  - auto_add_issue_summary: Auto-add session summary to issue tracker (JIRA/GitHub/GitLab)
   - auto_create_pr_on_complete: Auto-create PR/MR on completion
   - Reduces repetitive prompts for power users
   - Documentation added to dodevflow/06-configuration.md

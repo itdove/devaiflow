@@ -1330,10 +1330,10 @@ class ConfigTUI(App):
                 f"'{self.config.jira.comment_visibility_value or 'not set'}'[/dim]"
             )
 
-            yield Static("[bold]JIRA Workflow Prompts[/bold]", classes="subsection-title")
+            yield Static("[bold]Issue Tracker Workflow Prompts[/bold]", classes="subsection-title")
 
             yield ConfigSelect(
-                "Auto-add JIRA summary",
+                "Auto-add issue summary",
                 "prompts.auto_add_issue_summary",
                 choices=[
                     ("Always add summary", "true"),
@@ -1341,12 +1341,12 @@ class ConfigTUI(App):
                     ("Prompt each time", "prompt"),
                 ],
                 value=_bool_to_choice(self.config.prompts.auto_add_issue_summary),
-                help_text="Automatically add session summary to JIRA when completing",
+                help_text="Automatically add session summary to issue tracker when completing (JIRA, GitHub, GitLab)",
                 allow_blank=False,
             )
 
             yield ConfigSelect(
-                "Auto-update JIRA with PR URL",
+                "Auto-update issue with PR/MR URL",
                 "prompts.auto_update_jira_pr_url",
                 choices=[
                     ("Always update", "true"),
@@ -1354,7 +1354,7 @@ class ConfigTUI(App):
                     ("Prompt each time", "prompt"),
                 ],
                 value=_bool_to_choice(self.config.prompts.auto_update_jira_pr_url),
-                help_text="Automatically update issue tracker ticket with PR URL when PR is created",
+                help_text="Automatically update issue tracker with PR/MR URL when created (JIRA, GitHub, GitLab)",
                 allow_blank=False,
             )
 
