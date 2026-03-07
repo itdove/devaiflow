@@ -233,7 +233,8 @@ For complete documentation, refer to DAF_AGENTS.md.
 
 **Commands ALLOWED inside Claude Code** (read-only or specifically designed for use inside sessions):
 - Query commands: `daf active`, `daf status`, `daf list`, `daf info`
-- Read-only JIRA: `daf jira view`, `daf jira create`, `daf jira update` (API operations only)
+- JIRA operations: `daf jira view`, `daf jira create`, `daf jira update`, `daf jira add-comment` (API operations only)
+- GitHub/GitLab operations: `daf git view`, `daf git create`, `daf git update`, `daf git add-comment` (API operations only)
 - Session notes: `daf notes` (view notes)
 - Configuration: `daf config show`
 - Templates: `daf template list`, `daf template show`
