@@ -165,9 +165,34 @@ def download_skill(skill_url: str, config_file_path: Optional[Path] = None) -> s
 
         # Download content
         try:
-            response = requests.get(raw_url, timeout=10)
+            from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
+            ssl_verify = get_ssl_verify_setting()
+            timeout = get_request_timeout()
+
+            response = requests.get(raw_url, timeout=timeout, verify=ssl_verify)
             response.raise_for_status()
             return response.text
+        except requests.exceptions.SSLError as e:
+            # SSL certificate verification failed - provide helpful guidance
+            error_msg = (
+                f"SSL certificate verification failed for {raw_url}\n"
+                f"Error: {e}\n\n"
+                f"Solutions:\n"
+                f"  1. Use custom CA bundle (RECOMMENDED for production):\n"
+                f"     export DAF_SSL_VERIFY=/path/to/ca-bundle.crt\n"
+                f"     daf upgrade\n\n"
+                f"  2. Disable SSL verification (INSECURE - testing only):\n"
+                f"     export DAF_SSL_VERIFY=false\n"
+                f"     daf upgrade\n\n"
+                f"  3. Configure permanently in organization.json:\n"
+                f"     {{\n"
+                f"       \"http_client\": {{\n"
+                f"         \"ssl_verify\": \"/path/to/ca-bundle.crt\"\n"
+                f"       }}\n"
+                f"     }}\n\n"
+                f"See docs/ssl-configuration.md for more information."
+            )
+            raise ValueError(error_msg)
         except requests.RequestException as e:
             raise ValueError(f"Failed to download skill from {raw_url}: {e}")
 
@@ -271,9 +296,34 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
 
         # Download content
         try:
-            response = requests.get(raw_url, timeout=10)
+            from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
+            ssl_verify = get_ssl_verify_setting()
+            timeout = get_request_timeout()
+
+            response = requests.get(raw_url, timeout=timeout, verify=ssl_verify)
             response.raise_for_status()
             return response.text
+        except requests.exceptions.SSLError as e:
+            # SSL certificate verification failed - provide helpful guidance
+            error_msg = (
+                f"SSL certificate verification failed for {raw_url}\n"
+                f"Error: {e}\n\n"
+                f"Solutions:\n"
+                f"  1. Use custom CA bundle (RECOMMENDED for production):\n"
+                f"     export DAF_SSL_VERIFY=/path/to/ca-bundle.crt\n"
+                f"     daf upgrade\n\n"
+                f"  2. Disable SSL verification (INSECURE - testing only):\n"
+                f"     export DAF_SSL_VERIFY=false\n"
+                f"     daf upgrade\n\n"
+                f"  3. Configure permanently in organization.json:\n"
+                f"     {{\n"
+                f"       \"http_client\": {{\n"
+                f"         \"ssl_verify\": \"/path/to/ca-bundle.crt\"\n"
+                f"       }}\n"
+                f"     }}\n\n"
+                f"See docs/ssl-configuration.md for more information."
+            )
+            raise ValueError(error_msg)
         except requests.RequestException as e:
             raise ValueError(f"Failed to download config file from {raw_url}: {e}")
 

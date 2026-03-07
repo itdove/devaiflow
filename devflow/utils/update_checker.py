@@ -168,8 +168,11 @@ def _fetch_latest_version_from_pypi(timeout: int = 10) -> Tuple[Optional[str], b
     api_url = "https://pypi.org/pypi/devaiflow/json"
 
     try:
-        # Make request with configurable timeout
-        response = requests.get(api_url, timeout=timeout)
+        from devflow.utils.ssl_helper import get_ssl_verify_setting
+        ssl_verify = get_ssl_verify_setting()
+
+        # Make request with configurable timeout and SSL verification
+        response = requests.get(api_url, timeout=timeout, verify=ssl_verify)
 
         if response.status_code != 200:
             return None, False

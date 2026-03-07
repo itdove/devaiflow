@@ -1255,7 +1255,11 @@ def _fetch_github_with_api(owner: str, repo: str, file_path: str, branch: str) -
             'User-Agent': 'devaiflow'
         }
 
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+        from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
+        ssl_verify = get_ssl_verify_setting()
+        timeout = get_request_timeout()
+
+        response = requests.get(url, params=params, headers=headers, timeout=timeout, verify=ssl_verify)
 
         if response.status_code == 200:
             data = response.json()
@@ -1288,11 +1292,15 @@ def _fetch_github_raw(owner: str, repo: str, file_path: str, branch: str) -> Opt
     """
     try:
         import requests
+        from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
 
         url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}"
         headers = {'User-Agent': 'devaiflow'}
 
-        response = requests.get(url, headers=headers, timeout=10)
+        ssl_verify = get_ssl_verify_setting()
+        timeout = get_request_timeout()
+
+        response = requests.get(url, headers=headers, timeout=timeout, verify=ssl_verify)
 
         if response.status_code == 200:
             return response.text

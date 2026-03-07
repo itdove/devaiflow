@@ -227,8 +227,12 @@ def _fetch_goal_from_url(url: str) -> str:
         click.ClickException: If URL fetch fails or times out
     """
     try:
-        # Fetch URL with 10 second timeout
-        response = requests.get(url, timeout=10)
+        from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
+        ssl_verify = get_ssl_verify_setting()
+        timeout = get_request_timeout()
+
+        # Fetch URL with configurable timeout and SSL verification
+        response = requests.get(url, timeout=timeout, verify=ssl_verify)
 
         # Check for HTTP errors
         if response.status_code != 200:

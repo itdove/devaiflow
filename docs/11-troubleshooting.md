@@ -994,6 +994,105 @@ daf config tui ~/development/workspace
    daf new --name "test" --goal "..." --path /full/path/to/project
    ```
 
+## SSL Certificate Verification Issues
+
+### SSL Certificate Verification Failed
+
+**Problem:** Error when downloading hierarchical config files or accessing JIRA:
+
+```
+SSL certificate verification failed for https://gitlab.internal.company.com/.../ENTERPRISE.md
+Error: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+       self-signed certificate in certificate chain
+```
+
+**Cause:** Internal certificate authority (CA) not trusted by Python's requests library.
+
+**When This Happens:**
+- Downloading hierarchical config files from internal GitLab/GitHub
+- Connecting to JIRA instances with self-signed certificates
+- Behind corporate proxies with SSL inspection
+- Using internal services with custom CA certificates
+
+**Solutions:**
+
+DevAIFlow now provides **helpful error messages** with three solutions when SSL errors occur:
+
+**1. Use Custom CA Bundle (RECOMMENDED for production):**
+
+Find your organization's CA certificate:
+```bash
+# Red Hat/CentOS - Use the system CA bundle
+export DAF_SSL_VERIFY=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+daf upgrade
+
+# Or use a specific internal CA
+export DAF_SSL_VERIFY=/etc/pki/ca-trust/source/anchors/company-ca.crt
+daf upgrade
+
+# Debian/Ubuntu
+export DAF_SSL_VERIFY=/etc/ssl/certs/ca-certificates.crt
+daf upgrade
+
+# macOS
+export DAF_SSL_VERIFY=/etc/ssl/cert.pem
+daf upgrade
+```
+
+**2. Configure Permanently (organization.json):**
+```json
+{
+  "hierarchical_config_source": "https://gitlab.internal.company.com/org/devaiflow-config/configs",
+  "http_client": {
+    "ssl_verify": "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+    "timeout": 30
+  }
+}
+```
+
+**3. Disable SSL Verification (INSECURE - testing only):**
+```bash
+export DAF_SSL_VERIFY=false
+daf upgrade
+```
+
+⚠️ **Security Warning:** Only use `DAF_SSL_VERIFY=false` for:
+- Local development with self-signed certificates
+- Isolated testing environments
+- Temporary troubleshooting (then fix the root cause)
+
+**Never use in production** - it exposes you to man-in-the-middle attacks!
+
+**See Full Documentation:**
+- Comprehensive guide: `docs/ssl-configuration.md`
+- Environment variables, configuration options, examples
+
+### urllib3 InsecureRequestWarning
+
+**Problem:** Seeing warnings when using `DAF_SSL_VERIFY=false`:
+
+```
+InsecureRequestWarning: Unverified HTTPS request is being made to host 'gitlab.cee.redhat.com'.
+Adding certificate verification is strongly advised.
+```
+
+**Cause:** This is **expected and intentional** when SSL verification is disabled.
+
+**Solutions:**
+
+1. **Switch to CA bundle (recommended):**
+   ```bash
+   export DAF_SSL_VERIFY=/path/to/ca-bundle.crt
+   ```
+
+2. **Suppress warnings (not recommended):**
+   ```bash
+   export PYTHONWARNINGS="ignore:Unverified HTTPS request"
+   export DAF_SSL_VERIFY=false
+   ```
+
+The warnings are there to remind you that SSL verification is disabled (insecure).
+
 ## PR/MR Template Issues
 
 ### Could Not Fetch Template from GitHub

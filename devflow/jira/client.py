@@ -318,11 +318,15 @@ class JiraClient(IssueTrackerClient):
             console.print()
 
         try:
+            from devflow.utils.ssl_helper import get_ssl_verify_setting
+            ssl_verify = get_ssl_verify_setting()
+
             response = requests.request(
                 method=method,
                 url=url,
                 headers=headers,
                 timeout=timeout,
+                verify=ssl_verify,
                 **kwargs
             )
 
@@ -730,11 +734,15 @@ class JiraClient(IssueTrackerClient):
             with open(file_path, 'rb') as f:
                 files = {'file': f}
                 try:
+                    from devflow.utils.ssl_helper import get_ssl_verify_setting
+                    ssl_verify = get_ssl_verify_setting()
+
                     response = requests.post(
                         url,
                         headers=headers,
                         files=files,
-                        timeout=60  # Longer timeout for file uploads
+                        timeout=60,  # Longer timeout for file uploads
+                        verify=ssl_verify
                     )
                 except requests.exceptions.RequestException as e:
                     raise JiraConnectionError(f"JIRA API request failed: {e}")
