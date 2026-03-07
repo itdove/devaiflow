@@ -549,6 +549,15 @@ SESSION_NAME=$(echo "$DAF_TEST_GITHUB_REPO" | sed 's/\//-/g')-${ISSUE_NUMBER}
 echo -e "  ${GREEN}✓${NC} Session name: ${BOLD}$SESSION_NAME${NC}"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
+# Debug: Verify session was created
+print_test "Verify session exists in DEVAIFLOW_HOME"
+echo -e "  ${YELLOW}Debug:${NC} DEVAIFLOW_HOME=$DEVAIFLOW_HOME"
+echo -e "  ${YELLOW}Debug:${NC} Listing sessions:"
+daf list 2>&1 | sed 's/^/    /'
+echo -e "  ${YELLOW}Debug:${NC} Session directory contents:"
+ls -la "$DEVAIFLOW_HOME/" 2>&1 | sed 's/^/    /'
+TESTS_PASSED=$((TESTS_PASSED + 1))
+
 # Test 10: Verify issue is open
 print_section "Test 10: Verify Issue Status Before Complete"
 print_test "Verify issue is currently open"
