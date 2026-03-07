@@ -1,6 +1,6 @@
 """Update checker for DevAIFlow.
 
-Checks GitHub releases for new versions and caches results to avoid slowing down commands.
+Checks PyPI for new versions and caches results to avoid slowing down commands.
 Only checks when installed via pip (not in development/editable mode).
 """
 
@@ -153,8 +153,8 @@ def _get_timeout_from_config() -> int:
         return 10
 
 
-def _fetch_latest_version_from_github(timeout: int = 10) -> Tuple[Optional[str], bool]:
-    """Fetch latest release version from GitHub releases API.
+def _fetch_latest_version_from_pypi(timeout: int = 10) -> Tuple[Optional[str], bool]:
+    """Fetch latest release version from PyPI JSON API.
 
     Args:
         timeout: Request timeout in seconds (default: 10)
@@ -164,12 +164,8 @@ def _fetch_latest_version_from_github(timeout: int = 10) -> Tuple[Optional[str],
             - version_string: Latest version (e.g., "1.0.0") or None if fetch failed
             - network_error: True if error was network-related (connectivity), False otherwise
     """
-    # GitHub API details
-    github_api = "api.github.com"
-    repo_path = "itdove/devaiflow"
-
-    # GitHub API endpoint for latest release
-    api_url = f"https://{github_api}/repos/{repo_path}/releases/latest"
+    # PyPI JSON API endpoint for package info
+    api_url = "https://pypi.org/pypi/devaiflow/json"
 
     try:
         # Make request with configurable timeout
@@ -178,19 +174,20 @@ def _fetch_latest_version_from_github(timeout: int = 10) -> Tuple[Optional[str],
         if response.status_code != 200:
             return None, False
 
-        release = response.json()
+        package_data = response.json()
 
-        if not release or not isinstance(release, dict):
+        if not package_data or not isinstance(package_data, dict):
             return None, False
 
-        # Extract tag name (should be like "v1.0.0")
-        tag_name = release.get("tag_name", "")
+        # Extract version from PyPI response
+        # PyPI response structure: {"info": {"version": "1.0.0"}, "releases": {...}}
+        info = package_data.get("info", {})
+        if not isinstance(info, dict):
+            return None, False
 
-        # Remove "v" prefix if present
-        if tag_name.startswith("v"):
-            tag_name = tag_name[1:]
+        version = info.get("version", "")
 
-        return (tag_name if tag_name else None), False
+        return (version if version else None), False
 
     except requests.ConnectionError:
         # Connection error - actual network connectivity issue
@@ -210,13 +207,13 @@ def check_for_updates() -> Tuple[Optional[str], bool]:
     This function:
     1. Skips check if installed in development mode
     2. Uses cached result if available and fresh (< 24 hours old)
-    3. Fetches latest version from GitHub releases API
+    3. Fetches latest version from PyPI JSON API
     4. Caches the result for future checks
 
     Returns:
         Tuple of (latest_version, network_error):
             - latest_version: Latest version string if update available, None otherwise
-            - network_error: True if GitHub was unreachable (network issue), False otherwise
+            - network_error: True if PyPI was unreachable (network issue), False otherwise
     """
     # Skip check in development mode
     if _is_development_install():
@@ -238,8 +235,8 @@ def check_for_updates() -> Tuple[Optional[str], bool]:
     # Load timeout from config (default: 10 seconds)
     timeout = _get_timeout_from_config()
 
-    # Fetch latest version from GitHub
-    latest_version, network_error = _fetch_latest_version_from_github(timeout=timeout)
+    # Fetch latest version from PyPI
+    latest_version, network_error = _fetch_latest_version_from_pypi(timeout=timeout)
 
     # If network error (connectivity issue), don't cache and return error flag
     if network_error:
@@ -282,11 +279,11 @@ def show_update_notification(latest_version: str) -> None:
 
 
 def show_network_warning() -> None:
-    """Display warning when GitHub is unreachable (network connectivity issue)."""
+    """Display warning when PyPI is unreachable (network connectivity issue)."""
     from rich.console import Console
 
     console = Console()
     console.print()
-    console.print(f"[yellow]⚠️  Unable to check for updates - GitHub not reachable[/yellow]")
+    console.print(f"[yellow]⚠️  Unable to check for updates - PyPI not reachable[/yellow]")
     console.print(f"[dim]   (Check network connectivity to check for new versions)[/dim]")
     console.print()

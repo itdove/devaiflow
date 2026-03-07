@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from devflow.utils.update_checker import (
-    _fetch_latest_version_from_github,
+    _fetch_latest_version_from_pypi,
     _get_cache_file,
     _get_timeout_from_config,
     _is_cache_valid,
@@ -134,121 +134,124 @@ def test_is_cache_valid_empty_cache():
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_success(mock_get):
-    """Test successfully fetching latest version from GitHub."""
-    # Mock successful API response (GitHub /releases/latest returns a single dict)
+def test_fetch_latest_version_from_pypi_success(mock_get):
+    """Test successfully fetching latest version from PyPI."""
+    # Mock successful API response (PyPI JSON API returns package info)
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "tag_name": "v1.0.0",
-        "name": "Release 1.0.0"
+        "info": {
+            "version": "1.0.0",
+            "name": "devaiflow"
+        }
     }
     mock_get.return_value = mock_response
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version == "1.0.0"
     assert network_error is False
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_no_v_prefix(mock_get):
-    """Test fetching version without v prefix."""
+def test_fetch_latest_version_from_pypi_no_v_prefix(mock_get):
+    """Test fetching version without v prefix from PyPI."""
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "tag_name": "1.0.0",
-        "name": "Release 1.0.0"
+        "info": {
+            "version": "1.0.0"
+        }
     }
     mock_get.return_value = mock_response
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version == "1.0.0"
     assert network_error is False
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_api_error(mock_get):
+def test_fetch_latest_version_from_pypi_api_error(mock_get):
     """Test handling API errors."""
     mock_response = Mock()
     mock_response.status_code = 404
     mock_get.return_value = mock_response
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_connection_error(mock_get):
+def test_fetch_latest_version_from_pypi_connection_error(mock_get):
     """Test handling connection errors (actual network issue)."""
     import requests
     mock_get.side_effect = requests.ConnectionError("Connection refused")
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is True
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_timeout_error(mock_get):
+def test_fetch_latest_version_from_pypi_timeout_error(mock_get):
     """Test handling timeout errors (NOT a network issue)."""
     import requests
     mock_get.side_effect = requests.Timeout("Request timed out")
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False  # Timeout is NOT treated as network issue
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_http_error(mock_get):
+def test_fetch_latest_version_from_pypi_http_error(mock_get):
     """Test handling HTTP errors (NOT a network issue)."""
     import requests
     mock_get.side_effect = requests.HTTPError("500 Server Error")
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False  # HTTP error is NOT treated as network issue
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_too_many_redirects(mock_get):
+def test_fetch_latest_version_from_pypi_too_many_redirects(mock_get):
     """Test handling too many redirects error (NOT a network issue)."""
     import requests
     mock_get.side_effect = requests.TooManyRedirects("Too many redirects")
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False  # Redirects error is NOT treated as network issue
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_generic_request_exception(mock_get):
+def test_fetch_latest_version_from_pypi_generic_request_exception(mock_get):
     """Test handling generic RequestException (NOT a network issue)."""
     import requests
     mock_get.side_effect = requests.RequestException("Generic request error")
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False  # Generic RequestException is NOT treated as network issue
 
 
 @patch("devflow.utils.update_checker.requests.get")
-def test_fetch_latest_version_from_github_empty_response(mock_get):
+def test_fetch_latest_version_from_pypi_empty_response(mock_get):
     """Test handling empty response."""
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {}
     mock_get.return_value = mock_response
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False
 
 
 @patch("devflow.utils.update_checker.__version__", "0.9.0")
 @patch("devflow.utils.update_checker._is_development_install")
-@patch("devflow.utils.update_checker._fetch_latest_version_from_github")
+@patch("devflow.utils.update_checker._fetch_latest_version_from_pypi")
 def test_check_for_updates_update_available(mock_fetch, mock_is_dev, mock_cache_file):
     """Test check_for_updates when update is available."""
     mock_is_dev.return_value = False
@@ -261,7 +264,7 @@ def test_check_for_updates_update_available(mock_fetch, mock_is_dev, mock_cache_
 
 @patch("devflow.utils.update_checker.__version__", "1.0.0")
 @patch("devflow.utils.update_checker._is_development_install")
-@patch("devflow.utils.update_checker._fetch_latest_version_from_github")
+@patch("devflow.utils.update_checker._fetch_latest_version_from_pypi")
 def test_check_for_updates_no_update(mock_fetch, mock_is_dev, mock_cache_file):
     """Test check_for_updates when already on latest version."""
     mock_is_dev.return_value = False
@@ -274,7 +277,7 @@ def test_check_for_updates_no_update(mock_fetch, mock_is_dev, mock_cache_file):
 
 @patch("devflow.utils.update_checker.__version__", "1.1.0")
 @patch("devflow.utils.update_checker._is_development_install")
-@patch("devflow.utils.update_checker._fetch_latest_version_from_github")
+@patch("devflow.utils.update_checker._fetch_latest_version_from_pypi")
 def test_check_for_updates_newer_than_latest(mock_fetch, mock_is_dev, mock_cache_file):
     """Test check_for_updates when current version is newer than latest release."""
     mock_is_dev.return_value = False
@@ -310,7 +313,7 @@ def test_check_for_updates_uses_cache(mock_is_dev, mock_cache_file):
     _write_cache(cache_data)
 
     # Should use cache without making API request
-    with patch("devflow.utils.update_checker._fetch_latest_version_from_github") as mock_fetch:
+    with patch("devflow.utils.update_checker._fetch_latest_version_from_pypi") as mock_fetch:
         latest, network_error = check_for_updates()
         assert latest == "1.0.0"
         assert network_error is False
@@ -319,7 +322,7 @@ def test_check_for_updates_uses_cache(mock_is_dev, mock_cache_file):
 
 @patch("devflow.utils.update_checker.__version__", "0.9.0")
 @patch("devflow.utils.update_checker._is_development_install")
-@patch("devflow.utils.update_checker._fetch_latest_version_from_github")
+@patch("devflow.utils.update_checker._fetch_latest_version_from_pypi")
 def test_check_for_updates_fetches_when_cache_stale(mock_fetch, mock_is_dev, mock_cache_file):
     """Test check_for_updates fetches new data when cache is stale."""
     mock_is_dev.return_value = False
@@ -343,7 +346,7 @@ def test_check_for_updates_fetches_when_cache_stale(mock_fetch, mock_is_dev, moc
 
 @patch("devflow.utils.update_checker.__version__", "0.9.0")
 @patch("devflow.utils.update_checker._is_development_install")
-@patch("devflow.utils.update_checker._fetch_latest_version_from_github")
+@patch("devflow.utils.update_checker._fetch_latest_version_from_pypi")
 def test_check_for_updates_caches_result(mock_fetch, mock_is_dev, mock_cache_file):
     """Test check_for_updates caches the result."""
     mock_is_dev.return_value = False
@@ -360,7 +363,7 @@ def test_check_for_updates_caches_result(mock_fetch, mock_is_dev, mock_cache_fil
 
 
 @patch("devflow.utils.update_checker._is_development_install")
-@patch("devflow.utils.update_checker._fetch_latest_version_from_github")
+@patch("devflow.utils.update_checker._fetch_latest_version_from_pypi")
 def test_check_for_updates_network_error(mock_fetch, mock_is_dev, mock_cache_file):
     """Test check_for_updates handles network errors (network connectivity issue)."""
     mock_is_dev.return_value = False
@@ -384,14 +387,14 @@ def test_is_development_install_regular_install():
 
 @patch("devflow.utils.update_checker.requests.get")
 def test_fetch_latest_version_uses_custom_timeout(mock_get):
-    """Test that _fetch_latest_version_from_github uses custom timeout."""
+    """Test that _fetch_latest_version_from_pypi uses custom timeout."""
     mock_response = Mock()
     mock_response.status_code = 200
-    mock_response.json.return_value = [{"tag_name": "v1.0.0"}]
+    mock_response.json.return_value = {"info": {"version": "1.0.0"}}
     mock_get.return_value = mock_response
 
     # Call with custom timeout
-    _fetch_latest_version_from_github(timeout=30)
+    _fetch_latest_version_from_pypi(timeout=30)
 
     # Verify timeout was passed to requests.get
     mock_get.assert_called_once()
@@ -401,14 +404,14 @@ def test_fetch_latest_version_uses_custom_timeout(mock_get):
 
 @patch("devflow.utils.update_checker.requests.get")
 def test_fetch_latest_version_default_timeout(mock_get):
-    """Test that _fetch_latest_version_from_github uses default timeout."""
+    """Test that _fetch_latest_version_from_pypi uses default timeout."""
     mock_response = Mock()
     mock_response.status_code = 200
-    mock_response.json.return_value = [{"tag_name": "v1.0.0"}]
+    mock_response.json.return_value = {"info": {"version": "1.0.0"}}
     mock_get.return_value = mock_response
 
     # Call without timeout argument (should use default=10)
-    _fetch_latest_version_from_github()
+    _fetch_latest_version_from_pypi()
 
     # Verify default timeout was used
     mock_get.assert_called_once()
@@ -416,7 +419,7 @@ def test_fetch_latest_version_default_timeout(mock_get):
     assert call_kwargs["timeout"] == 10
 
 
-@patch("devflow.utils.update_checker._fetch_latest_version_from_github")
+@patch("devflow.utils.update_checker._fetch_latest_version_from_pypi")
 @patch("devflow.utils.update_checker._get_timeout_from_config")
 @patch("devflow.utils.update_checker._is_development_install")
 def test_check_for_updates_uses_config_timeout(mock_is_dev, mock_get_timeout, mock_fetch, mock_cache_file):
@@ -429,7 +432,7 @@ def test_check_for_updates_uses_config_timeout(mock_is_dev, mock_get_timeout, mo
 
     # Verify _get_timeout_from_config was called
     mock_get_timeout.assert_called_once()
-    # Verify timeout was passed to _fetch_latest_version_from_github
+    # Verify timeout was passed to _fetch_latest_version_from_pypi
     mock_fetch.assert_called_once_with(timeout=15)
 
 
@@ -473,7 +476,7 @@ def test_fetch_latest_version_json_decode_error(mock_get):
     mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
     mock_get.return_value = mock_response
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False
 
@@ -487,8 +490,8 @@ def test_fetch_latest_version_key_error(mock_get):
     mock_response.json.return_value = {"unexpected_key": "value"}
     mock_get.return_value = mock_response
 
-    version, network_error = _fetch_latest_version_from_github()
-    # Should handle missing tag_name gracefully
+    version, network_error = _fetch_latest_version_from_pypi()
+    # Should handle missing info.version gracefully
     assert version is None
     assert network_error is False
 
@@ -501,7 +504,7 @@ def test_fetch_latest_version_non_dict_response(mock_get):
     mock_response.json.return_value = ["not", "a", "dict"]  # List instead of dict
     mock_get.return_value = mock_response
 
-    version, network_error = _fetch_latest_version_from_github()
+    version, network_error = _fetch_latest_version_from_pypi()
     assert version is None
     assert network_error is False
 
@@ -521,7 +524,7 @@ def test_check_for_updates_cached_version_none(mock_is_dev, mock_cache_file):
     _write_cache(cache_data)
 
     # Should return None, False (no update available)
-    with patch("devflow.utils.update_checker._fetch_latest_version_from_github") as mock_fetch:
+    with patch("devflow.utils.update_checker._fetch_latest_version_from_pypi") as mock_fetch:
         latest, network_error = check_for_updates()
         assert latest is None
         assert network_error is False
@@ -545,6 +548,30 @@ def test_show_network_warning(capsys):
 
     captured = capsys.readouterr()
     assert "Unable to check for updates" in captured.out
-    assert "GitHub not reachable" in captured.out
+    assert "PyPI not reachable" in captured.out
 
 
+@patch("devflow.utils.update_checker.requests.get")
+def test_fetch_latest_version_from_pypi_info_not_dict(mock_get):
+    """Test handling when info field is not a dict."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"info": "not a dict"}
+    mock_get.return_value = mock_response
+
+    version, network_error = _fetch_latest_version_from_pypi()
+    assert version is None
+    assert network_error is False
+
+
+@patch("devflow.utils.update_checker.requests.get")
+def test_fetch_latest_version_from_pypi_empty_version(mock_get):
+    """Test handling when version field is empty string."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"info": {"version": ""}}
+    mock_get.return_value = mock_response
+
+    version, network_error = _fetch_latest_version_from_pypi()
+    assert version is None
+    assert network_error is False
