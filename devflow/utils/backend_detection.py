@@ -49,14 +49,16 @@ def detect_backend_from_key(issue_key: str, config: Optional[Config] = None) -> 
     # Examples: AAP-12345, PROJ-999, TEST-1, A-1
     if re.match(r'^[A-Z][A-Z0-9]*-\d+$', issue_key):
         # Optionally validate against configured JIRA project
-        if config and hasattr(config, 'jira') and config.jira and config.jira.project:
-            project_prefix = config.jira.project + "-"
-            if issue_key.startswith(project_prefix):
-                # Matches configured project - definitely JIRA
+        if config and hasattr(config, 'jira') and config.jira and hasattr(config.jira, 'project') and config.jira.project:
+            # Ensure project is a string (not a Mock or other object)
+            if isinstance(config.jira.project, str):
+                project_prefix = config.jira.project + "-"
+                if issue_key.startswith(project_prefix):
+                    # Matches configured project - definitely JIRA
+                    return "jira"
+                # Matches JIRA pattern but different project
+                # Still JIRA (might be multi-project setup)
                 return "jira"
-            # Matches JIRA pattern but different project
-            # Still JIRA (might be multi-project setup)
-            return "jira"
         # Matches JIRA pattern
         return "jira"
 

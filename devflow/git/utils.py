@@ -263,17 +263,47 @@ class GitUtils:
         return text[:50]
 
     @staticmethod
-    def generate_branch_name(issue_key: str, goal: Optional[str] = None, pattern: str = "{issue_key}-{goal_slug}") -> str:
+    def generate_branch_name(
+        issue_key: str,
+        goal: Optional[str] = None,
+        pattern: str = "{issue_key}-{goal_slug}",
+        use_issue_key_only: bool = True,
+        backend: str = "jira"
+    ) -> str:
         """Generate a branch name from issue key and goal.
 
         Args:
-            issue_key: issue tracker key (e.g., PROJ-58868)
+            issue_key: issue tracker key (e.g., PROJ-58868, #123, owner/repo#123)
             goal: Session goal (optional)
-            pattern: Branch naming pattern
+            pattern: Branch naming pattern (ignored if use_issue_key_only=True)
+            use_issue_key_only: Use only issue key without goal slug
+            backend: Issue tracker backend ("jira", "github", "gitlab")
 
         Returns:
             Generated branch name
+
+        Examples:
+            >>> generate_branch_name("PROJ-12345", use_issue_key_only=True, backend="jira")
+            'proj-12345'
+            >>> generate_branch_name("#123", use_issue_key_only=True, backend="github")
+            '123'
+            >>> generate_branch_name("owner/repo#123", use_issue_key_only=True, backend="github")
+            '123'
+            >>> generate_branch_name("PROJ-12345", "Fix bug", use_issue_key_only=False)
+            'proj-12345-fix-bug'
         """
+        if use_issue_key_only:
+            # For GitHub/GitLab, extract just the issue number
+            if backend in ["github", "gitlab"]:
+                # Parse formats: #123, owner/repo#123, 123
+                # Extract number from various formats
+                match = re.search(r'#?(\d+)$', issue_key)
+                if match:
+                    return match.group(1)  # Just the number
+            # For JIRA or other backends, use lowercase issue key
+            return issue_key.lower()
+
+        # Original behavior (current implementation)
         # If no goal provided, use just the issue key
         if not goal:
             return issue_key.lower()

@@ -1642,6 +1642,45 @@ This setting controls whether the session completion workflow is triggered when 
 }
 ```
 
+### prompts.use_issue_key_as_branch
+
+**Type:** boolean
+**Required:** No
+**Default:** `true`
+**Used by:** `daf new`, `daf jira new`, `daf git new`
+**Description:** Use issue key as branch name (without goal slug)
+
+When enabled, branch names are generated using only the issue key:
+- **JIRA**: Lowercase issue key (e.g., `PROJ-12345` → `proj-12345`)
+- **GitHub/GitLab**: Issue number only (e.g., `#123` → `123`, `owner/repo#123` → `123`)
+
+When disabled, branch names include both issue key and goal slug:
+- **JIRA**: `proj-12345-add-feature`
+- **GitHub/GitLab**: `#123-add-feature`
+
+**Values:**
+- `true` - Use issue key only (default, simpler branch names)
+- `false` - Use issue key + goal slug (legacy behavior)
+
+**Note:** This setting only affects branch name suggestions. You can always override the suggested branch name when prompted.
+
+**Example:**
+```json
+{
+  "prompts": {
+    "use_issue_key_as_branch": true
+  }
+}
+```
+
+**Behavior comparison:**
+
+| Issue Key | Goal | `use_issue_key_as_branch: true` | `use_issue_key_as_branch: false` |
+|-----------|------|----------------------------------|----------------------------------|
+| `PROJ-123` | "Add caching" | `proj-123` | `proj-123-add-caching` |
+| `#456` | "Fix bug" | `456` | `#456-fix-bug` |
+| `owner/repo#789` | "Refactor" | `789` | `owner/repo#789-refactor` |
+
 ### prompts.show_prompt_unit_tests
 
 **Type:** boolean
@@ -1735,6 +1774,7 @@ When creating a PR/MR during `daf complete`, this setting controls whether you'r
     "auto_sync_with_base": "always",
     "auto_complete_on_exit": true,
     "default_branch_strategy": "from_default",
+    "use_issue_key_as_branch": true,
     "show_prompt_unit_tests": true,
     "auto_select_target_branch": null
   }

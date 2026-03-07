@@ -1525,6 +1525,18 @@ class ConfigTUI(App):
                 allow_blank=True,
             )
 
+            yield ConfigSelect(
+                "Use issue key as branch name",
+                "prompts.use_issue_key_as_branch",
+                choices=[
+                    ("Use issue key only (e.g., proj-123 or 123)", "true"),
+                    ("Use issue key + goal slug (e.g., proj-123-fix-bug)", "false"),
+                ],
+                value="true" if self.config.prompts.use_issue_key_as_branch else "false",
+                help_text="For JIRA: use lowercase key (proj-123). For GitHub/GitLab: use number only (123)",
+                allow_blank=False,
+            )
+
             yield Static("[bold]Commit Behavior[/bold]", classes="subsection-title")
 
             yield ConfigSelect(
@@ -2497,6 +2509,10 @@ class ConfigTUI(App):
 
                 branch_strat = self.query_one(key_to_id("select", "prompts.default_branch_strategy"), Select).value
                 self.config.prompts.default_branch_strategy = branch_strat if branch_strat != Select.BLANK else None
+
+                # use_issue_key_as_branch is a boolean field (not tri-state)
+                use_issue_key = self.query_one(key_to_id("select", "prompts.use_issue_key_as_branch"), Select).value
+                self.config.prompts.use_issue_key_as_branch = (use_issue_key == "true")
 
                 # show_prompt_unit_tests is a boolean field (not tri-state)
                 show_unit_tests = self.query_one(key_to_id("select", "prompts.show_prompt_unit_tests"), Select).value
