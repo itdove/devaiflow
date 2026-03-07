@@ -585,6 +585,135 @@ def test_tui_workspace_repo_count_empty_path(mock_config_loader, mock_config):
 
 
 # ============================================================================
+# Upgrade Skills Button Tests
+# ============================================================================
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
+@patch("devflow.utils.claude_commands.install_or_upgrade_reference_skills")
+def test_handle_upgrade_commands_success(
+    mock_ref_skills, mock_slash_cmds, mock_config_loader, mock_config
+):
+    """Test successful skill upgrade via TUI button."""
+    # Setup mocks
+    mock_loader_instance = Mock()
+    mock_loader_instance.load_config.return_value = mock_config
+    mock_loader_instance.session_home = Path("/tmp/test")
+    mock_config_loader.return_value = mock_loader_instance
+
+    # Mock successful upgrade with some changes
+    mock_slash_cmds.return_value = (["daf-active", "daf-help"], [], [])
+    mock_ref_skills.return_value = (["daf-cli", "gh-cli"], [], [])
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+
+    # Call the upgrade handler
+    tui._handle_upgrade_commands()
+
+    # Verify both functions were called
+    mock_slash_cmds.assert_called_once_with(quiet=True)
+    mock_ref_skills.assert_called_once_with(quiet=True)
+
+    # Verify success notification
+    assert tui.notify.call_count >= 2
+    # Check for the summary notification with count
+    calls = [str(call) for call in tui.notify.call_args_list]
+    assert any("4 skill(s)" in str(call) for call in calls)
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
+@patch("devflow.utils.claude_commands.install_or_upgrade_reference_skills")
+def test_handle_upgrade_commands_up_to_date(
+    mock_ref_skills, mock_slash_cmds, mock_config_loader, mock_config
+):
+    """Test skill upgrade when all skills are up-to-date."""
+    # Setup mocks
+    mock_loader_instance = Mock()
+    mock_loader_instance.load_config.return_value = mock_config
+    mock_loader_instance.session_home = Path("/tmp/test")
+    mock_config_loader.return_value = mock_loader_instance
+
+    # Mock all skills up-to-date
+    mock_slash_cmds.return_value = ([], ["daf-active", "daf-help"], [])
+    mock_ref_skills.return_value = ([], ["daf-cli", "gh-cli"], [])
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+
+    # Call the upgrade handler
+    tui._handle_upgrade_commands()
+
+    # Verify both functions were called
+    mock_slash_cmds.assert_called_once_with(quiet=True)
+    mock_ref_skills.assert_called_once_with(quiet=True)
+
+    # Verify up-to-date notification
+    calls = [str(call) for call in tui.notify.call_args_list]
+    assert any("up-to-date" in str(call) for call in calls)
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
+@patch("devflow.utils.claude_commands.install_or_upgrade_reference_skills")
+def test_handle_upgrade_commands_with_failures(
+    mock_ref_skills, mock_slash_cmds, mock_config_loader, mock_config
+):
+    """Test skill upgrade with some failures."""
+    # Setup mocks
+    mock_loader_instance = Mock()
+    mock_loader_instance.load_config.return_value = mock_config
+    mock_loader_instance.session_home = Path("/tmp/test")
+    mock_config_loader.return_value = mock_loader_instance
+
+    # Mock with some failures
+    mock_slash_cmds.return_value = (["daf-active"], ["daf-help"], ["daf-failed"])
+    mock_ref_skills.return_value = (["daf-cli"], [], ["gh-cli"])
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+
+    # Call the upgrade handler
+    tui._handle_upgrade_commands()
+
+    # Verify both functions were called
+    mock_slash_cmds.assert_called_once_with(quiet=True)
+    mock_ref_skills.assert_called_once_with(quiet=True)
+
+    # Verify failure notification
+    calls = [str(call) for call in tui.notify.call_args_list]
+    assert any("Failed" in str(call) and "2 skill(s)" in str(call) for call in calls)
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
+def test_handle_upgrade_commands_exception(
+    mock_slash_cmds, mock_config_loader, mock_config
+):
+    """Test skill upgrade handles exceptions gracefully."""
+    # Setup mocks
+    mock_loader_instance = Mock()
+    mock_loader_instance.load_config.return_value = mock_config
+    mock_loader_instance.session_home = Path("/tmp/test")
+    mock_config_loader.return_value = mock_loader_instance
+
+    # Mock exception during upgrade
+    mock_slash_cmds.side_effect = Exception("Test error")
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+
+    # Call the upgrade handler (should not raise)
+    tui._handle_upgrade_commands()
+
+    # Verify error notification was shown
+    calls = [str(call) for call in tui.notify.call_args_list]
+    assert any("Error upgrading skills" in str(call) for call in calls)
+
+
+# ============================================================================
 # Widget Rendering Tests (would require textual.testing)
 # ============================================================================
 

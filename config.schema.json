@@ -591,6 +591,11 @@
           "default": false,
           "title": "Auto Load Related Conversations",
           "type": "boolean"
+        },
+        "use_issue_key_as_branch": {
+          "default": true,
+          "title": "Use Issue Key As Branch",
+          "type": "boolean"
         }
       },
       "title": "PromptsConfig",
