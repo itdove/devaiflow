@@ -3,5 +3,7 @@
   "agent_backend": null,
   "_agent_backend_comment": "Optional: Enforce AI agent backend for entire enterprise (e.g., 'claude', 'github-copilot'). Leave null to allow teams/users to choose.",
   "backend_overrides": null,
-  "_backend_overrides_comment": "Optional: Override backend configuration values. Example: {\"field_mappings\": {\"components\": {\"required_for\": [\"Bug\", \"Story\"]}}} to fix incorrect JIRA API metadata."
+  "_backend_overrides_comment": "Optional: Override backend configuration values. Example: {\"field_mappings\": {\"components\": {\"required_for\": [\"Bug\", \"Story\"]}}} to fix incorrect JIRA API metadata.",
+  "github_issue_types": ["bug", "enhancement", "task", "spike", "epic", "story"],
+  "_github_issue_types_comment": "Optional: Define allowed GitHub/GitLab issue types for entire enterprise. Standard Agile types: bug, enhancement, task, spike, epic, story. Organizations can override this list. Leave null to use default: ['bug', 'enhancement', 'task', 'spike', 'epic']"
 }

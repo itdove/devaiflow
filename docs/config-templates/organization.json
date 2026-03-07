@@ -39,5 +39,7 @@
   "status_grouping_field": null,
   "_status_grouping_field_comment": "Optional: Field to group by in status dashboard (e.g., 'sprint', 'iteration', 'release')",
   "status_totals_field": null,
-  "_status_totals_field_comment": "Optional: Field to sum for totals in status dashboard (e.g., 'points', 'story_points', 'effort')"
+  "_status_totals_field_comment": "Optional: Field to sum for totals in status dashboard (e.g., 'points', 'story_points', 'effort')",
+  "github_issue_types": null,
+  "_github_issue_types_comment": "Optional: Override enterprise-level GitHub/GitLab issue types for this organization. Example: ['bug', 'enhancement', 'documentation', 'question']. Leave null to use enterprise or default types."
 }

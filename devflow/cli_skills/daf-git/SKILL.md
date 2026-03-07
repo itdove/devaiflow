@@ -10,9 +10,11 @@ Automatically detects the platform from your git repository.
 
 **Create issue and start working (recommended):**
 ```bash
-daf git new --goal "Add caching layer" --type enhancement
+daf git new enhancement --goal "Add caching layer"
 ```
 Creates the issue AND opens a session in one command (in mock mode or with Claude Code).
+
+**Note:** Type is a positional argument (matches `daf jira new` syntax for consistency).
 
 **Work on existing issue:**
 ```bash
@@ -33,23 +35,56 @@ Auto-detects current session or accepts explicit issue key.
 ### daf git new
 Create a GitHub/GitLab issue with an analysis-only session.
 
+**Syntax:** `daf git new [TYPE] --goal "..."`
+
+TYPE is an optional positional argument (matches `daf jira new` syntax for consistency).
+
 ```bash
 # Create issue with type (recommended workflow)
-daf git new --goal "Add authentication" --type enhancement
+daf git new enhancement --goal "Add authentication"
 
 # Create bug report
-daf git new --goal "Fix login crash" --type bug
+daf git new bug --goal "Fix login crash"
 
 # Create task
-daf git new --goal "Update dependencies" --type task
+daf git new task --goal "Update dependencies"
+
+# Create spike (research/investigation)
+daf git new spike --goal "Research caching options"
+
+# Create epic
+daf git new epic --goal "User authentication system"
+
+# Without type (no type label added)
+daf git new --goal "General investigation work"
 
 # With custom name and branch
-daf git new --goal "API refactor" --type enhancement --name "api-work" --branch "feature/api"
+daf git new enhancement --goal "API refactor" --name "api-work" --branch "feature/api"
 ```
+
+**Standard Agile Issue Types:**
+- **bug** - Defect or error in existing functionality
+- **enhancement** - Improvement to existing functionality (GitHub convention)
+- **task** - Technical work without direct user-facing value
+- **spike** - Time-boxed research or investigation
+- **epic** - Large body of work spanning multiple iterations
+- **story** - User story delivering end-user value
+
+**Configurable Types:**
+Valid issue types are configured in `enterprise.json` or `organization.json`:
+
+```json
+{
+  "github_issue_types": ["bug", "enhancement", "task", "spike", "epic", "story"]
+}
+```
+
+**Default types** (if not configured): `["bug", "enhancement", "task", "spike", "epic"]`
 
 **What it does:**
 - Creates a GitHub/GitLab issue with the goal as title
-- Uses templates based on issue type (bug, enhancement, task)
+- Uses templates based on issue type (if configured)
+- Adds type label to the issue (if type provided)
 - Automatically renames session to `creation-{number}` (e.g., `creation-123`)
 - Sets up session metadata (issue_key, type, status)
 - In mock mode: Creates mock issue immediately
@@ -76,23 +111,30 @@ daf git open owner/repo#123
 ### daf git create
 Create a new GitHub/GitLab issue (standalone, without session).
 
+**Syntax:** `daf git create [TYPE] --summary "..."`
+
+TYPE is an optional positional argument (same as `daf git new`).
+
 ```bash
-# Basic issue creation
-daf git create --summary "Add caching" --type enhancement
+# Basic issue creation (note: type is positional argument)
+daf git create enhancement --summary "Add caching"
 
 # With description
-daf git create --summary "Fix bug" --description "Details here" --type bug
+daf git create bug --summary "Fix bug" --description "Details here"
 
 # With labels, assignee, milestone
-daf git create --summary "New feature" --type enhancement \
+daf git create enhancement --summary "New feature" \
   --labels "backend,api" \
   --assignee username \
   --milestone "v1.2.0"
 
 # With acceptance criteria
-daf git create --summary "Auth feature" --type enhancement \
+daf git create enhancement --summary "Auth feature" \
   --acceptance-criteria "OAuth works" \
   --acceptance-criteria "Tests pass"
+
+# Without type (no type label added)
+daf git create --summary "General issue"
 ```
 
 **Note:** Use `daf git new` instead if you want to start working on the issue immediately.
@@ -155,8 +197,8 @@ daf git update 123 --labels "critical" --assignee user --milestone "Sprint 5"
 
 **Workflow 1: Create new feature (recommended)**
 ```bash
-# 1. Create issue and session
-daf git new --goal "Add OAuth support" --type enhancement
+# 1. Create issue and session (note: type is positional argument)
+daf git new enhancement --goal "Add OAuth support"
 
 # 2. Work on it (Claude Code opens automatically)
 # ... do work in Claude Code session ...

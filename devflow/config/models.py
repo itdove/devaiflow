@@ -83,6 +83,7 @@ class EnterpriseConfig(BaseModel):
     agent_backend: Optional[str] = None  # AI agent backend enforced by enterprise (e.g., "claude", "github-copilot")
     backend_overrides: Optional[Dict[str, Any]] = None  # Override any fields from backend configs (backends/*.json). Example: {"field_mappings": {"components": {"required_for": ["Bug", "Story"]}}}
     jira_issue_templates: Optional[Dict[str, str]] = None  # Default issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
+    github_issue_types: Optional[List[str]] = None  # Allowed GitHub/GitLab issue types (e.g., ["bug", "enhancement", "task", "spike", "epic", "story"])
 
 
 class OrganizationConfig(BaseModel):
@@ -108,6 +109,7 @@ class OrganizationConfig(BaseModel):
     github_auto_close_on_complete: bool = False  # Auto-close GitHub issues when session completes
     github_default_labels: List[str] = Field(default_factory=list)  # Organization-level default labels for GitHub issues
     github_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
+    github_issue_types: Optional[List[str]] = None  # Override enterprise-level GitHub/GitLab issue types (e.g., ["bug", "enhancement", "documentation"])
 
 
 class TeamConfig(BaseModel):
@@ -180,6 +182,7 @@ class GitHubConfig(BaseModel):
     completion_label: str = "status: in-review"  # Label to add when completing a session (only if add_status_labels=true)
     label_conventions: Optional[Dict[str, str]] = None  # Custom label conventions (e.g., {"bug": "type:bug", "priority_high": "priority:high"})
     issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
+    issue_types: List[str] = Field(default_factory=lambda: ["bug", "enhancement", "task", "spike", "epic"])  # Allowed issue types from configuration hierarchy
 
 
 class RepoDetectionConfig(BaseModel):

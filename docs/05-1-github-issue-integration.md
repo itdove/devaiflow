@@ -185,10 +185,9 @@ daf complete owner-repo-60
 Skip analysis and create issues directly:
 
 ```bash
-daf git create \
+daf git create bug \
   --summary "Fix login button styling" \
   --description "Button is misaligned on mobile devices" \
-  --type bug \
   --assignee yourusername
 ```
 
@@ -356,10 +355,9 @@ This ensures uniqueness even if you have the same `owner/repo` on multiple GitHu
 daf git new --goal "Description of what you want to build"
 
 # Create directly
-daf git create \
+daf git create bug \
   --summary "Issue title" \
   --description "Detailed description" \
-  --type bug \
   --assignee username \
   --labels "priority: high,backend"
 
@@ -664,7 +662,7 @@ Don't clutter with unnecessary labels:
 daf git create --summary "Fix bug" --labels "bug,priority: high,points: 3,status: todo,backend,frontend,database"
 
 # ✅ Minimal essential labels
-daf git create --summary "Fix bug" --type bug
+daf git create bug --summary "Fix bug"
 ```
 
 ### 5. Configure Default Labels

@@ -186,14 +186,14 @@ print_test "Create issue with goal and type using --json"
 
 # Run daf git new command with --json flag and capture JSON output
 # In mock mode, this creates the issue and renames the session to creation-{number}
-GIT_NEW_JSON=$(daf git new --goal "$TEST_GOAL" --type enhancement --name "$TEST_NAME" --path "." --branch test-branch --json 2>&1)
+GIT_NEW_JSON=$(daf git new enhancement --goal "$TEST_GOAL" --name "$TEST_NAME" --path "." --branch test-branch --json 2>&1)
 EXIT_CODE=$?
 if [ $EXIT_CODE -eq 0 ]; then
     echo -e "  ${GREEN}✓${NC} GitHub issue and session created successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${RED}✗${NC} Issue creation FAILED with exit code $EXIT_CODE"
-    echo -e "  ${RED}Command:${NC} daf git new --goal \"$TEST_GOAL\" --type enhancement --name \"$TEST_NAME\" --path \".\" --branch test-branch --json"
+    echo -e "  ${RED}Command:${NC} daf git new enhancement --goal \"$TEST_GOAL\" --name \"$TEST_NAME\" --path \".\" --branch test-branch --json"
     echo -e "  ${RED}Output:${NC}"
     echo "$GIT_NEW_JSON" | sed 's/^/    /'
     exit 1
@@ -371,7 +371,7 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo -e "${BOLD}${GREEN}✓ All tests passed!${NC}"
     echo ""
     echo "Successfully tested the complete GitHub workflow:"
-    echo "  ✓ daf git new --type enhancement - Created issue ${ISSUE_KEY} and session ${SESSION_NAME}"
+    echo "  ✓ daf git new enhancement - Created issue ${ISSUE_KEY} and session ${SESSION_NAME}"
     echo "  ✓ daf git view - Retrieved and validated issue data"
     echo "  ✓ daf git add-comment - Added comment to issue"
     echo "  ✓ daf complete - Completed and archived session"

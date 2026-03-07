@@ -253,6 +253,41 @@ def create_git_issue_session(
             output_json(success=False, error={"message": "No configuration found", "code": "NO_CONFIG"})
         return
 
+    # Validate issue_type if provided
+    if issue_type:
+        # Get valid types from config hierarchy (enterprise > organization > default)
+        valid_types = ["bug", "enhancement", "task", "spike", "epic"]  # Default
+        if config.github and config.github.issue_types:
+            valid_types = config.github.issue_types
+
+        # Case-insensitive validation
+        issue_type_lower = issue_type.lower()
+        valid_types_lower = [t.lower() for t in valid_types]
+
+        if issue_type_lower not in valid_types_lower:
+            # Find the original case version
+            console_print(f"[red]✗[/red] Invalid issue type '{issue_type}'.")
+            console_print(f"[yellow]Valid types:[/yellow] {', '.join(valid_types)}")
+            console_print()
+            console_print("[dim]Configure valid types in enterprise.json or organization.json:[/dim]")
+            console_print('[dim]  "github_issue_types": ["bug", "enhancement", "task", "spike", "epic"][/dim]')
+            if is_json_mode():
+                output_json(
+                    success=False,
+                    error={
+                        "message": f"Invalid issue type '{issue_type}'",
+                        "code": "INVALID_ISSUE_TYPE",
+                        "valid_types": valid_types
+                    }
+                )
+            return
+
+        # Normalize to the configured case (find matching type in valid_types)
+        for vt in valid_types:
+            if vt.lower() == issue_type_lower:
+                issue_type = vt
+                break
+
     # Auto-generate session name from goal if not provided
     if not name:
         name = slugify_goal(goal)
@@ -586,9 +621,9 @@ def _build_issue_creation_prompt(
     prompt_parts.append("")
 
     # Build example command
-    example_cmd_parts = [f"daf git create"]
+    example_cmd_parts = ["daf git create"]
     if issue_type:
-        example_cmd_parts.append(f'--type {issue_type}')
+        example_cmd_parts.append(issue_type)
     example_cmd_parts.append('--summary "..."')
 
     # Add repository if specified
