@@ -63,7 +63,7 @@ print_test() {
     TESTS_TOTAL=$((TESTS_TOTAL + 1))
 }
 
-# Function to verify command success
+# Function to verify command success (standalone test that doesn't use print_test)
 verify_success() {
     local cmd="$1"
     local description="$2"
@@ -200,8 +200,6 @@ verify_success "git clone" "DevAIFlow cloned to $TEMP_PROJECT_DIR (branch: $TEST
 
 # Test 2: Create Python venv
 print_section "Test 2: Create Python Virtual Environment"
-print_test "Create Python venv"
-
 python3 -m venv "$TEMP_VENV" > /dev/null 2>&1
 verify_success "python3 -m venv" "Python venv created at $TEMP_VENV"
 
@@ -517,7 +515,6 @@ fi
 echo -e "  ${GREEN}✓${NC} GitHub username: ${BOLD}$GITHUB_USER${NC}"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
-print_test "Assign issue to current user"
 ISSUE_NUMBER=$(echo "$ISSUE_KEY" | cut -d'#' -f2)
 gh issue edit "$ISSUE_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" --add-assignee "@me" > /dev/null 2>&1
 verify_success "gh issue edit --add-assignee" "Issue assigned to $GITHUB_USER"
@@ -643,8 +640,6 @@ fi
 
 # Test 13: Reopen issue for reusability
 print_section "Test 13: Reopen Issue for Test Reusability"
-print_test "Reopen the test issue"
-
 # Reopen the issue so the test can be run again
 gh issue reopen "$ISSUE_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" > /dev/null 2>&1
 verify_success "gh issue reopen" "Issue reopened for future test runs"
