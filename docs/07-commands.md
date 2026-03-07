@@ -41,14 +41,34 @@ daf sync --type Bug
 
 # Sync by epic
 daf sync --epic PROJ-36419
+
+# Limit sync to specific workspace
+daf sync --workspace primary
+
+# Limit sync to specific repository
+daf sync --repository owner/repo
+
+# Combine workspace and repository filters
+daf sync --workspace primary --repository owner/repo1
+
+# Combine with JIRA filters
+daf sync --field sprint="Sprint 1" --workspace experiments
 ```
 
+**Filtering Options:**
+- `--field` - Filter JIRA tickets by custom field (format: field_name=value)
+- `--type` - Filter JIRA tickets by type (Story, Bug, Task, etc.)
+- `--epic` - Filter JIRA tickets by epic
+- `-w, --workspace` - Limit workspace scanning to specific workspace (name from config)
+- `--repository, --repo` - Limit repository syncing to specific repository (format: owner/repo)
+
 **What it does:**
-1. Fetches your assigned JIRA tickets
-2. Filters by sprint/type if specified
-3. Creates sessions for new tickets
-4. Updates existing sessions with latest JIRA data
-5. Shows summary of work ahead
+1. Syncs JIRA tickets (if configured) - **always runs** unless JIRA URL not configured
+2. Scans workspaces for git repositories (applies `--workspace` filter if provided)
+3. Syncs GitHub/GitLab issues from discovered repositories (applies `--repository` filter if provided)
+4. Creates sessions for new issues/tickets
+5. Updates existing sessions with latest data
+6. Shows summary of work ahead
 
 **Output example:**
 ```
