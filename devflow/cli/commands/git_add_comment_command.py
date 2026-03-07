@@ -4,7 +4,7 @@ import sys
 from typing import Optional
 from rich.console import Console
 
-from devflow.cli.utils import output_json as json_output, console_print, require_outside_claude
+from devflow.cli.utils import output_json as json_output, console_print
 from devflow.github.issues_client import GitHubClient
 from devflow.issue_tracker.exceptions import (
     IssueTrackerError,
@@ -16,7 +16,6 @@ from devflow.issue_tracker.exceptions import (
 console = Console()
 
 
-@require_outside_claude
 def git_add_comment(
     issue_key: str,
     comment: str,

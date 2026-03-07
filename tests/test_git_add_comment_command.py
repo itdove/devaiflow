@@ -284,3 +284,22 @@ def test_git_add_comment_public_flag_ignored(runner, mock_github_client):
     assert result.exit_code == 0
     # Comment should be added normally (public parameter is ignored)
     mock_github_client.add_comment.assert_called_once()
+
+
+def test_git_add_comment_works_inside_claude_session(runner, mock_github_client, monkeypatch):
+    """Test that git add-comment works inside Claude sessions (no @require_outside_claude decorator)."""
+    # Simulate running inside a Claude Code session
+    monkeypatch.setenv("DEVAIFLOW_IN_SESSION", "1")
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "test-session-456")
+
+    result = runner.invoke(cli, [
+        'git', 'add-comment', '123',
+        'Progress update from Claude session'
+    ])
+
+    # Should succeed (not blocked by decorator)
+    assert result.exit_code == 0
+    mock_github_client.add_comment.assert_called_once()
+    call_args = mock_github_client.add_comment.call_args[0]
+    assert call_args[0] == '123'
+    assert call_args[1] == 'Progress update from Claude session'

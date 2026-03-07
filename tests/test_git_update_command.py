@@ -267,3 +267,21 @@ def test_git_update_repository_option(runner, mock_github_client):
     assert result.exit_code == 0
     # Repository should be passed to client
     mock_github_client.update_issue.assert_called_once()
+
+
+def test_git_update_works_inside_claude_session(runner, mock_github_client, monkeypatch):
+    """Test that git update works inside Claude sessions (no @require_outside_claude decorator)."""
+    # Simulate running inside a Claude Code session
+    monkeypatch.setenv("DEVAIFLOW_IN_SESSION", "1")
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "test-session-123")
+
+    result = runner.invoke(cli, [
+        'git', 'update', '123',
+        '--title', 'Updated from Claude session'
+    ])
+
+    # Should succeed (not blocked by decorator)
+    assert result.exit_code == 0
+    mock_github_client.update_issue.assert_called_once()
+    call_args = mock_github_client.update_issue.call_args[0]
+    assert call_args[1]['title'] == 'Updated from Claude session'
