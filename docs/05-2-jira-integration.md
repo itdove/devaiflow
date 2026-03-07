@@ -298,7 +298,7 @@ Edit backend and organization configuration files:
 - **jira_custom_field_defaults** - Default values for custom fields (e.g., {"workstream": "Platform"})
 - **time_tracking_enabled** - Enable time tracking for JIRA tickets (true/false)
 
-**Note:** To control whether session summaries are automatically added to JIRA, use `prompts.auto_add_issue_summary` - see [Prompts Configuration](06-configuration.md#prompts-configuration)
+**Note:** To control whether session summaries are automatically added to issue tracker (JIRA, GitHub, GitLab), use `prompts.auto_add_issue_summary` - see [Prompts Configuration](06-configuration.md#prompts-configuration)
 
 ### Configuring JIRA Project and Custom Fields
 
