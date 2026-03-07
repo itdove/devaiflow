@@ -285,6 +285,29 @@ class ContextFilesConfig(BaseModel):
     )
 
 
+class HttpClientConfig(BaseModel):
+    """HTTP client configuration for all requests.
+
+    Controls SSL verification and timeout behavior for all HTTP requests
+    made by DevAIFlow (hierarchical config downloads, JIRA API, update checks, etc.).
+    """
+
+    ssl_verify: Union[bool, str] = True  # True (verify with system certs), False (disable - INSECURE), or path to CA bundle file
+    timeout: int = 10  # Default timeout for requests in seconds
+
+    @field_validator('ssl_verify')
+    @classmethod
+    def validate_ssl_verify(cls, v):
+        """Validate ssl_verify is bool or valid file path."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            # If it's a string, it should be a path to a CA bundle file
+            # Don't check if file exists here - might be configured before file is created
+            return v
+        raise ValueError("ssl_verify must be True, False, or a path to CA bundle file")
+
+
 class PromptsConfig(BaseModel):
     """User prompt preferences configuration.
 
@@ -392,6 +415,7 @@ class Config(BaseModel):
     session_summary: SessionSummaryConfig = Field(default_factory=SessionSummaryConfig)
     templates: TemplateConfig = Field(default_factory=TemplateConfig)
     context_files: ContextFilesConfig = Field(default_factory=ContextFilesConfig)
+    http_client: HttpClientConfig = Field(default_factory=HttpClientConfig)
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     pr_template_url: Optional[str] = None  # URL to PR/MR template
     storage: StorageConfig = Field(default_factory=StorageConfig)  # Storage backend config

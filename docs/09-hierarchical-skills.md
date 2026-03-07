@@ -860,6 +860,47 @@ daf upgrade
 cp /company/shared/devaiflow/configs/*.md ~/.daf-sessions/
 ```
 
+### SSL Certificate Verification Failed
+
+**Problem**: `daf upgrade` fails with SSL certificate error when downloading from internal GitLab/GitHub:
+
+```
+SSL certificate verification failed for https://gitlab.internal.company.com/.../ENTERPRISE.md
+Error: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+       self-signed certificate in certificate chain
+```
+
+**Cause**: Internal certificate authority (CA) not trusted by Python's requests library.
+
+**Quick Solutions** (DevAIFlow shows these automatically in the error message):
+
+**1. Use custom CA bundle (RECOMMENDED):**
+```bash
+export DAF_SSL_VERIFY=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+daf upgrade
+```
+
+**2. Configure permanently in organization.json:**
+```json
+{
+  "hierarchical_config_source": "https://gitlab.internal.company.com/org/devaiflow-config/configs",
+  "http_client": {
+    "ssl_verify": "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+    "timeout": 30
+  }
+}
+```
+
+**3. Disable SSL verification (INSECURE - testing only):**
+```bash
+export DAF_SSL_VERIFY=false
+daf upgrade
+```
+
+⚠️ **Security Warning:** Option 3 is insecure and should only be used for testing!
+
+**See full documentation:** `docs/ssl-configuration.md` for detailed SSL configuration guide.
+
 ### Checking Installed Versions
 
 ```bash
