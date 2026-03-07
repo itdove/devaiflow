@@ -532,13 +532,16 @@ cd "$TEMP_GIT_REPO"
 SYNC_OUTPUT=$(daf sync --repo "$DAF_TEST_GITHUB_REPO" 2>&1)
 SYNC_EXIT_CODE=$?
 
+# Debug: Always show sync output
+echo -e "  ${YELLOW}Debug:${NC} Sync command output:"
+echo "$SYNC_OUTPUT" | sed 's/^/    /'
+echo ""
+
 if [ $SYNC_EXIT_CODE -eq 0 ]; then
     echo -e "  ${GREEN}✓${NC} Issue synced successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${RED}✗${NC} Sync failed with exit code $SYNC_EXIT_CODE"
-    echo -e "  ${RED}Output:${NC}"
-    echo "$SYNC_OUTPUT" | sed 's/^/    /'
     exit 1
 fi
 
