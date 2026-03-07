@@ -255,6 +255,10 @@ def git_create(
                         if renamed_session and renamed_session.name == new_name:
                             # Set issue metadata on renamed session
                             renamed_session.issue_key = issue_key
+                            # Set issue tracker backend (should already be set from git_new_command.py,
+                            # but set it here too for consistency and to handle edge cases)
+                            if not hasattr(renamed_session, 'issue_tracker') or not renamed_session.issue_tracker:
+                                renamed_session.issue_tracker = "github"
                             if not renamed_session.issue_metadata:
                                 renamed_session.issue_metadata = {}
                             renamed_session.issue_metadata["summary"] = summary
