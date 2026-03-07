@@ -36,6 +36,7 @@ def mock_config():
         mock_config = Mock()
         mock_config.github = Mock()
         mock_config.github.default_labels = []
+        mock_config.github.issue_types = ["bug", "enhancement", "task", "spike", "epic"]
         mock_loader.load_config.return_value = mock_config
         mock_loader_class.return_value = mock_loader
         yield mock_config
@@ -65,7 +66,7 @@ def test_git_create_bug(runner, mock_github_client, mock_config):
 
     result = runner.invoke(cli, [
         'git', 'create',
-        '--type', 'bug',
+        'bug',
         '--summary', 'Fix timeout',
         '--description', 'Timeout occurs after 30s'
     ])
@@ -82,7 +83,7 @@ def test_git_create_enhancement(runner, mock_github_client, mock_config):
 
     result = runner.invoke(cli, [
         'git', 'create',
-        '--type', 'enhancement',
+        'enhancement',
         '--summary', 'Add caching',
         '--description', 'Add caching layer for better performance'
     ])
@@ -210,7 +211,7 @@ def test_git_create_all_options(runner, mock_github_client, mock_config):
 
     result = runner.invoke(cli, [
         'git', 'create',
-        '--type', 'bug',
+        'bug',
         '--summary', 'Complex issue',
         '--description', 'Detailed description',
         '--priority', 'high',
@@ -330,8 +331,8 @@ def test_git_create_invalid_type(runner, mock_github_client, mock_config):
     """Test creating issue with invalid type."""
     result = runner.invoke(cli, [
         'git', 'create',
-        '--summary', 'Test',
-        '--type', 'invalid'
+        'invalid',
+        '--summary', 'Test'
     ])
 
     # Should fail due to invalid choice

@@ -2625,6 +2625,18 @@ class ConfigTUI(App):
                 except NoMatches:
                     pass  # Field not found, skip
 
+                # Collect organization.github_issue_types
+                try:
+                    github_issue_types_val = self.query_one(key_to_id("input", "organization.github_issue_types"), Input).value.strip()
+                    if github_issue_types_val:
+                        # Parse comma-separated list
+                        issue_types = [t.strip() for t in github_issue_types_val.split(',') if t.strip()]
+                        org_data['github_issue_types'] = issue_types if issue_types else None
+                    else:
+                        org_data['github_issue_types'] = None
+                except NoMatches:
+                    pass  # Field not found, skip
+
                 # Save updated organization.json
                 org_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(org_file, 'w') as f:
@@ -2734,6 +2746,14 @@ class ConfigTUI(App):
                         classes="section-help"
                     )
 
+                if enterprise_config.github_issue_types:
+                    yield Static("\n[bold]GitHub Issue Types:[/bold]")
+                    yield Static(f"[dim]{', '.join(enterprise_config.github_issue_types)}[/dim]")
+                    yield Static(
+                        "[dim]Valid issue types enforced by your organization[/dim]",
+                        classes="section-help"
+                    )
+
                 yield Static("\n[yellow]ℹ Enterprise settings are read-only and managed by administrators[/yellow]")
 
     def _compose_organization_tab(self) -> ComposeResult:
@@ -2760,6 +2780,18 @@ class ConfigTUI(App):
                 "organization.hierarchical_config_source",
                 value=org_config.hierarchical_config_source if org_config and org_config.hierarchical_config_source else "",
                 help_text="URL or path to hierarchical config files (e.g., file:///company/shared/devaiflow/configs or https://github.com/company/devaiflow-config/configs)",
+            )
+
+            # GitHub Issue Types configuration
+            github_issue_types_value = ""
+            if org_config and org_config.github_issue_types:
+                github_issue_types_value = ",".join(org_config.github_issue_types)
+
+            yield ConfigInput(
+                "GitHub Issue Types",
+                "organization.github_issue_types",
+                value=github_issue_types_value,
+                help_text="Valid issue types for GitHub/GitLab (comma-separated, e.g., bug,enhancement,task,spike,epic)",
             )
 
             yield Static("\n[dim]Advanced: Sync Filters[/dim]", classes="subsection-title")

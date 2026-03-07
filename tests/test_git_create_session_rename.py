@@ -86,6 +86,7 @@ def mock_config_loader():
         mock_config = Mock()
         mock_config.github = Mock()
         mock_config.github.issue_templates = {}
+        mock_config.github.issue_types = ["bug", "enhancement", "task", "spike", "epic"]
         mock_loader.load_config.return_value = mock_config
         mock_loader_class.return_value = mock_loader
         yield mock_loader

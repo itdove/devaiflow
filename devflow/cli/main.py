@@ -1359,7 +1359,7 @@ def git_view(ctx: click.Context, issue_key: Optional[str], comments: bool, repos
 
 @git.command(name="create")
 @json_option
-@click.option("--type", "issue_type", type=click.Choice(["bug", "enhancement", "task"], case_sensitive=False), help="Issue type (optional, uses labels)")
+@click.argument("issue_type", required=False, default=None)
 @click.option("--summary", required=True, help="Issue summary/title")
 @click.option("--description", help="Issue description")
 @click.option("--priority", type=click.Choice(["low", "medium", "high", "critical"], case_sensitive=False), help="Priority (uses labels)")
@@ -1374,11 +1374,15 @@ def git_create(ctx: click.Context, issue_type: Optional[str], summary: str, desc
 
     Creates an issue with convention-based labels for type, priority, and points.
 
+    ISSUE_TYPE is optional positional argument (bug, enhancement, task, spike, epic).
+    Valid types are configurable in enterprise.json and organization.json.
+
     Examples:
-        daf git create --summary "Add feature X" --type enhancement
-        daf git create --summary "Fix bug" --type bug --priority high --points 5
-        daf git create --summary "Task" --assignee username --milestone v1.0
-        daf git create --summary "Feature" \\
+        daf git create enhancement --summary "Add feature X"
+        daf git create bug --summary "Fix bug" --priority high --points 5
+        daf git create task --summary "Task" --assignee username --milestone v1.0
+        daf git create --summary "No type label"
+        daf git create enhancement --summary "Feature" \\
             --acceptance-criteria "Tests pass" \\
             --acceptance-criteria "Docs updated"
     """
@@ -1458,14 +1462,14 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> N
 
 @git.command(name="new")
 @json_option
+@click.argument("issue_type", required=False, default=None)
 @click.option("--goal", help="Goal/description for the issue (supports file:// paths and http(s):// URLs)")
-@click.option("--type", "issue_type", type=click.Choice(["bug", "enhancement", "task"], case_sensitive=False), help="Issue type (optional, uses labels)")
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
 @workspace_option()
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_new(ctx: click.Context, goal: Optional[str], issue_type: Optional[str], name: str, path: str, branch: str, workspace: str, repository: Optional[str]) -> None:
+def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], name: str, path: str, branch: str, workspace: str, repository: Optional[str]) -> None:
     """Create GitHub/GitLab issue with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1473,10 +1477,13 @@ def git_new(ctx: click.Context, goal: Optional[str], issue_type: Optional[str], 
     - Provides analysis-only constraints in the initial prompt
     - Persists the session type for reopening
 
+    ISSUE_TYPE is optional positional argument (bug, enhancement, task, spike, epic).
+    Valid types are configurable in enterprise.json and organization.json.
+
     Examples:
-        daf git new --type enhancement  (prompts for goal)
-        daf git new --goal "Add retry logic to API" --type enhancement
-        daf git new --goal "Fix timeout in operation" --type bug
+        daf git new enhancement --goal "Add retry logic to API"
+        daf git new bug --goal "Fix timeout in operation"
+        daf git new --goal "General investigation"  (no type)
         daf git new --goal "file:///path/to/requirements.md"
     """
     from devflow.cli.commands.git_new_command import create_git_issue_session

@@ -126,14 +126,38 @@ def git_create(
     # Normalize and validate issue type if provided
     issue_type_lower = None
     if issue_type:
-        issue_type_lower = issue_type.lower()
+        # Get valid types from config hierarchy (enterprise > organization > default)
+        valid_types = ["bug", "enhancement", "task", "spike", "epic"]  # Default
+        if config.github and config.github.issue_types:
+            valid_types = config.github.issue_types
 
-        # Validate issue type
-        valid_types = {"bug", "enhancement", "task", "spike", "epic"}
-        if issue_type_lower not in valid_types:
-            console.print(f"[red]✗[/red] Invalid issue type: {issue_type}")
-            console.print(f"[dim]Valid types: {', '.join(sorted(valid_types))}[/dim]")
+        # Case-insensitive validation
+        issue_type_lower = issue_type.lower()
+        valid_types_lower = [t.lower() for t in valid_types]
+
+        if issue_type_lower not in valid_types_lower:
+            console.print(f"[red]✗[/red] Invalid issue type '{issue_type}'.")
+            console.print(f"[yellow]Valid types:[/yellow] {', '.join(valid_types)}")
+            console.print()
+            console.print("[dim]Configure valid types in enterprise.json or organization.json:[/dim]")
+            console.print('[dim]  "github_issue_types": ["bug", "enhancement", "task", "spike", "epic"][/dim]')
+            if output_json:
+                json_output(
+                    success=False,
+                    error={
+                        "message": f"Invalid issue type '{issue_type}'",
+                        "code": "INVALID_ISSUE_TYPE",
+                        "valid_types": valid_types
+                    }
+                )
             sys.exit(1)
+
+        # Normalize to the configured case (find matching type in valid_types)
+        for vt in valid_types:
+            if vt.lower() == issue_type_lower:
+                issue_type = vt
+                issue_type_lower = vt.lower()
+                break
 
     # Get description from template if not provided
     if not description:

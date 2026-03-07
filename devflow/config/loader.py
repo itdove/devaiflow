@@ -660,6 +660,54 @@ class ConfigLoader:
             affected_version=user.jira_affected_version,
         )
 
+    def _merge_github_config(
+        self,
+        enterprise: "EnterpriseConfig",
+        org: "OrganizationConfig",
+        team: "TeamConfig",
+    ) -> "GitHubConfig":
+        """Merge enterprise, organization, and team configs into unified GitHubConfig.
+
+        Args:
+            enterprise: Enterprise configuration
+            org: Organization configuration
+            team: Team configuration
+
+        Returns:
+            Merged GitHubConfig object
+        """
+        from .models import GitHubConfig
+
+        # Merge issue types with priority: Organization > Enterprise > Default
+        # Organization can override enterprise types for specific projects
+        issue_types = (
+            org.github_issue_types
+            or enterprise.github_issue_types
+            or ["bug", "enhancement", "task", "spike", "epic"]
+        )
+
+        # Merge templates from configuration hierarchy
+        # Priority: team.json > organization.json > enterprise.json
+        merged_templates = {}
+        # Note: Enterprise doesn't have github_issue_templates yet, only jira_issue_templates
+        if org.github_issue_templates:
+            merged_templates.update(org.github_issue_templates)
+        if team.github_issue_templates:
+            merged_templates.update(team.github_issue_templates)
+
+        # Merge default labels
+        # Priority: team.json > organization.json
+        merged_labels = list(org.github_default_labels)  # Start with org labels
+        merged_labels.extend(team.github_default_labels)  # Add team labels
+
+        return GitHubConfig(
+            repository=org.github_repository,
+            default_labels=merged_labels,
+            auto_close_on_complete=org.github_auto_close_on_complete,
+            issue_templates=merged_templates if merged_templates else None,
+            issue_types=issue_types,
+        )
+
     def _load_new_format_config(self) -> Optional[Config]:
         """Load configuration from 5 separate files (new format).
 
@@ -676,6 +724,9 @@ class ConfigLoader:
         # Merge JIRA configs
         merged_jira = self._merge_jira_config(backend_config, enterprise_config, org_config, team_config, user_config)
 
+        # Merge GitHub configs
+        merged_github = self._merge_github_config(enterprise_config, org_config, team_config)
+
         # Merge agent_backend with priority: Enterprise > Organization > Team > User
         # Enterprise can enforce agent backend for all organizations
         # Organization can enforce agent backend for all teams
@@ -690,6 +741,7 @@ class ConfigLoader:
         # Construct final Config object
         config = Config(
             jira=merged_jira,
+            github=merged_github,
             repos=user_config.repos,
             time_tracking=user_config.time_tracking,
             session_summary=user_config.session_summary,
