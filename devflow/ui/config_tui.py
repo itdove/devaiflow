@@ -1745,7 +1745,7 @@ class ConfigTUI(App):
                 )
 
                 with Horizontal(classes="button-bar"):
-                    yield Button("Upgrade Commands", variant="primary", id="upgrade_commands")
+                    yield Button("Upgrade Skills", variant="primary", id="upgrade_commands")
 
             with Vertical(id="claude_multi_conversation_section"):
                 yield Static("[bold]Multi-Conversation Sessions (Claude only)[/bold]", classes="subsection-title")
@@ -2225,32 +2225,45 @@ class ConfigTUI(App):
             self._handle_upgrade_commands()
 
     def _handle_upgrade_commands(self) -> None:
-        """Handle the upgrade commands button press."""
-        from devflow.utils.claude_commands import install_or_upgrade_commands
+        """Handle the upgrade skills button press.
 
-        workspace_path = self.config.repos.get_default_workspace_path()
-        if not workspace_path:
-            self.notify("No default workspace configured. Please configure a workspace first.", severity="error")
-            return
+        Upgrades bundled skills (slash commands + reference skills) to ~/.claude/skills/.
+        """
+        from devflow.utils.claude_commands import (
+            install_or_upgrade_slash_commands,
+            install_or_upgrade_reference_skills,
+        )
 
-        workspace = workspace_path
-        self.notify("Upgrading slash commands...", severity="information")
+        self.notify("Upgrading skills to ~/.claude/skills/...", severity="information")
+
+        all_changed = []
+        all_up_to_date = []
+        all_failed = []
 
         try:
-            changed, up_to_date, failed = install_or_upgrade_commands(workspace, quiet=True)
+            # Install slash commands
+            changed, up_to_date, failed = install_or_upgrade_slash_commands(quiet=True)
+            all_changed.extend(changed)
+            all_up_to_date.extend(up_to_date)
+            all_failed.extend(failed)
 
-            if changed:
-                self.notify(f"✓ Upgraded {len(changed)} command(s)", severity="information")
-            elif up_to_date:
-                self.notify("✓ All commands are up-to-date", severity="information")
+            # Install reference skills
+            changed, up_to_date, failed = install_or_upgrade_reference_skills(quiet=True)
+            all_changed.extend(changed)
+            all_up_to_date.extend(up_to_date)
+            all_failed.extend(failed)
 
-            if failed:
-                self.notify(f"✗ Failed to upgrade {len(failed)} command(s)", severity="error")
+            # Provide summary feedback
+            if all_changed:
+                self.notify(f"✓ Upgraded {len(all_changed)} skill(s)", severity="information")
+            elif all_up_to_date:
+                self.notify("✓ All skills are up-to-date", severity="information")
 
-        except FileNotFoundError as e:
-            self.notify(str(e), severity="error")
+            if all_failed:
+                self.notify(f"✗ Failed to upgrade {len(all_failed)} skill(s)", severity="error")
+
         except Exception as e:
-            self.notify(f"Error upgrading commands: {e}", severity="error")
+            self.notify(f"Error upgrading skills: {e}", severity="error")
 
     def _refresh_context_files_list(self) -> None:
         """Refresh the context files list display after add/edit/remove.

@@ -55,6 +55,7 @@ dmypy.json
 *.log
 .env
 *.tar.gz
+T-*.md
 
 # Claude Code session files (should not be committed to repo)
 .claude/
