@@ -1667,7 +1667,7 @@ See [RELEASING.md](RELEASING.md) for detailed instructions.
 
 ### Update Notifications
 
-The tool automatically checks for new versions from GitLab releases:
+The tool automatically checks for new versions from PyPI:
 - **Automatic checks**: Runs once per 24 hours (cached)
 - **Non-intrusive**: Shows a notification banner if newer version available
 - **Development mode**: Skipped for editable/development installations
