@@ -440,3 +440,129 @@ def test_select_target_branch_empty_branch_list(monkeypatch, tmp_path):
     result = _select_target_branch(tmp_path, config, upstream_info=None)
 
     assert result is None
+
+
+def test_select_target_branch_filters_current_branch(monkeypatch, tmp_path):
+    """Test current branch is excluded from target branch selection list."""
+    def mock_list_remote_branches(path, remote):
+        return ["main", "develop", "feature-branch", "release/2.5"]
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    # Mock Prompt.ask to simulate user selecting first option (main)
+    def mock_prompt_ask(prompt_text, choices, default):
+        # Verify current branch is not in choices
+        # choices should be ["1", "2", "3", "4"] (4 branches - 1 current = 3, + skip = 4)
+        assert choices == ["1", "2", "3", "4"]
+        return "1"
+
+    monkeypatch.setattr("rich.prompt.Prompt.ask", mock_prompt_ask)
+
+    # Create config with auto_select_target_branch=None (prompt mode)
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=None)
+    )
+
+    # Call with current_branch="feature-branch"
+    result = _select_target_branch(tmp_path, config, upstream_info=None, current_branch="feature-branch")
+
+    # Should return selected branch (main in this case)
+    assert result == "main"
+
+
+def test_select_target_branch_filters_current_when_default(monkeypatch, tmp_path):
+    """Test filtering works when current branch IS the default branch."""
+    def mock_list_remote_branches(path, remote):
+        return ["main", "develop", "release/2.5"]
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    # Mock Prompt.ask to simulate user selecting first option (develop)
+    def mock_prompt_ask(prompt_text, choices, default):
+        # Should have 2 branches (main filtered out) + skip = 3 options
+        assert choices == ["1", "2", "3"]
+        return "1"
+
+    monkeypatch.setattr("rich.prompt.Prompt.ask", mock_prompt_ask)
+
+    # Create config
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=None)
+    )
+
+    # Call with current_branch="main" (which is also the default)
+    result = _select_target_branch(tmp_path, config, upstream_info=None, current_branch="main")
+
+    # Should return develop (first available after filtering)
+    assert result == "develop"
+
+
+def test_select_target_branch_empty_after_filtering(monkeypatch, tmp_path):
+    """Test empty list after filtering (only current branch exists remotely)."""
+    def mock_list_remote_branches(path, remote):
+        # Only the current branch exists
+        return ["feature-branch"]
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
+
+    # Create config
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=None)
+    )
+
+    # Call with current_branch="feature-branch"
+    result = _select_target_branch(tmp_path, config, upstream_info=None, current_branch="feature-branch")
+
+    # Should return None (no branches available after filtering)
+    assert result is None
+
+
+def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path):
+    """Test fork scenario - current local branch filtered from upstream branches."""
+    def mock_list_remote_branches(path, remote):
+        # Upstream branches including a branch with same name as local
+        return ["main", "develop", "feature-x", "release/2.5"]
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    def mock_get_remote_name_for_url(path, url):
+        return "upstream"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_remote_name_for_url", mock_get_remote_name_for_url)
+
+    # Mock Prompt.ask to simulate user selecting first option
+    def mock_prompt_ask(prompt_text, choices, default):
+        # Should have 3 branches (feature-x filtered out) + skip = 4 options
+        assert choices == ["1", "2", "3", "4"]
+        return "1"
+
+    monkeypatch.setattr("rich.prompt.Prompt.ask", mock_prompt_ask)
+
+    # Create config
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=None)
+    )
+
+    # Mock upstream info (fork scenario)
+    upstream_info = {
+        'upstream_url': 'https://github.com/upstream/repo.git',
+        'upstream_owner': 'upstream',
+        'upstream_repo': 'repo',
+    }
+
+    # Call with current_branch="feature-x"
+    result = _select_target_branch(tmp_path, config, upstream_info=upstream_info, current_branch="feature-x")
+
+    # Should return main (first available after filtering)
+    assert result == "main"

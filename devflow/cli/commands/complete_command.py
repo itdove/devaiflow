@@ -978,13 +978,14 @@ def _get_pr_for_branch(working_dir: Path, branch_name: str) -> Optional[dict]:
     return None
 
 
-def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None) -> Optional[str]:
+def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None, current_branch: Optional[str] = None) -> Optional[str]:
     """Prompt user to select target branch for PR/MR.
 
     Args:
         working_dir: Working directory path
         config: Config object
         upstream_info: Upstream repository info if fork (optional)
+        current_branch: Current branch name to filter out (cannot PR to same branch)
 
     Returns:
         Selected branch name or None if skip/error
@@ -1014,6 +1015,10 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
 
     # Fetch remote branches
     branches = GitUtils.list_remote_branches(working_dir, remote_name)
+
+    # Filter out current branch (cannot create PR to same branch as source)
+    if current_branch and current_branch in branches:
+        branches = [b for b in branches if b != current_branch]
 
     # Handle empty branch list
     if not branches:
@@ -1125,7 +1130,7 @@ def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
     upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=False)
 
     # Select target branch (respects auto_select_target_branch configuration)
-    target_branch = _select_target_branch(working_dir, config, upstream_info)
+    target_branch = _select_target_branch(working_dir, config, upstream_info, current_branch)
 
     # Create PR/MR with retry logic
     console.print(f"\n[cyan]Creating {repo_type.upper()} PR/MR...[/cyan]")
