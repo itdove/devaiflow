@@ -68,6 +68,7 @@ verify_success() {
     local cmd="$1"
     local description="$2"
 
+    TESTS_TOTAL=$((TESTS_TOTAL + 1))
     if [ $? -eq 0 ]; then
         echo -e "  ${GREEN}✓${NC} ${description}"
         TESTS_PASSED=$((TESTS_PASSED + 1))
