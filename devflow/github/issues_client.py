@@ -443,7 +443,36 @@ class GitHubClient(IssueTrackerClient):
             ], payload_json)
 
             issue_number = output.strip()
-            return f'{repo}#{issue_number}'
+            issue_key = f'{repo}#{issue_number}'
+
+            # Link to parent issue if provided
+            if parent:
+                try:
+                    # Add a comment linking child to parent
+                    parent_repo, parent_number = self._parse_issue_number(parent)
+                    parent_repo = self._get_repository(parent_repo)
+
+                    # Add comment to child issue mentioning parent
+                    self.add_comment(
+                        issue_key,
+                        f"Child of {parent_repo}#{parent_number}",
+                        public=True
+                    )
+
+                    # Add comment to parent issue mentioning child
+                    self.add_comment(
+                        parent,
+                        f"Sub-issue created: {issue_key}",
+                        public=True
+                    )
+                except Exception as e:
+                    # Don't fail issue creation if parent linking fails
+                    # Just log the error (issue was already created)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to link issue {issue_key} to parent {parent}: {e}")
+
+            return issue_key
 
         except IssueTrackerApiError as e:
             # Check for validation errors

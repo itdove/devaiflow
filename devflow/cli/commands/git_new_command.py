@@ -64,6 +64,7 @@ def _create_mock_git_issue(
     goal: str,
     config,
     project_path: str,
+    parent: Optional[str] = None,
     repository: Optional[str] = None,
 ) -> str:
     """Create a mock GitHub/GitLab issue in mock mode.
@@ -79,6 +80,7 @@ def _create_mock_git_issue(
         goal: Goal/description for the issue
         config: Configuration object
         project_path: Full path to the project directory
+        parent: Optional parent issue key (owner/repo#123 or #123)
         repository: Optional repository in owner/repo format
 
     Returns:
@@ -136,7 +138,7 @@ def _create_mock_git_issue(
         workspace_path = get_workspace_path(config, session.workspace_name)
     elif config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, repository=repository)
+    initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, parent=parent, repository=repository)
 
     # Create mock Claude session with initial prompt
     ai_agent_session_id = mock_claude.create_session(
@@ -222,6 +224,7 @@ def create_git_issue_session(
     name: Optional[str] = None,
     path: Optional[str] = None,
     branch: Optional[str] = None,
+    parent: Optional[str] = None,
     workspace: Optional[str] = None,
     repository: Optional[str] = None,
 ) -> None:
@@ -238,6 +241,7 @@ def create_git_issue_session(
         name: Optional session name (auto-generated from goal if not provided)
         path: Optional project path (bypasses interactive selection if provided)
         branch: Optional git branch name
+        parent: Optional parent issue key (owner/repo#123 or #123)
         workspace: Optional workspace name (overrides session default and config default)
         repository: Optional repository in owner/repo format
     """
@@ -287,6 +291,36 @@ def create_git_issue_session(
             if vt.lower() == issue_type_lower:
                 issue_type = vt
                 break
+
+    # Validate parent issue exists if provided
+    if parent:
+        from devflow.github.issues_client import GitHubClient
+        from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError, IssueTrackerValidationError as ValidationError
+
+        console_print(f"\n[cyan]Validating parent issue {parent}...[/cyan]")
+        try:
+            client = GitHubClient(repository=repository)
+            parent_issue = client.get_issue(parent)
+            if not parent_issue:
+                console_print(f"[red]✗[/red] Parent issue {parent} not found")
+                if is_json_mode():
+                    output_json(success=False, error={"message": f"Parent issue {parent} not found", "code": "PARENT_NOT_FOUND"})
+                return
+            console_print(f"[dim]Parent issue found: {parent_issue.get('summary', 'N/A')}[/dim]")
+        except ValidationError as e:
+            console_print(f"[red]✗[/red] Invalid parent issue key format: {parent}")
+            console_print(f"[dim]Expected '#123' or 'owner/repo#123'[/dim]")
+            if is_json_mode():
+                output_json(success=False, error={"message": str(e), "code": "INVALID_PARENT_FORMAT"})
+            return
+        except IssueTrackerNotFoundError:
+            console_print(f"[red]✗[/red] Parent issue {parent} not found")
+            if is_json_mode():
+                output_json(success=False, error={"message": f"Parent issue {parent} not found", "code": "PARENT_NOT_FOUND"})
+            return
+        except Exception as e:
+            console_print(f"[yellow]⚠[/yellow] Could not validate parent issue: {e}")
+            console_print(f"[dim]Continuing anyway...[/dim]")
 
     # Auto-generate session name from goal if not provided
     if not name:
@@ -392,6 +426,7 @@ def create_git_issue_session(
             goal=goal,
             config=config,
             project_path=project_path,
+            parent=parent,
             repository=repository,
         )
 
@@ -451,7 +486,7 @@ def create_git_issue_session(
         workspace_path = get_workspace_path(config, session.workspace_name)
     elif config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, repository=repository)
+    initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, parent=parent, repository=repository)
 
     # Set up signal handlers for cleanup
     setup_signal_handlers(session, session_manager, name, config)
@@ -560,6 +595,7 @@ def _build_issue_creation_prompt(
     session_name: str,
     project_path: Optional[str] = None,
     workspace: Optional[str] = None,
+    parent: Optional[str] = None,
     repository: Optional[str] = None,
 ) -> str:
     """Build the initial prompt for GitHub/GitLab issue creation sessions.
@@ -571,6 +607,7 @@ def _build_issue_creation_prompt(
         session_name: Name of the session (unused, kept for backward compatibility)
         project_path: Unused, kept for backward compatibility
         workspace: Workspace path for skill discovery
+        parent: Optional parent issue key (owner/repo#123 or #123)
         repository: Optional repository in owner/repo format
 
     Returns:
@@ -625,6 +662,10 @@ def _build_issue_creation_prompt(
     if issue_type:
         example_cmd_parts.append(issue_type)
     example_cmd_parts.append('--summary "..."')
+
+    # Add parent if specified
+    if parent:
+        example_cmd_parts.append(f'--parent "{parent}"')
 
     # Add repository if specified
     if repository:

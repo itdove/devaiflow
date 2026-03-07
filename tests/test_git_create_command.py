@@ -337,3 +337,71 @@ def test_git_create_invalid_type(runner, mock_github_client, mock_config):
 
     # Should fail due to invalid choice
     assert result.exit_code != 0
+
+
+def test_git_create_with_parent(runner, mock_github_client, mock_config):
+    """Test creating issue with parent parameter."""
+    from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError
+
+    # Mock get_issue to validate parent exists
+    mock_parent = {'summary': 'Parent Issue', 'key': 'owner/repo#456'}
+    mock_github_client.get_issue.return_value = mock_parent
+    mock_github_client.create_issue.return_value = 'owner/repo#123'
+
+    result = runner.invoke(cli, [
+        'git', 'create',
+        'task',
+        '--summary', 'Child Issue',
+        '--description', 'Child task',
+        '--parent', '#456'
+    ])
+
+    assert result.exit_code == 0
+    assert '#123' in result.output or 'Created' in result.output
+
+    # Verify parent validation was called
+    mock_github_client.get_issue.assert_called_once_with('#456')
+
+    # Verify create_issue was called with parent parameter
+    call_args = mock_github_client.create_issue.call_args[1]
+    assert call_args['parent'] == '#456'
+
+
+def test_git_create_with_invalid_parent_format(runner, mock_github_client, mock_config):
+    """Test creating issue with invalid parent key format."""
+    mock_github_client.get_issue.side_effect = IssueTrackerValidationError(
+        "Invalid format"
+    )
+
+    result = runner.invoke(cli, [
+        'git', 'create',
+        'task',
+        '--summary', 'Child Issue',
+        '--description', 'Child task description',
+        '--parent', 'invalid-format'
+    ])
+
+    assert result.exit_code == 1
+    assert 'Invalid parent issue key format' in result.output
+
+
+def test_git_create_with_parent_not_found(runner, mock_github_client, mock_config):
+    """Test creating issue when parent doesn't exist."""
+    from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError
+
+    mock_github_client.get_issue.side_effect = IssueTrackerNotFoundError(
+        "Parent not found",
+        resource_type="issue",
+        resource_id="#999"
+    )
+
+    result = runner.invoke(cli, [
+        'git', 'create',
+        'task',
+        '--summary', 'Child Issue',
+        '--description', 'Child task description',
+        '--parent', '#999'
+    ])
+
+    assert result.exit_code == 1
+    assert 'Parent issue #999 not found' in result.output

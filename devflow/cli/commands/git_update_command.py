@@ -24,6 +24,7 @@ def git_update(
     labels: Optional[str] = None,
     assignee: Optional[str] = None,
     milestone: Optional[str] = None,
+    parent: Optional[str] = None,
     repository: Optional[str] = None,
     output_json: bool = False,
 ) -> None:
@@ -37,6 +38,7 @@ def git_update(
         labels: New labels (comma-separated, replaces all labels)
         assignee: Assign to username
         milestone: Set milestone
+        parent: Link to parent issue (owner/repo#123 or #123)
         repository: Repository in owner/repo format (optional, will auto-detect)
         output_json: Output in JSON format
     """
@@ -67,37 +69,99 @@ def git_update(
     if milestone:
         payload['milestone'] = milestone
 
-    if not payload:
+    # Handle parent separately (not part of standard payload)
+    parent_to_link = None
+    if parent:
+        parent_to_link = parent
+
+    if not payload and not parent_to_link:
         console.print("[yellow]⚠[/yellow] No fields to update")
-        console.print("[dim]Specify at least one option: --state, --title, --description, --labels, --assignee, or --milestone[/dim]")
+        console.print("[dim]Specify at least one option: --state, --title, --description, --labels, --assignee, --milestone, or --parent[/dim]")
         sys.exit(1)
 
     try:
         # Create client (automatically returns mock in mock mode)
         client = GitHubClient(repository=repository)
 
+        # Validate parent issue exists if provided
+        if parent_to_link:
+            from devflow.issue_tracker.exceptions import IssueTrackerValidationError
+            console_print(f"\n[cyan]Validating parent issue {parent_to_link}...[/cyan]")
+            try:
+                parent_issue = client.get_issue(parent_to_link)
+                if not parent_issue:
+                    console.print(f"[red]✗[/red] Parent issue {parent_to_link} not found")
+                    if output_json:
+                        json_output(success=False, error={"message": f"Parent issue {parent_to_link} not found", "code": "PARENT_NOT_FOUND"})
+                    sys.exit(1)
+                console_print(f"[dim]Parent issue found: {parent_issue.get('summary', 'N/A')}[/dim]")
+            except IssueTrackerValidationError as e:
+                console.print(f"[red]✗[/red] Invalid parent issue key format: {parent_to_link}")
+                console.print(f"[dim]Expected '#123' or 'owner/repo#123'[/dim]")
+                if output_json:
+                    json_output(success=False, error={"message": str(e), "code": "INVALID_PARENT_FORMAT"})
+                sys.exit(1)
+            except IssueTrackerNotFoundError:
+                console.print(f"[red]✗[/red] Parent issue {parent_to_link} not found")
+                if output_json:
+                    json_output(success=False, error={"message": f"Parent issue {parent_to_link} not found", "code": "PARENT_NOT_FOUND"})
+                sys.exit(1)
+
         # Update issue
         if not output_json:
             console_print(f"[cyan]Updating issue {issue_key}...[/cyan]")
 
-        client.update_issue(issue_key, payload)
+        if payload:
+            client.update_issue(issue_key, payload)
+
+        # Link to parent if specified
+        if parent_to_link:
+            try:
+                # Parse parent to get full repository info
+                parent_repo, parent_number = client._parse_issue_number(parent_to_link)
+                parent_repo = client._get_repository(parent_repo)
+
+                # Add comment to child issue mentioning parent
+                client.add_comment(
+                    issue_key,
+                    f"Child of {parent_repo}#{parent_number}",
+                    public=True
+                )
+
+                # Add comment to parent issue mentioning child
+                client.add_comment(
+                    parent_to_link,
+                    f"Sub-issue linked: {issue_key}",
+                    public=True
+                )
+            except Exception as e:
+                console.print(f"[yellow]⚠[/yellow] Could not link to parent: {e}")
 
         # JSON output mode
         if output_json:
-            json_output(success=True, data={"issue_key": issue_key, "updated_fields": payload})
+            result_data = {"issue_key": issue_key}
+            if payload:
+                result_data["updated_fields"] = payload
+            if parent_to_link:
+                result_data["parent"] = parent_to_link
+            json_output(success=True, data=result_data)
             return
 
         # Console output mode
         console_print(f"[green]✓[/green] Updated issue {issue_key}")
 
         # Show what was updated
-        console.print("\n[dim]Updated fields:[/dim]")
-        for field, value in payload.items():
-            if field == 'assignees':
-                value = ', '.join([f"@{u}" for u in value])
-            elif field == 'labels':
-                value = ', '.join(value)
-            console.print(f"  {field}: {value}")
+        if payload:
+            console.print("\n[dim]Updated fields:[/dim]")
+            for field, value in payload.items():
+                if field == 'assignees':
+                    value = ', '.join([f"@{u}" for u in value])
+                elif field == 'labels':
+                    value = ', '.join(value)
+                console.print(f"  {field}: {value}")
+
+        if parent_to_link:
+            console.print(f"\n[dim]Linked to parent: {parent_to_link}[/dim]")
 
     except IssueTrackerNotFoundError as e:
         console.print(f"[red]✗[/red] Issue not found: {issue_key}")
