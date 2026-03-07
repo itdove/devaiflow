@@ -17,6 +17,7 @@ from rich.prompt import Confirm, IntPrompt
 from devflow.config.models import Config, ConversationContext, Session
 from devflow.jira import JiraClient
 from devflow.session.manager import SessionManager
+from devflow.utils.backend_detection import detect_backend_from_key
 
 console = Console()
 
@@ -419,9 +420,10 @@ def add_jira_comment(issue_key: str, comment: str, timeout: int = 10, silent_suc
     """Add a comment to a issue tracker ticket.
 
     Common pattern for adding comments to issue tracker tickets with proper error handling.
+    Automatically detects backend (JIRA vs GitHub/GitLab) from issue key format.
 
     Args:
-        issue_key: issue tracker key (e.g., "PROJ-12345")
+        issue_key: issue tracker key (e.g., "PROJ-12345" for JIRA, "#123" or "owner/repo#123" for GitHub)
         comment: Comment text to add
         timeout: Command timeout in seconds
         silent_success: If True, don't print success message (caller will print custom message)
@@ -430,20 +432,34 @@ def add_jira_comment(issue_key: str, comment: str, timeout: int = 10, silent_suc
         True if comment was added successfully, False otherwise
     """
     from devflow.jira.exceptions import JiraError
+    from devflow.github.issues_client import GitHubClient
+    from devflow.issue_tracker.exceptions import IssueTrackerError
 
     try:
-        jira_client = JiraClient(timeout=timeout)
-        jira_client.add_comment(issue_key, comment)
+        # Detect backend from issue key format
+        from devflow.config.loader import ConfigLoader
+        config_loader = ConfigLoader()
+        config = config_loader.load_config()
+        backend = detect_backend_from_key(issue_key, config)
+
+        if backend == "github":
+            # Use GitHub client for GitHub/GitLab issues
+            github_client = GitHubClient(timeout=timeout)
+            github_client.add_comment(issue_key, comment)
+        else:
+            # Use JIRA client for JIRA issues
+            jira_client = JiraClient(timeout=timeout)
+            jira_client.add_comment(issue_key, comment)
 
         if not silent_success:
             console.print(f"[green]✓[/green] Comment added to issue tracker ticket {issue_key}")
         return True
 
-    except JiraError as e:
-        console.print(f"[yellow]⚠[/yellow] Failed to add JIRA comment: {e}")
+    except (JiraError, IssueTrackerError) as e:
+        console.print(f"[yellow]⚠[/yellow] Failed to add comment: {e}")
         return False
     except Exception as e:
-        console.print(f"[yellow]⚠[/yellow] Failed to add JIRA comment: {e}")
+        console.print(f"[yellow]⚠[/yellow] Failed to add comment: {e}")
         return False
 
 

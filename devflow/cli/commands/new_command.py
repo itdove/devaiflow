@@ -24,6 +24,7 @@ from devflow.suggestions import RepositorySuggester
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.cli.skills_discovery import discover_skills
 from devflow.utils.context_files import load_hierarchical_context_files
+from devflow.utils.backend_detection import detect_backend_from_key
 
 console = Console()
 
@@ -147,10 +148,17 @@ def _generate_initial_prompt(
             prompt += f"- {path}\n"
         prompt += "\nThese skills contain essential tool usage information and must be read completely.\n"
 
-    # Add JIRA reading instruction using daf jira view command with comments
+    # Add issue tracker reading instruction with backend detection
     if issue_key:
+        # Detect backend from issue key format
+        backend = detect_backend_from_key(issue_key, config)
+
         prompt += f"\nAlso read the issue tracker ticket with comments:\n"
-        prompt += f"daf jira view {issue_key} --comments\n"
+        if backend == "github":
+            prompt += f"daf git view {issue_key} --comments\n"
+        else:
+            # JIRA or other backends
+            prompt += f"daf jira view {issue_key} --comments\n"
 
     # Add multi-project scope constraints if this session has multiple conversations
     if other_projects and current_project:
