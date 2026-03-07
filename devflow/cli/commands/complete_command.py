@@ -1677,7 +1677,12 @@ def _generate_pr_title(session, working_dir: Path) -> str:
     # Start with issue key if available
     title_prefix = f"{session.issue_key}: " if session.issue_key else ""
 
-    # Try to generate a concise title from commits
+    # First priority: Use issue title from metadata if available
+    # This ensures PR titles match the original issue titles exactly
+    if session.issue_metadata and session.issue_metadata.get('summary'):
+        return f"{title_prefix}{session.issue_metadata['summary']}"
+
+    # Second priority: Try to generate a concise title from commits
     try:
         base_branch = GitUtils.get_default_branch(working_dir)
         commit_log = GitUtils.get_commit_log(working_dir, base_branch)
@@ -1732,7 +1737,7 @@ def _generate_pr_title(session, working_dir: Path) -> str:
     except Exception:
         pass
 
-    # Fallback: use session goal
+    # Final fallback: use session goal
     goal = session.goal
 
     # Remove issue key from goal if present

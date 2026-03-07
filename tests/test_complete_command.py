@@ -1187,6 +1187,229 @@ def test_generate_pr_title_without_backticks_still_works(temp_daf_home, tmp_path
     assert title == "PROJ-12345: Add comprehensive test coverage for validation"
 
 
+def test_generate_pr_title_uses_issue_metadata_summary(temp_daf_home, tmp_path, monkeypatch):
+    """Test that _generate_pr_title uses issue_metadata['summary'] first before commit heuristics."""
+    import subprocess
+    from devflow.cli.commands.complete_command import _generate_pr_title
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+
+    # Create a git repository
+    repo_dir = tmp_path / "test-repo-metadata"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    # Create initial commit on main
+    (repo_dir / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, capture_output=True)
+
+    # Create a feature branch
+    subprocess.run(["git", "checkout", "-b", "feature-metadata"], cwd=repo_dir, capture_output=True)
+
+    # Create a commit with generic message (commit heuristics would generate generic title)
+    (repo_dir / "new-file.txt").write_text("new content")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Update commands functionality"], cwd=repo_dir, capture_output=True)
+
+    # Create session with issue_metadata
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="metadata-test",
+        goal="Test metadata usage",
+        working_directory="test-repo-metadata",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-metadata",
+        branch="feature-metadata",
+        issue_key="itdove/devaiflow#65",
+    )
+
+    # Set issue_metadata with the actual issue title (like GitHub/GitLab issues)
+    session.issue_metadata = {
+        'summary': 'daf list --json output missing workspace_name field from sessions',
+        'type': 'task',
+        'status': 'open'
+    }
+
+    # Generate PR title
+    title = _generate_pr_title(session, repo_dir)
+
+    # Title should use issue_metadata['summary'] instead of commit heuristics
+    assert title == "itdove/devaiflow#65: daf list --json output missing workspace_name field from sessions"
+    # Should NOT use the generic commit-based title
+    assert "Update commands functionality" not in title
+
+
+def test_generate_pr_title_uses_jira_metadata_summary(temp_daf_home, tmp_path, monkeypatch):
+    """Test that _generate_pr_title uses issue_metadata['summary'] for JIRA issues."""
+    import subprocess
+    from devflow.cli.commands.complete_command import _generate_pr_title
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+
+    # Create a git repository
+    repo_dir = tmp_path / "test-repo-jira"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    # Create initial commit on main
+    (repo_dir / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, capture_output=True)
+
+    # Create a feature branch
+    subprocess.run(["git", "checkout", "-b", "feature-jira"], cwd=repo_dir, capture_output=True)
+
+    # Create commits
+    (repo_dir / "file1.txt").write_text("content 1")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Add file"], cwd=repo_dir, capture_output=True)
+
+    (repo_dir / "file2.txt").write_text("content 2")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Update functionality"], cwd=repo_dir, capture_output=True)
+
+    # Create session with JIRA issue_metadata
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="jira-test",
+        goal="Test JIRA metadata usage",
+        working_directory="test-repo-jira",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-jira",
+        branch="feature-jira",
+        issue_key="PROJ-12345",
+    )
+
+    # Set issue_metadata with JIRA ticket title
+    session.issue_metadata = {
+        'summary': 'Implement comprehensive error handling for API endpoints',
+        'type': 'Story',
+        'status': 'In Progress'
+    }
+
+    # Generate PR title
+    title = _generate_pr_title(session, repo_dir)
+
+    # Title should use issue_metadata['summary'] instead of commit heuristics
+    assert title == "PROJ-12345: Implement comprehensive error handling for API endpoints"
+    # Should NOT use generic commit-based title like "Update multiple components"
+    assert "Update multiple components" not in title
+
+
+def test_generate_pr_title_fallback_without_metadata(temp_daf_home, tmp_path, monkeypatch):
+    """Test that _generate_pr_title falls back to commit heuristics when no issue_metadata."""
+    import subprocess
+    from devflow.cli.commands.complete_command import _generate_pr_title
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+
+    # Create a git repository
+    repo_dir = tmp_path / "test-repo-fallback"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    # Create initial commit on main
+    (repo_dir / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, capture_output=True)
+
+    # Create a feature branch
+    subprocess.run(["git", "checkout", "-b", "feature-fallback"], cwd=repo_dir, capture_output=True)
+
+    # Create a commit
+    (repo_dir / "new-file.txt").write_text("new content")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Add caching layer"], cwd=repo_dir, capture_output=True)
+
+    # Create session WITHOUT issue_metadata (manual session)
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="fallback-test",
+        goal="Test fallback behavior",
+        working_directory="test-repo-fallback",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-fallback",
+        branch="feature-fallback",
+        issue_key="PROJ-99999",
+    )
+
+    # Do NOT set issue_metadata (simulating old sessions or manual sessions)
+    # This tests backward compatibility
+
+    # Generate PR title
+    title = _generate_pr_title(session, repo_dir)
+
+    # Title should use commit message since no metadata available
+    assert title == "PROJ-99999: Add caching layer"
+
+
+def test_generate_pr_title_fallback_empty_metadata(temp_daf_home, tmp_path, monkeypatch):
+    """Test that _generate_pr_title falls back when issue_metadata exists but has no summary."""
+    import subprocess
+    from devflow.cli.commands.complete_command import _generate_pr_title
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+
+    # Create a git repository
+    repo_dir = tmp_path / "test-repo-empty"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    # Create initial commit on main
+    (repo_dir / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, capture_output=True)
+
+    # Create a feature branch
+    subprocess.run(["git", "checkout", "-b", "feature-empty"], cwd=repo_dir, capture_output=True)
+
+    # Create a commit
+    (repo_dir / "new-file.txt").write_text("new content")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Refactor authentication module"], cwd=repo_dir, capture_output=True)
+
+    # Create session with empty issue_metadata
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="empty-test",
+        goal="Test empty metadata",
+        working_directory="test-repo-empty",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-empty",
+        branch="feature-empty",
+        issue_key="PROJ-88888",
+    )
+
+    # Set issue_metadata but without summary field
+    session.issue_metadata = {
+        'type': 'task',
+        'status': 'open'
+    }
+
+    # Generate PR title
+    title = _generate_pr_title(session, repo_dir)
+
+    # Title should use commit message since metadata has no summary
+    assert title == "PROJ-88888: Refactor authentication module"
+
+
 def test_complete_session_with_latest_flag(temp_daf_home, monkeypatch, capsys):
     """Test completing the most recently active session using --latest flag."""
     # Create multiple sessions
