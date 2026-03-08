@@ -17,6 +17,7 @@ from devflow.git.utils import GitUtils
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.cli.skills_discovery import discover_skills
 from devflow.utils.context_files import load_hierarchical_context_files
+from devflow.utils.daf_agents_validation import validate_daf_agents_md
 
 console = Console()
 
@@ -452,6 +453,10 @@ def create_jira_ticket_session(
         # Fallback to default if session doesn't have workspace
         workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
+
+    # Validate that DAF_AGENTS.md exists before launching Claude
+    if not validate_daf_agents_md(session, config_loader):
+        return
 
     # Set up signal handlers for cleanup (using unified utility)
     setup_signal_handlers(session, session_manager, name, config)

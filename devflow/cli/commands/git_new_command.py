@@ -18,6 +18,7 @@ from devflow.git.utils import GitUtils
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.cli.skills_discovery import discover_skills
 from devflow.utils.context_files import load_hierarchical_context_files
+from devflow.utils.daf_agents_validation import validate_daf_agents_md
 
 console = Console()
 
@@ -487,6 +488,10 @@ def create_git_issue_session(
     elif config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, parent=parent, repository=repository)
+
+    # Validate that DAF_AGENTS.md exists before launching Claude
+    if not validate_daf_agents_md(session, config_loader):
+        return
 
     # Set up signal handlers for cleanup
     setup_signal_handlers(session, session_manager, name, config)

@@ -25,6 +25,7 @@ from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.cli.skills_discovery import discover_skills
 from devflow.utils.context_files import load_hierarchical_context_files
 from devflow.utils.backend_detection import detect_backend_from_key
+from devflow.utils.daf_agents_validation import validate_daf_agents_md
 
 console = Console()
 
@@ -673,6 +674,10 @@ def create_new_session(
         # Set GCP Vertex AI region if configured
         if config and config.gcp_vertex_region:
             env["CLOUD_ML_REGION"] = config.gcp_vertex_region
+
+        # Validate that DAF_AGENTS.md exists before launching Claude
+        if not validate_daf_agents_md(session, config_loader):
+            return
 
         # Set up signal handlers for cleanup (using unified utility)
         setup_signal_handlers(session, session_manager, name, config)
