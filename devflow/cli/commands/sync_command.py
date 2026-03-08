@@ -19,6 +19,46 @@ from devflow.session.manager import SessionManager
 console = Console()
 
 
+def get_workspace_from_creation_session(
+    session_manager: SessionManager,
+    issue_key: str,
+) -> Optional[str]:
+    """Get workspace from creation session if it exists.
+
+    Args:
+        session_manager: SessionManager instance
+        issue_key: Issue key (e.g., "PROJ-12345" for JIRA, "owner/repo#123" for GitHub)
+
+    Returns:
+        workspace_name from creation session if found, None otherwise
+
+    This function looks for a creation session (session_type == "ticket_creation")
+    that matches the pattern "creation-{issue_key}" or "creation-{session_name}"
+    and returns its workspace_name if set.
+    """
+    # For JIRA: creation-PROJ-12345
+    # For GitHub: creation-owner-repo-123 (convert issue key to session name first)
+    creation_session_name = f"creation-{issue_key}"
+
+    # Try direct lookup first (JIRA case)
+    creation_session = session_manager.get_session(creation_session_name)
+
+    # If not found and issue_key contains # or /, it's a GitHub/GitLab issue
+    # Convert to session name format and try again
+    if not creation_session and ("#" in issue_key or "/" in issue_key):
+        # Convert GitHub issue key to session name format
+        session_name = issue_key_to_session_name(issue_key)
+        creation_session_name = f"creation-{session_name}"
+        creation_session = session_manager.get_session(creation_session_name)
+
+    # Validate: must be ticket_creation type and have workspace_name set
+    if creation_session:
+        if creation_session.session_type == "ticket_creation" and creation_session.workspace_name:
+            return creation_session.workspace_name
+
+    return None
+
+
 def issue_key_to_session_name(issue_key: str, hostname: Optional[str] = None) -> str:
     """Convert GitHub/GitLab issue key to dash-separated session name.
 
@@ -197,6 +237,12 @@ def sync_jira(
             # Copy ALL fields from ticket to issue_metadata (generic approach)
             # Exclude the 'key' and 'updated' fields (already stored separately)
             session.issue_metadata = {k: v for k, v in ticket.items() if k not in ('key', 'updated') and v is not None}
+
+            # Auto-inherit workspace from creation session (itdove/devaiflow#131)
+            # If user created ticket with `daf jira new --workspace X`, inherit workspace X
+            inherited_workspace = get_workspace_from_creation_session(session_manager, issue_key)
+            if inherited_workspace:
+                session.workspace_name = inherited_workspace
 
             session_manager.update_session(session)
             created_count += 1
@@ -449,6 +495,12 @@ def sync_github_repository(
                     if k not in ('key', 'updated') and v is not None
                 }
 
+                # Auto-inherit workspace from creation session (itdove/devaiflow#131)
+                # If user created ticket with `daf git new --workspace X`, inherit workspace X
+                inherited_workspace = get_workspace_from_creation_session(session_manager, issue_key)
+                if inherited_workspace:
+                    session.workspace_name = inherited_workspace
+
                 session_manager.update_session(session)
                 created_count += 1
 
@@ -586,6 +638,12 @@ def sync_multi_backend(
                             k: v for k, v in ticket.items()
                             if k not in ('key', 'updated') and v is not None
                         }
+
+                        # Auto-inherit workspace from creation session (itdove/devaiflow#131)
+                        # If user created ticket with `daf jira new --workspace X`, inherit workspace X
+                        inherited_workspace = get_workspace_from_creation_session(session_manager, issue_key)
+                        if inherited_workspace:
+                            session.workspace_name = inherited_workspace
 
                         session_manager.update_session(session)
                         jira_created += 1
