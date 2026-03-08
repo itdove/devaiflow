@@ -11,10 +11,11 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 
-from devflow.cli.utils import console_print
+from devflow.cli.utils import console_print, is_json_mode
 from devflow.git.utils import GitUtils
+from devflow.utils.paths import is_mock_mode
 
 
 def should_clone_to_temp(path: Path) -> bool:
@@ -29,6 +30,91 @@ def should_clone_to_temp(path: Path) -> bool:
         True if we should prompt to clone, False otherwise
     """
     return GitUtils.is_git_repository(path)
+
+
+def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
+    """Prompt user to select a branch after cloning to temp directory.
+
+    Args:
+        repo_path: Path to the cloned repository
+
+    Returns:
+        Selected branch name, or None if selection should be skipped or failed
+    """
+    # Skip prompting in non-interactive modes (mock or JSON output)
+    if is_mock_mode() or is_json_mode():
+        return None
+
+    # Get list of remotes
+    remotes = GitUtils.get_remote_names(repo_path)
+    if not remotes:
+        console_print("[yellow]⚠[/yellow] No remotes found in repository")
+        return None
+
+    # Determine which remote to use (prefer upstream over origin)
+    remote = "upstream" if "upstream" in remotes else "origin"
+    if remote not in remotes:
+        console_print(f"[yellow]⚠[/yellow] Remote '{remote}' not found")
+        return None
+
+    # List available branches from the remote
+    console_print(f"[dim]Fetching branches from {remote}...[/dim]")
+    branches = GitUtils.list_remote_branches(repo_path, remote)
+    if not branches:
+        console_print(f"[yellow]⚠[/yellow] No branches found on remote '{remote}'")
+        return None
+
+    # Determine default branch with priority: upstream/main > upstream/master > origin/main > origin/master
+    default_branch = None
+    default_candidates = ["main", "master"]
+    for candidate in default_candidates:
+        if candidate in branches:
+            default_branch = candidate
+            break
+
+    if not default_branch and branches:
+        # If no main/master, use first available branch
+        default_branch = branches[0]
+
+    # Build branch selection menu
+    console_print("\nSelect branch to checkout:")
+    for idx, branch in enumerate(branches, start=1):
+        if branch == default_branch:
+            console_print(f"  {idx}. {branch} [cyan](default - from {remote})[/cyan]")
+        else:
+            console_print(f"  {idx}. {branch}")
+
+    # Prompt user for selection
+    try:
+        choice = Prompt.ask(
+            "\nEnter selection",
+            default="1" if default_branch else None,
+            show_default=True
+        )
+
+        # Parse selection (can be number or branch name)
+        try:
+            # Try to parse as number
+            selection_num = int(choice)
+            if 1 <= selection_num <= len(branches):
+                selected_branch = branches[selection_num - 1]
+            else:
+                console_print(f"[yellow]⚠[/yellow] Invalid selection: {choice}")
+                console_print(f"[dim]Using default branch: {default_branch}[/dim]")
+                selected_branch = default_branch
+        except ValueError:
+            # Not a number, treat as branch name
+            if choice in branches:
+                selected_branch = choice
+            else:
+                console_print(f"[yellow]⚠[/yellow] Branch '{choice}' not found")
+                console_print(f"[dim]Using default branch: {default_branch}[/dim]")
+                selected_branch = default_branch
+
+        return selected_branch
+    except (KeyboardInterrupt, EOFError):
+        console_print("\n[dim]Branch selection cancelled, using default[/dim]")
+        return default_branch
 
 
 def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
@@ -82,23 +168,39 @@ def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
             pass
         return None
 
-    # Checkout default branch
-    default_branch = GitUtils.get_default_branch(Path(temp_dir))
-    if default_branch:
-        console_print(f"[dim]Checked out default branch: {default_branch}[/dim]")
-        # Branch was already checked out during clone, but let's verify
-        current_branch = GitUtils.get_current_branch(Path(temp_dir))
-        if current_branch != default_branch:
-            if not GitUtils.checkout_branch(Path(temp_dir), default_branch):
-                console_print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}")
-    else:
-        console_print(f"[yellow]⚠[/yellow] Could not determine default branch (trying main, master, develop)")
-        # Try common default branches
-        for branch in ["main", "master", "develop"]:
-            if GitUtils.branch_exists(Path(temp_dir), branch):
-                if GitUtils.checkout_branch(Path(temp_dir), branch):
-                    console_print(f"[dim]Checked out branch: {branch}[/dim]")
-                    break
+    console_print(f"[green]✓[/green] Repository cloned")
+
+    # Prompt user to select branch (unless in non-interactive mode)
+    selected_branch = _prompt_for_branch_selection(Path(temp_dir))
+
+    if selected_branch:
+        # Checkout the selected branch
+        console_print(f"[dim]Checking out branch: {selected_branch}...[/dim]")
+        if GitUtils.checkout_branch(Path(temp_dir), selected_branch):
+            console_print(f"[green]✓[/green] Checked out branch: {selected_branch}")
+        else:
+            console_print(f"[yellow]⚠[/yellow] Could not checkout {selected_branch}")
+            console_print("[dim]Falling back to auto-detection[/dim]")
+            selected_branch = None
+
+    # If no branch was selected or checkout failed, fall back to auto-detection
+    if not selected_branch:
+        default_branch = GitUtils.get_default_branch(Path(temp_dir))
+        if default_branch:
+            console_print(f"[dim]Checked out default branch: {default_branch}[/dim]")
+            # Branch was already checked out during clone, but let's verify
+            current_branch = GitUtils.get_current_branch(Path(temp_dir))
+            if current_branch != default_branch:
+                if not GitUtils.checkout_branch(Path(temp_dir), default_branch):
+                    console_print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}")
+        else:
+            console_print(f"[yellow]⚠[/yellow] Could not determine default branch (trying main, master, develop)")
+            # Try common default branches
+            for branch in ["main", "master", "develop"]:
+                if GitUtils.branch_exists(Path(temp_dir), branch):
+                    if GitUtils.checkout_branch(Path(temp_dir), branch):
+                        console_print(f"[dim]Checked out branch: {branch}[/dim]")
+                        break
 
     # Return temp directory and original path
     original_path = str(current_path.absolute())

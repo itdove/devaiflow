@@ -17,6 +17,7 @@ from devflow.utils.temp_directory import (
     should_clone_to_temp,
     prompt_and_clone_to_temp,
     cleanup_temp_directory,
+    _prompt_for_branch_selection,
 )
 
 
@@ -219,7 +220,8 @@ class TestPromptAndCloneToTemp:
              patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
              patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value=None), \
              patch("devflow.utils.temp_directory.GitUtils.branch_exists", return_value=False), \
-             patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True):
+             patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True), \
+             patch("devflow.utils.temp_directory._prompt_for_branch_selection", return_value=None):
 
             result = prompt_and_clone_to_temp(mock_git_repo)
 
@@ -228,6 +230,63 @@ class TestPromptAndCloneToTemp:
             temp_directory, original_project_path = result
             assert temp_directory == temp_dir
             assert original_project_path == str(mock_git_repo.absolute())
+
+    def test_clone_with_branch_selection_prompt(self, mock_git_repo, tmp_path):
+        """Test that branch selection prompt is called after successful clone."""
+        temp_dir = str(tmp_path / "test-temp-clone")
+
+        with patch("devflow.utils.temp_directory.Confirm.ask", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_url", return_value="https://example.com/repo.git"), \
+             patch("tempfile.mkdtemp", return_value=temp_dir), \
+             patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
+             patch("devflow.utils.temp_directory._prompt_for_branch_selection", return_value="develop") as mock_prompt, \
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=True) as mock_checkout:
+
+            result = prompt_and_clone_to_temp(mock_git_repo)
+
+            assert result is not None
+            # Verify branch selection was prompted
+            mock_prompt.assert_called_once_with(Path(temp_dir))
+            # Verify the selected branch was checked out
+            mock_checkout.assert_called_once_with(Path(temp_dir), "develop")
+
+    def test_clone_with_branch_selection_in_mock_mode(self, mock_git_repo, tmp_path):
+        """Test that branch selection is skipped in mock mode."""
+        temp_dir = str(tmp_path / "test-temp-clone")
+
+        with patch("devflow.utils.temp_directory.Confirm.ask", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_url", return_value="https://example.com/repo.git"), \
+             patch("tempfile.mkdtemp", return_value=temp_dir), \
+             patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
+             patch("devflow.utils.temp_directory._prompt_for_branch_selection", return_value=None) as mock_prompt, \
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
+             patch("devflow.utils.temp_directory.GitUtils.get_current_branch", return_value="main"):
+
+            result = prompt_and_clone_to_temp(mock_git_repo)
+
+            assert result is not None
+            # Verify branch selection was called (returns None in mock mode)
+            mock_prompt.assert_called_once_with(Path(temp_dir))
+
+    def test_clone_with_failed_branch_checkout_falls_back(self, mock_git_repo, tmp_path):
+        """Test that failed branch checkout falls back to auto-detection."""
+        temp_dir = str(tmp_path / "test-temp-clone")
+
+        with patch("devflow.utils.temp_directory.Confirm.ask", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_url", return_value="https://example.com/repo.git"), \
+             patch("tempfile.mkdtemp", return_value=temp_dir), \
+             patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
+             patch("devflow.utils.temp_directory._prompt_for_branch_selection", return_value="feature/test"), \
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
+             patch("devflow.utils.temp_directory.GitUtils.get_current_branch", return_value="main"):
+
+            result = prompt_and_clone_to_temp(mock_git_repo)
+
+            # Should still succeed and fall back to auto-detection
+            assert result is not None
+            temp_directory, original_project_path = result
+            assert temp_directory == temp_dir
 
 
 class TestCleanupTempDirectory:
@@ -286,3 +345,138 @@ class TestCleanupTempDirectory:
 
         assert not temp_dir.exists()
         assert not nested.exists()
+
+
+class TestPromptForBranchSelection:
+    """Test the _prompt_for_branch_selection function."""
+
+    def test_returns_none_in_mock_mode(self, mock_git_repo):
+        """Test that function returns None when in mock mode."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=True):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            assert result is None
+
+    def test_returns_none_in_json_mode(self, mock_git_repo):
+        """Test that function returns None when in JSON mode."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=True):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            assert result is None
+
+    def test_returns_none_when_no_remotes(self, mock_git_repo):
+        """Test that function returns None when no remotes are found."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=[]):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            assert result is None
+
+    def test_returns_none_when_no_branches(self, mock_git_repo):
+        """Test that function returns None when no branches are found on remote."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=[]):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            assert result is None
+
+    def test_prefers_upstream_over_origin(self, mock_git_repo):
+        """Test that function prefers upstream remote over origin."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin", "upstream"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop"]) as mock_list_branches, \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Verify that upstream was used, not origin
+            mock_list_branches.assert_called_once_with(mock_git_repo, "upstream")
+            assert result == "main"
+
+    def test_uses_origin_when_upstream_not_available(self, mock_git_repo):
+        """Test that function uses origin when upstream is not available."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop"]) as mock_list_branches, \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Verify that origin was used
+            mock_list_branches.assert_called_once_with(mock_git_repo, "origin")
+            assert result == "main"
+
+    def test_selects_main_as_default_over_master(self, mock_git_repo):
+        """Test that main is preferred over master as default branch."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "master"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Should default to main (first in priority list)
+            assert result == "develop"  # Index 1 = first item in sorted list
+
+    def test_selects_master_as_default_when_no_main(self, mock_git_repo):
+        """Test that master is used as default when main is not available."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "master", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Should select first item (default selection is "1")
+            assert result == "develop"
+
+    def test_user_can_select_branch_by_number(self, mock_git_repo):
+        """Test that user can select a branch by entering its number."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="3"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # User selected option 3 (release/2.5)
+            assert result == "release/2.5"
+
+    def test_user_can_select_branch_by_name(self, mock_git_repo):
+        """Test that user can select a branch by entering its name."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="release/2.5"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # User entered branch name directly
+            assert result == "release/2.5"
+
+    def test_invalid_selection_falls_back_to_default(self, mock_git_repo):
+        """Test that invalid selection falls back to default branch."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="99"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Invalid selection should fall back to default (main)
+            assert result == "main"
+
+    def test_keyboard_interrupt_returns_default(self, mock_git_repo):
+        """Test that keyboard interrupt returns default branch."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", side_effect=KeyboardInterrupt()):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Should return default branch on interrupt
+            assert result == "main"
+
+    def test_empty_input_uses_default(self, mock_git_repo):
+        """Test that pressing Enter without input uses default branch."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Default selection should be used
+            assert result == "main"
