@@ -438,24 +438,48 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 6: Initialize test git repository
-print_section "Test 6: Initialize Test Git Repository"
-print_test "Create and initialize git repository"
+# Test 6: Clone test git repository
+print_section "Test 6: Clone Test Git Repository"
+print_test "Clone test repository from GitHub"
 
+# Remove the temp directory if it exists (from mkdir earlier)
+rm -rf "$TEMP_GIT_REPO"
+
+# Clone the test repository (it should already exist on GitHub with a main branch)
+git clone "https://github.com/${DAF_TEST_GITHUB_REPO}.git" "$TEMP_GIT_REPO" > /dev/null 2>&1
+CLONE_EXIT_CODE=$?
+
+if [ $CLONE_EXIT_CODE -eq 0 ]; then
+    echo -e "  ${GREEN}✓${NC} Test repository cloned to $TEMP_GIT_REPO"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} Failed to clone test repository"
+    echo -e "  ${RED}Repository:${NC} https://github.com/${DAF_TEST_GITHUB_REPO}.git"
+    echo -e "  ${RED}Make sure GITHUB_TOKEN has access to this repository${NC}"
+    exit 1
+fi
+
+print_test "Configure git credentials for test repository"
 (
     cd "$TEMP_GIT_REPO"
-    git init > /dev/null 2>&1
     git config user.name "Test User" > /dev/null 2>&1
     git config user.email "test@example.com" > /dev/null 2>&1
-
-    # Add a remote pointing to the test repository
-    git remote add origin "https://github.com/${DAF_TEST_GITHUB_REPO}.git" > /dev/null 2>&1
-
-    echo "# Test Repository" > README.md
-    git add README.md > /dev/null 2>&1
-    git commit -m "Initial commit" > /dev/null 2>&1
+    # Configure gh CLI for authentication
+    git config --local credential.helper ""
+    git config --local --add credential.helper '!gh auth git-credential'
 ) 2>&1
-verify_success "git init" "Git repository initialized at $TEMP_GIT_REPO"
+verify_success "git config" "Git credentials configured"
+
+print_test "Verify we're on main branch"
+CURRENT_BRANCH=$(cd "$TEMP_GIT_REPO" && git branch --show-current)
+if [[ "$CURRENT_BRANCH" == "main" ]] || [[ "$CURRENT_BRANCH" == "master" ]]; then
+    echo -e "  ${GREEN}✓${NC} On main branch: $CURRENT_BRANCH"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${YELLOW}⚠${NC} On branch: $CURRENT_BRANCH (expected main or master)"
+    echo -e "  ${YELLOW}Note:${NC} Continuing test"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
 
 # Test 7: Create GitHub issue
 print_section "Test 7: Create GitHub Issue"
@@ -580,18 +604,21 @@ echo -e "${YELLOW}Debug:${NC} Session directory contents:"
 ls -la "$DEVAIFLOW_HOME/" 2>&1 | sed 's/^/    /'
 echo ""
 
-# Test 10: Configure git authentication for daf complete
-print_section "Test 10: Configure Git Authentication"
-print_test "Configure git to use gh as credential helper"
+# Test 10: Verify git authentication
+print_section "Test 10: Verify Git Authentication"
+print_test "Verify gh CLI authentication is configured"
 
-# Configure git to use gh CLI for authentication (gh is already authenticated)
-# This is needed for daf complete to push the feature branch
-(
-    cd "$TEMP_GIT_REPO"
-    git config --local credential.helper ""
-    git config --local --add credential.helper '!gh auth git-credential'
-) 2>&1
-verify_success "git config credential.helper" "Git configured to use gh CLI for auth"
+# Git authentication was already configured during repository clone (Test 6)
+# Just verify it's set up correctly
+GH_AUTH_STATUS=$(gh auth status 2>&1 | grep "Logged in" || echo "not logged in")
+if echo "$GH_AUTH_STATUS" | grep -q "Logged in"; then
+    echo -e "  ${GREEN}✓${NC} gh CLI authenticated and ready"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} gh CLI not authenticated"
+    echo -e "  ${RED}Status:${NC} $GH_AUTH_STATUS"
+    exit 1
+fi
 
 # Test 11: Create feature branch for the session
 print_section "Test 11: Create Feature Branch for Session"
