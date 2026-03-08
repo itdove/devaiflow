@@ -1514,19 +1514,22 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
     config = config_loader.load_config()
     template_content = None
 
-    # If no template URL configured, prompt the user
+    # If no template URL configured, optionally prompt the user (skip if auto-create is enabled)
     if config and not config.pr_template_url:
-        console.print("\n[yellow]No PR/MR template URL configured.[/yellow]")
-        if Confirm.ask("Would you like to configure a PR/MR template URL now?", default=True):
-            console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
-            template_url = Prompt.ask("Enter PR/MR template URL (leave empty to skip)", default="")
-            if template_url and template_url.strip():
-                config.pr_template_url = template_url.strip()
+        # Skip prompt if auto_create_pr_on_complete is enabled (automated workflow)
+        auto_create = config.prompts and config.prompts.auto_create_pr_on_complete
+        if not auto_create:
+            console.print("\n[yellow]No PR/MR template URL configured.[/yellow]")
+            if Confirm.ask("Would you like to configure a PR/MR template URL now?", default=True):
+                console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
+                template_url = Prompt.ask("Enter PR/MR template URL (leave empty to skip)", default="")
+                if template_url and template_url.strip():
+                    config.pr_template_url = template_url.strip()
 
-            # Save updated config
-            if config.pr_template_url:
-                config_loader.save_config(config)
-                console.print(f"[green]✓[/green] Saved PR template URL to config")
+                # Save updated config
+                if config.pr_template_url:
+                    config_loader.save_config(config)
+                    console.print(f"[green]✓[/green] Saved PR template URL to config")
 
     if config and config.pr_template_url:
         template_content = _fetch_pr_template(config.pr_template_url)

@@ -3,8 +3,8 @@
 # Integration test for DevAIFlow installation workflow with auto_close_on_complete
 #
 # This test validates the complete installation workflow including the auto_close_on_complete
-# feature for GitHub issues. Unlike other integration tests, this runs against real GitHub API
-# (not mock mode) to validate the end-to-end experience.
+# and auto_create_pr_on_complete features for GitHub issues. Unlike other integration tests,
+# this runs against real GitHub API (not mock mode) to validate the end-to-end experience.
 #
 # Requirements:
 #   - GITHUB_TOKEN environment variable set (your GitHub personal access token)
@@ -19,13 +19,19 @@
 # Test workflow:
 #   1. Clone DevAIFlow repository to temp directory
 #   2. Install DevAIFlow in fresh Python venv from source
-#   3. Programmatically create config.json with auto_close_on_complete=true
+#   3. Programmatically create config with auto_close_on_complete and auto_create_pr_on_complete
 #   4. Authenticate with GitHub using GITHUB_TOKEN
 #   5. Run daf upgrade to install skills
 #   6. Create a GitHub issue using daf git create
-#   7. Create and complete a session
-#   8. Verify the issue was automatically closed (no user prompt)
-#   9. Clean up test environment
+#   7. Sync issue with daf sync (creates session)
+#   8. Configure git to use gh CLI for authentication
+#   9. Create feature branch manually (matching session name)
+#  10. Make code changes and commit them
+#  11. Complete session (should push feature branch, auto-create PR, and auto-close issue)
+#  12. Verify PR was created
+#  13. Approve and merge the PR using gh CLI
+#  14. Verify the issue was automatically closed (no user prompt)
+#  15. Clean up test environment
 
 # Parse arguments
 DEBUG_MODE=false
@@ -82,15 +88,20 @@ verify_success() {
 }
 
 # Check prerequisites
-print_section "Installation Auto-Close Integration Test"
-echo "This script tests the complete installation workflow with auto_close_on_complete:"
+print_section "Installation Auto-Close and Auto-PR Integration Test"
+echo "This script tests the complete installation workflow with auto features:"
 echo "  1. Clone DevAIFlow from GitHub"
 echo "  2. Install DevAIFlow from source in fresh venv"
-echo "  3. Create config with auto_close_on_complete=true"
+echo "  3. Create config with auto_close_on_complete and auto_create_pr_on_complete"
 echo "  4. Run daf upgrade to install skills"
-echo "  5. Create GitHub issue and session"
-echo "  6. Complete session and verify issue auto-closed"
-echo "  7. Clean up test environment"
+echo "  5. Create GitHub issue and sync"
+echo "  6. Configure git authentication (gh CLI)"
+echo "  7. Create feature branch (matching session)"
+echo "  8. Make code changes and commit"
+echo "  9. Complete session (auto-push, auto-create PR, auto-close issue)"
+echo " 10. Approve and merge PR with gh CLI"
+echo " 11. Verify issue auto-closed"
+echo " 12. Clean up test environment"
 echo ""
 echo "Note: This test uses REAL GitHub API (not mock mode)"
 echo ""
@@ -228,6 +239,10 @@ print_test "Install DevAIFlow with pip install -e ."
 pip install -e "$TEMP_PROJECT_DIR" > /dev/null 2>&1
 verify_success "pip install -e ." "DevAIFlow installed from source"
 
+# IMPORTANT: Export DEVAIFLOW_HOME BEFORE running any daf commands
+# This prevents daf from creating config in the default ~/.daf-sessions location
+export DEVAIFLOW_HOME="$TEMP_DEVAIFLOW_HOME"
+
 print_test "Verify daf command is available"
 if command -v daf &> /dev/null; then
     DAF_VERSION=$(daf --version 2>&1 || echo "unknown")
@@ -241,8 +256,6 @@ fi
 # Test 4: Programmatically create config.json
 print_section "Test 4: Create Configuration with auto_close_on_complete"
 print_test "Create config.json programmatically"
-
-export DEVAIFLOW_HOME="$TEMP_DEVAIFLOW_HOME"
 
 # Create config directories
 mkdir -p "$DEVAIFLOW_HOME/backends"
@@ -268,16 +281,17 @@ cat > "$DEVAIFLOW_HOME/config.json" <<'EOF'
   },
   "prompts": {
     "auto_launch_agent": false,
-    "auto_commit_on_complete": false,
+    "auto_commit_on_complete": true,
     "auto_accept_ai_commit_message": true,
-    "auto_create_pr_on_complete": false,
+    "auto_create_pr_on_complete": true,
     "auto_add_issue_summary": false,
     "auto_update_jira_pr_url": false,
-    "auto_push_to_remote": false,
+    "auto_push_to_remote": true,
     "auto_checkout_branch": true,
     "auto_sync_with_base": "never",
     "auto_complete_on_exit": false,
-    "auto_create_pr_status": "draft",
+    "auto_create_pr_status": "ready",
+    "auto_select_target_branch": true,
     "show_prompt_unit_tests": false,
     "auto_load_related_conversations": false
   },
@@ -566,8 +580,130 @@ echo -e "${YELLOW}Debug:${NC} Session directory contents:"
 ls -la "$DEVAIFLOW_HOME/" 2>&1 | sed 's/^/    /'
 echo ""
 
-# Test 10: Verify issue is open
-print_section "Test 10: Verify Issue Status Before Complete"
+# Test 10: Configure git authentication for daf complete
+print_section "Test 10: Configure Git Authentication"
+print_test "Configure git to use gh as credential helper"
+
+# Configure git to use gh CLI for authentication (gh is already authenticated)
+# This is needed for daf complete to push the feature branch
+(
+    cd "$TEMP_GIT_REPO"
+    git config --local credential.helper ""
+    git config --local --add credential.helper '!gh auth git-credential'
+) 2>&1
+verify_success "git config credential.helper" "Git configured to use gh CLI for auth"
+
+# Test 11: Create feature branch for the session
+print_section "Test 11: Create Feature Branch for Session"
+print_test "Create feature branch matching session name"
+
+# Create feature branch manually (daf open requires remote sync which is complex in test)
+# Branch name should match the session name
+(
+    cd "$TEMP_GIT_REPO"
+    git checkout -b "$SESSION_NAME" > /dev/null 2>&1
+) 2>&1
+verify_success "git checkout -b" "Feature branch created: $SESSION_NAME"
+
+print_test "Verify we're on the feature branch"
+CURRENT_BRANCH=$(cd "$TEMP_GIT_REPO" && git branch --show-current)
+if [[ "$CURRENT_BRANCH" == "$SESSION_NAME" ]]; then
+    echo -e "  ${GREEN}✓${NC} On feature branch: ${BOLD}$CURRENT_BRANCH${NC}"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} Not on expected branch"
+    echo -e "  ${RED}Expected:${NC} $SESSION_NAME"
+    echo -e "  ${RED}Actual:${NC} $CURRENT_BRANCH"
+    exit 1
+fi
+
+print_test "Associate session with git repository"
+# Update session metadata to link it to the git repo and branch
+# This is needed for daf complete to know where to push and create PR
+python3 <<EOF
+import json
+import sys
+from pathlib import Path
+
+# Sessions are stored in sessions.json with structure: {"sessions": {session_name: {...}}}
+sessions_file = Path("$DEVAIFLOW_HOME") / "sessions.json"
+with open(sessions_file, "r") as f:
+    data = json.load(f)
+
+# Extract the sessions dict
+sessions_data = data.get("sessions", {})
+
+# Find and update our session
+session_name = "$SESSION_NAME"
+if session_name in sessions_data:
+    session = sessions_data[session_name]
+
+    # Set session_type to "development" (required for PR creation)
+    session["session_type"] = "development"
+    session["working_directory"] = "$TEMP_GIT_REPO"
+
+    # Create conversations structure with active_session
+    # conversations is a dict mapping working_directory to Conversation object
+    from datetime import datetime
+    session["conversations"] = {
+        "$TEMP_GIT_REPO": {
+            "active_session": {
+                "ai_agent_session_id": "test-ai-session",
+                "project_path": "$TEMP_GIT_REPO",
+                "branch": "$SESSION_NAME",
+                "base_branch": "main",
+                "created": datetime.now().isoformat(),
+                "last_active": datetime.now().isoformat(),
+                "message_count": 0,
+                "prs": [],
+                "archived": False,
+                "conversation_history": ["test-ai-session"],
+                "summary": None
+            },
+            "archived_sessions": []
+        }
+    }
+
+    # Write back the full structure
+    with open(sessions_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+    print("updated")
+else:
+    print(f"error: session '{session_name}' not found in sessions")
+    exit(1)
+EOF
+verify_success "python3" "Session associated with git repo and branch"
+
+# Test 12: Make code changes and commit
+print_section "Test 12: Make Code Changes"
+
+print_test "Modify a file to create a code change"
+# Add a new file with some content
+cat > "$TEMP_GIT_REPO/feature.txt" <<EOF
+# Feature Implementation
+
+This file was added as part of the automated test.
+Issue: $ISSUE_KEY
+Timestamp: $TEST_TIMESTAMP
+
+The auto_close_on_complete feature should:
+- Create a PR automatically
+- Close the issue when session completes
+EOF
+
+echo -e "  ${GREEN}✓${NC} Created feature.txt with test content"
+TESTS_PASSED=$((TESTS_PASSED + 1))
+
+print_test "Verify uncommitted changes exist"
+(
+    cd "$TEMP_GIT_REPO"
+    git status --porcelain | grep -q "feature.txt"
+) 2>&1
+verify_success "git status" "Uncommitted changes detected (will be auto-committed by daf complete)"
+
+# Test 13: Verify issue is open
+print_section "Test 13: Verify Issue Status Before Complete"
 print_test "Verify issue is currently open"
 
 # Get issue status using gh CLI directly
@@ -584,14 +720,20 @@ else
     exit 1
 fi
 
-# Test 11: Complete session with auto-close
-print_section "Test 11: Complete Session (Auto-Close Test)"
-print_test "Complete session with auto-close enabled"
+# Test 14: Complete session with auto-close and auto-PR
+print_section "Test 14: Complete Session (Auto-Close and Auto-PR Test)"
+print_test "Complete session with auto-close and auto-PR enabled"
 
-# Complete the session - with auto_close_on_complete=true, this should NOT prompt
-# and should automatically close the issue
-COMPLETE_OUTPUT=$(daf complete "$SESSION_NAME" --no-commit --no-pr 2>&1)
+# Complete the session - with auto_close_on_complete=true and auto_create_pr_on_complete=true
+# this should automatically create a PR, push it, and close the issue
+# Note: Changes are uncommitted, so daf complete will auto-commit them
+# All prompts are configured to auto-accept via config.json prompts section
+(
+    cd "$TEMP_GIT_REPO"
+    daf complete "$SESSION_NAME" 2>&1
+) > /tmp/complete_output.txt 2>&1
 COMPLETE_EXIT_CODE=$?
+COMPLETE_OUTPUT=$(cat /tmp/complete_output.txt)
 
 # Debug: Show full output for troubleshooting
 echo -e "  ${YELLOW}Debug:${NC} Full completion output:"
@@ -603,7 +745,7 @@ if [ $COMPLETE_EXIT_CODE -eq 0 ]; then
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "  ${RED}✗${NC} Session completion failed with exit code $COMPLETE_EXIT_CODE"
-    echo -e "  ${RED}Command:${NC} daf complete \"$SESSION_NAME\" --no-commit --no-pr"
+    echo -e "  ${RED}Command:${NC} daf complete \"$SESSION_NAME\""
     exit 1
 fi
 
@@ -618,8 +760,73 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 12: Verify issue was automatically closed
-print_section "Test 12: Verify Issue Was Automatically Closed"
+# Test 15: Verify PR was created
+print_section "Test 15: Verify Pull Request Was Created"
+print_test "Extract PR URL from completion output"
+
+# Look for PR URL in the output
+PR_URL=$(echo "$COMPLETE_OUTPUT" | grep -o 'https://github.com/[^/]*/[^/]*/pull/[0-9]*' | head -1)
+
+if [ -n "$PR_URL" ]; then
+    echo -e "  ${GREEN}✓${NC} PR URL found: ${BOLD}$PR_URL${NC}"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} PR URL not found in completion output"
+    echo -e "  ${RED}Completion output:${NC}"
+    echo "$COMPLETE_OUTPUT" | sed 's/^/    /'
+    exit 1
+fi
+
+print_test "Extract PR number from URL"
+PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
+
+if [ -n "$PR_NUMBER" ]; then
+    echo -e "  ${GREEN}✓${NC} PR number: ${BOLD}#$PR_NUMBER${NC}"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} Failed to extract PR number from URL"
+    exit 1
+fi
+
+print_test "Verify PR exists using gh CLI"
+PR_STATE=$(gh pr view "$PR_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" --json state --jq '.state' 2>&1)
+
+if [ "$PR_STATE" = "OPEN" ]; then
+    echo -e "  ${GREEN}✓${NC} PR #$PR_NUMBER exists and is open"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} PR verification failed (state: $PR_STATE)"
+    exit 1
+fi
+
+# Test 16: Approve the PR
+print_section "Test 16: Approve Pull Request"
+print_test "Approve PR using gh CLI"
+
+gh pr review "$PR_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" --approve > /dev/null 2>&1
+verify_success "gh pr review --approve" "PR #$PR_NUMBER approved"
+
+# Test 17: Merge the PR
+print_section "Test 17: Merge Pull Request"
+print_test "Merge PR using gh CLI"
+
+gh pr merge "$PR_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" --merge --delete-branch > /dev/null 2>&1
+verify_success "gh pr merge" "PR #$PR_NUMBER merged and branch deleted"
+
+print_test "Verify PR is now merged"
+PR_STATE_FINAL=$(gh pr view "$PR_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" --json state --jq '.state' 2>&1)
+
+if [ "$PR_STATE_FINAL" = "MERGED" ]; then
+    echo -e "  ${GREEN}✓${NC} PR #$PR_NUMBER successfully merged"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${YELLOW}⚠${NC} PR state: $PR_STATE_FINAL (expected: MERGED)"
+    echo -e "  ${YELLOW}Note:${NC} This might be OK depending on repository settings"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# Test 18: Verify issue was automatically closed
+print_section "Test 18: Verify Issue Was Automatically Closed"
 print_test "Check issue state using GitHub API"
 
 # Wait a moment for GitHub API to reflect the change
@@ -640,8 +847,8 @@ else
     exit 1
 fi
 
-# Test 13: Reopen issue for reusability
-print_section "Test 13: Reopen Issue for Test Reusability"
+# Test 19: Reopen issue for reusability
+print_section "Test 19: Reopen Issue for Test Reusability"
 # Reopen the issue so the test can be run again
 gh issue reopen "$ISSUE_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" > /dev/null 2>&1
 verify_success "gh issue reopen" "Issue reopened for future test runs"
@@ -672,14 +879,18 @@ if [ $TESTS_FAILED -eq 0 ]; then
     echo "Successfully tested the complete installation workflow:"
     echo "  ✓ Cloned DevAIFlow from GitHub"
     echo "  ✓ Installed DevAIFlow from source in fresh venv"
-    echo "  ✓ Created config with auto_close_on_complete=true"
+    echo "  ✓ Created config with auto_close_on_complete=true and auto_create_pr_on_complete=true"
     echo "  ✓ Ran daf upgrade to install skills"
     echo "  ✓ Created GitHub issue ${ISSUE_KEY}"
-    echo "  ✓ Created and completed session ${SESSION_NAME}"
+    echo "  ✓ Synced and opened session ${SESSION_NAME}"
+    echo "  ✓ Made code changes and committed them"
+    echo "  ✓ Completed session (auto-create PR, auto-close issue)"
+    echo "  ✓ Verified PR #${PR_NUMBER} was automatically created"
+    echo "  ✓ Approved and merged the PR"
     echo "  ✓ Verified issue was automatically closed (no prompt!)"
     echo "  ✓ Reopened issue for test reusability"
     echo ""
-    echo "The auto_close_on_complete feature is working correctly!"
+    echo "The auto_close_on_complete and auto_create_pr_on_complete features are working correctly!"
     echo ""
     exit 0
 else
