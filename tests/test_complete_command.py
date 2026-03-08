@@ -3805,6 +3805,9 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
     subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
     subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_dir, capture_output=True)
 
+    # Ensure main is the default branch
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo_dir, capture_output=True)
+
     # Create a feature branch with a commit
     subprocess.run(["git", "checkout", "-b", "feature-old-commits"], cwd=repo_dir, capture_output=True)
     (repo_dir / "feature.txt").write_text("feature work")
@@ -3851,6 +3854,8 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
     # Ensure no existing PR is found
     monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
+    # Explicitly ensure get_default_branch returns "main" to avoid test pollution
+    monkeypatch.setattr("devflow.git.utils.GitUtils.get_default_branch", lambda path: "main")
 
     # Complete the session (no changes, no commits)
     complete_session("no-commits-test")
@@ -4069,6 +4074,8 @@ def test_complete_no_pr_prompt_after_merged_branch(temp_daf_home, tmp_path, monk
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
     # Ensure no existing PR is found
     monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
+    # Explicitly ensure get_default_branch returns "main" to avoid test pollution
+    monkeypatch.setattr("devflow.git.utils.GitUtils.get_default_branch", lambda path: "main")
 
     # Complete the session (no new changes, branch already merged)
     complete_session("merged-test")
