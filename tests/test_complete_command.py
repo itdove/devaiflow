@@ -555,8 +555,10 @@ def test_complete_session_skips_pr_creation_with_no_commits(temp_daf_home, tmp_p
     complete_session("no-commits-test")
 
     captured = capsys.readouterr()
-    # Should skip PR creation because there are no file changes
-    assert "No new commits - skipping PR creation" in captured.out
+    # Should skip PR creation because there are no file changes from base branch
+    # The message should indicate the branch has no changes from base
+    assert ("Branch has no changes from" in captured.out or
+            "No new commits - skipping PR creation" in captured.out)
     # Should NOT prompt for PR creation
     assert "Create a PR/MR now?" not in captured.out
 
@@ -731,8 +733,9 @@ def test_complete_session_skips_pr_with_commits_but_no_file_changes(temp_daf_hom
     complete_session("no-net-changes-test")
 
     captured = capsys.readouterr()
-    # Should skip PR creation because there are no net file changes
-    assert "No new commits - skipping PR creation" in captured.out
+    # Should skip PR creation because there are no net file changes from base branch
+    assert ("Branch has no changes from" in captured.out or
+            "No new commits - skipping PR creation" in captured.out)
     # Should NOT prompt for PR creation
     assert "Create a PR/MR now?" not in captured.out
 
@@ -804,8 +807,72 @@ def test_complete_session_skips_pr_after_merge_to_base(temp_daf_home, tmp_path, 
     # The key requirement is that it should NOT prompt to create a PR
     assert "Create a PR/MR now?" not in captured.out
     # And it should indicate no changes or no PR found
-    assert ("No new commits - skipping PR creation" in captured.out or
+    assert ("Branch has no changes from" in captured.out or
+            "No new commits - skipping PR creation" in captured.out or
             "No PR/MR found for this branch" in captured.out)
+
+
+def test_complete_session_prompts_pr_with_existing_commits_not_from_this_cycle(temp_daf_home, tmp_path, monkeypatch, capsys):
+    """Test that PR creation IS prompted when branch has commits made BEFORE the session (issue #127).
+
+    This tests the fix for the bug where PR creation was skipped if all commits were made
+    before the daf complete cycle, even though the branch had changes from the base branch.
+    """
+    import subprocess
+
+    # Create a git repository
+    repo_dir = tmp_path / "test-repo-existing-commits"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    # Create initial commit on main
+    (repo_dir / "test.txt").write_text("original")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_dir, capture_output=True)
+
+    # Create a feature branch with commits BEFORE opening the session
+    subprocess.run(["git", "checkout", "-b", "feature-existing-commits"], cwd=repo_dir, capture_output=True)
+    (repo_dir / "feature.txt").write_text("feature content")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Add feature"], cwd=repo_dir, capture_output=True)
+
+    # Add another commit (simulating work done outside of daf)
+    (repo_dir / "feature.txt").write_text("feature content updated")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Update feature"], cwd=repo_dir, capture_output=True)
+
+    # Now create session (after commits were already made)
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="existing-commits-test",
+        goal="Test existing commits",
+        working_directory="test-repo-existing-commits",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-existing-commits",
+        branch="feature-existing-commits",
+    )
+
+    # Add work session
+    session_manager.start_work_session("existing-commits-test")
+    session_manager.end_work_session("existing-commits-test")
+
+    # Mock Confirm.ask to decline PR creation
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
+    monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
+
+    # Complete the session
+    complete_session("existing-commits-test")
+
+    captured = capsys.readouterr()
+    # Should prompt for PR creation (because branch has changes from main)
+    assert "No PR/MR found for this branch" in captured.out
+    # Should NOT skip PR creation with these messages
+    assert "No new commits - skipping PR creation" not in captured.out
+    assert "Branch has no changes from" not in captured.out
 
 
 def test_complete_session_skips_pr_when_on_different_branch(temp_daf_home, tmp_path, monkeypatch, capsys):
@@ -3738,6 +3805,9 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
     subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
     subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_dir, capture_output=True)
 
+    # Ensure main is the default branch
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo_dir, capture_output=True)
+
     # Create a feature branch with a commit
     subprocess.run(["git", "checkout", "-b", "feature-old-commits"], cwd=repo_dir, capture_output=True)
     (repo_dir / "feature.txt").write_text("feature work")
@@ -3745,8 +3815,12 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
     subprocess.run(["git", "commit", "-m", "Add feature"], cwd=repo_dir, capture_output=True)
 
     # Simulate that this branch was already merged to main
-    # (In reality, user created PR, merged it, but session wasn't marked complete)
-    # For this test, we just have old commits on the branch
+    # Merge the feature branch into main
+    subprocess.run(["git", "checkout", "main"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "merge", "feature-old-commits", "--no-ff", "-m", "Merge feature"], cwd=repo_dir, capture_output=True)
+
+    # Go back to feature branch (user is still on it after PR was merged)
+    subprocess.run(["git", "checkout", "feature-old-commits"], cwd=repo_dir, capture_output=True)
 
     # Create session
     config_loader = ConfigLoader()
@@ -3778,17 +3852,22 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
         return False  # Decline all prompts
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
+    # Ensure no existing PR is found
+    monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
+    # Explicitly ensure get_default_branch returns "main" to avoid test pollution
+    monkeypatch.setattr("devflow.git.utils.GitUtils.get_default_branch", lambda path: "main")
 
     # Complete the session (no changes, no commits)
     complete_session("no-commits-test")
 
-    # Verify NO PR prompt was shown
+    # Verify NO PR prompt was shown (branch was already merged, so no changes from main)
     pr_prompts = [p for p in confirm_prompts if "PR" in p or "MR" in p]
     assert len(pr_prompts) == 0, f"Expected no PR prompts, but got: {pr_prompts}"
 
-    # Check output shows skip message
+    # Check output shows skip message with improved wording
     captured = capsys.readouterr()
-    assert "No new commits - skipping PR creation" in captured.out
+    assert ("Branch has no changes from" in captured.out or
+            "No new commits - skipping PR creation" in captured.out)
 
 
 def test_complete_prompts_pr_when_commit_made(temp_daf_home, tmp_path, monkeypatch, capsys):
@@ -3993,6 +4072,10 @@ def test_complete_no_pr_prompt_after_merged_branch(temp_daf_home, tmp_path, monk
         return False
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
+    # Ensure no existing PR is found
+    monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
+    # Explicitly ensure get_default_branch returns "main" to avoid test pollution
+    monkeypatch.setattr("devflow.git.utils.GitUtils.get_default_branch", lambda path: "main")
 
     # Complete the session (no new changes, branch already merged)
     complete_session("merged-test")
@@ -4001,6 +4084,7 @@ def test_complete_no_pr_prompt_after_merged_branch(temp_daf_home, tmp_path, monk
     pr_prompts = [p for p in confirm_prompts if "PR" in p or "MR" in p]
     assert len(pr_prompts) == 0, f"Expected no PR prompts for merged branch, but got: {pr_prompts}"
 
-    # Check output shows skip message
+    # Check output shows skip message with improved wording
     captured = capsys.readouterr()
-    assert "No new commits - skipping PR creation" in captured.out
+    assert ("Branch has no changes from" in captured.out or
+            "No new commits - skipping PR creation" in captured.out)
