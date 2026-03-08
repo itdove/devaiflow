@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Branch selection prompt when cloning to temporary directory (#128)
+  - Interactive prompt to select which branch to checkout after cloning for analysis
+  - Lists all available remote branches from `upstream` (preferred) or `origin`
+  - Default branch priority: `upstream/main` > `upstream/master` > `origin/main` > `origin/master`
+  - Select branch by number, name, or press Enter for default
+  - Automatically skipped in non-interactive modes (`--json` flag, `DAF_MOCK_MODE=1`)
+  - Applies to `daf git new`, `daf jira new`, and `daf investigate` commands
+  - Gracefully falls back to auto-detection if branch selection fails
+  - Useful for analyzing repositories with multiple active development branches
 - Target branch selection when creating PRs/MRs (AAP-65187)
   - Interactive prompt to select which branch to target (e.g., `main`, `release/2.5`, `release/3.0`)
   - Adds `--base <branch>` flag for GitHub PRs or `--target-branch <branch>` flag for GitLab MRs
