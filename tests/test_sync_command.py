@@ -436,6 +436,163 @@ def test_sync_ignores_ticket_creation_sessions_and_creates_development_session(t
     assert "PROJ-12345" in sessions_with_issue_key
 
 
+def test_sync_inherits_workspace_from_creation_session(temp_daf_home, mock_jira_cli):
+    """Test that daf sync inherits workspace from creation session (itdove/devaiflow#131)."""
+    # Initialize config
+    from unittest.mock import patch
+    runner = CliRunner()
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create a ticket_creation session with workspace_name set (simulates daf jira new --workspace product-a)
+    ticket_creation_session = session_manager.create_session(
+        name="creation-PROJ-99999",
+        issue_key="PROJ-99999",
+        goal="Create JIRA story for feature Y",
+    )
+    ticket_creation_session.session_type = "ticket_creation"
+    ticket_creation_session.issue_tracker = "jira"
+    ticket_creation_session.issue_key = "PROJ-99999"
+    ticket_creation_session.workspace_name = "product-a"  # Key: workspace is set
+    ticket_creation_session.issue_metadata = {"summary": "Feature Y"}
+    session_manager.update_session(ticket_creation_session)
+
+    # Set up mock issue tracker ticket (the ticket now exists and is assigned to you)
+    mock_jira_cli.set_ticket("PROJ-99999", {
+        "key": "PROJ-99999",
+        "updated": "2025-12-09T10:00:00.000+0000",
+        "fields": {
+            "issuetype": {"name": "Story"},
+            "status": {"name": "To Do"},
+            "summary": "Feature Y",
+            "assignee": {"displayName": "Test User"},
+            "customfield_12310243": 5,  # Story points
+            "customfield_12310940": ["com.atlassian.greenhopper.service.sprint.Sprint@xxxxx[id=1234,name=Sprint 1,...]"],
+            "customfield_12311140": "PROJ-100",  # Epic link
+        }
+    })
+
+    # Run sync
+    sync_jira()
+
+    # Reload session index
+    session_manager.index = config_loader.load_sessions()
+
+    # Verify: new development session was created with inherited workspace
+    dev_sessions = session_manager.index.get_sessions("PROJ-99999")
+    assert len(dev_sessions) == 1, "Should have created one development session"
+
+    dev_session = dev_sessions[0]
+    assert dev_session.issue_key == "PROJ-99999"
+    assert dev_session.workspace_name == "product-a", "Should inherit workspace from creation session"
+    assert dev_session.session_type == "development"
+
+
+def test_sync_no_workspace_inheritance_when_creation_session_missing(temp_daf_home, mock_jira_cli):
+    """Test that daf sync works normally when no creation session exists."""
+    # Initialize config
+    from unittest.mock import patch
+    runner = CliRunner()
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # No creation session exists - simulate ticket created outside daf
+
+    # Set up mock issue tracker ticket
+    mock_jira_cli.set_ticket("PROJ-88888", {
+        "key": "PROJ-88888",
+        "updated": "2025-12-09T10:00:00.000+0000",
+        "fields": {
+            "issuetype": {"name": "Story"},
+            "status": {"name": "To Do"},
+            "summary": "Feature Z",
+            "assignee": {"displayName": "Test User"},
+            "customfield_12310243": 5,  # Story points
+            "customfield_12310940": ["com.atlassian.greenhopper.service.sprint.Sprint@xxxxx[id=1234,name=Sprint 1,...]"],
+            "customfield_12311140": "PROJ-100",  # Epic link
+        }
+    })
+
+    # Run sync
+    sync_jira()
+
+    # Reload session index
+    session_manager.index = config_loader.load_sessions()
+
+    # Verify: new development session was created without workspace (backward compatibility)
+    dev_sessions = session_manager.index.get_sessions("PROJ-88888")
+    assert len(dev_sessions) == 1, "Should have created one development session"
+
+    dev_session = dev_sessions[0]
+    assert dev_session.issue_key == "PROJ-88888"
+    assert dev_session.workspace_name is None, "Should have no workspace when creation session doesn't exist"
+    assert dev_session.session_type == "development"
+
+
+def test_sync_no_workspace_inheritance_when_workspace_not_set(temp_daf_home, mock_jira_cli):
+    """Test that daf sync doesn't inherit workspace when creation session has no workspace_name."""
+    # Initialize config
+    from unittest.mock import patch
+    runner = CliRunner()
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create a ticket_creation session WITHOUT workspace_name set
+    ticket_creation_session = session_manager.create_session(
+        name="creation-PROJ-77777",
+        issue_key="PROJ-77777",
+        goal="Create JIRA story for feature W",
+    )
+    ticket_creation_session.session_type = "ticket_creation"
+    ticket_creation_session.issue_tracker = "jira"
+    ticket_creation_session.issue_key = "PROJ-77777"
+    # workspace_name is None (not set)
+    ticket_creation_session.issue_metadata = {"summary": "Feature W"}
+    session_manager.update_session(ticket_creation_session)
+
+    # Set up mock issue tracker ticket
+    mock_jira_cli.set_ticket("PROJ-77777", {
+        "key": "PROJ-77777",
+        "updated": "2025-12-09T10:00:00.000+0000",
+        "fields": {
+            "issuetype": {"name": "Story"},
+            "status": {"name": "To Do"},
+            "summary": "Feature W",
+            "assignee": {"displayName": "Test User"},
+            "customfield_12310243": 5,  # Story points
+            "customfield_12310940": ["com.atlassian.greenhopper.service.sprint.Sprint@xxxxx[id=1234,name=Sprint 1,...]"],
+            "customfield_12311140": "PROJ-100",  # Epic link
+        }
+    })
+
+    # Run sync
+    sync_jira()
+
+    # Reload session index
+    session_manager.index = config_loader.load_sessions()
+
+    # Verify: new development session was created without workspace
+    dev_sessions = session_manager.index.get_sessions("PROJ-77777")
+    assert len(dev_sessions) == 1, "Should have created one development session"
+
+    dev_session = dev_sessions[0]
+    assert dev_session.issue_key == "PROJ-77777"
+    assert dev_session.workspace_name is None, "Should have no workspace when creation session has no workspace_name"
+    assert dev_session.session_type == "development"
+
+
 # NOTE: Type-specific required fields feature is implemented in devflow/config/models.py
 # (JiraFiltersConfig.get_required_fields_for_type) and devflow/cli/commands/sync_command.py.
 # The feature allows different required fields for different issue types:
@@ -770,6 +927,76 @@ def test_sync_multi_backend_with_invalid_repository_filter(temp_daf_home, capsys
                 assert "Discovered repositories:" in captured.out
                 assert "owner/repo1" in captured.out
                 assert "owner/repo2" in captured.out
+
+
+def test_sync_github_inherits_workspace_from_creation_session(temp_daf_home, mock_jira_cli):
+    """Test that GitHub sync inherits workspace from creation session (itdove/devaiflow#131)."""
+    # Initialize config
+    from unittest.mock import patch, MagicMock
+    from click.testing import CliRunner
+    from devflow.cli.commands.sync_command import sync_github_repository
+
+    runner = CliRunner()
+    # Mock prompts to skip JIRA integration (use defaults)
+    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create a ticket_creation session with workspace_name set (simulates daf git new --workspace experiments)
+    # Note: For GitHub, the creation session name uses dash-separated format
+    ticket_creation_session = session_manager.create_session(
+        name="creation-owner-repo-456",
+        issue_key="owner/repo#456",
+        goal="Create GitHub issue for feature",
+    )
+    ticket_creation_session.session_type = "ticket_creation"
+    ticket_creation_session.issue_tracker = "github"
+    ticket_creation_session.issue_key = "owner/repo#456"
+    ticket_creation_session.workspace_name = "experiments"  # Key: workspace is set
+    ticket_creation_session.issue_metadata = {"summary": "GitHub feature"}
+    session_manager.update_session(ticket_creation_session)
+
+    # Mock GitHubClient (patch at the module where it's defined, not where it's used)
+    mock_config = MagicMock()
+    with patch('devflow.github.issues_client.GitHubClient') as mock_github_class:
+        # Mock GitHub API to return a ticket
+        mock_client = mock_github_class.return_value
+        mock_client.list_tickets.return_value = [
+            {
+                'key': 'owner/repo#456',
+                'summary': 'GitHub feature',
+                'updated': '2025-12-09T10:00:00Z',
+                'status': 'open',
+            }
+        ]
+
+        # Mock gh api user call to get username
+        with patch('subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(stdout='testuser\n', returncode=0)
+
+            # Run GitHub sync
+            result = sync_github_repository(
+                repository='owner/repo',
+                session_manager=session_manager,
+                config=mock_config,
+                repository_url='https://github.com/owner/repo.git',
+            )
+
+    # Verify session was created
+    assert result['created_count'] == 1
+
+    # Reload session index
+    session_manager.index = config_loader.load_sessions()
+
+    # Verify: new development session was created with inherited workspace
+    # Get the development session by its name (owner-repo-456)
+    dev_session = session_manager.get_session("owner-repo-456")
+    assert dev_session is not None, "Should have created development session"
+    assert dev_session.issue_key == "owner/repo#456"
+    assert dev_session.workspace_name == "experiments", "Should inherit workspace from creation session"
+    assert dev_session.session_type == "development"
 
 
 def test_sync_multi_backend_with_workspace_and_repository_filters(temp_daf_home, capsys):
