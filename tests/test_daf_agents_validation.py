@@ -241,17 +241,16 @@ def test_validate_daf_agents_auto_install_failure_with_diagnostics(tmp_path, tem
     config_loader.save_config(config)
 
     # Mock _install_bundled_cs_agents to simulate failure with diagnostics
-    from devflow.cli.commands import open_command
     def mock_install(destination):
         # Return failure with diagnostic messages
         diagnostics = [
             "  Method 1 (importlib.resources): FileNotFoundError - DAF_AGENTS.md not found",
             "    Searched path: /path/to/package/DAF_AGENTS.md",
-            "  Method 2 (relative path): Searched: /path/to/devflow/cli/commands/../../../../DAF_AGENTS.md",
+            "  Method 2 (relative path): Searched: /path/to/devflow/utils/../../DAF_AGENTS.md",
             "  Method 2 (relative path): File does not exist"
         ]
         return False, diagnostics
-    monkeypatch.setattr("devflow.cli.commands.open_command._install_bundled_cs_agents", mock_install)
+    monkeypatch.setattr("devflow.utils.daf_agents_validation._install_bundled_cs_agents", mock_install)
 
     # Should fail to install and return False
     session = _create_mock_session(str(repo_dir))
@@ -267,7 +266,7 @@ def test_validate_daf_agents_auto_install_failure_with_diagnostics(tmp_path, tem
 
 def test_install_bundled_cs_agents_from_relative_path(tmp_path):
     """Test _install_bundled_cs_agents successfully installs from relative path."""
-    from devflow.cli.commands.open_command import _install_bundled_cs_agents
+    from devflow.utils.daf_agents_validation import _install_bundled_cs_agents
     from pathlib import Path
 
     # Create a source DAF_AGENTS.md at the expected relative path
@@ -293,7 +292,7 @@ def test_install_bundled_cs_agents_from_relative_path(tmp_path):
 
 def test_install_bundled_cs_agents_returns_diagnostics_on_failure(tmp_path, monkeypatch):
     """Test _install_bundled_cs_agents returns detailed diagnostics on failure."""
-    from devflow.cli.commands.open_command import _install_bundled_cs_agents
+    from devflow.utils.daf_agents_validation import _install_bundled_cs_agents
     import importlib.resources
     from pathlib import Path
 
@@ -317,14 +316,14 @@ def test_install_bundled_cs_agents_returns_diagnostics_on_failure(tmp_path, monk
 
     # Mock Path.__file__ to point to a location without DAF_AGENTS.md
     # This prevents the relative path method from succeeding
-    fake_file_location = tmp_path / "fake_package" / "devflow" / "cli" / "commands" / "open_command.py"
+    fake_file_location = tmp_path / "fake_package" / "devflow" / "utils" / "daf_agents_validation.py"
     fake_file_location.parent.mkdir(parents=True)
     fake_file_location.touch()
 
     # Patch __file__ in the function's module scope
-    import devflow.cli.commands.open_command as open_cmd_module
-    original_file = open_cmd_module.__file__
-    monkeypatch.setattr(open_cmd_module, "__file__", str(fake_file_location))
+    import devflow.utils.daf_agents_validation as validation_module
+    original_file = validation_module.__file__
+    monkeypatch.setattr(validation_module, "__file__", str(fake_file_location))
 
     destination = tmp_path / "test_destination" / "DAF_AGENTS.md"
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -454,7 +453,7 @@ def test_check_and_upgrade_daf_agents_cannot_read_bundled(tmp_path, temp_daf_hom
     def mock_get_bundled():
         return None, ["Error reading bundled file"]
 
-    monkeypatch.setattr("devflow.cli.commands.open_command._get_bundled_daf_agents_content", mock_get_bundled)
+    monkeypatch.setattr("devflow.utils.daf_agents_validation._get_bundled_daf_agents_content", mock_get_bundled)
 
     # Create an installed file
     installed_file = tmp_path / "DAF_AGENTS.md"
