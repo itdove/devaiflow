@@ -3849,6 +3849,8 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
         return False  # Decline all prompts
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
+    # Ensure no existing PR is found
+    monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
 
     # Complete the session (no changes, no commits)
     complete_session("no-commits-test")
@@ -4065,6 +4067,8 @@ def test_complete_no_pr_prompt_after_merged_branch(temp_daf_home, tmp_path, monk
         return False
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
+    # Ensure no existing PR is found
+    monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
 
     # Complete the session (no new changes, branch already merged)
     complete_session("merged-test")
