@@ -29,9 +29,15 @@ class OrganizationConfigValidator(BaseConfigValidator):
         """
         issues = []
 
-        # Check for null jira_project (required for functionality)
+        # Check if JIRA backend is configured by looking for backends/jira.json
+        jira_backend_configured = False
+        if self.config_dir:
+            jira_backend_file = self.config_dir / "backends" / "jira.json"
+            jira_backend_configured = jira_backend_file.exists()
+
+        # Check for null jira_project (only if JIRA backend is configured)
         jira_project = data.get("jira_project")
-        if not jira_project:
+        if jira_backend_configured and not jira_project:
             issues.append(
                 ValidationIssue(
                     file=self.config_file,

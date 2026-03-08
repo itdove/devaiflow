@@ -337,7 +337,7 @@ verify_success "cat > backends/github.json" "Backend config created"
 # Note: In the new 5-file format, GitHub settings go in organization.json
 cat > "$DEVAIFLOW_HOME/organization.json" <<'EOF'
 {
-  "jira_project": "NOPROJECT",
+  "jira_project": null,
   "github_repository": "$DAF_TEST_GITHUB_REPO",
   "github_auto_close_on_complete": true
 }
