@@ -2,8 +2,8 @@
 
 import pytest
 from pathlib import Path
-from devflow.cli.commands.open_command import (
-    _validate_context_files,
+from devflow.utils.daf_agents_validation import (
+    validate_daf_agents_md,
     _check_and_upgrade_daf_agents,
     _get_bundled_daf_agents_content
 )
@@ -17,7 +17,7 @@ def _create_mock_session(repo_dir: str) -> Session:
     # Create a ConversationContext (active session) with required fields
     context = ConversationContext(
         ai_agent_session_id=str(uuid.uuid4()),
-        project_path=repo_dir,  # Set project_path for _validate_context_files
+        project_path=repo_dir,  # Set project_path for validate_daf_agents_md
         working_directory=repo_dir,
         temp_directory=None
     )
@@ -48,7 +48,7 @@ def test_validate_daf_agents_in_repo(tmp_path, temp_daf_home):
     session = _create_mock_session(str(repo_dir))
 
     # Should find DAF_AGENTS.md in repo
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
 
@@ -83,7 +83,7 @@ def test_validate_daf_agents_in_workspace_fallback(tmp_path, temp_daf_home):
 
     
 
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
 
@@ -119,7 +119,7 @@ def test_validate_daf_agents_not_found_user_declines(tmp_path, temp_daf_home, mo
 
     
 
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is False
 
     # Verify Confirm was called
@@ -167,7 +167,7 @@ def test_validate_daf_agents_auto_install_success(tmp_path, temp_daf_home, monke
 
     
 
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
     # Verify DAF_AGENTS.md was created
@@ -209,7 +209,7 @@ def test_validate_daf_agents_prefers_repo_over_workspace(tmp_path, temp_daf_home
 
     
 
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
 
@@ -258,7 +258,7 @@ def test_validate_daf_agents_auto_install_failure_with_diagnostics(tmp_path, tem
 
     
 
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is False
 
     # Verify DAF_AGENTS.md was NOT created
@@ -485,8 +485,8 @@ def test_check_and_upgrade_daf_agents_cannot_read_installed(tmp_path, temp_daf_h
     assert result is True
 
 
-def test_validate_context_files_triggers_upgrade_check_repo(tmp_path, temp_daf_home, monkeypatch):
-    """Test that _validate_context_files triggers upgrade check for repo DAF_AGENTS.md."""
+def testvalidate_daf_agents_md_triggers_upgrade_check_repo(tmp_path, temp_daf_home, monkeypatch):
+    """Test that validate_daf_agents_md triggers upgrade check for repo DAF_AGENTS.md."""
     from unittest.mock import MagicMock
     from devflow.config.models import Conversation
     from devflow.config.models import Session
@@ -509,7 +509,7 @@ def test_validate_context_files_triggers_upgrade_check_repo(tmp_path, temp_daf_h
     session = Session(name="test-session", session_type="standard", conversations={str(repo_dir): conversation}, working_directory=str(repo_dir))
 
     # Should find, check, and upgrade DAF_AGENTS.md
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
     # Verify upgrade was performed
@@ -518,8 +518,8 @@ def test_validate_context_files_triggers_upgrade_check_repo(tmp_path, temp_daf_h
     assert new_content == bundled_content
 
 
-def test_validate_context_files_triggers_upgrade_check_workspace(tmp_path, temp_daf_home, monkeypatch):
-    """Test that _validate_context_files triggers upgrade check for workspace DAF_AGENTS.md."""
+def testvalidate_daf_agents_md_triggers_upgrade_check_workspace(tmp_path, temp_daf_home, monkeypatch):
+    """Test that validate_daf_agents_md triggers upgrade check for workspace DAF_AGENTS.md."""
     from unittest.mock import MagicMock
     from devflow.config.models import Conversation
     from devflow.config.models import Session
@@ -554,7 +554,7 @@ def test_validate_context_files_triggers_upgrade_check_workspace(tmp_path, temp_
     session = Session(name="test-session", session_type="standard", conversations={str(repo_dir): conversation}, working_directory=str(repo_dir))
 
     # Should find in workspace and upgrade
-    result = _validate_context_files(session, config_loader)
+    result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
     # Verify upgrade was performed on workspace file

@@ -17,6 +17,7 @@ from devflow.git.utils import GitUtils
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.cli.skills_discovery import discover_skills
 from devflow.utils.context_files import load_hierarchical_context_files
+from devflow.utils.daf_agents_validation import validate_daf_agents_md
 
 console = Console()
 
@@ -262,6 +263,10 @@ def create_investigation_session(
     # AAP-64886: Get workspace path from session instead of using default
     workspace = resolve_workspace_path(config, session.workspace_name)
     initial_prompt = _build_investigation_prompt(goal, parent, config, name, project_path=project_path, workspace=workspace)
+
+    # Validate that DAF_AGENTS.md exists before launching Claude
+    if not validate_daf_agents_md(session, config_loader):
+        return
 
     # Set up signal handlers for cleanup (using unified utility)
     setup_signal_handlers(session, session_manager, name, config)
