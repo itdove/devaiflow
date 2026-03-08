@@ -45,6 +45,7 @@ This ensures integration tests don't interfere with your actual session.
 | Test Script | Description | Test Scenarios |
 |------------|-------------|----------------|
 | `test_jira_green_path.sh` | Complete JIRA workflow | JIRA ticket creation → update → session open → complete |
+| `test_github_green_path.sh` | Complete GitHub workflow | GitHub issue creation → view → comment → session complete |
 | `test_collaboration_workflow.sh` | Export/import and multi-session | Developer A exports session → Developer B imports and continues |
 | `test_time_tracking.sh` | Time tracking features | Auto-start, pause/resume, time command, multiple cycles |
 | `test_templates.sh` | Template system | Save template, list, use, reuse, error handling, deletion |
@@ -55,9 +56,73 @@ This ensures integration tests don't interfere with your actual session.
 | `test_investigation.sh` | Investigation-only sessions | Read-only mode, no branch creation, research workflow |
 | `test_error_handling.sh` | Error handling and validation | Non-existent sessions, invalid inputs, edge cases |
 
+## Manual Tests (Require External Services)
+
+Some tests require real API access and cannot run in CI/CD:
+
+| Test Script | Requirements | Description |
+|------------|--------------|-------------|
+| `test_installation_auto_close.sh` | `GITHUB_TOKEN` and `DAF_TEST_GITHUB_REPO` environment variables | Tests complete installation workflow with `auto_close_on_complete` feature using real GitHub API |
+
+**Running manual tests:**
+
+```bash
+# Set up GitHub token
+export GITHUB_TOKEN="your-github-token"
+
+# Set up test repository (can be private)
+export DAF_TEST_GITHUB_REPO="yourusername/your-test-repo"
+
+# Optional: Specify which branch to test (defaults to 'main')
+export DAF_TEST_BRANCH="125"  # Test a feature branch
+# or
+export DAF_TEST_BRANCH="main"  # Test main branch (default)
+
+# Run the test
+./test_installation_auto_close.sh
+
+# Debug mode
+./test_installation_auto_close.sh --debug
+```
+
+**Setting up your test repository:**
+
+The test needs a GitHub repository where it can create and close issues. This can be:
+- A private repository (your `GITHUB_TOKEN` just needs write access)
+- A dedicated test repository you create just for this purpose
+- Example: Create a repo called `devaiflow-tests` under your account
+
+**Recommended repository settings:**
+
+To get the best test experience, configure your test repository with these settings (Settings → General):
+
+1. **Enable "Automatically delete head branches"**
+   - Keeps repository clean after PR merges
+   - Test uses `gh pr merge --delete-branch` which works better with this enabled
+
+2. **Disable branch protection on main** (optional but recommended for testing)
+   - Go to Settings → Branches
+   - Remove or disable any branch protection rules on `main`
+   - This allows the test to merge PRs without requiring approvals
+
+3. **Allow auto-merge** (optional)
+   - Settings → General → Pull Requests
+   - Check "Allow auto-merge"
+   - Makes PR merging smoother
+
+**Test behavior with repository settings:**
+- ✅ **Self-approval fails** - GitHub doesn't allow it, test handles gracefully
+- ✅ **Merge succeeds** - If no branch protection or approval requirements
+- ⚠️ **Merge skipped** - If branch protection requires approvals, test continues anyway
+- ✅ **Core test passes** - PR creation and issue auto-close work regardless
+
+The test validates the key features (auto PR creation and auto issue close) even if merge fails due to repository policies.
+
+**Note:** Manual tests skip gracefully if requirements are not met (exit code 0).
+
 ## Test Runner Features
 
-- ✅ Runs all 10 integration tests in sequence
+- ✅ Runs all mock-based integration tests in sequence
 - ✅ Fails fast (exits on first test failure)
 - ✅ Debug mode with `--debug` flag (enables `set -x`)
 - ✅ Timestamped output to `/tmp` for easy sharing

@@ -15,7 +15,7 @@ from devflow.config.validators import (
 )
 from devflow.config.validators.backends.jira import JiraBackendValidator
 
-console = Console()
+console = Console(stderr=True)
 
 # Re-export for backward compatibility with existing code
 __all__ = ["ConfigValidator", "ValidationIssue", "ValidationResult"]

@@ -67,7 +67,21 @@ class TestSplitConfigValidation:
         )
 
     def test_validate_organization_config_null_project(self, validator, temp_config_dir):
-        """Test detection of null jira_project."""
+        """Test detection of null jira_project when JIRA backend is configured."""
+        # Create JIRA backend first - validation only checks jira_project if JIRA is configured
+        backends_dir = temp_config_dir / "backends"
+        backends_dir.mkdir(parents=True, exist_ok=True)
+
+        backend_data = {
+            "url": "https://jira.example.com",
+            "user": "",
+            "transitions": {}
+        }
+
+        with open(backends_dir / "jira.json", "w") as f:
+            json.dump(backend_data, f)
+
+        # Now create organization.json with null jira_project
         org_data = {
             "jira_project": None,
             "sync_filters": {}
@@ -83,6 +97,27 @@ class TestSplitConfigValidation:
             issue.file == "organization.json" and
             issue.field == "jira_project" and
             issue.issue_type == "null_required"
+            for issue in result.issues
+        )
+
+    def test_validate_organization_config_null_project_no_jira(self, validator, temp_config_dir):
+        """Test that null jira_project is OK when JIRA backend is not configured (GitHub-only)."""
+        # Create organization.json with null jira_project but NO backends/jira.json
+        org_data = {
+            "jira_project": None,
+            "sync_filters": {}
+        }
+
+        with open(temp_config_dir / "organization.json", "w") as f:
+            json.dump(org_data, f)
+
+        result = validator.validate_split_config_files()
+
+        # Should pass - no JIRA validation when JIRA backend not configured
+        assert result.is_complete
+        assert not any(
+            issue.file == "organization.json" and
+            issue.field == "jira_project"
             for issue in result.issues
         )
 

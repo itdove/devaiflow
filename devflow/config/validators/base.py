@@ -133,6 +133,13 @@ class BaseConfigValidator:
         Returns:
             ValidationResult with all issues found
         """
+        # Store config_dir for custom validations to access
+        # For backends files, go up one more level to get the config root
+        if file_path.parent.name == "backends":
+            self.config_dir = file_path.parent.parent
+        else:
+            self.config_dir = file_path.parent
+
         if not file_path.exists():
             return ValidationResult(
                 is_complete=False,

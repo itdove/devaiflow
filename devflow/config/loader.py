@@ -11,7 +11,7 @@ from devflow.utils.paths import get_cs_home
 
 from .models import Config, SessionIndex
 
-console = Console()
+console = Console(stderr=True)
 
 
 class ConfigLoader:
@@ -441,8 +441,10 @@ class ConfigLoader:
                 data = json.load(f)
             return JiraBackendConfig(**data)
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to load backend config: {e}")
-            console.print("[dim]  Using default backend configuration[/dim]")
+            from devflow.cli.utils import is_json_mode
+            if not is_json_mode():
+                console.print(f"[yellow]⚠[/yellow] Failed to load backend config: {e}")
+                console.print("[dim]  Using default backend configuration[/dim]")
             return JiraBackendConfig(
                 url="https://jira.example.com",
             )
@@ -466,8 +468,10 @@ class ConfigLoader:
                 data = json.load(f)
             return EnterpriseConfig(**data)
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to load enterprise config: {e}")
-            console.print("[dim]  Using default enterprise configuration[/dim]")
+            from devflow.cli.utils import is_json_mode
+            if not is_json_mode():
+                console.print(f"[yellow]⚠[/yellow] Failed to load enterprise config: {e}")
+                console.print("[dim]  Using default enterprise configuration[/dim]")
             return EnterpriseConfig()
 
     def _load_organization_config(self) -> Optional["OrganizationConfig"]:
@@ -502,8 +506,10 @@ class ConfigLoader:
                 data = json.load(f)
             return OrganizationConfig(**data)
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to load organization config: {e}")
-            console.print("[dim]  Using default organization configuration[/dim]")
+            from devflow.cli.utils import is_json_mode
+            if not is_json_mode():
+                console.print(f"[yellow]⚠[/yellow] Failed to load organization config: {e}")
+                console.print("[dim]  Using default organization configuration[/dim]")
             return OrganizationConfig()
 
 
@@ -526,8 +532,10 @@ class ConfigLoader:
                 data = json.load(f)
             return TeamConfig(**data)
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to load team config: {e}")
-            console.print("[dim]  Using default team configuration[/dim]")
+            from devflow.cli.utils import is_json_mode
+            if not is_json_mode():
+                console.print(f"[yellow]⚠[/yellow] Failed to load team config: {e}")
+                console.print("[dim]  Using default team configuration[/dim]")
             return TeamConfig()
 
     def _load_user_config(self) -> Optional["UserConfig"]:
@@ -549,8 +557,10 @@ class ConfigLoader:
                 data = json.load(f)
             return UserConfig(**data)
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to load user config: {e}")
-            console.print("[dim]  Using default user configuration[/dim]")
+            from devflow.cli.utils import is_json_mode
+            if not is_json_mode():
+                console.print(f"[yellow]⚠[/yellow] Failed to load user config: {e}")
+                console.print("[dim]  Using default user configuration[/dim]")
             return UserConfig(
                 repos=RepoConfig(workspace=str(Path.home() / "development"))
             )

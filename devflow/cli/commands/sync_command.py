@@ -678,14 +678,24 @@ def sync_multi_backend(
         github_repos = [r for r in github_repos if r['repository'] == repository_filter]
         gitlab_repos = [r for r in gitlab_repos if r['repository'] == repository_filter]
 
-        # Warning if no repositories match filter
-        if not github_repos and not gitlab_repos and all_repositories:
-            console_print()
-            console_print(f"[yellow]⚠[/yellow] Repository '{repository_filter}' not found in scanned workspaces")
-            console_print("[dim]Discovered repositories:[/dim]")
-            for r in all_repositories:
-                console_print(f"  [dim]• {r['repository']} ({r['backend']})[/dim]")
-            # Continue (JIRA already synced, if configured)
+        # If no repositories match filter, add it directly (assume GitHub for now)
+        if not github_repos and not gitlab_repos:
+            if all_repositories:
+                # Repository wasn't found in scanned workspaces - show warning but continue
+                console_print()
+                console_print(f"[yellow]⚠[/yellow] Repository '{repository_filter}' not found in scanned workspaces")
+                console_print("[dim]Discovered repositories:[/dim]")
+                for r in all_repositories:
+                    console_print(f"  [dim]• {r['repository']} ({r['backend']})[/dim]")
+                console_print(f"[dim]Adding '{repository_filter}' directly for sync (assuming GitHub)[/dim]")
+
+            # Add the repository directly (assume GitHub, could enhance to detect GitLab)
+            github_repos.append({
+                'repository': repository_filter,
+                'backend': 'github',
+                'url': None,  # No local git remote
+                'remote': None
+            })
 
     if github_repos:
         console_print()
