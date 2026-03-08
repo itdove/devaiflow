@@ -260,99 +260,149 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
             else:
                 # Check if there are actually file changes to create a PR from
                 # We always check for existing PRs (to update JIRA if needed)
-                # But only prompt for PR creation if new work was done this cycle
                 has_uncommitted = GitUtils.has_uncommitted_changes(working_dir)
 
                 # Check if there's already a PR for the current branch
                 pr_status = _get_pr_for_branch(working_dir, active_conv.branch)
 
-                # Determine if we should enter PR creation/update flow
-                # Only proceed if: uncommitted changes OR commit made this cycle OR existing PR found
-                should_check_pr = has_uncommitted or commit_made_this_cycle or pr_status
+                if pr_status and pr_status['state'] == 'open':
+                    # There's an open PR - offer to push latest commits to update it
+                    console.print(f"\n[dim]Existing open PR/MR found for branch '{active_conv.branch}':[/dim]")
+                    console.print(f"  {pr_status['url']}")
 
-                if should_check_pr:
-
-                    if pr_status and pr_status['state'] == 'open':
-                        # There's an open PR - offer to push latest commits to update it
-                        console.print(f"\n[dim]Existing open PR/MR found for branch '{active_conv.branch}':[/dim]")
-                        console.print(f"  {pr_status['url']}")
-
-                        # Check if there are unpushed commits
-                        if GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
-                            # Offer to push commits to update the PR
-                            should_push = True
-                            if no_pr:
-                                should_push = False
-                                console.print("\n[dim]Skipping PR update (--no-pr flag)[/dim]")
-                            elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
-                                should_push = config.prompts.auto_push_to_remote
-                                if should_push:
-                                    console.print("\n[dim]Automatically pushing to remote (configured in prompts)[/dim]")
-                            else:
-                                should_push = Confirm.ask(f"\nPush latest commits to update PR/MR?", default=True)
-
+                    # Check if there are unpushed commits
+                    if GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
+                        # Offer to push commits to update the PR
+                        should_push = True
+                        if no_pr:
+                            should_push = False
+                            console.print("\n[dim]Skipping PR update (--no-pr flag)[/dim]")
+                        elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                            should_push = config.prompts.auto_push_to_remote
                             if should_push:
-                                console.print(f"[dim]Pushing {active_conv.branch} to origin...[/dim]")
-                                if GitUtils.push_branch(working_dir, active_conv.branch):
-                                    console.print(f"[green]✓[/green] PR/MR updated with latest commits")
-                                else:
-                                    console.print(f"[yellow]⚠[/yellow] Failed to push commits")
+                                console.print("\n[dim]Automatically pushing to remote (configured in prompts)[/dim]")
                         else:
-                            console.print(f"[dim]Branch is up to date with remote - no push needed[/dim]")
-                        # Update issue tracker ticket with MR URL if not already present
-                        if session.issue_key and pr_status['url']:
-                            _update_issue_pr_field(session, config, pr_status['url'], no_issue_update)
-                    elif pr_status and pr_status['state'] in ['merged', 'closed']:
-                        # PR exists but is merged/closed
-                        # Only prompt to create new PR if we have new work (commits or uncommitted changes)
-                        if has_uncommitted or commit_made_this_cycle:
-                            console.print(f"\n[dim]Previous PR/MR for this branch was {pr_status['state']}.[/dim]")
-                            should_create_pr = True
-                            if no_pr:
-                                should_create_pr = False
-                                console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
-                            elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
-                                should_create_pr = config.prompts.auto_create_pr_on_complete
-                                if should_create_pr:
-                                    console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
+                            should_push = Confirm.ask(f"\nPush latest commits to update PR/MR?", default=True)
+
+                        if should_push:
+                            console.print(f"[dim]Pushing {active_conv.branch} to origin...[/dim]")
+                            if GitUtils.push_branch(working_dir, active_conv.branch):
+                                console.print(f"[green]✓[/green] PR/MR updated with latest commits")
                             else:
-                                should_create_pr = Confirm.ask("Create a new PR/MR?", default=True)
-
+                                console.print(f"[yellow]⚠[/yellow] Failed to push commits")
+                    else:
+                        console.print(f"[dim]Branch is up to date with remote - no push needed[/dim]")
+                    # Update issue tracker ticket with MR URL if not already present
+                    if session.issue_key and pr_status['url']:
+                        _update_issue_pr_field(session, config, pr_status['url'], no_issue_update)
+                elif pr_status and pr_status['state'] in ['merged', 'closed']:
+                    # PR exists but is merged/closed
+                    # Check if there are changes from base branch before prompting for new PR
+                    if has_uncommitted or commit_made_this_cycle:
+                        # Has work this cycle - prompt to create PR
+                        console.print(f"\n[dim]Previous PR/MR for this branch was {pr_status['state']}.[/dim]")
+                        should_create_pr = True
+                        if no_pr:
+                            should_create_pr = False
+                            console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
+                        elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
+                            should_create_pr = config.prompts.auto_create_pr_on_complete
                             if should_create_pr:
-                                pr_url = _create_pr_mr(session, working_dir, session_manager)
+                                console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
+                        else:
+                            should_create_pr = Confirm.ask("Create a new PR/MR?", default=True)
 
-                                # Update issue tracker ticket with PR URL if created successfully
-                                if pr_url and session.issue_key:
-                                    _update_issue_pr_field(session, config, pr_url, no_issue_update)
+                        if should_create_pr:
+                            pr_url = _create_pr_mr(session, working_dir, session_manager)
+
+                            # Update issue tracker ticket with PR URL if created successfully
+                            if pr_url and session.issue_key:
+                                _update_issue_pr_field(session, config, pr_url, no_issue_update)
+                    else:
+                        # No work this cycle - check if branch has changes from base
+                        base_branch = GitUtils.get_default_branch(working_dir)
+                        if base_branch:
+                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
+                            if changed_files:
+                                # Branch has changes from base - prompt to create PR
+                                console.print(f"\n[dim]Previous PR/MR for this branch was {pr_status['state']}.[/dim]")
+                                should_create_pr = True
+                                if no_pr:
+                                    should_create_pr = False
+                                    console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
+                                elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
+                                    should_create_pr = config.prompts.auto_create_pr_on_complete
+                                    if should_create_pr:
+                                        console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
+                                else:
+                                    should_create_pr = Confirm.ask("Create a new PR/MR?", default=True)
+
+                                if should_create_pr:
+                                    pr_url = _create_pr_mr(session, working_dir, session_manager)
+
+                                    # Update issue tracker ticket with PR URL if created successfully
+                                    if pr_url and session.issue_key:
+                                        _update_issue_pr_field(session, config, pr_url, no_issue_update)
+                            else:
+                                # No changes from base branch - skip PR creation
+                                console.print(f"\n[dim]Previous PR/MR was {pr_status['state']} and branch has no changes from {base_branch} - skipping PR creation.[/dim]")
                         else:
                             console.print(f"\n[dim]Previous PR/MR was {pr_status['state']} and no new commits - skipping PR creation.[/dim]")
-                    else:
-                        # No existing PR for this branch
-                        # Only prompt to create PR if we have new work (commits or uncommitted changes)
-                        if has_uncommitted or commit_made_this_cycle:
-                            console.print("\n[dim]No PR/MR found for this branch.[/dim]")
+                else:
+                    # No existing PR for this branch
+                    # Check if we should create a PR based on work done and changes from base
+                    if has_uncommitted or commit_made_this_cycle:
+                        # Has work this cycle - prompt to create PR
+                        console.print("\n[dim]No PR/MR found for this branch.[/dim]")
 
-                            should_create_pr = True
-                            if no_pr:
-                                should_create_pr = False
-                                console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
-                            elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
-                                should_create_pr = config.prompts.auto_create_pr_on_complete
-                                if should_create_pr:
-                                    console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
-                            else:
-                                should_create_pr = Confirm.ask("Create a PR/MR now?", default=True)
-
+                        should_create_pr = True
+                        if no_pr:
+                            should_create_pr = False
+                            console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
+                        elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
+                            should_create_pr = config.prompts.auto_create_pr_on_complete
                             if should_create_pr:
-                                pr_url = _create_pr_mr(session, working_dir, session_manager)
+                                console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
+                        else:
+                            should_create_pr = Confirm.ask("Create a PR/MR now?", default=True)
 
-                                # Update issue tracker ticket with PR URL if created successfully
-                                if pr_url and session.issue_key:
-                                    _update_issue_pr_field(session, config, pr_url, no_issue_update)
+                        if should_create_pr:
+                            pr_url = _create_pr_mr(session, working_dir, session_manager)
+
+                            # Update issue tracker ticket with PR URL if created successfully
+                            if pr_url and session.issue_key:
+                                _update_issue_pr_field(session, config, pr_url, no_issue_update)
+                    else:
+                        # No work this cycle - check if branch has changes from base
+                        base_branch = GitUtils.get_default_branch(working_dir)
+                        if base_branch:
+                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
+                            if changed_files:
+                                # Branch has changes from base - prompt to create PR
+                                console.print("\n[dim]No PR/MR found for this branch.[/dim]")
+
+                                should_create_pr = True
+                                if no_pr:
+                                    should_create_pr = False
+                                    console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
+                                elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
+                                    should_create_pr = config.prompts.auto_create_pr_on_complete
+                                    if should_create_pr:
+                                        console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
+                                else:
+                                    should_create_pr = Confirm.ask("Create a PR/MR now?", default=True)
+
+                                if should_create_pr:
+                                    pr_url = _create_pr_mr(session, working_dir, session_manager)
+
+                                    # Update issue tracker ticket with PR URL if created successfully
+                                    if pr_url and session.issue_key:
+                                        _update_issue_pr_field(session, config, pr_url, no_issue_update)
+                            else:
+                                # No changes from base branch - skip PR creation
+                                console.print(f"\n[dim]Branch has no changes from {base_branch} - skipping PR creation.[/dim]")
                         else:
                             console.print("\n[dim]No new commits - skipping PR creation.[/dim]")
-                else:
-                    console.print("\n[dim]No new commits - skipping PR creation.[/dim]")
 
     # Offer to add session summary to JIRA (only if session has issue key and meaningful activity)
     if session.issue_key:
