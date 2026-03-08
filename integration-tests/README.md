@@ -92,6 +92,32 @@ The test needs a GitHub repository where it can create and close issues. This ca
 - A dedicated test repository you create just for this purpose
 - Example: Create a repo called `devaiflow-tests` under your account
 
+**Recommended repository settings:**
+
+To get the best test experience, configure your test repository with these settings (Settings → General):
+
+1. **Enable "Automatically delete head branches"**
+   - Keeps repository clean after PR merges
+   - Test uses `gh pr merge --delete-branch` which works better with this enabled
+
+2. **Disable branch protection on main** (optional but recommended for testing)
+   - Go to Settings → Branches
+   - Remove or disable any branch protection rules on `main`
+   - This allows the test to merge PRs without requiring approvals
+
+3. **Allow auto-merge** (optional)
+   - Settings → General → Pull Requests
+   - Check "Allow auto-merge"
+   - Makes PR merging smoother
+
+**Test behavior with repository settings:**
+- ✅ **Self-approval fails** - GitHub doesn't allow it, test handles gracefully
+- ✅ **Merge succeeds** - If no branch protection or approval requirements
+- ⚠️ **Merge skipped** - If branch protection requires approvals, test continues anyway
+- ✅ **Core test passes** - PR creation and issue auto-close work regardless
+
+The test validates the key features (auto PR creation and auto issue close) even if merge fails due to repository policies.
+
 **Note:** Manual tests skip gracefully if requirements are not met (exit code 0).
 
 ## Test Runner Features
