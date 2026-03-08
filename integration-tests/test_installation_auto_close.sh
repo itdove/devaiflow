@@ -337,7 +337,7 @@ verify_success "cat > backends/github.json" "Backend config created"
 # Note: In the new 5-file format, GitHub settings go in organization.json
 cat > "$DEVAIFLOW_HOME/organization.json" <<'EOF'
 {
-  "jira_project": null,
+  "jira_project": "NOPROJECT",
   "github_repository": "$DAF_TEST_GITHUB_REPO",
   "github_auto_close_on_complete": true
 }
@@ -559,8 +559,33 @@ ISSUE_NUMBER=$(echo "$ISSUE_KEY" | cut -d'#' -f2)
 gh issue edit "$ISSUE_NUMBER" --repo "$DAF_TEST_GITHUB_REPO" --add-assignee "@me" > /dev/null 2>&1
 verify_success "gh issue edit --add-assignee" "Issue assigned to $GITHUB_USER"
 
-# Test 9: Sync issue using daf sync
-print_section "Test 9: Sync Issue with daf sync"
+# Test 9: Clean up old test issues
+print_section "Test 9: Clean Up Old Test Issues"
+print_test "Close old AUTO-TEST issues to prevent syncing all of them"
+
+# Close all old AUTO-TEST issues to prevent them from being synced
+# This ensures only the newly created issue is synced
+OLD_ISSUES=$(gh issue list --repo "$DAF_TEST_GITHUB_REPO" --assignee "@me" --state open --search "[AUTO-TEST]" --json number --jq '.[].number' | grep -v "^${ISSUE_NUMBER}$" || true)
+
+if [ -n "$OLD_ISSUES" ]; then
+    OLD_COUNT=$(echo "$OLD_ISSUES" | wc -l | tr -d ' ')
+    echo -e "  ${YELLOW}→${NC} Found $OLD_COUNT old AUTO-TEST issue(s) to close"
+
+    # Close each old issue
+    while IFS= read -r old_issue; do
+        if [ -n "$old_issue" ]; then
+            gh issue close "$old_issue" --repo "$DAF_TEST_GITHUB_REPO" --comment "Closed by integration test cleanup" > /dev/null 2>&1 || true
+        fi
+    done <<< "$OLD_ISSUES"
+
+    echo -e "  ${GREEN}✓${NC} Closed $OLD_COUNT old AUTO-TEST issue(s)"
+else
+    echo -e "  ${GREEN}✓${NC} No old AUTO-TEST issues to close"
+fi
+TESTS_PASSED=$((TESTS_PASSED + 1))
+
+# Test 10: Sync issue using daf sync
+print_section "Test 10: Sync Issue with daf sync"
 # Wait for GitHub API to index (not counted as a test)
 echo -e "${YELLOW}→${NC} Waiting 3 seconds for GitHub API indexing..."
 sleep 3
@@ -604,8 +629,8 @@ echo -e "${YELLOW}Debug:${NC} Session directory contents:"
 ls -la "$DEVAIFLOW_HOME/" 2>&1 | sed 's/^/    /'
 echo ""
 
-# Test 10: Verify git authentication
-print_section "Test 10: Verify Git Authentication"
+# Test 11: Verify git authentication
+print_section "Test 11: Verify Git Authentication"
 print_test "Verify gh CLI authentication is configured"
 
 # Git authentication was already configured during repository clone (Test 6)
@@ -621,7 +646,7 @@ else
 fi
 
 # Test 11: Create feature branch for the session
-print_section "Test 11: Create Feature Branch for Session"
+print_section "Test 12: Create Feature Branch for Session"
 print_test "Create feature branch matching session name"
 
 # Create feature branch manually (daf open requires remote sync which is complex in test)
@@ -703,7 +728,7 @@ EOF
 verify_success "python3" "Session associated with git repo and branch"
 
 # Test 12: Make code changes and commit
-print_section "Test 12: Make Code Changes"
+print_section "Test 13: Make Code Changes"
 
 print_test "Modify a file to create a code change"
 # Add a new file with some content
@@ -729,8 +754,8 @@ print_test "Verify uncommitted changes exist"
 ) 2>&1
 verify_success "git status" "Uncommitted changes detected (will be auto-committed by daf complete)"
 
-# Test 13: Verify issue is open
-print_section "Test 13: Verify Issue Status Before Complete"
+# Test 14: Verify issue is open
+print_section "Test 14: Verify Issue Status Before Complete"
 print_test "Verify issue is currently open"
 
 # Get issue status using gh CLI directly
@@ -747,8 +772,8 @@ else
     exit 1
 fi
 
-# Test 14: Complete session with auto-close and auto-PR
-print_section "Test 14: Complete Session (Auto-Close and Auto-PR Test)"
+# Test 15: Complete session with auto-close and auto-PR
+print_section "Test 15: Complete Session (Auto-Close and Auto-PR Test)"
 print_test "Complete session with auto-close and auto-PR enabled"
 
 # Complete the session - with auto_close_on_complete=true and auto_create_pr_on_complete=true
@@ -787,8 +812,8 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 15: Verify PR was created
-print_section "Test 15: Verify Pull Request Was Created"
+# Test 16: Verify PR was created
+print_section "Test 16: Verify Pull Request Was Created"
 print_test "Extract PR URL from completion output"
 
 # Look for PR URL in the output
@@ -826,8 +851,8 @@ else
     exit 1
 fi
 
-# Test 16: Approve the PR (optional - GitHub doesn't allow self-approval)
-print_section "Test 16: Approve Pull Request"
+# Test 17: Approve the PR (optional - GitHub doesn't allow self-approval)
+print_section "Test 17: Approve Pull Request"
 print_test "Approve PR using gh CLI (may fail for self-approval)"
 
 # Temporarily disable errexit for optional command
@@ -845,8 +870,8 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 17: Merge the PR (may fail if repo requires approvals)
-print_section "Test 17: Merge Pull Request"
+# Test 18: Merge the PR (may fail if repo requires approvals)
+print_section "Test 18: Merge Pull Request"
 print_test "Merge PR using gh CLI"
 
 # Temporarily disable errexit for optional command
@@ -881,8 +906,8 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 18: Verify issue was automatically closed
-print_section "Test 18: Verify Issue Was Automatically Closed"
+# Test 19: Verify issue was automatically closed
+print_section "Test 19: Verify Issue Was Automatically Closed"
 print_test "Check issue state using GitHub API"
 
 # Wait a moment for GitHub API to reflect the change
@@ -903,8 +928,8 @@ else
     exit 1
 fi
 
-# Test 19: Reopen issue for reusability
-print_section "Test 19: Reopen Issue for Test Reusability"
+# Test 20: Reopen issue for reusability
+print_section "Test 20: Reopen Issue for Test Reusability"
 print_test "Reopen issue so test can be run again"
 
 # Reopen the issue so the test can be run again (optional cleanup step)
