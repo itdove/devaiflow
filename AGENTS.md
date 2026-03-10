@@ -957,7 +957,10 @@ daf --help
 ### Installation
 
 ```bash
-# Install from local directory
+# Install from PyPI (recommended for users)
+pip install devaiflow
+
+# Install from local directory (for contributors)
 pip install .
 
 # Install in editable mode (for development)
@@ -967,7 +970,7 @@ pip install -e .
 pip uninstall devaiflow
 
 # Upgrade to latest version
-pip install --upgrade .
+pip install --upgrade devaiflow
 ```
 
 ## Implementation Phases
@@ -1681,7 +1684,7 @@ When a new version is available, you'll see:
 ```
 ╭─ Update Available ──────────────────────────────────────────╮
 │  A new version of daf is available: 1.1.0 (current: 1.0.0)  │
-│  Run pip install --upgrade --force-reinstall .               │
+│  Run pip install --upgrade devaiflow                        │
 ╰─────────────────────────────────────────────────────────────╯
 ```
 

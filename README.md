@@ -100,7 +100,7 @@ Each session is an **isolated workspace** with its own:
 
 ```bash
 # Install
-pip install .
+pip install devaiflow
 
 # Authenticate GitHub CLI
 gh auth login

@@ -662,6 +662,14 @@ ls $DEVAIFLOW_HOME/config.json
 
 ## Upgrading
 
+### Upgrading from PyPI (recommended)
+
+```bash
+pip install --upgrade devaiflow
+```
+
+### Upgrading from source
+
 ```bash
 cd ~/development/workspace/devaiflow
 git pull  # Get latest code
@@ -760,7 +768,7 @@ Install DAF_AGENTS.md to repository? [y/n] (y):
 
 **Auto-Upgrade Detection**
 
-When you upgrade the daf package (via `pip install --upgrade --force-reinstall .`), the bundled DAF_AGENTS.md may contain improvements:
+When you upgrade the daf package (via `pip install --upgrade devaiflow`), the bundled DAF_AGENTS.md may contain improvements:
 - New command documentation
 - Updated JIRA Wiki markup guidance
 - Improved workflow instructions
