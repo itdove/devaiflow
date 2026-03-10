@@ -400,7 +400,7 @@ Use this checklist for each release:
 - [ ] Bump version to next dev cycle (`X.Y+1.0-dev`)
 - [ ] Update AGENTS.md "Completed Enhancements" section
 - [ ] Announce release (if applicable)
-- [ ] (Future) Publish to PyPI
+- [ ] Publish to PyPI (see [docs/publishing-to-pypi.md](docs/publishing-to-pypi.md))
 
 ### Hotfix (if needed)
 - [ ] Create hotfix branch from release tag

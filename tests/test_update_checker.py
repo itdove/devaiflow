@@ -539,7 +539,7 @@ def test_show_update_notification(capsys):
     captured = capsys.readouterr()
     assert "Update Available" in captured.out
     assert "2.0.0" in captured.out
-    assert "pip install --upgrade --force-reinstall" in captured.out
+    assert "pip install --upgrade devaiflow" in captured.out
 
 
 def test_show_network_warning(capsys):

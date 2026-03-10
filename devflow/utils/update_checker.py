@@ -276,7 +276,7 @@ def show_update_notification(latest_version: str) -> None:
     console.print()
     console.print(f"[yellow]╭─ Update Available ──────────────────────────────────────────╮[/yellow]")
     console.print(f"[yellow]│[/yellow]  A new version of daf is available: [green]{latest_version}[/green] (current: {__version__})  [yellow]│[/yellow]")
-    console.print(f"[yellow]│[/yellow]  Run [cyan]pip install --upgrade --force-reinstall .[/cyan]               [yellow]│[/yellow]")
+    console.print(f"[yellow]│[/yellow]  Run [cyan]pip install --upgrade devaiflow[/cyan]                        [yellow]│[/yellow]")
     console.print(f"[yellow]╰─────────────────────────────────────────────────────────────╯[/yellow]")
     console.print()
 

@@ -92,7 +92,7 @@ Before sharing session exports with teammates:
 
 ### 4. Keep Software Updated
 
-- Regularly update DevAIFlow: `pip install --upgrade --force-reinstall .`
+- Regularly update DevAIFlow: `pip install --upgrade devaiflow`
 - Subscribe to GitHub releases for security notifications
 - Review CHANGELOG.md for security-related updates
 
