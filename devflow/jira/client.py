@@ -156,7 +156,7 @@ class JiraClient(IssueTrackerClient):
                 if any(indicator in msg_lower for indicator in ["expired", "expiration", "token has expired"]):
                     return True
 
-        except (ValueError, AttributeError, KeyError):
+        except Exception:
             # If we can't parse JSON or expected structure isn't there,
             # fall back to text-based detection
             pass
@@ -166,7 +166,7 @@ class JiraClient(IssueTrackerClient):
             response_text = response.text.lower()
             if any(indicator in response_text for indicator in ["expired", "expiration", "token has expired"]):
                 return True
-        except:
+        except Exception:
             pass
 
         return False
