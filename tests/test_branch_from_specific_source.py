@@ -130,8 +130,11 @@ def test_handle_branch_creation_from_specific_branch_success(tmp_path):
             config=mock_config
         )
 
-        # Should successfully create the branch
-        assert result == "aap-12345-test-feature"
+        # Should successfully create the branch and return tuple (branch_name, source_branch)
+        assert isinstance(result, tuple)
+        branch_name, source_branch = result
+        assert branch_name == "aap-12345-test-feature"
+        assert source_branch == "develop"
 
         # Verify we're on the new branch
         current_branch = GitUtils.get_current_branch(tmp_path)
@@ -173,8 +176,11 @@ def test_handle_branch_creation_from_current_branch(tmp_path):
             config=mock_config
         )
 
-        # Should successfully create branch in auto mode
-        assert result == "aap-12345-test"
+        # Should successfully create branch in auto mode and return tuple
+        assert isinstance(result, tuple)
+        branch_name, source_branch = result
+        assert branch_name == "aap-12345-test"
+        assert source_branch == "main"
 
 
 def test_handle_branch_creation_works_for_daf_open(tmp_path):
@@ -225,8 +231,11 @@ def test_handle_branch_creation_works_for_daf_open(tmp_path):
             # Note: auto_from_default not passed, defaults to False
         )
 
-        # Should successfully create branch
-        assert result == "aap-12345-from-open"
+        # Should successfully create branch and return tuple
+        assert isinstance(result, tuple)
+        branch_name, source_branch = result
+        assert branch_name == "aap-12345-from-open"
+        assert source_branch == "develop"
 
         # Verify Prompt.ask was called for branch name and source branch
         assert mock_prompt.call_count == 2

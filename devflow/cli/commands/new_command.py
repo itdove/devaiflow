@@ -455,12 +455,19 @@ def create_new_session(
     if branch is None:
         # Use issue_key if available, otherwise use name for branch creation
         branch_identifier = issue_key if issue_key else name
-        branch = _handle_branch_creation(project_path, branch_identifier, goal)
+        branch_result = _handle_branch_creation(project_path, branch_identifier, goal)
 
         # Check if user explicitly cancelled due to uncommitted changes
-        if branch is False:
+        if branch_result is False:
             console.print("\n[yellow]Session creation cancelled[/yellow]")
             return
+
+        # Handle return value: could be tuple (branch, source_branch) or just branch name
+        source_branch_for_base = None
+        if isinstance(branch_result, tuple):
+            branch, source_branch_for_base = branch_result
+        else:
+            branch = branch_result
 
     # Generate session ID upfront
     session_id = str(uuid.uuid4())
@@ -501,11 +508,13 @@ def create_new_session(
             console.print(f"\n[cyan]Adding conversation to existing session: {name}[/cyan]")
 
             # AAP-64886: Use selected workspace_path instead of default
+            # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
             session.add_conversation(
                 working_dir=working_directory,
                 ai_agent_session_id=session_id,
                 project_path=project_path,
                 branch=branch or "",  # branch is required, use empty string if None
+                base_branch=source_branch_for_base or "main",
                 workspace=workspace_path,
             )
             session.working_directory = working_directory
@@ -555,11 +564,13 @@ def create_new_session(
                 console.print(f"\n[cyan]Adding conversation to session [/cyan]")
 
                 # AAP-63377: Use selected workspace path
+                # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
                 session.add_conversation(
                     working_dir=working_directory,
                     ai_agent_session_id=session_id,
                     project_path=project_path,
                     branch=branch or "",  # branch is required, use empty string if None
+                    base_branch=source_branch_for_base or "main",
                     workspace=workspace_path,
                 )
                 session.working_directory = working_directory
@@ -581,6 +592,11 @@ def create_new_session(
             branch=branch,
             ai_agent_session_id=session_id,
         )
+
+        # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
+        if source_branch_for_base and session.active_conversation:
+            session.active_conversation.base_branch = source_branch_for_base
+            session_manager.update_session(session)
 
         # AAP-63377: Store selected workspace in session
         if selected_workspace_name:
@@ -1241,7 +1257,7 @@ def _handle_branch_creation(
     goal: Optional[str],
     auto_from_default: bool = False,
     config: Optional[any] = None
-) -> Optional[str] | bool:
+) -> Optional[str] | bool | tuple[str, str]:
     """Handle git branch creation with enhanced UX.
 
     Enhanced workflow:
@@ -1262,7 +1278,8 @@ def _handle_branch_creation(
         config: Configuration object (optional, will load if not provided)
 
     Returns:
-        Branch name if created/exists
+        Tuple of (branch_name, source_branch) if newly created
+        Branch name (str) if switched to existing branch
         None if no git repo or user chose not to create a branch (continue anyway)
         False if user explicitly cancelled due to uncommitted changes (don't continue)
     """
@@ -1415,7 +1432,8 @@ def _handle_branch_creation(
         # Create new branch
         if GitUtils.create_branch(path, branch_name):
             console_print(f"[green]✓[/green] Created and switched to branch: [bold]{branch_name}[/bold]")
-            return branch_name
+            # Return both branch name and source branch for proper base_branch tracking
+            return (branch_name, source_branch)
         else:
             console_print(f"[red]✗[/red] Failed to create branch")
             return None

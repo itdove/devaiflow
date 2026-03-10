@@ -450,21 +450,31 @@ def open_session(
         # Use issue_key if available, otherwise use session name for branch creation
         branch_identifier = session.issue_key if session.issue_key else session.name
         # Prompt user for branch creation strategy (same as daf new)
-        branch = _handle_branch_creation(
+        branch_result = _handle_branch_creation(
             active_conv.project_path,
             branch_identifier,
             session.goal
         )
 
         # Check if user explicitly cancelled due to uncommitted changes
-        if branch is False:
+        if branch_result is False:
             console.print("\n[yellow]Session open cancelled[/yellow]")
             return
+
+        # Handle return value: could be tuple (branch, source_branch) or just branch name
+        source_branch_for_base = None
+        if isinstance(branch_result, tuple):
+            branch, source_branch_for_base = branch_result
+        else:
+            branch = branch_result
 
         if branch:
             # Update active conversation's branch
             if session.active_conversation:
                 session.active_conversation.branch = branch
+                # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
+                if source_branch_for_base:
+                    session.active_conversation.base_branch = source_branch_for_base
             session_manager.update_session(session)
 
     # Display session summary (use conversation-based API)

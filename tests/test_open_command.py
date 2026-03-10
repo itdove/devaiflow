@@ -214,7 +214,12 @@ def test_handle_branch_creation_auto_mode_skips_confirmation(tmp_path):
 
         # Verify Confirm.ask was NOT called (auto mode skips confirmation)
         mock_confirm.assert_not_called()
-        assert branch == 'aap-12345-test'
+        # Handle tuple return value (branch_name, source_branch)
+        if isinstance(branch, tuple):
+            branch_name, _ = branch
+            assert branch_name == 'aap-12345-test'
+        else:
+            assert branch == 'aap-12345-test'
 
 
 def test_handle_branch_creation_interactive_mode_asks_confirmation(tmp_path):
@@ -1862,7 +1867,12 @@ def test_handle_branch_creation_with_uncommitted_changes_continue(tmp_path):
 
         # Verify a branch name was returned (user continued)
         assert branch is not None
-        assert "proj-12345" in branch.lower()
+        # Handle tuple return value (branch_name, source_branch)
+        if isinstance(branch, tuple):
+            branch_name, _ = branch
+            assert "proj-12345" in branch_name.lower()
+        else:
+            assert "proj-12345" in branch.lower()
 
         # Verify Confirm.ask was called twice
         assert mock_confirm.call_count == 2
