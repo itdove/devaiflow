@@ -448,15 +448,59 @@ class TestPromptForBranchSelection:
             # User entered branch name directly
             assert result == "release/2.5"
 
-    def test_invalid_selection_falls_back_to_default(self, mock_git_repo):
-        """Test that invalid selection falls back to default branch."""
+    def test_invalid_number_retries_then_succeeds(self, mock_git_repo):
+        """Test that invalid number selection prompts again, then succeeds with valid input."""
         with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
              patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
              patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
              patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
-             patch("devflow.utils.temp_directory.Prompt.ask", return_value="99"):
+             patch("devflow.utils.temp_directory.Prompt.ask", side_effect=["99", "2"]):
             result = _prompt_for_branch_selection(mock_git_repo)
-            # Invalid selection should fall back to default (main)
+            # First input "99" is invalid, second input "2" selects "main"
+            assert result == "main"
+
+    def test_invalid_name_retries_then_succeeds(self, mock_git_repo):
+        """Test that invalid branch name prompts again, then succeeds with valid input."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", side_effect=["nonexistent-branch", "main"]):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # First input "nonexistent-branch" is invalid, second input "main" succeeds
+            assert result == "main"
+
+    def test_cancel_returns_default(self, mock_git_repo):
+        """Test that typing 'cancel' returns default branch."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="cancel"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Should return default branch (main)
+            assert result == "main"
+
+    def test_q_returns_default(self, mock_git_repo):
+        """Test that typing 'q' returns default branch."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value="q"):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # Should return default branch (main)
+            assert result == "main"
+
+    def test_multiple_retries_then_cancel(self, mock_git_repo):
+        """Test that multiple invalid attempts followed by cancel returns default."""
+        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
+             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.Prompt.ask", side_effect=["invalid1", "99", "cancel"]):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            # After two invalid attempts, cancel should return default (main)
             assert result == "main"
 
     def test_keyboard_interrupt_returns_default(self, mock_git_repo):
