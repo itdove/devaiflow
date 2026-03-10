@@ -1,0 +1,76 @@
+DevAIFlow GitHub Workflow Demo - Manual Commands
+================================================
+
+Prerequisites:
+- cd to: /Users/dvernier/development/ai/devaiflow-demos
+- Clear terminal before starting
+
+STEP 1: Create New Task
+========================
+
+# Create a new task
+daf git new task -w ai --goal "increment counter in the demo_counter.txt file"
+
+# When prompted:
+# - Selection: devaiflow-demos
+# - Clone in temp directory: y
+# - Base branch: 1 (main)
+# - Trust folder: Enter
+# - Do you want to proceed (create): y
+# - Do you want to proceed (view - if asked): y
+# - Run daf complete: y
+
+# After task is created, capture the issue number (e.g., #26)
+# Then assign it to yourself:
+gh issue edit 26 --repo itdove/devaiflow-demos --add-assignee "@me"
+
+# Verify assignment:
+gh issue view 26 --repo itdove/devaiflow-demos --json assignees,title,number
+
+STEP 2: Sync
+============
+
+# Sync the issue
+daf sync -w ai --repo itdove/devaiflow-demos
+
+# This will create a session, capture the session name (e.g., creation-26)
+
+STEP 3: Open Session
+=====================
+
+# Open the session (replace with your session name)
+daf open creation-26
+
+# When prompted:
+# - Selection: devaiflow-demos
+# - Create new branch: y
+# - Branch name: Enter (use default)
+# - Source branch: Enter (use default)
+# - Do you want to proceed (view): y
+# - Do you want to proceed (execute script): y
+# - Do you want to proceed (git add): y
+# - Do you want to proceed (git commit): y
+# - Do you want to proceed (add comment): y
+# - Run daf complete: y
+
+STEP 4: Verify PR Created
+==========================
+
+# List recent PRs for the repository
+gh pr list --repo itdove/devaiflow-demos --limit 5
+
+# View the specific PR (replace 123 with actual PR number)
+gh pr view 123 --repo itdove/devaiflow-demos
+
+# Or view PR in browser
+gh pr view 123 --repo itdove/devaiflow-demos --web
+
+STEP 5: Verify Issue Assignment
+================================
+
+# Show issue details including assignee
+gh issue view 26 --repo itdove/devaiflow-demos
+
+# List all your assigned issues
+gh issue list --repo itdove/devaiflow-demos --assignee "@me"
+
