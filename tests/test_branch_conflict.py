@@ -290,8 +290,13 @@ def test_handle_branch_creation_creates_new_with_suffix(tmp_path):
             auto_from_default=True
         )
 
-        # Should create new branch with different name
-        assert result == "aap-12345-test-feature-retry"
+        # Should create new branch with different name and return tuple
+        if isinstance(result, tuple):
+            branch_name, source_branch = result
+            assert branch_name == "aap-12345-test-feature-retry"
+            assert source_branch == "main"
+        else:
+            assert result == "aap-12345-test-feature-retry"
 
 
 def test_handle_branch_creation_skip_on_conflict(tmp_path):
