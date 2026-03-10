@@ -1348,7 +1348,7 @@ def _handle_workspace_mismatch(
     console.print()
 
     try:
-        choice = IntPrompt.ask("Enter choice", choices=["1", "2", "3"], default="1")
+        choice = IntPrompt.ask("Enter choice", choices=["1", "2", "3"], default=1)
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled[/yellow]")
         return False
@@ -1618,7 +1618,7 @@ def _create_conversation_from_workspace_selection(
 
     # Prompt for selection
     choices = [str(i) for i in range(1, len(repo_options) + 2)]  # +2 for "Other" option
-    choice = IntPrompt.ask("Which project?", choices=choices, default="1")
+    choice = IntPrompt.ask("Which project?", choices=choices, default=1)
 
     # Handle "Other" option
     if choice == len(repo_options) + 1:
