@@ -84,34 +84,46 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
         else:
             console_print(f"  {idx}. {branch}")
 
-    # Prompt user for selection
+    # Prompt user for selection with validation loop
     try:
-        choice = Prompt.ask(
-            "\nEnter selection",
-            default="1" if default_branch else None,
-            show_default=True
-        )
+        while True:
+            choice = Prompt.ask(
+                "\nEnter selection",
+                default="1" if default_branch else None,
+                show_default=True
+            )
 
-        # Parse selection (can be number or branch name)
-        try:
-            # Try to parse as number
-            selection_num = int(choice)
-            if 1 <= selection_num <= len(branches):
-                selected_branch = branches[selection_num - 1]
-            else:
-                console_print(f"[yellow]⚠[/yellow] Invalid selection: {choice}")
+            # Allow cancel
+            if choice.lower() in ['cancel', 'q']:
                 console_print(f"[dim]Using default branch: {default_branch}[/dim]")
-                selected_branch = default_branch
-        except ValueError:
-            # Not a number, treat as branch name
-            if choice in branches:
-                selected_branch = choice
-            else:
-                console_print(f"[yellow]⚠[/yellow] Branch '{choice}' not found")
-                console_print(f"[dim]Using default branch: {default_branch}[/dim]")
-                selected_branch = default_branch
+                return default_branch
 
-        return selected_branch
+            # Parse selection (can be number or branch name)
+            selected_branch = None
+
+            # Try to parse as number first
+            try:
+                selection_num = int(choice)
+                if 1 <= selection_num <= len(branches):
+                    selected_branch = branches[selection_num - 1]
+                else:
+                    console_print(f"[red]✗[/red] Invalid selection: {choice}")
+                    console_print("[dim]Please try again or type 'cancel' to use default[/dim]")
+                    continue
+            except ValueError:
+                # Not a number, treat as branch name
+                if choice in branches:
+                    selected_branch = choice
+                else:
+                    console_print(f"[red]✗[/red] Branch '{choice}' not found in available branches")
+                    console_print("[dim]Please try again or type 'cancel' to use default[/dim]")
+                    continue
+
+            # Valid selection made
+            if selected_branch:
+                console_print(f"[green]✓[/green] Selected branch: {selected_branch}")
+                return selected_branch
+
     except (KeyboardInterrupt, EOFError):
         console_print("\n[dim]Branch selection cancelled, using default[/dim]")
         return default_branch
