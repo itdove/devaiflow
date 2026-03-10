@@ -126,6 +126,75 @@ class JiraClient(IssueTrackerClient):
             # Default to bearer for unknown auth types
             return f"Bearer {self._jira_token}"
 
+    def _is_token_expired(self, response: requests.Response) -> bool:
+        """Check if a 401 response indicates an expired token.
+
+        Args:
+            response: HTTP response object from JIRA API
+
+        Returns:
+            True if the response indicates an expired token, False otherwise
+        """
+        if response.status_code != 401:
+            return False
+
+        try:
+            # Try to parse JSON response
+            response_data = response.json()
+
+            # Check errorMessages array for expiration indicators
+            error_messages = response_data.get("errorMessages", [])
+            for msg in error_messages:
+                msg_lower = str(msg).lower()
+                if any(indicator in msg_lower for indicator in ["expired", "expiration", "token has expired"]):
+                    return True
+
+            # Check errors dict for expiration indicators
+            errors = response_data.get("errors", {})
+            for error_msg in errors.values():
+                msg_lower = str(error_msg).lower()
+                if any(indicator in msg_lower for indicator in ["expired", "expiration", "token has expired"]):
+                    return True
+
+        except Exception:
+            # If we can't parse JSON or expected structure isn't there,
+            # fall back to text-based detection
+            pass
+
+        # Check response text for expiration indicators
+        try:
+            response_text = response.text.lower()
+            if any(indicator in response_text for indicator in ["expired", "expiration", "token has expired"]):
+                return True
+        except Exception:
+            pass
+
+        return False
+
+    def _raise_auth_error(self, message: str, response: requests.Response = None) -> None:
+        """Raise JiraAuthError with token expiration detection.
+
+        Args:
+            message: Error message describing the authentication failure
+            response: HTTP response object from JIRA API (optional)
+
+        Raises:
+            JiraAuthError: Always raises with appropriate expiration details
+        """
+        token_expired = False
+        status_code = None
+
+        if response is not None:
+            status_code = response.status_code
+            token_expired = self._is_token_expired(response)
+
+        raise JiraAuthError(
+            message,
+            token_expired=token_expired,
+            jira_url=self._jira_url,
+            status_code=status_code
+        )
+
     def _add_custom_fields_to_payload(
         self,
         payload: Dict,
@@ -381,9 +450,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed for issue tracker ticket {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
@@ -497,9 +566,9 @@ class JiraClient(IssueTrackerClient):
                 resource_id=issue_key
             )
         elif response.status_code == 401 or response.status_code == 403:
-            raise JiraAuthError(
+            self._raise_auth_error(
                 f"Authentication failed when adding comment to {issue_key}",
-                status_code=response.status_code
+                response
             )
         elif response.status_code != 201:
             raise JiraApiError(
@@ -541,9 +610,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when fetching comments for {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
@@ -608,9 +677,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when getting transitions for {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
@@ -662,9 +731,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when transitioning {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code == 400:
                 # Parse the error response to extract field information
@@ -756,9 +825,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when attaching file to {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             else:
                 raise JiraApiError(
@@ -819,9 +888,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed for issue tracker ticket {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
@@ -1007,9 +1076,9 @@ class JiraClient(IssueTrackerClient):
             )
 
             if response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     "Authentication failed when listing tickets",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
@@ -1165,9 +1234,9 @@ class JiraClient(IssueTrackerClient):
             )
 
             if response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     "Authentication failed when fetching child issues",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
@@ -1240,9 +1309,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when updating field in {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code == 400:
                 # Parse validation errors
@@ -1309,9 +1378,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when updating {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code == 400:
                 # Parse error response for detailed error messages
@@ -1407,9 +1476,9 @@ class JiraClient(IssueTrackerClient):
                     resource_id=issue_key
                 )
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when getting PR links for {issue_key}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code == 200:
                 data = response.json()
@@ -1581,9 +1650,9 @@ class JiraClient(IssueTrackerClient):
                 data = response.json()
                 return data["key"]
             elif response.status_code == 401 or response.status_code == 403:
-                raise JiraAuthError(
+                self._raise_auth_error(
                     f"Authentication failed when creating {issue_type.lower()}",
-                    status_code=response.status_code
+                    response
                 )
             elif response.status_code == 400:
                 # Parse validation errors
@@ -1724,9 +1793,9 @@ class JiraClient(IssueTrackerClient):
         response = self._api_request("GET", "/rest/api/2/issueLinkType")
 
         if response.status_code == 401 or response.status_code == 403:
-            raise JiraAuthError(
+            self._raise_auth_error(
                 "Authentication failed when fetching issue link types",
-                status_code=response.status_code
+                response
             )
         elif response.status_code != 200:
             raise JiraApiError(
@@ -1838,9 +1907,9 @@ class JiraClient(IssueTrackerClient):
                     response_text=response.text
                 )
         elif response.status_code == 401 or response.status_code == 403:
-            raise JiraAuthError(
+            self._raise_auth_error(
                 "Authentication failed when creating issue link",
-                status_code=response.status_code
+                response
             )
         elif response.status_code != 201:
             raise JiraApiError(

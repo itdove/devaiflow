@@ -23,8 +23,37 @@ class IssueTrackerError(Exception):
 
 
 class IssueTrackerAuthError(IssueTrackerError):
-    """Raised when issue tracker authentication fails."""
-    pass
+    """Raised when issue tracker authentication fails.
+
+    Attributes:
+        token_expired: True if authentication failure is due to expired token
+        jira_url: JIRA URL for token regeneration (JIRA-specific)
+    """
+
+    def __init__(self, message: str, token_expired: bool = False, jira_url: str = None, **kwargs):
+        """Initialize authentication error.
+
+        Args:
+            message: Error message
+            token_expired: True if authentication failure is due to expired token
+            jira_url: JIRA URL for token regeneration
+            **kwargs: Additional error context (stored as attributes)
+        """
+        super().__init__(message, **kwargs)
+        self.token_expired = token_expired
+        self.jira_url = jira_url
+
+    def __str__(self) -> str:
+        """Return detailed error message with token expiration guidance."""
+        if self.token_expired and self.jira_url:
+            return (
+                f"{self.message}\n\n"
+                f"Your JIRA API token has expired. To fix this:\n"
+                f"1. Generate a new API token at {self.jira_url}/secure/ViewProfile.jspa\n"
+                f"2. Update your JIRA_API_TOKEN environment variable with the new token\n"
+                f"3. Reload your shell (e.g., 'source ~/.zshrc' or restart your terminal)"
+            )
+        return self.message
 
 
 class IssueTrackerApiError(IssueTrackerError):

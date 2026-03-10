@@ -385,14 +385,19 @@ This is expected behavior. Select the conversation you want to work on.
 
 ### JIRA Personal Access Token Expired
 
-**Problem:** JIRA commands suddenly fail with `Authentication failed for issue tracker ticket` even though they were working before
+**Problem:** JIRA commands suddenly fail with token expiration message even though they were working before
 
 **Example Error:**
 ```
 ✗ Authentication failed for issue tracker ticket AAP-12345
+
+Your JIRA API token has expired. To fix this:
+1. Generate a new API token at https://jira.example.com/secure/ViewProfile.jspa
+2. Update your JIRA_API_TOKEN environment variable with the new token
+3. Reload your shell (e.g., 'source ~/.zshrc' or restart your terminal)
 ```
 
-**Cause:** JIRA Personal Access Tokens (PAT) have an expiration date. Once expired, all JIRA API calls will fail with 401 errors.
+**Cause:** JIRA Personal Access Tokens (PAT) have an expiration date. Once expired, all JIRA API calls will fail with 401 errors. DevAIFlow now detects token expiration and provides specific guidance.
 
 **How to Diagnose:**
 
