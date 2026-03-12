@@ -87,6 +87,9 @@ claude --resume <uuid>  # Resume existing session
 
 **Known Issues:** None
 
+**Using Alternative Models:**
+- For information on running Claude Code with local or cloud models (Ollama, OpenRouter, llama.cpp), see: [Run Claude Code on Local/Cloud Models](https://medium.com/@luongnv89/run-claude-code-on-local-cloud-models-in-5-minutes-ollama-openrouter-llama-cpp-6dfeaee03cda)
+
 ---
 
 ### GitHub Copilot (Experimental)
