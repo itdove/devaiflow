@@ -19,6 +19,52 @@ from devflow.session.manager import SessionManager
 console = Console()
 
 
+def render_sync_recap_table(synced_tickets: List[Dict[str, str]]) -> None:
+    """Render a recap table showing all synced tickets.
+
+    Args:
+        synced_tickets: List of dictionaries with keys:
+            - issue_key: Issue identifier (e.g., "PROJ-12345", "owner/repo#123")
+            - title: Issue title/summary (will be truncated if too long)
+            - action: "CREATED" or "UPDATED"
+            - backend: "JIRA", "GitHub", or "GitLab"
+    """
+    if not synced_tickets:
+        return
+
+    # Create Rich Table
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Issue Key", style="cyan", no_wrap=True)
+    table.add_column("Title", style="white", no_wrap=True)
+    table.add_column("Action", style="green", no_wrap=True)
+    table.add_column("Backend", style="blue", no_wrap=True)
+
+    # Add rows
+    for ticket in synced_tickets:
+        issue_key = ticket["issue_key"]
+        title = ticket["title"]
+        action = ticket["action"]
+        backend = ticket["backend"]
+
+        # Truncate long titles to fit nicely in the table
+        # Rich will apply ellipsis automatically due to overflow setting
+        if len(title) > 60:
+            title = title[:57] + "..."
+
+        # Color action based on type
+        if action == "CREATED":
+            action_display = f"[green]{action}[/green]"
+        else:  # UPDATED
+            action_display = f"[cyan]{action}[/cyan]"
+
+        table.add_row(issue_key, title, action_display, backend)
+
+    # Render the table
+    console.print()
+    console.print("[bold]Synced tickets:[/bold]")
+    console.print(table)
+
+
 def get_workspace_from_creation_session(
     session_manager: SessionManager,
     issue_key: str,
@@ -202,6 +248,7 @@ def sync_jira(
     updated_count = 0
     created_sessions: List[Dict[str, Any]] = []
     updated_sessions: List[Dict[str, Any]] = []
+    synced_tickets: List[Dict[str, str]] = []  # Track all synced tickets for recap
 
     for ticket in tickets:
         issue_key = ticket["key"]
@@ -251,6 +298,14 @@ def sync_jira(
             if output_json:
                 created_sessions.append(serialize_session(session))
 
+            # Track for recap table
+            synced_tickets.append({
+                "issue_key": issue_key,
+                "title": issue_summary or issue_key,
+                "action": "CREATED",
+                "backend": "JIRA"
+            })
+
             console_print(f"[green]✓[/green] Created session: {issue_key} - {goal[:60]}")
         else:
             # Update existing session metadata only if ticket has been updated
@@ -285,6 +340,15 @@ def sync_jira(
                     if output_json:
                         updated_sessions.append(serialize_session(session))
 
+                    # Track for recap table
+                    issue_summary = ticket.get("summary", issue_key)
+                    synced_tickets.append({
+                        "issue_key": issue_key,
+                        "title": issue_summary,
+                        "action": "UPDATED",
+                        "backend": "JIRA"
+                    })
+
                     console_print(f"[cyan]↻[/cyan] Updated session: {issue_key}")
                 else:
                     console_print(f"[dim]  Skipped (no changes): {issue_key}[/dim]")
@@ -318,6 +382,9 @@ def sync_jira(
             }
         )
         return
+
+    # Render recap table if there are synced tickets
+    render_sync_recap_table(synced_tickets)
 
     console_print()
     console_print("[bold]Sync complete[/bold]")
@@ -390,6 +457,7 @@ def sync_github_repository(
     config: Any,
     repository_url: Optional[str] = None,
     output_json: bool = False,
+    synced_tickets: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, int]:
     """Sync issues from a GitHub repository.
 
@@ -399,6 +467,7 @@ def sync_github_repository(
         config: Configuration object
         repository_url: Optional Git remote URL (to extract hostname for uniqueness)
         output_json: Whether to output JSON
+        synced_tickets: Optional list to track synced tickets for recap table
 
     Returns:
         Dictionary with created_count and updated_count
@@ -504,6 +573,15 @@ def sync_github_repository(
                 session_manager.update_session(session)
                 created_count += 1
 
+                # Track for recap table
+                if synced_tickets is not None:
+                    synced_tickets.append({
+                        "issue_key": issue_key,
+                        "title": issue_summary or issue_key,
+                        "action": "CREATED",
+                        "backend": "GitHub"
+                    })
+
                 console_print(f"[green]  ✓[/green] Created session: {session_name} ({issue_key})")
             else:
                 # Update existing session if needed
@@ -526,6 +604,16 @@ def sync_github_repository(
 
                         session_manager.update_session(session)
                         updated_count += 1
+
+                        # Track for recap table
+                        if synced_tickets is not None:
+                            issue_summary = ticket.get('summary', issue_key)
+                            synced_tickets.append({
+                                "issue_key": issue_key,
+                                "title": issue_summary,
+                                "action": "UPDATED",
+                                "backend": "GitHub"
+                            })
 
                         console_print(f"[cyan]  ↻[/cyan] Updated session: {issue_key}")
 
@@ -575,6 +663,7 @@ def sync_multi_backend(
     total_created = 0
     total_updated = 0
     backend_stats = {}
+    synced_tickets: List[Dict[str, str]] = []  # Track all synced tickets for recap
 
     # Phase 1: Sync JIRA (if configured)
     if config.jira and config.jira.project and config.jira.url:
@@ -647,6 +736,15 @@ def sync_multi_backend(
 
                         session_manager.update_session(session)
                         jira_created += 1
+
+                        # Track for recap table
+                        synced_tickets.append({
+                            "issue_key": issue_key,
+                            "title": issue_summary,
+                            "action": "CREATED",
+                            "backend": "JIRA"
+                        })
+
                         console_print(f"[green]✓[/green] Created JIRA session: {issue_key}")
                     else:
                         # Update logic (same as original)
@@ -661,6 +759,16 @@ def sync_multi_backend(
                                 }
                                 session_manager.update_session(session)
                                 jira_updated += 1
+
+                                # Track for recap table
+                                issue_summary = ticket.get("summary", issue_key)
+                                synced_tickets.append({
+                                    "issue_key": issue_key,
+                                    "title": issue_summary,
+                                    "action": "UPDATED",
+                                    "backend": "JIRA"
+                                })
+
                                 console_print(f"[cyan]↻[/cyan] Updated JIRA session: {issue_key}")
 
                 backend_stats['jira'] = {'created': jira_created, 'updated': jira_updated}
@@ -766,7 +874,14 @@ def sync_multi_backend(
             repository_url = repo_info.get('url')  # Git remote URL for hostname extraction
             console_print(f"[cyan]• {repository}[/cyan]")
 
-            result = sync_github_repository(repository, session_manager, config, repository_url=repository_url, output_json=output_json)
+            result = sync_github_repository(
+                repository,
+                session_manager,
+                config,
+                repository_url=repository_url,
+                output_json=output_json,
+                synced_tickets=synced_tickets
+            )
             github_created += result['created_count']
             github_updated += result['updated_count']
 
@@ -777,6 +892,9 @@ def sync_multi_backend(
     if gitlab_repos:
         console_print()
         console_print(f"[yellow]ℹ[/yellow] Found {len(gitlab_repos)} GitLab repositories, but GitLab sync not yet implemented")
+
+    # Render recap table if there are synced tickets
+    render_sync_recap_table(synced_tickets)
 
     # Summary
     console_print()
