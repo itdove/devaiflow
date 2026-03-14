@@ -46,12 +46,16 @@ def _get_base_branch(active_conv, working_dir: Path) -> Optional[str]:
     # First priority: Use stored base_branch from session
     # This ensures we compare against the correct base branch that was used
     # when creating the feature branch (e.g., 'develop' instead of 'main')
-    if active_conv and active_conv.base_branch:
+    if active_conv and hasattr(active_conv, 'base_branch') and active_conv.base_branch:
         return active_conv.base_branch
 
     # Fallback: Detect default branch from repository
     # Used for old sessions or when there's no active conversation
-    return GitUtils.get_default_branch(working_dir)
+    try:
+        return GitUtils.get_default_branch(working_dir)
+    except Exception:
+        # Last resort fallback
+        return "main"
 
 
 @require_outside_claude
