@@ -8,16 +8,42 @@ import os
 from typing import Dict, Optional, Any
 
 
-def get_active_profile(config) -> Optional[Dict[str, Any]]:
-    """Get the active model provider profile from configuration.
-
-    Profile resolution order:
-    1. Environment variable MODEL_PROVIDER_PROFILE (highest priority)
-    2. Config default_profile setting
-    3. None (use default Anthropic API)
+def get_profile_by_name(config, profile_name: str) -> Optional[Dict[str, Any]]:
+    """Get a specific model provider profile by name.
 
     Args:
         config: Merged configuration object with model_provider field
+        profile_name: Name of the profile to retrieve
+
+    Returns:
+        Profile dictionary or None if not found
+    """
+    if not config or not hasattr(config, 'model_provider'):
+        return None
+
+    model_provider_config = config.model_provider
+    if not model_provider_config or not model_provider_config.profiles:
+        return None
+
+    profile = model_provider_config.profiles.get(profile_name)
+    if profile:
+        return profile.model_dump() if hasattr(profile, 'model_dump') else profile
+
+    return None
+
+
+def get_active_profile(config, override_profile_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Get the active model provider profile from configuration.
+
+    Profile resolution order:
+    1. override_profile_name parameter (highest priority - from --model-profile flag)
+    2. Environment variable MODEL_PROVIDER_PROFILE
+    3. Config default_profile setting
+    4. None (use default Anthropic API)
+
+    Args:
+        config: Merged configuration object with model_provider field
+        override_profile_name: Optional profile name to use (e.g., from CLI flag or session setting)
 
     Returns:
         Profile dictionary or None if using default Anthropic API
@@ -29,7 +55,16 @@ def get_active_profile(config) -> Optional[Dict[str, Any]]:
     if not model_provider_config or not model_provider_config.profiles:
         return None
 
-    # Check environment variable first (temporary override)
+    # Check override parameter first (from --model-profile flag or session.model_profile)
+    if override_profile_name:
+        profile = model_provider_config.profiles.get(override_profile_name)
+        if profile:
+            return profile.model_dump() if hasattr(profile, 'model_dump') else profile
+        else:
+            # Override specified but profile not found - warn but continue with next priority
+            print(f"Warning: Model profile '{override_profile_name}' not found in configuration")
+
+    # Check environment variable second (temporary override)
     env_profile_name = os.environ.get("MODEL_PROVIDER_PROFILE")
     if env_profile_name:
         profile = model_provider_config.profiles.get(env_profile_name)

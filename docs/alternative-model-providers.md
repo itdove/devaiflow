@@ -45,9 +45,88 @@ ollama pull devstral-small-2
 ```bash
 # Uses default profile (ollama-local)
 daf open PROJ-123
+```
 
-# Override with different profile
+## Using Profiles
+
+DevAIFlow provides multiple ways to select which model provider profile to use:
+
+### Method 1: CLI Flag (Recommended for Testing)
+
+Use `--model-profile` flag to specify a profile for a single command:
+
+```bash
+# Create session with specific profile
+daf new --name feature-123 --goal "Add feature" --model-profile vertex
+
+# Open session with specific profile (overrides session default)
+daf open feature-123 --model-profile ollama-local
+
+# Investigate with local model
+daf investigate --goal "Research options" --model-profile ollama-local
+
+# Session remembers last used profile
+daf open feature-123  # Uses ollama-local from previous command
+```
+
+**Session Persistence**: When you use `--model-profile`, the profile is stored in the session. Future `daf open` commands for that session will use the stored profile unless overridden.
+
+### Method 2: Environment Variable (Temporary Override)
+
+Use `MODEL_PROVIDER_PROFILE` environment variable:
+
+```bash
+# One-time override
 MODEL_PROVIDER_PROFILE=anthropic daf open PROJ-123
+
+# Set for entire terminal session
+export MODEL_PROVIDER_PROFILE=vertex
+daf new --name task-456 --goal "Debug issue"
+daf open task-456
+```
+
+### Method 3: Config Default (Persistent)
+
+Set `default_profile` in your config:
+
+```json
+{
+  "model_provider": {
+    "default_profile": "ollama-local",
+    "profiles": { ... }
+  }
+}
+```
+
+All commands use this profile unless overridden.
+
+### Priority Resolution
+
+Profile selection follows this priority (highest to lowest):
+
+1. **`--model-profile` flag** (per-command override)
+2. **`session.model_profile`** (stored in session from previous `--model-profile`)
+3. **`MODEL_PROVIDER_PROFILE` env var** (terminal session override)
+4. **`config.model_provider.default_profile`** (persistent default)
+5. **Anthropic API** (fallback)
+
+**Example Workflow**:
+
+```bash
+# Set work profile as default in config
+# default_profile: "vertex"
+
+# Create session - uses Vertex AI (config default)
+daf new --name PROJ-123 --goal "Fix bug"
+
+# Test with local model - overrides config default
+daf open PROJ-123 --model-profile ollama-local
+
+# Next open uses last profile (ollama-local stored in session)
+daf open PROJ-123
+
+# Force back to Vertex for deployment testing
+daf open PROJ-123 --model-profile vertex
 ```
 
 ## Configuration
@@ -77,9 +156,14 @@ Profiles can be defined at multiple levels:
 3. **Team** (`team.json`) - Team defaults
 4. **User** (`config.json`) - Personal profiles
 
-**Priority**: User > Team > Organization > Enterprise
+**Config Merge Priority**: User > Team > Organization > Enterprise
 
-**Environment variable override**: `MODEL_PROVIDER_PROFILE=profile-name` (highest priority)
+**Runtime Profile Selection Priority** (highest to lowest):
+1. `--model-profile` CLI flag
+2. `session.model_profile` (stored from previous `--model-profile`)
+3. `MODEL_PROVIDER_PROFILE` environment variable
+4. `config.model_provider.default_profile`
+5. Anthropic API (fallback)
 
 ### Managing Profiles
 

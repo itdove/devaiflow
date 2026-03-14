@@ -275,6 +275,7 @@ def create_new_session(
     template_name: Optional[str] = None,
     workspace_name: Optional[str] = None,
     force_new_session: bool = False,
+    model_profile: Optional[str] = None,
     output_json: bool = False,
 ) -> None:
     """Create a new session or add conversation to existing session.
@@ -289,6 +290,7 @@ def create_new_session(
         template_name: Optional template to use for session configuration
         workspace_name: Optional workspace name (AAP-63377)
         force_new_session: If True, always create new session instead of adding conversation
+        model_profile: Optional model provider profile to use (e.g., "vertex", "ollama-local")
         output_json: If True, output JSON instead of human-readable text
     """
     config_loader = ConfigLoader()
@@ -591,6 +593,7 @@ def create_new_session(
             project_path=project_path,
             branch=branch,
             ai_agent_session_id=session_id,
+            model_profile=model_profile,
         )
 
         # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)

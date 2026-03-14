@@ -52,6 +52,7 @@ class SessionManager:
         branch: Optional[str] = None,
         ai_agent_session_id: Optional[str] = None,
         issue_key: Optional[str] = None,
+        model_profile: Optional[str] = None,
     ) -> Session:
         """Create a new session.
 
@@ -63,6 +64,7 @@ class SessionManager:
             branch: Git branch name
             ai_agent_session_id: Claude Code session UUID
             issue_key: Optional issue tracker key
+            model_profile: Optional model provider profile override (e.g., "vertex", "ollama-local")
 
         Returns:
             Created Session object
@@ -73,6 +75,7 @@ class SessionManager:
             goal=goal,
             working_directory=working_directory,
             status="created",
+            model_profile=model_profile,
         )
 
         # Create initial conversation if we have the required info (NEW in PROJ-59791)

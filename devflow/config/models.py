@@ -716,6 +716,9 @@ class Session(BaseModel):
     # Workspace support (AAP-63377)
     workspace_name: Optional[str] = None  # Selected workspace name for this session
 
+    # Model provider override (session-specific)
+    model_profile: Optional[str] = None  # Override default model profile for this session (e.g., "vertex", "ollama-local")
+
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure
     issue_tracker: Optional[str] = "jira"  # "jira" | "github" | "gitlab" | etc. | None (use pattern detection)

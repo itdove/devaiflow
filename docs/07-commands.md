@@ -116,6 +116,7 @@ daf new --name <NAME> --goal "..." [OPTIONS]
 - `--branch` - Git branch name (optional)
 - `--template` - Template name to use (optional)
 - `-w, --workspace` - Workspace name to use (overrides session default and config default)
+- `--model-profile` - Model provider profile to use (e.g., "vertex", "ollama-local"; stored in session for future use)
 
 **Goal Input Formats:**
 - **Plain text**: Any multi-word text is treated as plain text
@@ -150,6 +151,12 @@ daf new --name "spec-impl" --goal "https://docs.example.com/specification.txt"
 
 # Multi-word text with special characters is always treated as plain text
 daf new --name "bug-fix" --goal "Fix error in help.py when using --output flag"
+
+# Use alternative model provider (e.g., local Ollama for testing)
+daf new --name "experiment" --goal "Test new feature" --model-profile ollama-local
+
+# Use Vertex AI profile for production work
+daf new --name PROJ-789 --goal "Deploy feature" --model-profile vertex
 ```
 
 **When to use:**
@@ -498,6 +505,7 @@ daf open <NAME-or-JIRA> [OPTIONS]
 **Options:**
 - `-w, --workspace` - Workspace name to use (overrides and persists to session)
 - `--new-conversation` - Archive current Claude Code conversation and start fresh with a new one
+- `--model-profile` - Model provider profile to use (overrides session default; stored in session for future use)
 - `--json` - Return JSON output (non-interactive mode). Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Suitable for automation, CI/CD pipelines, and integration tests.
 
 **Examples:**
@@ -513,6 +521,9 @@ daf open
 
 # Start fresh conversation (archive current, create new)
 daf open PROJ-12345 --new-conversation
+
+# Override model provider for this session
+daf open PROJ-12345 --model-profile ollama-local
 
 # JSON output for automation
 daf open PROJ-12345 --json
@@ -1944,6 +1955,7 @@ daf investigate --goal <GOAL> [OPTIONS]
 - `--parent <KEY>` - Optional parent JIRA key (for tracking investigation under an epic)
 - `--name <NAME>` - Session name (auto-generated from goal if not provided)
 - `--path <PATH>` - Project path (bypasses interactive repository selection)
+- `--model-profile <PROFILE>` - Model provider profile to use (e.g., "vertex", "ollama-local"; stored in session for future use)
 - `--json` - Output in JSON format (for automation and scripting)
 
 **Goal Input Formats:**
@@ -1990,6 +2002,9 @@ daf investigate \
   --goal "Research database scaling options" \
   --path /path/to/project \
   --json
+
+# Use local model for cost-free investigation
+daf investigate --goal "Explore API design patterns" --model-profile ollama-local
 ```
 
 **Workflow:**

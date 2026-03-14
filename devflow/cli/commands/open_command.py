@@ -118,6 +118,7 @@ def open_session(
     workspace: Optional[str] = None,
     new_conversation: bool = False,
     conversation_id: Optional[str] = None,
+    model_profile: Optional[str] = None,
 ) -> None:
     """Open/resume an existing session.
 
@@ -129,6 +130,7 @@ def open_session(
         workspace: Optional workspace name to override session's stored workspace (AAP-63377)
         new_conversation: If True, create a new conversation (archive current and start fresh) - PROJ-63490
         conversation_id: Optional Claude session UUID to resume specific archived conversation - PROJ-63490
+        model_profile: Optional model provider profile to use (overrides session default)
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -672,8 +674,17 @@ def open_session(
         return
 
     try:
-        # Get active model provider profile (from config or env var)
-        model_provider_profile = get_active_profile(config) if config else None
+        # Determine which model profile to use
+        # Priority: --model-profile flag > session.model_profile > config default
+        effective_profile_name = model_profile or session.model_profile
+
+        # Store profile override in session if provided via flag
+        if model_profile and model_profile != session.model_profile:
+            session.model_profile = model_profile
+            session_manager.update_session(session)
+
+        # Get active model provider profile
+        model_provider_profile = get_active_profile(config, override_profile_name=effective_profile_name) if config else None
 
         # Display which model provider is being used
         if model_provider_profile:

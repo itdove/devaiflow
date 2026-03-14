@@ -63,6 +63,7 @@ def create_investigation_session(
     name: Optional[str] = None,
     path: Optional[str] = None,
     workspace: Optional[str] = None,
+    model_profile: Optional[str] = None,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
@@ -78,6 +79,7 @@ def create_investigation_session(
         name: Optional session name (auto-generated from goal if not provided)
         path: Optional project path (bypasses interactive selection if provided)
         workspace: Optional workspace name (overrides session default and config default)
+        model_profile: Optional model provider profile to use (e.g., "vertex", "ollama-local")
     """
     from devflow.session.manager import SessionManager
     from devflow.config.loader import ConfigLoader
@@ -191,6 +193,7 @@ def create_investigation_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=None,  # No branch for investigation sessions
+        model_profile=model_profile,
     )
 
     # Set session_type to "investigation"
@@ -271,12 +274,25 @@ def create_investigation_session(
     # Set up signal handlers for cleanup (using unified utility)
     setup_signal_handlers(session, session_manager, name, config)
 
-    # Set CS_SESSION_NAME environment variable
-    env = os.environ.copy()
-    env["CS_SESSION_NAME"] = name
+    # Get active model provider profile
+    from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
+    model_provider_profile = get_active_profile(config, override_profile_name=session.model_profile) if config else None
 
-    # Set GCP Vertex AI region if configured
-    if config and config.gcp_vertex_region:
+    # Display which model provider is being used
+    if model_provider_profile:
+        from devflow.cli.utils import console_print
+        provider_name = get_profile_display_name(model_provider_profile)
+        console_print(f"[dim]Using model provider: {provider_name}[/dim]")
+
+    # Build environment variables from model provider profile
+    env = build_env_from_profile(model_provider_profile)
+
+    # Set additional DevAIFlow environment variables
+    env["CS_SESSION_NAME"] = name
+    env["DEVAIFLOW_IN_SESSION"] = "1"
+
+    # Set GCP Vertex AI region if configured (deprecated - use model_provider instead)
+    if config and config.gcp_vertex_region and not model_provider_profile:
         env["CLOUD_ML_REGION"] = config.gcp_vertex_region
 
     # Launch Claude Code
