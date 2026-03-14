@@ -24,7 +24,7 @@ def render_sync_recap_table(synced_tickets: List[Dict[str, str]]) -> None:
 
     Args:
         synced_tickets: List of dictionaries with keys:
-            - issue_key: Issue identifier (e.g., "PROJ-12345", "owner/repo#123")
+            - session_name: Session name (what users use with 'daf open')
             - title: Issue title/summary (will be truncated if too long)
             - action: "CREATED" or "UPDATED"
             - backend: "JIRA", "GitHub", or "GitLab"
@@ -34,14 +34,14 @@ def render_sync_recap_table(synced_tickets: List[Dict[str, str]]) -> None:
 
     # Create Rich Table
     table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("Issue Key", style="cyan", no_wrap=True)
+    table.add_column("Session Name", style="cyan", no_wrap=True)
     table.add_column("Title", style="white", no_wrap=True)
     table.add_column("Action", style="green", no_wrap=True)
     table.add_column("Backend", style="blue", no_wrap=True)
 
     # Add rows
     for ticket in synced_tickets:
-        issue_key = ticket["issue_key"]
+        session_name = ticket["session_name"]
         title = ticket["title"]
         action = ticket["action"]
         backend = ticket["backend"]
@@ -57,7 +57,7 @@ def render_sync_recap_table(synced_tickets: List[Dict[str, str]]) -> None:
         else:  # UPDATED
             action_display = f"[cyan]{action}[/cyan]"
 
-        table.add_row(issue_key, title, action_display, backend)
+        table.add_row(session_name, title, action_display, backend)
 
     # Render the table
     console.print()
@@ -300,7 +300,7 @@ def sync_jira(
 
             # Track for recap table
             synced_tickets.append({
-                "issue_key": issue_key,
+                "session_name": issue_key,  # For JIRA, session name == issue key
                 "title": issue_summary or issue_key,
                 "action": "CREATED",
                 "backend": "JIRA"
@@ -343,7 +343,7 @@ def sync_jira(
                     # Track for recap table
                     issue_summary = ticket.get("summary", issue_key)
                     synced_tickets.append({
-                        "issue_key": issue_key,
+                        "session_name": issue_key,  # For JIRA, session name == issue key
                         "title": issue_summary,
                         "action": "UPDATED",
                         "backend": "JIRA"
@@ -576,7 +576,7 @@ def sync_github_repository(
                 # Track for recap table
                 if synced_tickets is not None:
                     synced_tickets.append({
-                        "issue_key": issue_key,
+                        "session_name": session_name,  # Use converted session name, not issue key
                         "title": issue_summary or issue_key,
                         "action": "CREATED",
                         "backend": "GitHub"
@@ -609,7 +609,7 @@ def sync_github_repository(
                         if synced_tickets is not None:
                             issue_summary = ticket.get('summary', issue_key)
                             synced_tickets.append({
-                                "issue_key": issue_key,
+                                "session_name": session.name,  # Use actual session name from session object
                                 "title": issue_summary,
                                 "action": "UPDATED",
                                 "backend": "GitHub"
@@ -739,7 +739,7 @@ def sync_multi_backend(
 
                         # Track for recap table
                         synced_tickets.append({
-                            "issue_key": issue_key,
+                            "session_name": issue_key,  # For JIRA, session name == issue key
                             "title": issue_summary,
                             "action": "CREATED",
                             "backend": "JIRA"
@@ -763,7 +763,7 @@ def sync_multi_backend(
                                 # Track for recap table
                                 issue_summary = ticket.get("summary", issue_key)
                                 synced_tickets.append({
-                                    "issue_key": issue_key,
+                                    "session_name": issue_key,  # For JIRA, session name == issue key
                                     "title": issue_summary,
                                     "action": "UPDATED",
                                     "backend": "JIRA"
