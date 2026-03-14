@@ -47,6 +47,20 @@ def test_get_base_branch_fallback_to_detection():
         assert result == "main"
 
 
+def test_get_base_branch_fallback_when_detection_returns_none():
+    """Test that _get_base_branch returns 'main' when detection returns None."""
+    active_conv = Mock()
+    active_conv.base_branch = None
+
+    working_dir = Path("/test")
+
+    with patch.object(GitUtils, 'get_default_branch', return_value=None):
+        result = _get_base_branch(active_conv, working_dir)
+
+        # Should return "main" as last resort fallback
+        assert result == "main"
+
+
 def test_get_base_branch_no_active_conv():
     """Test that _get_base_branch handles None active_conv gracefully."""
     active_conv = None

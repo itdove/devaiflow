@@ -29,7 +29,7 @@ from devflow.utils.dependencies import require_tool
 console = Console()
 
 
-def _get_base_branch(active_conv, working_dir: Path) -> Optional[str]:
+def _get_base_branch(active_conv, working_dir: Path) -> str:
     """Get the base branch from session or detect from repository.
 
     This uses the stored base_branch from the session's active conversation,
@@ -41,7 +41,7 @@ def _get_base_branch(active_conv, working_dir: Path) -> Optional[str]:
         working_dir: Working directory path
 
     Returns:
-        Base branch name or None if not available
+        Base branch name (never None - defaults to "main" if detection fails)
     """
     # First priority: Use stored base_branch from session
     # This ensures we compare against the correct base branch that was used
@@ -51,11 +51,11 @@ def _get_base_branch(active_conv, working_dir: Path) -> Optional[str]:
 
     # Fallback: Detect default branch from repository
     # Used for old sessions or when there's no active conversation
-    try:
-        return GitUtils.get_default_branch(working_dir)
-    except Exception:
-        # Last resort fallback
-        return "main"
+    detected = GitUtils.get_default_branch(working_dir)
+
+    # Always return a valid branch name (never None)
+    # This ensures downstream git commands don't fail
+    return detected if detected else "main"
 
 
 @require_outside_claude
