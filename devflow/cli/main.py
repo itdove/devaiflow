@@ -301,8 +301,9 @@ def cli(ctx: click.Context) -> None:
 @click.option("--template", help="Template name to use for session configuration")
 @workspace_option()
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
+@click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'ollama-local')")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, new_session: bool) -> None:
+def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, new_session: bool, model_profile: str) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -361,7 +362,7 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
     # Get output_json flag from context
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
 
-    create_new_session(name, goal, working_directory, path, branch, jira, template, workspace, new_session, output_json)
+    create_new_session(name, goal, working_directory, path, branch, jira, template, workspace, new_session, model_profile, output_json)
 
 
 @cli.command()
@@ -370,8 +371,9 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
 @workspace_option("Workspace name to use (overrides session stored workspace)")
 @click.option("--new-conversation", is_flag=True, help="Create a new conversation (archive current and start fresh)")
 @click.option("--conversation-id", help="Resume a specific archived conversation by its UUID")
+@click.option("--model-profile", help="Model provider profile to use (overrides session default)")
 @json_option
-def open(ctx: click.Context, identifier: str, path: str, workspace: str, new_conversation: bool, conversation_id: str) -> None:
+def open(ctx: click.Context, identifier: str, path: str, workspace: str, new_conversation: bool, conversation_id: str, model_profile: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -397,6 +399,7 @@ def open(ctx: click.Context, identifier: str, path: str, workspace: str, new_con
         workspace=workspace,
         new_conversation=new_conversation,
         conversation_id=conversation_id,
+        model_profile=model_profile,
     )
 
 
@@ -1562,7 +1565,8 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @workspace_option()
-def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str, path: str, workspace: str) -> None:
+@click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'ollama-local')")
+def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str, path: str, workspace: str, model_profile: str) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1589,7 +1593,7 @@ def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str,
     # Resolve goal input (file:// or http(s):// URL)
     goal = resolve_goal_input(goal)
 
-    create_investigation_session(goal, parent, name, path, workspace)
+    create_investigation_session(goal, parent, name, path, workspace, model_profile)
 
 
 @cli.group()

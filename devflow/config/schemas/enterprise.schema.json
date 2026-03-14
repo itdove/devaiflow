@@ -14,6 +14,63 @@
       "type": ["object", "null"],
       "description": "Override any fields from backend configs (backends/*.json). Example: {\"field_mappings\": {\"components\": {\"required_for\": [\"Bug\", \"Story\"]}}}",
       "additionalProperties": true
+    },
+    "model_provider": {
+      "type": ["object", "null"],
+      "description": "Model provider configuration enforced by enterprise",
+      "properties": {
+        "default_profile": {
+          "type": "string",
+          "description": "Default profile to use (e.g., 'vertex', 'ollama-local')"
+        },
+        "profiles": {
+          "type": "object",
+          "description": "Named provider profiles",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Profile name"
+              },
+              "base_url": {
+                "type": ["string", "null"],
+                "description": "ANTHROPIC_BASE_URL override"
+              },
+              "auth_token": {
+                "type": ["string", "null"],
+                "description": "ANTHROPIC_AUTH_TOKEN override"
+              },
+              "api_key": {
+                "type": ["string", "null"],
+                "description": "ANTHROPIC_API_KEY override"
+              },
+              "model_name": {
+                "type": ["string", "null"],
+                "description": "Default model name"
+              },
+              "use_vertex": {
+                "type": "boolean",
+                "description": "Use Google Vertex AI"
+              },
+              "vertex_project_id": {
+                "type": ["string", "null"],
+                "description": "ANTHROPIC_VERTEX_PROJECT_ID"
+              },
+              "vertex_region": {
+                "type": ["string", "null"],
+                "description": "ANTHROPIC_VERTEX_REGION"
+              },
+              "env_vars": {
+                "type": "object",
+                "description": "Additional environment variables",
+                "additionalProperties": {"type": "string"}
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

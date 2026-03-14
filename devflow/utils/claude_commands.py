@@ -374,7 +374,8 @@ def build_claude_command(
     initial_prompt: str,
     project_path: Optional[str] = None,
     workspace_path: Optional[str] = None,
-    config = None
+    config = None,
+    model_provider_profile: Optional[dict] = None
 ) -> list:
     """Build Claude Code command with all necessary --add-dir flags for skills and context files.
 
@@ -394,12 +395,17 @@ def build_claude_command(
         project_path: Project directory path (for project-level skills)
         workspace_path: Workspace directory path (for workspace-level skills)
         config: Configuration object (for hierarchical context files)
+        model_provider_profile: Model provider profile dict (for --model flag)
 
     Returns:
         List of command arguments ready for subprocess.run()
     """
-    # Build base command: prompt must come BEFORE --add-dir flags (positional argument)
-    cmd = ["claude", "--session-id", session_id, initial_prompt]
+    # Build base command with model flag if specified
+    if model_provider_profile and model_provider_profile.get("model_name"):
+        cmd = ["claude", "--model", model_provider_profile["model_name"], "--session-id", session_id, initial_prompt]
+    else:
+        # Default: prompt must come BEFORE --add-dir flags (positional argument)
+        cmd = ["claude", "--session-id", session_id, initial_prompt]
 
     # Collect all skills directories
     skills_dirs = []

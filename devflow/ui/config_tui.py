@@ -897,6 +897,354 @@ class AddEditWorkspaceScreen(ModalScreen):
             self.dismiss(None)
 
 
+class ModelProviderProfileEntry(Container):
+    """Widget for displaying a single model provider profile with edit/remove/set-default buttons."""
+
+    DEFAULT_CSS = """
+    ModelProviderProfileEntry {
+        height: auto;
+        margin: 0 0 1 0;
+        border: solid $primary;
+        padding: 1;
+        layout: vertical;
+    }
+
+    ModelProviderProfileEntry .profile-text {
+        width: 100%;
+        height: auto;
+        content-align: left middle;
+    }
+
+    ModelProviderProfileEntry .button-row {
+        width: 100%;
+        height: auto;
+        layout: horizontal;
+        align: right middle;
+        margin: 1 0 0 0;
+    }
+
+    ModelProviderProfileEntry Button {
+        height: 3;
+        margin: 0 0 0 1;
+    }
+    """
+
+    class EditPressed(Message):
+        """Message sent when edit button is pressed."""
+
+        def __init__(self, profile_name: str, profile_data: Dict[str, Any]):
+            super().__init__()
+            self.profile_name = profile_name
+            self.profile_data = profile_data
+
+    class RemovePressed(Message):
+        """Message sent when remove button is pressed."""
+
+        def __init__(self, profile_name: str):
+            super().__init__()
+            self.profile_name = profile_name
+
+    class SetAsDefaultPressed(Message):
+        """Message sent when set as default button is pressed."""
+
+        def __init__(self, profile_name: str):
+            super().__init__()
+            self.profile_name = profile_name
+
+    def __init__(self, profile_name: str, profile_data: Dict[str, Any], is_default: bool = False, **kwargs):
+        """Initialize profile entry.
+
+        Args:
+            profile_name: Name of the profile
+            profile_data: Profile configuration data
+            is_default: Whether this is the default profile
+        """
+        super().__init__(**kwargs)
+        self.profile_name = profile_name
+        self.profile_data = profile_data
+        self.is_default = is_default
+
+    def compose(self) -> ComposeResult:
+        """Compose the profile entry widgets."""
+        # Build compact text with name and badge
+        name_text = f"{self.profile_name}"
+        if self.is_default:
+            name_text += " [yellow]⭐[/yellow]"
+
+        # Add very short provider hint
+        if hasattr(self.profile_data, 'use_vertex') and self.profile_data.use_vertex:
+            region = getattr(self.profile_data, 'vertex_region', 'N/A')
+            # Shorten region names
+            if region == 'us-east5':
+                region = 'us-e5'
+            elif region == 'europe-west1':
+                region = 'eu-w1'
+            details_text = f"[bold]{name_text}[/bold] [dim]{region}[/dim]"
+        elif hasattr(self.profile_data, 'base_url') and self.profile_data.base_url:
+            details_text = f"[bold]{name_text}[/bold] [dim]local[/dim]"
+        else:
+            details_text = f"[bold]{name_text}[/bold]"
+
+        # Profile info on top, buttons on bottom
+        btn_id_base = f"profile_{self.profile_name.replace(' ', '_').replace('-', '_')}"
+
+        yield Static(details_text, classes="profile-text")
+
+        # Buttons in a horizontal row at the bottom
+        with Horizontal(classes="button-row"):
+            if not self.is_default:
+                yield Button("Set Default", variant="success", id=f"default_{btn_id_base}")
+            yield Button("Edit", variant="primary", id=f"edit_{btn_id_base}")
+            # Don't allow removing default profile or anthropic profile
+            if not self.is_default and self.profile_name != "anthropic":
+                yield Button("Delete", variant="error", id=f"remove_{btn_id_base}")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        event.stop()  # Prevent event bubbling
+        if event.button.id.startswith("edit_"):
+            self.post_message(self.EditPressed(self.profile_name, self.profile_data))
+        elif event.button.id.startswith("remove_"):
+            self.post_message(self.RemovePressed(self.profile_name))
+        elif event.button.id.startswith("default_"):
+            self.post_message(self.SetAsDefaultPressed(self.profile_name))
+
+
+class AddEditProfileScreen(ModalScreen):
+    """Modal screen for adding/editing a model provider profile."""
+
+    DEFAULT_CSS = """
+    AddEditProfileScreen {
+        align: center middle;
+    }
+
+    AddEditProfileScreen > Container {
+        width: 90;
+        height: auto;
+        max-height: 90%;
+        background: $surface;
+        border: thick $primary;
+        padding: 1 2;
+    }
+
+    AddEditProfileScreen Input {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+
+    AddEditProfileScreen Select {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+
+    AddEditProfileScreen .button-row {
+        width: 100%;
+        height: auto;
+        margin: 1 0 0 0;
+        align: center middle;
+    }
+
+    AddEditProfileScreen Button {
+        margin: 0 1;
+    }
+
+    AddEditProfileScreen .section {
+        margin: 1 0;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Cancel"),
+    ]
+
+    def __init__(self, existing_name: Optional[str] = None, existing_profile: Optional[Dict[str, Any]] = None):
+        """Initialize add/edit profile screen.
+
+        Args:
+            existing_name: If provided, edit mode (profile name)
+            existing_profile: Profile data being edited
+        """
+        super().__init__()
+        self.existing_name = existing_name
+        self.existing_profile = existing_profile or {}
+        self.is_edit_mode = existing_name is not None
+
+    def compose(self) -> ComposeResult:
+        """Compose add/edit profile screen."""
+        with VerticalScroll():
+            with Container():
+                title = f"Edit Profile: {self.existing_name}" if self.is_edit_mode else "Add Model Provider Profile"
+                yield Static(f"[bold cyan]{title}[/bold cyan]\n")
+
+                # Profile Name (disabled in edit mode)
+                yield Label("Profile Name *")
+                yield Input(
+                    value=self.existing_name if self.existing_name else "",
+                    placeholder="e.g., ollama-local, vertex-prod, openrouter",
+                    id="profile_name",
+                    disabled=self.is_edit_mode,
+                )
+
+                yield Static("[dim]Choose provider type:[/dim]", classes="section")
+
+                # Provider Type Selection
+                provider_type = "anthropic"
+                if self.existing_profile.get("use_vertex"):
+                    provider_type = "vertex"
+                elif self.existing_profile.get("base_url"):
+                    provider_type = "custom"
+
+                yield Label("Provider Type *")
+                yield Select(
+                    options=[
+                        ("Anthropic API (default)", "anthropic"),
+                        ("Google Vertex AI", "vertex"),
+                        ("Custom (Ollama, OpenRouter, etc.)", "custom"),
+                    ],
+                    value=provider_type,
+                    allow_blank=False,
+                    id="provider_type",
+                )
+
+                # Vertex AI specific fields
+                with Vertical(id="vertex_fields", classes="section"):
+                    yield Static("[bold]Vertex AI Settings:[/bold]")
+                    yield Label("GCP Project ID *")
+                    yield Input(
+                        value=self.existing_profile.get("vertex_project_id") or "",
+                        placeholder="your-gcp-project-id",
+                        id="vertex_project_id",
+                    )
+                    yield Label("GCP Region *")
+                    # Get default from regions list (use first option)
+                    regions = _get_vertex_ai_regions()
+                    default_region = regions[0][1] if regions else "global"  # First region in list
+                    yield Select(
+                        options=regions,
+                        value=self.existing_profile.get("vertex_region") or default_region,
+                        allow_blank=False,
+                        id="vertex_region",
+                    )
+
+                # Custom provider fields
+                with Vertical(id="custom_fields", classes="section"):
+                    yield Static("[bold]Custom Provider Settings:[/bold]")
+                    yield Label("Base URL *")
+                    yield Input(
+                        value=self.existing_profile.get("base_url") or "",
+                        placeholder="http://localhost:11434 or https://openrouter.ai/api",
+                        id="base_url",
+                    )
+                    yield Label("Auth Token")
+                    yield Input(
+                        value=self.existing_profile.get("auth_token") or "",
+                        placeholder="ollama or your-api-key",
+                        id="auth_token",
+                    )
+                    yield Label("API Key")
+                    yield Input(
+                        value=self.existing_profile.get("api_key") or "",
+                        placeholder="Leave empty to disable (for local models)",
+                        id="api_key",
+                    )
+                    yield Label("Model Name")
+                    yield Input(
+                        value=self.existing_profile.get("model_name") or "",
+                        placeholder="devstral-small-2, gpt-oss-120b:free, etc.",
+                        id="model_name",
+                    )
+
+                with Horizontal(classes="button-row"):
+                    save_label = "Update" if self.is_edit_mode else "Add"
+                    yield Button(save_label, variant="success", id="save")
+                    yield Button("Cancel", variant="default", id="cancel")
+
+    def on_mount(self) -> None:
+        """Called when screen is mounted - set initial field visibility."""
+        self._update_field_visibility()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Handle provider type selection change."""
+        if event.select.id == "provider_type":
+            self._update_field_visibility()
+
+    def _update_field_visibility(self) -> None:
+        """Update field visibility based on provider type."""
+        try:
+            provider_select = self.query_one("#provider_type", Select)
+            provider_type = provider_select.value
+
+            vertex_fields = self.query_one("#vertex_fields", Vertical)
+            custom_fields = self.query_one("#custom_fields", Vertical)
+
+            if provider_type == "vertex":
+                vertex_fields.display = True
+                custom_fields.display = False
+            elif provider_type == "custom":
+                vertex_fields.display = False
+                custom_fields.display = True
+            else:  # anthropic
+                vertex_fields.display = False
+                custom_fields.display = False
+        except NoMatches:
+            pass  # Fields not yet mounted
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "save":
+            name_input = self.query_one("#profile_name", Input)
+            provider_select = self.query_one("#provider_type", Select)
+
+            name = name_input.value.strip()
+            provider_type = provider_select.value
+
+            # Validation
+            if not name:
+                self.app.notify("Profile name is required", severity="error")
+                return
+
+            # Build profile data based on provider type
+            profile_data = {"name": name}
+
+            if provider_type == "vertex":
+                project_id = self.query_one("#vertex_project_id", Input).value.strip()
+                region = self.query_one("#vertex_region", Select).value
+
+                if not project_id:
+                    self.app.notify("GCP Project ID is required for Vertex AI", severity="error")
+                    return
+
+                profile_data.update({
+                    "use_vertex": True,
+                    "vertex_project_id": project_id,
+                    "vertex_region": region,
+                })
+
+            elif provider_type == "custom":
+                base_url = self.query_one("#base_url", Input).value.strip()
+                auth_token = self.query_one("#auth_token", Input).value.strip()
+                api_key = self.query_one("#api_key", Input).value.strip()
+                model_name = self.query_one("#model_name", Input).value.strip()
+
+                if not base_url:
+                    self.app.notify("Base URL is required for custom provider", severity="error")
+                    return
+
+                profile_data["base_url"] = base_url
+                if auth_token:
+                    profile_data["auth_token"] = auth_token
+                if api_key:
+                    profile_data["api_key"] = api_key
+                if model_name:
+                    profile_data["model_name"] = model_name
+
+            # For anthropic, just the name is enough (minimal profile)
+
+            self.dismiss((name, profile_data))
+        else:
+            self.dismiss(None)
+
+
 class PreviewScreen(ModalScreen):
     """Modal screen showing configuration preview before saving."""
 
@@ -1113,6 +1461,9 @@ class ConfigTUI(App):
 
                 with TabPane("AI", id="tab_claude"):
                     yield from self._compose_claude_tab()
+
+                with TabPane("Model Providers", id="tab_model_providers"):
+                    yield from self._compose_model_providers_tab()
 
                 with TabPane("Session Workflow", id="tab_workflow"):
                     yield from self._compose_session_workflow_tab()
@@ -1821,6 +2172,46 @@ class ConfigTUI(App):
             with Horizontal(classes="button-bar"):
                 yield Button("Add Context File", variant="success", id="add_context_file")
 
+    def _compose_model_providers_tab(self) -> ComposeResult:
+        """Compose model providers configuration tab content."""
+        with VerticalScroll():
+            yield Static("[bold cyan]Model Provider Profiles[/bold cyan]", classes="section-title")
+            yield Static(
+                "Configure alternative AI model providers for Claude Code. "
+                "Use Ollama for local models, OpenRouter for cloud, or Vertex AI for GCP. "
+                "Switch providers per session: MODEL_PROVIDER_PROFILE=name daf open",
+                classes="section-help",
+            )
+
+            yield Static("[bold]Available Profiles[/bold]", classes="subsection-title")
+
+            # Container for profile entries (will be updated dynamically)
+            with Vertical(id="profiles_list"):
+                if hasattr(self.config, 'model_provider') and self.config.model_provider and self.config.model_provider.profiles:
+                    default_profile = self.config.model_provider.default_profile or "anthropic"
+                    for profile_name, profile_data in self.config.model_provider.profiles.items():
+                        is_default = (profile_name == default_profile)
+                        yield ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default)
+                else:
+                    yield Static(
+                        "[dim]No profiles configured. Add your first profile below.[/dim]",
+                        id="empty_profiles_message"
+                    )
+
+            # Add button
+            with Horizontal(classes="button-bar"):
+                yield Button("Add Profile", variant="success", id="add_profile")
+
+            # Help text
+            yield Static(
+                "\n[dim]Tips:[/dim]\n"
+                "[dim]• Default profile (marked with ⭐) is used unless overridden[/dim]\n"
+                "[dim]• Override per session: MODEL_PROVIDER_PROFILE=profile-name daf open[/dim]\n"
+                "[dim]• The 'anthropic' profile is the base fallback and cannot be deleted[/dim]\n"
+                "[dim]• See docs/alternative-model-providers.md for setup guides[/dim]",
+                classes="section-help"
+            )
+
     def _compose_workspaces_tab(self) -> ComposeResult:
         """Compose workspaces configuration tab content."""
         with VerticalScroll():
@@ -2083,6 +2474,76 @@ class ConfigTUI(App):
         self.notify(f"Set '{message.workspace_name}' as last-used workspace", severity="information")
         self.modified = True
 
+    def on_model_provider_profile_entry_edit_pressed(self, message: ModelProviderProfileEntry.EditPressed) -> None:
+        """Handle edit button press on profile entry.
+
+        Args:
+            message: The edit pressed message containing profile name and data
+        """
+        def handle_edit_result(result):
+            """Handle the result from the edit screen."""
+            if result:
+                profile_name, profile_data = result
+
+                # Convert dict to ModelProviderProfile object
+                from devflow.config.models import ModelProviderProfile
+                profile_obj = ModelProviderProfile(**profile_data)
+
+                # Update the profile in config
+                if self.config.model_provider and profile_name in self.config.model_provider.profiles:
+                    # Check if name changed and it's the default profile
+                    if (message.profile_name == self.config.model_provider.default_profile and
+                        message.profile_name != profile_name):
+                        # Update default_profile to new name
+                        self.config.model_provider.default_profile = profile_name
+
+                    # Remove old profile if name changed
+                    if message.profile_name != profile_name:
+                        del self.config.model_provider.profiles[message.profile_name]
+
+                    self.config.model_provider.profiles[profile_name] = profile_obj
+                    self._refresh_profiles_list()
+                    self.notify(f"Updated profile: {profile_name}", severity="information")
+                    self.modified = True
+
+        # Convert ModelProviderProfile object to dict for the edit screen
+        profile_dict = message.profile_data.model_dump() if hasattr(message.profile_data, 'model_dump') else message.profile_data
+
+        self.push_screen(
+            AddEditProfileScreen(existing_name=message.profile_name, existing_profile=profile_dict),
+            handle_edit_result
+        )
+
+    def on_model_provider_profile_entry_remove_pressed(self, message: ModelProviderProfileEntry.RemovePressed) -> None:
+        """Handle remove button press on profile entry.
+
+        Args:
+            message: The remove pressed message containing profile name
+        """
+        # Remove the profile from config
+        if self.config.model_provider and message.profile_name in self.config.model_provider.profiles:
+            del self.config.model_provider.profiles[message.profile_name]
+
+            # If this was the default profile, update to anthropic
+            if message.profile_name == self.config.model_provider.default_profile:
+                self.config.model_provider.default_profile = "anthropic"
+
+            self._refresh_profiles_list()
+            self.notify(f"Removed profile: {message.profile_name}", severity="information")
+            self.modified = True
+
+    def on_model_provider_profile_entry_set_as_default_pressed(self, message: ModelProviderProfileEntry.SetAsDefaultPressed) -> None:
+        """Handle set as default button press on profile entry.
+
+        Args:
+            message: The set as default message containing profile name
+        """
+        if self.config.model_provider:
+            self.config.model_provider.default_profile = message.profile_name
+            self._refresh_profiles_list()
+            self.notify(f"Set '{message.profile_name}' as default profile", severity="information")
+            self.modified = True
+
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input change events.
 
@@ -2221,6 +2682,38 @@ class ConfigTUI(App):
 
             self.push_screen(AddEditWorkspaceScreen(), handle_add_workspace_result)
 
+        elif event.button.id == "add_profile":
+            def handle_add_profile_result(result):
+                """Handle the result from the add profile screen."""
+                if result:
+                    profile_name, profile_data = result
+
+                    # Initialize model_provider if it doesn't exist
+                    if not self.config.model_provider:
+                        from devflow.config.models import ModelProviderConfig
+                        self.config.model_provider = ModelProviderConfig(
+                            default_profile="anthropic",
+                            profiles={}
+                        )
+
+                    # Check if profile name already exists
+                    if profile_name in self.config.model_provider.profiles:
+                        self.notify(f"Profile '{profile_name}' already exists", severity="error")
+                        return
+
+                    # Convert dict to ModelProviderProfile object
+                    from devflow.config.models import ModelProviderProfile
+                    profile_obj = ModelProviderProfile(**profile_data)
+
+                    # Add the new profile
+                    self.config.model_provider.profiles[profile_name] = profile_obj
+
+                    self._refresh_profiles_list()
+                    self.notify(f"Added profile: {profile_name}", severity="information")
+                    self.modified = True
+
+            self.push_screen(AddEditProfileScreen(), handle_add_profile_result)
+
         elif event.button.id == "upgrade_commands":
             self._handle_upgrade_commands()
 
@@ -2315,6 +2808,32 @@ class ConfigTUI(App):
 
         except Exception as e:
             self.notify(f"Error refreshing workspaces list: {e}", severity="error")
+
+    def _refresh_profiles_list(self) -> None:
+        """Refresh the profiles list display after add/edit/remove/set-as-default."""
+        # Get the profiles list container
+        try:
+            list_container = self.query_one("#profiles_list", Vertical)
+
+            # Remove all existing children
+            list_container.remove_children()
+
+            # Re-add profile entries
+            if self.config.model_provider and self.config.model_provider.profiles:
+                default_profile = self.config.model_provider.default_profile or "anthropic"
+                for profile_name, profile_data in self.config.model_provider.profiles.items():
+                    is_default = (profile_name == default_profile)
+                    list_container.mount(ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default))
+            else:
+                list_container.mount(
+                    Static(
+                        "[dim]No profiles configured. Add your first profile to get started.[/dim]",
+                        id="empty_profiles_message"
+                    )
+                )
+
+        except Exception as e:
+            self.notify(f"Error refreshing profiles list: {e}", severity="error")
 
     def _collect_values(self) -> None:
         """Collect all values from input widgets and update config."""

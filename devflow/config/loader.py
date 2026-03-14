@@ -748,6 +748,18 @@ class ConfigLoader:
             or "claude"  # Default to claude if not set anywhere
         )
 
+        # Merge model_provider with priority: User > Team > Organization > Enterprise
+        # User preferences take priority for model provider (personal choice)
+        # But enterprise/org/team can provide shared profiles and defaults
+        from .models import ModelProviderConfig
+        model_provider = (
+            user_config.model_provider  # User takes highest precedence for model provider
+            or team_config.model_provider  # Then team
+            or org_config.model_provider  # Then organization
+            or enterprise_config.model_provider  # Then enterprise
+            or ModelProviderConfig()  # Default if not set anywhere
+        )
+
         # Construct final Config object
         config = Config(
             jira=merged_jira,
@@ -763,6 +775,7 @@ class ConfigLoader:
             backend_config_source=user_config.backend_config_source,
             agent_backend=agent_backend,  # Merged from org/team/user hierarchy
             mock_services=user_config.mock_services,
+            model_provider=model_provider,  # Merged from user/team/org/enterprise hierarchy (user takes priority)
             gcp_vertex_region=user_config.gcp_vertex_region,
             update_checker_timeout=user_config.update_checker_timeout,
         )
@@ -864,6 +877,7 @@ class ConfigLoader:
             pr_template_url=config.pr_template_url,
             storage=config.storage,  # Storage backend config
             mock_services=config.mock_services,
+            model_provider=config.model_provider,  # Model provider profiles (user preferences)
             gcp_vertex_region=config.gcp_vertex_region,
             update_checker_timeout=config.update_checker_timeout,
             jira_affected_version=config.jira.affected_version,

@@ -442,6 +442,134 @@
       "title": "MockServicesConfig",
       "type": "object"
     },
+    "ModelProviderConfig": {
+      "description": "Model provider configuration for alternative AI providers.\n\nSupports multiple named profiles that can be switched via:\n- Environment variable: MODEL_PROVIDER_PROFILE=profile-name\n- Config setting: default_profile\n- CLI flag: --model-provider profile-name",
+      "properties": {
+        "default_profile": {
+          "default": "anthropic",
+          "description": "Default profile to use",
+          "title": "Default Profile",
+          "type": "string"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelProviderProfile"
+          },
+          "description": "Named provider profiles",
+          "title": "Profiles",
+          "type": "object"
+        }
+      },
+      "title": "ModelProviderConfig",
+      "type": "object"
+    },
+    "ModelProviderProfile": {
+      "description": "Configuration profile for an AI model provider.\n\nProfiles allow easy switching between different AI model providers\n(Anthropic, Vertex AI, Ollama, OpenRouter, etc.) via environment variables.",
+      "properties": {
+        "name": {
+          "description": "Profile name (e.g., 'vertex', 'ollama-local', 'openrouter')",
+          "title": "Name",
+          "type": "string"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ANTHROPIC_BASE_URL override (e.g., 'http://localhost:11434' for Ollama)",
+          "title": "Base Url"
+        },
+        "auth_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ANTHROPIC_AUTH_TOKEN override (e.g., 'ollama' for Ollama, API key for cloud)",
+          "title": "Auth Token"
+        },
+        "api_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ANTHROPIC_API_KEY override (empty string '' to disable)",
+          "title": "Api Key"
+        },
+        "model_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default model for claude --model flag (e.g., 'devstral-small-2', 'kimi-k2.5:cloud')",
+          "title": "Model Name"
+        },
+        "use_vertex": {
+          "default": false,
+          "description": "Set CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI",
+          "title": "Use Vertex",
+          "type": "boolean"
+        },
+        "vertex_project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ANTHROPIC_VERTEX_PROJECT_ID for Vertex AI",
+          "title": "Vertex Project Id"
+        },
+        "vertex_region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ANTHROPIC_VERTEX_REGION for Vertex AI (e.g., 'us-east5')",
+          "title": "Vertex Region"
+        },
+        "env_vars": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Additional environment variables",
+          "title": "Env Vars",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ModelProviderProfile",
+      "type": "object"
+    },
     "PromptsConfig": {
       "description": "User prompt preferences configuration.\n\nAllows users to configure automatic answers for common prompts\nto skip repetitive questions in daf new/open/complete commands.",
       "properties": {
@@ -888,6 +1016,9 @@
       "default": 10,
       "title": "Update Checker Timeout",
       "type": "integer"
+    },
+    "model_provider": {
+      "$ref": "#/$defs/ModelProviderConfig"
     }
   },
   "required": [

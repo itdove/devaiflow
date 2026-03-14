@@ -73,6 +73,37 @@ class GitHubBackendConfig(BaseModel):
     label_conventions: Optional[Dict[str, str]] = None  # Custom label conventions (e.g., {"bug": "type:bug", "priority_high": "priority:high"})
 
 
+class ModelProviderProfile(BaseModel):
+    """Configuration profile for an AI model provider.
+
+    Profiles allow easy switching between different AI model providers
+    (Anthropic, Vertex AI, Ollama, OpenRouter, etc.) via environment variables.
+    """
+
+    name: str = Field(description="Profile name (e.g., 'vertex', 'ollama-local', 'openrouter')")
+    base_url: Optional[str] = Field(default=None, description="ANTHROPIC_BASE_URL override (e.g., 'http://localhost:11434' for Ollama)")
+    auth_token: Optional[str] = Field(default=None, description="ANTHROPIC_AUTH_TOKEN override (e.g., 'ollama' for Ollama, API key for cloud)")
+    api_key: Optional[str] = Field(default=None, description="ANTHROPIC_API_KEY override (empty string '' to disable)")
+    model_name: Optional[str] = Field(default=None, description="Default model for claude --model flag (e.g., 'devstral-small-2', 'kimi-k2.5:cloud')")
+    use_vertex: bool = Field(default=False, description="Set CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI")
+    vertex_project_id: Optional[str] = Field(default=None, description="ANTHROPIC_VERTEX_PROJECT_ID for Vertex AI")
+    vertex_region: Optional[str] = Field(default=None, description="ANTHROPIC_VERTEX_REGION for Vertex AI (e.g., 'us-east5')")
+    env_vars: Dict[str, str] = Field(default_factory=dict, description="Additional environment variables")
+
+
+class ModelProviderConfig(BaseModel):
+    """Model provider configuration for alternative AI providers.
+
+    Supports multiple named profiles that can be switched via:
+    - Environment variable: MODEL_PROVIDER_PROFILE=profile-name
+    - Config setting: default_profile
+    - CLI flag: --model-provider profile-name
+    """
+
+    default_profile: str = Field(default="anthropic", description="Default profile to use")
+    profiles: Dict[str, ModelProviderProfile] = Field(default_factory=dict, description="Named provider profiles")
+
+
 class EnterpriseConfig(BaseModel):
     """Enterprise-wide configuration (enterprise.json).
 
@@ -84,6 +115,7 @@ class EnterpriseConfig(BaseModel):
     backend_overrides: Optional[Dict[str, Any]] = None  # Override any fields from backend configs (backends/*.json). Example: {"field_mappings": {"components": {"required_for": ["Bug", "Story"]}}}
     jira_issue_templates: Optional[Dict[str, str]] = None  # Default issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
     github_issue_types: Optional[List[str]] = None  # Allowed GitHub/GitLab issue types (e.g., ["bug", "enhancement", "task", "spike", "epic", "story"])
+    model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration enforced by enterprise (can enforce alternative model providers)
 
 
 class OrganizationConfig(BaseModel):
@@ -111,6 +143,9 @@ class OrganizationConfig(BaseModel):
     github_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
     github_issue_types: Optional[List[str]] = None  # Override enterprise-level GitHub/GitLab issue types (e.g., ["bug", "enhancement", "documentation"])
 
+    # Model provider configuration
+    model_provider: Optional[ModelProviderConfig] = None  # Organization-level model provider configuration (project-specific profiles)
+
 
 class TeamConfig(BaseModel):
     """Team-specific configuration (team.json).
@@ -132,6 +167,9 @@ class TeamConfig(BaseModel):
     # GitHub-specific fields
     github_default_labels: List[str] = Field(default_factory=list)  # Team-level default labels for GitHub issues
     github_issue_templates: Optional[Dict[str, str]] = None  # Team-specific GitHub issue template overrides (e.g., {"Bug": "...", "Story": "..."})
+
+    # Model provider configuration
+    model_provider: Optional[ModelProviderConfig] = None  # Team-level model provider configuration (can customize model selection)
 
 
 class JiraConfig(BaseModel):
@@ -389,9 +427,10 @@ class UserConfig(BaseModel):
     pr_template_url: Optional[str] = None  # URL to PR/MR template
     storage: StorageConfig = Field(default_factory=StorageConfig)  # Storage backend config
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use
-    gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region
+    gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (deprecated - use model_provider.profiles.vertex.vertex_region instead)
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests
     jira_affected_version: Optional[str] = None  # User's current affected version for bug creation (e.g., "v1.0.0")
+    model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration (user-level profiles)
 
 
 class Config(BaseModel):
@@ -423,8 +462,9 @@ class Config(BaseModel):
     issue_tracker_backend: str = "jira"  # Issue tracker backend: "jira", "github", "gitlab", etc. - NEW in PROJ-63197
     agent_backend: str = "claude"  # AI agent backend: "claude", "copilot", etc. - NEW in PROJ-63294
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use (mock mode uses DAF_MOCK_MODE env var)
-    gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4")
+    gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4") - DEPRECATED: use model_provider instead
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests (default: 10)
+    model_provider: ModelProviderConfig = Field(default_factory=ModelProviderConfig)  # Model provider configuration (merged from enterprise/org/team/user)
 
 
     class Config:
@@ -675,6 +715,9 @@ class Session(BaseModel):
 
     # Workspace support (AAP-63377)
     workspace_name: Optional[str] = None  # Selected workspace name for this session
+
+    # Model provider override (session-specific)
+    model_profile: Optional[str] = None  # Override default model profile for this session (e.g., "vertex", "ollama-local")
 
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure

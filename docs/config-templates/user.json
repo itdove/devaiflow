@@ -1,0 +1,94 @@
+{
+  "_comment": "User-level configuration - personal preferences and workspaces",
+  "repos": {
+    "workspaces": [
+      {
+        "name": "primary",
+        "path": "~/development"
+      }
+    ]
+  },
+  "model_provider": {
+    "_comment": "Model provider profiles - easily switch between different AI models",
+    "default_profile": "anthropic",
+    "_default_profile_comment": "Default profile to use. Override with: MODEL_PROVIDER_PROFILE=profile-name daf open",
+    "profiles": {
+      "anthropic": {
+        "_comment": "Standard Anthropic API (default)",
+        "name": "anthropic"
+      },
+      "vertex": {
+        "_comment": "Google Vertex AI",
+        "name": "vertex",
+        "use_vertex": true,
+        "vertex_project_id": "your-gcp-project-id",
+        "vertex_region": "us-east5"
+      },
+      "ollama-local": {
+        "_comment": "Ollama running locally with devstral-small-2",
+        "name": "ollama-local",
+        "base_url": "http://localhost:11434",
+        "auth_token": "ollama",
+        "api_key": "",
+        "model_name": "devstral-small-2"
+      },
+      "ollama-glm": {
+        "_comment": "Ollama running locally with GLM-4.7-flash",
+        "name": "ollama-glm",
+        "base_url": "http://localhost:11434",
+        "auth_token": "ollama",
+        "api_key": "",
+        "model_name": "glm-4.7-flash:bf16"
+      },
+      "ollama-cloud-kimi": {
+        "_comment": "Ollama Cloud with kimi-k2.5:cloud model",
+        "name": "ollama-cloud-kimi",
+        "base_url": "http://localhost:11434",
+        "auth_token": "ollama",
+        "api_key": "",
+        "model_name": "kimi-k2.5:cloud"
+      },
+      "ollama-cloud-minimax": {
+        "_comment": "Ollama Cloud with minimax-m2.1:cloud model",
+        "name": "ollama-cloud-minimax",
+        "base_url": "http://localhost:11434",
+        "auth_token": "ollama",
+        "api_key": "",
+        "model_name": "minimax-m2.1:cloud"
+      },
+      "openrouter-free": {
+        "_comment": "OpenRouter with free GPT model",
+        "name": "openrouter-free",
+        "base_url": "https://openrouter.ai/api",
+        "auth_token": "YOUR_OPENROUTER_KEY",
+        "api_key": "",
+        "model_name": "openai/gpt-oss-120b:free"
+      },
+      "openrouter-deepseek": {
+        "_comment": "OpenRouter with DeepSeek V3.2 (cheapest option)",
+        "name": "openrouter-deepseek",
+        "base_url": "https://openrouter.ai/api",
+        "auth_token": "YOUR_OPENROUTER_KEY",
+        "api_key": "",
+        "model_name": "deepseek/deepseek-v3.2"
+      },
+      "lmstudio": {
+        "_comment": "LM Studio local server",
+        "name": "lmstudio",
+        "base_url": "http://localhost:1234",
+        "auth_token": "lmstudio",
+        "api_key": "",
+        "model_name": "qwen/qwen3-coder-30b"
+      },
+      "llama-cpp": {
+        "_comment": "llama.cpp server (running qwen3-coder)",
+        "name": "llama-cpp",
+        "base_url": "http://localhost:8000",
+        "api_key": "",
+        "model_name": "Qwen3-Coder-REAP-25B-A3B-GGUF"
+      }
+    }
+  },
+  "_model_provider_usage": "Switch profiles with: MODEL_PROVIDER_PROFILE=ollama-local daf open PROJ-123",
+  "_model_provider_setup": "See docs/alternative-model-providers.md for setup instructions"
+}

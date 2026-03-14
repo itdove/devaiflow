@@ -83,6 +83,7 @@ Each session is an **isolated workspace** with its own:
 
 **Key Features:**
 - 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf
+- 🔌 **Alternative Model Providers** - Run Claude Code with local models (Ollama, llama.cpp) or cloud providers (OpenRouter, Vertex AI) via configuration profiles - save up to 98% on costs or run completely offline
 - 📂 **Multi-Repository Workflows** - Work on one ticket across multiple repositories with unified time tracking (one session, multiple conversations)
 - 🏢 **Named Workspaces** - Multiple workspaces for concurrent multi-branch development
 - 🎫 **Optional Issue Tracker** - GitHub Issues, GitLab Issues, or JIRA (your choice, or none at all)
@@ -182,6 +183,7 @@ daf config tui
 
 The TUI provides:
 - 📑 Tabbed interface for all configuration sections
+- 🤖 **Model Provider management** - Configure alternative AI models (Ollama, Vertex AI, OpenRouter)
 - ✅ Input validation for URLs, paths, and required fields
 - 💾 Automatic backup creation before saving
 - 👀 Preview mode to review changes before saving
@@ -213,13 +215,11 @@ The TUI provides:
 - **[Command Reference](docs/07-commands.md)** - Complete CLI command documentation
 - **[Configuration](docs/06-configuration.md)** - Customizing the tool for your workflow (includes JSON Schema validation)
 - **[Troubleshooting](docs/11-troubleshooting.md)** - Common issues and solutions
-- **[Uninstall Guide](docs/uninstall.md)** - Complete uninstallation instructions
-- **[AI Agent Support](docs/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
-
 
 **Additional Resources:**
-- **[Uninstall Guide](docs/uninstall.md)** - Complete uninstallation instructions
+- **[Alternative Model Providers](docs/alternative-model-providers.md)** - Run Claude Code with local models (Ollama, llama.cpp) or alternative cloud providers (Vertex AI, OpenRouter)
 - **[AI Agent Support](docs/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
+- **[Uninstall Guide](docs/uninstall.md)** - Complete uninstallation instructions
 
 **Validation:**
 - **[config.schema.json](config.schema.json)** - JSON Schema for validating config.json (use `daf config validate`)
