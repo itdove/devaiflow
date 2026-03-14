@@ -16,59 +16,72 @@ Complete reference for all CLI commands with examples.
 
 ## Core Session Commands
 
-### daf sync - Sync JIRA Tickets (Recommended Start)
+### daf sync - Smart Sync (Recommended Start)
 
-**Most common command for JIRA users** - automatically creates sessions from your assigned tickets.
+**Smart sync automatically determines what to sync** based on your parameters and configuration.
 
 ```bash
 daf sync [OPTIONS]
 ```
 
-**Examples:**
-```bash
-# Sync current sprint tickets
-daf sync --sprint current
+**Smart Sync Behavior:**
 
-# Sync all assigned tickets
+The sync command intelligently decides what to sync based on your parameters:
+
+| Command | With JIRA URL | Without JIRA URL | What Gets Synced |
+|---------|---------------|------------------|------------------|
+| `daf sync` | ✅ | ❌ | JIRA tickets only |
+| `daf sync` | ❌ | ✅ | All workspaces |
+| `daf sync -w workspace` | ✅ or ❌ | ✅ or ❌ | Workspace only |
+| `daf sync --repository repo` | ✅ or ❌ | ✅ or ❌ | Repository only |
+| `daf sync --field/--type/--epic` | ✅ | ❌ | JIRA only (errors if no JIRA) |
+| `daf sync --jira` | ✅ | ❌ | JIRA only (errors if no JIRA) |
+| `daf sync --jira -w workspace` | ✅ | ❌ | Both JIRA and workspace |
+
+**Examples:**
+
+```bash
+# Smart sync (with JIRA configured) → Syncs JIRA tickets only
 daf sync
 
-# Preview what would be synced
-daf sync --dry-run
+# Smart sync (no JIRA configured) → Syncs all workspaces
+daf sync
 
-# Sync specific types
+# Sync JIRA with filters → JIRA only
 daf sync --type Story
-daf sync --type Bug
-
-# Sync by epic
+daf sync --field sprint="Sprint 1"
 daf sync --epic PROJ-36419
 
-# Limit sync to specific workspace
+# Sync specific workspace → Workspace only
 daf sync --workspace primary
 
-# Limit sync to specific repository
+# Sync specific repository → Repository only
 daf sync --repository owner/repo
 
-# Combine workspace and repository filters
-daf sync --workspace primary --repository owner/repo1
+# Force JIRA sync → JIRA only
+daf sync --jira
 
-# Combine with JIRA filters
-daf sync --field sprint="Sprint 1" --workspace experiments
+# Sync both JIRA and workspace → Both
+daf sync --jira --workspace primary
+daf sync --jira --repository owner/repo
 ```
 
-**Filtering Options:**
+**Options:**
 - `--field` - Filter JIRA tickets by custom field (format: field_name=value)
 - `--type` - Filter JIRA tickets by type (Story, Bug, Task, etc.)
 - `--epic` - Filter JIRA tickets by epic
-- `-w, --workspace` - Limit workspace scanning to specific workspace (name from config)
-- `--repository, --repo` - Limit repository syncing to specific repository (format: owner/repo)
+- `-w, --workspace` - Sync specific workspace only
+- `--repository, --repo` - Sync specific repository only
+- `--jira` - Force JIRA sync (can combine with workspace/repository)
 
 **What it does:**
-1. Syncs JIRA tickets (if configured) - **always runs** unless JIRA URL not configured
-2. Scans workspaces for git repositories (applies `--workspace` filter if provided)
-3. Syncs GitHub/GitLab issues from discovered repositories (applies `--repository` filter if provided)
-4. Creates sessions for new issues/tickets
-5. Updates existing sessions with latest data
-6. Shows summary of work ahead
+1. **Determines sync mode** based on parameters (see table above)
+2. **Syncs JIRA tickets** (if sync mode includes JIRA)
+3. **Scans workspaces** for git repositories (if sync mode includes workspaces)
+4. **Syncs GitHub/GitLab issues** from discovered repositories
+5. **Creates sessions** for new issues/tickets
+6. **Updates existing sessions** with latest data
+7. **Shows summary** of synced sessions
 
 **Output example:**
 ```
