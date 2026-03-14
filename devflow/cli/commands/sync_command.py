@@ -634,14 +634,15 @@ def sync_multi_backend(
     epic: Optional[str] = None,
     workspace_filter: Optional[str] = None,
     repository_filter: Optional[str] = None,
+    sync_jira: bool = True,
+    sync_workspaces: bool = True,
     output_json: bool = False,
 ) -> None:
-    """Sync issues from all configured backends (JIRA + GitHub + GitLab).
+    """Sync issues from configured backends (JIRA + GitHub + GitLab).
 
-    This is the new unified sync command that:
-    1. Syncs JIRA tickets (from config)
-    2. Scans workspaces for git repositories
-    3. Auto-syncs GitHub/GitLab issues from detected repos
+    Smart sync automatically determines what to sync based on parameters:
+    - sync_jira=True: Sync JIRA tickets
+    - sync_workspaces=True: Scan workspaces and sync GitHub/GitLab issues
 
     Args:
         field_filters: JIRA-specific field filters
@@ -649,6 +650,8 @@ def sync_multi_backend(
         epic: JIRA epic filter
         workspace_filter: Limit sync to specific workspace (name from config)
         repository_filter: Limit sync to specific repository (format: owner/repo)
+        sync_jira: Whether to sync JIRA tickets (default: True)
+        sync_workspaces: Whether to scan workspaces and sync GitHub/GitLab (default: True)
         output_json: Output results as JSON
     """
     config_loader = ConfigLoader()
@@ -665,8 +668,8 @@ def sync_multi_backend(
     backend_stats = {}
     synced_tickets: List[Dict[str, str]] = []  # Track all synced tickets for recap
 
-    # Phase 1: Sync JIRA (if configured)
-    if config.jira and config.jira.project and config.jira.url:
+    # Phase 1: Sync JIRA (if configured and sync_jira=True)
+    if sync_jira and config.jira and config.jira.project and config.jira.url:
         console_print("[bold cyan]Syncing JIRA tickets...[/bold cyan]")
 
         # Get sync filters
@@ -789,109 +792,111 @@ def sync_multi_backend(
         else:
             console_print("[dim]JIRA not configured, skipping JIRA sync[/dim]")
 
-    # Phase 2: Scan workspaces for git repositories
-    console_print()
-    console_print("[bold cyan]Scanning workspaces for git repositories...[/bold cyan]")
-
+    # Phase 2: Scan workspaces for git repositories (if sync_workspaces=True)
     all_repositories = []
     seen_repos = set()  # Track unique repositories by owner/repo
 
-    if config.repos and config.repos.workspaces:
-        workspaces_to_scan = config.repos.workspaces
+    if sync_workspaces:
+        console_print()
+        console_print("[bold cyan]Scanning workspaces for git repositories...[/bold cyan]")
 
-        # Apply workspace filter if provided
-        if workspace_filter:
-            workspaces_to_scan = [w for w in config.repos.workspaces if w.name == workspace_filter]
-            if not workspaces_to_scan:
-                console_print(f"[yellow]⚠[/yellow] Workspace '{workspace_filter}' not found in configuration")
-                console_print("[dim]Available workspaces:[/dim]")
-                for w in config.repos.workspaces:
-                    console_print(f"  [dim]• {w.name}: {w.path}[/dim]")
-                # Continue with JIRA sync results (if any)
-                if not output_json:
+        if config.repos and config.repos.workspaces:
+            workspaces_to_scan = config.repos.workspaces
+
+            # Apply workspace filter if provided
+            if workspace_filter:
+                workspaces_to_scan = [w for w in config.repos.workspaces if w.name == workspace_filter]
+                if not workspaces_to_scan:
+                    console_print(f"[yellow]⚠[/yellow] Workspace '{workspace_filter}' not found in configuration")
+                    console_print("[dim]Available workspaces:[/dim]")
+                    for w in config.repos.workspaces:
+                        console_print(f"  [dim]• {w.name}: {w.path}[/dim]")
+                    # Continue with JIRA sync results (if any)
+                    if not output_json:
+                        console_print()
+                        console_print("[dim]Use 'daf workspace list' to see all configured workspaces[/dim]")
+
+            for workspace in workspaces_to_scan:
+                workspace_path = workspace.path
+                console_print(f"[dim]Scanning {workspace_path}...[/dim]")
+
+                repos = scan_workspace_for_repositories(workspace_path)
+
+                # Deduplicate repositories
+                unique_repos = []
+                for repo in repos:
+                    repo_key = repo['repository']  # owner/repo format
+                    if repo_key not in seen_repos:
+                        seen_repos.add(repo_key)
+                        unique_repos.append(repo)
+                        remote_indicator = f"via {repo['remote']}" if repo['remote'] else ""
+                        console_print(f"  [dim]• {repo['repository']} ({repo['backend']}) {remote_indicator}[/dim]")
+
+                all_repositories.extend(unique_repos)
+
+        if not all_repositories:
+            console_print("[dim]No git repositories found in configured workspaces[/dim]")
+        else:
+            console_print(f"[dim]Found {len(all_repositories)} unique repositories[/dim]")
+
+    # Phase 3: Sync GitHub/GitLab issues (if sync_workspaces=True)
+    if sync_workspaces:
+        github_repos = [r for r in all_repositories if r['backend'] == 'github']
+        gitlab_repos = [r for r in all_repositories if r['backend'] == 'gitlab']
+
+        # Apply repository filter if provided
+        if repository_filter:
+            github_repos = [r for r in github_repos if r['repository'] == repository_filter]
+            gitlab_repos = [r for r in gitlab_repos if r['repository'] == repository_filter]
+
+            # If no repositories match filter, add it directly (assume GitHub for now)
+            if not github_repos and not gitlab_repos:
+                if all_repositories:
+                    # Repository wasn't found in scanned workspaces - show warning but continue
                     console_print()
-                    console_print("[dim]Use 'daf workspace list' to see all configured workspaces[/dim]")
+                    console_print(f"[yellow]⚠[/yellow] Repository '{repository_filter}' not found in scanned workspaces")
+                    console_print("[dim]Discovered repositories:[/dim]")
+                    for r in all_repositories:
+                        console_print(f"  [dim]• {r['repository']} ({r['backend']})[/dim]")
+                    console_print(f"[dim]Adding '{repository_filter}' directly for sync (assuming GitHub)[/dim]")
 
-        for workspace in workspaces_to_scan:
-            workspace_path = workspace.path
-            console_print(f"[dim]Scanning {workspace_path}...[/dim]")
+                # Add the repository directly (assume GitHub, could enhance to detect GitLab)
+                github_repos.append({
+                    'repository': repository_filter,
+                    'backend': 'github',
+                    'url': None,  # No local git remote
+                    'remote': None
+                })
 
-            repos = scan_workspace_for_repositories(workspace_path)
+        if github_repos:
+            console_print()
+            console_print(f"[bold cyan]Syncing GitHub issues ({len(github_repos)} repositories)...[/bold cyan]")
 
-            # Deduplicate repositories
-            unique_repos = []
-            for repo in repos:
-                repo_key = repo['repository']  # owner/repo format
-                if repo_key not in seen_repos:
-                    seen_repos.add(repo_key)
-                    unique_repos.append(repo)
-                    remote_indicator = f"via {repo['remote']}" if repo['remote'] else ""
-                    console_print(f"  [dim]• {repo['repository']} ({repo['backend']}) {remote_indicator}[/dim]")
+            github_created = 0
+            github_updated = 0
+            for repo_info in github_repos:
+                repository = repo_info['repository']
+                repository_url = repo_info.get('url')  # Git remote URL for hostname extraction
+                console_print(f"[cyan]• {repository}[/cyan]")
 
-            all_repositories.extend(unique_repos)
+                result = sync_github_repository(
+                    repository,
+                    session_manager,
+                    config,
+                    repository_url=repository_url,
+                    output_json=output_json,
+                    synced_tickets=synced_tickets
+                )
+                github_created += result['created_count']
+                github_updated += result['updated_count']
 
-    if not all_repositories:
-        console_print("[dim]No git repositories found in configured workspaces[/dim]")
-    else:
-        console_print(f"[dim]Found {len(all_repositories)} unique repositories[/dim]")
+            backend_stats['github'] = {'created': github_created, 'updated': github_updated}
+            total_created += github_created
+            total_updated += github_updated
 
-    # Phase 3: Sync GitHub/GitLab issues
-    github_repos = [r for r in all_repositories if r['backend'] == 'github']
-    gitlab_repos = [r for r in all_repositories if r['backend'] == 'gitlab']
-
-    # Apply repository filter if provided
-    if repository_filter:
-        github_repos = [r for r in github_repos if r['repository'] == repository_filter]
-        gitlab_repos = [r for r in gitlab_repos if r['repository'] == repository_filter]
-
-        # If no repositories match filter, add it directly (assume GitHub for now)
-        if not github_repos and not gitlab_repos:
-            if all_repositories:
-                # Repository wasn't found in scanned workspaces - show warning but continue
-                console_print()
-                console_print(f"[yellow]⚠[/yellow] Repository '{repository_filter}' not found in scanned workspaces")
-                console_print("[dim]Discovered repositories:[/dim]")
-                for r in all_repositories:
-                    console_print(f"  [dim]• {r['repository']} ({r['backend']})[/dim]")
-                console_print(f"[dim]Adding '{repository_filter}' directly for sync (assuming GitHub)[/dim]")
-
-            # Add the repository directly (assume GitHub, could enhance to detect GitLab)
-            github_repos.append({
-                'repository': repository_filter,
-                'backend': 'github',
-                'url': None,  # No local git remote
-                'remote': None
-            })
-
-    if github_repos:
-        console_print()
-        console_print(f"[bold cyan]Syncing GitHub issues ({len(github_repos)} repositories)...[/bold cyan]")
-
-        github_created = 0
-        github_updated = 0
-        for repo_info in github_repos:
-            repository = repo_info['repository']
-            repository_url = repo_info.get('url')  # Git remote URL for hostname extraction
-            console_print(f"[cyan]• {repository}[/cyan]")
-
-            result = sync_github_repository(
-                repository,
-                session_manager,
-                config,
-                repository_url=repository_url,
-                output_json=output_json,
-                synced_tickets=synced_tickets
-            )
-            github_created += result['created_count']
-            github_updated += result['updated_count']
-
-        backend_stats['github'] = {'created': github_created, 'updated': github_updated}
-        total_created += github_created
-        total_updated += github_updated
-
-    if gitlab_repos:
-        console_print()
-        console_print(f"[yellow]ℹ[/yellow] Found {len(gitlab_repos)} GitLab repositories, but GitLab sync not yet implemented")
+        if gitlab_repos:
+            console_print()
+            console_print(f"[yellow]ℹ[/yellow] Found {len(gitlab_repos)} GitLab repositories, but GitLab sync not yet implemented")
 
     # Render recap table if there are synced tickets
     render_sync_recap_table(synced_tickets)

@@ -763,21 +763,25 @@ def active(ctx: click.Context) -> None:
 @click.option("--epic", help="Filter by epic")
 @click.option("-w", "--workspace", help="Limit sync to specific workspace (name from config)")
 @click.option("--repository", "--repo", help="Limit sync to specific repository (format: owner/repo)")
+@click.option("--jira", is_flag=True, help="Force JIRA sync (can be combined with workspace/repository filters)")
 @json_option
-def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str, workspace: str, repository: str) -> None:
-    """Sync with all configured issue trackers (JIRA, GitHub, GitLab).
+def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str, workspace: str, repository: str, jira: bool) -> None:
+    """Sync with configured issue trackers (JIRA, GitHub, GitLab).
 
-    Automatically:
-    - Syncs JIRA tickets assigned to you (if configured)
-    - Scans workspaces for git repositories
-    - Syncs GitHub/GitLab issues assigned to you from detected repos
+    Smart sync automatically determines what to sync based on parameters:
+
+    - daf sync (with JIRA configured) → Sync JIRA tickets only
+    - daf sync -w <workspace> → Sync workspace repositories only
+    - daf sync --field/--type/--epic → Sync JIRA tickets only
+    - daf sync --repository → Sync specific repository only
+    - daf sync (no JIRA configured) → Sync all workspaces
+    - daf sync --jira → Force JIRA sync (requires JIRA URL)
+    - daf sync --jira -w <workspace> → Sync both JIRA and workspace
 
     Creates sessions for issues that don't already have them.
-
-    Use --workspace to limit which workspaces are scanned for repositories.
-    Use --repository to limit which repositories' issues are synced.
     """
     from devflow.cli.commands.sync_command import sync_multi_backend
+    from devflow.config.loader import ConfigLoader
 
     # Parse field filters from tuple of "field_name=value" strings
     field_filters = {}
@@ -786,6 +790,48 @@ def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str, workspac
             field_name, field_value = field_filter.split('=', 1)
             field_filters[field_name.strip()] = field_value.strip()
 
+    # Determine sync mode based on parameters
+    has_jira_filters = bool(field_filters or ticket_type or epic)
+    has_workspace_filters = bool(workspace or repository)
+
+    # Load config to check JIRA configuration
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+    jira_configured = bool(config and config.jira and config.jira.url)
+
+    # Determine what to sync
+    if jira:
+        # --jira flag: Force JIRA sync (can be combined with workspace filters)
+        if not jira_configured:
+            click.echo("Error: --jira flag requires JIRA to be configured", err=True)
+            click.echo("Please set JIRA_URL environment variable or configure JIRA in your organization.json", err=True)
+            raise click.Abort()
+        sync_jira = True
+        # Also sync workspaces if workspace/repository filters present
+        sync_workspaces = has_workspace_filters
+    elif has_jira_filters:
+        # JIRA-specific filters → sync JIRA only
+        if not jira_configured:
+            click.echo("Error: JIRA filters (--field, --type, --epic) require JIRA to be configured", err=True)
+            click.echo("Please set JIRA_URL environment variable or configure JIRA in your organization.json", err=True)
+            raise click.Abort()
+        sync_jira = True
+        sync_workspaces = False
+    elif has_workspace_filters:
+        # Workspace/repository filters → sync workspaces only (unless --jira also specified, handled above)
+        sync_jira = False
+        sync_workspaces = True
+    else:
+        # No filters → sync based on JIRA configuration
+        if jira_configured:
+            # JIRA configured → sync JIRA only
+            sync_jira = True
+            sync_workspaces = False
+        else:
+            # No JIRA configured → sync workspaces only
+            sync_jira = False
+            sync_workspaces = True
+
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
     sync_multi_backend(
         field_filters=field_filters,
@@ -793,6 +839,8 @@ def sync(ctx: click.Context, field: tuple, ticket_type: str, epic: str, workspac
         epic=epic,
         workspace_filter=workspace,
         repository_filter=repository,
+        sync_jira=sync_jira,
+        sync_workspaces=sync_workspaces,
         output_json=output_json
     )
 
