@@ -2,7 +2,7 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, ANY
 
 import pytest
 
@@ -102,6 +102,7 @@ class TestClaudeAgent:
         mock_popen.assert_called_once_with(
             ["claude", "code"],
             cwd=project_path,
+            env=ANY,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -124,6 +125,7 @@ class TestClaudeAgent:
         mock_popen.assert_called_once_with(
             ["claude", "--resume", session_id],
             cwd=project_path,
+            env=ANY,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

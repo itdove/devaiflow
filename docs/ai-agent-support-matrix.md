@@ -88,7 +88,63 @@ claude --resume <uuid>  # Resume existing session
 **Known Issues:** None
 
 **Using Alternative Models:**
-- For information on running Claude Code with local or cloud models (Ollama, OpenRouter, llama.cpp), see: [Run Claude Code on Local/Cloud Models](https://medium.com/@luongnv89/run-claude-code-on-local-cloud-models-in-5-minutes-ollama-openrouter-llama-cpp-6dfeaee03cda)
+
+DevAIFlow supports running Claude Code with alternative AI model providers through configuration profiles. This allows you to use:
+
+- **Local models**: Ollama, llama.cpp, LM Studio (free, private, offline)
+- **Cloud providers**: OpenRouter, Vertex AI, Ollama Cloud (cost savings up to 98%)
+
+**Quick Start:**
+
+Configure profiles in `~/.daf-sessions/config.json`:
+
+```json
+{
+  "model_provider": {
+    "default_profile": "anthropic",
+    "profiles": {
+      "anthropic": {
+        "name": "anthropic"
+      },
+      "ollama-local": {
+        "name": "ollama-local",
+        "base_url": "http://localhost:11434",
+        "auth_token": "ollama",
+        "api_key": "",
+        "model_name": "devstral-small-2"
+      },
+      "vertex": {
+        "name": "vertex",
+        "use_vertex": true,
+        "vertex_project_id": "your-gcp-project",
+        "vertex_region": "us-east5"
+      }
+    }
+  }
+}
+```
+
+**Switch providers:**
+
+```bash
+# Use default profile (Anthropic)
+daf open PROJ-123
+
+# Use Ollama for testing
+MODEL_PROVIDER_PROFILE=ollama-local daf open PROJ-123
+
+# Use Vertex AI for work
+MODEL_PROVIDER_PROFILE=vertex daf open PROJ-123
+```
+
+**Comprehensive Guide**: See [Alternative Model Providers](alternative-model-providers.md) for:
+- Detailed setup instructions for each provider
+- Model recommendations by hardware (16GB/32GB/64GB+ RAM)
+- Configuration hierarchy (enterprise/org/team/user)
+- Performance comparisons and cost analysis
+- Troubleshooting common issues
+
+**External Reference**: [Run Claude Code on Local/Cloud Models](https://medium.com/@luongnv89/run-claude-code-on-local-cloud-models-in-5-minutes-ollama-openrouter-llama-cpp-6dfeaee03cda)
 
 ---
 

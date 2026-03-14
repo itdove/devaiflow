@@ -28,6 +28,7 @@ from devflow.session.summary import generate_session_summary
 # Import unified utilities
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.utils.context_files import load_hierarchical_context_files
+from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
 from devflow.utils.daf_agents_validation import (
     validate_daf_agents_md as _validate_context_files,
     _install_bundled_cs_agents,
@@ -671,16 +672,26 @@ def open_session(
         return
 
     try:
-        # Set environment variables for the AI agent process
+        # Get active model provider profile (from config or env var)
+        model_provider_profile = get_active_profile(config) if config else None
+
+        # Display which model provider is being used
+        if model_provider_profile:
+            provider_name = get_profile_display_name(model_provider_profile)
+            console.print(f"[dim]Using model provider: {provider_name}[/dim]")
+
+        # Build environment variables from model provider profile
+        env = build_env_from_profile(model_provider_profile)
+
+        # Set additional DevAIFlow environment variables
         # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
         # AI_AGENT_SESSION_ID: Generic session ID (works with any AI agent)
-        env = os.environ.copy()
         env["DEVAIFLOW_IN_SESSION"] = "1"
         if active_conv and active_conv.ai_agent_session_id:
             env["AI_AGENT_SESSION_ID"] = active_conv.ai_agent_session_id
 
-        # Set GCP Vertex AI region if configured
-        if config and config.gcp_vertex_region:
+        # Set GCP Vertex AI region if configured (deprecated - use model_provider instead)
+        if config and config.gcp_vertex_region and not model_provider_profile:
             env["CLOUD_ML_REGION"] = config.gcp_vertex_region
 
         if is_first_launch:
@@ -733,7 +744,8 @@ def open_session(
                 initial_prompt=initial_prompt,
                 project_path=project_path,
                 workspace_path=workspace_path_for_cmd,
-                config=config
+                config=config,
+                model_provider_profile=model_provider_profile
             )
 
             # Set terminal window/tab title before launching Claude Code
@@ -769,7 +781,12 @@ def open_session(
             # Resume existing session
             # On resume, we only need --add-dir flags for auto-approval
             # The initial prompt and skills are already in the conversation context
-            cmd = ["claude", "--resume", active_conv.ai_agent_session_id]
+
+            # Build command with --model flag if using alternative provider
+            if model_provider_profile and model_provider_profile.get("model_name"):
+                cmd = ["claude", "--model", model_provider_profile["model_name"], "--resume", active_conv.ai_agent_session_id]
+            else:
+                cmd = ["claude", "--resume", active_conv.ai_agent_session_id]
 
             # Add all skills directories to allowed paths (auto-approve skill file reads)
             # Skills can be in 3 locations: user-level, workspace-level, project-level

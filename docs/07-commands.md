@@ -4563,7 +4563,8 @@ daf config edit
 ```
 
 **Features:**
-- Tabbed interface for different configuration sections (JIRA, Repository, Prompts, Context Files)
+- Tabbed interface for different configuration sections (JIRA, Repository, Model Providers, Prompts, Context Files)
+- **Model Provider management** - Visual editor for alternative AI models (Ollama, Vertex AI, OpenRouter)
 - Input validation for URLs, paths, and required fields
 - Tri-state prompt controls (Always/Never/Prompt each time) for workflow automation
 - Preview mode before saving (Ctrl+P)
@@ -4574,6 +4575,7 @@ daf config edit
 **Configuration Tabs:**
 - **JIRA** - JIRA server URL, project, custom field defaults, field mappings, transitions
 - **Repository** - Workspace directory, repository detection settings, keywords
+- **Model Providers** - Configure AI model profiles (Ollama, Vertex AI, OpenRouter, etc.) for Claude Code
 - **Prompts** - Automatic answers for `daf new`, `daf open`, `daf complete` prompts
 - **Context Files** - Additional context files for initial prompts (read-only, use CLI to manage)
 

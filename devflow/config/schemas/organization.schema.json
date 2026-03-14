@@ -41,6 +41,38 @@
     "status_totals_field": {
       "type": ["string", "null"],
       "description": "Field to sum for totals in status dashboard (e.g., 'points', 'story_points', 'effort'). None means no totals."
+    },
+    "model_provider": {
+      "type": ["object", "null"],
+      "description": "Model provider configuration for organization",
+      "properties": {
+        "default_profile": {
+          "type": "string",
+          "description": "Default profile to use"
+        },
+        "profiles": {
+          "type": "object",
+          "description": "Named provider profiles",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "base_url": {"type": ["string", "null"]},
+              "auth_token": {"type": ["string", "null"]},
+              "api_key": {"type": ["string", "null"]},
+              "model_name": {"type": ["string", "null"]},
+              "use_vertex": {"type": "boolean"},
+              "vertex_project_id": {"type": ["string", "null"]},
+              "vertex_region": {"type": ["string", "null"]},
+              "env_vars": {
+                "type": "object",
+                "additionalProperties": {"type": "string"}
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

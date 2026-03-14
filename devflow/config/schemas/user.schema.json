@@ -174,6 +174,38 @@
     "jira_affected_version": {
       "type": ["string", "null"],
       "description": "User's current affected version for bug creation (e.g., 'v1.0.0')"
+    },
+    "model_provider": {
+      "type": ["object", "null"],
+      "description": "Model provider configuration for user",
+      "properties": {
+        "default_profile": {
+          "type": "string",
+          "description": "Default profile to use"
+        },
+        "profiles": {
+          "type": "object",
+          "description": "Named provider profiles",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "base_url": {"type": ["string", "null"]},
+              "auth_token": {"type": ["string", "null"]},
+              "api_key": {"type": ["string", "null"]},
+              "model_name": {"type": ["string", "null"]},
+              "use_vertex": {"type": "boolean"},
+              "vertex_project_id": {"type": ["string", "null"]},
+              "vertex_region": {"type": ["string", "null"]},
+              "env_vars": {
+                "type": "object",
+                "additionalProperties": {"type": "string"}
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      }
     }
   },
   "required": ["repos"],
