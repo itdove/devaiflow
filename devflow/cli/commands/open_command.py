@@ -38,6 +38,51 @@ from devflow.utils.daf_agents_validation import (
 console = Console()
 
 
+def _extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[str]) -> Optional[str]:
+    """Extract repository name from GitHub/GitLab issue key.
+
+    Args:
+        issue_key: Issue key (e.g., "owner/repo#123", "#123", "PROJ-123")
+        issue_tracker: Issue tracker type ("github", "gitlab", "jira", etc.)
+
+    Returns:
+        Repository name (e.g., "repo") if extractable, None otherwise
+
+    Examples:
+        >>> _extract_repository_from_issue_key("itdove/devaiflow#146", "github")
+        'devaiflow'
+        >>> _extract_repository_from_issue_key("#123", "github")
+        None
+        >>> _extract_repository_from_issue_key("PROJ-123", "jira")
+        None
+    """
+    # Only process GitHub/GitLab issues
+    if not issue_tracker or issue_tracker not in ["github", "gitlab"]:
+        return None
+
+    if not issue_key:
+        return None
+
+    # Check if issue key contains owner/repo format
+    # Format: owner/repo#123
+    if "/" in issue_key and "#" in issue_key:
+        # Extract the part between / and #
+        try:
+            # Split on / to get [owner, repo#123]
+            parts = issue_key.split("/")
+            if len(parts) >= 2:
+                # Get the last part which should be "repo#123"
+                repo_with_number = parts[-1]
+                # Split on # to get [repo, 123]
+                repo = repo_with_number.split("#")[0]
+                return repo if repo else None
+        except (IndexError, ValueError):
+            return None
+
+    # Issue key doesn't contain repository info (e.g., "#123")
+    return None
+
+
 def _set_terminal_title(session) -> None:
     """Set terminal window/tab title using ANSI escape sequences.
 
@@ -1872,13 +1917,21 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
 
     console.print(f"\n[bold]Select working directory for session:[/bold] {session.name}")
     if session.issue_key:
-        console.print(f"[dim]JIRA: {session.issue_key}[/dim]")
+        console.print(f"[dim]Issue: {session.issue_key}[/dim]")
     if session.goal:
         console.print(f"[dim]Goal: {session.goal}[/dim]")
+
+    # Try to extract repository suggestion from issue key (GitHub/GitLab)
+    suggested_repo = None
+    if session.issue_key and session.issue_tracker:
+        suggested_repo = _extract_repository_from_issue_key(session.issue_key, session.issue_tracker)
+        if suggested_repo:
+            console.print(f"[cyan]ℹ Issue repository:[/cyan] {suggested_repo} (from {session.issue_key})")
 
     # Try to detect available repositories from config
     config = config_loader.load_config()
     repo_options = []
+    suggested_repo_index = None
 
     if config and config.repos:
         # Use selected workspace if provided, otherwise fall back to default
@@ -1899,16 +1952,28 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
                     directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
                     # Filter to only include git repositories
                     git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
-                    repo_options = sorted(git_repos)
+
+                    # Sort repositories, but put suggested repo first if it exists
+                    if suggested_repo and suggested_repo in git_repos:
+                        # Move suggested repo to front
+                        git_repos.remove(suggested_repo)
+                        repo_options = [suggested_repo] + sorted(git_repos)
+                        suggested_repo_index = 0  # First item
+                    else:
+                        repo_options = sorted(git_repos)
 
                     if repo_options:
                         console.print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
-                        for i, repo in enumerate(repo_options, 1):  # Show all repositories
-                            console.print(f"  {i}. {repo}")
+                        for i, repo in enumerate(repo_options, 1):
+                            # Highlight suggested repository
+                            if suggested_repo and repo == suggested_repo:
+                                console.print(f"  {i}. {repo} [dim](from issue)[/dim]")
+                            else:
+                                console.print(f"  {i}. {repo}")
                 except Exception as e:
                     console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
 
-    # Prompt for working directory
+    # Prompt for working directory with default suggestion
     console.print(f"\n[bold]Select working directory:[/bold]")
     if repo_options:
         console.print(f"  • Enter a number (1-{len(repo_options)}) to select from the list above")
@@ -1920,7 +1985,13 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
         console.print(f"  • Enter an absolute path (starting with / or ~)")
         console.print(f"  • Enter 'cancel' or 'q' to exit")
 
-    selection = Prompt.ask("Selection")
+    # Set default to suggested repository if found
+    default_value = None
+    if suggested_repo_index is not None:
+        default_value = str(suggested_repo_index + 1)  # 1-indexed for display
+        selection = Prompt.ask("Selection", default=default_value)
+    else:
+        selection = Prompt.ask("Selection")
 
     # Validate input is not empty
     if not selection or selection.strip() == "":
