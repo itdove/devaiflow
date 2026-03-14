@@ -280,7 +280,6 @@ def create_investigation_session(
 
     # Display which model provider is being used
     if model_provider_profile:
-        from devflow.cli.utils import console_print
         provider_name = get_profile_display_name(model_provider_profile)
         console_print(f"[dim]Using model provider: {provider_name}[/dim]")
 
