@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Auto-suggest repository when opening GitHub/GitLab synced sessions (#146)
+  - Automatically extracts repository name from GitHub/GitLab issue keys (e.g., `owner/repo#123`)
+  - Highlights matching repository in working directory selection prompt with "(from issue)" label
+  - Defaults to suggested repository if found in workspace
+  - Improves UX by reducing manual repository selection for synced issues
+  - Only affects GitHub/GitLab sessions; JIRA sessions behave as before
 - Branch selection prompt when cloning to temporary directory (#128)
   - Interactive prompt to select which branch to checkout after cloning for analysis
   - Lists all available remote branches from `upstream` (preferred) or `origin`
