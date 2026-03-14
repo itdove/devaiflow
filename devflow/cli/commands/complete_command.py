@@ -29,6 +29,31 @@ from devflow.utils.dependencies import require_tool
 console = Console()
 
 
+def _get_base_branch(active_conv, working_dir: Path) -> Optional[str]:
+    """Get the base branch from session or detect from repository.
+
+    This uses the stored base_branch from the session's active conversation,
+    which was set during branch creation (daf new/daf open). Falls back to
+    detecting the default branch for backward compatibility with old sessions.
+
+    Args:
+        active_conv: Active conversation context (may be None)
+        working_dir: Working directory path
+
+    Returns:
+        Base branch name or None if not available
+    """
+    # First priority: Use stored base_branch from session
+    # This ensures we compare against the correct base branch that was used
+    # when creating the feature branch (e.g., 'develop' instead of 'main')
+    if active_conv and active_conv.base_branch:
+        return active_conv.base_branch
+
+    # Fallback: Detect default branch from repository
+    # Used for old sessions or when there's no active conversation
+    return GitUtils.get_default_branch(working_dir)
+
+
 @require_outside_claude
 def complete_session(
     identifier: Optional[str] = None,
@@ -320,7 +345,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                                 _update_issue_pr_field(session, config, pr_url, no_issue_update)
                     else:
                         # No work this cycle - check if branch has changes from base
-                        base_branch = GitUtils.get_default_branch(working_dir)
+                        base_branch = _get_base_branch(active_conv, working_dir)
                         if base_branch:
                             changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
                             if changed_files:
@@ -374,7 +399,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                                 _update_issue_pr_field(session, config, pr_url, no_issue_update)
                     else:
                         # No work this cycle - check if branch has changes from base
-                        base_branch = GitUtils.get_default_branch(working_dir)
+                        base_branch = _get_base_branch(active_conv, working_dir)
                         if base_branch:
                             changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
                             if changed_files:
@@ -1585,7 +1610,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
         template_content = _fetch_pr_template(config.pr_template_url)
 
     # Gather git context for AI template filling
-    base_branch = GitUtils.get_default_branch(working_dir)
+    base_branch = _get_base_branch(active_conv, working_dir)
     commit_log = GitUtils.get_commit_log(working_dir, base_branch)
     changed_files = GitUtils.get_changed_files(working_dir, base_branch)
 
@@ -1651,7 +1676,7 @@ def _generate_pr_summary_bullets(session, working_dir: Path) -> Optional[str]:
         from devflow.session.summary import generate_session_summary
 
         # Gather git commit information
-        base_branch = GitUtils.get_default_branch(working_dir)
+        base_branch = _get_base_branch(active_conv, working_dir)
         commit_log = GitUtils.get_commit_log(working_dir, base_branch)
         changed_files = GitUtils.get_changed_files(working_dir, base_branch)
 
@@ -1735,6 +1760,9 @@ def _generate_pr_title(session, working_dir: Path) -> str:
     Returns:
         PR/MR title string
     """
+    # Get active conversation for accessing conversation-specific fields
+    active_conv = session.active_conversation
+
     # Start with issue key if available
     title_prefix = f"{session.issue_key}: " if session.issue_key else ""
 
@@ -1745,7 +1773,7 @@ def _generate_pr_title(session, working_dir: Path) -> str:
 
     # Second priority: Try to generate a concise title from commits
     try:
-        base_branch = GitUtils.get_default_branch(working_dir)
+        base_branch = _get_base_branch(active_conv, working_dir)
         commit_log = GitUtils.get_commit_log(working_dir, base_branch)
         changed_files = GitUtils.get_changed_files(working_dir, base_branch)
 
@@ -1837,7 +1865,7 @@ def _generate_pr_summary_with_api(session, working_dir: Path) -> Optional[str]:
             return None
 
         # Gather git commit information
-        base_branch = GitUtils.get_default_branch(working_dir)
+        base_branch = _get_base_branch(active_conv, working_dir)
         commit_log = GitUtils.get_commit_log(working_dir, base_branch)
         changed_files = GitUtils.get_changed_files(working_dir, base_branch)
 
