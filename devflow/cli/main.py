@@ -300,10 +300,11 @@ def cli(ctx: click.Context) -> None:
 @click.option("--branch", help="Git branch name (optional)")
 @click.option("--template", help="Template name to use for session configuration")
 @workspace_option()
+@click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'ollama-local')")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, new_session: bool, model_profile: str) -> None:
+def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -311,6 +312,9 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
 
     Use --new-session to create a separate session in the same group instead.
     This is useful for different approaches, phases, or experiments.
+
+    Use --projects with --workspace to work across multiple repositories simultaneously.
+    Example: daf new PROJ-123 -w primary --projects backend-api,frontend-app,shared-lib
 
     Issue tracker integration is optional. Use 'daf link' to associate a issue tracker ticket later.
 
@@ -359,10 +363,16 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
     if goal:
         goal = resolve_goal_input(goal)
 
+    # Validate --projects requires --workspace
+    if projects and not workspace:
+        console.print("[red]✗[/red] --projects requires --workspace to be specified")
+        console.print("[dim]Example: daf new PROJ-123 -w primary --projects backend-api,frontend-app[/dim]")
+        sys.exit(1)
+
     # Get output_json flag from context
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
 
-    create_new_session(name, goal, working_directory, path, branch, jira, template, workspace, new_session, model_profile, output_json)
+    create_new_session(name, goal, working_directory, path, branch, jira, template, workspace, projects, new_session, model_profile, output_json)
 
 
 @cli.command()

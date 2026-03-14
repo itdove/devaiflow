@@ -248,6 +248,109 @@ Proceeding with branch creation despite uncommitted changes (auto mode)
 - **Clear warnings**: Shows exactly what files are affected
 - **Recommended workflow**: Commit or stash before creating new branches
 
+**Multi-Project Workflow (Issue #149):**
+
+Create sessions that work across multiple repositories simultaneously with the `--projects` flag:
+
+```bash
+# Multi-project session (requires --workspace)
+daf new PROJ-123 -w primary --projects backend-api,frontend-app,shared-lib
+```
+
+**What happens:**
+1. **Prompts for shared branch name** - Same branch name used across all projects
+2. **Prompts for base branch per project** - Each project can branch from different bases
+   - Example: backend-api from `main`, frontend-app from `develop`, shared-lib from `main`
+3. **Creates branches in all projects** - Same name, different base branches
+4. **Creates conversations for each project** - All tracked in a single session
+5. **Launches Claude Code at workspace level** - Access to all projects
+
+**Example workflow:**
+```bash
+# Step 1: Create multi-project session
+$ daf new PROJ-12345 -w primary --projects backend-api,frontend-app
+
+Creating multi-project session:
+  Session: PROJ-12345
+  Workspace: primary
+  Projects (2):
+    • backend-api
+    • frontend-app
+
+Branch name for all projects: PROJ-12345-add-auth
+
+Select base branch for each project:
+
+backend-api (default: main)
+  1. main (default)
+  2. develop
+  3. staging
+Select option [1]: 1
+  → Will create branch from: main
+
+frontend-app (default: develop)
+  1. main
+  2. develop (default)
+  3. staging
+Select option [2]: 2
+  → Will create branch from: develop
+
+Creating branches...
+
+Processing backend-api...
+  ✓ Created and switched to branch: PROJ-12345-add-auth
+
+Processing frontend-app...
+  ✓ Created and switched to branch: PROJ-12345-add-auth
+
+✓ Multi-project session created: PROJ-12345
+
+Projects (2):
+  • backend-api
+    Branch: PROJ-12345-add-auth
+    Base: main
+  • frontend-app
+    Branch: PROJ-12345-add-auth
+    Base: develop
+```
+
+**Completing multi-project sessions:**
+```bash
+# When you run daf complete, it processes ALL projects:
+$ daf complete PROJ-12345
+
+Processing 2 projects:
+
+→ backend-api
+  ✓ Changes committed
+  ✓ Pushed to remote
+  ✓ Created PR/MR: https://github.com/org/backend-api/pull/123
+
+→ frontend-app
+  ✓ Changes committed
+  ✓ Pushed to remote
+  ✓ Created PR/MR: https://github.com/org/frontend-app/pull/456
+
+✓ Processed all 2 projects
+```
+
+**Key benefits:**
+- **Single session** - One Claude Code session for cross-repository work
+- **Consistent branch names** - Same branch name across all projects
+- **Flexible base branches** - Each project can branch from appropriate base
+- **Automatic PR creation** - Creates PR/MR for each project using correct base branch
+- **Workspace-level context** - Claude has access to all project files
+
+**When to use:**
+- Features spanning multiple repositories (e.g., API + UI changes)
+- Cross-cutting concerns (e.g., shared library updates affecting multiple consumers)
+- Coordinated releases across microservices
+
+**Requirements:**
+- Must specify `--workspace` flag
+- All specified projects must exist in the workspace
+- Each project must be a git repository
+
 ---
 
 ### Multi-Conversation vs Multi-Session Architecture
