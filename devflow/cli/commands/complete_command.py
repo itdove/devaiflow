@@ -43,19 +43,37 @@ def _get_base_branch(active_conv, working_dir: Path) -> str:
     Returns:
         Base branch name (never None - defaults to "main" if detection fails)
     """
-    # First priority: Use stored base_branch from session
-    # This ensures we compare against the correct base branch that was used
-    # when creating the feature branch (e.g., 'develop' instead of 'main')
-    if active_conv and hasattr(active_conv, 'base_branch') and active_conv.base_branch:
-        return active_conv.base_branch
+    # Get stored base_branch if available
+    stored_base_branch = None
+    if active_conv and hasattr(active_conv, 'base_branch'):
+        stored_base_branch = active_conv.base_branch
 
-    # Fallback: Detect default branch from repository
-    # Used for old sessions or when there's no active conversation
+    # Always detect the repository's actual default branch
     detected = GitUtils.get_default_branch(working_dir)
 
-    # Always return a valid branch name (never None)
-    # This ensures downstream git commands don't fail
-    return detected if detected else "main"
+    # Common default branch names (main, master)
+    common_defaults = {"main", "master"}
+
+    # Decision logic:
+    # 1. If stored is a non-default branch (not main/master) → use stored
+    #    (means user explicitly chose different base, e.g., "develop", "staging")
+    #    This is the fix for issue #150
+    # 2. Otherwise use detected (handles old sessions and repos with different defaults)
+
+    if stored_base_branch and stored_base_branch not in common_defaults:
+        # User explicitly selected a non-default base branch (e.g., develop, staging, release)
+        # This is the fix for issue #150 - use the branch they explicitly chose
+        return stored_base_branch
+    elif detected:
+        # Use detected repository default
+        # Handles: old sessions, model defaults, repos using master instead of main
+        return detected
+    elif stored_base_branch:
+        # Detection failed but we have stored value
+        return stored_base_branch
+    else:
+        # Last resort fallback
+        return "main"
 
 
 @require_outside_claude

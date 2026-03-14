@@ -85,6 +85,11 @@ class GitUtils:
     def get_default_branch(path: Path) -> Optional[str]:
         """Get the default branch (main/master/develop).
 
+        Checks remotes in priority order:
+        1. upstream (for fork workflows)
+        2. origin (standard workflows)
+        3. Common branch names (main, master, develop)
+
         Args:
             path: Repository path
 
@@ -92,7 +97,19 @@ class GitUtils:
             Default branch name or None if not found
         """
         try:
-            # Try to get remote HEAD
+            # Priority 1: Try upstream remote (for fork workflows)
+            result = subprocess.run(
+                ["git", "symbolic-ref", "refs/remotes/upstream/HEAD"],
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                # Output is like: refs/remotes/upstream/main
+                return result.stdout.strip().split("/")[-1]
+
+            # Priority 2: Try origin remote (standard workflows)
             result = subprocess.run(
                 ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
                 cwd=path,
@@ -104,7 +121,7 @@ class GitUtils:
                 # Output is like: refs/remotes/origin/main
                 return result.stdout.strip().split("/")[-1]
 
-            # Fallback: check common names
+            # Priority 3: Check common branch names locally
             for branch in ["main", "master", "develop"]:
                 result = subprocess.run(
                     ["git", "rev-parse", "--verify", branch],

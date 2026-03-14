@@ -18,17 +18,19 @@ from devflow.git.utils import GitUtils
 
 
 def test_get_base_branch_uses_stored_value():
-    """Test that _get_base_branch returns the stored base_branch from active_conv."""
-    # Create mock active conversation with base_branch set
+    """Test that _get_base_branch returns the stored base_branch when it differs from detected."""
+    # Create mock active conversation with base_branch set to "develop"
     active_conv = Mock()
     active_conv.base_branch = "develop"
 
     working_dir = Path("/test")
 
-    # Should return stored base_branch without calling GitUtils
-    result = _get_base_branch(active_conv, working_dir)
+    # Mock detection to return "main" (different from stored "develop")
+    with patch.object(GitUtils, 'get_default_branch', return_value='main'):
+        result = _get_base_branch(active_conv, working_dir)
 
-    assert result == "develop"
+        # Should return stored "develop" because it differs from detected "main"
+        assert result == "develop"
 
 
 def test_get_base_branch_fallback_to_detection():
@@ -59,6 +61,38 @@ def test_get_base_branch_fallback_when_detection_returns_none():
 
         # Should return "main" as last resort fallback
         assert result == "main"
+
+
+def test_get_base_branch_prefers_detected_when_stored_matches():
+    """Test that _get_base_branch uses detected branch when stored matches (e.g., both 'main')."""
+    # This handles the case where stored="main" (model default) and detected="main"
+    # Should use detected to ensure we're using the actual repo default
+    active_conv = Mock()
+    active_conv.base_branch = "main"
+
+    working_dir = Path("/test")
+
+    with patch.object(GitUtils, 'get_default_branch', return_value='main'):
+        result = _get_base_branch(active_conv, working_dir)
+
+        # Should return detected "main" (same as stored, normal case)
+        assert result == "main"
+
+
+def test_get_base_branch_uses_detected_when_stored_is_default_but_repo_differs():
+    """Test that _get_base_branch uses detected branch when stored is model default but repo uses different name."""
+    # This handles repos that use "master" instead of "main"
+    # If stored="main" (model default) but repo uses "master", use "master"
+    active_conv = Mock()
+    active_conv.base_branch = "main"
+
+    working_dir = Path("/test")
+
+    with patch.object(GitUtils, 'get_default_branch', return_value='master'):
+        result = _get_base_branch(active_conv, working_dir)
+
+        # Should return detected "master" (repo default, not model default)
+        assert result == "master"
 
 
 def test_get_base_branch_no_active_conv():
