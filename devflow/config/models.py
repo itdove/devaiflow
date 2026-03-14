@@ -471,7 +471,7 @@ class ConversationContext(BaseModel):
     ai_agent_session_id: str  # UUID for AI agent conversation (current/active)
     project_path: Optional[str] = None  # Full path to repo (legacy, still used as fallback)
     branch: Optional[str] = None  # Git branch for this repo (None for ticket_creation sessions)
-    base_branch: str = "main"  # Base branch
+    base_branch: Optional[str] = "main"  # Base branch (None for old sessions)
     remote_url: Optional[str] = None  # Git remote URL where branch was pushed (for fork support)
     created: datetime = Field(default_factory=datetime.now)
     last_active: datetime = Field(default_factory=datetime.now)
