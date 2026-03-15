@@ -57,9 +57,15 @@ def show_active(output_json: bool = False) -> None:
     minutes = int((current_work_seconds % 3600) // 60)
     current_work_time = f"{hours}h {minutes}m"
 
-    # Format project path display
+    # Format project path display (only for single-project conversations)
     workspace = config.repos.get_default_workspace_path() if config else None
-    project_path = conversation.get_project_path(workspace)
+    project_path = None
+    if not conversation.is_multi_project:
+        try:
+            project_path = conversation.get_project_path(workspace)
+        except ValueError:
+            # Handle missing project path gracefully
+            project_path = None
 
     # JSON output mode
     if output_json:
@@ -76,24 +82,42 @@ def show_active(output_json: bool = False) -> None:
                         "ai_agent_session_id": active.ai_agent_session_id
                     })
 
+        # Build active conversation data
+        active_data = {
+            "session_name": session.name,
+            "issue_key": session.issue_key,
+            "working_directory": working_dir,
+            "goal": session.goal,
+            "status": session.status,
+            "ai_agent_session_id": conversation.ai_agent_session_id,
+            "current_work_time_seconds": int(current_work_seconds),
+            "current_work_time_hours": hours,
+            "current_work_time_minutes": minutes,
+            "time_tracking_state": session.time_tracking_state,
+            "other_conversations": other_conversations
+        }
+
+        # Add multi-project or single-project specific fields
+        if conversation.is_multi_project and conversation.projects:
+            active_data["is_multi_project"] = True
+            active_data["workspace_path"] = conversation.workspace_path
+            active_data["projects"] = [
+                {
+                    "name": proj_name,
+                    "path": proj_info.project_path,
+                    "branch": proj_info.branch
+                }
+                for proj_name, proj_info in conversation.projects.items()
+            ]
+        else:
+            active_data["is_multi_project"] = False
+            active_data["project_path"] = project_path
+            active_data["branch"] = conversation.branch
+
         json_output(
             success=True,
             data={
-                "active_conversation": {
-                    "session_name": session.name,
-                    "issue_key": session.issue_key,
-                    "working_directory": working_dir,
-                    "project_path": project_path,
-                    "goal": session.goal,
-                    "branch": conversation.branch,
-                    "status": session.status,
-                    "ai_agent_session_id": conversation.ai_agent_session_id,
-                    "current_work_time_seconds": int(current_work_seconds),
-                    "current_work_time_hours": hours,
-                    "current_work_time_minutes": minutes,
-                    "time_tracking_state": session.time_tracking_state,
-                    "other_conversations": other_conversations
-                }
+                "active_conversation": active_data
             }
         )
         return
@@ -122,7 +146,8 @@ def show_active(output_json: bool = False) -> None:
     else:
         # Single-project conversation
         lines.append(f"[bold]Conversation:[/bold] ({working_dir})")
-        lines.append(f"[bold]Project:[/bold] {project_path}")
+        if project_path:
+            lines.append(f"[bold]Project:[/bold] {project_path}")
         lines.append(f"[bold]Goal:[/bold] {session.goal or 'N/A'}")
         lines.append(f"[bold]Branch:[/bold] {conversation.branch}")
         lines.append(f"[bold]Time (this work session):[/bold] {current_work_time}")

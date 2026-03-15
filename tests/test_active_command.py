@@ -407,3 +407,168 @@ def test_show_active_with_issue_key(monkeypatch, temp_daf_home):
     # Call show_active
     show_active(output_json=False)
     # Should display issue key in output
+
+
+def test_show_active_with_multi_project_conversation(monkeypatch, temp_daf_home, tmp_path):
+    """Test show_active with a true multi-project conversation (not just multiple conversations)."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Conversation, ConversationContext, ProjectInfo
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create multi-project conversation context with is_multi_project=True
+    conversation_context = ConversationContext(
+        ai_agent_session_id="uuid-multi-proj",
+        project_path=str(tmp_path / "backend"),  # This should not be used
+        branch="feature-branch",
+        base_branch="main",
+        created=datetime.now(),
+        last_active=datetime.now(),
+        message_count=10,
+        prs=[],
+        archived=False,
+        conversation_history=["uuid-multi-proj"],
+        is_multi_project=True,
+        workspace_path=str(tmp_path),
+        projects={
+            "backend": ProjectInfo(
+                project_path=str(tmp_path / "backend"),
+                relative_path="backend",
+                branch="feature-branch",
+                base_branch="main",
+                repo_name="backend",
+            ),
+            "frontend": ProjectInfo(
+                project_path=str(tmp_path / "frontend"),
+                relative_path="frontend",
+                branch="feature-branch",
+                base_branch="main",
+                repo_name="frontend",
+            ),
+        }
+    )
+
+    # Create conversation container
+    conversation = Conversation(
+        active_session=conversation_context,
+        archived_sessions=[]
+    )
+
+    # Create session with multi-project conversation
+    session = session_manager.create_session(
+        name="multi-project-test",
+        goal="Multi-project development",
+        working_directory="backend",
+        project_path=str(tmp_path / "backend"),
+        branch="feature-branch",
+        ai_agent_session_id="uuid-multi-proj",
+    )
+
+    # Replace the default conversation with our multi-project one
+    session.conversations["backend"] = conversation
+    session_manager.update_session(session)
+
+    # Set active conversation
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "uuid-multi-proj")
+    monkeypatch.setenv("PWD", str(tmp_path / "backend"))
+
+    # Call show_active - should not raise ValueError
+    show_active(output_json=False)
+    # Should display multi-project information without error
+
+
+def test_show_active_multi_project_json_output(monkeypatch, temp_daf_home, tmp_path, capsys):
+    """Test show_active JSON output for multi-project conversation."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Conversation, ConversationContext, ProjectInfo
+    import json
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create multi-project conversation context
+    conversation_context = ConversationContext(
+        ai_agent_session_id="uuid-multi-json",
+        project_path=str(tmp_path / "backend"),
+        branch="develop",
+        base_branch="main",
+        created=datetime.now(),
+        last_active=datetime.now(),
+        message_count=5,
+        prs=[],
+        archived=False,
+        conversation_history=["uuid-multi-json"],
+        is_multi_project=True,
+        workspace_path=str(tmp_path),
+        projects={
+            "backend-api": ProjectInfo(
+                project_path=str(tmp_path / "backend-api"),
+                relative_path="backend-api",
+                branch="develop",
+                base_branch="main",
+                repo_name="backend-api",
+            ),
+            "frontend-ui": ProjectInfo(
+                project_path=str(tmp_path / "frontend-ui"),
+                relative_path="frontend-ui",
+                branch="develop",
+                base_branch="main",
+                repo_name="frontend-ui",
+            ),
+        }
+    )
+
+    conversation = Conversation(
+        active_session=conversation_context,
+        archived_sessions=[]
+    )
+
+    # Create session
+    session = session_manager.create_session(
+        name="multi-json-test",
+        goal="Test multi-project JSON",
+        working_directory="backend-api",
+        project_path=str(tmp_path / "backend-api"),
+        branch="develop",
+        ai_agent_session_id="uuid-multi-json",
+    )
+
+    session.conversations["backend-api"] = conversation
+    session_manager.update_session(session)
+
+    # Set active
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "uuid-multi-json")
+    monkeypatch.setenv("PWD", str(tmp_path / "backend-api"))
+
+    # Call with JSON output
+    show_active(output_json=True)
+
+    output = capsys.readouterr().out
+    result = json.loads(output)
+
+    # Verify JSON structure
+    assert result["success"] is True
+    active = result["data"]["active_conversation"]
+
+    # Should have multi-project fields
+    assert active["is_multi_project"] is True
+    assert active["workspace_path"] == str(tmp_path)
+    assert "projects" in active
+    assert len(active["projects"]) == 2
+
+    # Verify project details
+    project_names = {p["name"] for p in active["projects"]}
+    assert "backend-api" in project_names
+    assert "frontend-ui" in project_names
+
+    # Verify each project has required fields
+    for project in active["projects"]:
+        assert "name" in project
+        assert "path" in project
+        assert "branch" in project
+        assert project["branch"] == "develop"
+
+    # Should NOT have single-project fields
+    assert "branch" not in active or active.get("branch") is None
+    assert "project_path" not in active or active.get("project_path") is None
