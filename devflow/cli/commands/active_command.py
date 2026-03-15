@@ -120,7 +120,7 @@ def show_active(output_json: bool = False) -> None:
         for proj_name, proj_info in conversation.projects.items():
             lines.append(f"  • [cyan]{proj_name}[/cyan] (branch: {proj_info.branch})")
     else:
-        # Single-project conversation (backward compatibility)
+        # Single-project conversation
         lines.append(f"[bold]Conversation:[/bold] ({working_dir})")
         lines.append(f"[bold]Project:[/bold] {project_path}")
         lines.append(f"[bold]Goal:[/bold] {session.goal or 'N/A'}")
@@ -128,7 +128,7 @@ def show_active(output_json: bool = False) -> None:
         lines.append(f"[bold]Time (this work session):[/bold] {current_work_time}")
         lines.append(f"[bold]Status:[/bold] {session.status}")
 
-        # Show other conversations if this is an old multi-conversation session
+        # Show other conversations if this session has multiple conversations
         if len(session.conversations) > 1:
             other_convos = [
                 (wd, conv) for wd, conv in session.conversations.items()

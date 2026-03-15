@@ -334,7 +334,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
         # After handling all projects
         console.print(f"\n[green]✓[/green] Processed all {len(active_conv.projects)} projects")
 
-    # OLD multi-conversation architecture (backward compatibility)
+    # Multi-conversation architecture (separate conversations for different projects)
     # If session has multiple conversations, handle all of them
     elif session.session_type == "development" and len(session.conversations) > 1:
         console.print(f"\n[bold cyan]Processing {len(session.conversations)} projects:[/bold cyan]")
