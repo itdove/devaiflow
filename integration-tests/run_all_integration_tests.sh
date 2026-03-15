@@ -90,6 +90,7 @@ TESTS=(
     "test_time_tracking.sh"
     "test_templates.sh"
     "test_jira_sync.sh"
+    "test_git_sync.sh"
     "test_readonly_commands.sh"
     "test_multi_repo.sh"
     "test_session_lifecycle.sh"
@@ -104,6 +105,7 @@ TEST_DESCRIPTIONS=(
     "Time tracking features (pause, resume, time command)"
     "Template system (save, list, use, delete)"
     "JIRA sync features (sprint sync, ticket sync)"
+    "Git sync with workspace and repository filtering"
     "Read-only commands that work inside Claude Code"
     # "Multi-repository workflow (cross-repo features)"  # COMMENTED OUT: Blocked by AAP-63884
     "Session lifecycle (link, unlink, delete operations)"
