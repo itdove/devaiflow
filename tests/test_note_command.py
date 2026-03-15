@@ -396,3 +396,29 @@ def test_view_notes_displays_chronological_order(temp_daf_home):
     third_pos = content.index("Third note")
 
     assert first_pos < second_pos < third_pos
+
+
+def test_add_note_works_inside_claude_session(temp_daf_home, monkeypatch):
+    """Test that add_note works when AI_AGENT_SESSION_ID is set (inside Claude Code)."""
+    # Set AI_AGENT_SESSION_ID to simulate being inside a Claude Code session
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "test-claude-session-id")
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="claude-session",
+        goal="Test inside Claude",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="test-claude-session-id",
+    )
+
+    # This should NOT raise SystemExit - it should work inside Claude Code
+    add_note(identifier="claude-session", note="Note from inside Claude Code")
+
+    # Verify note was added
+    notes_file = config_loader.get_session_dir("claude-session") / "notes.md"
+    assert notes_file.exists()
+    content = notes_file.read_text()
+    assert "Note from inside Claude Code" in content
