@@ -172,6 +172,25 @@ daf new --name PROJ-456 -w experiments --path ~/experiments/myproject
 daf open PROJ-123  # Prompts to select which workspace if ambiguous
 ```
 
+**Multi-Project Workflows:** Work across multiple repositories in a single session:
+```bash
+# Create session spanning multiple projects (requires workspace)
+daf new PROJ-123 -w primary --projects backend-api,frontend-app,shared-lib
+
+# System prompts for base branch per project:
+#   backend-api: branch from main
+#   frontend-app: branch from develop
+#   shared-lib: branch from main
+
+# Work in Claude Code across all projects...
+
+# Complete session - creates PR/MR for each project
+daf complete PROJ-123
+# → Creates PR for backend-api targeting main
+# → Creates PR for frontend-app targeting develop
+# → Creates PR for shared-lib targeting main
+```
+
 **Configuration:** Use the interactive TUI for easy configuration:
 ```bash
 # Launch the interactive configuration editor

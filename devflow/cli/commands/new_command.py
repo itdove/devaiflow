@@ -274,6 +274,7 @@ def create_new_session(
     issue_key: Optional[str] = None,
     template_name: Optional[str] = None,
     workspace_name: Optional[str] = None,
+    projects: Optional[str] = None,
     force_new_session: bool = False,
     model_profile: Optional[str] = None,
     output_json: bool = False,
@@ -289,6 +290,7 @@ def create_new_session(
         issue_key: Optional issue tracker key
         template_name: Optional template to use for session configuration
         workspace_name: Optional workspace name (AAP-63377)
+        projects: Comma-separated list of repository names for multi-project sessions
         force_new_session: If True, always create new session instead of adding conversation
         model_profile: Optional model provider profile to use (e.g., "vertex", "ollama-local")
         output_json: If True, output JSON instead of human-readable text
@@ -372,7 +374,119 @@ def create_new_session(
         skip_prompt=output_json
     )
 
-    # Determine project path
+    # Get workspace path for multi-project detection
+    workspace_path = None
+    if selected_workspace_name:
+        from devflow.cli.utils import get_workspace_path
+        workspace_path = get_workspace_path(config, selected_workspace_name)
+
+        # Auto-upgrade skills and commands for this workspace if needed
+        if workspace_path:
+            from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
+            success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
+            if not success:
+                console.print(f"[yellow]⚠[/yellow] Warning: {error}")
+
+    # Multi-project workflow (Issue #149)
+    # If --projects flag is provided OR user wants to select multiple projects interactively
+    multi_project_names = None
+
+    if projects:
+        # --projects flag provided - use those projects
+        multi_project_names = [p.strip() for p in projects.split(',')]
+    elif workspace_path and not output_json and path is None:
+        # No --projects flag, but we have a workspace - offer interactive multi-project selection
+        workspace_path_obj = Path(workspace_path)
+        available_repos = scan_workspace_repositories(workspace_path_obj)
+
+        if len(available_repos) > 1:
+            # Multiple repos available - ask if user wants multi-project session
+            console.print(f"\n[cyan]Detected {len(available_repos)} git repositories in workspace '{selected_workspace_name}':[/cyan]")
+            for repo in available_repos[:10]:  # Show first 10
+                console.print(f"  • {repo}")
+            if len(available_repos) > 10:
+                console.print(f"  ... and {len(available_repos) - 10} more")
+
+            if Confirm.ask("\nCreate multi-project session (work across multiple repos)?", default=False):
+                # User wants multi-project - let them select projects
+                from rich.prompt import Prompt
+
+                console.print("\n[bold]Select projects (comma-separated numbers or names):[/bold]")
+                for i, repo in enumerate(available_repos, 1):
+                    console.print(f"{i}. {repo}")
+
+                selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)")
+
+                # Parse selection (could be numbers or names)
+                selected_projects = []
+                for item in selection.split(','):
+                    item = item.strip()
+                    if item.isdigit():
+                        # Numeric selection
+                        idx = int(item) - 1
+                        if 0 <= idx < len(available_repos):
+                            selected_projects.append(available_repos[idx])
+                    else:
+                        # Name selection
+                        if item in available_repos:
+                            selected_projects.append(item)
+                        else:
+                            console.print(f"[yellow]⚠[/yellow] Project '{item}' not found - skipping")
+
+                if len(selected_projects) > 1:
+                    multi_project_names = selected_projects
+                    console.print(f"\n[green]✓[/green] Selected {len(multi_project_names)} projects:")
+                    for proj in multi_project_names:
+                        console.print(f"  • {proj}")
+                elif len(selected_projects) == 1:
+                    # Only one project selected - continue with single-project flow
+                    path = str(workspace_path_obj / selected_projects[0])
+                    console.print(f"\n[dim]Only one project selected - continuing with single-project session[/dim]")
+                else:
+                    console.print("\n[yellow]⚠[/yellow] No valid projects selected - continuing with single-project session")
+
+    # If multi-project mode, create multi-project session
+    if multi_project_names:
+        # Validate all projects exist in workspace
+        if not workspace_path:
+            console.print("[red]✗[/red] Internal error: workspace_path not set (should have been validated)")
+            raise click.Abort()
+
+        workspace_path_obj = Path(workspace_path)
+        missing_projects = []
+        for proj_name in multi_project_names:
+            proj_path = workspace_path_obj / proj_name
+            if not proj_path.exists() or not (proj_path / '.git').exists():
+                missing_projects.append(proj_name)
+
+        if missing_projects:
+            console.print(f"[red]✗[/red] The following projects were not found in workspace '{selected_workspace_name}':")
+            for proj in missing_projects:
+                console.print(f"  • {proj}")
+            console.print(f"\n[dim]Workspace path: {workspace_path}[/dim]")
+            raise click.Abort()
+
+        # Multi-project session creation - delegate to helper function
+        from devflow.cli.commands.new_command_multiproject import create_multi_project_session
+        create_multi_project_session(
+            session_manager=session_manager,
+            config_loader=config_loader,
+            config=config,
+            name=name,
+            goal=goal,
+            issue_key=issue_key,
+            issue_metadata_dict=issue_metadata_dict,
+            issue_title=issue_title,
+            project_names=multi_project_names,
+            workspace_path=workspace_path,
+            selected_workspace_name=selected_workspace_name,
+            force_new_session=force_new_session,
+            model_profile=model_profile,
+            output_json=output_json,
+        )
+        return
+
+    # Determine project path (single-project mode)
     if path is None:
         # Check if current directory is a git repository (indicates it's a project)
         current_dir = Path.cwd()
@@ -414,17 +528,7 @@ def create_new_session(
     if working_directory is None:
         working_directory = Path(project_path).name
 
-    # Get workspace path (will be None if using old single workspace config)
-    workspace_path = None
-    if selected_workspace_name:
-        from devflow.cli.utils import get_workspace_path
-        workspace_path = get_workspace_path(config, selected_workspace_name)
-
-        # Auto-upgrade skills and commands for this workspace if needed
-        from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
-        success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
-        if not success:
-            console.print(f"[yellow]⚠[/yellow] Warning: {error}")
+    # Note: workspace_path already resolved earlier in the function
 
     # Auto-create template if enabled and no template was used
 
@@ -453,6 +557,9 @@ def create_new_session(
     if not check_concurrent_session(session_manager, project_path, name, selected_workspace_name, action="create"):
         return
 
+    # Initialize source_branch_for_base (used later for setting base_branch)
+    source_branch_for_base = None
+
     # Handle git branch creation if this is a git repository
     if branch is None:
         # Use issue_key if available, otherwise use name for branch creation
@@ -465,7 +572,6 @@ def create_new_session(
             return
 
         # Handle return value: could be tuple (branch, source_branch) or just branch name
-        source_branch_for_base = None
         if isinstance(branch_result, tuple):
             branch, source_branch_for_base = branch_result
         else:
@@ -666,14 +772,7 @@ def create_new_session(
         # Build command with all skills and context directories
         from devflow.utils.claude_commands import build_claude_command
 
-        # Get workspace path for skills discovery
-        # AAP-XXXXX: Use selected workspace instead of default workspace
-        workspace_path = None
-        if selected_workspace_name and config and config.repos:
-            from devflow.cli.utils import get_workspace_path
-            workspace_path = get_workspace_path(config, selected_workspace_name)
-        elif config and config.repos:
-            workspace_path = config.repos.get_default_workspace_path()
+        # Note: workspace_path already resolved earlier in the function
 
         cmd = build_claude_command(
             session_id=session_id,
@@ -1259,7 +1358,8 @@ def _handle_branch_creation(
     issue_key: str,
     goal: Optional[str],
     auto_from_default: bool = False,
-    config: Optional[any] = None
+    config: Optional[any] = None,
+    source_branch: Optional[str] = None
 ) -> Optional[str] | bool | tuple[str, str]:
     """Handle git branch creation with enhanced UX.
 
@@ -1270,7 +1370,7 @@ def _handle_branch_creation(
     4. Allow user to customize branch name
     5. Check if branch exists
        - If exists: offer merge/switch/rename options
-       - If new: prompt for source branch with validation
+       - If new: prompt for source branch with validation (or use provided source_branch)
     6. If user declines: offer to sync with upstream/main
 
     Args:
@@ -1279,6 +1379,7 @@ def _handle_branch_creation(
         goal: Session goal (optional)
         auto_from_default: If True, use automatic mode with defaults
         config: Configuration object (optional, will load if not provided)
+        source_branch: Optional source branch to use (skips prompt if provided)
 
     Returns:
         Tuple of (branch_name, source_branch) if newly created
@@ -1400,16 +1501,21 @@ def _handle_branch_creation(
         break
 
     # === STEP 4: Prompt for source branch ===
-    if is_json_mode() or auto_from_default:
-        source_branch = default_source
-        console_print(f"[dim]Creating branch from: {source_branch}[/dim]")
-    else:
-        source_branch = _prompt_for_source_branch(path, default_source)
+    # Use provided source_branch if available (for multi-project sessions)
+    if source_branch is None:
+        if is_json_mode() or auto_from_default:
+            source_branch = default_source
+            console_print(f"[dim]Creating branch from: {source_branch}[/dim]")
+        else:
+            source_branch = _prompt_for_source_branch(path, default_source)
 
-        if not source_branch:
-            # User cancelled
-            console_print("[yellow]Branch creation cancelled[/yellow]")
-            return None
+            if not source_branch:
+                # User cancelled
+                console_print("[yellow]Branch creation cancelled[/yellow]")
+                return None
+    else:
+        # Source branch provided (multi-project mode) - use it
+        console_print(f"[dim]Creating branch from: {source_branch}[/dim]")
 
     # === STEP 5: Create the branch from source ===
     try:

@@ -1,0 +1,60 @@
+# GitHub Actions CI/CD - Integration Tests Workflow
+# Runs comprehensive integration tests in mock mode
+
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Display Python version
+        run: python --version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Install git (ensure available)
+        run: |
+          git --version
+
+      - name: Run integration tests
+        env:
+          DAF_MOCK_MODE: "1"
+          NO_COLOR: "1"
+          FORCE_COLOR: "0"
+          TERM: "dumb"
+        run: |
+          cd integration-tests
+          chmod +x run_all_integration_tests.sh
+          chmod +x *.sh
+          ./run_all_integration_tests.sh
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: /tmp/daf_integration_tests_*.log
+          retention-days: 7
+          if-no-files-found: ignore
