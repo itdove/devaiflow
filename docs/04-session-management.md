@@ -195,6 +195,106 @@ PROJ-12345 (session)
 - Easier to manage with `daf active`, `daf list`, `daf status`
 - All conversations share the same goal and context
 
+### Creating Multi-Project Sessions
+
+You can create a session with multiple projects from the start:
+
+```bash
+# Create session with multiple projects at once
+daf new --name "user-profile" --jira PROJ-12345 -w primary --projects backend,frontend,shared
+
+# This will:
+# 1. Ask for branch name once (used for all projects)
+# 2. Set up git branches in each project
+# 3. Create conversations for each project
+# 4. Launch Claude Code at workspace level
+```
+
+Each project gets its own conversation with clear context in all prompts (e.g., `[backend] Creating branch...`).
+
+### Managing Projects in Sessions
+
+#### Add Projects to Existing Session
+
+Add one or more projects after creating a session:
+
+```bash
+# Add single project
+daf session add-project PROJ-12345 backend-api -w primary
+
+# Add multiple projects at once
+daf session add-project PROJ-12345 --projects frontend,docs -w primary
+
+# Add with specific branch name
+daf session add-project PROJ-12345 mobile-app -w primary --branch feature/mobile
+```
+
+**What happens:**
+- Validates workspace and project paths
+- Sets up git branches (reuses session branch or asks once)
+- Creates new conversations
+- Shows `[project-name]` prefix in all prompts for clarity
+- Skips projects that already exist in session
+
+**Alternative via open:**
+```bash
+# Add projects when opening session
+daf open PROJ-12345 -w primary --projects backend,frontend
+```
+
+This adds the projects and exits (doesn't launch Claude Code).
+
+#### Remove Projects from Session
+
+Remove a project when it's no longer needed:
+
+```bash
+# Remove project (with confirmation)
+daf session remove-project PROJ-12345 old-service
+
+# Remove without confirmation
+daf session remove-project PROJ-12345 legacy-api --force
+```
+
+**What happens:**
+- Shows project details (branch, path, messages)
+- Prompts for confirmation (unless `--force`)
+- Removes the conversation
+- Auto-switches active conversation if removing current project
+- Shows remaining projects
+
+#### Common Workflows
+
+**Start single, expand later:**
+```bash
+# Day 1: Start with backend
+daf new PROJ-123 backend-api -w primary
+
+# Day 2: Add frontend
+daf session add-project PROJ-123 frontend-app -w primary
+daf open PROJ-123 --path frontend-app
+
+# Day 3: Add shared library
+daf session add-project PROJ-123 shared-lib -w primary
+```
+
+**Create multi-project from start:**
+```bash
+daf new PROJ-123 -w primary --projects backend,frontend,shared
+daf open PROJ-123 --path backend  # Work on specific project
+```
+
+**Expand via open:**
+```bash
+daf sync PROJ-123  # Existing session from JIRA
+daf open PROJ-123 -w primary --projects backend,frontend,docs
+```
+
+**Clean up:**
+```bash
+daf session remove-project PROJ-123 old-service
+daf session remove-project PROJ-123 legacy-api --force
+```
 
 ### Understanding the Relationship
 

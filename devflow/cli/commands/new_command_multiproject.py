@@ -163,6 +163,8 @@ def create_multi_project_session(
             auto_from_default=output_json,
             config=config,
             source_branch=base_branch,
+            branch_name=shared_branch_name,
+            project_name=proj_name,
         )
 
         # Check if user explicitly cancelled
@@ -295,7 +297,7 @@ def create_multi_project_session(
 
         # Setup signal handlers for graceful cleanup
         from devflow.cli.signal_handler import setup_signal_handlers
-        setup_signal_handlers(session_manager, session)
+        setup_signal_handlers(session, session_manager, name, config)
 
         # Import after signal handlers are set up
         from devflow.cli.utils import launch_claude_code

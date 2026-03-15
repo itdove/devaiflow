@@ -112,7 +112,8 @@ daf new --name <NAME> --goal "..." [OPTIONS]
 - `--name` - Session name
 - `--goal` - What you're trying to accomplish (required; supports file:// paths and http(s):// URLs)
 - `--jira` - JIRA ticket key (optional)
-- `--path` - Project path (auto-detected if not specified)
+- `--path` - Project path (auto-detected if not specified; mutually exclusive with `--projects`)
+- `--projects` - Comma-separated list of projects for multi-project session (e.g., "backend,frontend,docs")
 - `--branch` - Git branch name (optional)
 - `--template` - Template name to use (optional)
 - `-w, --workspace` - Workspace name to use (overrides session default and config default)
@@ -157,6 +158,9 @@ daf new --name "experiment" --goal "Test new feature" --model-profile ollama-loc
 
 # Use Vertex AI profile for production work
 daf new --name PROJ-789 --goal "Deploy feature" --model-profile vertex
+
+# Create multi-project session from the start
+daf new --name "user-profile" --jira PROJ-12345 -w primary --projects backend,frontend,shared
 ```
 
 **When to use:**
@@ -607,6 +611,8 @@ daf open <NAME-or-JIRA> [OPTIONS]
 
 **Options:**
 - `-w, --workspace` - Workspace name to use (overrides and persists to session)
+- `--path` - Specific project path to open (selects conversation for that project)
+- `--projects` - Comma-separated list of projects to add to session (e.g., "backend,frontend"; mutually exclusive with `--path`; requires `-w`)
 - `--new-conversation` - Archive current Claude Code conversation and start fresh with a new one
 - `--model-profile` - Model provider profile to use (overrides session default; stored in session for future use)
 - `--json` - Return JSON output (non-interactive mode). Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Suitable for automation, CI/CD pipelines, and integration tests.
@@ -630,6 +636,12 @@ daf open PROJ-12345 --model-profile ollama-local
 
 # JSON output for automation
 daf open PROJ-12345 --json
+
+# Add multiple projects to session (doesn't launch Claude)
+daf open PROJ-12345 -w primary --projects backend,frontend,docs
+
+# Open specific project conversation
+daf open PROJ-12345 --path backend-api
 ```
 
 **Multi-Repository Workflow Example:**
@@ -2935,6 +2947,81 @@ Conversations (2 repositories):
 - Each conversation can have multiple Claude Code sessions (active + archived)
 - Archived sessions preserve full conversation history with summaries
 - Use `daf open --new-conversation` to archive current and start fresh
+
+---
+
+### daf session add-project - Add Project to Session
+
+Add one or more projects (repositories) to an existing session.
+
+```bash
+daf session add-project <SESSION> <PROJECT> -w <WORKSPACE> [OPTIONS]
+daf session add-project <SESSION> --projects <PROJ1,PROJ2,...> -w <WORKSPACE> [OPTIONS]
+```
+
+**Options:**
+- `-w, --workspace WORKSPACE` - Workspace containing the projects (required)
+- `--projects PROJECTS` - Comma-separated list of projects (alternative to single project)
+- `--branch BRANCH` - Shared branch name for all projects (optional, will prompt if not provided)
+
+**Examples:**
+```bash
+# Add single project to session
+daf session add-project PROJ-12345 backend-api -w primary
+
+# Add multiple projects at once
+daf session add-project PROJ-12345 --projects frontend,docs,mobile -w primary
+
+# Add project with specific branch name
+daf session add-project PROJ-12345 backend-api -w primary --branch feature/api-v2
+```
+
+**What happens:**
+1. Validates workspace and project paths exist
+2. Prompts for branch name once (if not provided via `--branch`)
+3. Sets up git branches in each project repository
+4. Creates new conversation for each project
+5. Shows `[project-name]` prefix in all prompts for clarity
+6. Skips projects that already have conversations in the session
+
+**Use cases:**
+- Started with one project, need to add more later
+- Session scope expanded to include additional repositories
+- Adding frontend after starting with backend-only session
+
+---
+
+### daf session remove-project - Remove Project from Session
+
+Remove a project (conversation) from an existing session.
+
+```bash
+daf session remove-project <SESSION> <PROJECT> [OPTIONS]
+```
+
+**Options:**
+- `--force` - Skip confirmation prompt
+
+**Examples:**
+```bash
+# Remove project (with confirmation)
+daf session remove-project PROJ-12345 old-service
+
+# Remove without confirmation
+daf session remove-project PROJ-12345 legacy-api --force
+```
+
+**What happens:**
+1. Shows project details (branch, path, message count)
+2. Prompts for confirmation (unless `--force`)
+3. Removes the conversation from the session
+4. Auto-switches active conversation if removing current project
+5. Shows list of remaining projects
+
+**Use cases:**
+- Project no longer needed for this ticket
+- Cleaning up old/deprecated services
+- Narrowing session scope
 
 ---
 
