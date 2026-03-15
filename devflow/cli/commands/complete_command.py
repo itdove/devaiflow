@@ -2379,8 +2379,16 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
 
         # If target branch specified, add --base flag
         if target_branch:
-            cmd.extend(["--base", target_branch])
-            console.print(f"[dim]Target branch: {target_branch}[/dim]")
+            # Strip remote prefix if present (e.g., "origin/main" -> "main")
+            # GitHub's gh pr create --base expects branch name without remote prefix
+            # Only strip known remote prefixes (origin, upstream, fork), not branch paths like "release/2.5"
+            base_branch_name = target_branch
+            if '/' in target_branch:
+                parts = target_branch.split('/', 1)
+                if parts[0] in ['origin', 'upstream', 'fork']:
+                    base_branch_name = parts[1]
+            cmd.extend(["--base", base_branch_name])
+            console.print(f"[dim]Target branch: {base_branch_name}[/dim]")
 
         result = subprocess.run(
             cmd,
@@ -2473,8 +2481,16 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
 
         # If target branch specified, add --target-branch flag
         if target_branch:
-            cmd.extend(["--target-branch", target_branch])
-            console.print(f"[dim]Target branch: {target_branch}[/dim]")
+            # Strip remote prefix if present (e.g., "origin/main" -> "main")
+            # GitLab's glab mr create --target-branch expects branch name without remote prefix
+            # Only strip known remote prefixes (origin, upstream, fork), not branch paths like "release/3.0"
+            base_branch_name = target_branch
+            if '/' in target_branch:
+                parts = target_branch.split('/', 1)
+                if parts[0] in ['origin', 'upstream', 'fork']:
+                    base_branch_name = parts[1]
+            cmd.extend(["--target-branch", base_branch_name])
+            console.print(f"[dim]Target branch: {base_branch_name}[/dim]")
 
         result = subprocess.run(
             cmd,
