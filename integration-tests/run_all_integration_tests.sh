@@ -93,6 +93,7 @@ TESTS=(
     "test_git_sync.sh"
     "test_readonly_commands.sh"
     "test_multi_repo.sh"
+    "test_multi_project_workflow.sh"
     "test_session_lifecycle.sh"
     "test_investigation.sh"
     "test_error_handling.sh"
@@ -108,6 +109,7 @@ TEST_DESCRIPTIONS=(
     "Git sync with workspace and repository filtering"
     "Read-only commands that work inside Claude Code"
     # "Multi-repository workflow (cross-repo features)"  # COMMENTED OUT: Blocked by AAP-63884
+    "Multi-project workflow (--projects flag, different base branches, batch PRs)"
     "Session lifecycle (link, unlink, delete operations)"
     "Investigation-only sessions (read-only mode)"
     "Error handling and validation (edge cases)"

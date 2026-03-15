@@ -11,7 +11,6 @@ from rich.prompt import Confirm, Prompt
 from devflow.cli.utils import (
     console_print,
     get_status_display,
-    is_json_mode,
     output_json as json_output,
     serialize_session,
     should_launch_claude_code,
@@ -104,7 +103,7 @@ def create_multi_project_session(
     )
 
     # Prompt for branch name (shared across all projects)
-    if is_json_mode():
+    if output_json:
         shared_branch_name = suggested_branch
     else:
         console.print(f"[bold]Branch name for all projects:[/bold] {suggested_branch}")
@@ -123,7 +122,7 @@ def create_multi_project_session(
         # Get default base branch for this project
         default_base = _get_default_source_branch(proj_path)
 
-        if is_json_mode():
+        if output_json:
             # Use default in JSON mode
             selected_base = default_base
         else:
@@ -161,7 +160,7 @@ def create_multi_project_session(
             project_path=str(proj_path),
             issue_key=branch_identifier,
             goal=goal,
-            auto_from_default=is_json_mode(),
+            auto_from_default=output_json,
             config=config,
             source_branch=base_branch,
         )
@@ -259,8 +258,7 @@ def create_multi_project_session(
                 "session": session_data,
                 "ai_agent_session_id": session_id,
                 "conversations": len(session.conversations),
-            },
-            message=f"Created multi-project session '{name}' with {len(project_names)} projects"
+            }
         )
         return
 
