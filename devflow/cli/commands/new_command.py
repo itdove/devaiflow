@@ -374,6 +374,18 @@ def create_new_session(
         skip_prompt=output_json
     )
 
+    # Get workspace path for multi-project detection
+    workspace_path = None
+    if selected_workspace_name:
+        from devflow.cli.utils import get_workspace_path
+        workspace_path = get_workspace_path(config, selected_workspace_name)
+
+        # Auto-upgrade skills and commands for this workspace if needed
+        from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
+        success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
+        if not success:
+            console.print(f"[yellow]⚠[/yellow] Warning: {error}")
+
     # Multi-project workflow (Issue #149)
     # If --projects flag is provided OR user wants to select multiple projects interactively
     multi_project_names = None
@@ -515,17 +527,7 @@ def create_new_session(
     if working_directory is None:
         working_directory = Path(project_path).name
 
-    # Get workspace path (will be None if using old single workspace config)
-    workspace_path = None
-    if selected_workspace_name:
-        from devflow.cli.utils import get_workspace_path
-        workspace_path = get_workspace_path(config, selected_workspace_name)
-
-        # Auto-upgrade skills and commands for this workspace if needed
-        from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
-        success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
-        if not success:
-            console.print(f"[yellow]⚠[/yellow] Warning: {error}")
+    # Note: workspace_path already resolved earlier in the function
 
     # Auto-create template if enabled and no template was used
 
@@ -767,14 +769,7 @@ def create_new_session(
         # Build command with all skills and context directories
         from devflow.utils.claude_commands import build_claude_command
 
-        # Get workspace path for skills discovery
-        # AAP-XXXXX: Use selected workspace instead of default workspace
-        workspace_path = None
-        if selected_workspace_name and config and config.repos:
-            from devflow.cli.utils import get_workspace_path
-            workspace_path = get_workspace_path(config, selected_workspace_name)
-        elif config and config.repos:
-            workspace_path = config.repos.get_default_workspace_path()
+        # Note: workspace_path already resolved earlier in the function
 
         cmd = build_claude_command(
             session_id=session_id,
