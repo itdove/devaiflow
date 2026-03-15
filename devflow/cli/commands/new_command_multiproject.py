@@ -184,6 +184,14 @@ def create_multi_project_session(
             'base_branch': source_branch or base_branch,
         }
 
+        # Update shared_branch_name for subsequent projects if it changed
+        # This handles the case where user chose a different name for first project
+        actual_branch = branch_creation_results[proj_name]['branch']
+        if actual_branch != shared_branch_name:
+            if not output_json:
+                console.print(f"\n[cyan]ℹ Using updated branch name for remaining projects: {actual_branch}[/cyan]")
+            shared_branch_name = actual_branch
+
     # Check if session already exists (multi-conversation support)
     existing_sessions = session_manager.index.get_sessions(name)
     session = None
