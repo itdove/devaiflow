@@ -303,19 +303,56 @@ def create_multi_project_session(
     if should_launch_claude_code(config):
         console.print("[cyan]Launching Claude Code at workspace level...[/cyan]\n")
 
-        # Setup signal handlers for graceful cleanup
-        from devflow.cli.signal_handler import setup_signal_handlers
-        setup_signal_handlers(session, session_manager, name, config)
+        # Update session status and start work session
+        session.status = "in_progress"
+        session_manager.start_work_session(name)
 
-        # Import after signal handlers are set up
-        from devflow.cli.utils import launch_claude_code
+        # Build command with all skills and context directories
+        from devflow.utils.claude_commands import build_claude_command
 
-        launch_claude_code(
-            project_path=workspace_path,  # Launch at workspace root
+        cmd = build_claude_command(
             session_id=session_id,
             initial_prompt=initial_prompt,
-            model_profile=model_profile,
+            project_path=workspace_path,  # Launch at workspace root
+            workspace_path=workspace_path,
+            config=config,
+            model_provider_profile=model_profile
         )
+
+        # Set environment variables for the AI agent process
+        import os
+        env = os.environ.copy()
+        env["DEVAIFLOW_IN_SESSION"] = "1"
+        env["AI_AGENT_SESSION_ID"] = session_id
+
+        # Set GCP Vertex AI region if configured
+        if config and config.gcp_vertex_region:
+            env["CLOUD_ML_REGION"] = config.gcp_vertex_region
+
+        # Setup signal handlers for graceful cleanup
+        from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
+        setup_signal_handlers(session, session_manager, name, config)
+
+        # Execute claude in the workspace directory with the environment
+        try:
+            import subprocess
+            subprocess.run(cmd, cwd=workspace_path, env=env)
+        finally:
+            if not is_cleanup_done():
+                console.print(f"\n[green]✓[/green] Claude session completed")
+
+                # Update session status to paused
+                session.status = "paused"
+                session_manager.update_session(session)
+
+                # Auto-pause: End work session when Claude Code closes
+                session_manager.end_work_session(name)
+
+                console.print(f"[dim]Resume anytime with: daf open {name}[/dim]")
+
+                # Check if we should run 'daf complete' on exit
+                from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
+                _prompt_for_complete_on_exit(session, config)
     else:
         console.print(f"\n[dim]Claude Code launch disabled in config[/dim]")
         console.print(f"[dim]Session UUID: {session_id}[/dim]")
