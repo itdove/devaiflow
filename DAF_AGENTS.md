@@ -19,6 +19,67 @@ This file defines the workflow and behavioral constraints for Claude agents work
 
 ---
 
+## Understanding Multi-Project Sessions
+
+DevAIFlow supports multi-project sessions where a single session can span multiple related repositories. This is useful when working on features that require coordinated changes across multiple codebases (e.g., backend API + frontend UI).
+
+### Viewing Projects in the Current Session
+
+To see which projects are included in the current session, use:
+
+```bash
+daf active
+```
+
+**What it shows:**
+- DAF Session name
+- Session type (single-project or multi-project with count)
+- Workspace path
+- Goal/description
+- Time tracked for this work session
+- Status (in_progress, paused, complete)
+- **List of all projects** in the session with their git branches
+
+**Example output:**
+```
+╭────────────────────── ▶ Currently Active Conversation ───────────────────────╮
+│                                                                              │
+│  DAF Session: feature-x                                                      │
+│  Type: Multi-project (2 projects)                                            │
+│  Workspace: /Users/user/development                                          │
+│  Goal: Implement caching layer across backend and frontend                   │
+│  Time (this work session): 1h 23m                                            │
+│  Status: in_progress                                                         │
+│                                                                              │
+│  Projects in this session:                                                   │
+│    • backend-api (branch: feature-x)                                         │
+│    • frontend-app (branch: feature-x)                                        │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+**Use this command to:**
+- Verify which repositories are part of the current session
+- Check which git branch each project is using
+- Confirm you're working in the correct session before making changes
+- See session status and time tracking
+
+### Multi-Project Context
+
+When working in a multi-project session:
+
+1. **Each project has its own git repository and branch** - Changes in one project don't affect the git state of another
+2. **You're working in ONE project at a time** - Your current working directory is in one specific project
+3. **Shared context across projects** - The AI agent has shared context and can understand how changes relate across projects
+4. **Coordinated branching** - All projects typically use the same branch name for consistency
+
+**Before making changes, always:**
+1. Run `daf active` to see which projects are in the session
+2. Verify your current working directory to confirm which project you're in
+3. Understand how your changes might affect other projects in the session
+
+---
+
 ## Workflow: Standard Development Sessions
 
 When working in sessions opened by the user (via `daf open`), follow this workflow:
