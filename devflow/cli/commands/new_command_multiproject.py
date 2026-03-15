@@ -284,6 +284,12 @@ def create_multi_project_session(
     console.print("━" * 60 + "\n")
 
     # Generate initial prompt for multi-project session
+    # Build project_paths dict for context file reading
+    project_paths_dict = {
+        proj_name: str(workspace_path_obj / proj_name)
+        for proj_name in project_names
+    }
+
     initial_prompt = _generate_initial_prompt(
         name=name,
         goal=storage_goal,
@@ -295,6 +301,7 @@ def create_multi_project_session(
         project_path=workspace_path,  # Use workspace path for multi-project
         workspace=selected_workspace_name,
         is_multi_project=True,  # Flag to indicate shared context across projects
+        project_paths=project_paths_dict,
     )
 
     # Launch Claude Code at workspace level (not individual project)

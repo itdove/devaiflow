@@ -45,6 +45,7 @@ def _generate_initial_prompt(
     project_path: Optional[str] = None,
     workspace: Optional[str] = None,
     is_multi_project: bool = False,
+    project_paths: Optional[dict] = None,
 ) -> str:
     """Generate the initial prompt for Claude Code with context loading hints.
 
@@ -64,6 +65,10 @@ def _generate_initial_prompt(
         session_type: Type of session ("development" or "ticket_creation")
         current_project: Optional name of current project directory
         other_projects: Optional list of other project names in this session
+        project_path: Optional path to the project (for single project sessions)
+        workspace: Optional workspace path (for multi-project sessions)
+        is_multi_project: Flag indicating if this is a multi-project session
+        project_paths: Optional dict mapping repo_name -> project_path for multi-project sessions
 
     Returns:
         Formatted initial prompt for Claude Code
@@ -142,6 +147,18 @@ def _generate_initial_prompt(
     prompt += "Please start by reading the following context files if they exist:\n"
     for path, description in regular_files:
         prompt += f"- {path} ({description})\n"
+
+    # For multi-project sessions, also read project-level default files
+    if is_multi_project and project_paths:
+        from pathlib import Path
+        prompt += "\nAlso read project-level context files for each project:\n"
+        for repo_name in sorted(project_paths.keys()):
+            proj_path = project_paths[repo_name]
+            # Get project directory name relative to workspace
+            proj_dir = Path(proj_path).name if workspace else repo_name
+            prompt += f"\n{repo_name}:\n"
+            for filename, description in default_files:
+                prompt += f"- {proj_dir}/{filename} ({description})\n"
 
     # Add explicit skill loading section if skills are present
     if skill_files:
