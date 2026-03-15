@@ -759,6 +759,14 @@ def open_session(
             elif config and config.repos:
                 workspace = config.repos.get_default_workspace_path()
 
+            # Collect project paths for multi-project sessions
+            project_paths_dict = None
+            if active_conv and active_conv.is_multi_project and active_conv.projects:
+                project_paths_dict = {
+                    repo_name: proj_info.project_path
+                    for repo_name, proj_info in active_conv.projects.items()
+                }
+
             initial_prompt = _generate_initial_prompt(
                 name=session.name,
                 goal=session.goal,
@@ -769,6 +777,8 @@ def open_session(
                 other_projects=other_projects,
                 project_path=active_conv.project_path if active_conv else None,
                 workspace=workspace,
+                is_multi_project=active_conv.is_multi_project if active_conv else False,
+                project_paths=project_paths_dict,
             )
 
             # Build command with all skills and context directories
@@ -784,9 +794,10 @@ def open_session(
 
             # Get project path from active conversation
             # For multi-project sessions, use workspace_path instead
+            # Fallback to workspace_path from config if active_conv.workspace_path is not set
             if active_conv and active_conv.is_multi_project:
-                project_path = active_conv.workspace_path
-                launch_dir = active_conv.workspace_path
+                project_path = active_conv.workspace_path or workspace_path
+                launch_dir = active_conv.workspace_path or workspace_path
             else:
                 project_path = active_conv.project_path if active_conv else None
                 launch_dir = active_conv.project_path if active_conv else None
@@ -896,8 +907,9 @@ def open_session(
 
             # Determine working directory for Claude Code
             # For multi-project sessions, use workspace_path
+            # Fallback to workspace_path from config if active_conv.workspace_path is not set
             if active_conv and active_conv.is_multi_project:
-                launch_dir = active_conv.workspace_path
+                launch_dir = active_conv.workspace_path or workspace_path
             elif active_conv:
                 launch_dir = active_conv.project_path
             else:
