@@ -252,3 +252,89 @@ def test_multi_project_session_creation_end_to_end(temp_daf_home, tmp_path):
             # Branch name comes from session name (test-feature), not from GitUtils.generate_branch_name
             assert session.conversations["backend"].active_session.branch == "test-feature"
             assert session.conversations["frontend"].active_session.branch == "test-feature"
+
+
+def test_branch_name_updates_across_projects_when_changed(temp_daf_home, tmp_path):
+    """Test that shared_branch_name is updated when branch creation returns different name.
+
+    Bug scenario:
+    1. User creates multi-project session with branch name "multi-project-test"
+    2. Branch already exists in first project, user provides new name "multi-project-test-2"
+    3. BUG: Second project still uses "multi-project-test" (original shared_branch_name)
+    4. FIX: Update shared_branch_name when actual branch differs from expected
+    """
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    config = config_loader.load_config()
+
+    # Create workspace with two projects
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+
+    for proj_name in ["project1", "project2"]:
+        proj_path = workspace_path / proj_name
+        proj_path.mkdir()
+        (proj_path / ".git").mkdir()
+
+    # Track branch names passed to _handle_branch_creation
+    branch_creation_params = []
+
+    original_handle_branch = _handle_branch_creation
+
+    def mock_handle_branch_creation(**kwargs):
+        """Track parameters and simulate user choosing different branch name."""
+        branch_creation_params.append(kwargs.copy())
+
+        # First call: Simulate user choosing different name "multi-project-test-2"
+        if len(branch_creation_params) == 1:
+            # Return tuple (created_branch, source_branch) as if user created new branch
+            return ('multi-project-test-2', 'origin/main')
+        # Second call: Should receive the UPDATED branch name "multi-project-test-2"
+        else:
+            # This would be the bug - if it receives "multi-project-test" instead
+            assert kwargs.get('branch_name') == 'multi-project-test-2', \
+                f"Bug: Second project received original name '{kwargs.get('branch_name')}' instead of updated 'multi-project-test-2'"
+            return ('multi-project-test-2', 'origin/main')
+
+    with patch('devflow.cli.commands.new_command._handle_branch_creation', side_effect=mock_handle_branch_creation):
+        # Create multi-project session in JSON mode (simpler mocking)
+        create_multi_project_session(
+            session_manager=session_manager,
+            config_loader=config_loader,
+            config=config,
+            name="test-multi",
+            goal="Test branch update",
+            issue_key=None,
+            issue_metadata_dict=None,
+            issue_title=None,
+            project_names=["project1", "project2"],
+            workspace_path=str(workspace_path),
+            selected_workspace_name="test-workspace",
+            force_new_session=False,
+            model_profile=None,
+            output_json=True,  # JSON mode to avoid interactive prompts
+        )
+
+        # Verify session was created
+        session = session_manager.get_session("test-multi")
+        assert session is not None
+        assert len(session.conversations) == 2
+
+        # Verify _handle_branch_creation was called twice
+        assert len(branch_creation_params) == 2, \
+            f"Should have called _handle_branch_creation twice, got {len(branch_creation_params)} calls"
+
+        # Verify first call used original shared_branch_name
+        assert branch_creation_params[0]['branch_name'] == 'test-multi', \
+            f"First call should use session name 'test-multi', got '{branch_creation_params[0]['branch_name']}'"
+
+        # CRITICAL: Verify second call used UPDATED branch name
+        assert branch_creation_params[1]['branch_name'] == 'multi-project-test-2', \
+            f"Second call should use updated name 'multi-project-test-2', got '{branch_creation_params[1]['branch_name']}'"
+
+        # Verify both conversations have the updated branch name
+        project1_branch = session.conversations["project1"].active_session.branch
+        project2_branch = session.conversations["project2"].active_session.branch
+
+        assert project1_branch == "multi-project-test-2"
+        assert project2_branch == "multi-project-test-2"
