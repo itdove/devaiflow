@@ -56,7 +56,9 @@ def test_remove_project_deletes_conversation(temp_daf_home, tmp_path):
         force=True,
     )
 
-    # Reload and verify
+    # Reload with fresh session manager (remove_project creates its own instance)
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
     session = session_manager.get_session("test-remove")
     assert len(session.conversations) == 1
     assert "backend" in session.conversations
@@ -95,7 +97,9 @@ def test_remove_active_project_switches_working_directory(temp_daf_home, tmp_pat
         force=True,
     )
 
-    # Verify active switched to frontend
+    # Reload with fresh session manager (remove_project creates its own instance)
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
     session = session_manager.get_session("test-switch")
     assert session.working_directory == "frontend"
     assert len(session.conversations) == 1
