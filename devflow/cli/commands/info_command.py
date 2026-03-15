@@ -359,14 +359,30 @@ def _display_conversation(
         status_marker = ""
 
     console.print(f"[bold]#{conv_number}{status_marker}[/bold]")
-    console.print(f"  [dim]Working Directory:[/dim] {working_dir}")
-    console.print(f"  [dim]Project Path:[/dim] {conv.project_path}")
-    console.print(f"  [dim]Branch:[/dim] {conv.branch}")
-    console.print(f"  [bold]Claude Session UUID:[/bold] [cyan]{conv.ai_agent_session_id}[/cyan]")
+
+    # Handle multi-project conversations differently
+    if conv.is_multi_project and conv.projects:
+        console.print(f"  [dim]Type:[/dim] Multi-project ({len(conv.projects)} projects)")
+        console.print(f"  [dim]Workspace:[/dim] {conv.workspace_path}")
+        console.print(f"  [bold]Claude Session UUID:[/bold] [cyan]{conv.ai_agent_session_id}[/cyan]")
+        console.print(f"\n  [bold]Projects:[/bold]")
+        for proj_name, proj_info in conv.projects.items():
+            console.print(f"    • [cyan]{proj_name}[/cyan]")
+            console.print(f"      Path: {proj_info.project_path}")
+            console.print(f"      Branch: {proj_info.branch} [dim](from {proj_info.base_branch})[/dim]")
+    else:
+        # Single-project conversation (backward compatibility)
+        console.print(f"  [dim]Working Directory:[/dim] {working_dir}")
+        console.print(f"  [dim]Project Path:[/dim] {conv.project_path}")
+        console.print(f"  [dim]Branch:[/dim] {conv.branch}")
+        console.print(f"  [bold]Claude Session UUID:[/bold] [cyan]{conv.ai_agent_session_id}[/cyan]")
 
     # Get conversation file path
-    conv_file_path = _get_conversation_file_path(conv.project_path, conv.ai_agent_session_id)
-    console.print(f"  [dim]Conversation File:[/dim] {conv_file_path}")
+    # For multi-project sessions, use workspace_path; for single-project, use project_path
+    path_for_conv_file = conv.workspace_path if conv.is_multi_project else conv.project_path
+    if path_for_conv_file:
+        conv_file_path = _get_conversation_file_path(path_for_conv_file, conv.ai_agent_session_id)
+        console.print(f"  [dim]Conversation File:[/dim] {conv_file_path}")
 
     # Display timestamps
     console.print(f"  [dim]Created:[/dim] {conv.created.strftime('%Y-%m-%d %H:%M:%S')}")

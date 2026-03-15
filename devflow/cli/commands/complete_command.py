@@ -208,8 +208,135 @@ def complete_session(
     commit_made_this_cycle = False
 
     # Multi-project session support (Issue #149)
+    # Check if this is a new multi-project conversation (one conversation, multiple projects)
+    if session.session_type == "development" and active_conv and active_conv.is_multi_project and active_conv.projects:
+        console.print(f"\n[bold cyan]Processing {len(active_conv.projects)} projects:[/bold cyan]")
+
+        # Iterate through all projects in the multi-project conversation
+        for proj_name, proj_info in active_conv.projects.items():
+            if not proj_info.project_path or not proj_info.branch:
+                continue
+
+            working_dir = Path(proj_info.project_path)
+            if not GitUtils.is_git_repository(working_dir):
+                continue
+
+            console.print(f"\n[bold]→ {proj_name}[/bold]")
+
+            # Verify we're on the correct branch
+            current_git_branch = GitUtils.get_current_branch(working_dir)
+            if current_git_branch != proj_info.branch:
+                console.print(f"  [yellow]⚠[/yellow] Branch mismatch: expected '{proj_info.branch}', on '{current_git_branch}'")
+
+                # Try to checkout the session branch
+                if not GitUtils.has_uncommitted_changes(working_dir):
+                    if GitUtils.checkout_branch(working_dir, proj_info.branch):
+                        console.print(f"  [green]✓[/green] Checked out '{proj_info.branch}'")
+                    else:
+                        console.print(f"  [red]✗[/red] Failed to checkout '{proj_info.branch}' - skipping")
+                        continue
+                else:
+                    console.print(f"  [red]✗[/red] Uncommitted changes prevent branch switch - skipping")
+                    continue
+
+            # Check for uncommitted changes
+            if GitUtils.has_uncommitted_changes(working_dir):
+                status_summary = GitUtils.get_status_summary(working_dir)
+                console.print(f"  [yellow]⚠[/yellow] Uncommitted changes:")
+                if status_summary:
+                    for line in status_summary.split('\n')[:5]:  # Show first 5 lines
+                        console.print(f"    {line}")
+
+                # Prompt to commit
+                should_commit = True
+                if no_commit:
+                    should_commit = False
+                elif config and config.prompts and config.prompts.auto_commit_on_complete is not None:
+                    should_commit = config.prompts.auto_commit_on_complete
+                else:
+                    should_commit = Confirm.ask(f"  Commit changes in {proj_name}?", default=True)
+
+                if should_commit:
+                    auto_message = f"{session.issue_key}: {session.goal} ({proj_name})" if session.issue_key else f"{session.goal} ({proj_name})"
+                    full_message = f"""{auto_message}
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"""
+
+                    if GitUtils.commit_all(working_dir, full_message):
+                        console.print(f"  [green]✓[/green] Changes committed")
+                        commit_made_this_cycle = True
+
+                        # Push to remote
+                        if GitUtils.has_unpushed_commits(working_dir, proj_info.branch):
+                            should_push = True
+                            if config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                                should_push = config.prompts.auto_push_to_remote
+                            else:
+                                should_push = Confirm.ask(f"  Push to remote?", default=True)
+
+                            if should_push:
+                                if GitUtils.push_branch(working_dir, proj_info.branch):
+                                    console.print(f"  [green]✓[/green] Pushed to remote")
+                                else:
+                                    console.print(f"  [yellow]⚠[/yellow] Failed to push")
+
+            # Check for PR/MR
+            pr_status = _get_pr_for_branch(working_dir, proj_info.branch)
+
+            if pr_status and pr_status['state'] == 'open':
+                console.print(f"  [dim]Open PR/MR: {pr_status['url']}[/dim]")
+
+                # Push unpushed commits if any
+                if GitUtils.has_unpushed_commits(working_dir, proj_info.branch):
+                    should_push = not no_pr
+                    if should_push and config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                        should_push = config.prompts.auto_push_to_remote
+                    elif should_push:
+                        should_push = Confirm.ask(f"  Push latest commits to update PR/MR?", default=True)
+
+                    if should_push:
+                        if GitUtils.push_branch(working_dir, proj_info.branch):
+                            console.print(f"  [green]✓[/green] PR/MR updated")
+
+                # Store PR URL in conversation
+                if pr_status['url'] and pr_status['url'] not in active_conv.prs:
+                    active_conv.prs.append(pr_status['url'])
+                    session_manager.update_session(session)
+
+            elif not pr_status or pr_status['state'] in ['merged', 'closed']:
+                # No open PR - check if we should create one
+                base_branch = proj_info.base_branch
+                changed_files = GitUtils.get_changed_files(working_dir, base_branch, proj_info.branch) if base_branch else None
+
+                if changed_files:
+                    should_create = not no_pr
+                    if should_create and config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
+                        should_create = config.prompts.auto_create_pr_on_complete
+                    elif should_create:
+                        should_create = Confirm.ask(f"  Create PR/MR for {proj_name}?", default=True)
+
+                    if should_create:
+                        # Create PR/MR for this project
+                        pr_url = _create_pr_mr_for_project(session, proj_info, working_dir, session_manager)
+
+                        if pr_url:
+                            console.print(f"  [green]✓[/green] Created PR/MR: {pr_url}")
+
+                            # Store PR URL
+                            if pr_url not in active_conv.prs:
+                                active_conv.prs.append(pr_url)
+                                session_manager.update_session(session)
+                        else:
+                            console.print(f"  [yellow]⚠[/yellow] Failed to create PR/MR")
+
+        # After handling all projects
+        console.print(f"\n[green]✓[/green] Processed all {len(active_conv.projects)} projects")
+
+    # Multi-conversation architecture (separate conversations for different projects)
     # If session has multiple conversations, handle all of them
-    if session.session_type == "development" and len(session.conversations) > 1:
+    elif session.session_type == "development" and len(session.conversations) > 1:
         console.print(f"\n[bold cyan]Processing {len(session.conversations)} projects:[/bold cyan]")
 
         # Iterate through all conversations
@@ -1293,6 +1420,60 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         # Branch selected - return branch name (accounting for 1-based indexing)
         selected_branch = branches[choice_num - 1]
         return selected_branch
+
+
+def _create_pr_mr_for_project(session, proj_info, working_dir: Path, session_manager) -> Optional[str]:
+    """Create PR or MR for a specific project in a multi-project session.
+
+    Args:
+        session: Session object
+        proj_info: ProjectInfo object
+        working_dir: Working directory path
+        session_manager: SessionManager instance
+
+    Returns:
+        PR/MR URL if successful, None otherwise
+    """
+    # Detect repository type
+    repo_type = GitUtils.detect_repo_type(working_dir)
+
+    if not repo_type:
+        return None
+
+    if not proj_info or not proj_info.branch:
+        return None
+
+    # Load config
+    config = session_manager.config_loader.load_config()
+
+    # Push branch to remote if there are unpushed commits
+    current_branch = proj_info.branch
+    if GitUtils.has_unpushed_commits(working_dir, current_branch):
+        if GitUtils.push_branch(working_dir, current_branch):
+            console.print(f"    [dim]Pushed {current_branch} to remote[/dim]")
+        else:
+            return None
+
+    # Generate PR/MR description
+    description = _generate_pr_description(session, working_dir, session_manager.config_loader)
+
+    # Generate PR/MR title
+    title = _generate_pr_title(session, working_dir)
+
+    # Detect fork info
+    upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=False)
+
+    # Use project's base_branch as target branch
+    target_branch = proj_info.base_branch
+
+    # Create PR/MR
+    pr_url = None
+    if repo_type == "github":
+        pr_url = _create_github_pr(session, title, description, working_dir, config, target_branch, upstream_info)
+    elif repo_type == "gitlab":
+        pr_url = _create_gitlab_mr(session, title, description, working_dir, config, target_branch, upstream_info)
+
+    return pr_url
 
 
 def _create_pr_mr_for_conversation(session, conversation, working_dir: Path, session_manager) -> Optional[str]:

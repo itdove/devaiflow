@@ -12,7 +12,7 @@ Complete reference for all CLI commands with examples.
 - [Backup and Export](#backup-and-export)
 - [Maintenance Commands](#maintenance-commands)
 - [Utility Commands](#utility-commands)
-- [Using Slash Commands in Multi-Conversation Sessions](#using-slash-commands-in-multi-conversation-sessions)
+- [Using Slash Commands in Multi-Repository Sessions](#using-slash-commands-in-multi-repository-sessions)
 
 ## Core Session Commands
 
@@ -4580,17 +4580,21 @@ You can create your own custom skills by adding skill directories to `~/.claude/
 
 ---
 
-## Using Slash Commands in Multi-Conversation Sessions
+## Using Slash Commands in Multi-Repository Sessions
 
-When working on features that span multiple repositories, you'll use **multi-conversation sessions** (see [Multi-Conversation vs Multi-Session Architecture](#multi-conversation-vs-multi-session-architecture) for details).
+**Multi-Project Sessions (NEW):** When you create sessions with `--projects`, you get ONE conversation with SHARED CONTEXT across all repositories. Claude can already see all projects, so these slash commands are typically not needed.
 
-**What is multi-conversation:**
-- ONE session with MULTIPLE conversations (one per repository)
+**Legacy Multi-Conversation Sessions:** Older sessions have separate conversations per repository (no shared context). These slash commands help Claude understand work done in other repositories.
+
+**What is multi-conversation (legacy):**
+- ONE session with MULTIPLE separate conversations (one per repository)
+- Each conversation is isolated (no shared context)
 - All conversations share the same session metadata (goal, JIRA link, notes)
 - Each conversation has its own git branch and Claude Code session
-- This is the DEFAULT behavior when running `daf new` with an existing session
 
-**The bundled slash commands** help Claude understand work done in other repositories without losing context in the current conversation. They work WITHIN a single session that has multiple conversations (NOT across multiple sessions).
+**The bundled slash commands** help Claude in legacy sessions understand work done in other repositories. They work WITHIN a single session that has multiple conversations (NOT across multiple sessions).
+
+**Note:** If you're using new multi-project sessions (`--projects`), you don't need these commands since Claude already has shared context.
 
 ### Available Slash Commands
 

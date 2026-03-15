@@ -327,10 +327,20 @@ def open_session(
         # Save session
         session_manager.update_session(session)
 
-    # Multi-conversation selection 
+    # Multi-project session detection (Issue #149)
+    # Check if this is a multi-project session (one conversation, multiple projects)
+    active_conv = session.active_conversation
+    if active_conv and active_conv.is_multi_project:
+        # Multi-project session: skip conversation selection
+        # The single conversation already has access to all projects
+        console.print(f"[dim]Multi-project session detected: {len(active_conv.get_all_repo_names())} projects[/dim]")
+        for repo in active_conv.get_all_repo_names():
+            console.print(f"[dim]  • {repo}[/dim]")
+        # Skip to Claude Code launch - no conversation selection needed
+    # Multi-conversation selection (old mode)
     # If --path parameter is provided, auto-detect the conversation based on path
     # Otherwise prompt user to select which conversation to open
-    if path:
+    elif path:
         # User provided --path parameter - auto-detect conversation
         detected_repo_name = _detect_working_directory_from_path(Path(path), config_loader)
 
@@ -771,7 +781,13 @@ def open_session(
                 workspace_path_for_cmd = config.repos.get_default_workspace_path()
 
             # Get project path from active conversation
-            project_path = active_conv.project_path if active_conv else None
+            # For multi-project sessions, use workspace_path instead
+            if active_conv and active_conv.is_multi_project:
+                project_path = active_conv.workspace_path
+                launch_dir = active_conv.workspace_path
+            else:
+                project_path = active_conv.project_path if active_conv else None
+                launch_dir = active_conv.project_path if active_conv else None
 
             cmd = build_claude_command(
                 session_id=active_conv.ai_agent_session_id,
@@ -786,8 +802,8 @@ def open_session(
             _set_terminal_title(session)
 
             try:
-                if active_conv:
-                    subprocess.run(cmd, cwd=active_conv.project_path, env=env)
+                if active_conv and launch_dir:
+                    subprocess.run(cmd, cwd=launch_dir, env=env)
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")

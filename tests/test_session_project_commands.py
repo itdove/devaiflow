@@ -20,13 +20,45 @@ def test_session_project_commands_exist():
 
 
 def test_remove_project_deletes_conversation(temp_daf_home, tmp_path):
-    """Test that removing a project deletes the conversation."""
+    """Test that removing a project deletes it from the multi-project conversation."""
     from devflow.cli.commands.session_project_command import remove_project_from_session
+    from devflow.config.models import ProjectInfo, ConversationContext, Conversation
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
-    # Create session with two projects
+    # Create multi-project conversation context
+    conversation_context = ConversationContext(
+        ai_agent_session_id="uuid-1",
+        project_path=str(tmp_path / "backend"),
+        branch="main",
+        is_multi_project=True,
+        workspace_path=str(tmp_path),
+        projects={
+            "backend": ProjectInfo(
+                project_path=str(tmp_path / "backend"),
+                relative_path="backend",
+                branch="main",
+                base_branch="main",
+                repo_name="backend",
+            ),
+            "frontend": ProjectInfo(
+                project_path=str(tmp_path / "frontend"),
+                relative_path="frontend",
+                branch="main",
+                base_branch="main",
+                repo_name="frontend",
+            ),
+        }
+    )
+
+    # Create conversation container
+    conversation = Conversation(
+        active_session=conversation_context,
+        archived_sessions=[]
+    )
+
+    # Create session with multi-project conversation
     session = session_manager.create_session(
         name="test-remove",
         goal="Test",
@@ -36,18 +68,15 @@ def test_remove_project_deletes_conversation(temp_daf_home, tmp_path):
         ai_agent_session_id="uuid-1",
     )
 
-    session.add_conversation(
-        working_dir="frontend",
-        ai_agent_session_id="uuid-2",
-        project_path=str(tmp_path / "frontend"),
-        branch="main",
-    )
+    # Replace the default conversation with our multi-project one
+    session.conversations["backend"] = conversation
 
     session_manager.update_session(session)
 
-    # Verify two conversations exist
+    # Verify two projects exist
     session = session_manager.get_session("test-remove")
-    assert len(session.conversations) == 2
+    assert session.active_conversation.is_multi_project
+    assert len(session.active_conversation.projects) == 2
 
     # Remove frontend
     remove_project_from_session(
@@ -60,18 +89,51 @@ def test_remove_project_deletes_conversation(temp_daf_home, tmp_path):
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
     session = session_manager.get_session("test-remove")
-    assert len(session.conversations) == 1
-    assert "backend" in session.conversations
-    assert "frontend" not in session.conversations
+    assert len(session.active_conversation.projects) == 1
+    assert "backend" in session.active_conversation.projects
+    assert "frontend" not in session.active_conversation.projects
 
 
 def test_remove_active_project_switches_working_directory(temp_daf_home, tmp_path):
-    """Test that removing the active project switches working_directory."""
+    """Test that removing a project from multi-project conversation works correctly."""
     from devflow.cli.commands.session_project_command import remove_project_from_session
+    from devflow.config.models import ProjectInfo, ConversationContext, Conversation
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
+    # Create multi-project conversation context
+    conversation_context = ConversationContext(
+        ai_agent_session_id="uuid-1",
+        project_path=str(tmp_path / "backend"),
+        branch="main",
+        is_multi_project=True,
+        workspace_path=str(tmp_path),
+        projects={
+            "backend": ProjectInfo(
+                project_path=str(tmp_path / "backend"),
+                relative_path="backend",
+                branch="main",
+                base_branch="main",
+                repo_name="backend",
+            ),
+            "frontend": ProjectInfo(
+                project_path=str(tmp_path / "frontend"),
+                relative_path="frontend",
+                branch="main",
+                base_branch="main",
+                repo_name="frontend",
+            ),
+        }
+    )
+
+    # Create conversation container
+    conversation = Conversation(
+        active_session=conversation_context,
+        archived_sessions=[]
+    )
+
+    # Create session with multi-project conversation
     session = session_manager.create_session(
         name="test-switch",
         goal="Test",
@@ -81,16 +143,12 @@ def test_remove_active_project_switches_working_directory(temp_daf_home, tmp_pat
         ai_agent_session_id="uuid-1",
     )
 
-    session.add_conversation(
-        working_dir="frontend",
-        ai_agent_session_id="uuid-2",
-        project_path=str(tmp_path / "frontend"),
-        branch="main",
-    )
+    # Replace the default conversation with our multi-project one
+    session.conversations["backend"] = conversation
 
     session_manager.update_session(session)
 
-    # Remove backend (active project)
+    # Remove backend project
     remove_project_from_session(
         session_name="test-switch",
         project_name="backend",
@@ -101,8 +159,9 @@ def test_remove_active_project_switches_working_directory(temp_daf_home, tmp_pat
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
     session = session_manager.get_session("test-switch")
-    assert session.working_directory == "frontend"
-    assert len(session.conversations) == 1
+    assert len(session.active_conversation.projects) == 1
+    assert "frontend" in session.active_conversation.projects
+    assert "backend" not in session.active_conversation.projects
 
 
 def test_remove_nonexistent_project_exits(temp_daf_home, tmp_path):

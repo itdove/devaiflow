@@ -93,8 +93,23 @@ def _sync_all_branches_for_export(session) -> None:
     Args:
         session: Session object
     """
-    # Multi-conversation support
-    if session.conversations:
+    # Check if this is a multi-project session (new architecture)
+    active_conv = session.active_conversation
+    if active_conv and active_conv.is_multi_project and active_conv.projects:
+        console.print(f"\n[bold cyan]Syncing {len(active_conv.projects)} project(s) for {session.name}[/bold cyan]")
+        for proj_name, proj_info in active_conv.projects.items():
+            if proj_info.project_path and proj_info.branch:
+                console.print(f"\n[cyan]→ {proj_name} (branch: {proj_info.branch})[/cyan]")
+                _sync_single_conversation_branch(
+                    project_path=Path(proj_info.project_path),
+                    branch=proj_info.branch,
+                    session_name=session.name,
+                    issue_key=session.issue_key,
+                    working_dir_name=proj_name,
+                    conversation=active_conv,  # Pass conversation to update remote_url
+                )
+    # Multi-conversation support (old architecture - backward compatibility)
+    elif session.conversations:
         console.print(f"\n[bold cyan]Syncing {len(session.conversations)} conversation(s) for {session.name}[/bold cyan]")
         for working_dir, conversation in session.conversations.items():
             # Access active_session
