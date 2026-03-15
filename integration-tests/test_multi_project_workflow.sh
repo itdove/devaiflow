@@ -348,20 +348,16 @@ fi
 print_section "Test 3: Verify Multi-Conversation Structure"
 
 print_test "Verify session has 3 conversations"
-CONVERSATION_COUNT=$(python3 <<EOF
-import json
-from pathlib import Path
-
-sessions_file = Path("$DEVAIFLOW_HOME") / "sessions.json"
-with open(sessions_file, 'r') as f:
-    data = json.load(f)
-
-sessions = data.get("sessions", {})
-session = sessions.get("$SESSION_NAME", {})
-conversations = session.get("conversations", {})
-print(len(conversations))
-EOF
-)
+# Use the JSON output we already have instead of reading from file
+CONVERSATION_COUNT=$(echo "$SESSION_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if data.get('success'):
+    conversations = data.get('data', {}).get('session', {}).get('conversations', {})
+    print(len(conversations))
+else:
+    print('0')
+")
 
 if [ "$CONVERSATION_COUNT" = "3" ]; then
     echo -e "  ${GREEN}✓${NC} Session has 3 conversations (one per project)"
@@ -375,26 +371,17 @@ fi
 print_section "Test 4: Verify Base Branch Configuration"
 
 print_test "Verify backend-api base_branch is 'main'"
-BACKEND_BASE=$(python3 <<EOF
-import json
-from pathlib import Path
-
-sessions_file = Path("$DEVAIFLOW_HOME") / "sessions.json"
-with open(sessions_file, 'r') as f:
-    data = json.load(f)
-
-sessions = data.get("sessions", {})
-session = sessions.get("$SESSION_NAME", {})
-conversations = session.get("conversations", {})
-
-# Find backend-api conversation
-for conv_name, conv_data in conversations.items():
-    if "backend-api" in conv_name:
-        active = conv_data.get("active_session", {})
-        print(active.get("base_branch", ""))
-        break
-EOF
-)
+BACKEND_BASE=$(echo "$SESSION_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if data.get('success'):
+    conversations = data.get('data', {}).get('session', {}).get('conversations', {})
+    for conv_name, conv_data in conversations.items():
+        if 'backend-api' in conv_name:
+            active = conv_data.get('active_session', {})
+            print(active.get('base_branch', ''))
+            break
+")
 
 if [ "$BACKEND_BASE" = "main" ]; then
     echo -e "  ${GREEN}✓${NC} backend-api base_branch is 'main'"
@@ -497,29 +484,24 @@ print_section "Test 8: Verify Complete Command Would Process All Projects"
 print_test "Verify session structure ready for multi-project complete"
 # We don't actually run daf complete in test because it requires prompts
 # and git push operations, but we verify the structure is correct
-HAS_ALL_PROJECTS=$(python3 <<EOF
-import json
-from pathlib import Path
+HAS_ALL_PROJECTS=$(echo "$SESSION_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if data.get('success'):
+    conversations = data.get('data', {}).get('session', {}).get('conversations', {})
 
-sessions_file = Path("$DEVAIFLOW_HOME") / "sessions.json"
-with open(sessions_file, 'r') as f:
-    data = json.load(f)
+    # Check all 3 projects are present
+    has_backend = any('backend-api' in name for name in conversations.keys())
+    has_frontend = any('frontend-app' in name for name in conversations.keys())
+    has_shared = any('shared-lib' in name for name in conversations.keys())
 
-sessions = data.get("sessions", {})
-session = sessions.get("$SESSION_NAME", {})
-conversations = session.get("conversations", {})
-
-# Check all 3 projects are present
-has_backend = any("backend-api" in name for name in conversations.keys())
-has_frontend = any("frontend-app" in name for name in conversations.keys())
-has_shared = any("shared-lib" in name for name in conversations.keys())
-
-if has_backend and has_frontend and has_shared:
-    print("true")
+    if has_backend and has_frontend and has_shared:
+        print('true')
+    else:
+        print('false')
 else:
-    print("false")
-EOF
-)
+    print('false')
+")
 
 if [ "$HAS_ALL_PROJECTS" = "true" ]; then
     echo -e "  ${GREEN}✓${NC} Session has all 3 projects ready for completion"
@@ -530,29 +512,24 @@ else
 fi
 
 print_test "Verify each conversation has branch information"
-ALL_HAVE_BRANCHES=$(python3 <<EOF
-import json
-from pathlib import Path
+ALL_HAVE_BRANCHES=$(echo "$SESSION_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if data.get('success'):
+    conversations = data.get('data', {}).get('session', {}).get('conversations', {})
 
-sessions_file = Path("$DEVAIFLOW_HOME") / "sessions.json"
-with open(sessions_file, 'r') as f:
-    data = json.load(f)
+    all_ok = True
+    for conv_name, conv_data in conversations.items():
+        active = conv_data.get('active_session', {})
+        branch = active.get('branch')
+        if not branch:
+            all_ok = False
+            break
 
-sessions = data.get("sessions", {})
-session = sessions.get("$SESSION_NAME", {})
-conversations = session.get("conversations", {})
-
-all_ok = True
-for conv_name, conv_data in conversations.items():
-    active = conv_data.get("active_session", {})
-    branch = active.get("branch")
-    if not branch:
-        all_ok = False
-        break
-
-print("true" if all_ok else "false")
-EOF
-)
+    print('true' if all_ok else 'false')
+else:
+    print('false')
+")
 
 if [ "$ALL_HAVE_BRANCHES" = "true" ]; then
     echo -e "  ${GREEN}✓${NC} All conversations have branch information"
