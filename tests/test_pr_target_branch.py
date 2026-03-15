@@ -566,3 +566,109 @@ def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path):
 
     # Should return main (first available after filtering)
     assert result == "main"
+
+
+def test_create_github_pr_strips_remote_prefix_from_target_branch(monkeypatch, tmp_path):
+    """Test GitHub PR creation strips remote prefix from target_branch (e.g., 'origin/main' -> 'main')."""
+    captured_commands = []
+
+    def mock_run(cmd, *args, **kwargs):
+        captured_commands.append(cmd)
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "https://github.com/owner/repo/pull/123"
+        mock_result.stderr = ""
+        return mock_result
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.require_tool", lambda tool, desc: None)
+
+    # Mock session
+    session = Mock()
+
+    # Create config with auto_create_pr_status set to "draft"
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_create_pr_status="draft")
+    )
+
+    # Call with target_branch containing remote prefix
+    result = _create_github_pr(
+        session=session,
+        title="Test PR",
+        description="Test description",
+        working_dir=tmp_path,
+        config=config,
+        target_branch="origin/main",  # Remote prefix should be stripped
+        upstream_info=None
+    )
+
+    # Verify PR URL returned
+    assert result == "https://github.com/owner/repo/pull/123"
+
+    # Verify gh pr create command was called with --base main (not origin/main)
+    gh_commands = [cmd for cmd in captured_commands if cmd[0] == "gh"]
+    assert len(gh_commands) >= 1
+    gh_cmd = [cmd for cmd in gh_commands if "create" in cmd][0]
+
+    # Verify command structure
+    assert "gh" in gh_cmd
+    assert "pr" in gh_cmd
+    assert "create" in gh_cmd
+    assert "--draft" in gh_cmd
+    assert "--base" in gh_cmd
+    # Remote prefix should be stripped
+    assert "main" in gh_cmd
+    assert "origin/main" not in gh_cmd
+
+
+def test_create_gitlab_mr_strips_remote_prefix_from_target_branch(monkeypatch, tmp_path):
+    """Test GitLab MR creation strips remote prefix from target_branch (e.g., 'origin/develop' -> 'develop')."""
+    captured_commands = []
+
+    def mock_run(cmd, *args, **kwargs):
+        captured_commands.append(cmd)
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "https://gitlab.example.com/group/project/-/merge_requests/123"
+        mock_result.stderr = ""
+        return mock_result
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.require_tool", lambda tool, desc: None)
+
+    # Mock session
+    session = Mock()
+
+    # Create config with auto_create_pr_status set to "draft"
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_create_pr_status="draft")
+    )
+
+    # Call with target_branch containing remote prefix
+    result = _create_gitlab_mr(
+        session=session,
+        title="Test MR",
+        description="Test description",
+        working_dir=tmp_path,
+        config=config,
+        target_branch="upstream/develop",  # Remote prefix should be stripped
+        upstream_info=None
+    )
+
+    # Verify MR URL returned
+    assert result == "https://gitlab.example.com/group/project/-/merge_requests/123"
+
+    # Verify glab mr create command was called with --target-branch develop (not upstream/develop)
+    glab_commands = [cmd for cmd in captured_commands if cmd[0] == "glab"]
+    assert len(glab_commands) >= 1
+    glab_cmd = [cmd for cmd in glab_commands if "create" in cmd][0]
+
+    # Verify command structure
+    assert "glab" in glab_cmd
+    assert "mr" in glab_cmd
+    assert "create" in glab_cmd
+    assert "--draft" in glab_cmd
+    assert "--target-branch" in glab_cmd
+    # Remote prefix should be stripped
+    assert "develop" in glab_cmd
+    assert "upstream/develop" not in glab_cmd

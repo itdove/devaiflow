@@ -330,7 +330,8 @@ def open_session(
     # Multi-project session detection (Issue #149)
     # Check if this is a multi-project session (one conversation, multiple projects)
     active_conv = session.active_conversation
-    if active_conv and active_conv.is_multi_project:
+    is_multi_project_session = active_conv and active_conv.is_multi_project
+    if is_multi_project_session:
         # Multi-project session: skip conversation selection
         # The single conversation already has access to all projects
         console.print(f"[dim]Multi-project session detected: {len(active_conv.get_all_repo_names())} projects[/dim]")
@@ -467,7 +468,8 @@ def open_session(
 
     # Handle missing project_path (can happen with synced sessions)
     # Check conversation-based API for project_path
-    if not (active_conv and active_conv.project_path):
+    # Skip this check for multi-project sessions (they use workspace_path instead)
+    if not is_multi_project_session and not (active_conv and active_conv.project_path):
         console.print(f"\n[yellow]⚠ Session is missing working directory information[/yellow]")
         console.print(f"[dim]This can happen when sessions are created via 'daf sync'[/dim]")
 
@@ -862,10 +864,19 @@ def open_session(
                     skills_dirs.append(str(workspace_skills))
 
             # 3. Project-level skills: <project>/.claude/skills/
+            # For multi-project sessions, check all projects for skills
             if active_conv:
-                project_skills = Path(active_conv.project_path) / ".claude" / "skills"
-                if project_skills.exists():
-                    skills_dirs.append(str(project_skills))
+                if active_conv.is_multi_project and active_conv.projects:
+                    # Multi-project: check each project for skills
+                    for proj_info in active_conv.projects.values():
+                        project_skills = Path(proj_info.project_path) / ".claude" / "skills"
+                        if project_skills.exists():
+                            skills_dirs.append(str(project_skills))
+                elif active_conv.project_path:
+                    # Single project: check main project path
+                    project_skills = Path(active_conv.project_path) / ".claude" / "skills"
+                    if project_skills.exists():
+                        skills_dirs.append(str(project_skills))
 
             # Add all discovered skills directories
             for skills_dir in skills_dirs:
@@ -883,11 +894,20 @@ def open_session(
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
 
+            # Determine working directory for Claude Code
+            # For multi-project sessions, use workspace_path
+            if active_conv and active_conv.is_multi_project:
+                launch_dir = active_conv.workspace_path
+            elif active_conv:
+                launch_dir = active_conv.project_path
+            else:
+                launch_dir = None
+
             try:
-                if active_conv:
+                if launch_dir:
                     subprocess.run(
                         cmd,
-                        cwd=active_conv.project_path,
+                        cwd=launch_dir,
                         env=env,
                     )
             finally:
