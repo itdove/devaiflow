@@ -102,28 +102,42 @@ def show_active(output_json: bool = False) -> None:
     # Build the active conversation display
     lines = [
         f"[bold]DAF Session:[/bold] {session.name}",
-        f"[bold]Conversation:[/bold] ({working_dir})",
-        f"[bold]Project:[/bold] {project_path}",
-        f"[bold]Goal:[/bold] {session.goal or 'N/A'}",
-        f"[bold]Branch:[/bold] {conversation.branch}",
-        f"[bold]Time (this work session):[/bold] {current_work_time}",
-        f"[bold]Status:[/bold] {session.status}",
     ]
 
     # Add issue key if present
     if session.issue_key:
-        lines.insert(1, f"[bold]JIRA:[/bold] {session.issue_key}")
+        lines.append(f"[bold]JIRA:[/bold] {session.issue_key}")
 
-    # Show other conversations if this is a multi-project session
-    if len(session.conversations) > 1:
-        other_convos = [
-            (wd, conv) for wd, conv in session.conversations.items()
-            if wd != working_dir
-        ]
+    # Handle multi-project sessions differently
+    if conversation.is_multi_project and conversation.projects:
+        lines.append(f"[bold]Type:[/bold] Multi-project ({len(conversation.projects)} projects)")
+        lines.append(f"[bold]Workspace:[/bold] {conversation.workspace_path}")
+        lines.append(f"[bold]Goal:[/bold] {session.goal or 'N/A'}")
+        lines.append(f"[bold]Time (this work session):[/bold] {current_work_time}")
+        lines.append(f"[bold]Status:[/bold] {session.status}")
         lines.append("")
-        lines.append(f"[bold]Other conversations in this session:[/bold]")
-        for other_wd, other_conv in other_convos:
-            lines.append(f"  • {other_wd} (branch: {other_conv.active_session.branch})")
+        lines.append(f"[bold]Projects in this session:[/bold]")
+        for proj_name, proj_info in conversation.projects.items():
+            lines.append(f"  • [cyan]{proj_name}[/cyan] (branch: {proj_info.branch})")
+    else:
+        # Single-project conversation (backward compatibility)
+        lines.append(f"[bold]Conversation:[/bold] ({working_dir})")
+        lines.append(f"[bold]Project:[/bold] {project_path}")
+        lines.append(f"[bold]Goal:[/bold] {session.goal or 'N/A'}")
+        lines.append(f"[bold]Branch:[/bold] {conversation.branch}")
+        lines.append(f"[bold]Time (this work session):[/bold] {current_work_time}")
+        lines.append(f"[bold]Status:[/bold] {session.status}")
+
+        # Show other conversations if this is an old multi-conversation session
+        if len(session.conversations) > 1:
+            other_convos = [
+                (wd, conv) for wd, conv in session.conversations.items()
+                if wd != working_dir
+            ]
+            lines.append("")
+            lines.append(f"[bold]Other conversations in this session:[/bold]")
+            for other_wd, other_conv in other_convos:
+                lines.append(f"  • {other_wd} (branch: {other_conv.active_session.branch})")
 
     panel_content = "\n".join(lines)
     panel = Panel(

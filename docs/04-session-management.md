@@ -31,7 +31,8 @@ A **conversation** represents work in a specific project directory with:
   - Can be viewed with `daf sessions list`
 
 **Key Points:**
-- One session can have multiple conversations - one for each project/repository you work in for that ticket
+- **Multi-project sessions** create ONE conversation with SHARED CONTEXT across all selected projects - enabling Claude to coordinate changes across repositories
+- **Legacy sessions** can have multiple separate conversations - one for each project (backward compatibility)
 - Each conversation can have multiple Claude Code sessions (active + archived) for starting fresh while preserving history
 
 ### Session States
@@ -132,68 +133,61 @@ See [Configuration Guide - Workspaces](06-configuration.md#workspaces-multiple-n
 
 ## Working Across Multiple Repositories
 
-**Recommended: Use Multi-Conversation Sessions (New!)**
+**Recommended: Use Multi-Project Sessions with Shared Context (New!)**
 
-The modern approach is to create one session with multiple conversations - one per repository. This keeps all related work under a single session with unified time tracking.
+The modern approach creates ONE conversation with SHARED CONTEXT across all selected projects. This enables Claude to:
+- Coordinate changes across multiple repositories
+- Update backend API and frontend client together
+- Maintain awareness of all project changes
+- Provide consistent implementations across projects
 
-### Example: Multi-Repository Work (Recommended)
+This is more powerful than separate conversations because Claude can see and reference all project code simultaneously.
+
+### Example: Multi-Project Session (Recommended)
 
 ```bash
-# Create session - you'll be prompted to select a repository
-daf new --name "user-profile" --jira PROJ-12345 --goal "Add user profile feature"
+# Create session with multiple projects at once
+daf new --name "user-profile" --jira PROJ-12345 -w primary --projects backend-api,frontend-app,shared-lib
 
-# You'll see:
-Available repositories (8):
-  1. backend-api
-  2. frontend-app
-  3. mobile-app
-  ...
+# System prompts for base branch per project:
+#   backend-api: branch from main
+#   frontend-app: branch from develop
+#   shared-lib: branch from main
 
-Which project? [1-8]: 1
+# Claude Code launches from workspace directory with ALL projects visible
+# You can make changes across all projects in the same conversation!
 
-# Work in backend, then exit Claude Code...
+# Example conversation:
+You: "Update the API endpoint to return user profiles and modify the frontend to display them"
+Claude:
+  - Updates backend-api/src/api/users.py
+  - Updates frontend-app/src/components/Profile.tsx
+  - Updates shared-lib/types/user.ts
+  # All changes coordinated with shared context!
 
-# Continue same session in different repository
-daf open PROJ-12345
-
-# You'll see:
-Found 1 conversation(s) for PROJ-12345:
-
-  1. backend-api
-     Path: /Users/you/workspace/backend-api
-     Branch: feature/PROJ-12345
-     Last active: 15m ago
-
-  2. → Create new conversation (in a different project)
-
-Which conversation? [1-2]: 2
-
-# Select frontend repository
-Available projects:
-  1. backend-api (already has conversation)
-  2. frontend-app
-  3. mobile-app
-  ...
-
-Which project? [1-3]: 2
-
-# Now working in frontend with separate conversation...
+# Complete session - creates separate PR/MR for each project
+daf complete PROJ-12345
+# → Creates PR for backend-api targeting main
+# → Creates PR for frontend-app targeting develop
+# → Creates PR for shared-lib targeting main
 ```
 
-**Result:** One session (PROJ-12345) with multiple conversations:
+**Result:** One session (PROJ-12345) with ONE multi-project conversation:
 ```
 PROJ-12345 (session)
-  ├─ Conversation: backend-api
-  │  └─ Claude Code history, branch: feature/PROJ-12345
-  └─ Conversation: frontend-app
-     └─ Claude Code history, branch: feature/PROJ-12345-ui
+  └─ Multi-Project Conversation (SHARED CONTEXT)
+     ├─ backend-api (branch: feature/PROJ-12345)
+     ├─ frontend-app (branch: feature/PROJ-12345)
+     └─ shared-lib (branch: feature/PROJ-12345)
 ```
 
 **Benefits:**
-- Unified time tracking across all repositories
-- Single JIRA ticket link
-- Easier to manage with `daf active`, `daf list`, `daf status`
-- All conversations share the same goal and context
+- **Shared context** - Claude sees all projects simultaneously
+- **Coordinated changes** - Update API and client together
+- **Unified time tracking** across all repositories
+- **Single JIRA ticket** link
+- **Individual PRs** - Each project gets its own PR with correct base branch
+- **Different base branches** - Each project can target different branches (main, develop, etc.)
 
 ### Creating Multi-Project Sessions
 
@@ -203,14 +197,35 @@ You can create a session with multiple projects from the start:
 # Create session with multiple projects at once
 daf new --name "user-profile" --jira PROJ-12345 -w primary --projects backend,frontend,shared
 
-# This will:
-# 1. Ask for branch name once (used for all projects)
-# 2. Set up git branches in each project
-# 3. Create conversations for each project
-# 4. Launch Claude Code at workspace level
+# This creates:
+# - ONE conversation with SHARED CONTEXT across all projects
+# - Separate git branches in each project (same branch name by default)
+# - Each project can have different base branch (prompted per-project)
+# - Claude Code launched from workspace root (sees all projects)
 ```
 
-Each project gets its own conversation with clear context in all prompts (e.g., `[backend] Creating branch...`).
+All projects share the same conversation with clear context in prompts (e.g., `[backend] Creating branch...`).
+
+### Architecture: Multi-Project vs Legacy Multi-Conversation
+
+**NEW: Multi-Project Sessions (Recommended)**
+- **ONE conversation** with **SHARED CONTEXT** across all projects
+- Claude sees all project code simultaneously
+- Can coordinate changes across repositories (e.g., update API + client together)
+- Launched from workspace root directory
+- Each project has its own git branch
+- `daf complete` creates separate PR for each project
+
+**LEGACY: Multi-Conversation Sessions (Backward Compatibility)**
+- **Multiple separate conversations** - one per repository
+- Each conversation is isolated (no shared context)
+- Must switch between conversations to work on different projects
+- Launched from individual project directories
+- Kept for backward compatibility with existing sessions
+
+**When to use each:**
+- Use **multi-project** when you need to coordinate changes across repositories
+- Legacy multi-conversation is automatically used for existing sessions
 
 ### Managing Projects in Sessions
 
@@ -232,9 +247,10 @@ daf session add-project PROJ-12345 mobile-app -w primary --branch feature/mobile
 **What happens:**
 - Validates workspace and project paths
 - Sets up git branches (reuses session branch or asks once)
-- Creates new conversations
+- Adds projects to the multi-project conversation
 - Shows `[project-name]` prefix in all prompts for clarity
 - Skips projects that already exist in session
+- **Note:** Projects are added to the existing shared conversation, not as separate conversations
 
 **Alternative via open:**
 ```bash
@@ -259,9 +275,9 @@ daf session remove-project PROJ-12345 legacy-api --force
 **What happens:**
 - Shows project details (branch, path, messages)
 - Prompts for confirmation (unless `--force`)
-- Removes the conversation
-- Auto-switches active conversation if removing current project
+- Removes the project from the multi-project conversation
 - Shows remaining projects
+- **Note:** Removes the project from the shared conversation's projects dict
 
 #### Common Workflows
 
@@ -1064,14 +1080,14 @@ Don't leave sessions in `in_progress` forever:
 daf complete user-auth-api
 ```
 
-### 4. Use Multi-Conversation Sessions for Multi-Repo Work
+### 4. Use Multi-Project Sessions for Multi-Repo Work
 
-Keep related work organized:
+Keep related work organized with shared context:
 ```bash
-# All conversations in one session for one JIRA ticket
-daf new --name "backup" --jira PROJ-12345 --goal "Backend API"
-daf new --name "backup" --jira PROJ-12345 --goal "Frontend UI"
-daf new --name "backup" --jira PROJ-12345 --goal "Infrastructure"
+# Create one session with all related projects
+daf new PROJ-12345 -w primary --projects backend,frontend,infrastructure
+# → ONE conversation with SHARED CONTEXT across all three projects
+# → Claude can coordinate changes across all repositories
 ```
 
 ### 5. Clean Up Old Sessions

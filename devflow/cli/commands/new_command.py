@@ -44,6 +44,7 @@ def _generate_initial_prompt(
     other_projects: Optional[list] = None,
     project_path: Optional[str] = None,
     workspace: Optional[str] = None,
+    is_multi_project: bool = False,
 ) -> str:
     """Generate the initial prompt for Claude Code with context loading hints.
 
@@ -161,8 +162,24 @@ def _generate_initial_prompt(
             # JIRA or other backends
             prompt += f"daf jira view {issue_key} --comments\n"
 
-    # Add multi-project scope constraints if this session has multiple conversations
-    if other_projects and current_project:
+    # Add multi-project scope constraints
+    if is_multi_project and other_projects:
+        # New mode: Shared context across all projects
+        prompt += f"\n⚠️  MULTI-PROJECT SESSION:\n"
+        prompt += f"   • This session spans {len(other_projects)} projects with SHARED CONTEXT\n"
+        prompt += f"   • Projects: {', '.join(other_projects)}\n"
+        prompt += f"   • You can make changes in ANY of these projects\n"
+        prompt += f"\n   ✅ ADVANTAGES:\n"
+        prompt += f"   • All changes are coordinated in a single conversation\n"
+        prompt += f"   • You can update frontend to match backend API changes\n"
+        prompt += f"   • Shared understanding across all related code\n"
+        prompt += f"\n   🔍 IMPORTANT:\n"
+        prompt += f"   • Each project has its OWN git repository\n"
+        prompt += f"   • Use `daf active` to see all projects in this session\n"
+        prompt += f"   • File paths are relative to workspace root\n"
+        prompt += f"   • Example: `backend-api/src/api.py`, `frontend-app/src/client.ts`\n"
+    elif other_projects and current_project:
+        # Old mode: Isolated conversations (backward compatibility)
         prompt += f"\n⚠️  MULTI-PROJECT SESSION SCOPE:\n"
         prompt += f"   • This session works across {len(other_projects) + 1} different projects\n"
         prompt += f"   • YOU ARE CURRENTLY IN: {current_project}\n"

@@ -84,7 +84,7 @@ Each session is an **isolated workspace** with its own:
 **Key Features:**
 - 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf
 - 🔌 **Alternative Model Providers** - Run Claude Code with local models (Ollama, llama.cpp) or cloud providers (OpenRouter, Vertex AI) via configuration profiles - save up to 98% on costs or run completely offline
-- 📂 **Multi-Repository Workflows** - Work on one ticket across multiple repositories with unified time tracking (one session, multiple conversations)
+- 📂 **Multi-Repository Workflows** - Work on one ticket across multiple repositories with shared context - Claude can coordinate changes across all projects in a single conversation
 - 🏢 **Named Workspaces** - Multiple workspaces for concurrent multi-branch development
 - 🎫 **Optional Issue Tracker** - GitHub Issues, GitLab Issues, or JIRA (your choice, or none at all)
 - ⏱️ **Time Tracking** - Automatic tracking with pause/resume

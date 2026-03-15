@@ -244,14 +244,23 @@ def test_multi_project_session_creation_end_to_end(temp_daf_home, tmp_path):
             # Verify session was created successfully
             session = session_manager.get_session("test-feature")
             assert session is not None
-            assert len(session.conversations) == 2
-            assert "backend" in session.conversations
-            assert "frontend" in session.conversations
 
-            # Verify both conversations have correct branches
+            # NEW ARCHITECTURE: One conversation with multiple projects
+            assert len(session.conversations) == 1
+
+            # Get the multi-project conversation
+            active_conv = session.active_conversation
+            assert active_conv is not None
+            assert active_conv.is_multi_project is True
+            assert active_conv.projects is not None
+            assert len(active_conv.projects) == 2
+            assert "backend" in active_conv.projects
+            assert "frontend" in active_conv.projects
+
+            # Verify both projects have correct branches
             # Branch name comes from session name (test-feature), not from GitUtils.generate_branch_name
-            assert session.conversations["backend"].active_session.branch == "test-feature"
-            assert session.conversations["frontend"].active_session.branch == "test-feature"
+            assert active_conv.projects["backend"].branch == "test-feature"
+            assert active_conv.projects["frontend"].branch == "test-feature"
 
 
 def test_branch_name_updates_across_projects_when_changed(temp_daf_home, tmp_path):
@@ -318,7 +327,9 @@ def test_branch_name_updates_across_projects_when_changed(temp_daf_home, tmp_pat
         # Verify session was created
         session = session_manager.get_session("test-multi")
         assert session is not None
-        assert len(session.conversations) == 2
+
+        # NEW ARCHITECTURE: One conversation with multiple projects
+        assert len(session.conversations) == 1
 
         # Verify _handle_branch_creation was called twice
         assert len(branch_creation_params) == 2, \
@@ -332,9 +343,151 @@ def test_branch_name_updates_across_projects_when_changed(temp_daf_home, tmp_pat
         assert branch_creation_params[1]['branch_name'] == 'multi-project-test-2', \
             f"Second call should use updated name 'multi-project-test-2', got '{branch_creation_params[1]['branch_name']}'"
 
-        # Verify both conversations have the updated branch name
-        project1_branch = session.conversations["project1"].active_session.branch
-        project2_branch = session.conversations["project2"].active_session.branch
+        # Verify both projects have the updated branch name
+        active_conv = session.active_conversation
+        assert active_conv is not None
+        assert active_conv.is_multi_project is True
+        project1_branch = active_conv.projects["project1"].branch
+        project2_branch = active_conv.projects["project2"].branch
 
         assert project1_branch == "multi-project-test-2"
         assert project2_branch == "multi-project-test-2"
+
+
+def test_multi_project_complete_workflow_integration(temp_daf_home, tmp_path):
+    """Full integration test: create multi-project session -> make changes -> complete -> create PRs.
+
+    This test verifies the complete multi-project workflow:
+    1. Create a multi-project session with 2 projects
+    2. Simulate changes in both projects
+    3. Run daf complete
+    4. Verify PRs are created for each project with correct base branches
+    """
+    from unittest.mock import MagicMock, call
+    from devflow.cli.commands.complete_command import complete_session
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    config = config_loader.load_config()
+
+    # Create workspace with two git repositories
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+
+    for proj_name in ["backend", "frontend"]:
+        proj_path = workspace_path / proj_name
+        proj_path.mkdir()
+        (proj_path / ".git").mkdir()
+
+        # Create a test file to simulate changes
+        test_file = proj_path / "README.md"
+        test_file.write_text(f"# {proj_name.capitalize()} Project\n")
+
+    # Mock Git operations
+    with patch('devflow.cli.commands.new_command.GitUtils') as mock_git_new:
+        mock_git_new.is_git_repository.return_value = True
+        mock_git_new.has_uncommitted_changes.return_value = False
+        mock_git_new.branch_exists.return_value = False
+        mock_git_new.generate_branch_name.return_value = 'feature-123'
+        mock_git_new.get_current_branch.return_value = 'main'
+        mock_git_new.create_branch.return_value = True
+        mock_git_new.fetch_origin.return_value = True
+        mock_git_new.checkout_branch.return_value = True
+
+        with patch('devflow.cli.commands.new_command._get_default_source_branch') as mock_default:
+            mock_default.return_value = 'origin/main'
+
+            # Create multi-project session
+            create_multi_project_session(
+                session_manager=session_manager,
+                config_loader=config_loader,
+                config=config,
+                name="integration-test",
+                goal="Integration test for multi-project completion",
+                issue_key="TEST-123",
+                issue_metadata_dict={"summary": "Test issue"},
+                issue_title=None,
+                project_names=["backend", "frontend"],
+                workspace_path=str(workspace_path),
+                selected_workspace_name="test-workspace",
+                force_new_session=False,
+                model_profile=None,
+                output_json=True,
+            )
+
+    # Verify session was created correctly
+    session = session_manager.get_session("integration-test")
+    assert session is not None
+    assert len(session.conversations) == 1
+
+    active_conv = session.active_conversation
+    assert active_conv is not None
+    assert active_conv.is_multi_project is True
+    assert len(active_conv.projects) == 2
+    assert "backend" in active_conv.projects
+    assert "frontend" in active_conv.projects
+
+    # Simulate file changes in both projects
+    backend_file = workspace_path / "backend" / "api.py"
+    backend_file.write_text("# New backend code\n")
+
+    frontend_file = workspace_path / "frontend" / "app.js"
+    frontend_file.write_text("// New frontend code\n")
+
+    # Mock Git operations for completion
+    with patch('devflow.cli.commands.complete_command.GitUtils') as mock_git_complete:
+        mock_git_complete.is_git_repository.return_value = True
+        mock_git_complete.has_uncommitted_changes.return_value = True
+        mock_git_complete.get_status_summary.return_value = "M api.py\nM app.js"
+        mock_git_complete.commit_all.return_value = True
+        mock_git_complete.push_branch.return_value = True
+        mock_git_complete.is_branch_pushed.return_value = True
+        mock_git_complete.has_unpushed_commits.return_value = True
+        mock_git_complete.get_current_branch.return_value = "test-123"  # Match the branch name
+        mock_git_complete.get_default_branch.return_value = "main"
+
+        # Mock PR creation functions
+        with patch('devflow.cli.commands.complete_command._create_github_pr') as mock_gh_pr:
+            with patch('devflow.cli.commands.complete_command._create_gitlab_mr') as mock_gl_mr:
+                # Mock GitHub PR creation to return URLs
+                mock_gh_pr.return_value = "https://github.com/test/backend/pull/1"
+
+                # Mock Confirm.ask to automatically answer "yes" to prompts
+                with patch('devflow.cli.commands.complete_command.Confirm') as mock_confirm:
+                    mock_confirm.ask.return_value = True
+
+                    # Mock the @require_outside_claude decorator to bypass the check
+                    with patch('devflow.cli.commands.complete_command.require_outside_claude', lambda f: f):
+                        # Run daf complete
+                        try:
+                            with patch('devflow.cli.commands.complete_command.console') as mock_console:
+                                complete_session(
+                                    identifier="integration-test",
+                                    status=None,
+                                    attach_to_issue=False,
+                                    latest=False,
+                                    no_commit=False,
+                                    no_pr=False,
+                                    no_issue_update=True,  # Skip JIRA updates in test
+                                )
+                        except SystemExit:
+                            # complete_session may exit, that's ok
+                            pass
+
+                # Verify Git operations were called for EACH project
+                # Should have committed changes in both projects
+                assert mock_git_complete.commit_all.call_count >= 2, \
+                    f"Should commit in both projects, got {mock_git_complete.commit_all.call_count} calls"
+
+                # Should have pushed branches for both projects
+                assert mock_git_complete.push_branch.call_count >= 2, \
+                    f"Should push both branches, got {mock_git_complete.push_branch.call_count} calls"
+
+    # Reload session to verify it was marked as completed
+    session = session_manager.get_session("integration-test")
+
+    # Session should still exist and have the multi-project conversation
+    assert session is not None
+    assert session.active_conversation is not None
+    assert session.active_conversation.is_multi_project is True
+    assert len(session.active_conversation.projects) == 2

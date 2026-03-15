@@ -486,6 +486,20 @@ class WorkSession(BaseModel):
         return (self.end - self.start).total_seconds()
 
 
+class ProjectInfo(BaseModel):
+    """Information about a single project in a multi-project conversation."""
+
+    project_path: str  # Full absolute path to project
+    relative_path: Optional[str] = None  # Path relative to workspace
+    branch: str  # Git branch for this project
+    base_branch: str = "main"  # Base branch this was created from
+    repo_name: str  # Repository directory name
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+        extra = "ignore"
+
+
 class ConversationContext(BaseModel):
     """Context for a single AI agent conversation within a session.
 
@@ -534,6 +548,12 @@ class ConversationContext(BaseModel):
     temp_directory: Optional[str] = Field(default=None)  # Path to temporary directory (if using temp clone)
     original_project_path: Optional[str] = Field(default=None)  # Original project path (before temp clone)
 
+    # Multi-project support (Issue #149)
+    # When is_multi_project=True, use projects dict instead of single project fields
+    is_multi_project: bool = False  # Flag indicating this conversation spans multiple projects
+    projects: Optional[Dict[str, ProjectInfo]] = Field(default=None)  # Maps repo_name -> ProjectInfo
+    workspace_path: Optional[str] = Field(default=None)  # Workspace root path for multi-project sessions
+
     def get_project_path(self, workspace: Optional[str] = None) -> str:
         """Get the full project path, reconstructing from relative path if available.
 
@@ -581,6 +601,45 @@ class ConversationContext(BaseModel):
             return Path(self.relative_path).name
 
         raise ValueError("No repository name available")
+
+    def get_all_project_paths(self) -> List[str]:
+        """Get all project paths for multi-project conversations.
+
+        Returns:
+            List of absolute project paths
+        """
+        if self.is_multi_project and self.projects:
+            return [proj.project_path for proj in self.projects.values()]
+        elif self.project_path:
+            # Single project mode
+            return [self.project_path]
+        return []
+
+    def get_all_repo_names(self) -> List[str]:
+        """Get all repository names for multi-project conversations.
+
+        Returns:
+            List of repository directory names
+        """
+        if self.is_multi_project and self.projects:
+            return list(self.projects.keys())
+        elif self.repo_name:
+            # Single project mode
+            return [self.repo_name]
+        return []
+
+    def get_project_info(self, repo_name: str) -> Optional['ProjectInfo']:
+        """Get project information for a specific repository.
+
+        Args:
+            repo_name: Repository directory name
+
+        Returns:
+            ProjectInfo if found, None otherwise
+        """
+        if self.is_multi_project and self.projects:
+            return self.projects.get(repo_name)
+        return None
 
     @model_validator(mode='after')
     def populate_conversation_history(self) -> 'ConversationContext':
@@ -859,6 +918,73 @@ class Session(BaseModel):
             archived_sessions=[]
         )
         self.conversations[working_dir] = conversation
+        return conversation_context
+
+    def add_multi_project_conversation(
+        self,
+        ai_agent_session_id: str,
+        projects_info: Dict[str, Dict[str, str]],
+        workspace_path: str,
+    ) -> ConversationContext:
+        """Add a new multi-project conversation to this session.
+
+        Args:
+            ai_agent_session_id: UUID for Claude Code conversation (shared across all projects)
+            projects_info: Dict mapping repo_name -> {project_path, branch, base_branch}
+            workspace_path: Workspace root path
+
+        Returns:
+            The created ConversationContext
+
+        Note: Creates a single conversation that spans multiple projects.
+        Uses a synthetic working_dir key for storage.
+        """
+        from pathlib import Path
+
+        # Build ProjectInfo objects for each project
+        projects_dict = {}
+        for repo_name, info in projects_info.items():
+            abs_project_path = Path(info['project_path']).expanduser().resolve()
+            workspace_path_obj = Path(workspace_path).expanduser().resolve()
+
+            # Compute relative path
+            try:
+                rel_path = abs_project_path.relative_to(workspace_path_obj)
+                relative_path = str(rel_path)
+            except ValueError:
+                # Project not in workspace
+                relative_path = None
+
+            projects_dict[repo_name] = ProjectInfo(
+                project_path=str(abs_project_path),
+                relative_path=relative_path,
+                branch=info['branch'],
+                base_branch=info.get('base_branch', 'main'),
+                repo_name=repo_name,
+            )
+
+        # Create multi-project conversation context
+        conversation_context = ConversationContext(
+            ai_agent_session_id=ai_agent_session_id,
+            is_multi_project=True,
+            projects=projects_dict,
+            workspace_path=workspace_path,
+        )
+
+        # Use a synthetic key for multi-project conversations
+        # Format: "multiproject-<session_id_prefix>"
+        working_dir_key = f"multiproject-{ai_agent_session_id[:8]}"
+
+        # Create a new Conversation object with this as the active session
+        conversation = Conversation(
+            active_session=conversation_context,
+            archived_sessions=[]
+        )
+        self.conversations[working_dir_key] = conversation
+
+        # Set this as the active working directory
+        self.working_directory = working_dir_key
+
         return conversation_context
 
     def get_all_conversations(self) -> List[ConversationContext]:

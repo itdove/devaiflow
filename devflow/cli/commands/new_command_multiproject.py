@@ -208,46 +208,43 @@ def create_multi_project_session(
             console.print(f"[dim]Multi-project sessions require a new session. Use --new-session flag.[/dim]")
         sys.exit(1)
 
-    # Create new session with first project as primary
-    first_project = project_names[0]
-    first_proj_path = workspace_path_obj / first_project
-    first_branch_info = branch_creation_results[first_project]
-
+    # Create new session with multi-project conversation
+    # Use ONE shared session ID for all projects
     session_id = str(uuid.uuid4())
 
+    # Build projects_info dict for multi-project conversation
+    projects_info = {}
+    for proj_name in project_names:
+        proj_path = workspace_path_obj / proj_name
+        branch_info = branch_creation_results[proj_name]
+        projects_info[proj_name] = {
+            'project_path': str(proj_path),
+            'branch': branch_info['branch'],
+            'base_branch': branch_info['base_branch'],
+        }
+
+    # Create session without initial conversation
     session = session_manager.create_session(
         name=name,
         issue_key=issue_key,
         goal=storage_goal,
-        working_directory=first_project,
-        project_path=str(first_proj_path),
-        branch=first_branch_info['branch'],
-        ai_agent_session_id=session_id,
+        working_directory=None,  # Will be set by add_multi_project_conversation
+        project_path=None,
+        branch=None,
+        ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
         model_profile=model_profile,
     )
 
-    # Set base_branch for first conversation
-    if session.active_conversation:
-        session.active_conversation.base_branch = first_branch_info['base_branch']
+    # Add multi-project conversation (ONE conversation for all projects)
+    session.add_multi_project_conversation(
+        ai_agent_session_id=session_id,
+        projects_info=projects_info,
+        workspace_path=workspace_path,
+    )
 
     # Store workspace name
     if selected_workspace_name:
         session.workspace_name = selected_workspace_name
-
-    # Add remaining projects as conversations
-    for proj_name in project_names[1:]:
-        proj_path = workspace_path_obj / proj_name
-        branch_info = branch_creation_results[proj_name]
-        conv_session_id = str(uuid.uuid4())
-
-        session.add_conversation(
-            working_dir=proj_name,
-            ai_agent_session_id=conv_session_id,
-            project_path=str(proj_path),
-            branch=branch_info['branch'],
-            base_branch=branch_info['base_branch'],
-            workspace=workspace_path,
-        )
 
     # Populate JIRA metadata if available
     if issue_metadata_dict:
@@ -286,7 +283,7 @@ def create_multi_project_session(
         console.print(f"    Base: {info['base_branch']}")
     console.print("━" * 60 + "\n")
 
-    # Generate initial prompt
+    # Generate initial prompt for multi-project session
     initial_prompt = _generate_initial_prompt(
         name=name,
         goal=storage_goal,
@@ -297,6 +294,7 @@ def create_multi_project_session(
         other_projects=project_names,
         project_path=workspace_path,  # Use workspace path for multi-project
         workspace=selected_workspace_name,
+        is_multi_project=True,  # Flag to indicate shared context across projects
     )
 
     # Launch Claude Code at workspace level (not individual project)

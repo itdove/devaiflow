@@ -68,9 +68,18 @@ def add_project_to_session(
     console.print(f"\n[bold cyan]Adding projects to session:[/bold cyan] {session_name}")
     console.print(f"[dim]Workspace: {workspace_name} ({workspace_path})[/dim]\n")
 
+    # Check if this is a multi-project session (new architecture)
+    active_conv = session.active_conversation
+    is_multi_project = active_conv and active_conv.is_multi_project
+
+    if not is_multi_project:
+        console.print("[red]✗[/red] This session does not support multi-project mode")
+        console.print("[yellow]Only sessions created with --projects flag support adding/removing projects[/yellow]")
+        sys.exit(1)
+
     for project_name in project_names:
-        # Check if conversation already exists
-        if project_name in session.conversations:
+        # Check if project already exists in multi-project conversation
+        if active_conv.projects and project_name in active_conv.projects:
             console.print(f"[yellow]⚠[/yellow] Project already exists: {project_name} [dim](skipping)[/dim]")
             skipped_count += 1
             continue
@@ -109,17 +118,27 @@ def add_project_to_session(
             created_branch = branch_result
             base_branch = None
 
-        # Generate new session UUID for this conversation
-        conversation_id = str(uuid.uuid4())
+        # Add project to multi-project conversation's projects dict
+        from devflow.config.models import ProjectInfo
 
-        # Add conversation to session
-        session.add_conversation(
-            working_dir=project_name,
-            ai_agent_session_id=conversation_id,
-            project_path=str(project_path),
+        # Compute relative path
+        abs_project_path = project_path.resolve()
+        try:
+            rel_path = abs_project_path.relative_to(workspace_path)
+            relative_path = str(rel_path)
+        except ValueError:
+            relative_path = None
+
+        # Create ProjectInfo
+        if not active_conv.projects:
+            active_conv.projects = {}
+
+        active_conv.projects[project_name] = ProjectInfo(
+            project_path=str(abs_project_path),
+            relative_path=relative_path,
             branch=created_branch or "",
-            base_branch=base_branch,
-            workspace=str(workspace_path),
+            base_branch=base_branch or "main",
+            repo_name=project_name,
         )
 
         console.print(f"[green]✓[/green] Added project: {project_name}")
@@ -142,8 +161,9 @@ def add_project_to_session(
     if added_count == 0:
         console.print("[yellow]No projects were added[/yellow]")
     else:
-        console.print(f"\n[bold]To work on added projects:[/bold]")
-        console.print(f"  daf open {session_name} --path <project-name>")
+        console.print(f"\n[bold]To work on the session:[/bold]")
+        console.print(f"  daf open {session_name}")
+        console.print(f"\n[dim]All projects are accessible in the same conversation[/dim]")
     console.print("━" * 60 + "\n")
 
 
@@ -168,53 +188,50 @@ def remove_project_from_session(
         console.print(f"[red]✗[/red] Session not found: {session_name}")
         sys.exit(1)
 
-    # Check if conversation exists
-    if project_name not in session.conversations:
-        console.print(f"[red]✗[/red] No conversation found for project: {project_name}")
-        console.print(f"\n[dim]Available projects in session:[/dim]")
-        for conv_name in session.conversations.keys():
-            console.print(f"  • {conv_name}")
+    # Check if this is a multi-project session
+    active_conv = session.active_conversation
+    if not active_conv or not active_conv.is_multi_project:
+        console.print("[red]✗[/red] This session does not support multi-project mode")
+        console.print("[yellow]Only sessions created with --projects flag support adding/removing projects[/yellow]")
         sys.exit(1)
 
-    # Get conversation details for confirmation message
-    conversation = session.conversations[project_name]
-    active_session = conversation.active_session
+    # Check if project exists
+    if not active_conv.projects or project_name not in active_conv.projects:
+        console.print(f"[red]✗[/red] Project not found: {project_name}")
+        console.print(f"\n[dim]Available projects in session:[/dim]")
+        if active_conv.projects:
+            for proj_name in active_conv.projects.keys():
+                console.print(f"  • {proj_name}")
+        sys.exit(1)
+
+    # Get project details for confirmation message
+    project_info = active_conv.projects[project_name]
+
+    # Check if this is the last project
+    if len(active_conv.projects) == 1:
+        console.print("[red]✗[/red] Cannot remove the last project from the session")
+        console.print("[yellow]Delete the entire session instead if you want to remove all projects[/yellow]")
+        sys.exit(1)
 
     # Confirm removal
     if not force:
         console.print(f"\n[yellow]⚠ About to remove project:[/yellow] {project_name}")
-        console.print(f"  Branch: {active_session.branch}")
-        console.print(f"  Path: {active_session.project_path}")
-        console.print(f"  Messages: {active_session.message_count}")
+        console.print(f"  Branch: {project_info.branch}")
+        console.print(f"  Path: {project_info.project_path}")
 
         if not Confirm.ask("\n[bold]Remove this project from the session?[/bold]", default=False):
             console.print("[yellow]Cancelled[/yellow]")
             return
 
-    # Remove the conversation
-    del session.conversations[project_name]
-
-    # If this was the active working directory, switch to another one or clear it
-    if session.working_directory == project_name:
-        if len(session.conversations) > 0:
-            # Switch to first remaining conversation
-            session.working_directory = list(session.conversations.keys())[0]
-            console.print(f"[dim]Active conversation switched to: {session.working_directory}[/dim]")
-        else:
-            session.working_directory = ""
-            console.print("[dim]No conversations remaining in session[/dim]")
+    # Remove the project from multi-project conversation
+    del active_conv.projects[project_name]
 
     # Save session
     session_manager.update_session(session)
 
     console.print(f"\n[green]✓[/green] Removed project: {project_name}")
 
-    # Show remaining projects if any
-    if len(session.conversations) > 0:
-        console.print(f"\n[dim]Remaining projects in session:[/dim]")
-        for conv_name in session.conversations.keys():
-            marker = "← active" if conv_name == session.working_directory else ""
-            console.print(f"  • {conv_name} {marker}")
-    else:
-        console.print("\n[yellow]⚠ Session has no projects remaining[/yellow]")
-        console.print("[dim]Consider deleting the session or adding new projects[/dim]")
+    # Show remaining projects
+    console.print(f"\n[dim]Remaining projects in session:[/dim]")
+    for proj_name in active_conv.projects.keys():
+        console.print(f"  • {proj_name}")

@@ -8,16 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Multi-project workflow support for cross-repository features (#149)
+- Multi-project workflow support with shared context for cross-repository features (#149)
+  - **Architecture:** Creates ONE conversation with SHARED CONTEXT across all selected projects
+  - **Shared Context:** Claude can see and coordinate changes across all repositories simultaneously
   - Add `--projects` flag to `daf new` command (comma-separated list of repository names)
   - Requires `--workspace` flag to be specified
   - Prompts for base branch selection per project (e.g., backend from `main`, frontend from `develop`)
-  - Creates branches with the same name across all specified projects
-  - Tracks base branch per conversation in Session model
-  - `daf complete` iterates through ALL conversations and creates PR/MR for each
-  - Each PR/MR uses the conversation's `base_branch` as the target branch
+  - Creates branches with the same name across all specified projects by default
+  - Tracks base branch per project in ConversationContext.projects dict
+  - `daf complete` iterates through ALL projects and creates PR/MR for each
+  - Each PR/MR uses the project's `base_branch` as the target branch
   - Launches Claude Code at workspace level with access to all projects
-  - Maintains backward compatibility with single-project workflow
+  - **Use Cases:** Update backend API + frontend client in coordinated way, maintain consistency across microservices
+  - Maintains backward compatibility with single-project workflow and legacy multi-conversation sessions
   - Example: `daf new PROJ-123 -w primary --projects backend-api,frontend-app,shared-lib`
 - Auto-suggest repository when opening GitHub/GitLab synced sessions (#146)
   - Automatically extracts repository name from GitHub/GitLab issue keys (e.g., `owner/repo#123`)
