@@ -1359,7 +1359,9 @@ def _handle_branch_creation(
     goal: Optional[str],
     auto_from_default: bool = False,
     config: Optional[any] = None,
-    source_branch: Optional[str] = None
+    source_branch: Optional[str] = None,
+    branch_name: Optional[str] = None,
+    project_name: Optional[str] = None
 ) -> Optional[str] | bool | tuple[str, str]:
     """Handle git branch creation with enhanced UX.
 
@@ -1380,6 +1382,8 @@ def _handle_branch_creation(
         auto_from_default: If True, use automatic mode with defaults
         config: Configuration object (optional, will load if not provided)
         source_branch: Optional source branch to use (skips prompt if provided)
+        branch_name: Optional branch name to use (skips prompt if provided)
+        project_name: Optional project name for display in prompts (multi-project mode)
 
     Returns:
         Tuple of (branch_name, source_branch) if newly created
@@ -1395,11 +1399,17 @@ def _handle_branch_creation(
     if not GitUtils.is_git_repository(path):
         return None
 
-    console_print("\n[cyan]✓[/cyan] Detected git repository")
+    msg = "Detected git repository"
+    if project_name:
+        msg = f"[{project_name}] {msg}"
+    console_print(f"\n[cyan]✓[/cyan] {msg}")
 
     # Check for uncommitted changes before creating new branch
     if GitUtils.has_uncommitted_changes(path):
-        console_print("\n[yellow]⚠ Warning: You have uncommitted changes in the current branch[/yellow]")
+        msg = "Warning: You have uncommitted changes in the current branch"
+        if project_name:
+            msg = f"[{project_name}] {msg}"
+        console_print(f"\n[yellow]⚠ {msg}[/yellow]")
 
         # Show status summary
         status_summary = GitUtils.get_status_summary(path)
@@ -1411,7 +1421,10 @@ def _handle_branch_creation(
         # In JSON mode or auto mode, proceed with warning logged
         if is_json_mode() or auto_from_default:
             mode_str = "JSON mode" if is_json_mode() else "auto mode"
-            console_print(f"\n[yellow]Proceeding with branch creation despite uncommitted changes ({mode_str})[/yellow]")
+            msg = f"Proceeding with branch creation despite uncommitted changes ({mode_str})"
+            if project_name:
+                msg = f"[{project_name}] {msg}"
+            console_print(f"\n[yellow]{msg}[/yellow]")
         else:
             # Ask user if they want to continue
             console_print(
@@ -1419,9 +1432,15 @@ def _handle_branch_creation(
                 "Consider committing, stashing, or discarding your changes first.[/dim]"
             )
 
-            should_continue = Confirm.ask("\nContinue anyway?", default=False)
+            prompt = "\nContinue anyway?"
+            if project_name:
+                prompt = f"\n[{project_name}] Continue anyway?"
+            should_continue = Confirm.ask(prompt, default=False)
             if not should_continue:
-                console_print("\n[yellow]Branch creation cancelled[/yellow]")
+                msg = "Branch creation cancelled"
+                if project_name:
+                    msg = f"[{project_name}] {msg}"
+                console_print(f"\n[yellow]{msg}[/yellow]")
                 console_print("[dim]Tip: Commit your changes with 'git commit' or stash them with 'git stash' before creating a new branch[/dim]")
                 return False  # Explicit cancellation - don't continue
 
@@ -1447,17 +1466,24 @@ def _handle_branch_creation(
     default_source = _get_default_source_branch(path)
 
     # === STEP 1: Ask if user wants to create a branch ===
-    if not auto_from_default:
+    if not auto_from_default and branch_name is None:
+        # Build prompt prefix with project name if provided
+        prompt_prefix = f"\n[{project_name}] " if project_name else "\n"
+
         if is_json_mode():
             should_create = True
         else:
-            should_create = Confirm.ask("\nWould you like to create a new branch?", default=True)
+            should_create = Confirm.ask(f"{prompt_prefix}Would you like to create a new branch?", default=True)
 
         if not should_create:
             # User declined - offer to sync with upstream/main
             console_print("\n[dim]No new branch will be created.[/dim]")
 
-            if Confirm.ask(f"Would you like to sync current branch with {default_source}?", default=True):
+            sync_prompt = f"Would you like to sync current branch with {default_source}?"
+            if project_name:
+                sync_prompt = f"[{project_name}] {sync_prompt}"
+
+            if Confirm.ask(sync_prompt, default=True):
                 console_print(f"\nPulling latest changes from {default_source}...")
 
                 # Fetch first
@@ -1473,12 +1499,14 @@ def _handle_branch_creation(
             return None  # No branch created, but that's OK
 
     # === STEP 2: Prompt for branch name (with suggestion) ===
-    console_print(f"\n[bold]Suggested branch name:[/bold] {suggested_branch}")
+    # Skip prompting if branch_name already provided (multi-project mode)
+    if branch_name is None:
+        console_print(f"\n[bold]Suggested branch name:[/bold] {suggested_branch}")
 
-    if is_json_mode() or auto_from_default:
-        branch_name = suggested_branch
-    else:
-        branch_name = Prompt.ask("Enter branch name", default=suggested_branch)
+        if is_json_mode() or auto_from_default:
+            branch_name = suggested_branch
+        else:
+            branch_name = Prompt.ask("Enter branch name", default=suggested_branch)
 
     # === STEP 3: Check if branch exists ===
     while True:
@@ -1488,7 +1516,10 @@ def _handle_branch_creation(
 
             if result is False:
                 # User chose "Choose different name" - prompt again
-                branch_name = Prompt.ask("Enter branch name")
+                branch_prompt = "Enter branch name"
+                if project_name:
+                    branch_prompt = f"[{project_name}] {branch_prompt}"
+                branch_name = Prompt.ask(branch_prompt)
                 continue  # Loop to check new name
             elif result is None:
                 # User cancelled
@@ -1505,50 +1536,83 @@ def _handle_branch_creation(
     if source_branch is None:
         if is_json_mode() or auto_from_default:
             source_branch = default_source
-            console_print(f"[dim]Creating branch from: {source_branch}[/dim]")
+            msg = f"Creating branch from: {source_branch}"
+            if project_name:
+                msg = f"[{project_name}] {msg}"
+            console_print(f"[dim]{msg}[/dim]")
         else:
             source_branch = _prompt_for_source_branch(path, default_source)
 
             if not source_branch:
                 # User cancelled
-                console_print("[yellow]Branch creation cancelled[/yellow]")
+                msg = "Branch creation cancelled"
+                if project_name:
+                    msg = f"[{project_name}] {msg}"
+                console_print(f"[yellow]{msg}[/yellow]")
                 return None
     else:
         # Source branch provided (multi-project mode) - use it
-        console_print(f"[dim]Creating branch from: {source_branch}[/dim]")
+        msg = f"Creating branch from: {source_branch}"
+        if project_name:
+            msg = f"[{project_name}] {msg}"
+        console_print(f"[dim]{msg}[/dim]")
 
     # === STEP 5: Create the branch from source ===
     try:
-        console_print(f"\n[cyan]Creating branch '{branch_name}' from '{source_branch}'...[/cyan]")
+        msg = f"Creating branch '{branch_name}' from '{source_branch}'..."
+        if project_name:
+            msg = f"[{project_name}] {msg}"
+        console_print(f"\n[cyan]{msg}[/cyan]")
 
         # Fetch latest to ensure we have up-to-date remote branches
-        console_print("[cyan]Fetching latest from remote...[/cyan]")
+        msg = "Fetching latest from remote..."
+        if project_name:
+            msg = f"[{project_name}] {msg}"
+        console_print(f"[cyan]{msg}[/cyan]")
         GitUtils.fetch_origin(path)
 
         # Checkout source branch first
         current_branch = GitUtils.get_current_branch(path)
         if current_branch != source_branch:
-            console_print(f"[cyan]Checking out {source_branch}...[/cyan]")
+            msg = f"Checking out {source_branch}..."
+            if project_name:
+                msg = f"[{project_name}] {msg}"
+            console_print(f"[cyan]{msg}[/cyan]")
             if not GitUtils.checkout_branch(path, source_branch):
-                console_print(f"[red]✗[/red] Failed to checkout {source_branch}")
+                msg = f"Failed to checkout {source_branch}"
+                if project_name:
+                    msg = f"[{project_name}] {msg}"
+                console_print(f"[red]✗[/red] {msg}")
                 return None
 
             # Pull latest if it's a tracking branch
             if '/' not in source_branch:  # Local branch
-                console_print(f"[cyan]Pulling latest {source_branch}...[/cyan]")
+                msg = f"Pulling latest {source_branch}..."
+                if project_name:
+                    msg = f"[{project_name}] {msg}"
+                console_print(f"[cyan]{msg}[/cyan]")
                 GitUtils.pull_current_branch(path)
 
         # Create new branch
         if GitUtils.create_branch(path, branch_name):
-            console_print(f"[green]✓[/green] Created and switched to branch: [bold]{branch_name}[/bold]")
+            msg = f"Created and switched to branch: [bold]{branch_name}[/bold]"
+            if project_name:
+                msg = f"[{project_name}] {msg}"
+            console_print(f"[green]✓[/green] {msg}")
             # Return both branch name and source branch for proper base_branch tracking
             return (branch_name, source_branch)
         else:
-            console_print(f"[red]✗[/red] Failed to create branch")
+            msg = "Failed to create branch"
+            if project_name:
+                msg = f"[{project_name}] {msg}"
+            console_print(f"[red]✗[/red] {msg}")
             return None
 
     except Exception as e:
-        console.print(f"[red]✗[/red] Git operation failed: {e}")
+        msg = f"Git operation failed: {e}"
+        if project_name:
+            msg = f"[{project_name}] {msg}"
+        console.print(f"[red]✗[/red] {msg}")
         return None
 
 

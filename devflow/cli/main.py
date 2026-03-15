@@ -379,11 +379,12 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
 @click.argument("identifier", shell_complete=complete_session_identifiers)
 @click.option("--path", help="Project path (auto-detects conversation in multi-conversation sessions)")
 @workspace_option("Workspace name to use (overrides session stored workspace)")
+@click.option("--projects", help="Add multiple projects to session (comma-separated, requires --workspace)")
 @click.option("--new-conversation", is_flag=True, help="Create a new conversation (archive current and start fresh)")
 @click.option("--conversation-id", help="Resume a specific archived conversation by its UUID")
 @click.option("--model-profile", help="Model provider profile to use (overrides session default)")
 @json_option
-def open(ctx: click.Context, identifier: str, path: str, workspace: str, new_conversation: bool, conversation_id: str, model_profile: str) -> None:
+def open(ctx: click.Context, identifier: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -394,19 +395,45 @@ def open(ctx: click.Context, identifier: str, path: str, workspace: str, new_con
     - A repository name from workspace
     - Current directory (if not specified)
 
+    Use --projects to add multiple projects to the session at once (batch mode).
+    This requires --workspace and will prompt for branch creation for each project.
+
     Use --new-conversation to start a fresh Claude session when context becomes too long.
     This archives the current conversation and creates a new one.
 
     Use --conversation-id to resume a specific archived conversation by its UUID.
     Find conversation UUIDs with: daf info <session-name>
+
+    Examples:
+        # Open existing single-project session
+        daf open PROJ-123
+
+        # Switch to specific project in multi-project session
+        daf open PROJ-123 --path backend
+
+        # Add multiple projects to existing session
+        daf open PROJ-123 -w primary --projects backend,frontend,shared
     """
     from devflow.cli.commands.open_command import open_session
+
+    # Validate --projects and --path are mutually exclusive
+    if path and projects:
+        console.print("[red]✗[/red] Cannot use both --path and --projects at the same time")
+        console.print("[dim]Use --path to select one project, or --projects to add multiple[/dim]")
+        sys.exit(1)
+
+    # Validate --projects requires --workspace
+    if projects and not workspace:
+        console.print("[red]✗[/red] --projects requires --workspace to be specified")
+        console.print("[dim]Example: daf open PROJ-123 -w primary --projects backend,frontend[/dim]")
+        sys.exit(1)
 
     open_session(
         identifier,
         output_json=ctx.obj.get('output_json', False),
         path=path,
         workspace=workspace,
+        projects=projects,
         new_conversation=new_conversation,
         conversation_id=conversation_id,
         model_profile=model_profile,
@@ -415,15 +442,15 @@ def open(ctx: click.Context, identifier: str, path: str, workspace: str, new_con
 
 @cli.group()
 @json_option
-def sessions(ctx: click.Context) -> None:
-    """Manage conversations within a session."""
+def session(ctx: click.Context) -> None:
+    """Manage sessions and their projects/conversations."""
     pass
 
 
-@sessions.command(name="list")
+@session.command(name="list-conversations")
 @click.argument("identifier", shell_complete=complete_session_identifiers)
 @json_option
-def sessions_list_cmd(ctx: click.Context, identifier: str) -> None:
+def session_list_conversations_cmd(ctx: click.Context, identifier: str) -> None:
     """List all conversations for a session.
 
     Shows all Claude Code conversations (active and archived) across all repositories
@@ -432,10 +459,108 @@ def sessions_list_cmd(ctx: click.Context, identifier: str) -> None:
     IDENTIFIER can be either a session name or issue tracker key.
 
     Example:
-        daf sessions list PROJ-12345
-        daf sessions list my-session --json
+        daf session list-conversations PROJ-12345
+        daf session list-conversations my-session --json
     """
     from devflow.cli.commands.sessions_list_command import sessions_list
+
+    sessions_list(identifier, output_json=ctx.obj.get('output_json', False))
+
+
+@session.command(name="add-project")
+@click.argument("session_name", shell_complete=complete_session_identifiers)
+@click.argument("project_name", required=False)
+@workspace_option()
+@click.option("--projects", help="Add multiple projects (comma-separated)")
+@click.option("--branch", help="Shared branch name for all projects (optional)")
+def session_add_project(session_name: str, project_name: Optional[str], workspace: str, projects: Optional[str], branch: Optional[str]) -> None:
+    """Add project(s) to an existing session.
+
+    Add one or more projects/repositories to a multi-project session. Each project
+    will get its own conversation with separate git branch.
+
+    Examples:
+        # Add one project
+        daf session add-project PROJ-123 backend-api -w primary
+
+        # Add multiple projects at once
+        daf session add-project PROJ-123 --projects backend,frontend,shared -w primary
+
+        # Add with specific branch name
+        daf session add-project PROJ-123 backend-api -w primary --branch feature/api
+    """
+    from devflow.cli.commands.session_project_command import add_project_to_session
+
+    # Validation
+    if not project_name and not projects:
+        console.print("[red]✗[/red] Must specify either PROJECT_NAME or --projects")
+        console.print("[dim]Examples:[/dim]")
+        console.print("[dim]  daf session add-project PROJ-123 backend-api -w primary[/dim]")
+        console.print("[dim]  daf session add-project PROJ-123 --projects backend,frontend -w primary[/dim]")
+        sys.exit(1)
+
+    if project_name and projects:
+        console.print("[red]✗[/red] Cannot use both PROJECT_NAME and --projects")
+        sys.exit(1)
+
+    if not workspace:
+        console.print("[red]✗[/red] --workspace is required")
+        console.print("[dim]Example: daf session add-project PROJ-123 backend-api -w primary[/dim]")
+        sys.exit(1)
+
+    # Build project list
+    project_list = [project_name] if project_name else projects.split(',')
+    project_list = [p.strip() for p in project_list]
+
+    add_project_to_session(session_name, project_list, workspace, branch)
+
+
+@session.command(name="remove-project")
+@click.argument("session_name", shell_complete=complete_session_identifiers)
+@click.argument("project_name")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+def session_remove_project(session_name: str, project_name: str, force: bool) -> None:
+    """Remove a project from a session.
+
+    Removes a project/conversation from a multi-project session. The project's
+    conversation history will be deleted.
+
+    Example:
+        daf session remove-project PROJ-123 old-service
+        daf session remove-project PROJ-123 backend-api --force
+    """
+    from devflow.cli.commands.session_project_command import remove_project_from_session
+
+    remove_project_from_session(session_name, project_name, force)
+
+
+# Keep 'sessions' group for backward compatibility (deprecated)
+@cli.group()
+@json_option
+def sessions(ctx: click.Context) -> None:
+    """[Deprecated] Use 'daf session' instead."""
+    pass
+
+
+@sessions.command(name="list")
+@click.argument("identifier", shell_complete=complete_session_identifiers)
+@json_option
+def sessions_list_cmd(ctx: click.Context, identifier: str) -> None:
+    """[Deprecated] Use 'daf session list-conversations' instead.
+
+    Shows all Claude Code conversations (active and archived) across all repositories
+    in the session.
+
+    IDENTIFIER can be either a session name or issue tracker key.
+
+    Example:
+        daf sessions list PROJ-12345  (deprecated)
+        daf session list-conversations PROJ-12345  (use this)
+    """
+    from devflow.cli.commands.sessions_list_command import sessions_list
+
+    console.print("[yellow]⚠ Command 'daf sessions list' is deprecated.[/yellow]")
+    console.print("[dim]Use 'daf session list-conversations' instead[/dim]\n")
 
     sessions_list(identifier, output_json=ctx.obj.get('output_json', False))
 

@@ -116,6 +116,7 @@ def open_session(
     skip_jira_transition: bool = False,
     path: Optional[str] = None,
     workspace: Optional[str] = None,
+    projects: Optional[str] = None,
     new_conversation: bool = False,
     conversation_id: Optional[str] = None,
     model_profile: Optional[str] = None,
@@ -128,6 +129,7 @@ def open_session(
         skip_jira_transition: If True, skip JIRA status transition (used by daf jira open)
         path: Optional project path to auto-select conversation in multi-conversation sessions
         workspace: Optional workspace name to override session's stored workspace (AAP-63377)
+        projects: Optional comma-separated list of projects to add to session (requires workspace)
         new_conversation: If True, create a new conversation (archive current and start fresh) - PROJ-63490
         conversation_id: Optional Claude session UUID to resume specific archived conversation - PROJ-63490
         model_profile: Optional model provider profile to use (overrides session default)
@@ -257,6 +259,27 @@ def open_session(
             if selected_workspace_name:
                 from devflow.cli.utils import get_workspace_path
                 workspace_path = get_workspace_path(config, selected_workspace_name)
+
+    # Handle --projects flag (add multiple projects to session)
+    if projects:
+        console.print(f"\n[bold cyan]Adding projects to session:[/bold cyan] {session.name}\n")
+
+        # Parse project names
+        project_list = [p.strip() for p in projects.split(',')]
+
+        # Delegate to add_project_to_session function
+        from devflow.cli.commands.session_project_command import add_project_to_session
+
+        add_project_to_session(session.name, project_list, selected_workspace_name, branch=None)
+
+        # Reload session after adding projects
+        session = session_manager.get_session(session.name)
+
+        console.print(f"\n[bold]To work on added projects, run:[/bold]")
+        console.print(f"  daf open {session.name} --path <project-name>\n")
+
+        # Exit after adding projects (don't launch Claude)
+        return
 
     # Handle --conversation-id flag
     # This allows resuming a specific archived conversation
