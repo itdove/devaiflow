@@ -381,10 +381,11 @@ def create_new_session(
         workspace_path = get_workspace_path(config, selected_workspace_name)
 
         # Auto-upgrade skills and commands for this workspace if needed
-        from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
-        success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
-        if not success:
-            console.print(f"[yellow]⚠[/yellow] Warning: {error}")
+        if workspace_path:
+            from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
+            success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
+            if not success:
+                console.print(f"[yellow]⚠[/yellow] Warning: {error}")
 
     # Multi-project workflow (Issue #149)
     # If --projects flag is provided OR user wants to select multiple projects interactively
@@ -556,6 +557,9 @@ def create_new_session(
     if not check_concurrent_session(session_manager, project_path, name, selected_workspace_name, action="create"):
         return
 
+    # Initialize source_branch_for_base (used later for setting base_branch)
+    source_branch_for_base = None
+
     # Handle git branch creation if this is a git repository
     if branch is None:
         # Use issue_key if available, otherwise use name for branch creation
@@ -568,7 +572,6 @@ def create_new_session(
             return
 
         # Handle return value: could be tuple (branch, source_branch) or just branch name
-        source_branch_for_base = None
         if isinstance(branch_result, tuple):
             branch, source_branch_for_base = branch_result
         else:
