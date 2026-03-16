@@ -1128,3 +1128,161 @@ def prompt_repository_selection(
             return None
 
     return str(project_path)
+
+
+def prompt_multi_project_selection(
+    repo_options: list[str],
+    workspace_path: str,
+    suggested_repo: Optional[str] = None
+) -> Optional[list[str]]:
+    """Prompt user to select multiple projects from a list.
+
+    Extracted from open_command.py (Issue #177) for reuse in daf git new and daf jira new (Issue #179).
+
+    Args:
+        repo_options: List of repository names to choose from
+        workspace_path: Workspace path (for constructing full paths)
+        suggested_repo: Optional suggested repository (e.g., from issue metadata)
+
+    Returns:
+        List of full paths to selected repositories, or None if user cancelled
+
+    Examples:
+        >>> repos = ['backend-api', 'frontend-app', 'database']
+        >>> prompt_multi_project_selection(repos, "/Users/john/repos")
+        ['/Users/john/repos/backend-api', '/Users/john/repos/frontend-app']  # If user selected 1,2
+    """
+    from rich.prompt import Prompt
+
+    if not repo_options:
+        console.print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+        return None
+
+    workspace = Path(workspace_path).expanduser()
+
+    # Show selection UI
+    console.print("\n[bold]Select projects (comma-separated numbers or names):[/bold]")
+    for i, repo in enumerate(repo_options, 1):
+        if suggested_repo and repo == suggested_repo:
+            console.print(f"{i}. {repo} [dim](suggested)[/dim]")
+        else:
+            console.print(f"{i}. {repo}")
+
+    selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)")
+
+    # Parse selection (could be numbers or names)
+    selected_projects = []
+    for item in selection.split(','):
+        item = item.strip()
+        if item.isdigit():
+            # Numeric selection
+            idx = int(item) - 1
+            if 0 <= idx < len(repo_options):
+                selected_projects.append(repo_options[idx])
+            else:
+                console.print(f"[yellow]⚠[/yellow] Invalid index '{item}' - skipping")
+        else:
+            # Name selection
+            if item in repo_options:
+                selected_projects.append(item)
+            else:
+                console.print(f"[yellow]⚠[/yellow] Project '{item}' not found - skipping")
+
+    if not selected_projects:
+        console.print(f"[yellow]⚠[/yellow] No valid projects selected")
+        return None
+
+    # Convert names to full paths
+    selected_paths = [str(workspace / proj) for proj in selected_projects]
+
+    console.print(f"\n[green]✓[/green] Selected {len(selected_projects)} project(s):")
+    for proj in selected_projects:
+        console.print(f"  • {proj}")
+
+    return selected_paths
+
+
+def prompt_repository_selection_with_multiproject(
+    config,
+    workspace_flag: Optional[str] = None,
+    allow_multiple: bool = False,
+    suggested_repo: Optional[str] = None
+) -> tuple[Optional[list[str]], Optional[str]]:
+    """Prompt user to select one or more repositories from workspace.
+
+    Enhanced version of _prompt_for_repository_selection that supports multi-project mode (Issue #179).
+
+    Args:
+        config: Configuration object
+        workspace_flag: Optional workspace name from command line flag
+        allow_multiple: If True, offer multi-project selection
+        suggested_repo: Optional suggested repository
+
+    Returns:
+        Tuple of (project_paths_list, workspace_name) if selected, (None, None) if cancelled
+        project_paths_list is always a list (single item for single selection, multiple for multi-project)
+
+    Examples:
+        >>> # Single-project mode
+        >>> paths, ws = prompt_repository_selection_with_multiproject(config, allow_multiple=False)
+        >>> paths  # ['/workspace/backend-api']
+
+        >>> # Multi-project mode
+        >>> paths, ws = prompt_repository_selection_with_multiproject(config, allow_multiple=True)
+        >>> paths  # ['/workspace/backend-api', '/workspace/frontend-app']
+    """
+    # Select workspace using priority resolution system
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag=workspace_flag,
+        session=None,
+        skip_prompt=False
+    )
+
+    if not selected_workspace_name:
+        # No workspace selected - fall back to current directory
+        console.print(f"[yellow]⚠[/yellow] No workspace selected")
+        console.print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
+        return [str(Path.cwd())], None
+
+    # Get workspace path from workspace name
+    workspace_path = get_workspace_path(config, selected_workspace_name)
+    if not workspace_path:
+        console.print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
+        console.print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
+        return [str(Path.cwd())], None
+
+    console.print(f"\n[cyan]Scanning workspace:[/cyan] {workspace_path}")
+
+    # Scan for git repositories in workspace
+    try:
+        repo_options = scan_workspace_repositories(workspace_path)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[yellow]Warning: {e}[/yellow]")
+        console.print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
+        return [str(Path.cwd())], None
+
+    if not repo_options:
+        console.print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+        console.print(f"[dim]Make sure your workspace contains git repositories.[/dim]")
+        console.print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
+        return [str(Path.cwd())], None
+
+    # Multi-project selection (if enabled and multiple repos available)
+    if allow_multiple and len(repo_options) > 1:
+        if Confirm.ask("\nCreate multi-project session (analyze multiple repos)?", default=False):
+            # User wants multi-project mode
+            project_paths = prompt_multi_project_selection(repo_options, workspace_path, suggested_repo)
+            if not project_paths:
+                return None, None
+
+            # Return list of paths
+            return project_paths, selected_workspace_name
+
+    # Single-project selection (fallback or default)
+    project_path = prompt_repository_selection(repo_options, workspace_path, allow_cancel=True)
+    if not project_path:
+        return None, None
+
+    # Return as list for consistency
+    return [project_path], selected_workspace_name
