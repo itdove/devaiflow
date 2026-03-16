@@ -341,11 +341,42 @@ def create_git_issue_session(
             return
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
     else:
-        # Prompt for repository selection from workspace
-        project_path, selected_workspace_name = _prompt_for_repository_selection(config, workspace_flag=workspace)
-        if not project_path:
+        # Prompt for repository selection from workspace with multi-project support (Issue #179)
+        from devflow.cli.utils import prompt_repository_selection_with_multiproject
+        project_paths, selected_workspace_name = prompt_repository_selection_with_multiproject(
+            config,
+            workspace_flag=workspace,
+            allow_multiple=True  # Enable multi-project mode for git new
+        )
+        if not project_paths:
             # User cancelled or no workspace configured
             return
+
+        # Check if multi-project mode was selected
+        if len(project_paths) > 1:
+            # Multi-project ticket creation session - need to select target repository
+            target_repo_path = _prompt_for_target_repository(project_paths, repository)
+            if not target_repo_path:
+                console_print("[yellow]Cancelled[/yellow]")
+                return
+
+            # Multi-project issue creation session
+            return _create_multi_project_git_session(
+                config=config,
+                config_loader=config_loader,
+                name=name,
+                goal=goal,
+                issue_type=issue_type,
+                parent=parent,
+                project_paths=project_paths,
+                target_repo_path=target_repo_path,
+                workspace=workspace,
+                selected_workspace_name=selected_workspace_name,
+                repository=repository,
+            )
+
+        # Single project mode - use first (and only) path
+        project_path = project_paths[0]
 
     working_directory = Path(project_path).name
 
@@ -714,6 +745,242 @@ def _build_issue_creation_prompt(
     ])
 
     return "\n".join(prompt_parts)
+
+
+def _prompt_for_target_repository(project_paths: list[str], repository: Optional[str]) -> Optional[str]:
+    """Prompt user to select target repository for GitHub/GitLab issue creation (Issue #179).
+
+    Args:
+        project_paths: List of selected project paths
+        repository: Optional repository from command line (owner/repo format)
+
+    Returns:
+        Full path to target repository, or None if cancelled
+    """
+    project_names = [Path(p).name for p in project_paths]
+
+    console.print("\n[bold]Which repository should the GitHub/GitLab issue be created in?[/bold]")
+    for i, (name, path) in enumerate(zip(project_names, project_paths), 1):
+        console.print(f"  {i}. {name}")
+
+    from rich.prompt import Prompt
+    selection = Prompt.ask(f"\nSelect repository (1-{len(project_paths)})")
+
+    # Validate selection
+    if selection.isdigit():
+        idx = int(selection) - 1
+        if 0 <= idx < len(project_paths):
+            selected = project_paths[idx]
+            console.print(f"[green]✓[/green] Issue will be created in: [bold]{Path(selected).name}[/bold]")
+            return selected
+        else:
+            console.print(f"[red]✗[/red] Invalid selection: {selection}")
+            return None
+    else:
+        # Try name matching
+        for path in project_paths:
+            if Path(path).name == selection:
+                console.print(f"[green]✓[/green] Issue will be created in: [bold]{selection}[/bold]")
+                return path
+        console.print(f"[red]✗[/red] Repository not found: {selection}")
+        return None
+
+
+def _build_multiproject_issue_creation_prompt(
+    issue_type: Optional[str],
+    goal: str,
+    config,
+    name: str,
+    project_paths: list[str],
+    workspace: str,
+    target_repo_path: str,
+    parent: Optional[str] = None,
+    repository: Optional[str] = None,
+) -> str:
+    """Build initial prompt for multi-project GitHub/GitLab issue creation (Issue #179).
+
+    Args:
+        issue_type: Optional issue type (bug, enhancement, task)
+        goal: Goal/description
+        config: Configuration object
+        name: Session name
+        project_paths: List of full project paths to analyze
+        workspace: Workspace path
+        target_repo_path: Target repository for issue creation
+        parent: Optional parent issue key
+        repository: Optional repository in owner/repo format
+
+    Returns:
+        Initial prompt string for Claude
+    """
+    project_names = [Path(p).name for p in project_paths]
+    projects_list = "\n".join([f"  • {name}" for name in project_names])
+    target_repo_name = Path(target_repo_path).name
+
+    # Build example command
+    example_cmd_parts = ["daf git create"]
+    if issue_type:
+        example_cmd_parts.append(issue_type)
+    example_cmd_parts.extend([
+        '--summary "..."',
+        '--description "..."',
+    ])
+    if parent:
+        example_cmd_parts.append(f'--parent "{parent}"')
+    example_cmd_parts.append('--acceptance-criteria "..." --acceptance-criteria "..."')
+
+    example_command = " \\\n  ".join(example_cmd_parts)
+
+    prompt_parts = [
+        f"Work on daf session: {name}",
+        "",
+        f"This is a MULTI-PROJECT issue creation session for analyzing {len(project_paths)} repositories:",
+        projects_list,
+        "",
+        f"⚠️  Issue will be created in: {target_repo_name}",
+        "",
+        "⚠️  CRITICAL CONSTRAINTS:",
+        "• This is a READ-ONLY analysis session",
+        "• Do NOT modify any code or files in any project",
+        "• Do NOT create git commits or checkout branches",
+        "• ONLY analyze the codebases to inform issue creation",
+        "",
+        f"Your task: Analyze all {len(project_paths)} projects and create a comprehensive GitHub/GitLab issue{' (' + issue_type + ')' if issue_type else ''}",
+        "",
+        f"User's goal: {goal}",
+        "",
+        "Steps to complete this task:",
+        f"1. Analyze ALL {len(project_paths)} projects to understand:",
+        "   • Current architecture and implementation across projects",
+        "   • How the projects interact (APIs, shared code, dependencies)",
+        "   • Relevant code patterns and conventions",
+        "   • Potential impact areas in each project",
+        "2. Identify what needs to be implemented/fixed across all projects",
+        "3. Determine clear, testable acceptance criteria considering all projects",
+        f"4. Create the GitHub/GitLab issue in {target_repo_name} with your cross-project analysis",
+        "",
+        "⚠️  CRITICAL: Use EXACTLY this command format (do not modify syntax):",
+        "",
+        example_command,
+        "",
+        "⚠️  The command above is the EXACT format you MUST use. Do not attempt alternative formats.",
+        "   Use this template precisely, filling in your cross-project analysis and findings.",
+        "",
+        "After you create the issue, the session will be automatically renamed to 'creation-<issue_number>'",
+        "for easy identification. Users can reopen with: daf open creation-<issue_number>",
+        "",
+        f"Remember: This is READ-ONLY analysis across {len(project_paths)} projects. Do not modify any files.",
+    ]
+
+    return "\n".join(prompt_parts)
+
+
+def _create_multi_project_git_session(
+    config,
+    config_loader,
+    name: str,
+    goal: str,
+    issue_type: Optional[str],
+    parent: Optional[str],
+    project_paths: list[str],
+    target_repo_path: str,
+    workspace: Optional[str],
+    selected_workspace_name: str,
+    repository: Optional[str] = None,
+) -> None:
+    """Create a multi-project ticket creation session for GitHub/GitLab (Issue #179).
+
+    Args:
+        config: Configuration object
+        config_loader: ConfigLoader instance
+        name: Session name
+        goal: Session goal
+        issue_type: Optional issue type (bug, enhancement, task)
+        parent: Optional parent issue key
+        project_paths: List of full paths to selected projects
+        target_repo_path: Target repository for issue creation
+        workspace: Workspace flag
+        selected_workspace_name: Selected workspace name
+        repository: Optional repository in owner/repo format
+    """
+    from devflow.cli.commands.ticket_creation_multiproject import create_multi_project_ticket_creation_session
+    from devflow.cli.utils import get_workspace_path
+    from devflow.session.manager import SessionManager
+
+    # Build the goal string that includes the issue creation task
+    full_goal = f"Create GitHub/GitLab issue: {goal}" if not issue_type else f"Create GitHub/GitLab {issue_type}: {goal}"
+
+    # Get workspace path
+    workspace_path = get_workspace_path(config, selected_workspace_name)
+    if not workspace_path:
+        console_print(f"[red]✗[/red] Could not find workspace path")
+        return
+
+    # Create session manager
+    session_manager = SessionManager(config_loader=config_loader)
+
+    # Create multi-project ticket creation session
+    session, ai_agent_session_id = create_multi_project_ticket_creation_session(
+        session_manager=session_manager,
+        config=config,
+        name=name,
+        goal=full_goal,
+        project_paths=project_paths,
+        workspace_path=workspace_path,
+        selected_workspace_name=selected_workspace_name,
+        session_type="ticket_creation",
+        issue_type=issue_type,
+    )
+
+    # Set issue tracker backend (github or gitlab) from target repository
+    from devflow.utils.git_remote import GitRemoteDetector
+    detector = GitRemoteDetector(target_repo_path)
+    repo_info = detector.parse_repository_info()
+
+    if repo_info:
+        backend = repo_info[0]  # 'github' or 'gitlab'
+        session.issue_tracker = backend
+    else:
+        # Fallback to github if can't detect
+        session.issue_tracker = "github"
+
+    session_manager.update_session(session)
+
+    # Check if we should launch Claude Code
+    if not should_launch_claude_code(config=config, mock_mode=False):
+        console_print("[yellow]⚠[/yellow] Session created but Claude Code not launched.")
+        console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
+        return
+
+    # Build initial prompt for multi-project issue creation
+    initial_prompt = _build_multiproject_issue_creation_prompt(
+        issue_type=issue_type,
+        goal=goal,
+        config=config,
+        name=name,
+        project_paths=project_paths,
+        workspace=workspace_path,
+        target_repo_path=target_repo_path,
+        parent=parent,
+        repository=repository,
+    )
+
+    # Launch Claude Code
+    from devflow.claude_code.launcher import launch_claude_code
+    from devflow.cli.utils import handle_claude_code_launch_failure
+
+    # Use the first project as the primary working directory for Claude Code
+    primary_project_path = project_paths[0]
+
+    success = launch_claude_code(
+        project_path=primary_project_path,
+        initial_prompt=initial_prompt,
+        ai_agent_session_id=ai_agent_session_id,
+        config=config
+    )
+
+    if not success:
+        handle_claude_code_launch_failure(session, session_manager, name)
 
 
 def _prompt_for_repository_selection(config, workspace_flag: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:

@@ -308,11 +308,35 @@ def create_jira_ticket_session(
             return
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
     else:
-        # Prompt for repository selection from workspace (similar to daf new and daf open)
-        project_path, selected_workspace_name = _prompt_for_repository_selection(config, workspace_flag=workspace)
-        if not project_path:
+        # Prompt for repository selection from workspace with multi-project support (Issue #179)
+        from devflow.cli.utils import prompt_repository_selection_with_multiproject
+        project_paths, selected_workspace_name = prompt_repository_selection_with_multiproject(
+            config,
+            workspace_flag=workspace,
+            allow_multiple=True  # Enable multi-project mode for jira new
+        )
+        if not project_paths:
             # User cancelled or no workspace configured
             return
+
+        # Check if multi-project mode was selected
+        if len(project_paths) > 1:
+            # Multi-project ticket creation session
+            return _create_multi_project_jira_session(
+                config=config,
+                config_loader=config_loader,
+                name=name,
+                goal=goal,
+                issue_type=issue_type,
+                parent=parent,
+                project_paths=project_paths,
+                workspace=workspace,
+                selected_workspace_name=selected_workspace_name,
+                affects_versions=affects_versions,
+            )
+
+        # Single project mode - use first (and only) path
+        project_path = project_paths[0]
 
     working_directory = Path(project_path).name
 
@@ -801,6 +825,208 @@ def _build_ticket_creation_prompt(
     ])
 
     return "\n".join(prompt_parts)
+
+
+def _build_multiproject_ticket_creation_prompt(
+    issue_type: str,
+    goal: str,
+    config,
+    name: str,
+    project_paths: list[str],
+    workspace: str,
+    parent: Optional[str] = None,
+    affects_versions: Optional[str] = None,
+) -> str:
+    """Build initial prompt for multi-project JIRA ticket creation (Issue #179).
+
+    Similar to _build_ticket_creation_prompt but for multiple projects.
+
+    Args:
+        issue_type: JIRA issue type (bug, story, etc.)
+        goal: Goal/description
+        config: Configuration object
+        name: Session name
+        project_paths: List of full project paths
+        workspace: Workspace path
+        parent: Optional parent issue key
+        affects_versions: Optional affected versions
+
+    Returns:
+        Initial prompt string for Claude
+    """
+    project_names = [Path(p).name for p in project_paths]
+    projects_list = "\n".join([f"  • {name}" for name in project_names])
+
+    # Get JIRA configuration
+    project = config.jira.project if config.jira else "UNKNOWN"
+
+    # Build defaults string
+    defaults = []
+    if config.jira and config.jira.custom_field_defaults:
+        for field, value in config.jira.custom_field_defaults.items():
+            if value:
+                defaults.append(f"{field}={value}")
+    defaults_str = ", ".join(defaults) if defaults else "none configured"
+
+    # Build parent note
+    parent_note = f"Use parent epic: {parent}" if parent else "Parent epic will be specified by you based on project structure"
+
+    # Build affected version note
+    affected_version_note = ""
+    if affects_versions:
+        affected_version_note = f"Use affected version: {affects_versions}"
+
+    # Build example command
+    example_command = f'daf jira create {issue_type} --summary "..." --parent {parent or "PROJ-XXX"} --description "..." --field acceptance_criteria="..."'
+
+    prompt_parts = [
+        f"Work on daf session: {name}",
+        "",
+        f"This is a MULTI-PROJECT ticket creation session for analyzing {len(project_paths)} repositories:",
+        projects_list,
+        "",
+        "⚠️  CRITICAL CONSTRAINTS:",
+        "• This is a READ-ONLY analysis session",
+        "• Do NOT modify any code or files in any project",
+        "• Do NOT create git commits or checkout branches",
+        "• ONLY analyze the codebases to inform ticket creation",
+        "",
+        f"Your task: Analyze all {len(project_paths)} projects and create a comprehensive JIRA {issue_type}",
+        "",
+        f"User's goal: {goal}",
+        "",
+        "Steps to complete this task:",
+        f"1. Analyze ALL {len(project_paths)} projects to understand:",
+        "   • Current architecture and implementation across projects",
+        "   • How the projects interact (APIs, shared code, dependencies)",
+        "   • Relevant code patterns and conventions",
+        "   • Potential impact areas in each project",
+        "2. Identify what needs to be implemented/fixed across all projects",
+        "3. Determine clear, testable acceptance criteria considering all projects",
+        "4. Create the JIRA ticket with your analysis",
+        f"5. Use project: {project}; configured defaults: {defaults_str}",
+        "6. Include detailed description and acceptance criteria based on cross-project analysis",
+        "",
+        "⚠️  CRITICAL: Use EXACTLY this command format (do not modify syntax):",
+        "",
+        example_command,
+        "",
+        "⚠️  The command above is the EXACT format you MUST use. Do not attempt alternative formats.",
+        "   Use this template precisely, filling in your cross-project analysis and findings.",
+        "",
+        parent_note,
+    ]
+
+    if affected_version_note:
+        prompt_parts.append(affected_version_note)
+
+    prompt_parts.extend([
+        "",
+        "After you create the ticket, the session will be automatically renamed to 'creation-<ticket_key>'",
+        "for easy identification. Users can reopen with: daf open creation-<ticket_key>",
+        "",
+        f"Remember: This is READ-ONLY analysis across {len(project_paths)} projects. Do not modify any files.",
+    ])
+
+    return "\n".join(prompt_parts)
+
+
+def _create_multi_project_jira_session(
+    config,
+    config_loader,
+    name: str,
+    goal: str,
+    issue_type: str,
+    parent: str,
+    project_paths: list[str],
+    workspace: Optional[str],
+    selected_workspace_name: str,
+    affects_versions: Optional[str] = None,
+) -> None:
+    """Create a multi-project ticket creation session for JIRA (Issue #179).
+
+    Args:
+        config: Configuration object
+        config_loader: ConfigLoader instance
+        name: Session name
+        goal: Session goal
+        issue_type: JIRA issue type (bug, story, etc.)
+        parent: Parent issue key
+        project_paths: List of full paths to selected projects
+        workspace: Workspace flag
+        selected_workspace_name: Selected workspace name
+        affects_versions: Optional affected versions
+    """
+    from devflow.cli.commands.ticket_creation_multiproject import create_multi_project_ticket_creation_session
+    from devflow.cli.utils import get_workspace_path
+    from devflow.session.manager import SessionManager
+
+    # Build the goal string that includes the ticket creation task
+    if parent:
+        full_goal = f"Create JIRA {issue_type} under {parent}: {goal}"
+    else:
+        full_goal = f"Create JIRA {issue_type}: {goal}"
+
+    # Get workspace path
+    workspace_path = get_workspace_path(config, selected_workspace_name)
+    if not workspace_path:
+        console_print(f"[red]✗[/red] Could not find workspace path")
+        return
+
+    # Create session manager
+    session_manager = SessionManager(config_loader=config_loader)
+
+    # Create multi-project ticket creation session
+    session, ai_agent_session_id = create_multi_project_ticket_creation_session(
+        session_manager=session_manager,
+        config=config,
+        name=name,
+        goal=full_goal,
+        project_paths=project_paths,
+        workspace_path=workspace_path,
+        selected_workspace_name=selected_workspace_name,
+        session_type="ticket_creation",
+        issue_type=issue_type,
+    )
+
+    # Check if we should launch Claude Code
+    if not should_launch_claude_code(config=config, mock_mode=False):
+        console_print("[yellow]⚠[/yellow] Session created but Claude Code not launched.")
+        console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
+        return
+
+    # Build initial prompt for multi-project ticket creation
+    project_names = [Path(p).name for p in project_paths]
+    project_paths_str = "\n".join([f"  • {Path(p).name}: {p}" for p in project_paths])
+
+    # Generate multi-project ticket creation prompt
+    initial_prompt = _build_multiproject_ticket_creation_prompt(
+        issue_type=issue_type,
+        goal=goal,
+        config=config,
+        name=name,
+        project_paths=project_paths,
+        workspace=workspace_path,
+        parent=parent,
+        affects_versions=affects_versions,
+    )
+
+    # Launch Claude Code
+    from devflow.claude_code.launcher import launch_claude_code
+    from devflow.cli.utils import handle_claude_code_launch_failure
+
+    # Use the first project as the primary working directory for Claude Code
+    primary_project_path = project_paths[0]
+
+    success = launch_claude_code(
+        project_path=primary_project_path,
+        initial_prompt=initial_prompt,
+        ai_agent_session_id=ai_agent_session_id,
+        config=config
+    )
+
+    if not success:
+        handle_claude_code_launch_failure(session, session_manager, name)
 
 
 def _prompt_for_repository_selection(config, workspace_flag: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
