@@ -1997,11 +1997,173 @@ def _create_conversation_for_current_directory(
     return True
 
 
+def _create_multi_project_conversation_for_open(
+    session,
+    project_names,
+    workspace_path,
+    config,
+    config_loader,
+    session_manager,
+    selected_workspace_name=None,
+) -> bool:
+    """Create multi-project conversation for synced session (Issue #177).
+
+    Args:
+        session: Session object to update
+        project_names: List of project names to include
+        workspace_path: Workspace root path
+        config: Loaded configuration
+        config_loader: ConfigLoader instance
+        session_manager: SessionManager instance
+        selected_workspace_name: Optional workspace name
+
+    Returns:
+        True if multi-project conversation was created successfully, False otherwise
+    """
+    import uuid
+    from devflow.cli.commands.new_command import _get_default_source_branch, _handle_branch_creation
+    from devflow.git.utils import GitUtils
+
+    workspace_path_obj = Path(workspace_path)
+
+    # Generate a shared branch name for all projects
+    branch_identifier = session.issue_key if session.issue_key else session.name
+    backend = None
+    if session.issue_key:
+        from devflow.utils.backend_detection import detect_backend_from_key
+        backend = detect_backend_from_key(session.issue_key, config)
+
+    # Get use_issue_key_only setting
+    use_issue_key_only = True
+    if config and hasattr(config, 'prompts') and config.prompts:
+        use_issue_key_only = config.prompts.use_issue_key_as_branch
+
+    suggested_branch = GitUtils.generate_branch_name(
+        branch_identifier,
+        session.goal,
+        use_issue_key_only=use_issue_key_only,
+        backend=backend
+    )
+
+    console.print(f"\n[bold]Branch name for all projects:[/bold] {suggested_branch}")
+    from rich.prompt import Prompt
+    shared_branch_name = Prompt.ask("Enter branch name", default=suggested_branch)
+
+    # Collect base branch for each project
+    project_base_branches = {}
+    console.print(f"\n[bold]Select base branch for each project:[/bold]")
+
+    for proj_name in project_names:
+        proj_path = workspace_path_obj / proj_name
+
+        # Get default base branch for this project
+        default_base = _get_default_source_branch(proj_path)
+
+        console.print(f"\n[cyan]{proj_name}[/cyan] (default: {default_base})")
+
+        # Offer common base branch options
+        from devflow.cli.commands.new_command import _prompt_for_source_branch
+        selected_base = _prompt_for_source_branch(proj_path, default_base)
+
+        if not selected_base:
+            # User cancelled
+            console.print("[yellow]Multi-project session creation cancelled[/yellow]")
+            return False
+
+        project_base_branches[proj_name] = selected_base
+        console.print(f"  → Will create branch from: [bold]{selected_base}[/bold]")
+
+    # Create branches in all projects
+    console.print(f"\n[bold]Creating branches...[/bold]")
+
+    branch_creation_results = {}
+    for proj_name in project_names:
+        proj_path = workspace_path_obj / proj_name
+        base_branch = project_base_branches[proj_name]
+
+        console.print(f"\n[cyan]Processing {proj_name}...[/cyan]")
+
+        # Create branch using the shared name and project-specific base branch
+        branch_result = _handle_branch_creation(
+            project_path=str(proj_path),
+            issue_key=branch_identifier,
+            goal=session.goal,
+            auto_from_default=False,
+            config=config,
+            source_branch=base_branch,
+            branch_name=shared_branch_name,
+            project_name=proj_name,
+        )
+
+        # Check if user explicitly cancelled
+        if branch_result is False:
+            console.print(f"\n[yellow]Branch creation cancelled for {proj_name}[/yellow]")
+            return False
+
+        # Extract branch name and source branch
+        if isinstance(branch_result, tuple):
+            created_branch, source_branch = branch_result
+        else:
+            created_branch = branch_result
+            source_branch = base_branch
+
+        branch_creation_results[proj_name] = {
+            'branch': created_branch or shared_branch_name,
+            'base_branch': source_branch or base_branch,
+        }
+
+        # Update shared_branch_name for subsequent projects if it changed
+        actual_branch = branch_creation_results[proj_name]['branch']
+        if actual_branch != shared_branch_name:
+            console.print(f"\n[cyan]ℹ Using updated branch name for remaining projects: {actual_branch}[/cyan]")
+            shared_branch_name = actual_branch
+
+    # Create ONE shared session ID for all projects
+    session_id = str(uuid.uuid4())
+
+    # Build projects_info dict for multi-project conversation
+    projects_info = {}
+    for proj_name in project_names:
+        proj_path = workspace_path_obj / proj_name
+        branch_info = branch_creation_results[proj_name]
+        projects_info[proj_name] = {
+            'project_path': str(proj_path),
+            'branch': branch_info['branch'],
+            'base_branch': branch_info['base_branch'],
+        }
+
+    # Clear any existing conversations (synced sessions shouldn't have any, but be safe)
+    session.conversations = {}
+
+    # Add multi-project conversation (ONE conversation for all projects)
+    session.add_multi_project_conversation(
+        ai_agent_session_id=session_id,
+        projects_info=projects_info,
+        workspace_path=workspace_path,
+    )
+
+    # Store workspace name
+    if selected_workspace_name:
+        session.workspace_name = selected_workspace_name
+
+    # Update session working_directory to the multi-project identifier
+    # This is used for display purposes
+    session.working_directory = f"multiproject-{len(project_names)}-repos"
+
+    # Save updated session
+    session_manager.update_session(session)
+
+    console.print(f"\n[green]✓[/green] Multi-project session created with {len(project_names)} projects")
+    return True
+
+
 def _prompt_for_working_directory(session, config_loader, session_manager, selected_workspace_name=None) -> bool:
     """Prompt user to select a working directory for a session.
 
     This is used when opening sessions that were created via 'daf sync' without
     specifying a working directory.
+
+    Supports both single-project and multi-project selection (Issue #177).
 
     Args:
         session: Session object to update
@@ -2072,6 +2234,62 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
                 except Exception as e:
                     console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
 
+    # Multi-project selection (Issue #177)
+    # If multiple repositories available, offer multi-project mode
+    if len(repo_options) > 1:
+        if Confirm.ask("\nCreate multi-project session (work across multiple repos)?", default=False):
+            # User wants multi-project mode - show selection UI
+            console.print("\n[bold]Select projects (comma-separated numbers or names):[/bold]")
+            for i, repo in enumerate(repo_options, 1):
+                if suggested_repo and repo == suggested_repo:
+                    console.print(f"{i}. {repo} [dim](from issue)[/dim]")
+                else:
+                    console.print(f"{i}. {repo}")
+
+            selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)")
+
+            # Parse selection (could be numbers or names)
+            selected_projects = []
+            for item in selection.split(','):
+                item = item.strip()
+                if item.isdigit():
+                    # Numeric selection
+                    idx = int(item) - 1
+                    if 0 <= idx < len(repo_options):
+                        selected_projects.append(repo_options[idx])
+                else:
+                    # Name selection
+                    if item in repo_options:
+                        selected_projects.append(item)
+                    else:
+                        console.print(f"[yellow]⚠[/yellow] Project '{item}' not found - skipping")
+
+            if len(selected_projects) > 1:
+                # Create multi-project session
+                console.print(f"\n[green]✓[/green] Selected {len(selected_projects)} projects:")
+                for proj in selected_projects:
+                    console.print(f"  • {proj}")
+
+                # Create multi-project conversation
+                return _create_multi_project_conversation_for_open(
+                    session=session,
+                    project_names=selected_projects,
+                    workspace_path=str(workspace),
+                    config=config,
+                    config_loader=config_loader,
+                    session_manager=session_manager,
+                    selected_workspace_name=selected_workspace_name,
+                )
+            elif len(selected_projects) == 1:
+                # Only one project selected - continue with single-project flow
+                console.print(f"\n[dim]Only one project selected - continuing with single-project session[/dim]")
+                # Set the selected project and continue to single-project logic below
+                repo_options = selected_projects
+                suggested_repo_index = 0
+            else:
+                console.print("\n[yellow]⚠[/yellow] No valid projects selected - continuing with single-project prompt")
+
+    # Single-project selection (original behavior)
     # Prompt for working directory with default suggestion
     console.print(f"\n[bold]Select working directory:[/bold]")
     if repo_options:
