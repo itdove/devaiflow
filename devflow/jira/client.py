@@ -288,8 +288,10 @@ class JiraClient(IssueTrackerClient):
                     }
                 )
 
-                # If we get HTTP 410 (Gone), API v2 is deprecated - switch to v3
-                if response.status_code == 410:
+                # If we get HTTP 410 (Gone) or HTTP 414 (URI Too Long), switch to v3
+                # HTTP 410: API v2 is deprecated on Cloud
+                # HTTP 414: URI too long with many custom fields (e.g., 489 fields in query string)
+                if response.status_code == 410 or response.status_code == 414:
                     self._search_api_version = 3
                 else:
                     # v2 works - cache this for future requests

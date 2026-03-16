@@ -1027,3 +1027,76 @@ def test_get_field_name_cache_hit(mock_jira_cli):
     # Call _get_field_name again - should hit the cache
     field_name = client._get_field_name("customfield_12310243")
     assert field_name == "Story Points"
+
+
+def test_search_api_request_handles_http_414_uri_too_long(monkeypatch):
+    """Test that HTTP 414 (URI Too Long) triggers fallback to API v3.
+
+    This handles the case where JIRA Cloud instances with many custom fields
+    (e.g., 489 fields) exceed the URI length limit when using GET requests.
+    """
+    from unittest.mock import Mock
+
+    monkeypatch.setenv("JIRA_API_TOKEN", "mock-token")
+    monkeypatch.setenv("JIRA_URL", "https://jira.example.com")
+
+    # Track which API version was called
+    api_calls = []
+
+    def mock_request_with_414(method, url, **kwargs):
+        api_calls.append((method, url))
+        response = Mock()
+
+        # First call to API v2 returns HTTP 414 (URI Too Long)
+        if "/rest/api/2/search" in url and method == "GET":
+            response.status_code = 414
+            response.text = "<!DOCTYPE HTML><html><head><title>414 Request-URI Too Large</title></head><body>Request-URI Too Large</body></html>"
+            return response
+
+        # Second call to API v3 returns success
+        if "/rest/api/3/search/jql" in url and method == "POST":
+            response.status_code = 200
+            response.json.return_value = {
+                "issues": [
+                    {
+                        "key": "PROJ-100",
+                        "fields": {
+                            "summary": "Test ticket",
+                            "status": {"name": "New"},
+                            "issuetype": {"name": "Story"}
+                        }
+                    }
+                ],
+                "maxResults": 50,
+                "total": 1
+            }
+            return response
+
+        # Default response
+        response.status_code = 404
+        return response
+
+    monkeypatch.setattr("requests.request", mock_request_with_414)
+
+    client = JiraClient()
+
+    # Create a large fields list to simulate many custom fields
+    large_field_list = [f"customfield_{i}" for i in range(100)]
+    field_mappings = {f"field_{i}": {"id": f"customfield_{i}"} for i in range(100)}
+
+    # Call list_tickets which uses _search_api_request
+    tickets = client.list_tickets(field_mappings=field_mappings)
+
+    # Verify the flow:
+    # 1. First call attempted API v2 GET
+    assert any("/rest/api/2/search" in url and method == "GET" for method, url in api_calls)
+
+    # 2. After HTTP 414, fallback to API v3 POST
+    assert any("/rest/api/3/search/jql" in url and method == "POST" for method, url in api_calls)
+
+    # 3. API version is now cached as v3
+    assert client._search_api_version == 3
+
+    # 4. Tickets were successfully retrieved
+    assert len(tickets) == 1
+    assert tickets[0]["key"] == "PROJ-100"
