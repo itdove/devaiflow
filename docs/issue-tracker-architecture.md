@@ -91,7 +91,7 @@ The JIRA client supports both self-hosted and Cloud JIRA instances with automati
 The `_search_api_request()` method in `devflow/jira/client.py` handles automatic version detection:
 
 1. First request attempts API v2 (for self-hosted JIRA)
-2. If HTTP 410 (Gone) is returned, switches to API v3 (for Cloud JIRA)
+2. If HTTP 410 (Gone) or HTTP 414 (URI Too Long) is returned, switches to API v3 (for Cloud JIRA)
 3. Caches the working version in `_search_api_version` for subsequent requests
 4. No configuration required - version detection is transparent
 
