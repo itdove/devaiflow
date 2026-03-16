@@ -396,3 +396,62 @@ def test_view_notes_displays_chronological_order(temp_daf_home):
     third_pos = content.index("Third note")
 
     assert first_pos < second_pos < third_pos
+
+
+def test_add_note_works_inside_ai_agent_session(temp_daf_home, monkeypatch):
+    """Test that daf note works when AI_AGENT_SESSION_ID is set (inside Claude Code session)."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="ai-session",
+        goal="Test inside AI agent",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-ai-123",
+    )
+
+    # Simulate being inside an AI agent session
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "uuid-ai-123")
+
+    # This should NOT raise an error now that @require_outside_claude is removed
+    add_note(identifier="ai-session", note="Note added inside AI agent session")
+
+    # Verify note was added
+    notes_file = config_loader.get_session_dir("ai-session") / "notes.md"
+    assert notes_file.exists()
+    content = notes_file.read_text()
+    assert "Note added inside AI agent session" in content
+
+
+def test_add_note_multiple_notes_same_session(temp_daf_home):
+    """Test that multiple notes can be added to the same session sequentially."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="multi-note-session",
+        goal="Test multiple notes",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-multi-1",
+    )
+
+    # Add multiple notes
+    add_note(identifier="multi-note-session", note="First note")
+    add_note(identifier="multi-note-session", note="Second note")
+    add_note(identifier="multi-note-session", note="Third note")
+
+    # Verify all notes are present
+    notes_file = config_loader.get_session_dir("multi-note-session") / "notes.md"
+    assert notes_file.exists()
+    content = notes_file.read_text()
+    assert "First note" in content
+    assert "Second note" in content
+    assert "Third note" in content
+
+    # Verify chronological order
+    first_pos = content.index("First note")
+    second_pos = content.index("Second note")
+    third_pos = content.index("Third note")
+    assert first_pos < second_pos < third_pos

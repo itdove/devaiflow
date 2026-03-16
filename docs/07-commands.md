@@ -2136,7 +2136,7 @@ daf investigate --goal "Explore API design patterns" --model-profile ollama-loca
    - Documents findings and recommendations
    - No code modifications or ticket creation
 
-3. **Save findings** using notes (exit Claude Code first):
+3. **Save findings** using notes:
    ```bash
    daf note "Found 3 possible approaches: 1) Redis as session store, 2) Redis for cache layer, 3) Hybrid approach. Recommend approach 2 due to..."
    ```
@@ -2610,7 +2610,7 @@ Make comment PUBLIC (visible to all)? [y/N]: y
 
 Add a note to track progress.
 
-> **Important:** This command must be run **outside** Claude Code to prevent data conflicts. Exit Claude Code first before adding notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Tip:** This command now works inside Claude Code! Add notes anytime to document your work. Use `/daf-notes` to view all notes.
 
 ```bash
 daf note <NAME-or-JIRA> "Note text" [--jira]
@@ -4965,7 +4965,7 @@ daf upgrade
 daf sync --sprint current    # Start of sprint
 daf status                   # Check sprint progress
 daf open PROJ-12345          # Start working
-daf note PROJ-12345 "..."    # Track progress (exit Claude first)
+daf note PROJ-12345 "..."    # Track progress
 daf complete PROJ-12345      # Finish work
 ```
 
