@@ -15,6 +15,7 @@ from devflow.ui.config_tui import (
     AddContextFileScreen,
     ConfigTUI,
     run_config_tui,
+    _sanitize_widget_id,
 )
 from devflow.config.models import Config, JiraConfig, RepoConfig, ContextFile
 
@@ -81,6 +82,34 @@ def test_non_empty_validator():
 
     result = validator.validate("   ")
     assert not result.is_valid
+
+
+def test_sanitize_widget_id():
+    """Test widget ID sanitization for special characters."""
+    # Test normal cases with dots
+    assert _sanitize_widget_id("jira.url") == "jira_url"
+    assert _sanitize_widget_id("jira.custom_field_defaults.workstream") == "jira_custom_field_defaults_workstream"
+
+    # Test apostrophes (the bug we're fixing)
+    assert _sanitize_widget_id("ack'd_status") == "ack_d_status"
+    assert _sanitize_widget_id("jira.custom_field_defaults.ack'd_status") == "jira_custom_field_defaults_ack_d_status"
+    assert _sanitize_widget_id("should've_been_found") == "should_ve_been_found"
+    assert _sanitize_widget_id("sdlc_stage_when_should've_been_found") == "sdlc_stage_when_should_ve_been_found"
+
+    # Test other special characters
+    assert _sanitize_widget_id("field with spaces") == "field_with_spaces"
+    assert _sanitize_widget_id("field-with-dashes") == "field-with-dashes"  # Hyphens are allowed
+    assert _sanitize_widget_id("field_with_underscores") == "field_with_underscores"  # Underscores are allowed
+    assert _sanitize_widget_id("field(with)parens") == "field_with_parens"
+    assert _sanitize_widget_id("field@with#symbols") == "field_with_symbols"
+
+    # Test that result starts with valid character (already prefixed in actual use)
+    result = _sanitize_widget_id("test.field")
+    assert result[0].isalpha() or result[0] == '_'
+
+    # Test complex real-world example
+    assert _sanitize_widget_id("jira.custom_field_defaults.sdlc_stage_when_should've_been_found") == \
+           "jira_custom_field_defaults_sdlc_stage_when_should_ve_been_found"
 
 
 # ============================================================================
