@@ -79,7 +79,7 @@ On first open, you'll be prompted to select a working directory if it can't be a
 
 ### 3. Work and Track Progress
 
-Exit Claude Code first, then add notes:
+You can add notes from inside or outside Claude Code:
 
 ```bash
 # Add notes (saved locally)
@@ -89,7 +89,7 @@ daf note owner-repo-60 "Completed login endpoint"
 daf git add-comment "owner/repo#60" "Ready for code review"
 ```
 
-> **Note:** `daf note` cannot be run inside Claude Code. Exit first, then add notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Note:** `daf note` now works inside Claude Code! You can add notes without exiting. Use `/daf-notes` to view notes (also works inside Claude Code).
 
 ### 4. Check Your Status
 
@@ -198,7 +198,7 @@ On first open, you'll be prompted to select a working directory. The tool sugges
 
 ### 3. Work and Track Progress
 
-Exit Claude Code first, then add notes:
+You can add notes from inside or outside Claude Code:
 
 ```bash
 # Add notes (saved locally)
@@ -208,7 +208,7 @@ daf note PROJ-12345 "Completed login endpoint"
 daf note PROJ-12345 "Ready for code review" --jira
 ```
 
-> **Note:** `daf note` cannot be run inside Claude Code. Exit first, then add notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Note:** `daf note` now works inside Claude Code! You can add notes without exiting. Use `/daf-notes` to view notes (also works inside Claude Code).
 
 ### 4. Check Your Sprint Status
 
@@ -274,14 +274,14 @@ Claude Code will open with your goal as the initial prompt. Work on your task as
 
 ### 3. Add Progress Notes
 
-Exit Claude Code, then add notes:
+You can add notes from inside or outside Claude Code:
 
 ```bash
 daf note "api-optimization" "Identified slow queries in UserController"
 daf note "api-optimization" "Added database indexes for user lookups"
 ```
 
-> **Note:** `daf note` must be run outside Claude Code to prevent data conflicts. Inside Claude Code, use `/daf-notes` to view notes.
+> **Note:** `daf note` now works inside Claude Code! You can add notes without exiting. Use `/daf-notes` to view notes (also works inside Claude Code).
 
 ### 4. View Your Sessions
 
@@ -366,8 +366,7 @@ daf status
 # 3. Start working on a ticket
 daf open PROJ-12345
 
-# 4. Work, exit Claude, add notes, complete
-# (Exit Claude Code before running daf note)
+# 4. Work, add notes (inside or outside Claude), complete
 daf note PROJ-12345 "Implemented feature X"
 daf complete PROJ-12345
 ```
@@ -426,8 +425,7 @@ daf list --active
 # 3. Start working on an issue
 daf open owner-repo-123
 
-# 4. Work, exit Claude, add notes, complete
-# (Exit Claude Code before running daf note)
+# 4. Work, add notes (inside or outside Claude), complete
 daf note owner-repo-123 "Implemented feature X"
 daf complete owner-repo-123
 ```
@@ -553,8 +551,8 @@ daf delete <name-or-jira>                   # Delete session
 ### Notes and Progress
 
 ```bash
-daf note <name> "Your note"                 # Add local note (run outside Claude Code)
-daf note <name> "Your note" --jira          # Add note + JIRA comment (run outside Claude Code)
+daf note <name> "Your note"                 # Add local note (works inside Claude Code!)
+daf note <name> "Your note" --jira          # Add note + JIRA comment (works inside Claude Code!)
 daf summary <name>                          # View session summary
 daf time <name>                             # View time spent
 ```

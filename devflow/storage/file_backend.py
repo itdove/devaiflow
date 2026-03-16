@@ -199,7 +199,7 @@ class FileBackend(StorageBackend):
         return session_dir
 
     def add_note(self, session: Session, note: str) -> None:
-        """Add a note to a session.
+        """Add a note to a session with file locking for concurrent access safety.
 
         Args:
             session: Session object
@@ -212,16 +212,35 @@ class FileBackend(StorageBackend):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         note_entry = f"\n## {timestamp}\n- {note}\n"
 
-        if notes_file.exists():
-            with open(notes_file, "a") as f:
-                f.write(note_entry)
-        else:
-            with open(notes_file, "w") as f:
-                # Use session name for the title
-                f.write(f"# Session Notes: {session.name}\n")
-                if session.issue_key:
-                    f.write(f"*JIRA:* {session.issue_key}\n\n")
-                f.write(note_entry)
+        # Open file with locking to prevent concurrent write corruption
+        # Use 'a+' mode for atomic append operations
+        mode = "a+" if notes_file.exists() else "w+"
+
+        with open(notes_file, mode) as f:
+            # Acquire exclusive lock on Unix/Linux/macOS
+            # Windows doesn't support fcntl, so we skip locking there
+            if sys.platform != "win32":
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+
+            try:
+                if mode == "w+":
+                    # New file: write header and first note
+                    f.write(f"# Session Notes: {session.name}\n")
+                    if session.issue_key:
+                        f.write(f"*JIRA:* {session.issue_key}\n\n")
+                    f.write(note_entry)
+                else:
+                    # Existing file: append note
+                    f.write(note_entry)
+
+                f.flush()  # Explicitly flush to ensure data is written
+                os.fsync(f.fileno())  # Force OS to write to disk (prevents data loss on signal)
+            finally:
+                # Release lock (happens automatically on close, but explicit is better)
+                if sys.platform != "win32":
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def list_sessions(self, index: SessionIndex, filters: SessionFilters) -> List[Session]:
         """List sessions with optional filters.

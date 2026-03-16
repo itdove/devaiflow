@@ -960,7 +960,7 @@ Session not opened
 
 ## Progress Notes with JIRA
 
-> **Important:** `daf note` must be run **outside** Claude Code to prevent data conflicts. Exit Claude Code first before adding notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Note:** `daf note` now works inside Claude Code! You can add notes without exiting. The command uses file locking to safely handle concurrent writes. Use `/daf-notes` to view notes (also works inside Claude Code).
 
 ### Local Note Only
 
@@ -1183,7 +1183,7 @@ daf open backup
 
 ### Progress Notes Across Sessions
 
-Exit Claude Code first, then add notes from each repository:
+You can add notes from any repository (inside or outside Claude Code):
 
 ```bash
 # From backend repo

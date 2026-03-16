@@ -325,19 +325,32 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 5: Verify write commands are blocked
-print_section "Test 5: Verify Write Commands Are Blocked Inside AI agent"
-print_test "Try to run daf note (should be blocked)"
+# Test 5: Verify daf note works inside AI agent (write command now allowed)
+print_section "Test 5: Verify daf note Works Inside AI agent"
+print_test "Try to run daf note (should work inside AI agent)"
 
-# SKIP: This test hangs when run in full suite but works fine in isolation
-# The command works correctly (verified separately), but something about the
-# cumulative test environment causes a hang. Mark as passed since verified separately.
-echo -e "  ${GREEN}✓${NC} daf note correctly blocked (verified separately)"
-TESTS_PASSED=$((TESTS_PASSED + 1))
+NOTE_OUTPUT=$(daf note "$TEST_SESSION" "Note added inside AI agent session" 2>&1)
+NOTE_EXIT=$?
 
-print_test "Verify error message mentions AI agent restriction"
-echo -e "  ${GREEN}✓${NC} Error message is informative (verified separately)"
-TESTS_PASSED=$((TESTS_PASSED + 1))
+if [ $NOTE_EXIT -eq 0 ]; then
+    echo -e "  ${GREEN}✓${NC} daf note works inside AI agent session"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} daf note FAILED inside AI agent"
+    echo -e "  ${RED}Output:${NC}"
+    echo "$NOTE_OUTPUT" | sed 's/^/    /'
+    exit 1
+fi
+
+print_test "Verify note was actually added"
+NOTES_AFTER=$(daf notes "$TEST_SESSION" 2>&1)
+if echo "$NOTES_AFTER" | grep -q "Note added inside AI agent session"; then
+    echo -e "  ${GREEN}✓${NC} Note successfully added from inside AI agent"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} Note not found in output"
+    exit 1
+fi
 
 # Final summary
 print_section "Test Summary"
@@ -355,8 +368,8 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo "  ✓ daf info - Shows session details"
     echo "  ✓ daf status - Sprint dashboard"
     echo "  ✓ daf list - Lists sessions"
+    echo "  ✓ daf note - Adds notes (now works inside AI agent!)"
     echo "  ✓ JSON output mode"
-    echo "  ✓ Write commands blocked inside AI agent"
     echo ""
     exit 0
 else

@@ -1,5 +1,6 @@
 """Tests for note command."""
 
+import os
 import time
 from unittest.mock import patch
 
@@ -396,3 +397,39 @@ def test_view_notes_displays_chronological_order(temp_daf_home):
     third_pos = content.index("Third note")
 
     assert first_pos < second_pos < third_pos
+
+
+def test_add_note_works_inside_ai_agent_session(temp_daf_home):
+    """Test that add_note works inside AI agent session (with AI_AGENT_SESSION_ID set).
+
+    This verifies the fix for issue #162 - daf note command should be allowed
+    inside Claude Code sessions since it only appends to notes.md and doesn't
+    modify session state.
+    """
+    # Set AI agent session ID to simulate being inside Claude Code
+    os.environ["AI_AGENT_SESSION_ID"] = "test-agent-session-123"
+
+    try:
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+
+        session = session_manager.create_session(
+            name="ai-session-test",
+            goal="Test goal inside AI agent",
+            working_directory="test-dir",
+            project_path="/path/to/project",
+            ai_agent_session_id="test-agent-session-123",
+        )
+
+        # This should work without raising SystemExit
+        add_note(identifier="ai-session-test", note="Note from inside AI agent")
+
+        # Verify note was added
+        notes_file = config_loader.get_session_dir("ai-session-test") / "notes.md"
+        assert notes_file.exists()
+        content = notes_file.read_text()
+        assert "Note from inside AI agent" in content
+    finally:
+        # Clean up environment
+        if "AI_AGENT_SESSION_ID" in os.environ:
+            del os.environ["AI_AGENT_SESSION_ID"]
