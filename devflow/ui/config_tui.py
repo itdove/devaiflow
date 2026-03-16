@@ -51,6 +51,28 @@ from devflow.jira.utils import get_field_with_alias
 console = Console()
 
 
+def _sanitize_widget_id(config_key: str) -> str:
+    """Sanitize a config key to create a valid Textual widget ID.
+
+    Textual widget IDs must match: [a-zA-Z][a-zA-Z0-9_-]*
+    This means only letters, numbers, underscores, and hyphens are allowed.
+
+    Args:
+        config_key: Configuration key (e.g., "jira.custom_field_defaults.ack'd_status")
+
+    Returns:
+        Sanitized string with only valid characters (dots, apostrophes, etc. replaced with underscores)
+
+    Examples:
+        "jira.url" -> "jira_url"
+        "ack'd_status" -> "ack_d_status"
+        "should've_been" -> "should_ve_been"
+    """
+    import re
+    # Replace any character that's not alphanumeric, underscore, or hyphen with underscore
+    return re.sub(r'[^a-zA-Z0-9_-]', '_', config_key)
+
+
 def _is_vertex_ai_available() -> bool:
     """Check if GCP Vertex AI is being used for Claude.
 
@@ -255,7 +277,7 @@ class ConfigInput(Container):
             value=self._value,
             placeholder=self._help_text if not self._value else "",
             validators=validators,
-            id=f"input_{self.config_key.replace('.', '_')}",
+            id=f"input_{_sanitize_widget_id(self.config_key)}",
         )
 
         if self._help_text:
@@ -263,7 +285,7 @@ class ConfigInput(Container):
 
     def get_value(self) -> str:
         """Get current input value."""
-        input_widget = self.query_one(f"#input_{self.config_key.replace('.', '_')}", Input)
+        input_widget = self.query_one(f"#input_{_sanitize_widget_id(self.config_key)}", Input)
         return input_widget.value.strip()
 
 
@@ -324,7 +346,7 @@ class ConfigCheckbox(Container):
         yield Label(self._label)
         with Horizontal():
             checkbox_value = self._value if self._value is not None else False
-            yield Checkbox(value=checkbox_value, id=f"checkbox_{self.config_key.replace('.', '_')}")
+            yield Checkbox(value=checkbox_value, id=f"checkbox_{_sanitize_widget_id(self.config_key)}")
             if self._value is None:
                 yield Label("[dim](not set - will prompt)[/dim]")
 
@@ -333,7 +355,7 @@ class ConfigCheckbox(Container):
 
     def get_value(self) -> bool:
         """Get current checkbox value."""
-        checkbox = self.query_one(f"#checkbox_{self.config_key.replace('.', '_')}", Checkbox)
+        checkbox = self.query_one(f"#checkbox_{_sanitize_widget_id(self.config_key)}", Checkbox)
         return checkbox.value
 
 
@@ -399,7 +421,7 @@ class ConfigSelect(Container):
             options=self._choices,
             value=self._value if self._value else Select.BLANK,
             allow_blank=self._allow_blank,
-            id=f"select_{self.config_key.replace('.', '_')}",
+            id=f"select_{_sanitize_widget_id(self.config_key)}",
         )
 
         if self._help_text:
@@ -407,7 +429,7 @@ class ConfigSelect(Container):
 
     def get_value(self) -> Optional[str]:
         """Get current select value."""
-        select = self.query_one(f"#select_{self.config_key.replace('.', '_')}", Select)
+        select = self.query_one(f"#select_{_sanitize_widget_id(self.config_key)}", Select)
         return select.value if select.value != Select.BLANK else None
 
 
@@ -2839,7 +2861,7 @@ class ConfigTUI(App):
         """Collect all values from input widgets and update config."""
         # Helper to convert config key to valid ID
         def key_to_id(prefix: str, key: str) -> str:
-            return f"#{prefix}_{key.replace('.', '_')}"
+            return f"#{prefix}_{_sanitize_widget_id(key)}"
 
         # JIRA settings (only in Simple mode)
         if not self.advanced_mode:
