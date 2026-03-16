@@ -141,14 +141,36 @@ def create_investigation_session(
             sys.exit(1)
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
     else:
-        # Prompt for repository selection from workspace
-        from devflow.cli.commands.jira_new_command import _prompt_for_repository_selection
-        project_path, selected_workspace_name = _prompt_for_repository_selection(config, workspace_flag=workspace)
-        if not project_path:
+        # Prompt for repository selection from workspace with multi-project support (Issue #182)
+        from devflow.cli.utils import prompt_repository_selection_with_multiproject
+        project_paths, selected_workspace_name = prompt_repository_selection_with_multiproject(
+            config,
+            workspace_flag=workspace,
+            allow_multiple=True  # Enable multi-project mode for daf investigate
+        )
+        if not project_paths:
             # User cancelled or no workspace configured
             if is_json_mode():
                 output_json(success=False, error={"message": "Repository selection cancelled or failed", "code": "NO_REPOSITORY"})
             sys.exit(1)
+
+        # Check if multi-project mode was selected (Issue #182)
+        if len(project_paths) > 1:
+            # Multi-project investigation session
+            return _create_multi_project_investigation_session(
+                config=config,
+                config_loader=config_loader,
+                name=name,
+                goal=goal,
+                parent=parent,
+                project_paths=project_paths,
+                workspace=workspace,
+                selected_workspace_name=selected_workspace_name,
+                model_profile=model_profile,
+            )
+
+        # Single project mode - use first (and only) path
+        project_path = project_paths[0]
 
     working_directory = Path(project_path).name
 
@@ -462,3 +484,287 @@ def _build_investigation_prompt(
     ])
 
     return "\n".join(prompt_parts)
+
+
+def _build_multiproject_investigation_prompt(
+    goal: str,
+    parent: Optional[str],
+    config,
+    name: str,
+    project_paths: list[str],
+    workspace: str,
+) -> str:
+    """Build initial prompt for multi-project investigation (Issue #182).
+
+    Args:
+        goal: Goal/description for the investigation
+        parent: Parent issue key (optional, for tracking)
+        config: Configuration object
+        name: Session name
+        project_paths: List of full project paths to investigate
+        workspace: Workspace path
+
+    Returns:
+        Initial prompt string for Claude
+    """
+    from devflow.cli.skills_discovery import discover_skills
+    from devflow.utils.context_files import load_hierarchical_context_files
+
+    project_names = [Path(p).name for p in project_paths]
+    projects_list = "\n".join([f"  • {name}" for name in project_names])
+
+    # Build the "Work on" line
+    if parent:
+        work_on_line = f"Work on daf session: {name} (tracking under {parent})"
+    else:
+        work_on_line = f"Work on daf session: {name}"
+
+    prompt_parts = [
+        work_on_line,
+        "",
+        f"This is a MULTI-PROJECT investigation session for analyzing {len(project_paths)} repositories:",
+        projects_list,
+        "",
+    ]
+
+    # Add context files section
+    default_files = [
+        ("AGENTS.md", "agent-specific instructions"),
+        ("CLAUDE.md", "project guidelines and standards"),
+        ("DAF_AGENTS.md", "daf tool usage guide"),
+    ]
+
+    # Load configured context files
+    configured_files = []
+    if config and config.context_files:
+        configured_files = [(f.path, f.description) for f in config.context_files.files if not f.hidden]
+
+    # Load hierarchical context files
+    hierarchical_files = load_hierarchical_context_files(config)
+
+    # Discover skills from first project (skills are workspace-level)
+    skill_files = discover_skills(project_path=project_paths[0], workspace=workspace)
+
+    # Combine regular context files
+    regular_files = default_files + hierarchical_files + configured_files
+
+    prompt_parts.append("Please start by reading the following context files if they exist:")
+    for path, description in regular_files:
+        prompt_parts.append(f"- {path} ({description})")
+
+    # Add skill loading section
+    if skill_files:
+        prompt_parts.append("")
+        prompt_parts.append("⚠️  CRITICAL: Read ALL of the following skill files before proceeding:")
+        for path, description in skill_files:
+            prompt_parts.append(f"- {path}")
+        prompt_parts.append("")
+        prompt_parts.append("These skills contain essential tool usage information and must be read completely.")
+
+    prompt_parts.append("")
+
+    # Add multi-project investigation instructions
+    prompt_parts.extend([
+        "⚠️  CRITICAL CONSTRAINTS:",
+        "• This is a READ-ONLY investigation session",
+        "• Do NOT modify any code or files in any project",
+        "• Do NOT create git commits or checkout branches",
+        "• ONLY analyze the codebases to understand architecture and dependencies",
+        "",
+        f"Your task: Investigate ALL {len(project_paths)} projects to understand: {goal}",
+        "",
+        "Steps to complete this investigation:",
+        f"1. Analyze ALL {len(project_paths)} projects to understand:",
+        "   • Current architecture and implementation across projects",
+        "   • How the projects interact (APIs, shared code, dependencies)",
+        "   • Relevant code patterns and conventions",
+        "   • Cross-project dependencies and integration points",
+        "2. Read relevant files in each project, search for patterns, understand the architecture",
+        "3. Document your findings considering all projects",
+        "4. Identify feasibility and implementation approaches for cross-project changes",
+        "5. Generate a comprehensive summary of your findings and recommendations",
+        "6. Suggest whether this work should proceed and what approach to take",
+        "7. If you discover bugs or improvements during investigation, you MAY create issue tracker tickets using 'daf jira create' commands",
+        "",
+        "When you're done investigating:",
+        "- Provide a clear summary of what you discovered across all projects",
+        "- List the key files and components involved in each project",
+        "- Explain how the projects interact and depend on each other",
+        "- Suggest implementation approaches considering all projects (if applicable)",
+        "- Note any concerns, blockers, or cross-project compatibility issues",
+        "- Create issue tracker tickets for any bugs or improvements discovered (if applicable)",
+        "",
+        "The user will save your findings using 'daf note' or export them.",
+        "",
+        f"Remember: This is READ-ONLY investigation across {len(project_paths)} projects. Do not modify any files or branches.",
+    ])
+
+    return "\n".join(prompt_parts)
+
+
+def _create_multi_project_investigation_session(
+    config,
+    config_loader,
+    name: str,
+    goal: str,
+    parent: Optional[str],
+    project_paths: list[str],
+    workspace: Optional[str],
+    selected_workspace_name: str,
+    model_profile: Optional[str] = None,
+) -> None:
+    """Create a multi-project investigation session (Issue #182).
+
+    Args:
+        config: Configuration object
+        config_loader: ConfigLoader instance
+        name: Session name
+        goal: Investigation goal
+        parent: Optional parent issue key (for tracking)
+        project_paths: List of full paths to selected projects
+        workspace: Workspace flag
+        selected_workspace_name: Selected workspace name
+        model_profile: Optional model provider profile
+    """
+    from devflow.cli.commands.ticket_creation_multiproject import create_multi_project_ticket_creation_session
+    from devflow.cli.utils import get_workspace_path, resolve_workspace_path
+    from devflow.session.manager import SessionManager
+
+    # Build the goal string that includes the investigation task
+    if parent:
+        full_goal = f"Investigate (under {parent}): {goal}"
+    else:
+        full_goal = f"Investigate: {goal}"
+
+    # Get workspace path
+    workspace_path = get_workspace_path(config, selected_workspace_name)
+    if not workspace_path:
+        console_print(f"[red]✗[/red] Could not find workspace path")
+        if is_json_mode():
+            output_json(success=False, error={"message": "Could not find workspace path", "code": "NO_WORKSPACE"})
+        sys.exit(1)
+
+    # Create session manager
+    session_manager = SessionManager(config_loader=config_loader)
+
+    # Create multi-project ticket creation session with session_type="investigation"
+    session, ai_agent_session_id = create_multi_project_ticket_creation_session(
+        session_manager=session_manager,
+        config=config,
+        name=name,
+        goal=full_goal,
+        project_paths=project_paths,
+        workspace_path=workspace_path,
+        selected_workspace_name=selected_workspace_name,
+        session_type="investigation",  # Use investigation session type
+    )
+
+    # Set model profile if provided
+    if model_profile:
+        session.model_profile = model_profile
+
+    # Set parent for tracking if provided
+    if parent:
+        session.issue_key = parent
+
+    session_manager.update_session(session)
+
+    # Check if we should launch Claude Code
+    if not should_launch_claude_code(config=config, mock_mode=False):
+        console_print("[yellow]⚠[/yellow] Session created but Claude Code not launched.")
+        console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
+        return
+
+    # Build initial prompt for multi-project investigation
+    initial_prompt = _build_multiproject_investigation_prompt(
+        goal=goal,
+        parent=parent,
+        config=config,
+        name=name,
+        project_paths=project_paths,
+        workspace=workspace_path,
+    )
+
+    # Validate that DAF_AGENTS.md exists before launching Claude
+    if not validate_daf_agents_md(session, config_loader):
+        return
+
+    # Set up signal handlers for cleanup
+    setup_signal_handlers(session, session_manager, name, config)
+
+    # Get active model provider profile
+    from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
+    model_provider_profile = get_active_profile(config, override_profile_name=session.model_profile) if config else None
+
+    # Display which model provider is being used
+    if model_provider_profile:
+        provider_name = get_profile_display_name(model_provider_profile)
+        console_print(f"[dim]Using model provider: {provider_name}[/dim]")
+
+    # Build environment variables from model provider profile
+    env = build_env_from_profile(model_provider_profile)
+
+    # Set additional DevAIFlow environment variables
+    env["CS_SESSION_NAME"] = name
+    env["DEVAIFLOW_IN_SESSION"] = "1"
+
+    # Set GCP Vertex AI region if configured (deprecated - use model_provider instead)
+    if config and config.gcp_vertex_region and not model_provider_profile:
+        env["CLOUD_ML_REGION"] = config.gcp_vertex_region
+
+    # Launch Claude Code at workspace level with all projects accessible
+    try:
+        from devflow.utils.claude_commands import build_claude_command
+
+        # Use workspace path as the primary directory
+        workspace_resolved = resolve_workspace_path(config, session.workspace_name)
+
+        cmd = build_claude_command(
+            session_id=ai_agent_session_id,
+            initial_prompt=initial_prompt,
+            project_path=workspace_path,  # Launch at workspace level
+            workspace_path=workspace_resolved,
+            config=config
+        )
+
+        # Debug output
+        console_print(f"\n[dim]Debug - Command:[/dim]")
+        console_print(f"[dim]  claude executable: {cmd[0]}[/dim]")
+        console_print(f"[dim]  --session-id: {cmd[2]}[/dim]")
+        console_print(f"[dim]  --add-dir flags: {len([x for x in cmd if x == '--add-dir'])}[/dim]")
+        console_print(f"[dim]  Prompt (first 100 chars): {cmd[-1][:100]}...[/dim]")
+        console_print(f"[dim]  Working directory: {workspace_path}[/dim]")
+        console_print()
+
+        subprocess.run(
+            cmd,
+            cwd=workspace_path,
+            env=env,
+            check=False
+        )
+    finally:
+        if not is_cleanup_done():
+            console_print(f"\n[green]✓[/green] Claude session completed")
+
+            # Reload index from disk
+            session_manager.index = session_manager.config_loader.load_sessions()
+
+            # Get current session
+            current_session = session_manager.get_session(name)
+            if not current_session:
+                current_session = session
+
+            # End work session
+            try:
+                session_manager.end_work_session(name)
+            except ValueError as e:
+                console_print(f"[yellow]⚠[/yellow] Could not end work session: {e}")
+
+            console_print(f"[dim]Resume anytime with: daf open {name}[/dim]")
+
+            # Prompt for complete on exit
+            from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
+            if current_session:
+                _prompt_for_complete_on_exit(current_session, config)
+            else:
+                _prompt_for_complete_on_exit(session, config)
