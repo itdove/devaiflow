@@ -67,10 +67,13 @@ def mock_session(mock_workspace, temp_daf_home):
 
 def test_empty_input_returns_false_with_error(mock_workspace, mock_config_loader, mock_session, monkeypatch):
     """Test that pressing Enter without input shows error and returns False (PROJ-61069)."""
-    from rich.prompt import Prompt
+    from rich.prompt import Prompt, Confirm
+
+    # Mock Confirm.ask to decline multi-project mode (Issue #177)
+    monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
     # Mock Prompt.ask to simulate empty input (pressing Enter)
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: "")
 
     # Mock console to capture output
     console_output = []
@@ -100,10 +103,13 @@ def test_empty_input_returns_false_with_error(mock_workspace, mock_config_loader
 
 def test_whitespace_input_returns_false_with_error(mock_workspace, mock_config_loader, mock_session, monkeypatch):
     """Test that entering only whitespace shows error and returns False (PROJ-61069)."""
-    from rich.prompt import Prompt
+    from rich.prompt import Prompt, Confirm
+
+    # Mock Confirm.ask to decline multi-project mode (Issue #177)
+    monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
     # Mock Prompt.ask to simulate whitespace input
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "   ")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: "   ")
 
     # Create session manager
     session_manager = SessionManager(mock_config_loader)
@@ -122,10 +128,13 @@ def test_whitespace_input_returns_false_with_error(mock_workspace, mock_config_l
 
 def test_valid_number_selection_succeeds(mock_workspace, mock_config_loader, mock_session, monkeypatch):
     """Test that selecting a valid number returns True."""
-    from rich.prompt import Prompt
+    from rich.prompt import Prompt, Confirm
+
+    # Mock Confirm.ask to decline multi-project mode (Issue #177)
+    monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
     # Mock Prompt.ask to simulate selecting first repository
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "1")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: "1")
 
     # Create session manager
     session_manager = SessionManager(mock_config_loader)
@@ -148,10 +157,13 @@ def test_valid_number_selection_succeeds(mock_workspace, mock_config_loader, moc
 
 def test_cancel_returns_false(mock_workspace, mock_config_loader, mock_session, monkeypatch):
     """Test that entering 'cancel' returns False."""
-    from rich.prompt import Prompt
+    from rich.prompt import Prompt, Confirm
+
+    # Mock Confirm.ask to decline multi-project mode (Issue #177)
+    monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
     # Mock Prompt.ask to simulate cancel
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "cancel")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: "cancel")
 
     # Create session manager
     session_manager = SessionManager(mock_config_loader)
@@ -169,10 +181,13 @@ def test_cancel_returns_false(mock_workspace, mock_config_loader, mock_session, 
 
 def test_q_returns_false(mock_workspace, mock_config_loader, mock_session, monkeypatch):
     """Test that entering 'q' returns False (alias for cancel)."""
-    from rich.prompt import Prompt
+    from rich.prompt import Prompt, Confirm
+
+    # Mock Confirm.ask to decline multi-project mode (Issue #177)
+    monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
     # Mock Prompt.ask to simulate 'q'
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "q")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: "q")
 
     # Create session manager
     session_manager = SessionManager(mock_config_loader)

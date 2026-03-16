@@ -146,8 +146,11 @@ class TestGitHubRepoSuggestionIntegration:
         self, workspace_with_devaiflow, config_loader_with_workspace, github_session, monkeypatch, capsys
     ):
         """Test that opening a GitHub session suggests the matching repository."""
-        from rich.prompt import Prompt
+        from rich.prompt import Prompt, Confirm
         from rich.console import Console
+
+        # Mock Confirm.ask to decline multi-project mode (Issue #177)
+        monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
         # Mock Prompt.ask to simulate selecting the default (devaiflow)
         monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: default or "1")
@@ -172,7 +175,7 @@ class TestGitHubRepoSuggestionIntegration:
 
     def test_jira_session_no_suggestion(self, workspace_with_devaiflow, config_loader_with_workspace, temp_daf_home, monkeypatch):
         """Test that JIRA sessions do not show repository suggestions."""
-        from rich.prompt import Prompt
+        from rich.prompt import Prompt, Confirm
 
         # Create a JIRA session
         session_manager = SessionManager(config_loader_with_workspace)
@@ -186,6 +189,9 @@ class TestGitHubRepoSuggestionIntegration:
         # Set issue_tracker manually
         jira_session.issue_tracker = "jira"
         session_manager.update_session(jira_session)
+
+        # Mock Confirm.ask to decline multi-project mode (Issue #177)
+        monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
         # Mock Prompt.ask to simulate selecting first repository
         monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: "1")
@@ -204,7 +210,7 @@ class TestGitHubRepoSuggestionIntegration:
         self, tmp_path, config_loader_with_workspace, temp_daf_home, monkeypatch
     ):
         """Test handling when suggested repository doesn't exist in workspace."""
-        from rich.prompt import Prompt
+        from rich.prompt import Prompt, Confirm
 
         # Create session with issue for a repo that doesn't exist in workspace
         session_manager = SessionManager(config_loader_with_workspace)
@@ -217,6 +223,9 @@ class TestGitHubRepoSuggestionIntegration:
         # Set issue_tracker manually
         session.issue_tracker = "github"
         session_manager.update_session(session)
+
+        # Mock Confirm.ask to decline multi-project mode (Issue #177)
+        monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: False)
 
         # Mock Prompt.ask to simulate selecting first repository
         monkeypatch.setattr(Prompt, "ask", lambda prompt, default=None: "1")
