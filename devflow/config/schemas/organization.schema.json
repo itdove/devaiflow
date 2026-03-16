@@ -9,6 +9,46 @@
       "type": ["string", "null"],
       "description": "JIRA project key (e.g., 'PROJ', 'ENG', 'MYAPP'). Required for ticket creation."
     },
+    "transitions": {
+      "type": "object",
+      "description": "Organization workflow transition policies",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of source statuses",
+            "default": ["New", "To Do"]
+          },
+          "to": {
+            "type": "string",
+            "description": "Target status for automatic transitions (when prompt=false)",
+            "default": ""
+          },
+          "prompt": {
+            "type": "boolean",
+            "description": "Whether to prompt user for transition",
+            "default": false
+          },
+          "on_fail": {
+            "type": "string",
+            "description": "Action on transition failure",
+            "default": "warn"
+          },
+          "options": {
+            "type": ["array", "null"],
+            "items": {"type": "string"},
+            "description": "Deprecated - transitions now fetched dynamically from JIRA API"
+          }
+        }
+      }
+    },
+    "parent_field_mapping": {
+      "type": ["object", "null"],
+      "description": "Organization issue hierarchy policy - maps issue types to parent field names (e.g., {\"story\": \"epic_link\", \"sub-task\": \"parent\"})",
+      "additionalProperties": {"type": "string"}
+    },
     "sync_filters": {
       "type": "object",
       "description": "Filters for JIRA ticket synchronization",
@@ -18,16 +58,30 @@
           "status": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "List of JIRA statuses to sync (e.g., ['To Do', 'In Progress'])"
+            "description": "List of JIRA statuses to sync (e.g., ['To Do', 'In Progress'])",
+            "default": ["New", "To Do", "In Progress"]
           },
           "required_fields": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "List of required fields for ticket creation"
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "List of required fields for all issue types"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                },
+                "description": "Required fields per issue type (e.g., {\"Bug\": [\"sprint\"], \"Story\": [\"sprint\", \"story_points\"]})"
+              }
+            ]
           },
           "assignee": {
             "type": "string",
-            "description": "Assignee filter: 'currentUser()' for user's tickets, specific username, or null for all"
+            "description": "Assignee filter: 'currentUser()' for user's tickets, specific username, or null for all",
+            "default": "currentUser()"
           }
         },
         "required": ["status", "required_fields", "assignee"],
@@ -41,6 +95,40 @@
     "status_totals_field": {
       "type": ["string", "null"],
       "description": "Field to sum for totals in status dashboard (e.g., 'points', 'story_points', 'effort'). None means no totals."
+    },
+    "hierarchical_config_source": {
+      "type": ["string", "null"],
+      "description": "URL or path to hierarchical config files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md). Supports file://, http://, https://. Example: 'https://github.com/ansible-saas/devflow-for-red-hatters/configs' or 'file:///path/to/configs'"
+    },
+    "jira_issue_templates": {
+      "type": ["object", "null"],
+      "description": "Issue templates for different issue types (e.g., {\"Bug\": \"...\", \"Story\": \"...\", \"Task\": \"...\", \"Epic\": \"...\", \"Spike\": \"...\"})",
+      "additionalProperties": {"type": "string"}
+    },
+    "github_repository": {
+      "type": ["string", "null"],
+      "description": "GitHub repository in owner/repo format (e.g., 'ansible-saas/devaiflow')"
+    },
+    "github_auto_close_on_complete": {
+      "type": "boolean",
+      "description": "Auto-close GitHub issues when session completes",
+      "default": false
+    },
+    "github_default_labels": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Organization-level default labels for GitHub issues",
+      "default": []
+    },
+    "github_issue_templates": {
+      "type": ["object", "null"],
+      "description": "Issue templates for different issue types (e.g., {\"Bug\": \"...\", \"Story\": \"...\"})",
+      "additionalProperties": {"type": "string"}
+    },
+    "github_issue_types": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "description": "Override enterprise-level GitHub/GitLab issue types (e.g., [\"bug\", \"enhancement\", \"documentation\"])"
     },
     "model_provider": {
       "type": ["object", "null"],
