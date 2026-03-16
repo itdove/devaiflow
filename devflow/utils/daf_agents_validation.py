@@ -274,7 +274,69 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
         console.print(f"[dim]Run: daf config tui[/dim]")
         return False
 
-    # Normal session: check repository directory first, then workspace
+    # Multi-project session: check workspace directory only
+    # (Claude launches from workspace root for multi-project sessions)
+    if active_conv and active_conv.is_multi_project:
+        workspace_path_from_session = active_conv.workspace_path
+        if workspace_path_from_session:
+            workspace_path = Path(workspace_path_from_session).expanduser()
+            cs_agents_workspace = workspace_path / "DAF_AGENTS.md"
+
+            if cs_agents_workspace.exists():
+                console.print(f"[dim]✓ Found DAF_AGENTS.md in workspace (multi-project)[/dim]")
+                console.print(f"[dim]  Location: {cs_agents_workspace}[/dim]")
+                # Check if upgrade is needed
+                if not _check_and_upgrade_daf_agents(cs_agents_workspace, "workspace"):
+                    return False
+                return True
+
+            # Not found in workspace - offer to install there
+            console.print(f"\n[yellow]⚠ DAF_AGENTS.md not found in workspace[/yellow]")
+            console.print(f"\n[dim]DAF_AGENTS.md provides daf tool usage instructions to Claude.[/dim]")
+            console.print(f"\nSearched location:")
+            console.print(f"  Workspace: {cs_agents_workspace}")
+            console.print(f"\n[dim]Note: Multi-project sessions use workspace-level DAF_AGENTS.md[/dim]")
+
+            from devflow.utils import is_mock_mode
+            mock_mode = is_mock_mode()
+
+            should_install = True
+            if not mock_mode:
+                console.print(f"\n[bold]Install DAF_AGENTS.md to workspace?[/bold]")
+                console.print(f"[dim]This will copy the bundled DAF_AGENTS.md to: {cs_agents_workspace}[/dim]")
+                should_install = Confirm.ask("Install DAF_AGENTS.md to workspace?", default=True)
+            else:
+                console.print(f"[dim]Mock mode: Auto-installing DAF_AGENTS.md to {cs_agents_workspace}[/dim]")
+
+            if not should_install:
+                console.print(f"\n[yellow]Cannot continue without DAF_AGENTS.md[/yellow]")
+                console.print(f"\n[bold]Manual installation:[/bold]")
+                console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
+                console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
+                return False
+
+            # Install bundled DAF_AGENTS.md to workspace
+            success, diagnostics = _install_bundled_cs_agents(cs_agents_workspace)
+            if success:
+                console.print(f"[green]✓ Installed DAF_AGENTS.md to workspace[/green]")
+                console.print(f"[dim]  Location: {cs_agents_workspace}[/dim]")
+                return True
+            else:
+                console.print(f"\n[red]✗ Failed to install DAF_AGENTS.md[/red]")
+                if diagnostics:
+                    console.print(f"\n[yellow]Debug information:[/yellow]")
+                    for diag in diagnostics:
+                        console.print(f"[dim]{diag}[/dim]")
+                console.print(f"\n[bold]Manual installation:[/bold]")
+                console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
+                console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
+                return False
+
+        # No workspace path in multi-project session
+        console.print(f"\n[red]✗ Multi-project session missing workspace_path[/red]")
+        return False
+
+    # Normal single-project session: check repository directory first, then workspace
     project_path = active_conv.project_path if active_conv else None
     if not project_path:
         return False
