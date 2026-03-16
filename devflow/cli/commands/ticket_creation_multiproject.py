@@ -68,15 +68,22 @@ def create_multi_project_ticket_creation_session(
     for proj_path in project_paths:
         proj_name = Path(proj_path).name
 
-        # Get current branch (or None if not a git repo)
-        current_branch = None
+        # Get current branch (or "main" if not a git repo or no branch)
+        current_branch = "main"  # Default for non-git repos
+        base_branch = "main"  # Default base branch
         if GitUtils.is_git_repository(Path(proj_path)):
-            current_branch = GitUtils.get_current_branch(Path(proj_path))
+            detected_branch = GitUtils.get_current_branch(Path(proj_path))
+            if detected_branch:
+                current_branch = detected_branch
+                # Use detected base branch or fallback to "main"
+                detected_base = GitUtils.get_default_branch(Path(proj_path))
+                if detected_base:
+                    base_branch = detected_base
 
         projects_info[proj_name] = {
             'project_path': proj_path,
-            'branch': current_branch,  # Current branch, not creating new one
-            'base_branch': None,  # Not applicable for ticket creation
+            'branch': current_branch,  # Current branch (or "main" for non-git)
+            'base_branch': base_branch,  # Base branch (detected or "main")
         }
 
     # Create session without initial conversation
