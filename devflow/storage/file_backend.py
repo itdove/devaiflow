@@ -201,6 +201,9 @@ class FileBackend(StorageBackend):
     def add_note(self, session: Session, note: str) -> None:
         """Add a note to a session.
 
+        Uses file locking (fcntl.flock on Unix) to prevent concurrent write issues
+        when multiple processes add notes simultaneously.
+
         Args:
             session: Session object
             note: Note text to add
@@ -212,16 +215,30 @@ class FileBackend(StorageBackend):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         note_entry = f"\n## {timestamp}\n- {note}\n"
 
-        if notes_file.exists():
-            with open(notes_file, "a") as f:
+        # Create or append to notes file with file locking
+        mode = "a" if notes_file.exists() else "w"
+        with open(notes_file, mode) as f:
+            # Windows doesn't support fcntl, so we skip locking there
+            if sys.platform != "win32":
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+
+            try:
+                if mode == "w":
+                    # New file - write header
+                    f.write(f"# Session Notes: {session.name}\n")
+                    if session.issue_key:
+                        f.write(f"*JIRA:* {session.issue_key}\n\n")
+
+                # Write note entry
                 f.write(note_entry)
-        else:
-            with open(notes_file, "w") as f:
-                # Use session name for the title
-                f.write(f"# Session Notes: {session.name}\n")
-                if session.issue_key:
-                    f.write(f"*JIRA:* {session.issue_key}\n\n")
-                f.write(note_entry)
+                f.flush()  # Explicitly flush to ensure data is written
+                os.fsync(f.fileno())  # Force OS to write to disk
+            finally:
+                # Release lock (happens automatically on close, but explicit is better)
+                if sys.platform != "win32":
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def list_sessions(self, index: SessionIndex, filters: SessionFilters) -> List[Session]:
         """List sessions with optional filters.

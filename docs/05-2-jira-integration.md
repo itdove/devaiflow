@@ -960,7 +960,7 @@ Session not opened
 
 ## Progress Notes with JIRA
 
-> **Important:** `daf note` must be run **outside** Claude Code to prevent data conflicts. Exit Claude Code first before adding notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Tip:** `daf note` now works inside Claude Code! Add notes anytime to track progress. Use `/daf-notes` to view all notes.
 
 ### Local Note Only
 
@@ -1500,7 +1500,7 @@ daf link experiment --jira PROJ-12345
 
 ### 3. Use Notes for Team Communication
 
-Add notes with `--jira` flag for team visibility (exit Claude Code first):
+Add notes with `--jira` flag for team visibility:
 ```bash
 daf note PROJ-12345 "Backend complete, needs UI work" --jira
 ```

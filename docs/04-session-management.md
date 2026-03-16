@@ -684,7 +684,7 @@ daf list --status in_progress,paused
 
 ## Progress Notes
 
-> **Important:** `daf note` must be run **outside** Claude Code to prevent data conflicts. Exit Claude Code first before adding notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Tip:** `daf note` now works inside Claude Code! Add notes anytime to track progress and document decisions. Use `/daf-notes` to view all notes.
 
 ### Add a Note (Local Only)
 
@@ -1066,7 +1066,7 @@ daf new --name "test123" --goal "stuff"
 
 ### 2. Add Notes Regularly
 
-Document progress (exit Claude Code first):
+Document progress as you work:
 ```bash
 daf note "Completed login endpoint"
 daf note "Found bug in token refresh, fixing"

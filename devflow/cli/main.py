@@ -666,10 +666,6 @@ def note(ctx: click.Context, identifier: str, note: str, sync_to_jira: bool, lat
     (requires session to have a issue key).
     """
     from devflow.cli.commands.note_command import add_note
-    from devflow.cli.utils import check_outside_ai_session
-
-    # Block this command inside AI agent sessions
-    check_outside_ai_session()
 
     add_note(identifier, note, sync_to_jira=sync_to_jira, latest=latest)
 

@@ -7,14 +7,13 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.prompt import Prompt
 
-from devflow.cli.utils import get_session_with_prompt, add_jira_comment, require_outside_claude
+from devflow.cli.utils import get_session_with_prompt, add_jira_comment
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 
 console = Console()
 
 
-@require_outside_claude
 def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_to_jira: bool = False, latest: bool = False) -> None:
     """Add a note to a session.
 

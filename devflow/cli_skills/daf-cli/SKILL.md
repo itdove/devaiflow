@@ -312,37 +312,46 @@ daf jira add-comment PROJ-12345 "Comment text" --json
 
 ## Session Notes
 
-**⚠️ IMPORTANT:** The `daf note` command (for adding notes) **CANNOT be used inside Claude Code sessions**. It is blocked for safety reasons.
+**Session notes** allow you to document progress, decisions, and context as you work. There are two ways to add notes:
 
-**Inside Claude sessions, use instead:**
-- ✅ **`daf jira add-comment`** - Add progress notes/comments to JIRA tickets (recommended)
-  - This is the primary way to document work and add notes inside Claude sessions
-  - Notes added this way appear as JIRA comments and are visible in the ticket
-  - Use this to track progress, document decisions, and update stakeholders
-- ✅ `daf notes` - View existing session notes (read-only)
+### Using `daf note` (Local Notes)
 
-**Outside Claude sessions only:**
-- `daf note` - Add progress notes to local session files (must run in terminal, not in Claude)
+✅ **Now works inside Claude Code sessions!**
 
 ```bash
-# View existing session notes (works inside Claude sessions)
+# Add a note to current session (works inside Claude sessions)
+daf note PROJ-12345 "Completed API implementation"
+daf note --latest "Refactored authentication module"
+
+# View existing session notes
 daf notes PROJ-12345
 daf notes --latest
 daf notes PROJ-12345 --json
 
-# ✅ Add notes/comments to JIRA ticket (works inside Claude sessions)
-# This is the recommended way to document your work and track progress
-daf jira add-comment PROJ-12345 "Completed API implementation"
-daf jira add-comment PROJ-12345 "Fixed bug in authentication flow"
-daf jira add-comment PROJ-12345 "$(cat <<'EOF'
-Updated implementation details:
-* Refactored authentication module
+# Add structured progress notes
+daf note PROJ-12345 "$(cat <<'EOF'
+Progress Update:
+* Completed API endpoint implementation
 * Added unit tests for edge cases
 * Verified performance meets requirements
 EOF
 )"
+```
 
-# Add structured progress updates
+**What `daf note` does:**
+- Appends to local `sessions/<name>/notes.md` file
+- Persists across sessions
+- No external dependencies (works offline)
+- Great for documenting implementation details and decisions
+
+### Using `daf jira add-comment` (JIRA Comments)
+
+For teams using JIRA, you can also add notes directly to JIRA tickets:
+
+```bash
+# Add notes/comments to JIRA ticket (works inside Claude sessions)
+daf jira add-comment PROJ-12345 "Completed API implementation"
+daf jira add-comment PROJ-12345 "Fixed bug in authentication flow"
 daf jira add-comment AAP-12345 "$(cat <<'EOF'
 *Progress Update*
 
@@ -359,7 +368,12 @@ EOF
 )"
 ```
 
-**Best Practice:** Use `daf jira add-comment` regularly to document your work as you progress through the ticket. This creates a clear audit trail and keeps stakeholders informed.
+**What `daf jira add-comment` does:**
+- Creates JIRA comments visible to stakeholders
+- Useful for team communication and audit trails
+- Requires JIRA integration to be configured
+
+**Best Practice:** Use `daf note` for implementation details and `daf jira add-comment` for stakeholder updates.
 
 ## Session Information
 

@@ -89,7 +89,7 @@ daf note owner-repo-60 "Completed login endpoint"
 daf git add-comment "owner/repo#60" "Ready for code review"
 ```
 
-> **Note:** `daf note` cannot be run inside Claude Code. Exit first, then add notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Tip:** `daf note` now works inside Claude Code! Add notes anytime to track progress. Use `/daf-notes` to view all notes.
 
 ### 4. Check Your Status
 
@@ -208,7 +208,7 @@ daf note PROJ-12345 "Completed login endpoint"
 daf note PROJ-12345 "Ready for code review" --jira
 ```
 
-> **Note:** `daf note` cannot be run inside Claude Code. Exit first, then add notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Tip:** `daf note` now works inside Claude Code! Add notes anytime to track progress. Use `/daf-notes` to view all notes.
 
 ### 4. Check Your Sprint Status
 

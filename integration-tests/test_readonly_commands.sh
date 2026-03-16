@@ -325,19 +325,37 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 5: Verify write commands are blocked
-print_section "Test 5: Verify Write Commands Are Blocked Inside AI agent"
-print_test "Try to run daf note (should be blocked)"
+# Test 5: Verify daf note works inside AI agent session
+print_section "Test 5: Verify daf note Works Inside AI agent Session"
+print_test "Add note inside AI agent session (with AI_AGENT_SESSION_ID set)"
 
-# SKIP: This test hangs when run in full suite but works fine in isolation
-# The command works correctly (verified separately), but something about the
-# cumulative test environment causes a hang. Mark as passed since verified separately.
-echo -e "  ${GREEN}✓${NC} daf note correctly blocked (verified separately)"
-TESTS_PASSED=$((TESTS_PASSED + 1))
+# Use timeout to prevent hanging if command prompts for input
+NOTE_OUTPUT=$(timeout 10 daf note "$TEST_SESSION" "Note added inside AI agent" 2>&1)
+NOTE_EXIT=$?
 
-print_test "Verify error message mentions AI agent restriction"
-echo -e "  ${GREEN}✓${NC} Error message is informative (verified separately)"
-TESTS_PASSED=$((TESTS_PASSED + 1))
+if [ $NOTE_EXIT -eq 0 ]; then
+    echo -e "  ${GREEN}✓${NC} daf note works inside AI agent session"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+elif [ $NOTE_EXIT -eq 124 ]; then
+    # Timeout occurred - command hung
+    echo -e "  ${RED}✗${NC} daf note TIMED OUT (command hung - possible prompt for input)"
+    exit 1
+else
+    echo -e "  ${RED}✗${NC} daf note FAILED inside AI agent (exit code: $NOTE_EXIT)"
+    echo -e "  ${RED}Output:${NC}"
+    echo "$NOTE_OUTPUT" | sed 's/^/    /'
+    exit 1
+fi
+
+print_test "Verify note was actually added"
+NOTES_AFTER_ADD=$(daf notes "$TEST_SESSION" 2>&1)
+if echo "$NOTES_AFTER_ADD" | grep -q "Note added inside AI agent"; then
+    echo -e "  ${GREEN}✓${NC} Note successfully added and visible"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "  ${RED}✗${NC} Note not found after adding"
+    exit 1
+fi
 
 # Final summary
 print_section "Test Summary"
@@ -352,11 +370,11 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo "  ✓ Commands work inside AI agent (with AI_AGENT_SESSION_ID)"
     echo "  ✓ daf active - Shows active conversation"
     echo "  ✓ daf notes - Views session notes"
+    echo "  ✓ daf note - Adds notes (now works inside AI agent!)"
     echo "  ✓ daf info - Shows session details"
     echo "  ✓ daf status - Sprint dashboard"
     echo "  ✓ daf list - Lists sessions"
     echo "  ✓ JSON output mode"
-    echo "  ✓ Write commands blocked inside AI agent"
     echo ""
     exit 0
 else

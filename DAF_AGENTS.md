@@ -99,7 +99,15 @@ When working in sessions opened by the user (via `daf open`), follow this workfl
 - Making code changes to implement the requested feature/fix
 - Verifying each acceptance criterion as you complete related work
 - Testing that criteria are actually met (run tests, check implementation manually)
-- Tracking progress on acceptance criteria using notes
+- Tracking progress using `daf note` or `daf jira add-comment`
+
+**Documenting Progress:**
+- ✅ **`daf note`** - Add local session notes (works inside Claude sessions)
+  - Use for implementation details, decisions, and progress tracking
+  - Example: `daf note "Completed API endpoint implementation"`
+- ✅ **`daf jira add-comment`** - Add JIRA comments for stakeholder visibility
+  - Use for team communication and progress updates
+  - Example: `daf jira add-comment PROJ-123 "Fixed authentication bug"`
 
 **Do NOT:**
 - ❌ Create git commits or run git commands (see git-cli skill for why)
