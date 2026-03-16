@@ -560,3 +560,203 @@ def testvalidate_daf_agents_md_triggers_upgrade_check_workspace(tmp_path, temp_d
     bundled_content, _ = _get_bundled_daf_agents_content()
     new_content = (workspace / "DAF_AGENTS.md").read_text()
     assert new_content == bundled_content
+
+
+def test_validate_daf_agents_multi_project_session(tmp_path, temp_daf_home):
+    """Test DAF_AGENTS.md validation for multi-project sessions."""
+    from devflow.config.models import Conversation, ProjectInfo
+    from devflow.config.models import Session
+    import uuid
+
+    # Create workspace with up-to-date DAF_AGENTS.md
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    # Use actual bundled content to avoid triggering upgrade
+    bundled_content, _ = _get_bundled_daf_agents_content()
+    (workspace / "DAF_AGENTS.md").write_text(bundled_content)
+
+    # Create multiple project directories (no DAF_AGENTS.md in individual projects)
+    project1 = workspace / "backend-api"
+    project2 = workspace / "frontend-app"
+    project1.mkdir()
+    project2.mkdir()
+
+    # Create a multi-project conversation context
+    session_id = str(uuid.uuid4())
+    projects_dict = {
+        "backend-api": ProjectInfo(
+            project_path=str(project1),
+            relative_path="backend-api",
+            branch="feature-branch",
+            base_branch="main",
+            repo_name="backend-api"
+        ),
+        "frontend-app": ProjectInfo(
+            project_path=str(project2),
+            relative_path="frontend-app",
+            branch="feature-branch",
+            base_branch="main",
+            repo_name="frontend-app"
+        )
+    }
+    context = ConversationContext(
+        ai_agent_session_id=session_id,
+        is_multi_project=True,
+        projects=projects_dict,
+        workspace_path=str(workspace)
+    )
+
+    # Create session with multi-project conversation
+    conversation = Conversation(active_session=context)
+    working_dir_key = f"multiproject-{session_id[:8]}"
+    session = Session(
+        name="test-multi-project-session",
+        session_type="development",
+        conversations={working_dir_key: conversation},
+        working_directory=working_dir_key
+    )
+
+    config_loader = ConfigLoader()
+
+    # Should find DAF_AGENTS.md in workspace
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True
+
+
+def test_validate_daf_agents_multi_project_session_not_found(tmp_path, temp_daf_home, monkeypatch):
+    """Test DAF_AGENTS.md validation for multi-project sessions when not found."""
+    from devflow.config.models import Conversation, ProjectInfo
+    from devflow.config.models import Session
+    from unittest.mock import MagicMock
+    import uuid
+
+    # Mock Confirm.ask to return True (user accepts installation)
+    mock_confirm = MagicMock(return_value=True)
+    monkeypatch.setattr("rich.prompt.Confirm.ask", mock_confirm)
+
+    # Create workspace WITHOUT DAF_AGENTS.md
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    # Create multiple project directories
+    project1 = workspace / "backend-api"
+    project2 = workspace / "frontend-app"
+    project1.mkdir()
+    project2.mkdir()
+
+    # Create a multi-project conversation context
+    session_id = str(uuid.uuid4())
+    projects_dict = {
+        "backend-api": ProjectInfo(
+            project_path=str(project1),
+            relative_path="backend-api",
+            branch="feature-branch",
+            base_branch="main",
+            repo_name="backend-api"
+        ),
+        "frontend-app": ProjectInfo(
+            project_path=str(project2),
+            relative_path="frontend-app",
+            branch="feature-branch",
+            base_branch="main",
+            repo_name="frontend-app"
+        )
+    }
+    context = ConversationContext(
+        ai_agent_session_id=session_id,
+        is_multi_project=True,
+        projects=projects_dict,
+        workspace_path=str(workspace)
+    )
+
+    # Create session with multi-project conversation
+    conversation = Conversation(active_session=context)
+    working_dir_key = f"multiproject-{session_id[:8]}"
+    session = Session(
+        name="test-multi-project-session",
+        session_type="development",
+        conversations={working_dir_key: conversation},
+        working_directory=working_dir_key
+    )
+
+    config_loader = ConfigLoader()
+
+    # Should offer to install DAF_AGENTS.md to workspace
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True
+
+    # Verify DAF_AGENTS.md was created in workspace
+    assert (workspace / "DAF_AGENTS.md").exists()
+
+    # Verify Confirm was called
+    assert mock_confirm.called
+
+
+def test_validate_daf_agents_multi_project_session_user_declines(tmp_path, temp_daf_home, monkeypatch):
+    """Test multi-project session validation when user declines installation."""
+    from devflow.config.models import Conversation, ProjectInfo
+    from devflow.config.models import Session
+    from unittest.mock import MagicMock
+    import uuid
+
+    # Mock Confirm.ask to return False (user declines installation)
+    mock_confirm = MagicMock(return_value=False)
+    monkeypatch.setattr("rich.prompt.Confirm.ask", mock_confirm)
+
+    # Create workspace WITHOUT DAF_AGENTS.md
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    # Create multiple project directories
+    project1 = workspace / "backend-api"
+    project2 = workspace / "frontend-app"
+    project1.mkdir()
+    project2.mkdir()
+
+    # Create a multi-project conversation context
+    session_id = str(uuid.uuid4())
+    projects_dict = {
+        "backend-api": ProjectInfo(
+            project_path=str(project1),
+            relative_path="backend-api",
+            branch="feature-branch",
+            base_branch="main",
+            repo_name="backend-api"
+        ),
+        "frontend-app": ProjectInfo(
+            project_path=str(project2),
+            relative_path="frontend-app",
+            branch="feature-branch",
+            base_branch="main",
+            repo_name="frontend-app"
+        )
+    }
+    context = ConversationContext(
+        ai_agent_session_id=session_id,
+        is_multi_project=True,
+        projects=projects_dict,
+        workspace_path=str(workspace)
+    )
+
+    # Create session with multi-project conversation
+    conversation = Conversation(active_session=context)
+    working_dir_key = f"multiproject-{session_id[:8]}"
+    session = Session(
+        name="test-multi-project-session",
+        session_type="development",
+        conversations={working_dir_key: conversation},
+        working_directory=working_dir_key
+    )
+
+    config_loader = ConfigLoader()
+
+    # Should return False when user declines
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is False
+
+    # Verify DAF_AGENTS.md was NOT created
+    assert not (workspace / "DAF_AGENTS.md").exists()
+
+    # Verify Confirm was called
+    assert mock_confirm.called
