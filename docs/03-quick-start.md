@@ -89,7 +89,7 @@ daf note owner-repo-60 "Completed login endpoint"
 daf git add-comment "owner/repo#60" "Ready for code review"
 ```
 
-> **Note:** `daf note` cannot be run inside Claude Code. Exit first, then add notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Note:** `daf note` can now be run inside Claude Code sessions. Use it to document progress without exiting. You can also use `/daf-notes` to view notes (read-only).
 
 ### 4. Check Your Status
 
@@ -208,7 +208,7 @@ daf note PROJ-12345 "Completed login endpoint"
 daf note PROJ-12345 "Ready for code review" --jira
 ```
 
-> **Note:** `daf note` cannot be run inside Claude Code. Exit first, then add notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Note:** `daf note` can now be run inside Claude Code sessions. Use it to document progress without exiting. You can also use `/daf-notes` to view notes (read-only).
 
 ### 4. Check Your Sprint Status
 
@@ -281,7 +281,7 @@ daf note "api-optimization" "Identified slow queries in UserController"
 daf note "api-optimization" "Added database indexes for user lookups"
 ```
 
-> **Note:** `daf note` must be run outside Claude Code to prevent data conflicts. Inside Claude Code, use `/daf-notes` to view notes.
+> **Note:** `daf note` can now be run inside Claude Code sessions. Use it to document progress without exiting. You can also use `/daf-notes` to view notes (read-only).
 
 ### 4. View Your Sessions
 

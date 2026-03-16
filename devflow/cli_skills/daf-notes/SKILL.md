@@ -53,7 +53,7 @@ Total: 3 notes
 - Notes are stored in $DEVAIFLOW_HOME/sessions/<name>/notes.md
 - Notes persist across sessions and exports
 - Included in session summaries
-- To add notes during development, use `daf jira add-comment` to document work in JIRA
+- To add notes, use `daf note` (now works inside Claude Code) or `daf jira add-comment`
 
 **Related commands:**
 ```bash

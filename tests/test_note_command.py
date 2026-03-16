@@ -396,3 +396,61 @@ def test_view_notes_displays_chronological_order(temp_daf_home):
     third_pos = content.index("Third note")
 
     assert first_pos < second_pos < third_pos
+
+
+def test_add_note_works_inside_claude_session(temp_daf_home):
+    """Test that add_note works when AI_AGENT_SESSION_ID is set (inside Claude Code)."""
+    import os
+
+    # Set AI_AGENT_SESSION_ID to simulate being inside Claude Code
+    os.environ["AI_AGENT_SESSION_ID"] = "test-claude-session-123"
+
+    try:
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+
+        session = session_manager.create_session(
+            name="test-session",
+            goal="Test goal",
+            working_directory="test-dir",
+            project_path="/path/to/project",
+            ai_agent_session_id="test-claude-session-123",
+        )
+
+        # This should NOT raise SystemExit - it should work inside Claude
+        add_note(identifier="test-session", note="Note added inside Claude session")
+
+        # Verify note was added
+        notes_file = config_loader.get_session_dir("test-session") / "notes.md"
+        assert notes_file.exists()
+        content = notes_file.read_text()
+        assert "Note added inside Claude session" in content
+    finally:
+        # Clean up environment
+        del os.environ["AI_AGENT_SESSION_ID"]
+
+
+def test_add_note_multiple_notes_same_session(temp_daf_home):
+    """Test that multiple notes can be added to the same session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="multi-note-session",
+        goal="Test multiple notes",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-1",
+    )
+
+    # Add multiple notes in sequence
+    for i in range(5):
+        add_note(identifier="multi-note-session", note=f"Sequential note {i}")
+
+    # Verify all notes exist
+    notes_file = config_loader.get_session_dir("multi-note-session") / "notes.md"
+    assert notes_file.exists()
+    content = notes_file.read_text()
+
+    for i in range(5):
+        assert f"Sequential note {i}" in content

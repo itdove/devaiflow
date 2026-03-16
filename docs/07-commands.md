@@ -2610,7 +2610,7 @@ Make comment PUBLIC (visible to all)? [y/N]: y
 
 Add a note to track progress.
 
-> **Important:** This command must be run **outside** Claude Code to prevent data conflicts. Exit Claude Code first before adding notes. Inside Claude Code, use `/daf-notes` to view notes (read-only).
+> **Important:** `daf note` can now be run **inside** Claude Code sessions with file locking for safety. Document progress without exiting. You can also use `/daf-notes` to view notes (read-only).
 
 ```bash
 daf note <NAME-or-JIRA> "Note text" [--jira]

@@ -1,7 +1,7 @@
 #!/bin/bash
 # test_readonly_commands.sh
 # Integration test for DevAIFlow read-only commands that work inside AI agent sessions
-# Tests: daf active, daf notes, daf info, daf status, daf list (all read-only)
+# Tests: daf active, daf notes, daf note, daf info, daf status, daf list
 #
 # These commands should work inside AI agent sessions (with AI_AGENT_SESSION_ID set)
 # This script runs entirely in mock mode (DAF_MOCK_MODE=1)
@@ -266,6 +266,10 @@ print_test "daf notes (inside AI agent)"
 NOTES_IN_CLAUDE=$(daf notes "$TEST_SESSION" 2>&1)
 verify_success "daf notes" "daf notes works inside AI agent"
 
+print_test "daf note (inside AI agent) - add note"
+NOTE_OUTPUT=$(daf note "$TEST_SESSION" "Note added inside AI agent session" 2>&1)
+verify_success "daf note" "daf note works inside AI agent"
+
 # Test 3: Verify notes content
 print_section "Test 3: Verify Notes Content"
 print_test "Verify notes contain expected entries"
@@ -347,16 +351,16 @@ echo ""
 if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo -e "${BOLD}${GREEN}✓ All tests passed!${NC}"
     echo ""
-    echo "Successfully tested read-only commands:"
+    echo "Successfully tested commands:"
     echo "  ✓ Commands work in normal terminal mode"
     echo "  ✓ Commands work inside AI agent (with AI_AGENT_SESSION_ID)"
     echo "  ✓ daf active - Shows active conversation"
     echo "  ✓ daf notes - Views session notes"
+    echo "  ✓ daf note - Adds notes (now works inside AI agent)"
     echo "  ✓ daf info - Shows session details"
     echo "  ✓ daf status - Sprint dashboard"
     echo "  ✓ daf list - Lists sessions"
     echo "  ✓ JSON output mode"
-    echo "  ✓ Write commands blocked inside AI agent"
     echo ""
     exit 0
 else
