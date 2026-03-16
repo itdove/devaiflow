@@ -34,6 +34,22 @@
       "enum": ["claude", "github-copilot", null],
       "description": "AI agent backend enforced by team (e.g., 'claude', 'github-copilot'). Use null to allow users to choose."
     },
+    "jira_issue_templates": {
+      "type": ["object", "null"],
+      "description": "Team-specific issue template overrides (e.g., {\"Bug\": \"...\", \"Story\": \"...\"})",
+      "additionalProperties": {"type": "string"}
+    },
+    "github_default_labels": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Team-level default labels for GitHub issues",
+      "default": []
+    },
+    "github_issue_templates": {
+      "type": ["object", "null"],
+      "description": "Team-specific GitHub issue template overrides (e.g., {\"Bug\": \"...\", \"Story\": \"...\"})",
+      "additionalProperties": {"type": "string"}
+    },
     "model_provider": {
       "type": ["object", "null"],
       "description": "Model provider configuration for team",

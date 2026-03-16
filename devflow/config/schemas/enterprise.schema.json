@@ -15,6 +15,16 @@
       "description": "Override any fields from backend configs (backends/*.json). Example: {\"field_mappings\": {\"components\": {\"required_for\": [\"Bug\", \"Story\"]}}}",
       "additionalProperties": true
     },
+    "jira_issue_templates": {
+      "type": ["object", "null"],
+      "description": "Default issue templates for different issue types (e.g., {\"Bug\": \"...\", \"Story\": \"...\", \"Task\": \"...\", \"Epic\": \"...\", \"Spike\": \"...\"})",
+      "additionalProperties": {"type": "string"}
+    },
+    "github_issue_types": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "description": "Allowed GitHub/GitLab issue types (e.g., [\"bug\", \"enhancement\", \"task\", \"spike\", \"epic\", \"story\"])"
+    },
     "model_provider": {
       "type": ["object", "null"],
       "description": "Model provider configuration enforced by enterprise",
