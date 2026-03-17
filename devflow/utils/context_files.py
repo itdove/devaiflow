@@ -18,6 +18,7 @@ def load_hierarchical_context_files(config: Optional['Config'] = None) -> list[t
     - Organization: ORGANIZATION.md
     - Team: TEAM.md
     - User: USER.md
+    - DAF_AGENTS.md: daf tool usage guide
 
     Only returns files that physically exist on disk.
     Paths are resolved relative to DEVAIFLOW_HOME.
@@ -58,5 +59,10 @@ def load_hierarchical_context_files(config: Optional['Config'] = None) -> list[t
     user_path = cs_home / "USER.md"
     if user_path.exists() and user_path.is_file():
         context_files.append((str(user_path), "personal notes and preferences"))
+
+    # DAF_AGENTS context (daf tool usage guide)
+    daf_agents_path = cs_home / "DAF_AGENTS.md"
+    if daf_agents_path.exists() and daf_agents_path.is_file():
+        context_files.append((str(daf_agents_path), "daf tool usage guide"))
 
     return context_files
