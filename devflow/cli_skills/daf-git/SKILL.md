@@ -109,6 +109,113 @@ daf git update 123 --parent "#456"
 daf git update 123 --parent "owner/repo#789"
 ```
 
+## GitHub/GitLab Markdown Syntax
+
+**CRITICAL:** GitHub and GitLab issues use **Markdown syntax**, NOT JIRA Wiki markup.
+
+When using `daf git create`, `daf git add-comment`, or `daf git update` commands, all text fields (descriptions, comments) **MUST** use standard **Markdown** formatting.
+
+### Syntax Reference
+
+| Element | ✅ GitHub/GitLab Markdown (CORRECT) | ❌ JIRA Wiki Markup (WRONG) |
+|---------|-------------------------------------|------------------------------|
+| Header 2 | `## Header` | `h2. Header` |
+| Header 3 | `### Header` | `h3. Header` |
+| Bold | `**bold**` | `*bold*` |
+| Italic | `*italic*` | `_italic_` |
+| Code block | ` ```bash\ncode\n``` ` | `{code:bash}\ncode\n{code}` |
+| Inline code | `` `code` `` | `{{code}}` |
+| Unordered list | `- item` | `* item` |
+| Ordered list | `1. item` | `# item` |
+| Link | `[text](url)` | `[text|url]` |
+| Checkbox | `- [ ] item` | N/A |
+| Checked box | `- [x] item` | N/A |
+
+### When to Use Each Syntax
+
+**✅ Use Markdown for GitHub/GitLab operations:**
+- `daf git create` - Creating GitHub/GitLab issues
+- `daf git add-comment` - Adding comments to issues
+- `daf git update` - Updating issue descriptions
+- Pull request descriptions and comments
+
+**✅ Use JIRA Wiki markup for JIRA operations:**
+- `daf jira create` - Creating JIRA tickets
+- `daf jira add-comment` - Adding JIRA comments
+- `daf jira update` - Updating JIRA descriptions
+
+**Why this matters:**
+- GitHub/GitLab will NOT render JIRA Wiki markup correctly
+- Using `h3. Header` in GitHub will display as plain text, not a header
+- Using `{code}` blocks will not format as code in GitHub
+- Acceptance criteria checkboxes must use `- [ ]` format in Markdown
+
+### Example: Creating Issue with Markdown
+
+```bash
+# Correct Markdown formatting for GitHub/GitLab
+daf git create enhancement --summary "Add caching layer" \
+  --description "$(cat <<'EOF'
+## Overview
+
+Implement Redis caching to improve API performance.
+
+### Requirements
+
+- Cache should store subscription lookups
+- Configurable TTL (default: 5 minutes)
+- Handle cache misses gracefully
+
+### Implementation Notes
+
+Use `redis-py` client with the following configuration:
+
+```python
+redis_client = Redis(
+    host='localhost',
+    port=6379,
+    decode_responses=True
+)
+```
+
+### Testing
+
+- [ ] Unit tests for cache hit/miss scenarios
+- [ ] Integration tests with Redis
+- [ ] Performance benchmarks
+
+**Target:** 50ms response time for cached responses
+EOF
+)" \
+  --labels "backend,enhancement"
+```
+
+### Common Mistakes to Avoid
+
+❌ **DON'T** use JIRA Wiki markup in GitHub/GitLab issues:
+```bash
+# WRONG - This will not render correctly in GitHub
+daf git create bug --description "h3. Bug Description
+
+*Problem:* API times out
+
+{code:python}
+# broken code
+{code}"
+```
+
+✅ **DO** use Markdown syntax:
+```bash
+# CORRECT - Proper Markdown formatting
+daf git create bug --description "### Bug Description
+
+**Problem:** API times out
+
+\`\`\`python
+# broken code
+\`\`\`"
+```
+
 ## Typical Workflows
 
 **Workflow: Working on existing issue**
