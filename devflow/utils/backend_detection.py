@@ -6,6 +6,34 @@ from typing import Optional
 from devflow.config.models import Config, Session
 
 
+def get_backend_display_name(backend: str) -> str:
+    """Get human-friendly display name for issue tracker backend.
+
+    Args:
+        backend: Backend identifier ("jira", "github", "gitlab", "mock")
+
+    Returns:
+        Display name suitable for user-facing messages
+
+    Examples:
+        >>> get_backend_display_name("jira")
+        'JIRA'
+        >>> get_backend_display_name("github")
+        'GitHub Issues'
+        >>> get_backend_display_name("gitlab")
+        'GitLab Issues'
+        >>> get_backend_display_name("mock")
+        'Mock Issue Tracker'
+    """
+    display_names = {
+        "jira": "JIRA",
+        "github": "GitHub Issues",
+        "gitlab": "GitLab Issues",
+        "mock": "Mock Issue Tracker",
+    }
+    return display_names.get(backend, backend.upper())
+
+
 def detect_backend_from_key(issue_key: str, config: Optional[Config] = None) -> str:
     """Detect issue tracker backend from issue key format.
 

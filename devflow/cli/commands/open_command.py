@@ -2692,7 +2692,16 @@ def _handle_closed_ticket_reopen(session, jira_client) -> bool:
     """
     # Check if we're in mock mode
     from devflow.utils import is_mock_mode
+    from devflow.utils.backend_detection import get_issue_tracker_backend, get_backend_display_name
+    from devflow.config.loader import ConfigLoader
+
     mock_mode = is_mock_mode()
+
+    # Get backend display name for messages
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+    backend = get_issue_tracker_backend(session, config)
+    backend_name = get_backend_display_name(backend)
 
     current_status = session.issue_metadata.get("status") if session.issue_metadata else "Unknown"
     console.print(f"\n[yellow]⚠  issue tracker ticket {session.issue_key} is currently: {current_status}[/yellow]")
@@ -2704,13 +2713,13 @@ def _handle_closed_ticket_reopen(session, jira_client) -> bool:
         should_transition = Confirm.ask(f"\nTransition {session.issue_key} back to 'In Progress'?", default=True)
 
     if not should_transition:
-        console.print("[dim]Skipping JIRA transition[/dim]")
+        console.print(f"[dim]Skipping {backend_name} transition[/dim]")
         console.print(f"[yellow]Note: Ticket status will remain as {current_status}[/yellow]")
 
         # Ask if user wants to continue anyway (skip in mock mode)
         if mock_mode:
             return True
-        if not Confirm.ask("Continue opening session without updating JIRA?", default=False):
+        if not Confirm.ask(f"Continue opening session without updating {backend_name}?", default=False):
             console.print("\n[yellow]Session open cancelled[/yellow]")
             return False
         return True
@@ -2735,7 +2744,7 @@ def _handle_closed_ticket_reopen(session, jira_client) -> bool:
         return True
     except JiraValidationError as e:
         console.print(f"[red]✗[/red] Failed to transition {session.issue_key} to In Progress")
-        console.print(f"[yellow]The ticket may have required fields that need to be set in JIRA.[/yellow]")
+        console.print(f"[yellow]The ticket may have required fields that need to be set in {backend_name}.[/yellow]")
         if e.field_errors:
             console.print("  [red]Field errors:[/red]")
             for field, msg in e.field_errors.items():
@@ -2746,26 +2755,26 @@ def _handle_closed_ticket_reopen(session, jira_client) -> bool:
 
         # Ask if user wants to continue anyway (auto-continue in mock mode)
         if mock_mode:
-            console.print("[dim]Mock mode: Continuing without JIRA update[/dim]")
+            console.print(f"[dim]Mock mode: Continuing without {backend_name} update[/dim]")
             return True
-        if Confirm.ask("Continue opening session without updating JIRA?", default=False):
+        if Confirm.ask(f"Continue opening session without updating {backend_name}?", default=False):
             return True
 
         console.print("\n[yellow]Session open cancelled[/yellow]")
-        console.print(f"[dim]Please update required fields in JIRA and try again[/dim]")
+        console.print(f"[dim]Please update required fields in {backend_name} and try again[/dim]")
         return False
     except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError) as e:
         console.print(f"[red]✗[/red] Failed to transition {session.issue_key} to In Progress: {e}")
 
         # Ask if user wants to continue anyway (auto-continue in mock mode)
         if mock_mode:
-            console.print("[dim]Mock mode: Continuing without JIRA update[/dim]")
+            console.print(f"[dim]Mock mode: Continuing without {backend_name} update[/dim]")
             return True
-        if Confirm.ask("Continue opening session without updating JIRA?", default=False):
+        if Confirm.ask(f"Continue opening session without updating {backend_name}?", default=False):
             return True
 
         console.print("\n[yellow]Session open cancelled[/yellow]")
-        console.print(f"[dim]Please update required fields in JIRA and try again[/dim]")
+        console.print(f"[dim]Please update required fields in {backend_name} and try again[/dim]")
         return False
 
 

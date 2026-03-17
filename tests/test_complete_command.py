@@ -283,7 +283,7 @@ def test_complete_session_without_issue_key(temp_daf_home, monkeypatch, capsys):
     complete_session("no-jira")
 
     captured = capsys.readouterr()
-    assert "skipping JIRA summary" in captured.out
+    assert "skipping issue tracker summary" in captured.out
 
 
 def test_complete_session_attach_to_issue(temp_daf_home, monkeypatch, capsys):
