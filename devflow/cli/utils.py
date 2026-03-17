@@ -1270,6 +1270,14 @@ def prompt_repository_selection_with_multiproject(
 
     # Multi-project selection (if enabled and multiple repos available)
     if allow_multiple and len(repo_options) > 1:
+        # Display list of available repositories BEFORE asking multi-project question (Issue #216)
+        console.print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
+        for i, repo in enumerate(repo_options, 1):
+            if suggested_repo and repo == suggested_repo:
+                console.print(f"  {i}. {repo} [dim](suggested)[/dim]")
+            else:
+                console.print(f"  {i}. {repo}")
+
         if Confirm.ask("\nCreate multi-project session (analyze multiple repos)?", default=False):
             # User wants multi-project mode
             project_paths = prompt_multi_project_selection(repo_options, workspace_path, suggested_repo)
