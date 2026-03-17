@@ -129,9 +129,17 @@ daf complete owner-repo-123
 ### With JIRA (Alternative)
 
 ```bash
-# Export environment variables for JIRA
-export JIRA_URL="https://jira.example.com"
+# For Atlassian Cloud (https://yourcompany.atlassian.net):
+# 1. Create base64-encoded credentials: echo -n "email:token" | base64
+# 2. Set environment variables
+export JIRA_AUTH_TYPE=basic
+export JIRA_API_TOKEN=<BASE64_ENCODED_CREDENTIALS>
+export JIRA_URL="https://yourcompany.atlassian.net"
+
+# For Self-Hosted JIRA:
+export JIRA_AUTH_TYPE=Bearer
 export JIRA_API_TOKEN=<YOUR_JIRA_PAT>
+export JIRA_URL="https://jira.example.com"
 
 # Initialize and sync
 daf init

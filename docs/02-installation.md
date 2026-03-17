@@ -348,34 +348,55 @@ The tool uses the JIRA REST API directly - no additional CLI tools are needed!
 
 ### 1. Get JIRA API Token
 
-**For Atlassian Cloud:**
+**For Atlassian Cloud (https://yourcompany.atlassian.net):**
+
 1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
 2. Click "Create API token"
 3. Give it a name (e.g., "DevAIFlow")
 4. Copy the token (you won't see it again!)
 
 **For Enterprise JIRA or Self-Hosted:**
+
 1. Go to your JIRA instance → Profile → Personal Access Tokens
 2. Create a new token
 3. Copy the token value
 
 ### 2. Configure Environment Variables
 
+> **⚠️ IMPORTANT:** Authentication setup differs between Cloud and Self-Hosted JIRA.
+
+**For Atlassian Cloud:**
+
 Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, `~/.profile`, etc.):
 
 ```bash
-# Required: JIRA API Token
-export JIRA_API_TOKEN="your-api-token-here"
+# Step 1: Create base64-encoded credentials (email:token)
+# Replace with YOUR email and token from step 1
+echo -n "user@company.com:your-api-token" | base64
 
-# Optional: JIRA URL (defaults to https://jira.example.com)
-export JIRA_URL="https://jira.example.com"
-
-# Optional: Enable debug logging for JIRA API calls (troubleshooting)
-export DEVAIFLOW_DEBUG=1
+# Step 2: Add to shell profile
+# CRITICAL: JIRA_AUTH_TYPE=basic is required for Cloud
+export JIRA_AUTH_TYPE=basic
+export JIRA_API_TOKEN="<base64-output-from-above>"
+export JIRA_URL="https://yourcompany.atlassian.net"
 ```
 
-**For jira-cli config fallback:**
-The tool can also read the JIRA URL from `~/.config/.jira/.config.yml` if you have jira-cli installed, but this is not required.
+**For Self-Hosted JIRA:**
+
+Add these to your shell profile:
+
+```bash
+# For self-hosted JIRA, use Bearer authentication
+export JIRA_AUTH_TYPE=Bearer
+export JIRA_API_TOKEN="your-personal-access-token"
+export JIRA_URL="https://jira.example.com"
+```
+
+**Optional debugging:**
+```bash
+# Enable debug logging for JIRA API calls (troubleshooting)
+export DEVAIFLOW_DEBUG=1
+```
 
 **Reload your shell:**
 ```bash
@@ -385,11 +406,15 @@ source ~/.zshrc  # or ~/.bashrc, ~/.profile, etc.
 ### 3. Verify JIRA Setup
 
 ```bash
-# Test by listing your sessions
+# Test authentication with curl
+curl -H "Authorization: Basic $JIRA_API_TOKEN" \
+     "$JIRA_URL/rest/api/2/myself"
+
+# If successful, test DevAIFlow integration
 daf sync --dry-run
 ```
 
-If this shows your JIRA tickets, the integration is working!
+✅ If this shows your JIRA tickets, the integration is working!
 
 ## Configuring DevAIFlow
 
