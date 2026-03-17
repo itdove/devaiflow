@@ -229,9 +229,12 @@ def open_session(
             session.workspace_name = selected_workspace_name
             session_manager.update_session(session)
 
-    # AAP-64497: Workspace mismatch confirmation
-    # If opening session from different workspace context than session was previously used in,
-    # prompt user to confirm: use session workspace, switch to current workspace, or cancel
+    # AAP-64497: Workspace mismatch confirmation (improved in #208)
+    # Three-tier workspace selection logic:
+    # Case 1: If --workspace flag provided -> already handled above, skip mismatch check
+    # Case 2: If detected workspace == session workspace -> skip prompt, continue
+    # Case 3: If detected workspace != session workspace -> show ALL workspaces in prompt
+    #
     # Only check if:
     # - Workspace was selected (not None)
     # - User did NOT explicitly provide --workspace flag (intentional override)
@@ -241,13 +244,27 @@ def open_session(
         current_dir = Path.cwd()
         detected_workspace_name = _detect_workspace_from_cwd(current_dir, config_loader)
 
-        # If detected workspace differs from selected workspace, prompt for confirmation
-        if detected_workspace_name and detected_workspace_name != selected_workspace_name:
+        # Case 2: If detected workspace matches session workspace, skip prompt and continue
+        # (No need to prompt user when they're already in the right place)
+        if detected_workspace_name and detected_workspace_name == selected_workspace_name:
+            # Workspaces match - continue without prompting
+            pass
+
+        # Case 3: If detected workspace differs from selected workspace, show ALL workspaces
+        elif detected_workspace_name and detected_workspace_name != selected_workspace_name:
+            # Get detected workspace path for display
+            detected_workspace_path = str(current_dir)
+
+            # Get all configured workspaces
+            all_workspaces = config.repos.workspaces if config and config.repos else []
+
             if not _handle_workspace_mismatch(
                 session,
                 session_manager,
                 selected_workspace_name,
                 detected_workspace_name,
+                all_workspaces,
+                detected_workspace_path=detected_workspace_path,
                 skip_prompt=output_json
             ):
                 # User cancelled - exit without opening session
@@ -1455,6 +1472,8 @@ def _handle_workspace_mismatch(
     session_manager,
     selected_workspace_name: str,
     detected_workspace_name: str,
+    all_workspaces: list,
+    detected_workspace_path: Optional[str] = None,
     skip_prompt: bool = False
 ) -> bool:
     """Handle workspace mismatch confirmation when opening session from different context.
@@ -1462,11 +1481,15 @@ def _handle_workspace_mismatch(
     This function prompts the user to confirm what to do when the detected workspace
     (from current directory) differs from the session's stored workspace.
 
+    Shows ALL configured workspaces with detected workspace as default selection.
+
     Args:
         session: Session object
         session_manager: SessionManager instance
         selected_workspace_name: Workspace name selected for this session
         detected_workspace_name: Workspace name detected from current directory
+        all_workspaces: List of all configured WorkspaceDefinition objects
+        detected_workspace_path: Full path where detected workspace was found (for display)
         skip_prompt: If True (e.g., --json mode), default to session workspace without prompt
 
     Returns:
@@ -1478,39 +1501,89 @@ def _handle_workspace_mismatch(
     if skip_prompt:
         return True
 
-    # Display workspace mismatch warning
-    console.print(f"\n[yellow]⚠ Workspace mismatch detected[/yellow]")
-    console.print(f"[dim]Session workspace:[/dim] [cyan]{selected_workspace_name}[/cyan]")
-    console.print(f"[dim]Current workspace:[/dim] [cyan]{detected_workspace_name}[/cyan]")
+    # Display workspace mismatch warning with explanation
+    console.print(f"\n[yellow]⚠ Workspace mismatch detected[/yellow]\n")
+    console.print(f"[dim]Session was previously used in workspace:[/dim] [cyan]{selected_workspace_name}[/cyan]")
+
+    # Show detected workspace with explanation
+    if detected_workspace_path:
+        console.print(f"[dim]Currently detected workspace:[/dim] [cyan]{detected_workspace_name}[/cyan] " +
+                     f"[dim](based on current directory: {detected_workspace_path})[/dim]")
+    else:
+        console.print(f"[dim]Currently detected workspace:[/dim] [cyan]{detected_workspace_name}[/cyan] " +
+                     f"[dim](based on current directory)[/dim]")
     console.print()
 
-    # Prompt user for action
-    console.print("[bold]What would you like to do?[/bold]")
-    console.print(f"  [cyan]1.[/cyan] Use session workspace ([cyan]{selected_workspace_name}[/cyan])")
-    console.print(f"  [cyan]2.[/cyan] Switch to current workspace ([cyan]{detected_workspace_name}[/cyan])")
-    console.print(f"  [cyan]3.[/cyan] Cancel")
+    # Build workspace options menu showing ALL configured workspaces
+    console.print("[bold]Select workspace for this session:[/bold]")
+
+    # Build choices list with detected workspace first, then session workspace, then others
+    workspace_choices = []
+    choice_to_workspace = {}
+    choice_num = 1
+
+    # Option 1: Detected workspace (from current directory) - marked as DEFAULT
+    workspace_choices.append((choice_num, detected_workspace_name, "[DEFAULT]", True))
+    choice_to_workspace[choice_num] = detected_workspace_name
+    choice_num += 1
+
+    # Option 2: Session's previous workspace (if different from detected)
+    if selected_workspace_name != detected_workspace_name:
+        workspace_choices.append((choice_num, selected_workspace_name, "(session's previous workspace)", False))
+        choice_to_workspace[choice_num] = selected_workspace_name
+        choice_num += 1
+
+    # Options 3+: All other configured workspaces
+    for workspace in all_workspaces:
+        if workspace.name not in [detected_workspace_name, selected_workspace_name]:
+            workspace_choices.append((choice_num, workspace.name, "", False))
+            choice_to_workspace[choice_num] = workspace.name
+            choice_num += 1
+
+    # Add Cancel option
+    cancel_choice = choice_num
+
+    # Display menu
+    for num, name, label, is_default in workspace_choices:
+        # Get full path for this workspace
+        ws_obj = next((w for w in all_workspaces if w.name == name), None)
+        ws_path = ws_obj.path if ws_obj else ""
+
+        default_marker = " [DEFAULT]" if is_default else ""
+        label_text = f" {label}" if label else ""
+        console.print(f"  [cyan]{num}.[/cyan] {name}{label_text}{default_marker}")
+        if ws_path:
+            console.print(f"      [dim]{ws_path}[/dim]")
+
+    console.print(f"  [cyan]{cancel_choice}.[/cyan] Cancel")
     console.print()
+
+    # Get valid choice numbers as strings
+    valid_choices = [str(i) for i in range(1, choice_num + 1)]
 
     try:
-        choice = IntPrompt.ask("Enter choice", choices=["1", "2", "3"], default=1)
+        choice = IntPrompt.ask("Enter choice", choices=valid_choices, default=1)
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled[/yellow]")
         return False
 
-    if choice == 1:
-        # Use session workspace - no change needed
-        console.print(f"[green]✓[/green] Using session workspace: [cyan]{selected_workspace_name}[/cyan]")
-        return True
-    elif choice == 2:
-        # Switch to current workspace - update session
-        console.print(f"[green]✓[/green] Switching to current workspace: [cyan]{detected_workspace_name}[/cyan]")
-        session.workspace_name = detected_workspace_name
-        session_manager.update_session(session)
-        return True
-    else:
+    if choice == cancel_choice:
         # User chose to cancel
         console.print("[yellow]Cancelled[/yellow] - session not opened")
         return False
+
+    # User selected a workspace
+    selected_name = choice_to_workspace[choice]
+
+    # Update session if workspace changed
+    if selected_name != session.workspace_name:
+        console.print(f"[green]✓[/green] Switching to workspace: [cyan]{selected_name}[/cyan]")
+        session.workspace_name = selected_name
+        session_manager.update_session(session)
+    else:
+        console.print(f"[green]✓[/green] Using workspace: [cyan]{selected_name}[/cyan]")
+
+    return True
 
 
 def _handle_conversation_selection_without_detection(

@@ -235,3 +235,58 @@ def remove_project_from_session(
     console.print(f"\n[dim]Remaining projects in session:[/dim]")
     for proj_name in active_conv.projects.keys():
         console.print(f"  • {proj_name}")
+
+
+def set_workspace_for_session(
+    session_name: str,
+    workspace_name: str
+) -> None:
+    """Set the workspace for an existing session.
+
+    This updates the session's workspace_name field and persists the change.
+    Useful for explicitly changing which workspace a session uses without
+    going through the mismatch prompt.
+
+    Args:
+        session_name: Name of the session to update
+        workspace_name: Workspace name to set for this session
+    """
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    config = config_loader.load_config()
+
+    if not config:
+        console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
+        sys.exit(1)
+
+    # Get session
+    session = session_manager.get_session(session_name)
+    if not session:
+        console.print(f"[red]✗[/red] Session not found: {session_name}")
+        sys.exit(1)
+
+    # Validate workspace exists
+    if not config.repos or not config.repos.workspaces:
+        console.print("[red]✗[/red] No workspaces configured. Run [cyan]daf workspace add[/cyan] first.")
+        sys.exit(1)
+
+    workspace = config.repos.get_workspace_by_name(workspace_name)
+    if not workspace:
+        console.print(f"[red]✗[/red] Workspace not found: {workspace_name}")
+        console.print(f"[dim]Available workspaces: {', '.join(w.name for w in config.repos.workspaces)}[/dim]")
+        sys.exit(1)
+
+    # Check if workspace is already set to this value
+    if session.workspace_name == workspace_name:
+        console.print(f"[yellow]⚠[/yellow] Session '{session.name}' is already using workspace: {workspace_name}")
+        return
+
+    # Update session workspace
+    old_workspace = session.workspace_name or "(none)"
+    session.workspace_name = workspace_name
+    session_manager.update_session(session)
+
+    console.print(f"\n[green]✓[/green] Updated workspace for session: {session.name}")
+    console.print(f"[dim]  Previous: {old_workspace}[/dim]")
+    console.print(f"[dim]  New: {workspace_name}[/dim]")
+    console.print(f"[dim]  Path: {workspace.path}[/dim]")

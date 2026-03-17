@@ -113,3 +113,31 @@ def complete_file_paths(ctx, param, incomplete):
     # Let shell handle file completion by returning empty
     # Click will fall back to shell's native file completion
     return []
+
+
+def complete_workspace_names(ctx, param, incomplete):
+    """Auto-complete workspace names.
+
+    Args:
+        ctx: Click context
+        param: Parameter being completed
+        incomplete: Partial input from user
+
+    Returns:
+        List of workspace name completions
+    """
+    try:
+        config_loader = ConfigLoader()
+        config = config_loader.load_config()
+
+        if not config or not config.repos or not config.repos.workspaces:
+            return []
+
+        completions = []
+        for workspace in config.repos.workspaces:
+            if workspace.name.startswith(incomplete):
+                completions.append((workspace.name, workspace.path))
+
+        return completions
+    except Exception:
+        return []
