@@ -473,6 +473,6 @@ Claude Code's conversation files remain in their original location:
 
 ## Next Steps
 
-- [Installation Guide](02-installation.md) - Set up the tool
-- [Quick Start](03-quick-start.md) - Create your first session
-- [Commands Reference](07-commands.md) - Learn all available commands
+- [Installation Guide](installation.md) - Set up the tool
+- [Quick Start](quick-start.md) - Create your first session
+- [Commands Reference](../reference/commands.md) - Learn all available commands

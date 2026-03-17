@@ -186,7 +186,7 @@ The allow list **must** be in the global `~/.claude/settings.json` file, NOT in 
 
 **Do NOT use** `.claude/settings.local.json` in project directories for this configuration.
 
-**For detailed configuration instructions**, see [Installation Guide - Configuring Claude Code Permissions](02-installation.md#configuring-claude-code-permissions).
+**For detailed configuration instructions**, see [Installation Guide - Configuring Claude Code Permissions](../getting-started/installation.md#configuring-claude-code-permissions).
 
 ### Settings File Invalid JSON
 
@@ -1370,8 +1370,8 @@ Which project? [1-3]: 2
 
 **Documentation:**
 - [Session Management Guide](04-session-management.md#working-across-multiple-repositories) - Detailed explanation
-- [Commands Reference: daf open](07-commands.md#daf-open---resume-session) - Multi-repository workflow examples
-- [Quick Start Guide](03-quick-start.md#multi-project-sessions) - Complete walkthrough
+- [Commands Reference: daf open](../reference/commands.md#daf-open---resume-session) - Multi-repository workflow examples
+- [Quick Start Guide](../getting-started/quick-start.md#multi-project-sessions) - Complete walkthrough
 
 ### How do I switch between repositories in a multi-repo session?
 

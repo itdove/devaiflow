@@ -675,7 +675,7 @@ Please bump release/{X.Y} branch to {X.Y.Z+1-dev} per RELEASING.md step 7.
 - **[RELEASING.md](../RELEASING.md)** - Complete technical release process (Claude reads this)
 - **[CHANGELOG.md](../CHANGELOG.md)** - Version history and release notes
 - **[AGENTS.md](../AGENTS.md)** - Development and release guidelines
-- **[docs/07-commands.md](07-commands.md)** - daf command reference
+- **[docs/07-commands.md](../reference/commands.md)** - daf command reference
 
 ## Questions?
 

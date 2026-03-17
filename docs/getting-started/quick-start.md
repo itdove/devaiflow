@@ -4,7 +4,7 @@ Get up and running with DevAIFlow in 5 minutes.
 
 ## Prerequisites
 
-- DevAIFlow installed ([Installation Guide](02-installation.md))
+- DevAIFlow installed ([Installation Guide](installation.md))
 - Claude Code CLI installed and working
 - (Optional) JIRA CLI configured if using JIRA integration
 - (Optional) GitHub CLI (`gh`) authenticated if using GitHub integration
@@ -534,8 +534,8 @@ daf search "auth"
 
 ## Next Steps
 
-- [Session Management Guide](04-session-management.md) - Deep dive into sessions
-- [JIRA Integration](05-2-jira-integration.md) - Learn JIRA workflows
-- [GitHub Integration](github-integration.md) - Learn GitHub/GitLab workflows
-- [Commands Reference](07-commands.md) - All available commands
-- [Common Workflows](08-workflows.md) - Step-by-step guides
+- [Session Management Guide](../guides/session-management.md) - Deep dive into sessions
+- [JIRA Integration](../workflows/jira-integration.md) - Learn JIRA workflows
+- [GitHub Integration](../workflows/github-gitlab-integration.md) - Learn GitHub/GitLab workflows
+- [Commands Reference](../reference/commands.md) - All available commands
+- [Common Workflows](../workflows/WORKFLOWS.md) - Step-by-step guides

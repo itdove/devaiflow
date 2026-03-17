@@ -3673,7 +3673,7 @@ daf release 0.2.0 --force
 
 **See Also:**
 - [RELEASING.md](../RELEASING.md) - Complete technical release process
-- [docs/08-release-management.md](08-release-management.md) - Release management guide
+- [docs/08-release-management.md](../developer/release-management.md) - Release management guide
 - [CHANGELOG.md](../CHANGELOG.md) - Version history
 
 ---
@@ -4294,7 +4294,7 @@ daf completion fish
 - Auto-complete working directories, sprints, tags
 - File path completion for exports/imports
 
-See [Installation Guide](02-installation.md) for setup instructions.
+See [Installation Guide](../getting-started/installation.md) for setup instructions.
 
 ---
 
@@ -5051,7 +5051,7 @@ daf backup                  # Backup everything
 
 - [Workflows](08-workflows.md) - Step-by-step workflows using these commands
 - [Advanced Features](09-advanced.md) - Advanced command usage
-- [Troubleshooting](11-troubleshooting.md) - Command errors and solutions
+- [Troubleshooting](../guides/troubleshooting.md) - Command errors and solutions
 
 ---
 
@@ -5299,7 +5299,7 @@ jq '.jira.project = "PROJ" | .repos.workspaces = [{"name": "default", "path": "/
 ### Getting Help
 
 If you encounter issues during migration:
-- Check the [Configuration Guide](06-configuration.md) for detailed config.json schema
+- Check the [Configuration Guide](configuration.md) for detailed config.json schema
 - Use `daf config show` to view current configuration
 - Use `daf config validate` to check for errors
 - Report issues: https://github.com/itdove/devaiflow/issues

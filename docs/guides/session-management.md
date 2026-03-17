@@ -129,7 +129,7 @@ daf workspace set-default primary
 
 **Important:** Use `-w` flag for switching between workspaces per-session. The `set-default` command is for permanent configuration changes, not for frequent switching.
 
-See [Configuration Guide - Workspaces](06-configuration.md#workspaces-multiple-named-workspaces) for detailed workspace configuration.
+See [Configuration Guide - Workspaces](../reference/configuration.md#workspaces-multiple-named-workspaces) for detailed workspace configuration.
 
 ## Working Across Multiple Repositories
 
@@ -464,7 +464,7 @@ daf sync
 
 This automatically creates sessions for all your JIRA tickets. No need to manually create sessions!
 
-See the [JIRA Integration Guide](05-2-jira-integration.md) for complete sync documentation.
+See the [JIRA Integration Guide](../workflows/jira-integration.md) for complete sync documentation.
 
 ### Basic Session (No JIRA)
 
@@ -1183,6 +1183,6 @@ daf resume session-name
 
 ## Next Steps
 
-- [JIRA Integration](05-2-jira-integration.md) - Learn JIRA workflows
-- [Configuration Reference](06-configuration.md) - Configure session behavior
-- [Commands Reference](07-commands.md) - All available commands
+- [JIRA Integration](../workflows/jira-integration.md) - Learn JIRA workflows
+- [Configuration Reference](../reference/configuration.md) - Configure session behavior
+- [Commands Reference](../reference/commands.md) - All available commands

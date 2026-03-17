@@ -69,7 +69,7 @@ No configuration changes are needed - the migration is transparent to users.
    sudo mv jira /usr/local/bin/
    ```
 
-See [Installation Guide](02-installation.md) for detailed setup instructions.
+See [Installation Guide](../getting-started/installation.md) for detailed setup instructions.
 
 ## Authentication Setup
 
@@ -128,7 +128,7 @@ This outputs a base64 string. **Save this output** - it becomes your `JIRA_API_T
 
 Example output format:
 ```
-dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==
+dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg== # notsecret
 ```
 
 **Step 5: Configure Environment Variables**
@@ -141,7 +141,7 @@ dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==
 export JIRA_AUTH_TYPE=basic
 
 # Set the base64-encoded credentials (paste output from Step 4)
-export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg=="
+export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==" # notsecret
 
 # Set your Atlassian Cloud URL
 export JIRA_URL="https://yourcompany.atlassian.net"
@@ -170,7 +170,7 @@ Once verified, add these to your `~/.zshrc` or `~/.bashrc`:
 ```bash
 # JIRA Configuration (Atlassian Cloud)
 export JIRA_AUTH_TYPE=basic
-export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg=="
+export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==" # notsecret
 export JIRA_URL="https://yourcompany.atlassian.net"
 ```
 
@@ -338,7 +338,7 @@ Edit backend and organization configuration files:
 - **jira_custom_field_defaults** - Default values for custom fields (e.g., {"workstream": "Platform"})
 - **time_tracking_enabled** - Enable time tracking for JIRA tickets (true/false)
 
-**Note:** To control whether session summaries are automatically added to issue tracker (JIRA, GitHub, GitLab), use `prompts.auto_add_issue_summary` - see [Prompts Configuration](06-configuration.md#prompts-configuration)
+**Note:** To control whether session summaries are automatically added to issue tracker (JIRA, GitHub, GitLab), use `prompts.auto_add_issue_summary` - see [Prompts Configuration](../reference/configuration.md#prompts-configuration)
 
 ### Configuring JIRA Project and Custom Fields
 
@@ -1392,7 +1392,7 @@ unset DEVAIFLOW_DEBUG
 
 **Note:** Debug output is automatically disabled when using `--json` flag.
 
-For more details, see [Troubleshooting Guide - JIRA API Debug Logging](11-troubleshooting.md#jira-api-debug-logging).
+For more details, see [Troubleshooting Guide - JIRA API Debug Logging](../guides/troubleshooting.md#jira-api-debug-logging).
 
 ### JIRA URL Not Detected
 
@@ -1492,7 +1492,7 @@ jira version
      }
    }
    ```
-   See [Prompts Configuration](06-configuration.md#promptsauto_add_issue_summary) for details.
+   See [Prompts Configuration](../reference/configuration.md#promptsauto_add_issue_summary) for details.
 
 ### Sync Not Working
 
@@ -1586,7 +1586,7 @@ daf export-md PROJ-12345 PROJ-12346 --combined --output sprint-report.md
 
 ## Next Steps
 
-- [Configuration Reference](06-configuration.md) - Detailed config options
-- [Commands Reference](07-commands.md) - All JIRA-related commands
+- [Configuration Reference](../reference/configuration.md) - Detailed config options
+- [Commands Reference](../reference/commands.md) - All JIRA-related commands
 - [Workflows](08-workflows.md) - Step-by-step JIRA workflows
-- [Troubleshooting](11-troubleshooting.md) - JIRA integration issues
+- [Troubleshooting](../guides/troubleshooting.md) - JIRA integration issues
