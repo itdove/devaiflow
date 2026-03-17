@@ -22,5 +22,5 @@
       }
     }
   },
-  "_model_provider_comment": "Optional: Enforce which AI models employees can use. Example shows enforcing Google Vertex AI. Set to null to allow teams/users to choose their own models. Profiles can include: Vertex AI, Ollama, OpenRouter, or standard Anthropic API."
+  "_model_provider_comment": "Optional: Enforce which AI models employees can use. Example shows enforcing Google Vertex AI. Set to null to allow teams/users to choose their own models. Profiles can include: Vertex AI, llama.cpp, OpenRouter, or standard Anthropic API."
 }

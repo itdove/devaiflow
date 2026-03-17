@@ -569,9 +569,9 @@ daf open PROJ-456 --model-profile llama-fast    # Use 7B model
 
 ---
 
-### Option 2: OpenRouter
+### Option 2: OpenRouter (⚠️ To Be Tested)
 
-**Time**: 2 minutes | **Cost**: Pay-per-use | **Best for**: Access to many models with one API key
+**Time**: 2 minutes | **Cost**: Pay-per-use | **Best for**: Access to many models with one API key | **Status**: ⚠️ Not yet tested with DevAIFlow
 
 OpenRouter provides a universal adapter for AI APIs.
 
@@ -617,9 +617,9 @@ OpenRouter provides a universal adapter for AI APIs.
 MODEL_PROVIDER_PROFILE=openrouter-deepseek daf open PROJ-123
 ```
 
-### Option 3: LM Studio
+### Option 3: LM Studio (⚠️ To Be Tested)
 
-**Time**: 5 minutes | **Cost**: Free | **Best for**: GUI model management
+**Time**: 5 minutes | **Cost**: Free | **Best for**: GUI model management | **Status**: ⚠️ Not yet tested with DevAIFlow
 
 #### Step 1: Install LM Studio
 
@@ -665,9 +665,9 @@ lms server start --port 1234
 }
 ```
 
-### Option 4: Google Vertex AI
+### Option 4: Google Vertex AI (✅ Tested)
 
-**Time**: 5 minutes | **Cost**: Pay-per-use | **Best for**: Enterprise GCP users
+**Time**: 5 minutes | **Cost**: Pay-per-use | **Best for**: Enterprise GCP users | **Status**: ✅ Tested and working
 
 #### Step 1: Set Up GCP Project
 
@@ -907,27 +907,28 @@ Error: model 'Qwen3-Coder' not found
 
 | Provider | Model | Hardware | Speed | Quality | Cost | Status |
 |----------|-------|----------|-------|---------|------|--------|
-| Anthropic | Claude Opus 4.6 | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$$ | ✅ Works |
-| Vertex AI | Claude 3.5 Sonnet v2 | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$ | ✅ Works |
-| llama.cpp | Qwen3-Coder (25B Q4) | Mac M1 32GB | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Free | ✅ Works |
-| llama.cpp | DeepSeek-Coder (16B Q5) | DGX Spark | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Free | ✅ Works |
-| OpenRouter | deepseek-v3.2 | Cloud | ⭐⭐⭐⭐ | ⭐⭐⭐ | $ (98% cheaper) | ✅ Works |
+| Anthropic | Claude Opus 4.6 | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$$ | ✅ **Tested** |
+| Vertex AI | Claude 3.5 Sonnet v2 | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$ | ✅ **Tested** |
+| llama.cpp | Qwen3-Coder (25B Q4) | Mac M1 32GB | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Free | ✅ **Tested** |
+| llama.cpp | DeepSeek-Coder (16B Q5) | DGX Spark | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Free | ✅ **Tested** |
+| OpenRouter | deepseek-v3.2 | Cloud | ? | ? | $ (98% cheaper) | ⚠️ **To be tested** |
+| LM Studio | Various models | Local | ? | ? | Free | ⚠️ **To be tested** |
 | ~~Ollama~~ | ~~Any model~~ | ~~Any~~ | ❌ | ❌ | ❌ | ❌ **Incompatible** |
 
-**Note:** Ollama entries removed - Ollama does NOT work with Claude Code due to API incompatibility.
+**Note:** Only Anthropic API, Vertex AI, and llama.cpp have been tested and confirmed working. OpenRouter and LM Studio are theoretically compatible but need testing. Ollama does NOT work with Claude Code due to API incompatibility.
 
 ## Decision Matrix: Which Solution to Use?
 
 ### Quick Comparison
 
-| Solution | Setup | Cost | Offline | IDE Integration | Model Choice |
-|----------|-------|------|---------|----------------|--------------|
-| **Anthropic API** | ⭐⭐⭐⭐⭐ Instant | $$$$ High | ❌ No | ✅ Full | Claude only |
-| **Vertex AI** | ⭐⭐⭐⭐ Easy | $$$ Medium | ❌ No | ✅ Full | Claude only |
-| **OpenRouter** | ⭐⭐⭐⭐⭐ Instant | $ Very low | ❌ No | ✅ Full | 100+ models |
-| **llama.cpp** | ⭐⭐ Complex | Free | ✅ Yes | ✅ Full | Any GGUF |
-| **LM Studio** | ⭐⭐⭐⭐ Easy | Free | ✅ Yes | ✅ Full | Any GGUF |
-| **~~Ollama~~** | ❌ Not compatible | - | - | ❌ No | - |
+| Solution | Setup | Cost | Offline | IDE Integration | Model Choice | Status |
+|----------|-------|------|---------|----------------|--------------|--------|
+| **Anthropic API** | ⭐⭐⭐⭐⭐ Instant | $$$$ High | ❌ No | ✅ Full | Claude only | ✅ **Tested** |
+| **Vertex AI** | ⭐⭐⭐⭐ Easy | $$$ Medium | ❌ No | ✅ Full | Claude only | ✅ **Tested** |
+| **llama.cpp** | ⭐⭐ Complex | Free | ✅ Yes | ✅ Full | Any GGUF | ✅ **Tested** |
+| **OpenRouter** | ⭐⭐⭐⭐⭐ Instant | $ Very low | ❌ No | ? | 100+ models | ⚠️ **To be tested** |
+| **LM Studio** | ⭐⭐⭐⭐ Easy | Free | ✅ Yes | ? | Any GGUF | ⚠️ **To be tested** |
+| **~~Ollama~~** | ❌ Not compatible | - | - | ❌ No | - | ❌ **Incompatible** |
 
 ### Use Case Recommendations
 

@@ -79,7 +79,7 @@ def create_investigation_session(
         name: Optional session name (auto-generated from goal if not provided)
         path: Optional project path (bypasses interactive selection if provided)
         workspace: Optional workspace name (overrides session default and config default)
-        model_profile: Optional model provider profile to use (e.g., "vertex", "ollama-local")
+        model_profile: Optional model provider profile to use (e.g., "vertex", "llama-cpp")
     """
     from devflow.session.manager import SessionManager
     from devflow.config.loader import ConfigLoader

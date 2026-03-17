@@ -303,7 +303,7 @@ def cli(ctx: click.Context) -> None:
 @workspace_option()
 @click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
-@click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'ollama-local')")
+@click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 @json_option
 def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str) -> None:
     """Create a new session or add conversation to existing session.
@@ -1715,7 +1715,7 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @workspace_option()
-@click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'ollama-local')")
+@click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str, path: str, workspace: str, model_profile: str) -> None:
     """Create investigation-only session without ticket creation.
 

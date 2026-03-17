@@ -1102,7 +1102,7 @@ class AddEditProfileScreen(ModalScreen):
                 yield Label("Profile Name *")
                 yield Input(
                     value=self.existing_name if self.existing_name else "",
-                    placeholder="e.g., ollama-local, vertex-prod, openrouter",
+                    placeholder="e.g., llama-cpp, vertex-prod, openrouter",
                     id="profile_name",
                     disabled=self.is_edit_mode,
                 )
@@ -1121,7 +1121,7 @@ class AddEditProfileScreen(ModalScreen):
                     options=[
                         ("Anthropic API (default)", "anthropic"),
                         ("Google Vertex AI", "vertex"),
-                        ("Custom (Ollama, OpenRouter, etc.)", "custom"),
+                        ("Custom (llama.cpp, OpenRouter, etc.)", "custom"),
                     ],
                     value=provider_type,
                     allow_blank=False,
@@ -1160,7 +1160,7 @@ class AddEditProfileScreen(ModalScreen):
                     yield Label("Auth Token")
                     yield Input(
                         value=self.existing_profile.get("auth_token") or "",
-                        placeholder="ollama or your-api-key",
+                        placeholder="llama-cpp or your-api-key",
                         id="auth_token",
                     )
                     yield Label("API Key")
@@ -2200,7 +2200,7 @@ class ConfigTUI(App):
             yield Static("[bold cyan]Model Provider Profiles[/bold cyan]", classes="section-title")
             yield Static(
                 "Configure alternative AI model providers for Claude Code. "
-                "Use Ollama for local models, OpenRouter for cloud, or Vertex AI for GCP. "
+                "Use llama.cpp for local models, OpenRouter for cloud, or Vertex AI for GCP. "
                 "Switch providers per session: MODEL_PROVIDER_PROFILE=name daf open",
                 classes="section-help",
             )

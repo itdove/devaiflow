@@ -64,7 +64,7 @@ class SessionManager:
             branch: Git branch name
             ai_agent_session_id: Claude Code session UUID
             issue_key: Optional issue tracker key
-            model_profile: Optional model provider profile override (e.g., "vertex", "ollama-local")
+            model_profile: Optional model provider profile override (e.g., "vertex", "llama-cpp")
 
         Returns:
             Created Session object

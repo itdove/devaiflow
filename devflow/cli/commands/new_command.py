@@ -340,7 +340,7 @@ def create_new_session(
         workspace_name: Optional workspace name (AAP-63377)
         projects: Comma-separated list of repository names for multi-project sessions
         force_new_session: If True, always create new session instead of adding conversation
-        model_profile: Optional model provider profile to use (e.g., "vertex", "ollama-local")
+        model_profile: Optional model provider profile to use (e.g., "vertex", "llama-cpp")
         output_json: If True, output JSON instead of human-readable text
     """
     config_loader = ConfigLoader()

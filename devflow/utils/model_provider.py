@@ -156,7 +156,7 @@ def get_profile_display_name(profile: Optional[Dict[str, Any]]) -> str:
         profile: Model provider profile dictionary (optional)
 
     Returns:
-        Display name (e.g., "Anthropic API", "Vertex AI (project-123)", "Ollama (devstral-small-2)")
+        Display name (e.g., "Anthropic API", "Vertex AI (project-123)", "llama.cpp (Qwen3-Coder)")
     """
     if not profile:
         return "Anthropic API"
