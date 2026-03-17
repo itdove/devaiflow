@@ -186,6 +186,13 @@ def _generate_initial_prompt(
         prompt += f"   • This session spans {len(other_projects)} projects with SHARED CONTEXT\n"
         prompt += f"   • Projects: {', '.join(other_projects)}\n"
         prompt += f"   • You can make changes in ANY of these projects\n"
+
+        # Add explicit file permission guidance based on session_type
+        if session_type == "development":
+            prompt += f"   • File Permissions: You can EDIT files in any of these project directories\n"
+        else:  # ticket_creation or investigation
+            prompt += f"   • File Permissions: You can only READ files in these directories - DO NOT edit any files\n"
+
         prompt += f"\n   ✅ ADVANTAGES:\n"
         prompt += f"   • All changes are coordinated in a single conversation\n"
         prompt += f"   • You can update frontend to match backend API changes\n"
@@ -202,6 +209,13 @@ def _generate_initial_prompt(
         prompt += f"   • YOU ARE CURRENTLY IN: {current_project}\n"
         prompt += f"   • Other projects in this session: {', '.join(other_projects)}\n"
         prompt += f"\n   🚨 CRITICAL: Only make changes in the '{current_project}' project!\n"
+
+        # Add explicit file permission guidance based on session_type
+        if session_type == "development":
+            prompt += f"   • File Permissions: You can EDIT files in '{current_project}' directory only\n"
+        else:  # ticket_creation or investigation
+            prompt += f"   • File Permissions: You can only READ files in '{current_project}' directory - DO NOT edit any files\n"
+
         prompt += f"\n   WHY THIS MATTERS:\n"
         prompt += f"   • Each project has its OWN git repository and branch\n"
         prompt += f"   • The other projects ({', '.join(other_projects)}) may be on DIFFERENT branches\n"
