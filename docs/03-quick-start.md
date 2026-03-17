@@ -10,144 +10,35 @@ Get up and running with DevAIFlow in 5 minutes.
 - (Optional) GitHub CLI (`gh`) authenticated if using GitHub integration
 - (Optional) GitLab CLI (`glab`) authenticated if using GitLab integration
 
-## Your First Session (With GitHub)
+## Core Concepts
 
-### 1. Create a Well-Researched Issue (Recommended!)
+Before diving in, understand these key concepts:
 
-The best way to start with GitHub is to create a well-researched issue using Claude's codebase analysis:
+### Session Types
 
+**Single-Project Sessions**
+- Work on one repository at a time
+- One Git branch per session
+- Simplest workflow for focused tasks
+
+**Multi-Project Sessions**
+- Work across multiple repositories for one task
+- Shared context across all projects
+- Each project gets its own Git branch
+- Unified time tracking
+
+> **When to use multi-project?** When a single JIRA ticket or GitHub issue requires changes in multiple repositories (e.g., backend API + frontend UI + shared library).
+
+### Entry Points: Create vs Sync
+
+**Path A: Create New Tickets** (Recommended for new work)
 ```bash
-# Create an issue with Claude's help
+# GitHub
 daf git new --goal "Add user authentication to API"
-```
 
-This will:
-1. Create an analysis-only session (no code changes, no branches)
-2. Launch Claude to analyze your codebase
-3. Help you create a detailed GitHub issue with proper context
-
-**Why this is better:**
-- Claude analyzes the codebase first, understanding implementation complexity
-- Creates issues with accurate descriptions and acceptance criteria
-- Safe read-only exploration prevents accidental code changes
-- One command handles everything: session creation + Claude launch
-
-**Example workflow:**
-```bash
-# 1. Create issue with analysis
-daf git new --goal "Add two-factor authentication"
-
-# 2. Claude will analyze the codebase and you can ask questions like:
-#    - "What authentication libraries are currently used?"
-#    - "Where should I add the 2FA code?"
-#    - "What tests already exist for authentication?"
-
-# 3. When ready, Claude creates the issue using:
-daf git create \
-  --summary "Add two-factor authentication support" \
-  --description "..." \
-  --acceptance-criteria "User can enable 2FA" \
-  --acceptance-criteria "Supports TOTP apps like Google Authenticator"
-```
-
-**Note:** GitHub doesn't have issue types like JIRA. The `--type` flag is optional and only adds a label (bug, enhancement, task) if specified.
-
-### Alternative: Sync Existing Issues
-
-If you already have assigned issues, you can sync them instead:
-
-```bash
-# Sync GitHub issues from all configured workspaces
-daf sync
-```
-
-This automatically creates sessions for all your assigned GitHub issues across all repositories in your configured workspaces.
-
-### 2. Open a Session
-
-```bash
-# Recommended: Use session name (created by daf sync)
-daf open owner-repo-60
-
-# Alternative: Use issue key with quotes (bash requires quotes due to #)
-daf git open "owner/repo#60"
-```
-
-On first open, you'll be prompted to select a working directory if it can't be auto-detected from the issue repository.
-
-> **Tip:** Session names use dashes (e.g., `owner-repo-60`) because they're used as directory names. Always use quotes when referencing issue keys with `#` in bash commands to prevent the `#` from being treated as a comment.
-
-### 3. Work and Track Progress
-
-Exit Claude Code first, then add notes:
-
-```bash
-# Add notes (saved locally)
-daf note owner-repo-60 "Completed login endpoint"
-
-# Add note AND GitHub comment (use quotes around issue key)
-daf git add-comment "owner/repo#60" "Ready for code review"
-```
-
-> **Tip:** `daf note` now works inside Claude Code! Add notes anytime to track progress. Use `/daf-notes` to view all notes.
-
-### 4. Check Your Status
-
-```bash
-daf list --active
-```
-
-Output:
-```
-Sessions (2):
-
-📋 owner-repo-60
-   🎯 owner/repo#60: Add two-factor authentication
-   📁 my-app
-   📊 in_progress
-   ⏱️  2h 30m
-
-📋 owner-repo-61
-   🎯 owner/repo#61: Fix password reset
-   📁 my-app
-   📊 in_progress
-   ⏱️  1h 15m
-```
-
-### 5. Complete and Close Issue
-
-```bash
-daf complete owner-repo-60
-```
-
-The tool will:
-1. Ask if you want to commit changes
-2. Ask if you want to create a PR
-3. Ask if you want to close the GitHub issue (default: No)
-4. Generate an AI summary (optional)
-5. Add the summary as a GitHub comment
-6. Mark the session complete
-
-**GitHub closing behavior:**
-- By default, issues remain open (you can close via PR)
-- Prompts you to close: `Close GitHub issue owner/repo#60? (y/N)`
-- Or configure auto-close: `config.github.auto_close_on_complete = true`
-
-## Your First Session (With JIRA)
-
-### 1. Create a Well-Researched Ticket (Recommended!)
-
-The best way to start with JIRA is to create a well-researched ticket using Claude's codebase analysis:
-
-```bash
-# Create a story ticket with Claude's help
+# JIRA
 daf jira new story --parent PROJ-12345 --goal "Add user authentication to API"
 ```
-
-This will:
-1. Create an analysis-only session (no code changes, no branches)
-2. Launch Claude to analyze your codebase
-3. Help you create a detailed JIRA ticket with proper context
 
 **Why this is better:**
 - Claude analyzes the codebase first, understanding implementation complexity
@@ -155,354 +46,265 @@ This will:
 - Safe read-only exploration prevents accidental code changes
 - One command handles everything: session creation + Claude launch
 
-**Example workflow:**
+**Path B: Sync Existing Tickets** (For already-assigned work)
 ```bash
-# 1. Create ticket with analysis
-daf jira new story --parent PROJ-59038 --goal "Add two-factor authentication"
+# Sync GitHub/GitLab issues from all configured workspaces
+daf sync
 
-# 2. Claude will analyze the codebase and you can ask questions like:
+# Sync JIRA tickets from current sprint
+daf sync --sprint current
+```
+
+**When to use sync:**
+- Working on tickets already created by PM/team
+- Sprint has pre-defined backlog
+- Bug fixes with clear reproduction steps
+
+> **🔑 Key Difference:** `daf git new`/`daf jira new` creates new tickets WITH Claude's analysis. `daf sync` imports existing assigned tickets.
+
+### Backends
+
+DevAIFlow supports three issue tracker backends:
+
+| Backend | CLI Required | Best For |
+|---------|-------------|----------|
+| **GitHub Issues** | `gh` (GitHub CLI) | Open source projects, GitHub-centric teams |
+| **GitLab Issues** | `glab` (GitLab CLI) | GitLab-centric teams, self-hosted needs |
+| **JIRA** | JIRA CLI or API token | Enterprise teams, complex workflows |
+| **None** | - | Personal experiments, no ticket tracking |
+
+All backends support the same core features: time tracking, progress notes, session management, and PR/MR creation.
+
+## Your First Session
+
+Choose your path based on whether you're creating new work or working on assigned tickets.
+
+### Path A: Create New Tickets (Recommended!)
+
+This approach uses Claude to analyze your codebase BEFORE creating the ticket, resulting in better-informed issues.
+
+**With GitHub:**
+```bash
+# 1. Create issue with Claude's analysis
+daf git new --goal "Add two-factor authentication"
+
+# 2. Claude analyzes and you ask questions:
 #    - "What authentication libraries are currently used?"
 #    - "Where should I add the 2FA code?"
 #    - "What tests already exist for authentication?"
 
-# 3. When ready, Claude creates the ticket using:
+# 3. Claude creates the issue using:
+daf git create \
+  --summary "Add two-factor authentication support" \
+  --description "..." \
+  --acceptance-criteria "User can enable 2FA" \
+  --acceptance-criteria "Supports TOTP apps like Google Authenticator"
+
+# 4. Complete the analysis session
+daf complete <session-name>
+
+# 5. Open the created issue to implement it
+daf open owner-repo-123
+```
+
+**With JIRA:**
+```bash
+# 1. Create ticket with Claude's analysis
+daf jira new story --parent PROJ-59038 --goal "Add two-factor authentication"
+
+# 2. Claude analyzes and you ask questions:
+#    - "What authentication libraries are currently used?"
+#    - "Where should I add the 2FA code?"
+#    - "What tests already exist for authentication?"
+
+# 3. Claude creates the ticket using:
 daf jira create story \
   --summary "Add two-factor authentication support" \
   --parent PROJ-59038 \
   --description "..." \
   --acceptance-criteria "..."
-```
 
-### Alternative: Sync Existing Tickets
+# 4. Complete the analysis session
+daf complete <session-name>
 
-If you already have assigned tickets, you can sync them instead:
-
-```bash
-# See what tickets you have assigned
-daf sync --dry-run
-
-# Actually sync them
-daf sync --sprint current
-```
-
-This automatically creates sessions for all your assigned tickets (including tickets you just created in the previous step, once they're assigned to you, pointed, and added to a sprint).
-
-### 2. Open a Session
-
-```bash
-# Open by JIRA key (works for both synced and created tickets)
+# 5. Open the created ticket to implement it
 daf open PROJ-12345
 ```
 
-On first open, you'll be prompted to select a working directory. The tool suggests repositories based on the JIRA ticket summary.
-
-### 3. Work and Track Progress
-
-Exit Claude Code first, then add notes:
-
-```bash
-# Add notes (saved locally)
-daf note PROJ-12345 "Completed login endpoint"
-
-# Add note AND sync to JIRA
-daf note PROJ-12345 "Ready for code review" --jira
-```
-
-> **Tip:** `daf note` now works inside Claude Code! Add notes anytime to track progress. Use `/daf-notes` to view all notes.
-
-### 4. Check Your Sprint Status
-
-```bash
-daf status
-```
-
-Output:
-```
-Current Sprint: 2025-01
-
-In Progress:
-🚧 PROJ-12345  User authentication       5 pts | 2h 30m
-🚧 PROJ-12346  Fix password reset        3 pts | 1h 15m
-
-Ready to Start:
-🆕 PROJ-12347  Add 2FA support          8 pts
-```
-
-### 5. Complete and Transition JIRA
-
-```bash
-daf complete PROJ-12345
-```
-
-The tool will:
-1. Ask if you want to transition the JIRA ticket
-2. Show available transitions (e.g., "In Progress → Code Review")
-3. Generate an AI summary (optional)
-4. Add the summary as a JIRA comment
-5. Mark the session complete
-
-## Your First Session (Without JIRA)
-
-### 1. Create a Session
-
+**Without Issue Tracker:**
 ```bash
 # Navigate to your project
 cd ~/projects/my-app
 
-# Create a new session
+# Create and open session
 daf new --name "api-optimization" --goal "Optimize database queries"
 ```
 
-You'll see:
-```
-✓ Created session for api-optimization (#1)
+### Path B: Sync Existing Tickets
 
-📋 Session: api-optimization (#1)
-🎯 Goal: Optimize database queries
-📁 Working Directory: my-app
-📂 Path: /Users/you/projects/my-app
-🆔 Claude Session ID: abc123...
+If you already have assigned tickets from sprint planning, sync them:
 
-Launch Claude Code now? [Y/n]:
-```
-
-Press `y` to launch Claude Code.
-
-### 2. Work in Claude Code
-
-Claude Code will open with your goal as the initial prompt. Work on your task as normal.
-
-### 3. Add Progress Notes
-
-Exit Claude Code, then add notes:
-
+**With GitHub:**
 ```bash
-daf note "api-optimization" "Identified slow queries in UserController"
-daf note "api-optimization" "Added database indexes for user lookups"
-```
-
-> **Note:** `daf note` must be run outside Claude Code to prevent data conflicts. Inside Claude Code, use `/daf-notes` to view notes.
-
-### 4. View Your Sessions
-
-```bash
-daf list
-```
-
-Output:
-```
-Sessions (1):
-
-📋 api-optimization (#1)
-   🎯 Optimize database queries
-   📁 my-app
-   📊 in_progress
-   ⏱️  45m
-```
-
-### 5. Resume Later
-
-Close Claude Code when done. Resume anytime:
-
-```bash
-daf open api-optimization
-```
-
-### 6. Complete the Session
-
-When finished:
-
-```bash
-daf complete api-optimization
-```
-
-## Common Scenarios
-
-### Scenario 1: Start of Sprint (JIRA Users)
-
-Two common workflows for JIRA users:
-
-#### Workflow A: Create New Tickets (Recommended for new features)
-
-Use this when planning new work items or breaking down epics into stories:
-
-```bash
-# 1. Create a well-researched story with Claude's analysis
-daf jira new story --parent PROJ-59038 --goal "Add pagination to user list API"
-
-# 2. Claude analyzes codebase and helps you understand:
-#    - Current API patterns
-#    - Pagination implementations already in use
-#    - Testing patterns
-#    - Complexity and dependencies
-
-# 3. Create the ticket with informed description and acceptance criteria
-# (Claude will guide you through using daf jira create command)
-
-# 4. Complete the analysis session
-daf complete <session-name>
-
-# 5. Now open the created ticket to implement it
-daf open PROJ-12345  # The ticket you just created
-```
-
-**When to use this workflow:**
-- Planning new features or enhancements
-- Breaking down epics into detailed stories
-- Need to understand codebase before estimating effort
-- Want accurate acceptance criteria based on actual architecture
-
-#### Workflow B: Work on Assigned Tickets
-
-Use this when you already have assigned tickets from sprint planning:
-
-```bash
-# 1. Beginning of sprint - sync all your assigned tickets
-daf sync --sprint current
-
-# 2. See your sprint status
-daf status
-
-# 3. Start working on a ticket
-daf open PROJ-12345
-
-# 4. Work, exit Claude, add notes, complete
-# (Exit Claude Code before running daf note)
-daf note PROJ-12345 "Implemented feature X"
-daf complete PROJ-12345
-```
-
-**When to use this workflow:**
-- Working on tickets already created by PM/team
-- Sprint has pre-defined backlog
-- Implementing well-defined requirements
-- Bug fixes with clear reproduction steps
-
-### Scenario 1b: Start of Sprint (GitHub Users)
-
-Similar to JIRA workflows, GitHub users have two approaches:
-
-#### Workflow A: Create New Issues (Recommended for new features)
-
-Use this when planning new work items:
-
-```bash
-# 1. Create a well-researched issue with Claude's analysis
-daf git new --goal "Add pagination to user list API"
-
-# 2. Claude analyzes codebase and helps you understand:
-#    - Current API patterns
-#    - Pagination implementations already in use
-#    - Testing patterns
-#    - Complexity and dependencies
-
-# 3. Create the issue with informed description and acceptance criteria
-# (Claude will guide you through using daf git create command)
-
-# 4. Complete the analysis session
-daf complete <session-name>
-
-# 5. Now open the created issue to implement it
-daf open owner-repo-123  # The issue you just created
-```
-
-**When to use this workflow:**
-- Planning new features or enhancements
-- Need to understand codebase before implementing
-- Want accurate acceptance criteria based on actual architecture
-- Working in open-source projects where you create your own issues
-
-#### Workflow B: Work on Assigned Issues
-
-Use this when you already have assigned issues:
-
-```bash
-# 1. Sync all your assigned issues from configured workspaces
+# 1. Sync all assigned issues from configured workspaces
 daf sync
 
 # 2. See your active sessions
 daf list --active
 
-# 3. Start working on an issue
+# 3. Open an issue (use session name - no quotes needed!)
 daf open owner-repo-123
 
-# 4. Work, exit Claude, add notes, complete
-# (Exit Claude Code before running daf note)
-daf note owner-repo-123 "Implemented feature X"
+# 4. Work, exit Claude, add notes
+daf note owner-repo-123 "Completed login endpoint"
+
+# 5. Complete the session
 daf complete owner-repo-123
 ```
 
-**When to use this workflow:**
-- Working on issues assigned by maintainers/team
-- Contributing to projects with established issue tracking
-- Bug fixes with clear reproduction steps
-- Issues created during planning meetings
-
-### Scenario 2: Working Across Multiple Repositories (Multi-Conversation Sessions)
-
-**Common Use Case:** One JIRA ticket requires changes in multiple repositories (e.g., backend API + frontend UI).
-
-**Recommended Approach:** Use multi-conversation sessions to keep all related work under one session with unified time tracking.
-
+**With JIRA:**
 ```bash
-# Create or sync the session
+# 1. Preview what tickets will be synced
+daf sync --dry-run
+
+# 2. Sync current sprint tickets
 daf sync --sprint current
-# Or: daf new --jira PROJ-12345 --goal "Add user profile feature"
 
-# First time: Open for backend work
+# 3. See your sprint status
+daf status
+
+# 4. Open a ticket
 daf open PROJ-12345
 
-# You'll be prompted to select a repository:
-Available repositories (8):
-  1. backend-api
-  2. frontend-app
-  3. mobile-app
-  ...
+# 5. Work, exit Claude, add notes
+daf note PROJ-12345 "Completed login endpoint"
 
-Which project? [1-8]: 1
-
-# Work in backend, make changes, then exit Claude Code...
-
-# Continue same session in frontend repository
-daf open PROJ-12345
-
-# You'll see the existing conversation and option to create new one:
-Found 1 conversation(s) for PROJ-12345:
-
-  1. backend-api
-     Path: /Users/you/workspace/backend-api
-     Branch: feature/PROJ-12345
-     Last active: 15m ago
-
-  2. → Create new conversation (in a different project)
-
-Which conversation? [1-2]: 2
-
-# Select frontend repository:
-Available projects:
-  1. backend-api (already has conversation)
-  2. frontend-app
-  3. mobile-app
-  ...
-
-Which project? [1-3]: 2
-
-# Now working in frontend with separate conversation...
+# 6. Complete the session
+daf complete PROJ-12345
 ```
 
-**Result:** One session (PROJ-12345) with multiple conversations:
-- Unified time tracking across all repositories
-- Single JIRA ticket link
-- Separate Claude Code conversation history per repository
-- Easy to switch between with `daf open PROJ-12345`
+> **💡 Tip:** Session names use dashes (e.g., `owner-repo-60` or `PROJ-12345`) and don't need quotes. Only use quotes when referencing GitHub issue keys with `#` (e.g., `"owner/repo#60"`).
+
+### Work and Track Progress
+
+Once you're in a session, track your progress:
+
+```bash
+# Add notes (works inside Claude Code now!)
+daf note <session-name> "Completed feature X"
+
+# Add note AND sync to JIRA/GitHub
+daf note PROJ-12345 "Ready for review" --jira           # JIRA
+daf git add-comment "owner/repo#60" "Ready for review"  # GitHub (needs quotes)
+```
+
+### Complete and Close
+
+```bash
+daf complete <session-name>
+```
+
+The tool will:
+1. Ask if you want to commit changes
+2. Ask if you want to create a PR/MR
+3. Ask if you want to close/transition the ticket
+4. Generate an AI summary (optional)
+5. Add the summary as a comment
+6. Mark the session complete
+
+## Multi-Project Sessions
+
+Work across multiple repositories in a single session with shared context.
+
+### When to Use Multi-Project Sessions
+
+**Common use cases:**
+- One JIRA ticket requires changes in multiple repositories (backend API + frontend UI)
+- Coordinated updates across microservices
+- Shared library changes that affect multiple consumers
 
 **Benefits:**
 - All work for one ticket stays together
-- Time tracking counts work across all repositories
-- Easier to manage with `daf status`, `daf list`
+- Unified time tracking across repositories
+- Claude has shared context across all projects
 - Each repository gets its own Git branch
+- One `daf complete` creates PRs/MRs for all projects
 
-### Scenario 3: Quick Experiment (No JIRA)
+### Creating Multi-Project Sessions
+
+**Declarative Approach** (All at once):
+```bash
+# Create session spanning multiple projects
+daf new PROJ-123 -w primary --projects backend-api,frontend-app,shared-lib
+
+# System prompts for base branch per project:
+#   backend-api: branch from main
+#   frontend-app: branch from develop
+#   shared-lib: branch from main
+```
+
+**Iterative Approach** (Add as you go):
+```bash
+# 1. First open: Select backend repository
+daf open PROJ-12345
+# Prompts: Which project? Select "backend-api"
+
+# Work in backend, then exit Claude Code...
+
+# 2. Second open: Add frontend repository
+daf open PROJ-12345
+# Shows existing conversations and option to create new one
+# Select "Create new conversation (in a different project)"
+# Prompts: Which project? Select "frontend-app"
+
+# Work in frontend, then exit Claude Code...
+
+# 3. Complete creates PRs for both projects
+daf complete PROJ-12345
+```
+
+### Comparison: Declarative vs Iterative
+
+| Approach | When to Use | Pros | Cons |
+|----------|-------------|------|------|
+| **Declarative** (`--projects` flag) | You know all repositories upfront | Faster setup, all branches created at once | Requires workspace configuration |
+| **Iterative** (sequential opens) | Discover repositories as you work | More flexible, add repositories on-demand | Manual per-repository setup |
+
+> **💡 Recommendation:** Use declarative for planned multi-repo work. Use iterative for exploratory work where you discover dependencies as you go.
+
+### Viewing Multi-Project Sessions
+
+```bash
+# See all projects in current session
+daf active
+
+# List all conversations in session
+/daf-list-conversations  # Inside Claude Code
+```
+
+Example output:
+```
+╭────────────────────── ▶ Currently Active ──────────────────────╮
+│                                                                 │
+│  DAF Session: PROJ-12345 (#1)                                  │
+│  Type: Multi-project (2 projects)                              │
+│  Workspace: /Users/you/development                             │
+│  Goal: Add user profile feature across stack                  │
+│  Time (this work session): 2h 15m                             │
+│  Status: in_progress                                           │
+│                                                                 │
+│  Projects in this session:                                     │
+│    • backend-api (branch: feature/PROJ-12345)                  │
+│    • frontend-app (branch: feature/PROJ-12345-ui)              │
+│                                                                 │
+╰─────────────────────────────────────────────────────────────────╯
+```
+
+## Common Scenarios
+
+These scenarios demonstrate advanced workflows. Most users can skip this section initially.
+
+### Scenario 1: Quick Experiment (No Issue Tracker)
 
 ```bash
 cd ~/experiments
@@ -512,7 +314,7 @@ daf open test-redis
 daf delete test-redis  # Clean up when done
 ```
 
-### Scenario 4: Resume Yesterday's Work
+### Scenario 2: Resume Yesterday's Work
 
 ```bash
 # List recent sessions
@@ -525,7 +327,7 @@ daf open PROJ-12345
 daf summary PROJ-12345
 ```
 
-### Scenario 5: Long-Running Session (Cleanup)
+### Scenario 3: Long-Running Session (Cleanup)
 
 If you hit "413 Prompt too long" errors:
 
@@ -536,6 +338,16 @@ daf cleanup-conversation PROJ-12345 --older-than 8h
 
 # 3. Reopen
 daf open PROJ-12345
+```
+
+### Scenario 4: Session Templates
+
+```bash
+# Save successful session as template
+daf template save backend-api my-backend-template
+
+# Reuse for similar work
+daf new --name "new-endpoint" --goal "..." --template my-backend-template
 ```
 
 ## Useful Commands
@@ -559,8 +371,9 @@ daf summary <name>                          # View session summary
 daf time <name>                             # View time spent
 ```
 
-### JIRA Integration
+### Issue Tracker Integration
 
+**JIRA:**
 ```bash
 daf jira new <type> --parent <key> --goal "..."  # Create ticket with analysis
 daf sync                                          # Sync assigned tickets
@@ -571,8 +384,7 @@ daf unlink <name>                                # Remove JIRA link
 daf status                                        # Sprint dashboard
 ```
 
-### GitHub/GitLab Integration
-
+**GitHub/GitLab:**
 ```bash
 daf git new --goal "..."                             # Create issue with analysis
 daf git create --summary "..." --description "..."   # Create issue directly
