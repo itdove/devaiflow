@@ -48,10 +48,10 @@ def add_project_to_session(
         console.print("[red]✗[/red] No workspaces configured. Run [cyan]daf init[/cyan] first.")
         sys.exit(1)
 
-    workspace = config.repos.workspaces.get(workspace_name)
+    workspace = config.repos.get_workspace_by_name(workspace_name)
     if not workspace:
         console.print(f"[red]✗[/red] Workspace not found: {workspace_name}")
-        console.print(f"[dim]Available workspaces: {', '.join(config.repos.workspaces.keys())}[/dim]")
+        console.print(f"[dim]Available workspaces: {', '.join(w.name for w in config.repos.workspaces)}[/dim]")
         sys.exit(1)
 
     workspace_path = Path(workspace.path).expanduser().resolve()
