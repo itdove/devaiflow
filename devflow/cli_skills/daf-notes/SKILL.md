@@ -57,7 +57,8 @@ Total: 3 notes
 
 **Related commands:**
 ```bash
-daf note PROJ-12345 "Add progress note"  # Add a note
-daf summary PROJ-12345     # View session summary with notes
-daf info PROJ-12345        # View session details
+daf note "Add progress note"              # Add note to active session (auto-detects)
+daf note PROJ-12345 "Add progress note"   # Add note to specific session
+daf summary PROJ-12345                    # View session summary with notes
+daf info PROJ-12345                       # View session details
 ```

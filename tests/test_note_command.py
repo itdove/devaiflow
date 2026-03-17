@@ -455,3 +455,92 @@ def test_add_note_multiple_notes_same_session(temp_daf_home):
     second_pos = content.index("Second note")
     third_pos = content.index("Third note")
     assert first_pos < second_pos < third_pos
+
+
+def test_add_note_auto_detects_active_session_with_message_only(temp_daf_home, monkeypatch):
+    """Test that 'daf note MESSAGE' auto-detects active session (fix for issue #198)."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="active-session",
+        goal="Test auto-detection",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-active-123",
+    )
+
+    # Simulate being inside an AI agent session
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "uuid-active-123")
+
+    # Call with message only (no explicit session identifier)
+    # This should auto-detect the active session and treat the first arg as note content
+    add_note(identifier="My note message", note=None)
+
+    # Verify note was added to the active session
+    notes_file = config_loader.get_session_dir("active-session") / "notes.md"
+    assert notes_file.exists()
+    content = notes_file.read_text()
+    assert "My note message" in content
+
+
+def test_add_note_explicit_session_still_works(temp_daf_home, monkeypatch):
+    """Test that 'daf note SESSION MESSAGE' still works with explicit session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session1 = session_manager.create_session(
+        name="session-1",
+        goal="First session",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-1",
+    )
+
+    session2 = session_manager.create_session(
+        name="session-2",
+        goal="Second session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-2",
+    )
+
+    # Simulate being inside session-1
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "uuid-1")
+
+    # Explicitly add note to session-2 (not the active session)
+    add_note(identifier="session-2", note="Note for session 2")
+
+    # Verify note was added to session-2, not session-1
+    notes_file2 = config_loader.get_session_dir("session-2") / "notes.md"
+    assert notes_file2.exists()
+    content2 = notes_file2.read_text()
+    assert "Note for session 2" in content2
+
+    # Verify session-1 has no notes
+    notes_file1 = config_loader.get_session_dir("session-1") / "notes.md"
+    assert not notes_file1.exists()
+
+
+def test_add_note_message_only_outside_active_session_fails(temp_daf_home, monkeypatch):
+    """Test that 'daf note MESSAGE' fails with helpful error when not in active session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="test-session",
+        goal="Test session",
+        working_directory="test-dir",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-test",
+    )
+
+    # Ensure we're NOT in an active session
+    monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+    # Try to add note with message only (no active session)
+    # This should fail because "My note message" will be treated as session identifier
+    with pytest.raises(SystemExit) as exc_info:
+        add_note(identifier="My note message", note=None)
+    assert exc_info.value.code == 1
+    # Should show error that session "My note message" was not found
