@@ -134,7 +134,7 @@ def git_view(
         if not current_session_id:
             console.print("[red]✗[/red] Not in a DevAIFlow session")
             console.print("[dim]Run this command from within a Claude Code session opened via 'daf open'[/dim]")
-            console.print("[dim]Or provide an issue key: daf github view 123[/dim]")
+            console.print("[dim]Or provide an issue key: daf git view 123[/dim]")
             sys.exit(1)
 
         # Get session from ID
@@ -143,7 +143,7 @@ def git_view(
 
         if not session or not session.issue_key:
             console.print("[red]✗[/red] Current session has no GitHub issue associated")
-            console.print("[dim]Provide an issue key: daf github view 123[/dim]")
+            console.print("[dim]Provide an issue key: daf git view 123[/dim]")
             sys.exit(1)
 
         issue_key = session.issue_key
