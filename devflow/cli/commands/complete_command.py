@@ -305,6 +305,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                     active_conv.prs.append(pr_status['url'])
                     session_manager.update_session(session)
 
+                # Update issue tracker ticket with PR URL if not already present
+                if session.issue_key and pr_status['url']:
+                    _update_issue_pr_field(session, config, pr_status['url'], no_issue_update)
+
             elif not pr_status or pr_status['state'] in ['merged', 'closed']:
                 # No open PR - check if we should create one
                 base_branch = proj_info.base_branch
@@ -328,6 +332,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                             if pr_url not in active_conv.prs:
                                 active_conv.prs.append(pr_url)
                                 session_manager.update_session(session)
+
+                            # Update issue tracker ticket with PR URL
+                            if session.issue_key:
+                                _update_issue_pr_field(session, config, pr_url, no_issue_update)
                         else:
                             console.print(f"  [yellow]⚠[/yellow] Failed to create PR/MR")
 
@@ -434,6 +442,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                     conv.prs.append(pr_status['url'])
                     session_manager.update_session(session)
 
+                # Update issue tracker ticket with PR URL if not already present
+                if session.issue_key and pr_status['url']:
+                    _update_issue_pr_field(session, config, pr_status['url'], no_issue_update)
+
             elif not pr_status or pr_status['state'] in ['merged', 'closed']:
                 # No open PR - check if we should create one
                 base_branch = conv.base_branch or _get_base_branch(conv, working_dir)
@@ -457,6 +469,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                             if pr_url not in conv.prs:
                                 conv.prs.append(pr_url)
                                 session_manager.update_session(session)
+
+                            # Update issue tracker ticket with PR URL
+                            if session.issue_key:
+                                _update_issue_pr_field(session, config, pr_url, no_issue_update)
                         else:
                             console.print(f"  [yellow]⚠[/yellow] Failed to create PR/MR")
 
@@ -548,9 +564,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                 else:
                     console.print("[yellow]⚠[/yellow] Failed to commit changes")
 
-    # Check if PR/MR already exists for this session
+    # Check if PR/MR already exists for this session (single-project sessions only)
     # Skip for ticket_creation and investigation sessions (analysis-only, no code changes)
-    if session.session_type == "development" and active_conv and active_conv.project_path and active_conv.branch:
+    # Skip for multi-project and multi-conversation sessions (already handled above)
+    if (session.session_type == "development" and active_conv and active_conv.project_path and active_conv.branch
+        and not (active_conv.is_multi_project and active_conv.projects)  # Skip multi-project (already handled)
+        and len(session.conversations) <= 1):  # Skip multi-conversation (already handled)
         working_dir = Path(active_conv.project_path)
         if GitUtils.is_git_repository(working_dir):
             # At this point, we've already verified and corrected the branch above
