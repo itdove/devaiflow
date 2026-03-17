@@ -36,7 +36,7 @@
    git push -u origin <branch-name>
    ```
 
-5. **Create a draft PR** using the template from @.github/PULL_REQUEST_TEMPLATE.md using `gh` CLI
+5. **Create a draft PR** using auto-discovered PR templates (organization `.github` repo first, then repository `.github/` directory, then user-configured URL, then default template) using `gh` CLI
 
 #### Creating Pull Requests
 

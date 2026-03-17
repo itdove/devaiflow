@@ -1120,9 +1120,17 @@ The tool automatically falls back to unauthenticated GitHub API when `gh` CLI is
    - Make sure the file exists at that path
    - Check the branch name matches (main vs master)
 
-3. **Try raw URL format:**
+3. **Manual configuration (optional):**
+
+   Auto-discovery tries these locations in order:
+   - Organization `.github` repository (highest priority)
+   - Repository `.github/` directory
+   - User-configured URL in `config.json` (lowest priority)
+
+   To manually configure a template URL for testing:
    ```bash
-   daf config set-pr-template-url https://raw.githubusercontent.com/owner/repo/main/PULL_REQUEST_TEMPLATE.md
+   # Edit config.json and add:
+   # "pr_template_url": "https://raw.githubusercontent.com/owner/repo/main/PULL_REQUEST_TEMPLATE.md"
    ```
 
 **For Private Repositories:**
@@ -1171,9 +1179,12 @@ Private repositories require `gh` CLI installed and authenticated:
    - Rate limits reset every hour
    - Check rate limit status: `curl https://api.github.com/rate_limit`
 
-3. **Use raw URL as workaround:**
+3. **Manual configuration for testing:**
+
+   Raw URLs can be configured in `config.json`:
    ```bash
-   daf config set-pr-template-url https://raw.githubusercontent.com/owner/repo/main/PULL_REQUEST_TEMPLATE.md
+   # Edit ~/.daf-sessions/config.json and add:
+   # "pr_template_url": "https://raw.githubusercontent.com/owner/repo/main/PULL_REQUEST_TEMPLATE.md"
    ```
 
 ### Template File Not Found (404)
@@ -1194,9 +1205,14 @@ Private repositories require `gh` CLI installed and authenticated:
    ```
 
 2. **Check branch name:**
+
+   Auto-discovery checks the `main` branch by default. For repositories using different default branches,
+   place your template in one of the standard locations (.github/, docs/, or root) on the default branch.
+
+   For manual configuration, edit `config.json`:
    ```bash
-   # Use 'main' not 'master' (or vice versa)
-   daf config set-pr-template-url https://github.com/org/repo/blob/main/PULL_REQUEST_TEMPLATE.md
+   # ~/.daf-sessions/config.json
+   # "pr_template_url": "https://github.com/org/repo/blob/main/PULL_REQUEST_TEMPLATE.md"
    ```
 
 3. **Verify repository and file existence:**

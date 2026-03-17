@@ -1255,9 +1255,18 @@ The tool can automatically fetch and fill PR/MR templates from your repository. 
 - Requires `gh` CLI installed and authenticated
 - Provides higher rate limits (5000 vs 60 requests/hour)
 
-**Configuration:**
+**PR Template Auto-Discovery:**
+
+Templates are automatically discovered in this priority order:
+1. Organization `.github` repository (enforced, cannot be overridden)
+2. Repository `.github/`, `docs/`, or root directory
+3. User-configured URL in `config.json` (for testing)
+4. Default built-in template
+
+Manual configuration (optional, for testing):
 ```bash
-daf config set-pr-template-url https://github.com/org/repo/blob/main/PULL_REQUEST_TEMPLATE.md
+# Edit ~/.daf-sessions/config.json:
+# "pr_template_url": "https://github.com/org/repo/blob/main/PULL_REQUEST_TEMPLATE.md"
 ```
 
 **Benefits:**
@@ -4396,7 +4405,8 @@ Configure keyword mappings now? [y/n] (n): n
 === PR/MR Template Configuration ===
 
 Optional: Configure how AI generates PR/MR descriptions.
-Can be set later via 'daf config tui' or 'daf config set-pr-template-url'.
+Templates are auto-discovered from organization and repository locations.
+Manual configuration can be added later via 'daf config tui' or by editing config.json.
 
 You have three options for generating PR/MR descriptions:
   1. Provide a template URL - AI will fill your organization's template
