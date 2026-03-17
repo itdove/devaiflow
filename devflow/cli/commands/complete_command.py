@@ -723,9 +723,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                         else:
                             console.print("\n[dim]No new commits - skipping PR creation.[/dim]")
 
-    # Offer to add session summary to JIRA (only if session has issue key and meaningful activity)
+    # Offer to add session summary to issue tracker (only if session has issue key and meaningful activity)
     if session.issue_key:
-        # Check if session has meaningful activity to warrant a JIRA comment
+        # Detect backend for dynamic messaging
+        from devflow.utils.backend_detection import get_backend_display_name
+        backend = get_issue_tracker_backend(session, config)
+        backend_name = get_backend_display_name(backend)
+
+        # Check if session has meaningful activity to warrant an issue tracker comment
         has_meaningful_activity = (
             active_conv and active_conv.ai_agent_session_id and  # Claude was actually used
             (hours > 0 or minutes >= 5) and        # At least 5 minutes of work
@@ -734,24 +739,24 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
         )
 
         if has_meaningful_activity:
-            # Check if we should add JIRA summary (or use configured default)
+            # Check if we should add issue tracker summary (or use configured default)
             should_add_summary = True
             if no_issue_update:
                 should_add_summary = False
-                console.print("\n[dim]Skipping JIRA update (--no-issue-update flag)[/dim]")
+                console.print(f"\n[dim]Skipping {backend_name} update (--no-issue-update flag)[/dim]")
             elif config and config.prompts and config.prompts.auto_add_issue_summary is not None:
                 should_add_summary = config.prompts.auto_add_issue_summary
                 if should_add_summary:
-                    console.print("\n[dim]Automatically adding summary to JIRA (configured in prompts)[/dim]")
+                    console.print(f"\n[dim]Automatically adding summary to {backend_name} (configured in prompts)[/dim]")
             else:
-                should_add_summary = Confirm.ask("\nAdd session summary to JIRA?", default=True)
+                should_add_summary = Confirm.ask(f"\nAdd session summary to {backend_name}?", default=True)
 
             if should_add_summary:
                 _add_session_summary_to_issue(session, config, session.name, hours, minutes, config_loader)
         else:
-            console.print(f"[dim]Skipping JIRA summary - session has minimal activity (0h {minutes}m, no Claude interaction)[/dim]")
+            console.print(f"[dim]Skipping {backend_name} summary - session has minimal activity (0h {minutes}m, no Claude interaction)[/dim]")
     else:
-        console.print(f"[dim]Session has no issue key - skipping JIRA summary[/dim]")
+        console.print(f"[dim]Session has no issue key - skipping issue tracker summary[/dim]")
 
     # Export and attach to issue tracker if requested
     if attach_to_issue:
@@ -3193,25 +3198,28 @@ def _update_issue_pr_field(session, config, pr_url: str, no_issue_update: bool =
         pr_url: PR/MR URL to add
         no_issue_update: If True, skip issue tracker update
     """
+    from devflow.utils.backend_detection import get_backend_display_name
+
     issue_key = session.issue_key
     if not issue_key:
         return
 
     # Detect backend for this session
     backend = get_issue_tracker_backend(session, config)
+    backend_name = get_backend_display_name(backend)
 
     # Check if we should update (or use configured default)
     should_update = True
 
     if no_issue_update:
         should_update = False
-        console.print(f"\n[dim]Skipping {backend.upper()} PR update (--no-issue-update flag)[/dim]")
+        console.print(f"\n[dim]Skipping {backend_name} PR update (--no-issue-update flag)[/dim]")
     elif config and config.prompts and config.prompts.auto_update_jira_pr_url is not None:
         should_update = config.prompts.auto_update_jira_pr_url
         if should_update:
-            console.print(f"\n[dim]Automatically updating {backend.upper()} with PR URL (configured in prompts)[/dim]")
+            console.print(f"\n[dim]Automatically updating {backend_name} with PR URL (configured in prompts)[/dim]")
     else:
-        should_update = Confirm.ask(f"\nUpdate {backend} issue {issue_key} with PR URL?", default=True)
+        should_update = Confirm.ask(f"\nUpdate {backend_name} issue {issue_key} with PR URL?", default=True)
 
     if not should_update:
         return

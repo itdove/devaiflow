@@ -6,6 +6,7 @@ from devflow.config.models import Config, Session, JiraConfig, RepoConfig
 from devflow.utils.backend_detection import (
     detect_backend_from_key,
     get_issue_tracker_backend,
+    get_backend_display_name,
     validate_issue_key_format,
 )
 
@@ -230,3 +231,28 @@ class TestValidateIssueKeyFormat:
         """Test validation with unknown backend returns False."""
         assert validate_issue_key_format("AAP-12345", "unknown") is False
         assert validate_issue_key_format("#123", "unknown") is False
+
+
+class TestGetBackendDisplayName:
+    """Tests for get_backend_display_name function."""
+
+    def test_jira_display_name(self):
+        """Test JIRA backend returns correct display name."""
+        assert get_backend_display_name("jira") == "JIRA"
+
+    def test_github_display_name(self):
+        """Test GitHub backend returns correct display name."""
+        assert get_backend_display_name("github") == "GitHub Issues"
+
+    def test_gitlab_display_name(self):
+        """Test GitLab backend returns correct display name."""
+        assert get_backend_display_name("gitlab") == "GitLab Issues"
+
+    def test_mock_display_name(self):
+        """Test mock backend returns correct display name."""
+        assert get_backend_display_name("mock") == "Mock Issue Tracker"
+
+    def test_unknown_backend_uppercase(self):
+        """Test unknown backend returns uppercased identifier."""
+        assert get_backend_display_name("unknown") == "UNKNOWN"
+        assert get_backend_display_name("custom") == "CUSTOM"
