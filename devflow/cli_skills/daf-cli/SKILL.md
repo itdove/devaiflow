@@ -316,20 +316,25 @@ daf jira add-comment PROJ-12345 "Comment text" --json
 
 ### Using `daf note` (Local Notes)
 
-✅ **Now works inside Claude Code sessions!**
+✅ **Now works inside Claude Code sessions with auto-detection!**
 
 ```bash
-# Add a note to current session (works inside Claude sessions)
+# Add a note to current session (auto-detects when in Claude Code session)
+daf note "Completed API implementation"
+daf note "Refactored authentication module"
+
+# Add note to specific session
 daf note PROJ-12345 "Completed API implementation"
 daf note --latest "Refactored authentication module"
 
 # View existing session notes
+daf notes                     # Auto-detects current session
 daf notes PROJ-12345
 daf notes --latest
 daf notes PROJ-12345 --json
 
 # Add structured progress notes
-daf note PROJ-12345 "$(cat <<'EOF'
+daf note "$(cat <<'EOF'
 Progress Update:
 * Completed API endpoint implementation
 * Added unit tests for edge cases
@@ -337,6 +342,11 @@ Progress Update:
 EOF
 )"
 ```
+
+**How `daf note` auto-detection works:**
+- **Inside Claude Code session**: `daf note "message"` auto-detects the active session
+- **Outside Claude Code**: Use `daf note SESSION_ID "message"` or `daf note --latest "message"`
+- **Explicit session**: Always specify with `daf note SESSION_ID "message"`
 
 **What `daf note` does:**
 - Appends to local `sessions/<name>/notes.md` file

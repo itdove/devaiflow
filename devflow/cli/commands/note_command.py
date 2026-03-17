@@ -26,6 +26,25 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
+    # Import get_active_conversation for auto-detection
+    from devflow.cli.utils import get_active_conversation
+    import os
+
+    # Auto-detect active session if in Claude Code session
+    # When identifier is provided but note is None, check if we're in an active session
+    # If yes, treat identifier as note content (fix for issue #198)
+    if identifier and not note and not latest:
+        # Check if we're in an active Claude Code session
+        active_result = get_active_conversation(session_manager)
+        if active_result:
+            # We're in an active session - treat identifier as note content
+            session, conversation, working_dir = active_result
+            note = identifier
+            identifier = session.name
+            issue_display = f" ({session.issue_key})" if session.issue_key else ""
+            console.print(f"[dim]Using active session: {identifier}{issue_display}[/dim]")
+        # else: not in active session, keep identifier as session name (old behavior)
+
     # If no identifier or --latest flag, use most recent active session
     if not identifier or latest:
         all_sessions = session_manager.list_sessions()
@@ -40,8 +59,18 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
         console.print(f"[dim]Using session: {identifier}{issue_display}[/dim]")
 
     # Get session using common utility (handles multi-session selection)
-    session = get_session_with_prompt(session_manager, identifier)
+    session = get_session_with_prompt(session_manager, identifier, error_if_not_found=False)
     if not session:
+        console.print(f"[red]No session found for '{identifier}'[/red]")
+        # Provide helpful guidance based on context
+        if os.environ.get("AI_AGENT_SESSION_ID"):
+            console.print("[dim]Tip: When in a Claude Code session, use:[/dim]")
+            console.print("[dim]  daf note \"your note text\"[/dim]")
+        else:
+            console.print("[dim]Usage:[/dim]")
+            console.print("[dim]  daf note SESSION_ID \"note text\"          # Add note to specific session[/dim]")
+            console.print("[dim]  daf note \"note text\"                      # Add note to active session (when in Claude Code)[/dim]")
+            console.print("[dim]  daf note --latest \"note text\"            # Add note to most recent session[/dim]")
         import sys
         sys.exit(1)
 
@@ -113,7 +142,8 @@ def view_notes(identifier: Optional[str] = None, latest: bool = False) -> None:
     # Check if notes file exists
     if not notes_file.exists():
         console.print(f"[yellow]No notes found for session '{session.name}'[/yellow]")
-        console.print(f"[dim]Add notes using: daf note '{session.name}' 'Your note text'[/dim]")
+        console.print(f"[dim]Add notes using: daf note 'Your note text' (when in active session)[/dim]")
+        console.print(f"[dim]                 or daf note '{session.name}' 'Your note text'[/dim]")
         return
 
     # Read and display notes
