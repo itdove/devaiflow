@@ -1792,7 +1792,7 @@ def _fetch_github_raw(owner: str, repo: str, file_path: str, branch: str) -> Opt
         return None
 
 
-def _fetch_github_template(template_url: str) -> Optional[str]:
+def _fetch_github_template(template_url: str, silent: bool = False) -> Optional[str]:
     """Fetch GitHub template with three-tier fallback.
 
     Tries (in order):
@@ -1802,6 +1802,7 @@ def _fetch_github_template(template_url: str) -> Optional[str]:
 
     Args:
         template_url: GitHub blob or raw URL
+        silent: If True, suppress warning messages when template not found (for auto-discovery)
 
     Returns:
         Template content or None if all methods fail
@@ -1821,7 +1822,8 @@ def _fetch_github_template(template_url: str) -> Optional[str]:
         )
 
     if not match:
-        console.print(f"[yellow]⚠[/yellow] Could not parse GitHub URL: {template_url}")
+        if not silent:
+            console.print(f"[yellow]⚠[/yellow] Could not parse GitHub URL: {template_url}")
         return None
 
     owner, repo, branch, file_path = match.groups()
@@ -1833,32 +1835,36 @@ def _fetch_github_template(template_url: str) -> Optional[str]:
         return content
 
     # Method 2: Try GitHub REST API (unauthenticated, public repos only)
-    console.print("[dim]Trying unauthenticated GitHub API...[/dim]")
+    if not silent:
+        console.print("[dim]Trying unauthenticated GitHub API...[/dim]")
     content = _fetch_github_with_api(owner, repo, file_path, branch)
     if content:
         console.print("[dim]✓ Template fetched successfully (GitHub API)[/dim]")
         return content
 
     # Method 3: Try raw URL (direct access, public repos only)
-    console.print("[dim]Trying raw GitHub URL...[/dim]")
+    if not silent:
+        console.print("[dim]Trying raw GitHub URL...[/dim]")
     content = _fetch_github_raw(owner, repo, file_path, branch)
     if content:
         console.print("[dim]✓ Template fetched successfully (raw URL)[/dim]")
         return content
 
     # All methods failed
-    console.print(
-        f"[yellow]⚠[/yellow] Could not fetch template from GitHub. "
-        f"If this is a private repository, ensure 'gh' CLI is installed and authenticated."
-    )
+    if not silent:
+        console.print(
+            f"[yellow]⚠[/yellow] Could not fetch template from GitHub. "
+            f"If this is a private repository, ensure 'gh' CLI is installed and authenticated."
+        )
     return None
 
 
-def _fetch_gitlab_template(template_url: str) -> Optional[str]:
+def _fetch_gitlab_template(template_url: str, silent: bool = False) -> Optional[str]:
     """Fetch GitLab template using glab CLI.
 
     Args:
         template_url: GitLab blob URL
+        silent: If True, suppress warning messages when template not found (for auto-discovery)
 
     Returns:
         Template content or None if fetch fails
@@ -1869,7 +1875,8 @@ def _fetch_gitlab_template(template_url: str) -> Optional[str]:
     match = re.match(r'https://([^/]+)/([^/]+/[^/]+)/-/blob/([^/]+)/(.+)', template_url)
 
     if not match or 'gitlab' not in match.group(1).lower():
-        console.print(f"[yellow]⚠[/yellow] Could not parse GitLab URL: {template_url}")
+        if not silent:
+            console.print(f"[yellow]⚠[/yellow] Could not parse GitLab URL: {template_url}")
         return None
 
     hostname, project_path, branch, file_path = match.groups()
@@ -1899,7 +1906,8 @@ def _fetch_gitlab_template(template_url: str) -> Optional[str]:
         console.print("[dim]✓ Template fetched successfully[/dim]")
         return template_content
     else:
-        console.print(f"[yellow]⚠[/yellow] glab CLI error: {result.stderr}")
+        if not silent:
+            console.print(f"[yellow]⚠[/yellow] glab CLI error: {result.stderr}")
         return None
 
 
@@ -1973,6 +1981,103 @@ def _fill_pr_template(template_content: str, session, working_dir: Path, git_con
     return fill_pr_template_with_ai(template_content, session, working_dir, git_context)
 
 
+def _try_discover_repo_template(working_dir: Path) -> Optional[str]:
+    """Try to discover PR template from standard repository locations.
+
+    Checks standard locations in order:
+    1. .github/PULL_REQUEST_TEMPLATE.md
+    2. docs/PULL_REQUEST_TEMPLATE.md
+    3. PULL_REQUEST_TEMPLATE.md (root)
+
+    Args:
+        working_dir: Repository path
+
+    Returns:
+        Template content as string or None if not found
+    """
+    standard_locations = [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "docs/PULL_REQUEST_TEMPLATE.md",
+        "PULL_REQUEST_TEMPLATE.md",
+    ]
+
+    for location in standard_locations:
+        template_file = working_dir / location
+        if template_file.exists() and template_file.is_file():
+            try:
+                content = template_file.read_text(encoding='utf-8')
+                console.print(f"[dim]✓ Using repository template: {location}[/dim]")
+                return content
+            except (IOError, UnicodeDecodeError):
+                continue
+
+    return None
+
+
+def _try_discover_org_template(working_dir: Path) -> Optional[str]:
+    """Try to discover PR template from organization .github repository.
+
+    Extracts organization/owner from git remote URL and attempts to fetch
+    template from {ORG}/.github/.github/PULL_REQUEST_TEMPLATE.md
+
+    Uses existing _fetch_github_template() infrastructure for authenticated access.
+
+    Args:
+        working_dir: Repository path
+
+    Returns:
+        Template content as string or None if not found
+    """
+    import re
+
+    # Get remote URL to extract organization/owner
+    remote_url = GitUtils.get_remote_url(working_dir, "origin")
+    if not remote_url or not isinstance(remote_url, str):
+        return None
+
+    # Extract owner/org from various git URL formats
+    # Supports: git@github.com:owner/repo.git, https://github.com/owner/repo.git, etc.
+    match = re.search(r'[:/]([^/]+)/([^/.]+?)(?:\.git)?$', remote_url)
+    if not match:
+        return None
+
+    owner = match.group(1)
+
+    # Detect platform (GitHub vs GitLab)
+    is_github = 'github.com' in remote_url or 'github' in remote_url.lower()
+    is_gitlab = 'gitlab' in remote_url.lower()
+
+    if is_github:
+        # Try to fetch from GitHub organization .github repository
+        # Format: https://github.com/{ORG}/.github/blob/main/.github/PULL_REQUEST_TEMPLATE.md
+        template_url = f"https://github.com/{owner}/.github/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
+
+        console.print(f"[dim]Checking organization template: {owner}/.github[/dim]")
+        content = _fetch_github_template(template_url, silent=True)
+
+        if content:
+            console.print(f"[green]✓[/green] Using organization template (enforced): {owner}/.github")
+            return content
+
+    elif is_gitlab:
+        # Try to fetch from GitLab group .github repository
+        # Format: https://gitlab.com/{ORG}/.github/-/blob/main/.github/PULL_REQUEST_TEMPLATE.md
+        # Note: GitLab detection needs hostname extraction for self-hosted instances
+        hostname_match = re.search(r'(gitlab[^/:]+)', remote_url)
+        hostname = hostname_match.group(1) if hostname_match else 'gitlab.com'
+
+        template_url = f"https://{hostname}/{owner}/.github/-/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
+
+        console.print(f"[dim]Checking organization template: {owner}/.github[/dim]")
+        content = _fetch_gitlab_template(template_url, silent=True)
+
+        if content:
+            console.print(f"[green]✓[/green] Using organization template (enforced): {owner}/.github")
+            return content
+
+    return None
+
+
 def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLoader) -> str:
     """Generate PR/MR description from session data using AI analysis and template.
 
@@ -1987,16 +2092,41 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
     # Get active conversation for accessing conversation-specific fields
     active_conv = session.active_conversation
 
-    # Try to fetch PR template from config
+    # Load config for user-configured template URL
     config = config_loader.load_config()
     template_content = None
+    template_source = None
 
-    # If no template URL configured, optionally prompt the user (skip if auto-create is enabled)
-    if config and not config.pr_template_url:
+    # Auto-discovery cascade (priority order):
+    # 1. Organization .github repo template (ENFORCED - cannot be overridden)
+    # 2. Current repository .github/ template (only if no org template)
+    # 3. User configured URL in config.pr_template_url (lowest priority - for testing)
+    # 4. Default built-in template (fallback)
+
+    # Priority 1: Organization template (highest - enforced)
+    template_content = _try_discover_org_template(working_dir)
+    if template_content:
+        template_source = "organization"
+
+    # Priority 2: Repository template (if no org template)
+    if not template_content:
+        template_content = _try_discover_repo_template(working_dir)
+        if template_content:
+            template_source = "repository"
+
+    # Priority 3: User configured URL (lowest priority - for testing)
+    if not template_content and config and config.pr_template_url:
+        console.print(f"[dim]Using user-configured template URL[/dim]")
+        template_content = _fetch_pr_template(config.pr_template_url)
+        if template_content:
+            template_source = "user-config"
+
+    # If still no template and no user config, optionally prompt (skip if auto-create enabled)
+    if not template_content and config and not config.pr_template_url:
         # Skip prompt if auto_create_pr_on_complete is enabled (automated workflow)
         auto_create = config.prompts and config.prompts.auto_create_pr_on_complete
         if not auto_create:
-            console.print("\n[yellow]No PR/MR template URL configured.[/yellow]")
+            console.print("\n[yellow]No PR/MR template discovered or configured.[/yellow]")
             if Confirm.ask("Would you like to configure a PR/MR template URL now?", default=True):
                 console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
                 template_url = Prompt.ask("Enter PR/MR template URL (leave empty to skip)", default="")
@@ -2008,8 +2138,10 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
                     config_loader.save_config(config)
                     console.print(f"[green]✓[/green] Saved PR template URL to config")
 
-    if config and config.pr_template_url:
-        template_content = _fetch_pr_template(config.pr_template_url)
+                    # Fetch the newly configured template
+                    template_content = _fetch_pr_template(config.pr_template_url)
+                    if template_content:
+                        template_source = "user-config"
 
     # Gather git context for AI template filling
     base_branch = _get_base_branch(active_conv, working_dir)
@@ -2025,10 +2157,20 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
 
     # If we have a template, use AI to fill it; otherwise use default format
     if template_content:
+        # Report which template source is being used
+        if template_source:
+            if template_source == "organization":
+                console.print("[cyan]Using organization template (enforced)[/cyan]")
+            elif template_source == "repository":
+                console.print("[cyan]Using repository template[/cyan]")
+            elif template_source == "user-config":
+                console.print("[cyan]Using user-configured template[/cyan]")
+
         # Use AI-powered template filling
         description = _fill_pr_template(template_content, session, working_dir, git_context)
     else:
         # Fallback to built-in template
+        console.print("[dim]Using default built-in template[/dim]")
         jira_section = ""
         if session.issue_key:
             jira_url = config.jira.url if config and config.jira else None
