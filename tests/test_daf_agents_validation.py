@@ -130,6 +130,7 @@ def test_validate_daf_agents_auto_install_success(tmp_path, temp_daf_home, monke
     """Test successful auto-installation of bundled DAF_AGENTS.md."""
     from devflow.config.loader import ConfigLoader
     from unittest.mock import MagicMock
+    from devflow.utils.paths import get_cs_home
 
     # Mock Confirm.ask to return True (user accepts installation)
     mock_confirm = MagicMock(return_value=True)
@@ -165,13 +166,14 @@ def test_validate_daf_agents_auto_install_success(tmp_path, temp_daf_home, monke
     # Should auto-install DAF_AGENTS.md and succeed
     session = _create_mock_session(str(repo_dir))
 
-    
+
 
     result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
-    # Verify DAF_AGENTS.md was created
-    assert (repo_dir / "DAF_AGENTS.md").exists()
+    # Verify DAF_AGENTS.md was created in DEVAIFLOW_HOME (new behavior)
+    cs_home = get_cs_home()
+    assert (cs_home / "DAF_AGENTS.md").exists()
 
     # Verify Confirm was called
     assert mock_confirm.called
@@ -629,6 +631,7 @@ def test_validate_daf_agents_multi_project_session_not_found(tmp_path, temp_daf_
     from devflow.config.models import Conversation, ProjectInfo
     from devflow.config.models import Session
     from unittest.mock import MagicMock
+    from devflow.utils.paths import get_cs_home
     import uuid
 
     # Mock Confirm.ask to return True (user accepts installation)
@@ -682,12 +685,13 @@ def test_validate_daf_agents_multi_project_session_not_found(tmp_path, temp_daf_
 
     config_loader = ConfigLoader()
 
-    # Should offer to install DAF_AGENTS.md to workspace
+    # Should offer to install DAF_AGENTS.md to DEVAIFLOW_HOME (new behavior)
     result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
-    # Verify DAF_AGENTS.md was created in workspace
-    assert (workspace / "DAF_AGENTS.md").exists()
+    # Verify DAF_AGENTS.md was created in DEVAIFLOW_HOME (new behavior)
+    cs_home = get_cs_home()
+    assert (cs_home / "DAF_AGENTS.md").exists()
 
     # Verify Confirm was called
     assert mock_confirm.called
@@ -759,4 +763,126 @@ def test_validate_daf_agents_multi_project_session_user_declines(tmp_path, temp_
     assert not (workspace / "DAF_AGENTS.md").exists()
 
     # Verify Confirm was called
+    assert mock_confirm.called
+
+
+def test_validate_daf_agents_devaiflow_home_priority_over_repo(tmp_path, temp_daf_home):
+    """Test that DEVAIFLOW_HOME is checked before repository."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.utils.paths import get_cs_home
+
+    # Create DEVAIFLOW_HOME with up-to-date DAF_AGENTS.md
+    cs_home = get_cs_home()
+    bundled_content, _ = _get_bundled_daf_agents_content()
+    (cs_home / "DAF_AGENTS.md").write_text(bundled_content)
+
+    # Create repo with DIFFERENT (older) DAF_AGENTS.md
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    repo_dir = workspace / "test-repo"
+    repo_dir.mkdir()
+    (repo_dir / "DAF_AGENTS.md").write_text("# Old Repository Version")
+
+    # Create config
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.repos.last_used_workspace = "default"
+    config_loader.save_config(config)
+
+    session = _create_mock_session(str(repo_dir))
+
+    # Should find DEVAIFLOW_HOME version (not repository version)
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True
+
+    # Repository file should still have old content (wasn't used)
+    assert (repo_dir / "DAF_AGENTS.md").read_text() == "# Old Repository Version"
+
+
+def test_validate_daf_agents_devaiflow_home_priority_over_workspace(tmp_path, temp_daf_home):
+    """Test that DEVAIFLOW_HOME is checked before workspace."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.utils.paths import get_cs_home
+
+    # Create DEVAIFLOW_HOME with up-to-date DAF_AGENTS.md
+    cs_home = get_cs_home()
+    bundled_content, _ = _get_bundled_daf_agents_content()
+    (cs_home / "DAF_AGENTS.md").write_text(bundled_content)
+
+    # Create workspace with DIFFERENT (older) DAF_AGENTS.md
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "DAF_AGENTS.md").write_text("# Old Workspace Version")
+
+    # Create repo WITHOUT DAF_AGENTS.md
+    repo_dir = workspace / "test-repo"
+    repo_dir.mkdir()
+
+    # Create config
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.repos.last_used_workspace = "default"
+    config_loader.save_config(config)
+
+    session = _create_mock_session(str(repo_dir))
+
+    # Should find DEVAIFLOW_HOME version (not workspace version)
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True
+
+    # Workspace file should still have old content (wasn't used)
+    assert (workspace / "DAF_AGENTS.md").read_text() == "# Old Workspace Version"
+
+
+def test_validate_daf_agents_upgrade_devaiflow_home(tmp_path, temp_daf_home, monkeypatch):
+    """Test that upgrade detection works for DEVAIFLOW_HOME location."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.utils.paths import get_cs_home
+    from unittest.mock import MagicMock
+
+    # Mock Confirm.ask to return True (user accepts upgrade)
+    mock_confirm = MagicMock(return_value=True)
+    monkeypatch.setattr("rich.prompt.Confirm.ask", mock_confirm)
+
+    # Create DEVAIFLOW_HOME with outdated DAF_AGENTS.md
+    cs_home = get_cs_home()
+    (cs_home / "DAF_AGENTS.md").write_text("# Old DEVAIFLOW_HOME Version")
+
+    # Create workspace and repo
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    repo_dir = workspace / "test-repo"
+    repo_dir.mkdir()
+
+    # Create config
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.repos.last_used_workspace = "default"
+    config_loader.save_config(config)
+
+    session = _create_mock_session(str(repo_dir))
+
+    # Should find, check, and upgrade DEVAIFLOW_HOME version
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True
+
+    # Verify upgrade was performed on DEVAIFLOW_HOME file
+    bundled_content, _ = _get_bundled_daf_agents_content()
+    new_content = (cs_home / "DAF_AGENTS.md").read_text()
+    assert new_content == bundled_content
+    assert "Old DEVAIFLOW_HOME Version" not in new_content
+
+    # Verify Confirm was called for upgrade
     assert mock_confirm.called
