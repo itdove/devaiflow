@@ -1,6 +1,8 @@
 # Alternative Model Providers
 
-DevAIFlow supports running Claude Code with alternative AI model providers through environment variable configuration. This allows you to use local models (Ollama, llama.cpp, LM Studio) or cloud providers (OpenRouter, Minimax, etc.) instead of the default Anthropic API.
+DevAIFlow supports running Claude Code with alternative AI model providers through environment variable configuration. This allows you to use local models (llama.cpp, LM Studio) or cloud providers (OpenRouter, Minimax, etc.) instead of the default Anthropic API.
+
+**⚠️ Important:** Ollama is **NOT compatible** with Claude Code due to API differences. Use llama.cpp for local model support.
 
 ## Why Use Alternative Providers?
 
@@ -18,14 +20,14 @@ Add to your `~/.daf-sessions/config.json`:
 ```json
 {
   "model_provider": {
-    "default_profile": "ollama-local",
+    "default_profile": "llama-cpp",
     "profiles": {
-      "ollama-local": {
-        "name": "ollama-local",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
+      "llama-cpp": {
+        "name": "llama-cpp",
+        "base_url": "http://localhost:8000",
+        "auth_token": "llama-cpp",
         "api_key": "",
-        "model_name": "devstral-small-2"
+        "model_name": "Qwen3-Coder"
       }
     }
   }
@@ -35,15 +37,20 @@ Add to your `~/.daf-sessions/config.json`:
 ### 2. Install and Start the Provider
 
 ```bash
-# Example: Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull devstral-small-2
+# Example: llama.cpp
+git clone https://github.com/ggml-org/llama.cpp
+cmake llama.cpp -B llama.cpp/build -DGGML_METAL=ON
+cmake --build llama.cpp/build --config Release -j
+cd llama.cpp
+./llama-server -hf bartowski/cerebras_Qwen3-Coder-REAP-25B-A3B-GGUF:Q4_K_M \
+    --alias "Qwen3-Coder" --port 8000 --jinja \
+    --ctx-size 64000
 ```
 
 ### 3. Use DevAIFlow
 
 ```bash
-# Uses default profile (ollama-local)
+# Uses default profile (llama-cpp)
 daf open PROJ-123
 ```
 
@@ -60,13 +67,13 @@ Use `--model-profile` flag to specify a profile for a single command:
 daf new --name feature-123 --goal "Add feature" --model-profile vertex
 
 # Open session with specific profile (overrides session default)
-daf open feature-123 --model-profile ollama-local
+daf open feature-123 --model-profile llama-cpp
 
 # Investigate with local model
-daf investigate --goal "Research options" --model-profile ollama-local
+daf investigate --goal "Research options" --model-profile llama-cpp
 
 # Session remembers last used profile
-daf open feature-123  # Uses ollama-local from previous command
+daf open feature-123  # Uses llama-cpp from previous command
 ```
 
 **Session Persistence**: When you use `--model-profile`, the profile is stored in the session. Future `daf open` commands for that session will use the stored profile unless overridden.
@@ -92,7 +99,7 @@ Set `default_profile` in your config:
 ```json
 {
   "model_provider": {
-    "default_profile": "ollama-local",
+    "default_profile": "llama-cpp",
     "profiles": { ... }
   }
 }
@@ -120,9 +127,9 @@ Profile selection follows this priority (highest to lowest):
 daf new --name PROJ-123 --goal "Fix bug"
 
 # Test with local model - overrides config default
-daf open PROJ-123 --model-profile ollama-local
+daf open PROJ-123 --model-profile llama-cpp
 
-# Next open uses last profile (ollama-local stored in session)
+# Next open uses last profile (llama-cpp stored in session)
 daf open PROJ-123
 
 # Force back to Vertex for deployment testing
@@ -137,9 +144,9 @@ Each profile contains:
 
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
-| `name` | string | Profile name | `"ollama-local"` |
-| `base_url` | string (optional) | ANTHROPIC_BASE_URL override | `"http://localhost:11434"` |
-| `auth_token` | string (optional) | ANTHROPIC_AUTH_TOKEN override | `"ollama"` |
+| `name` | string | Profile name | `"llama-cpp"` |
+| `base_url` | string (optional) | ANTHROPIC_BASE_URL override | `"http://localhost:8000"` |
+| `auth_token` | string (optional) | ANTHROPIC_AUTH_TOKEN override | `"llama-cpp"` |
 | `api_key` | string (optional) | ANTHROPIC_API_KEY override | `""` (empty string to disable) |
 | `model_name` | string (optional) | Model for `--model` flag | `"devstral-small-2"` |
 | `use_vertex` | boolean | Use Google Vertex AI | `true` |
@@ -189,14 +196,14 @@ Add to `~/.daf-sessions/config.json`:
 ```json
 {
   "model_provider": {
-    "default_profile": "ollama-local",
+    "default_profile": "llama-cpp",
     "profiles": {
-      "ollama-local": {
-        "name": "ollama-local",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
+      "llama-cpp": {
+        "name": "llama-cpp",
+        "base_url": "http://localhost:8000",
+        "auth_token": "llama-cpp",
         "api_key": "",
-        "model_name": "devstral-small-2"
+        "model_name": "Qwen3-Coder"
       }
     }
   }
@@ -205,99 +212,364 @@ Add to `~/.daf-sessions/config.json`:
 
 ## Provider Setup Guides
 
-### Option 1: Ollama Local
+### ⚠️ Important: Ollama Does NOT Work with Claude Code
 
-**Time**: 5 minutes | **Cost**: Free | **Best for**: Privacy, offline use
+**Critical:** Ollama **cannot** be used with Claude Code due to API incompatibility.
 
-#### Step 1: Install Ollama
+**Think of it like this:** Claude Code speaks "Anthropic language" while Ollama only speaks "OpenAI language" - they can't communicate! 🗣️
 
+**The technical breakdown:**
+- ❌ Ollama provides OpenAI-compatible API
+- ❌ Claude Code requires Anthropic Messages API format
+- ❌ These APIs are fundamentally different and incompatible
+- ❌ Like trying to plug USB-A into USB-C - won't work!
+
+**Test results confirm incompatibility:**
 ```bash
-curl -fsSL https://ollama.com/install.sh | sh
+# Ollama + Claude Code (❌ FAILS)
+claude --model kimi-k2.5:cloud
+# Result: 500 {"type":"error","error":{"type":"api_error",...}}
+
+claude --model devstral-small-2
+# Result: Hangs forever with "Deliberating..."
 ```
 
-#### Step 2: Pull a Model
+**✅ Use llama.cpp instead** (see Option 1 below) for local models with full Claude Code IDE integration.
+
+**Why articles claim Ollama works:**
+- Articles actually use llama.cpp (not Ollama) but title says "Ollama"
+- Articles use API translation layers (litellm, OpenRouter) that convert between formats
+- Information is outdated from older Claude Code versions
+
+**For terminal-based Ollama chat without Claude Code IDE:** Ollama works fine for basic CLI chat, but it does NOT integrate with Claude Code's file editing, tool calling, and IDE features.
+
+---
+
+### Option 1: llama.cpp Server (Recommended for Local Models)
+
+**Status:** ✅ **Tested and confirmed working**
+**Time**: 15-20 minutes | **Cost**: Free | **Best for**: Local/offline usage with full Claude Code IDE integration
+
+llama.cpp is the **ONLY local solution** that provides full Claude Code compatibility with file editing, multi-file changes, and tool calling.
+
+#### Why llama.cpp Works (But Ollama Doesn't)
+
+**The Core Issue: API Incompatibility**
+
+- **Ollama** → Provides **OpenAI-compatible API**
+- **Claude Code** → Requires **Anthropic Messages API**
+- **Result** → ❌ **Incompatible** (like trying to plug USB-A into USB-C)
+
+**Simple Analogy:**
+- **Claude Code** speaks "Anthropic language" 🇫🇷
+- **Ollama** only speaks "OpenAI language" 🇩🇪
+- **llama.cpp** is bilingual and can speak "Anthropic language" 🇫🇷 (with `--jinja` flag)
+
+You can't have a conversation if you don't speak the same language!
+
+**Technical Differences:**
+
+| Feature | llama.cpp | Ollama | Impact |
+|---------|-----------|--------|--------|
+| `--jinja` flag | ✅ Available | ❌ Not available | **Required** for tool calling |
+| API customization | ✅ Flexible | ❌ Fixed OpenAI format | Allows Anthropic compatibility |
+| Response format | ✅ Configurable | ❌ Standard only | Matches Claude expectations |
+
+**The Critical `--jinja` Flag:**
+
+This is the most important difference:
 
 ```bash
-# Recommended for 32GB RAM
-ollama pull devstral-small-2
+# llama.cpp (WORKS) ✅
+./llama-server -hf model --port 8000 --jinja  # ← This flag is CRITICAL
 
-# Alternative: GLM-4.7-flash (30B - F16)
-ollama pull glm-4.7-flash:bf16
-
-# Alternative: Qwen3-Coder (30B)
-ollama pull qwen3-coder:30b
+# Ollama (FAILS) ❌
+ollama serve  # ← No --jinja flag available
 ```
 
-**Model Recommendations by RAM**:
-- **16GB**: devstral-small-2 (24B) - usable but slower
-- **32GB**: devstral-small-2 (24B) or glm-4.7-flash:bf16 (30B) - good performance
-- **64GB+**: qwen3-coder:30b or larger models
+**What `--jinja` does:**
+- Enables proper tool calling / function calling support
+- Formats responses in a way Claude Code can understand
+- **Without it:** Claude Code hangs forever with "Deliberating..." or gets 500 errors
 
-#### Step 3: Configure Profile
+**What Actually Happens:**
 
-Add to `~/.daf-sessions/config.json`:
+```bash
+# With Ollama ❌
+claude --model kimi-k2.5:cloud
+# Result: 500 {"type":"error","error":{"type":"api_error",...}}
+
+claude --model devstral-small-2
+# Result: Hangs forever with "Deliberating..."
+
+# With llama.cpp ✅
+claude --model Qwen3-Coder
+# Result: SUCCESS - Full working response!
+```
+
+**Why Articles Claim "Ollama Works":**
+
+This confuses users because:
+1. **Misleading titles**: Articles say "Run Claude Code with Ollama" but actually use llama.cpp
+2. **API translation layers**: Some use litellm or OpenRouter to translate between APIs
+3. **Outdated info**: Older Claude Code versions had different requirements
+
+**What Each Tool is Designed For:**
+
+**Ollama** is designed for:
+- ✅ OpenAI API compatibility
+- ✅ Easy local chat in terminal
+- ✅ Simple model management with `ollama pull`
+
+But **NOT for**:
+- ❌ Claude Code's Anthropic API format
+- ❌ Claude Code's tool calling requirements
+- ❌ IDE integration with file editing
+
+**llama.cpp** is designed for:
+- ✅ Maximum flexibility and customization
+- ✅ Custom API formats (can mimic Anthropic)
+- ✅ Advanced features like `--jinja` for tool calling
+- ✅ Works with Claude Code's requirements
+
+#### Prerequisites
+
+- macOS with Apple Silicon OR Linux with NVIDIA GPU
+- 16GB+ RAM (32GB+ recommended for larger models)
+- Git, CMake installed
+
+#### Step 1: Build llama.cpp
+
+**macOS (Apple Silicon):**
+```bash
+# Install dependencies
+brew install cmake
+
+# Clone and build
+git clone https://github.com/ggml-org/llama.cpp
+cmake llama.cpp -B llama.cpp/build -DGGML_METAL=ON
+cmake --build llama.cpp/build --config Release -j
+```
+
+**Linux (NVIDIA GPU):**
+```bash
+# Install dependencies
+sudo apt-get update && sudo apt-get install build-essential cmake git -y
+
+# Clone and build
+git clone https://github.com/ggml-org/llama.cpp
+cmake llama.cpp -B llama.cpp/build -DGGML_CUDA=ON
+cmake --build llama.cpp/build --config Release -j
+```
+
+#### Step 2: Start llama.cpp Server
+
+```bash
+cd llama.cpp
+
+# Start server with CRITICAL FLAGS
+./llama-server -hf bartowski/cerebras_Qwen3-Coder-REAP-25B-A3B-GGUF:Q4_K_M \
+    --alias "Qwen3-Coder" \
+    --port 8000 \
+    --jinja \              # ← CRITICAL: Required for tool calling
+    --kv-unified \
+    --cache-type-k q8_0 --cache-type-v q8_0 \
+    --flash-attn on \
+    --batch-size 4096 --ubatch-size 1024 \
+    --ctx-size 64000
+```
+
+**Important flags explained:**
+- `--jinja` - **REQUIRED** for Claude Code tool calling to work
+- `--hf` - Download model directly from HuggingFace
+- `--alias` - Model name to use in Claude Code
+- `--ctx-size 64000` - Large context for Claude Code's tool definitions (~35k tokens)
+
+**Keep this terminal running** - the server must stay active.
+
+#### Step 3: Configure daf Model Provider Profile
+
+**Method 1: Interactive TUI (Recommended)**
+
+```bash
+# Open configuration TUI
+daf config edit
+
+# Navigate to "Model Providers" tab
+# Click "Add Profile" → "Custom Provider"
+# Fill in:
+#   Name: llama-cpp
+#   Base URL: http://localhost:8000
+#   Auth Token: llama-cpp
+#   API Key: (leave empty)
+#   Model Name: Qwen3-Coder
+#
+# Click "Set as Default" (optional)
+# Press Ctrl+S to save
+```
+
+**Method 2: Manual JSON Edit**
+
+Edit `~/.daf-sessions/config.json`:
 
 ```json
 {
   "model_provider": {
-    "default_profile": "ollama-local",
+    "default_profile": "llama-cpp",
     "profiles": {
-      "ollama-local": {
-        "name": "ollama-local",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
+      "llama-cpp": {
+        "name": "llama-cpp",
+        "base_url": "http://localhost:8000",
+        "auth_token": "llama-cpp",
         "api_key": "",
-        "model_name": "devstral-small-2"
+        "model_name": "Qwen3-Coder"
       }
     }
   }
 }
 ```
 
-#### Step 4: Use
+**Method 3: Environment Variables (Temporary)**
 
 ```bash
+export ANTHROPIC_BASE_URL="http://localhost:8000"
+export ANTHROPIC_AUTH_TOKEN="llama-cpp"
+export ANTHROPIC_API_KEY=""
+```
+
+#### Step 4: Use with daf
+
+```bash
+# Uses default profile (llama-cpp)
 daf open PROJ-123
+
+# Or override per session
+daf open PROJ-123 --model-profile llama-cpp
+
+# Or use environment variable
+MODEL_PROVIDER_PROFILE=llama-cpp daf open PROJ-456
 ```
 
-### Option 2: Ollama Cloud Models
+**Session starts with Claude Code using your local llama.cpp model!**
 
-**Time**: 2 minutes | **Cost**: Pay-per-use | **Best for**: Cloud power with local workflow
+#### Step 5: Test It Works
 
-Ollama provides `:cloud` variants that run on cloud infrastructure.
+In Claude Code, type: `hi`
 
-#### Step 1: Pull Cloud Model
+**Expected:**
+- First prompt takes 30-60 seconds (processing 35k tokens of tool definitions)
+- You get a response from the model
+- Subsequent prompts are much faster
 
+**If it hangs forever:**
+- Check llama.cpp server logs
+- Verify `--jinja` flag was included
+- Verify model supports tool calling
+
+#### Performance Notes
+
+**Initial Prompt:**
+- Claude Code sends ~35,140 tokens on first prompt (tool definitions, context)
+- llama.cpp processes at ~2048 tokens/batch
+- Expect 30-60 seconds for first response
+- **This is normal!**
+
+**Subsequent Prompts:**
+- Much faster (context already loaded)
+- Response time depends on hardware and model size
+
+**Hardware Recommendations:**
+- **16GB RAM:** Use Q4_K_M quantized models (24B parameters max)
+- **32GB RAM:** Use Q4_K_M or Q5_K_M quantized models (30B parameters comfortable)
+- **64GB+ RAM:** Larger models and higher quantization
+
+#### Recommended Models for Coding
+
+**For 32GB RAM:**
 ```bash
-ollama pull kimi-k2.5:cloud
-ollama pull minimax-m2.1:cloud
+# Qwen3-Coder (25B) - Excellent for coding
+./llama-server -hf bartowski/cerebras_Qwen3-Coder-REAP-25B-A3B-GGUF:Q4_K_M \
+    --alias "Qwen3-Coder" --port 8000 --jinja \
+    --ctx-size 64000 --batch-size 4096 --ubatch-size 1024
+
+# DeepSeek-Coder V2 (16B) - Fast and capable
+./llama-server -hf bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF:Q5_K_M \
+    --alias "DeepSeek-Coder" --port 8000 --jinja \
+    --ctx-size 64000 --batch-size 4096 --ubatch-size 1024
 ```
 
-#### Step 2: Configure Profile
+**For 16GB RAM:**
+```bash
+# Qwen2.5-Coder (14B) - Good balance
+./llama-server -hf bartowski/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M \
+    --alias "Qwen2.5-Coder" --port 8000 --jinja \
+    --ctx-size 64000 --batch-size 4096 --ubatch-size 1024
+```
+
+#### Multiple Models Setup
+
+You can configure multiple llama.cpp profiles for different models:
 
 ```json
 {
   "model_provider": {
+    "default_profile": "llama-coding",
     "profiles": {
-      "ollama-cloud-kimi": {
-        "name": "ollama-cloud-kimi",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
+      "llama-coding": {
+        "name": "llama-coding",
+        "base_url": "http://localhost:8000",
+        "auth_token": "llama-cpp",
         "api_key": "",
-        "model_name": "kimi-k2.5:cloud"
+        "model_name": "Qwen3-Coder"
+      },
+      "llama-fast": {
+        "name": "llama-fast",
+        "base_url": "http://localhost:8001",
+        "auth_token": "llama-cpp",
+        "api_key": "",
+        "model_name": "Qwen2.5-7B"
       }
     }
   }
 }
 ```
 
-#### Step 3: Use
-
+Start multiple servers on different ports:
 ```bash
-MODEL_PROVIDER_PROFILE=ollama-cloud-kimi daf open PROJ-123
+# Terminal 1: Larger model for complex tasks
+./llama-server -hf bartowski/cerebras_Qwen3-Coder-REAP-25B-A3B-GGUF:Q4_K_M \
+    --port 8000 --alias "Qwen3-Coder" --jinja --ctx-size 64000
+
+# Terminal 2: Smaller model for quick tasks
+./llama-server -hf bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M \
+    --port 8001 --alias "Qwen2.5-7B" --jinja --ctx-size 64000
 ```
 
-### Option 3: OpenRouter
+Switch between them:
+```bash
+daf open PROJ-123 --model-profile llama-coding  # Use 25B model
+daf open PROJ-456 --model-profile llama-fast    # Use 7B model
+```
+
+#### Pros and Cons
+
+**Pros:**
+- ✅ Full Claude Code IDE integration (file editing, multi-file changes)
+- ✅ Works with any GGUF model from HuggingFace
+- ✅ Completely offline
+- ✅ Zero cost
+- ✅ Tested and confirmed working
+- ✅ Control over model size, quantization, hardware usage
+
+**Cons:**
+- ⚠️ Complex initial setup (build from source)
+- ⚠️ Slow first prompt (30-60 seconds)
+- ⚠️ Requires manual server management
+- ⚠️ Need to keep terminal running
+
+---
+
+### Option 2: OpenRouter
 
 **Time**: 2 minutes | **Cost**: Pay-per-use | **Best for**: Access to many models with one API key
 
@@ -345,7 +617,7 @@ OpenRouter provides a universal adapter for AI APIs.
 MODEL_PROVIDER_PROFILE=openrouter-deepseek daf open PROJ-123
 ```
 
-### Option 4: LM Studio
+### Option 3: LM Studio
 
 **Time**: 5 minutes | **Cost**: Free | **Best for**: GUI model management
 
@@ -393,67 +665,7 @@ lms server start --port 1234
 }
 ```
 
-### Option 5: llama.cpp + HuggingFace
-
-**Time**: 15-20 minutes | **Cost**: Free | **Best for**: Any model from HuggingFace
-
-#### Step 1: Build llama.cpp
-
-**macOS (Apple Silicon)**:
-
-```bash
-brew install cmake
-git clone https://github.com/ggml-org/llama.cpp
-cmake llama.cpp -B llama.cpp/build -DGGML_METAL=ON
-cmake --build llama.cpp/build --config Release -j
-cp llama.cpp/build/bin/llama-* llama.cpp/
-```
-
-**Linux (NVIDIA GPU)**:
-
-```bash
-sudo apt-get update && sudo apt-get install build-essential cmake git -y
-git clone https://github.com/ggml-org/llama.cpp
-cmake llama.cpp -B llama.cpp/build -DGGML_CUDA=ON
-cmake --build llama.cpp/build --config Release -j
-cp llama.cpp/build/bin/llama-* llama.cpp/
-```
-
-#### Step 2: Start Server
-
-```bash
-cd llama.cpp
-./llama-server -hf bartowski/cerebras_Qwen3-Coder-REAP-25B-A3B-GGUF:Q4_K_M \
-    --alias "Qwen3-Coder-REAP-25B-A3B-GGUF" \
-    --port 8000 \
-    --jinja \
-    --kv-unified \
-    --cache-type-k q8_0 --cache-type-v q8_0 \
-    --flash-attn on \
-    --batch-size 4096 --ubatch-size 1024 \
-    --ctx-size 64000
-```
-
-**Important**: The `--jinja` flag is required for tool calling to work.
-
-#### Step 3: Configure Profile
-
-```json
-{
-  "model_provider": {
-    "profiles": {
-      "llama-cpp": {
-        "name": "llama-cpp",
-        "base_url": "http://localhost:8000",
-        "api_key": "",
-        "model_name": "Qwen3-Coder-REAP-25B-A3B-GGUF"
-      }
-    }
-  }
-}
-```
-
-### Option 6: Google Vertex AI
+### Option 4: Google Vertex AI
 
 **Time**: 5 minutes | **Cost**: Pay-per-use | **Best for**: Enterprise GCP users
 
@@ -494,7 +706,7 @@ Edit `~/.daf-sessions/config.json`:
 ```json
 {
   "model_provider": {
-    "default_profile": "ollama-local"  // Changed from "anthropic"
+    "default_profile": "llama-cpp"  // Changed from "anthropic"
   }
 }
 ```
@@ -504,13 +716,13 @@ Edit `~/.daf-sessions/config.json`:
 Use environment variable:
 
 ```bash
-# Use Ollama for this session
-MODEL_PROVIDER_PROFILE=ollama-local daf open PROJ-123
+# Use llama.cpp for this session
+MODEL_PROVIDER_PROFILE=llama-cpp daf open PROJ-123
 
 # Use Vertex AI for this session
 MODEL_PROVIDER_PROFILE=vertex daf open PROJ-456
 
-# Use Anthropic API (override Ollama default)
+# Use Anthropic API (override llama.cpp default)
 MODEL_PROVIDER_PROFILE=anthropic daf open PROJ-789
 ```
 
@@ -527,12 +739,12 @@ MODEL_PROVIDER_PROFILE=anthropic daf open PROJ-789
         "vertex_project_id": "work-project",
         "vertex_region": "us-east5"
       },
-      "ollama-local": {
-        "name": "ollama-local",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
+      "llama-cpp": {
+        "name": "llama-cpp",
+        "base_url": "http://localhost:8000",
+        "auth_token": "llama-cpp",
         "api_key": "",
-        "model_name": "devstral-small-2"
+        "model_name": "Qwen3-Coder"
       },
       "anthropic": {
         "name": "anthropic"
@@ -544,8 +756,8 @@ MODEL_PROVIDER_PROFILE=anthropic daf open PROJ-789
 
 **Usage**:
 - Work: Uses Vertex AI (default)
-- Testing locally: `MODEL_PROVIDER_PROFILE=ollama-local daf open`
-- Emergency (Ollama down): `MODEL_PROVIDER_PROFILE=anthropic daf open`
+- Testing locally: `MODEL_PROVIDER_PROFILE=llama-cpp daf open`
+- Emergency (llama.cpp server down): `MODEL_PROVIDER_PROFILE=anthropic daf open`
 
 ## Enterprise Configuration
 
@@ -573,7 +785,7 @@ Enterprises can enforce model provider usage across all users.
 
 Users cannot override enterprise settings (only use allowed profiles).
 
-### Provide Shared Ollama Server
+### Provide Shared llama.cpp Server
 
 `~/.daf-sessions/organization.json`:
 
@@ -581,12 +793,12 @@ Users cannot override enterprise settings (only use allowed profiles).
 {
   "model_provider": {
     "profiles": {
-      "ollama-shared": {
-        "name": "ollama-shared",
-        "base_url": "http://ollama.internal.company.com:11434",
-        "auth_token": "ollama",
+      "llama-cpp-shared": {
+        "name": "llama-cpp-shared",
+        "base_url": "http://llama-cpp.internal.company.com:8000",
+        "auth_token": "llama-cpp",
         "api_key": "",
-        "model_name": "devstral-small-2"
+        "model_name": "Qwen3-Coder"
       }
     }
   }
@@ -597,10 +809,63 @@ Teams can use the shared server without individual setup.
 
 ## Troubleshooting
 
+### "I followed Ollama setup but it doesn't work"
+
+**Problem:** You're trying to use Ollama with Claude Code and getting:
+- 500 errors: `{"type":"error","error":{"type":"api_error",...}}`
+- Infinite hangs: `✽ Deliberating…` never completes
+
+**Root Cause:** Ollama uses OpenAI-compatible API, but Claude Code requires Anthropic's API format. These are incompatible.
+
+**Solution:** Use llama.cpp instead:
+1. Follow llama.cpp setup guide in Option 1 above
+2. Key difference: llama.cpp has `--jinja` flag for tool calling compatibility
+3. llama.cpp server can be configured to match Anthropic API expectations
+
+**Why articles claim Ollama works:**
+- They actually use llama.cpp (not Ollama)
+- They use API translation layers (litellm, OpenRouter)
+- Information is outdated
+
+### llama.cpp Hangs Forever
+
+**Problem:** Server logs show "prompt processing progress" but never completes
+
+**Check:**
+1. **Wait longer** - First prompt is ~35k tokens, takes 30-60 seconds
+2. **Hardware** - Model too large for available RAM?
+3. **Batch size** - Reduce `--batch-size` if using limited RAM
+
+**If still stuck after 2 minutes:**
+1. Check server logs for errors
+2. Verify model supports instruct format
+3. Try smaller model (14B instead of 30B)
+4. Reduce `--ctx-size` to 32000
+
+### Missing `--jinja` Flag
+
+**Problem:** Claude Code hangs or gives tool calling errors
+
+**Symptoms:**
+- Server starts fine
+- Claude Code connects
+- Hangs on first prompt or tool use fails
+
+**Solution:**
+```bash
+# WRONG (missing --jinja)
+./llama-server -hf model --port 8000
+
+# CORRECT (includes --jinja)
+./llama-server -hf model --port 8000 --jinja
+```
+
+**The `--jinja` flag is REQUIRED for Claude Code to work!**
+
 ### Profile Not Found
 
 ```
-Warning: MODEL_PROVIDER_PROFILE=ollama-local not found in configuration
+Warning: MODEL_PROVIDER_PROFILE=llama-cpp not found in configuration
 ```
 
 **Solution**: Check profile name in `~/.daf-sessions/config.json`. Profile names are case-sensitive.
@@ -608,34 +873,25 @@ Warning: MODEL_PROVIDER_PROFILE=ollama-local not found in configuration
 ### Connection Refused
 
 ```
-Error: Failed to connect to http://localhost:11434
+Error: Failed to connect to http://localhost:8000
 ```
 
 **Solutions**:
-1. Check if server is running: `curl http://localhost:11434/api/tags`
+1. Check if server is running: `curl http://localhost:8000/health`
 2. Verify port number matches profile `base_url`
-3. For Ollama: Run `ollama serve` or `ollama list` to start server
+3. For llama.cpp: Check terminal where `llama-server` is running
+4. Verify no firewall blocking localhost connections
 
 ### Model Not Found
 
 ```
-Error: model 'devstral-small-2' not found
+Error: model 'Qwen3-Coder' not found
 ```
 
 **Solutions**:
-1. Pull model: `ollama pull devstral-small-2`
-2. List available models: `ollama list`
-3. Verify `model_name` matches exact model name
-
-### Tool Calling Doesn't Work
-
-**For llama.cpp**: Must use `--jinja` flag when starting server:
-
-```bash
-./llama-server -hf ... --jinja ...
-```
-
-**For other providers**: Check model supports function calling/tool use.
+1. Verify `--alias` flag matches `model_name` in profile
+2. Check llama-server startup logs for model loading errors
+3. Try different model from HuggingFace
 
 ### Vertex AI Authentication Failed
 
@@ -649,22 +905,153 @@ Error: model 'devstral-small-2' not found
 
 **Based on testing with MacBook Pro M1 (32GB) and Nvidia DGX Spark (120GB, GB10)**:
 
-| Provider | Model | Hardware | Speed | Quality | Cost |
-|----------|-------|----------|-------|---------|------|
-| Anthropic | Claude Opus 4.5 | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$$ |
-| Vertex AI | Claude 3.5 Sonnet | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$ |
-| Ollama | devstral-small-2 (24B) | Mac M1 32GB | ⭐⭐⭐ | ⭐⭐⭐⭐ | Free |
-| Ollama | glm-4.7-flash:bf16 (30B) | DGX Spark | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Free |
-| Ollama Cloud | kimi-k2.5:cloud | Cloud | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | $ |
-| OpenRouter | deepseek-v3.2 | Cloud | ⭐⭐⭐⭐ | ⭐⭐⭐ | $ (98% cheaper) |
+| Provider | Model | Hardware | Speed | Quality | Cost | Status |
+|----------|-------|----------|-------|---------|------|--------|
+| Anthropic | Claude Opus 4.6 | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$$ | ✅ Works |
+| Vertex AI | Claude 3.5 Sonnet v2 | Cloud | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$$ | ✅ Works |
+| llama.cpp | Qwen3-Coder (25B Q4) | Mac M1 32GB | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Free | ✅ Works |
+| llama.cpp | DeepSeek-Coder (16B Q5) | DGX Spark | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Free | ✅ Works |
+| OpenRouter | deepseek-v3.2 | Cloud | ⭐⭐⭐⭐ | ⭐⭐⭐ | $ (98% cheaper) | ✅ Works |
+| ~~Ollama~~ | ~~Any model~~ | ~~Any~~ | ❌ | ❌ | ❌ | ❌ **Incompatible** |
+
+**Note:** Ollama entries removed - Ollama does NOT work with Claude Code due to API incompatibility.
+
+## Decision Matrix: Which Solution to Use?
+
+### Quick Comparison
+
+| Solution | Setup | Cost | Offline | IDE Integration | Model Choice |
+|----------|-------|------|---------|----------------|--------------|
+| **Anthropic API** | ⭐⭐⭐⭐⭐ Instant | $$$$ High | ❌ No | ✅ Full | Claude only |
+| **Vertex AI** | ⭐⭐⭐⭐ Easy | $$$ Medium | ❌ No | ✅ Full | Claude only |
+| **OpenRouter** | ⭐⭐⭐⭐⭐ Instant | $ Very low | ❌ No | ✅ Full | 100+ models |
+| **llama.cpp** | ⭐⭐ Complex | Free | ✅ Yes | ✅ Full | Any GGUF |
+| **LM Studio** | ⭐⭐⭐⭐ Easy | Free | ✅ Yes | ✅ Full | Any GGUF |
+| **~~Ollama~~** | ❌ Not compatible | - | - | ❌ No | - |
+
+### Use Case Recommendations
+
+**Use Anthropic API when:**
+- ✅ Want best quality (Claude Opus 4.6)
+- ✅ Don't mind cost
+- ✅ Need instant setup
+- ✅ Have internet connection
+- ✅ Need production reliability
+
+**Use Vertex AI when:**
+- ✅ Enterprise GCP user
+- ✅ Need Claude models
+- ✅ Want enterprise billing/security
+- ✅ Already using GCP infrastructure
+- ✅ Need compliance/audit trails
+
+**Use OpenRouter when:**
+- ✅ Want cloud convenience
+- ✅ Want very low cost ($0.28/M tokens)
+- ✅ Want access to many models
+- ✅ Need instant setup
+- ✅ Willing to pay (but cheaply)
+- ✅ Want to test different models easily
+
+**Use llama.cpp when:**
+- ✅ Want completely offline/local
+- ✅ Want zero cost
+- ✅ Want full IDE integration
+- ✅ Want control over model selection
+- ✅ Don't mind complex setup
+- ✅ Don't mind slow initial prompt (30-60s)
+- ✅ Have sufficient hardware (16GB+ RAM)
+
+**Use LM Studio when:**
+- ✅ Want local models with GUI
+- ✅ Prefer visual model management
+- ✅ Want zero cost
+- ✅ Don't mind slower performance vs llama.cpp
+- ✅ Want easier setup than llama.cpp
+
+**Do NOT use Ollama:**
+- ❌ API incompatibility with Claude Code
+- ❌ All models fail (500 errors or hangs)
+- ❌ Use llama.cpp or LM Studio instead for local models
+
+## Other LLM Servers - Compatibility Guide
+
+**Want to try a different LLM server?** Here's what you need to know before testing:
+
+### Compatibility Requirements
+
+For an LLM server to work with Claude Code, it MUST support:
+
+1. ✅ **Anthropic Messages API format** (not just OpenAI-compatible)
+2. ✅ **Tool calling / function calling** in Anthropic format
+3. ✅ **Response streaming** in the format Claude Code expects
+
+**Most LLM servers WON'T work** because they're designed for OpenAI API compatibility, which is incompatible with Claude Code.
+
+### Known Status
+
+| Server | Status | Reason |
+|--------|--------|--------|
+| **llama.cpp** | ✅ **Works** | Flexible API, `--jinja` flag for tool calling |
+| **LM Studio** | ✅ **Works** | GUI wrapper around llama.cpp |
+| **OpenRouter** | ✅ **Works** | Cloud service with multi-API support |
+| **Vertex AI** | ✅ **Works** | Native Claude models from Google Cloud |
+| **Ollama** | ❌ **Incompatible** | OpenAI-only format, no `--jinja` equivalent |
+| **vLLM** | ⚠️ **Likely fails** | OpenAI-compatible only (untested) |
+| **Text Gen Inference** | ⚠️ **Likely fails** | OpenAI-compatible only (untested) |
+| **LocalAI** | ⚠️ **Likely fails** | Explicitly OpenAI-compatible (untested) |
+| **FastChat** | ⚠️ **Likely fails** | OpenAI-compatible API (untested) |
+| **Koboldcpp** | ⚠️ **Unknown** | llama.cpp fork, might work (untested) |
+| **Jan** | ⚠️ **Unknown** | Unclear API format (untested) |
+
+### Testing a New Server
+
+**Before adding a new server to the documentation**, please test:
+
+1. **Basic connectivity:** Can you start a session?
+2. **Simple prompts:** Does it respond to "hi" or simple questions?
+3. **Tool calling:** Can it edit files when you ask? This is the critical test!
+4. **Multi-turn conversation:** Does context work across multiple prompts?
+
+**If it fails at tool calling** (step 3), it's incompatible - don't waste more time.
+
+### How to Test Tool Calling
+
+```bash
+# 1. Start your LLM server
+# 2. Configure daf profile pointing to it
+# 3. Open a test session
+daf new --name test-server --goal "Test compatibility"
+
+# 4. In Claude Code, try a file operation:
+# Type: "Create a file called test.txt with the word 'hello' in it"
+
+# Expected: ✅ File is created
+# Failure: ❌ Hangs, errors, or just responds without creating file
+```
+
+**If tool calling works, congrats! 🎉** Please report your success:
+- Open an issue at: https://github.com/itdove/devaiflow/issues
+- Title: "Confirmed working: [Server Name] with Claude Code"
+- Include: Server version, configuration, test results
+
+### Why We Don't List Untested Servers
+
+We learned from the Ollama situation:
+- ❌ Misleading documentation wastes users' time
+- ❌ Untested claims damage credibility
+- ✅ Only tested, verified configurations should be documented
+
+**Help us expand this list!** Test servers and report your results. Community-verified configurations will be added to the official documentation.
 
 ## Best Practices
 
-1. **Test locally first**: Use Ollama to test workflow before committing to paid API
+1. **Test locally first**: Use llama.cpp or LM Studio to test workflow before committing to paid API
 2. **Have a fallback**: Configure multiple profiles (local + cloud)
 3. **Match model to task**: Use smaller models for simple tasks, larger for complex
 4. **Monitor costs**: Track API usage for cloud providers
 5. **Keep profiles updated**: Document which models work well for your use cases
+6. **Avoid Ollama**: Don't waste time trying to make Ollama work - it's incompatible with Claude Code
 
 ## See Also
 
