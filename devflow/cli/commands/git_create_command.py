@@ -350,8 +350,8 @@ def git_create(
 
         # Show next steps
         console.print("\n[cyan]Next steps:[/cyan]")
-        console.print(f"  View: daf github view {issue_key}")
-        console.print(f"  Open session: daf github open {issue_key}")
+        console.print(f"  View: daf git view {issue_key}")
+        console.print(f"  Open session: daf git open {issue_key}")
 
     except IssueTrackerValidationError as e:
         console.print(f"[red]✗[/red] Validation error: {e}")
