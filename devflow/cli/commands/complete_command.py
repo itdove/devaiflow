@@ -1792,7 +1792,7 @@ def _fetch_github_raw(owner: str, repo: str, file_path: str, branch: str) -> Opt
         return None
 
 
-def _fetch_github_template(template_url: str) -> Optional[str]:
+def _fetch_github_template(template_url: str, silent: bool = False) -> Optional[str]:
     """Fetch GitHub template with three-tier fallback.
 
     Tries (in order):
@@ -1802,6 +1802,7 @@ def _fetch_github_template(template_url: str) -> Optional[str]:
 
     Args:
         template_url: GitHub blob or raw URL
+        silent: If True, suppress warning messages when template not found (for auto-discovery)
 
     Returns:
         Template content or None if all methods fail
@@ -1821,7 +1822,8 @@ def _fetch_github_template(template_url: str) -> Optional[str]:
         )
 
     if not match:
-        console.print(f"[yellow]⚠[/yellow] Could not parse GitHub URL: {template_url}")
+        if not silent:
+            console.print(f"[yellow]⚠[/yellow] Could not parse GitHub URL: {template_url}")
         return None
 
     owner, repo, branch, file_path = match.groups()
@@ -1833,32 +1835,36 @@ def _fetch_github_template(template_url: str) -> Optional[str]:
         return content
 
     # Method 2: Try GitHub REST API (unauthenticated, public repos only)
-    console.print("[dim]Trying unauthenticated GitHub API...[/dim]")
+    if not silent:
+        console.print("[dim]Trying unauthenticated GitHub API...[/dim]")
     content = _fetch_github_with_api(owner, repo, file_path, branch)
     if content:
         console.print("[dim]✓ Template fetched successfully (GitHub API)[/dim]")
         return content
 
     # Method 3: Try raw URL (direct access, public repos only)
-    console.print("[dim]Trying raw GitHub URL...[/dim]")
+    if not silent:
+        console.print("[dim]Trying raw GitHub URL...[/dim]")
     content = _fetch_github_raw(owner, repo, file_path, branch)
     if content:
         console.print("[dim]✓ Template fetched successfully (raw URL)[/dim]")
         return content
 
     # All methods failed
-    console.print(
-        f"[yellow]⚠[/yellow] Could not fetch template from GitHub. "
-        f"If this is a private repository, ensure 'gh' CLI is installed and authenticated."
-    )
+    if not silent:
+        console.print(
+            f"[yellow]⚠[/yellow] Could not fetch template from GitHub. "
+            f"If this is a private repository, ensure 'gh' CLI is installed and authenticated."
+        )
     return None
 
 
-def _fetch_gitlab_template(template_url: str) -> Optional[str]:
+def _fetch_gitlab_template(template_url: str, silent: bool = False) -> Optional[str]:
     """Fetch GitLab template using glab CLI.
 
     Args:
         template_url: GitLab blob URL
+        silent: If True, suppress warning messages when template not found (for auto-discovery)
 
     Returns:
         Template content or None if fetch fails
@@ -1869,7 +1875,8 @@ def _fetch_gitlab_template(template_url: str) -> Optional[str]:
     match = re.match(r'https://([^/]+)/([^/]+/[^/]+)/-/blob/([^/]+)/(.+)', template_url)
 
     if not match or 'gitlab' not in match.group(1).lower():
-        console.print(f"[yellow]⚠[/yellow] Could not parse GitLab URL: {template_url}")
+        if not silent:
+            console.print(f"[yellow]⚠[/yellow] Could not parse GitLab URL: {template_url}")
         return None
 
     hostname, project_path, branch, file_path = match.groups()
@@ -1899,7 +1906,8 @@ def _fetch_gitlab_template(template_url: str) -> Optional[str]:
         console.print("[dim]✓ Template fetched successfully[/dim]")
         return template_content
     else:
-        console.print(f"[yellow]⚠[/yellow] glab CLI error: {result.stderr}")
+        if not silent:
+            console.print(f"[yellow]⚠[/yellow] glab CLI error: {result.stderr}")
         return None
 
 
@@ -2024,7 +2032,7 @@ def _try_discover_org_template(working_dir: Path) -> Optional[str]:
 
     # Get remote URL to extract organization/owner
     remote_url = GitUtils.get_remote_url(working_dir, "origin")
-    if not remote_url:
+    if not remote_url or not isinstance(remote_url, str):
         return None
 
     # Extract owner/org from various git URL formats
@@ -2045,7 +2053,7 @@ def _try_discover_org_template(working_dir: Path) -> Optional[str]:
         template_url = f"https://github.com/{owner}/.github/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
 
         console.print(f"[dim]Checking organization template: {owner}/.github[/dim]")
-        content = _fetch_github_template(template_url)
+        content = _fetch_github_template(template_url, silent=True)
 
         if content:
             console.print(f"[green]✓[/green] Using organization template (enforced): {owner}/.github")
@@ -2061,7 +2069,7 @@ def _try_discover_org_template(working_dir: Path) -> Optional[str]:
         template_url = f"https://{hostname}/{owner}/.github/-/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
 
         console.print(f"[dim]Checking organization template: {owner}/.github[/dim]")
-        content = _fetch_gitlab_template(template_url)
+        content = _fetch_gitlab_template(template_url, silent=True)
 
         if content:
             console.print(f"[green]✓[/green] Using organization template (enforced): {owner}/.github")

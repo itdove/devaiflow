@@ -124,9 +124,9 @@ class TestOrgTemplateDiscovery:
         # Test discovery
         result = _try_discover_org_template(tmp_path)
 
-        # Verify correct URL was constructed
+        # Verify correct URL was constructed with silent=True
         expected_url = "https://github.com/myorg/.github/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
-        mock_fetch.assert_called_once_with(expected_url)
+        mock_fetch.assert_called_once_with(expected_url, silent=True)
         assert result == template_content
 
     @patch('devflow.cli.commands.complete_command.GitUtils.get_remote_url')
@@ -143,7 +143,7 @@ class TestOrgTemplateDiscovery:
         result = _try_discover_org_template(tmp_path)
 
         expected_url = "https://github.com/acme-corp/.github/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
-        mock_fetch.assert_called_once_with(expected_url)
+        mock_fetch.assert_called_once_with(expected_url, silent=True)
         assert result == template_content
 
     @patch('devflow.cli.commands.complete_command.GitUtils.get_remote_url')
@@ -160,7 +160,7 @@ class TestOrgTemplateDiscovery:
         result = _try_discover_org_template(tmp_path)
 
         expected_url = "https://gitlab.com/myorg/.github/-/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
-        mock_fetch.assert_called_once_with(expected_url)
+        mock_fetch.assert_called_once_with(expected_url, silent=True)
         assert result == template_content
 
     @patch('devflow.cli.commands.complete_command.GitUtils.get_remote_url')
@@ -178,7 +178,7 @@ class TestOrgTemplateDiscovery:
 
         # Should detect hostname from URL
         expected_url = "https://gitlab.example.com/engineering/.github/-/blob/main/.github/PULL_REQUEST_TEMPLATE.md"
-        mock_fetch.assert_called_once_with(expected_url)
+        mock_fetch.assert_called_once_with(expected_url, silent=True)
         assert result == template_content
 
     @patch('devflow.cli.commands.complete_command.GitUtils.get_remote_url')
