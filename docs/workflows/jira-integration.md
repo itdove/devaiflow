@@ -128,7 +128,7 @@ This outputs a base64 string. **Save this output** - it becomes your `JIRA_API_T
 
 Example output format:
 ```
-dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==
+dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg== # notsecret
 ```
 
 **Step 5: Configure Environment Variables**
@@ -141,7 +141,7 @@ dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==
 export JIRA_AUTH_TYPE=basic
 
 # Set the base64-encoded credentials (paste output from Step 4)
-export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==" # nosecret
+export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==" # notsecret
 
 # Set your Atlassian Cloud URL
 export JIRA_URL="https://yourcompany.atlassian.net"
@@ -170,7 +170,7 @@ Once verified, add these to your `~/.zshrc` or `~/.bashrc`:
 ```bash
 # JIRA Configuration (Atlassian Cloud)
 export JIRA_AUTH_TYPE=basic
-export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==" # nosecret
+export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==" # notsecret
 export JIRA_URL="https://yourcompany.atlassian.net"
 ```
 
