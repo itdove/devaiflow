@@ -97,6 +97,30 @@ Each session is an **isolated workspace** with its own:
 
 ## Quick Start
 
+### Two Paths: Create vs Sync
+
+**Path A: Create New Tickets (Recommended for new work)**
+```bash
+# GitHub - Create issue with Claude's analysis
+daf git new --goal "Add user authentication to API"
+
+# JIRA - Create ticket with Claude's analysis
+daf jira new story --parent PROJ-12345 --goal "Add user authentication to API"
+```
+
+**Why this is better:** Claude analyzes the codebase first, understanding implementation complexity before creating tickets with accurate descriptions and acceptance criteria.
+
+**Path B: Sync Existing Tickets (For already-assigned work)**
+```bash
+# Sync GitHub/GitLab issues from all configured workspaces
+daf sync
+
+# Sync JIRA tickets from current sprint
+daf sync --sprint current
+```
+
+**When to use sync:** Working on tickets already created by PM/team, sprint has pre-defined backlog.
+
 ### With GitHub Issues (Recommended)
 
 ```bash
@@ -112,10 +136,15 @@ daf init  # Configures workspaces, GitHub settings, etc.
 # Install Claude Code commands and skills
 daf upgrade  # Installs /daf-* slash commands into Claude Code
 
-# Sync GitHub issues from your repositories
+# Path A: Create new issue with analysis
+daf git new --goal "Add two-factor authentication"
+# ... Claude analyzes and helps create detailed issue ...
+daf complete <session-name>
+
+# Path B: Or sync existing assigned issues
 daf sync
 
-# Open a session for your issue (use session name - no quotes!)
+# Open a session (use session name - no quotes!)
 daf open owner-repo-123
 
 # Work in your AI assistant...
@@ -141,10 +170,17 @@ export JIRA_AUTH_TYPE=Bearer
 export JIRA_API_TOKEN=<YOUR_JIRA_PAT>
 export JIRA_URL="https://jira.example.com"
 
-# Initialize and sync
+# Initialize and upgrade
 daf init
 daf upgrade
-daf sync
+
+# Path A: Create new ticket with analysis
+daf jira new story --parent PROJ-59038 --goal "Add two-factor authentication"
+# ... Claude analyzes and helps create detailed ticket ...
+daf complete <session-name>
+
+# Path B: Or sync existing assigned tickets
+daf sync --sprint current
 
 # Open a session
 daf open PROJ-12345
@@ -182,22 +218,20 @@ daf open PROJ-123  # Prompts to select which workspace if ambiguous
 
 **Multi-Project Workflows:** Work across multiple repositories in a single session:
 ```bash
-# Create session spanning multiple projects (requires workspace)
+# Declarative: All projects at once (requires workspace)
 daf new PROJ-123 -w primary --projects backend-api,frontend-app,shared-lib
 
-# System prompts for base branch per project:
-#   backend-api: branch from main
-#   frontend-app: branch from develop
-#   shared-lib: branch from main
+# Iterative: Add projects as you go
+daf open PROJ-123    # First open: select backend-api
+# ... work in backend ...
+daf open PROJ-123    # Second open: select "Create new conversation" → frontend-app
+# ... work in frontend ...
 
-# Work in Claude Code across all projects...
-
-# Complete session - creates PR/MR for each project
+# Complete creates PRs/MRs for all projects
 daf complete PROJ-123
-# → Creates PR for backend-api targeting main
-# → Creates PR for frontend-app targeting develop
-# → Creates PR for shared-lib targeting main
 ```
+
+**When to use multi-project:** One ticket requires changes in multiple repositories (backend API + frontend UI + shared library). Benefits: unified time tracking, shared context across projects, one command creates all PRs/MRs.
 
 **Configuration:** Use the interactive TUI for easy configuration:
 ```bash

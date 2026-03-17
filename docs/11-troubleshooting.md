@@ -1371,7 +1371,7 @@ Which project? [1-3]: 2
 **Documentation:**
 - [Session Management Guide](04-session-management.md#working-across-multiple-repositories) - Detailed explanation
 - [Commands Reference: daf open](07-commands.md#daf-open---resume-session) - Multi-repository workflow examples
-- [Quick Start Guide](03-quick-start.md#scenario-2-working-across-multiple-repositories-multi-conversation-sessions) - Complete walkthrough
+- [Quick Start Guide](03-quick-start.md#multi-project-sessions) - Complete walkthrough
 
 ### How do I switch between repositories in a multi-repo session?
 
