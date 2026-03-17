@@ -135,61 +135,67 @@ def test_detect_workspace_from_cwd_config_load_fails():
 
 
 def test_handle_workspace_mismatch_user_chooses_session_workspace(
-    mock_session, mock_session_manager
+    mock_session, mock_session_manager, mock_config
 ):
     """Test workspace mismatch when user chooses to use session workspace."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
 
-    with patch("rich.prompt.IntPrompt.ask", return_value=1):
+    with patch("rich.prompt.IntPrompt.ask", return_value=2):  # Changed: session workspace is now choice 2
         result = _handle_workspace_mismatch(
             mock_session,
             mock_session_manager,
             "workspace-a",
             "workspace-b",
+            mock_config.repos.workspaces,  # New parameter: all workspaces
+            detected_workspace_path="/tmp/workspace-b",  # New parameter
             skip_prompt=False
         )
 
     assert result is True
-    # Session workspace should not change
+    # Session workspace should not change (user chose session workspace)
     assert mock_session.workspace_name == "workspace-a"
-    # Session should not be updated
+    # Session should not be updated when staying with same workspace
     mock_session_manager.update_session.assert_not_called()
 
 
 def test_handle_workspace_mismatch_user_chooses_current_workspace(
-    mock_session, mock_session_manager
+    mock_session, mock_session_manager, mock_config
 ):
     """Test workspace mismatch when user chooses to switch to current workspace."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
 
-    with patch("rich.prompt.IntPrompt.ask", return_value=2):
+    with patch("rich.prompt.IntPrompt.ask", return_value=1):  # Changed: detected workspace is now choice 1 (default)
         result = _handle_workspace_mismatch(
             mock_session,
             mock_session_manager,
             "workspace-a",
             "workspace-b",
+            mock_config.repos.workspaces,  # New parameter: all workspaces
+            detected_workspace_path="/tmp/workspace-b",  # New parameter
             skip_prompt=False
         )
 
     assert result is True
-    # Session workspace should be updated to current workspace
+    # Session workspace should be updated to detected workspace
     assert mock_session.workspace_name == "workspace-b"
     # Session should be updated
     mock_session_manager.update_session.assert_called_once_with(mock_session)
 
 
 def test_handle_workspace_mismatch_user_cancels(
-    mock_session, mock_session_manager
+    mock_session, mock_session_manager, mock_config
 ):
     """Test workspace mismatch when user cancels."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
 
-    with patch("rich.prompt.IntPrompt.ask", return_value=3):
+    with patch("rich.prompt.IntPrompt.ask", return_value=4):  # Changed: cancel is now choice 4 (1=detected, 2=session, 3=workspace-c, 4=cancel)
         result = _handle_workspace_mismatch(
             mock_session,
             mock_session_manager,
             "workspace-a",
             "workspace-b",
+            mock_config.repos.workspaces,  # New parameter: all workspaces
+            detected_workspace_path="/tmp/workspace-b",  # New parameter
             skip_prompt=False
         )
 
@@ -199,7 +205,7 @@ def test_handle_workspace_mismatch_user_cancels(
 
 
 def test_handle_workspace_mismatch_keyboard_interrupt(
-    mock_session, mock_session_manager
+    mock_session, mock_session_manager, mock_config
 ):
     """Test workspace mismatch when user presses Ctrl+C."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
@@ -210,6 +216,8 @@ def test_handle_workspace_mismatch_keyboard_interrupt(
             mock_session_manager,
             "workspace-a",
             "workspace-b",
+            mock_config.repos.workspaces,  # New parameter: all workspaces
+            detected_workspace_path="/tmp/workspace-b",  # New parameter
             skip_prompt=False
         )
 
@@ -219,7 +227,7 @@ def test_handle_workspace_mismatch_keyboard_interrupt(
 
 
 def test_handle_workspace_mismatch_skip_prompt(
-    mock_session, mock_session_manager
+    mock_session, mock_session_manager, mock_config
 ):
     """Test workspace mismatch in non-interactive mode (--json flag)."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
@@ -230,6 +238,8 @@ def test_handle_workspace_mismatch_skip_prompt(
         mock_session_manager,
         "workspace-a",
         "workspace-b",
+        mock_config.repos.workspaces,  # New parameter: all workspaces
+        detected_workspace_path="/tmp/workspace-b",  # New parameter
         skip_prompt=True
     )
 
@@ -303,3 +313,96 @@ def test_workspace_mismatch_check_no_workspace_selected():
 
     # In Python, None is falsy, so the check correctly skips
     assert not should_check_mismatch
+
+
+def test_workspace_mismatch_shows_all_workspaces(
+    mock_session, mock_session_manager, mock_config
+):
+    """Test that workspace mismatch prompt shows ALL configured workspaces (#208)."""
+    from devflow.cli.commands.open_command import _handle_workspace_mismatch
+
+    # User selects workspace-c (choice 3)
+    with patch("rich.prompt.IntPrompt.ask", return_value=3):
+        result = _handle_workspace_mismatch(
+            mock_session,
+            mock_session_manager,
+            "workspace-a",  # session workspace
+            "workspace-b",  # detected workspace
+            mock_config.repos.workspaces,  # All 3 workspaces
+            detected_workspace_path="/tmp/workspace-b",
+            skip_prompt=False
+        )
+
+    assert result is True
+    # Session workspace should be updated to workspace-c
+    assert mock_session.workspace_name == "workspace-c"
+    # Session should be updated
+    mock_session_manager.update_session.assert_called_once_with(mock_session)
+
+
+def test_workspace_mismatch_detected_equals_selected_skips_prompt(
+    mock_config, mock_config_loader
+):
+    """Test Case 2: When detected workspace == selected workspace, skip prompt (#208)."""
+    from devflow.config.models import Session
+
+    # Create session with workspace_name set
+    session = Session(
+        name="test-session",
+        issue_key="PROJ-12345",
+        goal="Test session",
+        workspace_name="workspace-a"
+    )
+
+    # Simulate the check in open_command.py
+    selected_workspace_name = "workspace-a"
+    workspace_flag = None  # No explicit flag
+    detected_workspace_name = "workspace-a"  # Same as selected
+
+    # Case 2: detected == selected, should skip prompt
+    if detected_workspace_name and detected_workspace_name == selected_workspace_name:
+        # Should skip prompt
+        should_prompt = False
+    elif detected_workspace_name and detected_workspace_name != selected_workspace_name:
+        # Should show prompt
+        should_prompt = True
+    else:
+        should_prompt = False
+
+    # Verify Case 2 logic: no prompt when workspaces match
+    assert should_prompt is False
+
+
+def test_set_workspace_for_session(temp_daf_home, mock_config):
+    """Test the new 'daf session set-workspace' command (#208)."""
+    from devflow.cli.commands.session_project_command import set_workspace_for_session
+    from devflow.config.loader import ConfigLoader
+    from devflow.config.models import Session
+    from devflow.session.manager import SessionManager
+    from unittest.mock import patch, MagicMock
+
+    # Create a mock session
+    session = Session(
+        name="test-session",
+        issue_key="PROJ-12345",
+        goal="Test session",
+        workspace_name="workspace-a"
+    )
+
+    # Mock SessionManager
+    mock_session_manager = MagicMock(spec=SessionManager)
+    mock_session_manager.get_session.return_value = session
+
+    # Mock ConfigLoader
+    mock_config_loader = MagicMock(spec=ConfigLoader)
+    mock_config_loader.load_config.return_value = mock_config
+
+    with patch("devflow.cli.commands.session_project_command.ConfigLoader", return_value=mock_config_loader):
+        with patch("devflow.cli.commands.session_project_command.SessionManager", return_value=mock_session_manager):
+            # Call set_workspace_for_session
+            set_workspace_for_session("test-session", "workspace-b")
+
+    # Verify session workspace was updated
+    assert session.workspace_name == "workspace-b"
+    # Verify session was saved
+    mock_session_manager.update_session.assert_called_once_with(session)

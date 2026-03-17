@@ -12,6 +12,7 @@ from devflow.cli.completion import (
     complete_working_directories,
     complete_tags,
     complete_file_paths,
+    complete_workspace_names,
 )
 
 console = Console()
@@ -532,6 +533,24 @@ def session_remove_project(session_name: str, project_name: str, force: bool) ->
     from devflow.cli.commands.session_project_command import remove_project_from_session
 
     remove_project_from_session(session_name, project_name, force)
+
+
+@session.command(name="set-workspace")
+@click.argument("session_name", shell_complete=complete_session_identifiers)
+@click.argument("workspace_name", shell_complete=complete_workspace_names)
+def session_set_workspace(session_name: str, workspace_name: str) -> None:
+    """Set the workspace for a session.
+
+    Changes which workspace a session uses. This persists and will be used
+    when the session is reopened with 'daf open'.
+
+    Example:
+        daf session set-workspace PROJ-123 production
+        daf session set-workspace my-session experiments
+    """
+    from devflow.cli.commands.session_project_command import set_workspace_for_session
+
+    set_workspace_for_session(session_name, workspace_name)
 
 
 # Keep 'sessions' group for backward compatibility (deprecated)
