@@ -258,15 +258,20 @@ def complete_session(
 
                 if should_commit:
                     auto_message = f"{session.issue_key}: {session.goal} ({proj_name})" if session.issue_key else f"{session.goal} ({proj_name})"
-                    full_message = f"""{auto_message}
+
+                    # Display commit message and prompt for confirmation
+                    commit_message_short = _prompt_for_commit_message(auto_message, config)
+
+                    if commit_message_short:
+                        full_message = f"""{commit_message_short}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"""
 
-                    if GitUtils.commit_all(working_dir, full_message):
-                        console.print(f"  [green]✓[/green] Changes committed")
-                        commit_made_this_cycle = True
+                        if GitUtils.commit_all(working_dir, full_message):
+                            console.print(f"  [green]✓[/green] Changes committed")
+                            commit_made_this_cycle = True
 
                         # Push to remote
                         if GitUtils.has_unpushed_commits(working_dir, proj_info.branch):
@@ -395,15 +400,20 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
                 if should_commit:
                     auto_message = f"{session.issue_key}: {session.goal} ({working_dir_name})" if session.issue_key else f"{session.goal} ({working_dir_name})"
-                    full_message = f"""{auto_message}
+
+                    # Display commit message and prompt for confirmation
+                    commit_message_short = _prompt_for_commit_message(auto_message, config)
+
+                    if commit_message_short:
+                        full_message = f"""{commit_message_short}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"""
 
-                    if GitUtils.commit_all(working_dir, full_message):
-                        console.print(f"  [green]✓[/green] Changes committed")
-                        commit_made_this_cycle = True
+                        if GitUtils.commit_all(working_dir, full_message):
+                            console.print(f"  [green]✓[/green] Changes committed")
+                            commit_made_this_cycle = True
 
                         # Push to remote
                         if GitUtils.has_unpushed_commits(working_dir, conv.branch):
@@ -506,35 +516,22 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
             if should_commit:
                 # Auto-generate commit message from session goal
                 auto_message = _generate_commit_message(session)
-                console.print(f"\n[dim]Suggested commit message:[/dim]")
-                console.print(f"[cyan]{auto_message}[/cyan]")
 
-                # Check if user wants to accept AI commit message automatically
-                use_auto = True
-                if config and config.prompts and config.prompts.auto_accept_ai_commit_message is not None:
-                    use_auto = config.prompts.auto_accept_ai_commit_message
-                    if use_auto:
-                        console.print("\n[dim]Automatically accepting AI commit message (configured in prompts)[/dim]")
-                    else:
-                        console.print("\n[dim]Skipping AI commit message (configured in prompts)[/dim]")
-                        commit_message_short = Prompt.ask("Commit message", default=auto_message)
-                else:
-                    # Ask user to confirm
-                    use_auto = Confirm.ask("\nUse this commit message?", default=True)
+                # Display commit message and prompt for confirmation
+                commit_message_short = _prompt_for_commit_message(auto_message, config)
 
-                if use_auto:
-                    commit_message_short = auto_message
-                else:
-                    commit_message_short = Prompt.ask("Commit message", default=auto_message)
-
-                # Create commit with standard format
-                full_message = f"""{commit_message_short}
+                if commit_message_short:
+                    # Create commit with standard format
+                    full_message = f"""{commit_message_short}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"""
+                else:
+                    # User cancelled the commit
+                    should_commit = False
 
-                if GitUtils.commit_all(working_dir, full_message):
+                if should_commit and GitUtils.commit_all(working_dir, full_message):
                     console.print("[green]✓[/green] Changes committed")
                     commit_made_this_cycle = True  # Track that we made a commit
 
@@ -2549,6 +2546,45 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Exception creating MR: {e}")
         return None
+
+
+def _prompt_for_commit_message(auto_message: str, config) -> Optional[str]:
+    """Display commit message and prompt user for confirmation.
+
+    This function provides a consistent commit message review flow across all session types.
+    It displays the suggested message and prompts for confirmation, respecting the
+    auto_accept_ai_commit_message configuration setting.
+
+    Args:
+        auto_message: Auto-generated commit message to display
+        config: Configuration object (may be None)
+
+    Returns:
+        Final commit message to use, or None if user cancels
+    """
+    # Display the suggested commit message
+    console.print(f"\n[dim]Suggested commit message:[/dim]")
+    console.print(f"[cyan]{auto_message}[/cyan]")
+
+    # Check if user wants to accept AI commit message automatically
+    use_auto = True
+    if config and config.prompts and config.prompts.auto_accept_ai_commit_message is not None:
+        use_auto = config.prompts.auto_accept_ai_commit_message
+        if use_auto:
+            console.print("\n[dim]Automatically accepting AI commit message (configured in prompts)[/dim]")
+        else:
+            console.print("\n[dim]Skipping AI commit message (configured in prompts)[/dim]")
+            commit_message_short = Prompt.ask("Commit message", default=auto_message)
+            return commit_message_short
+    else:
+        # Ask user to confirm
+        use_auto = Confirm.ask("\nUse this commit message?", default=True)
+
+    if use_auto:
+        return auto_message
+    else:
+        commit_message_short = Prompt.ask("Commit message", default=auto_message)
+        return commit_message_short
 
 
 def _generate_commit_message(session) -> str:
