@@ -2493,7 +2493,7 @@ daf init
 
 ## Next Steps
 
-- [Session Management](04-session-management.md) - Using configured features
-- [JIRA Integration](05-2-jira-integration.md) - JIRA-specific configuration
-- [Commands Reference](07-commands.md) - Commands using configuration
+- [Session Management](../guides/session-management.md) - Using configured features
+- [JIRA Integration](../workflows/jira-integration.md) - JIRA-specific configuration
+- [Commands Reference](commands.md) - Commands using configuration
 - [Workflows](08-workflows.md) - Configuration in practice

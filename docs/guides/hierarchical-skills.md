@@ -1024,6 +1024,6 @@ ls ~/.daf-sessions/.claude/skills/
 ```
 
 **Next Steps:**
-- See [Configuration Reference](06-configuration.md) for all config options
-- See [Commands Reference](07-commands.md) for `daf upgrade` details
+- See [Configuration Reference](../reference/configuration.md) for all config options
+- See [Commands Reference](../reference/commands.md) for `daf upgrade` details
 - See example repositories for complete implementations

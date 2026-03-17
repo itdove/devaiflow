@@ -769,12 +769,12 @@ daf sync
 - [GitHub CLI Documentation](https://cli.github.com/manual/)
 - [GitHub Issues API](https://docs.github.com/en/rest/issues)
 - [Issue Templates](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests)
-- [DevAIFlow JIRA Integration](./05-2-jira-integration.md)
-- [Architecture Overview](./issue-tracker-architecture.md)
+- [DevAIFlow JIRA Integration](jira-integration.md)
+- [Architecture Overview](../reference/issue-tracker-architecture.md)
 
 ## Next Steps
 
-- [Quick Start Guide](03-quick-start.md) - Get started with GitHub workflows
-- [JIRA Integration](05-2-jira-integration.md) - Compare with JIRA integration
-- [Session Management](04-session-management.md) - Deep dive into sessions
-- [Commands Reference](07-commands.md) - All available commands
+- [Quick Start Guide](../getting-started/quick-start.md) - Get started with GitHub workflows
+- [JIRA Integration](jira-integration.md) - Compare with JIRA integration
+- [Session Management](../guides/session-management.md) - Deep dive into sessions
+- [Commands Reference](../reference/commands.md) - All available commands

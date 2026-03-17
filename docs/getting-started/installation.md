@@ -310,7 +310,7 @@ Get-Command claude -ErrorAction SilentlyContinue
 # Add to PATH if needed
 ```
 
-For more troubleshooting, see [Windows Troubleshooting Guide](11-troubleshooting.md#windows-specific-issues).
+For more troubleshooting, see [Windows Troubleshooting Guide](../guides/troubleshooting.md#windows-specific-issues).
 
 ## Setting Up Issue Tracker Integration (Optional)
 
@@ -326,7 +326,7 @@ gh auth status
 gh issue list --assignee @me
 ```
 
-See the [GitHub Issue Integration Guide](05-1-github-issue-integration.md) for complete documentation.
+See the [GitHub Issue Integration Guide](../workflows/github-gitlab-integration.md) for complete documentation.
 
 ### GitLab Issues
 
@@ -483,7 +483,7 @@ After running `daf init`, verify and customize your configuration:
    daf sync --dry-run
    ```
 
-For detailed configuration options and multi-file structure, see [Multi-File Configuration System](06-configuration.md#multi-file-configuration-system).
+For detailed configuration options and multi-file structure, see [Multi-File Configuration System](../reference/configuration.md#multi-file-configuration-system).
 
 ### 2. Install Claude Code Skills
 
@@ -553,7 +553,7 @@ Edit `$DEVAIFLOW_HOME/config.json`:
 - `repos.workspace` - Your main development directory
 - `repos.keywords` - Keywords for smart repository detection
 
-See [Configuration Reference](06-configuration.md) for detailed configuration options.
+See [Configuration Reference](../reference/configuration.md) for detailed configuration options.
 
 ### 3. Set Up Shell Completion (Optional)
 
@@ -619,7 +619,7 @@ Optional Dependencies:
 
 **If any required tools are missing:**
 - See [Prerequisites](#prerequisites) for installation instructions
-- See [Troubleshooting Guide](11-troubleshooting.md#dependency-issues) for help
+- See [Troubleshooting Guide](../guides/troubleshooting.md#dependency-issues) for help
 
 ### Verify Basic Functionality
 
@@ -1103,10 +1103,10 @@ daf open PROJ-12345
 # Check the initial prompt - it should include instructions to read the file
 ```
 
-For troubleshooting, see [Troubleshooting Guide - Claude Code Permission Issues](11-troubleshooting.md#claude-code-permission-issues).
+For troubleshooting, see [Troubleshooting Guide - Claude Code Permission Issues](../guides/troubleshooting.md#claude-code-permission-issues).
 
 ## Next Steps
 
-- [Quick Start Guide](03-quick-start.md) - Create your first session
-- [Configuration Reference](06-configuration.md) - Customize the tool
-- [Commands Reference](07-commands.md) - Learn available commands
+- [Quick Start Guide](quick-start.md) - Create your first session
+- [Configuration Reference](../reference/configuration.md) - Customize the tool
+- [Commands Reference](../reference/commands.md) - Learn available commands

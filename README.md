@@ -251,14 +251,17 @@ The TUI provides:
 - ⌨️ Full keyboard navigation (Tab, Arrow keys, Ctrl+S to save)
 - ❓ Built-in help screen (press `?`)
 
-**Next Steps:** See the [Quick Start Guide](docs/03-quick-start.md) for a complete walkthrough.
+**Next Steps:**
+- **Quick Reference**: [QUICKREF.md](QUICKREF.md) - All essential commands on one page
+- **Complete Guide**: [Quick Start Guide](docs/getting-started/quick-start.md) - Full walkthrough with examples
+- **All Workflows**: [WORKFLOWS.md](docs/workflows/WORKFLOWS.md) - Step-by-step workflow documentation
 
 ## Documentation
 
 **New to DevAIFlow?** Choose your path:
 
-- **Quick Decision** (2 min): Read [What is DevAIFlow?](docs/01-overview.md) to see if this tool is right for you
-- **Quick Start** (5 min): [Installation](docs/02-installation.md) → [Quick Start](docs/03-quick-start.md) → Create your first session
+- **Quick Decision** (2 min): Read [What is DevAIFlow?](docs/getting-started/overview.md) to see if this tool is right for you
+- **Quick Start** (5 min): [Installation](docs/getting-started/installation.md) → [Quick Start](docs/getting-started/quick-start.md) → Create your first session
 - **Complete Guide**: Read the documentation sections below in order
 
 ---
@@ -268,19 +271,25 @@ The TUI provides:
 
 ### Quick Links
 
+**Quick References** (Start Here!):
+- **[⚡ Command Quick Reference](QUICKREF.md)** - Single-page command reference (<5KB)
+- **[📖 Complete Workflows](docs/workflows/WORKFLOWS.md)** - Step-by-step workflow guide with examples
+- **[🤖 AI-Optimized Summary](docs/NOTEBOOKLM.md)** - Essential overview for AI tools (NotebookLM, Claude, etc.)
+
 **Core Documentation:**
-- **[Installation Guide](docs/02-installation.md)** - Setup instructions and requirements
-- **[Session Management](docs/04-session-management.md)** - Understanding sessions and lifecycle
-- **[GitHub Issue Integration](docs/05-1-github-issue-integration.md)** - GitHub/GitLab issue tracking
-- **[JIRA Integration](docs/05-2-jira-integration.md)** - JIRA issue tracking
-- **[Command Reference](docs/07-commands.md)** - Complete CLI command documentation
-- **[Configuration](docs/06-configuration.md)** - Customizing the tool for your workflow (includes JSON Schema validation)
-- **[Troubleshooting](docs/11-troubleshooting.md)** - Common issues and solutions
+- **[Installation Guide](docs/getting-started/installation.md)** - Setup instructions and requirements
+- **[Quick Start](docs/getting-started/quick-start.md)** - Getting started guide (5 minutes)
+- **[Session Management](docs/guides/session-management.md)** - Understanding sessions and lifecycle
+- **[GitHub Issue Integration](docs/workflows/github-gitlab-integration.md)** - GitHub/GitLab issue tracking
+- **[JIRA Integration](docs/workflows/jira-integration.md)** - JIRA issue tracking
+- **[Command Reference](docs/reference/commands.md)** - Complete CLI command documentation
+- **[Configuration](docs/reference/configuration.md)** - Customizing the tool for your workflow (includes JSON Schema validation)
+- **[Troubleshooting](docs/guides/troubleshooting.md)** - Common issues and solutions
 
 **Additional Resources:**
-- **[Alternative Model Providers](docs/alternative-model-providers.md)** - Run Claude Code with local models (llama.cpp) or alternative cloud providers (Vertex AI, OpenRouter)
-- **[AI Agent Support](docs/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
-- **[Uninstall Guide](docs/uninstall.md)** - Complete uninstallation instructions
+- **[Alternative Model Providers](docs/reference/alternative-model-providers.md)** - Run Claude Code with local models (llama.cpp) or alternative cloud providers (Vertex AI, OpenRouter)
+- **[AI Agent Support](docs/reference/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
+- **[Uninstall Guide](docs/getting-started/uninstall.md)** - Complete uninstallation instructions
 
 **Validation:**
 - **[config.schema.json](config.schema.json)** - JSON Schema for validating config.json (use `daf config validate`)
@@ -290,7 +299,7 @@ The TUI provides:
 DevAIFlow officially supports:
 - **macOS** (Intel and Apple Silicon)
 - **Linux** (Ubuntu, Debian, Fedora, RHEL, etc.)
-- **Windows 10/11** (see [Windows Installation](docs/02-installation.md#windows-installation))
+- **Windows 10/11** (see [Windows Installation](docs/getting-started/installation.md#windows-installation))
 
 All core features work across platforms with automatic platform-specific handling for:
 - Signal handling (SIGTERM on Unix, SIGBREAK on Windows)
@@ -311,7 +320,7 @@ All core features work across platforms with automatic platform-specific handlin
 - **GitLab CLI (`glab`)** (optional) - Required for creating GitLab MRs and fetching MR templates from private repos
 - **Issue Tracker API Token** (optional) - Only required if using issue tracker integration (JIRA currently supported)
 
-See the [Installation Guide](docs/02-installation.md) for detailed setup instructions including issue tracker configuration.
+See the [Installation Guide](docs/getting-started/installation.md) for detailed setup instructions including issue tracker configuration.
 
 ## For Other Organizations
 

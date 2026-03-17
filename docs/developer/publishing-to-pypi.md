@@ -614,5 +614,5 @@ Before publishing, verify:
 ## Related Documentation
 
 - [RELEASING.md](../RELEASING.md) - Complete release process including git workflow
-- [docs/08-release-management.md](08-release-management.md) - Automated release management with `daf release`
+- [docs/08-release-management.md](release-management.md) - Automated release management with `daf release`
 - [CHANGELOG.md](../CHANGELOG.md) - Version history and changes

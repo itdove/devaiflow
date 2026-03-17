@@ -162,7 +162,7 @@ Add to `~/.claude/settings.json` (replace `$DEVAIFLOW_HOME` with `~/.daf-session
 }
 ```
 
-**For detailed instructions**, see [Installation Guide - Configuring Claude Code Permissions](../02-installation.md#configuring-claude-code-permissions).
+**For detailed instructions**, see [Installation Guide - Configuring Claude Code Permissions](../getting-started/installation.md#configuring-claude-code-permissions).
 
 ## Customizing Templates
 

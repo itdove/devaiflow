@@ -1057,5 +1057,5 @@ We learned from the Ollama situation:
 ## See Also
 
 - [AI Agent Support Matrix](ai-agent-support-matrix.md) - Compare different AI agents
-- [Configuration Guide](06-configuration.md) - Full configuration reference
+- [Configuration Guide](configuration.md) - Full configuration reference
 - [Article: Run Claude Code on Local/Cloud Models](https://medium.com/@luongnv89/run-claude-code-on-local-cloud-models-in-5-minutes-ollama-openrouter-llama-cpp-6dfeaee03cda)
