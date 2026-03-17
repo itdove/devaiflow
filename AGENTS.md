@@ -6,7 +6,13 @@
 
 **For JIRA operations**: This project uses the `daf` tool for issue tracker integration. Always use `daf jira` commands (documented in DAF_AGENTS.md), NOT direct API calls.
 
-**Skills Documentation**: The skills (CLI command documentation) are located in `devflow/cli_skills/` directory. When updating command functionality, remember to update the corresponding `SKILL.md` file in the appropriate skill directory.
+**Skills Documentation**: The skills (CLI command documentation) are located in the **`devflow/cli_skills/`** directory in the repository.
+
+**⚠️ CRITICAL - Common Mistake to Avoid:**
+- ✅ **CORRECT**: Update files in `devflow/cli_skills/daf-*/SKILL.md` (repository files that get committed)
+- ❌ **WRONG**: Do NOT update files in `~/.claude/skills/daf-*/SKILL.md` (user's local cache, will be overwritten)
+
+When updating command functionality or documentation, remember to update the corresponding `SKILL.md` file in the appropriate skill directory within the repository (`devflow/cli_skills/`).
 
 ---
 
