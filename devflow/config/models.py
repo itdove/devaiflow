@@ -77,12 +77,12 @@ class ModelProviderProfile(BaseModel):
     """Configuration profile for an AI model provider.
 
     Profiles allow easy switching between different AI model providers
-    (Anthropic, Vertex AI, Ollama, OpenRouter, etc.) via environment variables.
+    (Anthropic, Vertex AI, llama.cpp, OpenRouter, etc.) via environment variables.
     """
 
-    name: str = Field(description="Profile name (e.g., 'vertex', 'ollama-local', 'openrouter')")
-    base_url: Optional[str] = Field(default=None, description="ANTHROPIC_BASE_URL override (e.g., 'http://localhost:11434' for Ollama)")
-    auth_token: Optional[str] = Field(default=None, description="ANTHROPIC_AUTH_TOKEN override (e.g., 'ollama' for Ollama, API key for cloud)")
+    name: str = Field(description="Profile name (e.g., 'vertex', 'llama-cpp', 'openrouter')")
+    base_url: Optional[str] = Field(default=None, description="ANTHROPIC_BASE_URL override (e.g., 'http://localhost:8000' for llama.cpp)")
+    auth_token: Optional[str] = Field(default=None, description="ANTHROPIC_AUTH_TOKEN override (e.g., 'llama-cpp' for llama.cpp, API key for cloud)")
     api_key: Optional[str] = Field(default=None, description="ANTHROPIC_API_KEY override (empty string '' to disable)")
     model_name: Optional[str] = Field(default=None, description="Default model for claude --model flag (e.g., 'devstral-small-2', 'kimi-k2.5:cloud')")
     use_vertex: bool = Field(default=False, description="Set CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI")
@@ -776,7 +776,7 @@ class Session(BaseModel):
     workspace_name: Optional[str] = None  # Selected workspace name for this session
 
     # Model provider override (session-specific)
-    model_profile: Optional[str] = None  # Override default model profile for this session (e.g., "vertex", "ollama-local")
+    model_profile: Optional[str] = None  # Override default model profile for this session (e.g., "vertex", "llama-cpp")
 
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure

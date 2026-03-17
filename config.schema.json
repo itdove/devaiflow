@@ -464,10 +464,10 @@
       "type": "object"
     },
     "ModelProviderProfile": {
-      "description": "Configuration profile for an AI model provider.\n\nProfiles allow easy switching between different AI model providers\n(Anthropic, Vertex AI, Ollama, OpenRouter, etc.) via environment variables.",
+      "description": "Configuration profile for an AI model provider.\n\nProfiles allow easy switching between different AI model providers\n(Anthropic, Vertex AI, llama.cpp, OpenRouter, etc.) via environment variables.",
       "properties": {
         "name": {
-          "description": "Profile name (e.g., 'vertex', 'ollama-local', 'openrouter')",
+          "description": "Profile name (e.g., 'vertex', 'llama-cpp', 'openrouter')",
           "title": "Name",
           "type": "string"
         },
@@ -481,7 +481,7 @@
             }
           ],
           "default": null,
-          "description": "ANTHROPIC_BASE_URL override (e.g., 'http://localhost:11434' for Ollama)",
+          "description": "ANTHROPIC_BASE_URL override (e.g., 'http://localhost:8000' for llama.cpp)",
           "title": "Base Url"
         },
         "auth_token": {
@@ -494,7 +494,7 @@
             }
           ],
           "default": null,
-          "description": "ANTHROPIC_AUTH_TOKEN override (e.g., 'ollama' for Ollama, API key for cloud)",
+          "description": "ANTHROPIC_AUTH_TOKEN override (e.g., 'llama-cpp' for llama.cpp, API key for cloud)",
           "title": "Auth Token"
         },
         "api_key": {

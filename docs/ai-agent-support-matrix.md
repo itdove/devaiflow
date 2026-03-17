@@ -91,8 +91,8 @@ claude --resume <uuid>  # Resume existing session
 
 DevAIFlow supports running Claude Code with alternative AI model providers through configuration profiles. This allows you to use:
 
-- **Local models**: Ollama, llama.cpp, LM Studio (free, private, offline)
-- **Cloud providers**: OpenRouter, Vertex AI, Ollama Cloud (cost savings up to 98%)
+- **Local models**: llama.cpp, LM Studio (free, private, offline)
+- **Cloud providers**: OpenRouter, Vertex AI (cost savings up to 98%)
 
 **Quick Start:**
 
@@ -106,12 +106,12 @@ Configure profiles in `~/.daf-sessions/config.json`:
       "anthropic": {
         "name": "anthropic"
       },
-      "ollama-local": {
-        "name": "ollama-local",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
+      "llama-cpp": {
+        "name": "llama-cpp",
+        "base_url": "http://localhost:8000",
+        "auth_token": "llama-cpp",
         "api_key": "",
-        "model_name": "devstral-small-2"
+        "model_name": "Qwen3-Coder"
       },
       "vertex": {
         "name": "vertex",
@@ -130,8 +130,8 @@ Configure profiles in `~/.daf-sessions/config.json`:
 # Use default profile (Anthropic)
 daf open PROJ-123
 
-# Use Ollama for testing
-MODEL_PROVIDER_PROFILE=ollama-local daf open PROJ-123
+# Use llama.cpp for testing
+MODEL_PROVIDER_PROFILE=llama-cpp daf open PROJ-123
 
 # Use Vertex AI for work
 MODEL_PROVIDER_PROFILE=vertex daf open PROJ-123

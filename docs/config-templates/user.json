@@ -24,38 +24,6 @@
         "vertex_project_id": "your-gcp-project-id",
         "vertex_region": "us-east5"
       },
-      "ollama-local": {
-        "_comment": "Ollama running locally with devstral-small-2",
-        "name": "ollama-local",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
-        "api_key": "",
-        "model_name": "devstral-small-2"
-      },
-      "ollama-glm": {
-        "_comment": "Ollama running locally with GLM-4.7-flash",
-        "name": "ollama-glm",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
-        "api_key": "",
-        "model_name": "glm-4.7-flash:bf16"
-      },
-      "ollama-cloud-kimi": {
-        "_comment": "Ollama Cloud with kimi-k2.5:cloud model",
-        "name": "ollama-cloud-kimi",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
-        "api_key": "",
-        "model_name": "kimi-k2.5:cloud"
-      },
-      "ollama-cloud-minimax": {
-        "_comment": "Ollama Cloud with minimax-m2.1:cloud model",
-        "name": "ollama-cloud-minimax",
-        "base_url": "http://localhost:11434",
-        "auth_token": "ollama",
-        "api_key": "",
-        "model_name": "minimax-m2.1:cloud"
-      },
       "openrouter-free": {
         "_comment": "OpenRouter with free GPT model",
         "name": "openrouter-free",
@@ -89,6 +57,6 @@
       }
     }
   },
-  "_model_provider_usage": "Switch profiles with: MODEL_PROVIDER_PROFILE=ollama-local daf open PROJ-123",
+  "_model_provider_usage": "Switch profiles with: MODEL_PROVIDER_PROFILE=llama-cpp daf open PROJ-123",
   "_model_provider_setup": "See docs/alternative-model-providers.md for setup instructions"
 }

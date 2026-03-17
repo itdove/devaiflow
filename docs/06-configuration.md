@@ -41,7 +41,7 @@ daf config tui     # Alias for the above
 
 The TUI provides:
 - Tabbed interface for all configuration sections (JIRA, Repository, Model Providers, Prompts, Context Files, etc.)
-- **Model Provider management** - Configure alternative AI models (Ollama, Vertex AI, OpenRouter) with visual profile editor
+- **Model Provider management** - Configure alternative AI models (llama.cpp, Vertex AI, OpenRouter) with visual profile editor
 - Context file management (add/edit/remove files with path validation)
 - Input validation (URLs, paths, required fields)
 - Tri-state prompt controls (Always/Never/Prompt each time)
@@ -50,7 +50,7 @@ The TUI provides:
 - Help screen (press `?`)
 - Keyboard shortcuts (Ctrl+S to save, Tab to navigate)
 
-**Alternative AI Models**: For detailed setup guides for running Claude Code with alternative AI models (Ollama, Vertex AI, OpenRouter, llama.cpp, LM Studio), see [Alternative Model Providers](alternative-model-providers.md). This includes cost savings (up to 98% cheaper), local/offline models, and enterprise cloud options.
+**Alternative AI Models**: For detailed setup guides for running Claude Code with alternative AI models (llama.cpp, Vertex AI, OpenRouter, LM Studio), see [Alternative Model Providers](alternative-model-providers.md). This includes cost savings (up to 98% cheaper), local/offline models, and enterprise cloud options.
 
 **Command Line**:
 ```bash

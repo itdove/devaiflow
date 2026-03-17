@@ -210,7 +210,7 @@ daf config tui
 
 The TUI provides:
 - 📑 Tabbed interface for all configuration sections
-- 🤖 **Model Provider management** - Configure alternative AI models (Ollama, Vertex AI, OpenRouter)
+- 🤖 **Model Provider management** - Configure alternative AI models (llama.cpp, Vertex AI, OpenRouter)
 - ✅ Input validation for URLs, paths, and required fields
 - 💾 Automatic backup creation before saving
 - 👀 Preview mode to review changes before saving
@@ -244,7 +244,7 @@ The TUI provides:
 - **[Troubleshooting](docs/11-troubleshooting.md)** - Common issues and solutions
 
 **Additional Resources:**
-- **[Alternative Model Providers](docs/alternative-model-providers.md)** - Run Claude Code with local models (Ollama, llama.cpp) or alternative cloud providers (Vertex AI, OpenRouter)
+- **[Alternative Model Providers](docs/alternative-model-providers.md)** - Run Claude Code with local models (llama.cpp) or alternative cloud providers (Vertex AI, OpenRouter)
 - **[AI Agent Support](docs/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
 - **[Uninstall Guide](docs/uninstall.md)** - Complete uninstallation instructions
 
