@@ -44,6 +44,11 @@ from rich.text import Text
 
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Config, JiraTransitionConfig, ContextFile, WorkspaceDefinition
+from devflow.config.templates.model_providers import (
+    get_template_registry,
+    detect_template_from_profile,
+    FormField,
+)
 from devflow.jira.client import JiraClient
 from devflow.jira.utils import get_field_with_alias
 
@@ -1032,8 +1037,88 @@ class ModelProviderProfileEntry(Container):
             self.post_message(self.SetAsDefaultPressed(self.profile_name))
 
 
+class TemplateSelectionScreen(ModalScreen):
+    """Modal screen for selecting a provider template."""
+
+    DEFAULT_CSS = """
+    TemplateSelectionScreen {
+        align: center middle;
+    }
+
+    TemplateSelectionScreen > Container {
+        width: 80;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: thick $primary;
+        padding: 1 2;
+    }
+
+    TemplateSelectionScreen .template-option {
+        height: auto;
+        margin: 1 0;
+        padding: 1;
+        border: solid $primary;
+    }
+
+    TemplateSelectionScreen .template-option:hover {
+        background: $primary 20%;
+    }
+
+    TemplateSelectionScreen .template-option Static {
+        width: 100%;
+    }
+
+    TemplateSelectionScreen Button {
+        margin: 0 1;
+    }
+
+    TemplateSelectionScreen .button-row {
+        width: 100%;
+        margin: 1 0 0 0;
+        align: center middle;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Cancel"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        """Compose template selection screen."""
+        with VerticalScroll():
+            with Container():
+                yield Static("[bold cyan]Select Provider Type[/bold cyan]\n")
+                yield Static(
+                    "Choose the type of model provider you want to configure.\n"
+                    "Each template provides a customized form for that provider.\n",
+                    classes="section-help"
+                )
+
+                # Get templates from registry
+                templates = get_template_registry()
+
+                # Display template options
+                for template_id, template in templates.items():
+                    with Container(classes="template-option", id=f"template_{template_id}"):
+                        yield Static(f"[bold]{template.get_name()}[/bold]")
+                        yield Static(f"[dim]{template.get_description()}[/dim]")
+                        yield Button("Select", variant="primary", id=f"select_{template_id}")
+
+                with Horizontal(classes="button-row"):
+                    yield Button("Cancel", variant="default", id="cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "cancel":
+            self.dismiss(None)
+        elif event.button.id.startswith("select_"):
+            template_id = event.button.id.replace("select_", "")
+            self.dismiss(template_id)
+
+
 class AddEditProfileScreen(ModalScreen):
-    """Modal screen for adding/editing a model provider profile."""
+    """Modal screen for adding/editing a model provider profile using templates."""
 
     DEFAULT_CSS = """
     AddEditProfileScreen {
@@ -1079,10 +1164,16 @@ class AddEditProfileScreen(ModalScreen):
         Binding("escape", "dismiss", "Cancel"),
     ]
 
-    def __init__(self, existing_name: Optional[str] = None, existing_profile: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        template_id: Optional[str] = None,
+        existing_name: Optional[str] = None,
+        existing_profile: Optional[Dict[str, Any]] = None
+    ):
         """Initialize add/edit profile screen.
 
         Args:
+            template_id: Template to use for new profiles
             existing_name: If provided, edit mode (profile name)
             existing_profile: Profile data being edited
         """
@@ -1091,178 +1182,121 @@ class AddEditProfileScreen(ModalScreen):
         self.existing_profile = existing_profile or {}
         self.is_edit_mode = existing_name is not None
 
+        # Detect template from existing profile or use provided template
+        if self.is_edit_mode:
+            self.template_id = detect_template_from_profile(self.existing_profile)
+        else:
+            self.template_id = template_id or "anthropic"
+
+        # Get the template instance
+        templates = get_template_registry()
+        self.template = templates.get(self.template_id)
+
     def compose(self) -> ComposeResult:
-        """Compose add/edit profile screen."""
+        """Compose add/edit profile screen using template fields."""
         with VerticalScroll():
             with Container():
-                title = f"Edit Profile: {self.existing_name}" if self.is_edit_mode else "Add Model Provider Profile"
+                # Title
+                if self.is_edit_mode:
+                    title = f"Edit Profile: {self.existing_name}"
+                else:
+                    title = f"Add {self.template.get_name()} Profile"
                 yield Static(f"[bold cyan]{title}[/bold cyan]\n")
 
-                # Profile Name (disabled in edit mode)
-                yield Label("Profile Name *")
-                yield Input(
-                    value=self.existing_name if self.existing_name else "",
-                    placeholder="e.g., llama-cpp, vertex-prod, openrouter",
-                    id="profile_name",
-                    disabled=self.is_edit_mode,
-                )
+                # Show provider type info
+                yield Static(f"[dim]Provider: {self.template.get_name()}[/dim]")
+                yield Static(f"[dim]{self.template.get_description()}[/dim]\n")
 
-                yield Static("[dim]Choose provider type:[/dim]", classes="section")
+                # Dynamically render fields from template
+                for field in self.template.get_fields():
+                    # Get existing value if in edit mode
+                    existing_value = ""
+                    if self.is_edit_mode:
+                        # Map field_id to existing profile data
+                        if field.field_id == "profile_name":
+                            existing_value = self.existing_name or ""
+                        else:
+                            existing_value = self.existing_profile.get(field.field_id, field.default_value or "")
 
-                # Provider Type Selection
-                provider_type = "anthropic"
-                if self.existing_profile.get("use_vertex"):
-                    provider_type = "vertex"
-                elif self.existing_profile.get("base_url"):
-                    provider_type = "custom"
+                    # Render label with required indicator
+                    label_text = field.label
+                    if field.required:
+                        label_text += " *"
+                    yield Label(label_text)
 
-                yield Label("Provider Type *")
-                yield Select(
-                    options=[
-                        ("Anthropic API (default)", "anthropic"),
-                        ("Google Vertex AI", "vertex"),
-                        ("Custom (llama.cpp, OpenRouter, etc.)", "custom"),
-                    ],
-                    value=provider_type,
-                    allow_blank=False,
-                    id="provider_type",
-                )
+                    # Render field based on type
+                    if field.field_type == "input":
+                        # Special handling for profile_name - disable in edit mode
+                        disabled = self.is_edit_mode and field.field_id == "profile_name"
+                        yield Input(
+                            value=str(existing_value) if existing_value else "",
+                            placeholder=field.placeholder,
+                            id=field.field_id,
+                            disabled=disabled,
+                        )
+                    elif field.field_type == "select":
+                        # Select field
+                        value = existing_value if existing_value else field.default_value
+                        yield Select(
+                            options=field.options or [],
+                            value=value,
+                            allow_blank=not field.required,
+                            id=field.field_id,
+                        )
+                    elif field.field_type == "checkbox":
+                        # Checkbox field
+                        yield Checkbox(
+                            field.label,
+                            value=bool(existing_value),
+                            id=field.field_id,
+                        )
 
-                # Vertex AI specific fields
-                with Vertical(id="vertex_fields", classes="section"):
-                    yield Static("[bold]Vertex AI Settings:[/bold]")
-                    yield Label("GCP Project ID *")
-                    yield Input(
-                        value=self.existing_profile.get("vertex_project_id") or "",
-                        placeholder="your-gcp-project-id",
-                        id="vertex_project_id",
-                    )
-                    yield Label("GCP Region *")
-                    # Get default from regions list (use first option)
-                    regions = _get_vertex_ai_regions()
-                    default_region = regions[0][1] if regions else "global"  # First region in list
-                    yield Select(
-                        options=regions,
-                        value=self.existing_profile.get("vertex_region") or default_region,
-                        allow_blank=False,
-                        id="vertex_region",
-                    )
+                    # Add help text if provided
+                    if field.help_text:
+                        yield Static(f"[dim italic]{field.help_text}[/dim italic]")
 
-                # Custom provider fields
-                with Vertical(id="custom_fields", classes="section"):
-                    yield Static("[bold]Custom Provider Settings:[/bold]")
-                    yield Label("Base URL *")
-                    yield Input(
-                        value=self.existing_profile.get("base_url") or "",
-                        placeholder="http://localhost:11434 or https://openrouter.ai/api",
-                        id="base_url",
-                    )
-                    yield Label("Auth Token")
-                    yield Input(
-                        value=self.existing_profile.get("auth_token") or "",
-                        placeholder="llama-cpp or your-api-key",
-                        id="auth_token",
-                    )
-                    yield Label("API Key")
-                    yield Input(
-                        value=self.existing_profile.get("api_key") or "",
-                        placeholder="Leave empty to disable (for local models)",
-                        id="api_key",
-                    )
-                    yield Label("Model Name")
-                    yield Input(
-                        value=self.existing_profile.get("model_name") or "",
-                        placeholder="devstral-small-2, gpt-oss-120b:free, etc.",
-                        id="model_name",
-                    )
-
+                # Buttons
                 with Horizontal(classes="button-row"):
                     save_label = "Update" if self.is_edit_mode else "Add"
                     yield Button(save_label, variant="success", id="save")
                     yield Button("Cancel", variant="default", id="cancel")
 
-    def on_mount(self) -> None:
-        """Called when screen is mounted - set initial field visibility."""
-        self._update_field_visibility()
-
-    def on_select_changed(self, event: Select.Changed) -> None:
-        """Handle provider type selection change."""
-        if event.select.id == "provider_type":
-            self._update_field_visibility()
-
-    def _update_field_visibility(self) -> None:
-        """Update field visibility based on provider type."""
-        try:
-            provider_select = self.query_one("#provider_type", Select)
-            provider_type = provider_select.value
-
-            vertex_fields = self.query_one("#vertex_fields", Vertical)
-            custom_fields = self.query_one("#custom_fields", Vertical)
-
-            if provider_type == "vertex":
-                vertex_fields.display = True
-                custom_fields.display = False
-            elif provider_type == "custom":
-                vertex_fields.display = False
-                custom_fields.display = True
-            else:  # anthropic
-                vertex_fields.display = False
-                custom_fields.display = False
-        except NoMatches:
-            pass  # Fields not yet mounted
-
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
+        """Handle button press using template-based validation and config generation."""
         if event.button.id == "save":
-            name_input = self.query_one("#profile_name", Input)
-            provider_select = self.query_one("#provider_type", Select)
+            # Collect form data from all template fields
+            form_data = {}
+            for field in self.template.get_fields():
+                try:
+                    if field.field_type == "input":
+                        input_widget = self.query_one(f"#{field.field_id}", Input)
+                        form_data[field.field_id] = input_widget.value.strip()
+                    elif field.field_type == "select":
+                        select_widget = self.query_one(f"#{field.field_id}", Select)
+                        form_data[field.field_id] = select_widget.value
+                    elif field.field_type == "checkbox":
+                        checkbox_widget = self.query_one(f"#{field.field_id}", Checkbox)
+                        form_data[field.field_id] = checkbox_widget.value
+                except NoMatches:
+                    # Field not found - use default if available
+                    if field.default_value is not None:
+                        form_data[field.field_id] = field.default_value
 
-            name = name_input.value.strip()
-            provider_type = provider_select.value
-
-            # Validation
-            if not name:
-                self.app.notify("Profile name is required", severity="error")
+            # Validate form data using template
+            validation_errors = self.template.validate(form_data)
+            if validation_errors:
+                error_msg = "Validation errors:\n" + "\n".join(f"  • {err}" for err in validation_errors)
+                self.app.notify(error_msg, severity="error", timeout=10)
                 return
 
-            # Build profile data based on provider type
-            profile_data = {"name": name}
-
-            if provider_type == "vertex":
-                project_id = self.query_one("#vertex_project_id", Input).value.strip()
-                region = self.query_one("#vertex_region", Select).value
-
-                if not project_id:
-                    self.app.notify("GCP Project ID is required for Vertex AI", severity="error")
-                    return
-
-                profile_data.update({
-                    "use_vertex": True,
-                    "vertex_project_id": project_id,
-                    "vertex_region": region,
-                })
-
-            elif provider_type == "custom":
-                base_url = self.query_one("#base_url", Input).value.strip()
-                auth_token = self.query_one("#auth_token", Input).value.strip()
-                api_key = self.query_one("#api_key", Input).value.strip()
-                model_name = self.query_one("#model_name", Input).value.strip()
-
-                if not base_url:
-                    self.app.notify("Base URL is required for custom provider", severity="error")
-                    return
-
-                profile_data["base_url"] = base_url
-                if auth_token:
-                    profile_data["auth_token"] = auth_token
-                if api_key:
-                    profile_data["api_key"] = api_key
-                if model_name:
-                    profile_data["model_name"] = model_name
-
-            # For anthropic, just the name is enough (minimal profile)
-
-            self.dismiss((name, profile_data))
+            # Generate profile configuration from template
+            try:
+                profile_data = self.template.generate_config(form_data)
+                profile_name = form_data.get("profile_name", "")
+                self.dismiss((profile_name, profile_data))
+            except Exception as e:
+                self.app.notify(f"Error generating profile: {str(e)}", severity="error")
+                return
         else:
             self.dismiss(None)
 
@@ -2705,36 +2739,43 @@ class ConfigTUI(App):
             self.push_screen(AddEditWorkspaceScreen(), handle_add_workspace_result)
 
         elif event.button.id == "add_profile":
-            def handle_add_profile_result(result):
-                """Handle the result from the add profile screen."""
-                if result:
-                    profile_name, profile_data = result
+            def handle_template_selection(template_id):
+                """Handle template selection - show profile form with selected template."""
+                if template_id:
+                    def handle_add_profile_result(result):
+                        """Handle the result from the add profile screen."""
+                        if result:
+                            profile_name, profile_data = result
 
-                    # Initialize model_provider if it doesn't exist
-                    if not self.config.model_provider:
-                        from devflow.config.models import ModelProviderConfig
-                        self.config.model_provider = ModelProviderConfig(
-                            default_profile="anthropic",
-                            profiles={}
-                        )
+                            # Initialize model_provider if it doesn't exist
+                            if not self.config.model_provider:
+                                from devflow.config.models import ModelProviderConfig
+                                self.config.model_provider = ModelProviderConfig(
+                                    default_profile="anthropic",
+                                    profiles={}
+                                )
 
-                    # Check if profile name already exists
-                    if profile_name in self.config.model_provider.profiles:
-                        self.notify(f"Profile '{profile_name}' already exists", severity="error")
-                        return
+                            # Check if profile name already exists
+                            if profile_name in self.config.model_provider.profiles:
+                                self.notify(f"Profile '{profile_name}' already exists", severity="error")
+                                return
 
-                    # Convert dict to ModelProviderProfile object
-                    from devflow.config.models import ModelProviderProfile
-                    profile_obj = ModelProviderProfile(**profile_data)
+                            # Convert dict to ModelProviderProfile object
+                            from devflow.config.models import ModelProviderProfile
+                            profile_obj = ModelProviderProfile(**profile_data)
 
-                    # Add the new profile
-                    self.config.model_provider.profiles[profile_name] = profile_obj
+                            # Add the new profile
+                            self.config.model_provider.profiles[profile_name] = profile_obj
 
-                    self._refresh_profiles_list()
-                    self.notify(f"Added profile: {profile_name}", severity="information")
-                    self.modified = True
+                            self._refresh_profiles_list()
+                            self.notify(f"Added profile: {profile_name}", severity="information")
+                            self.modified = True
 
-            self.push_screen(AddEditProfileScreen(), handle_add_profile_result)
+                    # Show profile form with selected template
+                    self.push_screen(AddEditProfileScreen(template_id=template_id), handle_add_profile_result)
+
+            # First show template selection screen
+            self.push_screen(TemplateSelectionScreen(), handle_template_selection)
 
         elif event.button.id == "upgrade_commands":
             self._handle_upgrade_commands()
