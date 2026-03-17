@@ -79,57 +79,77 @@ DevAIFlow supports two authentication methods depending on your JIRA deployment 
 
 Atlassian Cloud requires **Basic Authentication** with base64-encoded credentials.
 
-**Step 1: Get Your JIRA Email Address**
+> **⚠️ CRITICAL:** JIRA Cloud authentication requires three key elements:
+> 1. Base64-encoded credentials combining `email:token`
+> 2. `JIRA_AUTH_TYPE=basic` environment variable
+> 3. Your JIRA Cloud URL (e.g., `https://yourcompany.atlassian.net`)
+>
+> Missing any of these will result in authentication failures.
+
+**Step 1: Configure JIRA URL in DevAIFlow**
+
+First, ensure your JIRA URL is configured. Check your current configuration:
+
+```bash
+# Check if JIRA URL is already configured
+daf config show | grep -i jira
+```
+
+If not configured or incorrect, set it:
+
+```bash
+# Set via environment variable (required)
+export JIRA_URL="https://yourcompany.atlassian.net"
+```
+
+**Step 2: Get Your JIRA Email Address**
 
 Use the email address associated with your Atlassian account (e.g., `user@company.com`).
 
-**Step 2: Generate API Token**
+**Step 3: Generate API Token**
 
 1. Go to: https://id.atlassian.com/manage-profile/security/api-tokens
 2. Click **Create API token**
 3. Give it a name (e.g., "DevAIFlow CLI")
 4. Copy the generated token (you won't see it again)
 
-**Step 3: Create Base64-Encoded Credentials**
+**Step 4: Create Base64-Encoded Credentials**
 
-Combine your email and API token with a colon, then encode to base64:
+> **IMPORTANT:** You must combine your email and API token with a colon (`:`) **before** encoding to base64.
+
+Replace `user@company.com` with your email and `your-api-token` with the token from Step 3:
 
 ```bash
+# Replace with YOUR email and token
 echo -n "user@company.com:your-api-token" | base64
 ```
 
-This outputs a base64 string (this becomes your JIRA_API_TOKEN).
+This outputs a base64 string. **Save this output** - it becomes your `JIRA_API_TOKEN`.
 
-**Step 4: Configure Environment Variables**
+Example output format:
+```
+dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg==
+```
+
+**Step 5: Configure Environment Variables**
+
+> **⚠️ CRITICAL:** The `JIRA_AUTH_TYPE=basic` variable is **required** for JIRA Cloud.
+> Without this, authentication will fail even with correct credentials.
 
 ```bash
-# Set authentication type to basic
+# CRITICAL: Set authentication type to basic for JIRA Cloud
 export JIRA_AUTH_TYPE=basic
 
-# Set the base64-encoded credentials (paste output from step 3)
-export JIRA_API_TOKEN="your-jira-token"
+# Set the base64-encoded credentials (paste output from Step 4)
+export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg=="
 
 # Set your Atlassian Cloud URL
 export JIRA_URL="https://yourcompany.atlassian.net"
 ```
 
-**Step 5: Add to Shell Profile (Permanent)**
-
-Add these to your `~/.zshrc` or `~/.bashrc`:
-
-```bash
-# JIRA Configuration (Atlassian Cloud)
-export JIRA_AUTH_TYPE=basic
-export JIRA_API_TOKEN="your-jira-token"
-export JIRA_URL="https://yourcompany.atlassian.net"
-```
-
-Then reload:
-```bash
-source ~/.zshrc  # or source ~/.bashrc
-```
-
 **Step 6: Verify Authentication**
+
+Test the connection **before** making it permanent:
 
 ```bash
 # Test API access
@@ -137,7 +157,27 @@ curl -H "Authorization: Basic $JIRA_API_TOKEN" \
      "$JIRA_URL/rest/api/2/myself"
 ```
 
-If successful, you'll see your user profile data.
+✅ **Success:** You'll see your user profile data in JSON format.
+❌ **Failure:** Check that:
+- Your JIRA_API_TOKEN is the base64 output from Step 4
+- JIRA_AUTH_TYPE is set to `basic`
+- JIRA_URL matches your Atlassian Cloud URL
+
+**Step 7: Make It Permanent**
+
+Once verified, add these to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# JIRA Configuration (Atlassian Cloud)
+export JIRA_AUTH_TYPE=basic
+export JIRA_API_TOKEN="dXNlckBjb21wYW55LmNvbTp5b3VyLWFwaS10b2tlbg=="
+export JIRA_URL="https://yourcompany.atlassian.net"
+```
+
+Then reload:
+```bash
+source ~/.zshrc  # or source ~/.bashrc
+```
 
 ### Self-Hosted JIRA (On-Premise)
 
