@@ -7,7 +7,8 @@ from rich.console import Console
 from devflow.cli.utils import console_print, require_outside_claude, is_json_mode, output_json
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
-from devflow.github.issues_client import GitHubClient
+from devflow.issue_tracker.factory import create_issue_tracker_client
+from devflow.utils.git_remote import GitRemoteDetector
 from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError, IssueTrackerAuthError, IssueTrackerApiError
 
 console = Console()
@@ -72,8 +73,26 @@ def git_open_session(
     console_print(f"[dim]No existing session found, validating issue...[/dim]")
 
     try:
-        # Create client (automatically returns mock in mock mode)
-        client = GitHubClient(repository=repository)
+        # Detect platform from repository or git remote
+        detector = GitRemoteDetector()
+        platform_info = detector.parse_repository_info()
+
+        if platform_info:
+            platform, owner, repo_name = platform_info
+            backend = "gitlab" if platform == "gitlab" else "github"
+            if not repository:
+                repository = f"{owner}/{repo_name}"
+        else:
+            # Default to GitHub if can't detect
+            backend = "github"
+
+        # Create appropriate client (automatically returns mock in mock mode)
+        client = create_issue_tracker_client(backend=backend)
+
+        # Set repository if we have one
+        if repository and hasattr(client, 'repository'):
+            client.repository = repository
+
         issue = client.get_ticket(issue_key)
     except IssueTrackerNotFoundError:
         console_print(f"[red]✗[/red] Issue not found: {issue_key}")

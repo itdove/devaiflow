@@ -64,11 +64,21 @@ def create_issue_tracker_client(backend: Optional[str] = None, timeout: int = 30
 
         return GitHubClient(timeout=timeout, repository=repository)
     elif backend == "gitlab":
-        # Future implementation
-        raise NotImplementedError(
-            "GitLab Issues backend is not yet implemented. "
-            "See devflow/issue_tracker/interface.py for the interface to implement."
-        )
+        from devflow.gitlab.issues_client import GitLabClient
+
+        # Try to get repository from config
+        repository = None
+        try:
+            from devflow.config.loader import ConfigLoader
+            config_loader = ConfigLoader()
+            if config_loader.config_file.exists():
+                config = config_loader.load_config()
+                if config and hasattr(config, 'gitlab') and config.gitlab:
+                    repository = config.gitlab.repository
+        except Exception:
+            pass
+
+        return GitLabClient(timeout=timeout, repository=repository)
     else:
         raise ValueError(
             f"Unsupported issue tracker backend: {backend}. "

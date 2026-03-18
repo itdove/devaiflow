@@ -5,7 +5,8 @@ from typing import Optional
 from rich.console import Console
 
 from devflow.cli.utils import output_json as json_output, console_print
-from devflow.github.issues_client import GitHubClient
+from devflow.issue_tracker.factory import create_issue_tracker_client
+from devflow.utils.git_remote import GitRemoteDetector
 from devflow.issue_tracker.exceptions import (
     IssueTrackerError,
     IssueTrackerAuthError,
@@ -35,8 +36,25 @@ def git_add_comment(
         sys.exit(1)
 
     try:
-        # Create client (automatically returns mock in mock mode)
-        client = GitHubClient(repository=repository)
+        # Detect platform from repository or git remote
+        detector = GitRemoteDetector()
+        platform_info = detector.parse_repository_info()
+
+        if platform_info:
+            platform, owner, repo_name = platform_info
+            backend = "gitlab" if platform == "gitlab" else "github"
+            if not repository:
+                repository = f"{owner}/{repo_name}"
+        else:
+            # Default to GitHub if can't detect
+            backend = "github"
+
+        # Create appropriate client (automatically returns mock in mock mode)
+        client = create_issue_tracker_client(backend=backend)
+
+        # Set repository if we have one
+        if repository and hasattr(client, 'repository'):
+            client.repository = repository
 
         # Add comment
         console_print(f"[cyan]Adding comment to {issue_key}...[/cyan]")
