@@ -130,6 +130,167 @@ organization.json
   Saves ENTERPRISE.md to ~/.daf-sessions/ENTERPRISE.md
 ```
 
+### Complete Flow Diagram
+
+Here's the complete flow from remote configuration to local skill installation:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Configuration (User sets this up)                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+~/.daf-sessions/organization.json
+┌─────────────────────────────────────────────────────────────────┐
+│ {                                                               │
+│   "jira_project": "PROJ",                                       │
+│   "hierarchical_config_source":                                 │
+│     "/path/to/org-devaiflow/configs"  ◄────────────────────── Points to config directory
+│ }                                                               │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            │ User runs: daf upgrade
+                            ▼
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Download Config Files (.md) from hierarchical_config_source        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+/path/to/org-devaiflow/configs/
+├── ENTERPRISE.md      ──────┐
+├── ORGANIZATION.md    ──────┤  Downloaded to
+├── TEAM.md            ──────┤  ~/.daf-sessions/
+└── USER.md            ──────┘
+
+                            │
+                            ▼
+
+~/.daf-sessions/
+├── ENTERPRISE.md      ◄─── Saved here
+├── ORGANIZATION.md    ◄─── Saved here
+├── TEAM.md            ◄─── Saved here
+└── USER.md            ◄─── Saved here
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Extract skill_url from each config file's frontmatter              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+~/.daf-sessions/ENTERPRISE.md
+┌─────────────────────────────────────────────────────────────────┐
+│ ---                                                             │
+│ skill_url: https://github.com/org/skills/enterprise  ◄──────── Extract this URL
+│ ---                                                             │
+│                                                                 │
+│ # Enterprise Guidelines                                        │
+│ ...                                                             │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            │ For each config file
+                            ▼
+
+~/.daf-sessions/ORGANIZATION.md
+┌─────────────────────────────────────────────────────────────────┐
+│ ---                                                             │
+│ skill_url: https://github.com/org/skills/organization ◄──────── Extract this URL
+│ ---                                                             │
+└─────────────────────────────────────────────────────────────────┘
+
+(Same for TEAM.md and USER.md)
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: Download SKILL.md from each skill_url                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+https://github.com/org/skills/enterprise/SKILL.md
+┌─────────────────────────────────────────────────────────────────┐
+│ ---                                                             │
+│ name: 01-enterprise                                             │
+│ description: Enterprise custom fields and configuration         │
+│ user-invocable: false                                           │
+│ ---                                                             │
+│                                                                 │
+│ # Enterprise DAF Skill                                         │
+│ ...                                                             │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            │ Download SKILL.md content (as-is, no modification)
+                            ▼
+
+~/.daf-sessions/.claude/skills/01-enterprise/SKILL.md  ◄─── Install here
+
+
+Similarly for:
+- https://github.com/org/skills/organization/SKILL.md
+    → ~/.daf-sessions/.claude/skills/02-organization/SKILL.md
+
+- https://github.com/org/skills/team/SKILL.md
+    → ~/.daf-sessions/.claude/skills/03-team/SKILL.md
+
+- https://github.com/org/skills/user/SKILL.md
+    → ~/.daf-sessions/.claude/skills/04-user/SKILL.md
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ FINAL RESULT: Installed Skills                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+~/.daf-sessions/.claude/skills/
+├── 01-enterprise/
+│   └── SKILL.md          ◄─── user-invocable: false
+├── 02-organization/
+│   └── SKILL.md          ◄─── user-invocable: false
+├── 03-team/
+│   └── SKILL.md          ◄─── user-invocable: false
+└── 04-user/
+    └── SKILL.md          ◄─── user-invocable: false
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ WHEN CLAUDE CODE STARTS: Skills are loaded in this order                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. ~/.claude/skills/daf-* (user-invocable slash commands)
+2. ~/.claude/skills/daf-cli, gh-cli, etc. (reference docs)
+3. ~/.daf-sessions/.claude/skills/01-enterprise/
+4. ~/.daf-sessions/.claude/skills/02-organization/
+5. ~/.daf-sessions/.claude/skills/03-team/
+6. ~/.daf-sessions/.claude/skills/04-user/
+7. <project>/.claude/skills/* (project-specific)
+```
+
+**Example with actual paths:**
+
+```
+organization.json → "hierarchical_config_source":
+    "/Users/alice/company/org-devaiflow/configs"
+    │
+    ├─→ configs/ENTERPRISE.md (skill_url: https://github.com/company/skills/enterprise)
+    │   └─→ Downloads: https://github.com/company/skills/enterprise/SKILL.md
+    │       └─→ Installs: ~/.daf-sessions/.claude/skills/01-enterprise/SKILL.md
+    │
+    ├─→ configs/ORGANIZATION.md (skill_url: https://github.com/company/skills/organization)
+    │   └─→ Downloads: https://github.com/company/skills/organization/SKILL.md
+    │       └─→ Installs: ~/.daf-sessions/.claude/skills/02-organization/SKILL.md
+    │
+    ├─→ configs/TEAM.md (skill_url: https://github.com/company/skills/team)
+    │   └─→ Downloads: https://github.com/company/skills/team/SKILL.md
+    │       └─→ Installs: ~/.daf-sessions/.claude/skills/03-team/SKILL.md
+    │
+    └─→ configs/USER.md (skill_url: https://github.com/company/skills/user)
+        └─→ Downloads: https://github.com/company/skills/user/SKILL.md
+            └─→ Installs: ~/.daf-sessions/.claude/skills/04-user/SKILL.md
+```
+
+**Key Points:**
+
+- ✓ **Two-level indirection**: organization.json → config files (.md) → skill files (SKILL.md)
+- ✓ **Config files can be local or remote**: file://, http://, https://
+- ✓ **Skill URLs can be local or remote**: Supports relative paths, absolute paths, HTTP(S) URLs
+- ✓ **Downloaded content is NOT modified**: SKILL.md files are copied as-is
+- ✓ **Numbered prefixes** (01-, 02-, 03-, 04-) guarantee load order
+- ✓ **All hierarchical skills have user-invocable: false** (documentation only, not slash commands)
+
 ### Relative Path Resolution
 
 **Key Feature**: Skills can use relative paths in config files:
