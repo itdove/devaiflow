@@ -191,6 +191,9 @@ def git_create(
         detector = GitRemoteDetector()
         platform_info = detector.parse_repository_info()
 
+        # Extract hostname for enterprise GitLab/GitHub instances
+        hostname = detector.get_hostname()
+
         if platform_info:
             platform, owner, repo_name = platform_info
             backend = "gitlab" if platform == "gitlab" else "github"
@@ -201,7 +204,7 @@ def git_create(
             backend = "github"
 
         # Create appropriate client
-        client = create_issue_tracker_client(backend=backend)
+        client = create_issue_tracker_client(backend=backend, hostname=hostname)
 
         # Set repository if we have one
         if repository and hasattr(client, 'repository'):

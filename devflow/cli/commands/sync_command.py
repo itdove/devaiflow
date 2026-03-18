@@ -1,6 +1,7 @@
 """Implementation of 'daf sync' command."""
 
 import os
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -112,10 +113,12 @@ def issue_key_to_session_name(issue_key: str, hostname: Optional[str] = None) ->
     work safely in shell commands and scripts.
 
     Args:
-        issue_key: Issue key in format "owner/repo#123" or "#123"
-        hostname: Optional hostname (e.g., "github.com", "github.enterprise.com")
-                  If github.com (default), hostname is omitted from session name.
-                  For self-hosted instances, hostname is included for uniqueness.
+        issue_key: Issue key in format "owner/repo#123", "#123",
+                  or "hostname/owner/repo#123" (for enterprise instances)
+        hostname: Optional hostname (e.g., "github.com", "gitlab.cee.redhat.com")
+                  If github.com or gitlab.com (defaults), hostname is omitted from session name.
+                  For enterprise instances, hostname is included for uniqueness.
+                  Note: If issue_key already contains hostname, this parameter is ignored.
 
     Returns:
         Dash-separated session name safe for bash usage
@@ -127,12 +130,22 @@ def issue_key_to_session_name(issue_key: str, hostname: Optional[str] = None) ->
         'itdove-devaiflow-60'
         >>> issue_key_to_session_name("itdove/devaiflow#60", "github.enterprise.com")
         'github-enterprise-com-itdove-devaiflow-60'
+        >>> issue_key_to_session_name("gitlab.cee.redhat.com/dvernier/tools#1")
+        'gitlab-cee-redhat-com-dvernier-tools-1'
     """
+    # Check if issue_key already contains hostname (e.g., "gitlab.cee.redhat.com/owner/repo#123")
+    # Pattern: starts with hostname (contains dots) followed by /
+    if re.match(r'^[\w.-]+\.\w+/', issue_key):
+        # Hostname is already embedded in issue_key
+        return issue_key.replace('/', '-').replace('#', '-').replace('.', '-')
+
     # Replace bash-problematic characters: / and # with -
     base_name = issue_key.replace('/', '-').replace('#', '-').lstrip('-')
 
-    if hostname and hostname != 'github.com':
-        # Include hostname for non-default GitHub instances (GitHub Enterprise, etc.)
+    # Check if hostname should be prepended
+    # Default hostnames (github.com, gitlab.com) don't need to be included
+    if hostname and hostname not in ['github.com', 'gitlab.com']:
+        # Include hostname for enterprise instances
         hostname_part = hostname.replace('.', '-')
         return f"{hostname_part}-{base_name}"
 
@@ -398,13 +411,16 @@ def sync_jira(
 def scan_workspace_for_repositories(workspace_path: str) -> List[Dict[str, str]]:
     """Scan workspace directory for git repositories.
 
+    Scans ALL remotes (origin, upstream, etc.) so you can sync issues from
+    both your fork and the upstream repository.
+
     Args:
         workspace_path: Path to workspace directory
 
     Returns:
         List of repository info dictionaries with keys:
         - path: Absolute path to repository
-        - remote: Remote name used (upstream or origin)
+        - remote: Remote name used (upstream, origin, etc.)
         - url: Git remote URL
         - backend: Platform (github, gitlab)
         - repository: owner/repo format
@@ -421,29 +437,22 @@ def scan_workspace_for_repositories(workspace_path: str) -> List[Dict[str, str]]
             repo_path = root
             detector = GitRemoteDetector(repo_path)
 
-            # Try to parse repository info
-            info = detector.parse_repository_info()
-            if info:
-                platform, owner, repo = info
+            # Get ALL remotes (origin, upstream, etc.)
+            all_remotes = detector.list_all_remotes()
 
-                # Get which remote was used (upstream or origin)
-                remote_url = detector.get_remote_url()
-                remote_name = None
-                if remote_url:
-                    # Check which remote this URL came from
-                    upstream_url = detector.get_remote_url('upstream')
-                    if upstream_url == remote_url:
-                        remote_name = 'upstream'
-                    else:
-                        remote_name = 'origin'
+            # Parse repository info for each remote
+            for remote_name, remote_url in all_remotes.items():
+                info = detector.parse_repository_info(remote_url)
+                if info:
+                    platform, owner, repo = info
 
-                repositories.append({
-                    'path': repo_path,
-                    'remote': remote_name or 'origin',
-                    'url': remote_url or '',
-                    'backend': platform,
-                    'repository': f"{owner}/{repo}"
-                })
+                    repositories.append({
+                        'path': repo_path,
+                        'remote': remote_name,
+                        'url': remote_url,
+                        'backend': platform,
+                        'repository': f"{owner}/{repo}"
+                    })
 
             # Don't descend into .git or node_modules
             dirs[:] = [d for d in dirs if d not in {'.git', 'node_modules', '.venv', 'venv', '__pycache__'}]
@@ -666,29 +675,43 @@ def sync_gitlab_repository(
             elif ssh_match:
                 hostname = ssh_match.group(1)
 
-        # Create GitLab client
+        # Create GitLab client with hostname for enterprise instances
         from devflow.gitlab.issues_client import GitLabClient
-        client = GitLabClient(repository=repository)
+        client = GitLabClient(repository=repository, hostname=hostname)
 
         # Get current GitLab username
         import subprocess
         try:
+            # Build glab api command with hostname if needed
+            glab_cmd = ['glab', 'api']
+
+            # Add --hostname if not gitlab.com (for enterprise instances)
+            if hostname and hostname != 'gitlab.com':
+                glab_cmd.extend(['--hostname', hostname])
+
+            glab_cmd.append('user')
+
             result = subprocess.run(
-                ['glab', 'api', 'user', '--fields', 'username'],
+                glab_cmd,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False
             )
-            # Parse JSON output from glab api
-            import json
-            user_data = json.loads(result.stdout.strip())
-            username = user_data.get('username', '@me')
 
-            if not username or username == '@me':
-                raise ValueError("Empty username from glab api")
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse JSON output from glab api (returns JSON by default)
+                import json
+                user_data = json.loads(result.stdout.strip())
+                username = user_data.get('username', '@me')
 
-            # Debug: Show detected username
-            console_print(f"[dim]  Detected GitLab user: {username}[/dim]")
+                if not username or username == '@me':
+                    raise ValueError("Empty username from glab api")
+
+                # Debug: Show detected username
+                console_print(f"[dim]  Detected GitLab user: {username}[/dim]")
+            else:
+                raise ValueError(f"glab api user failed: {result.stderr}")
         except Exception as e:
             username = '@me'  # Fallback to @me
             # Debug: Show fallback

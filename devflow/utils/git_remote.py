@@ -184,6 +184,40 @@ class GitRemoteDetector:
             return f"{owner}/{repo}"
         return None
 
+    def get_hostname(self, url: Optional[str] = None) -> Optional[str]:
+        """Extract hostname from remote URL.
+
+        Args:
+            url: Remote URL to parse. If None, uses get_remote_url()
+
+        Returns:
+            Hostname (e.g., 'github.com', 'gitlab.cee.redhat.com') or None
+
+        Examples:
+            >>> detector = GitRemoteDetector()
+            >>> detector.get_hostname('https://gitlab.cee.redhat.com/owner/repo.git')
+            'gitlab.cee.redhat.com'
+            >>> detector.get_hostname('git@github.enterprise.com:owner/repo.git')
+            'github.enterprise.com'
+        """
+        if url is None:
+            url = self.get_remote_url()
+
+        if not url:
+            return None
+
+        # Handle SSH URLs (git@host:owner/repo.git)
+        ssh_match = re.match(r'^git@([^:]+):', url)
+        if ssh_match:
+            return ssh_match.group(1)
+
+        # Handle HTTPS URLs
+        try:
+            parsed = urlparse(url)
+            return parsed.netloc
+        except Exception:
+            return None
+
     def list_all_remotes(self) -> dict[str, str]:
         """List all remotes and their URLs.
 

@@ -36,12 +36,13 @@ class GitLabClient(IssueTrackerClient):
     - GITLAB_TOKEN environment variable OR `glab auth login`
     """
 
-    def __new__(cls, timeout: int = 30, repository: Optional[str] = None):
+    def __new__(cls, timeout: int = 30, repository: Optional[str] = None, hostname: Optional[str] = None):
         """Create GitLab client or mock client based on environment.
 
         Args:
             timeout: Request timeout in seconds
             repository: Default repository in group/project format
+            hostname: GitLab instance hostname (e.g., "gitlab.cee.redhat.com")
 
         Returns:
             GitLabClient instance or MockIssueTrackerClient in mock mode
@@ -52,18 +53,20 @@ class GitLabClient(IssueTrackerClient):
             return MockIssueTrackerClient(timeout=timeout)
         return super().__new__(cls)
 
-    def __init__(self, timeout: int = 30, repository: Optional[str] = None):
+    def __init__(self, timeout: int = 30, repository: Optional[str] = None, hostname: Optional[str] = None):
         """Initialize GitLab Issues client.
 
         Args:
             timeout: Request timeout in seconds
             repository: Default repository in group/project format (e.g., "group/project")
+            hostname: GitLab instance hostname (e.g., "gitlab.cee.redhat.com"). Defaults to gitlab.com
         """
         # Only initialize if this is actually a GitLabClient instance
         # (not a MockIssueTrackerClient returned from __new__)
         if isinstance(self, GitLabClient):
             self.timeout = timeout
             self.repository = repository
+            self.hostname = hostname or 'gitlab.com'
             self.field_mapper = GitLabFieldMapper()
 
     def _run_glab_command(self, args: List[str]) -> str:
@@ -80,7 +83,15 @@ class GitLabClient(IssueTrackerClient):
             IssueTrackerConnectionError: If connection fails
             IssueTrackerApiError: If command fails
         """
-        cmd = ['glab'] + args
+        # Build command with hostname for enterprise GitLab instances
+        # Note: Only 'glab api' commands use --hostname flag, other commands infer from git remote
+        cmd = ['glab']
+
+        # Add --hostname for api commands when using enterprise GitLab
+        if args and args[0] == 'api' and self.hostname and self.hostname != 'gitlab.com':
+            cmd.extend(['--hostname', self.hostname])
+
+        cmd.extend(args)
 
         try:
             result = subprocess.run(
@@ -130,7 +141,8 @@ class GitLabClient(IssueTrackerClient):
         """Parse issue key into repository and issue number.
 
         Args:
-            issue_key: Issue key in format "#123" or "group/project#123"
+            issue_key: Issue key in format "#123", "group/project#123",
+                      or "hostname/group/project#123" (for enterprise instances)
 
         Returns:
             Tuple of (repository, issue_number)
@@ -143,11 +155,24 @@ class GitLabClient(IssueTrackerClient):
             (None, 123)  # Uses default repository
             >>> client._parse_issue_number("group/project#123")
             ('group/project', 123)
+            >>> client._parse_issue_number("gitlab.cee.redhat.com/group/project#123")
+            ('group/project', 123)  # Hostname is stripped
         """
+        # Format: hostname/group/project#123 (enterprise instances)
+        # Strip hostname if present (it matches self.hostname context)
+        match = re.match(r'^[\w.-]+(?:\.\w+)+/([\w-]+(?:/[\w.-]+)+)#(\d+)$', issue_key)
+        if match:
+            return match.group(1), int(match.group(2))
+
         # Format: group/project#123 or group/subgroup/project#123
         match = re.match(r'^([\w-]+(?:/[\w.-]+)+)#(\d+)$', issue_key)
         if match:
             return match.group(1), int(match.group(2))
+
+        # Format: hostname#123 (enterprise instances, uses default repository)
+        match = re.match(r'^[\w.-]+(?:\.\w+)+#(\d+)$', issue_key)
+        if match:
+            return None, int(match.group(1))
 
         # Format: #123
         match = re.match(r'^#?(\d+)$', issue_key)
@@ -156,7 +181,7 @@ class GitLabClient(IssueTrackerClient):
 
         raise IssueTrackerValidationError(
             f"Invalid GitLab issue key format: {issue_key}. "
-            f"Expected '#123' or 'group/project#123'"
+            f"Expected '#123', 'group/project#123', or 'hostname/group/project#123'"
         )
 
     def _get_repository(self, repository: Optional[str] = None) -> str:
@@ -238,7 +263,7 @@ class GitLabClient(IssueTrackerClient):
             ])
 
             issue_data = json.loads(output)
-            return self.field_mapper.map_gitlab_to_interface(issue_data, repository=repo)
+            return self.field_mapper.map_gitlab_to_interface(issue_data, repository=repo, hostname=self.hostname)
 
         except IssueTrackerApiError as e:
             if 'Not Found' in str(e) or '404' in str(e):
@@ -377,7 +402,7 @@ class GitLabClient(IssueTrackerClient):
             if os.environ.get('DAF_DEBUG'):
                 print(f"[DEBUG] Found {len(issues)} issues")
 
-            return [self.field_mapper.map_gitlab_to_interface(issue, repository=repo) for issue in issues]
+            return [self.field_mapper.map_gitlab_to_interface(issue, repository=repo, hostname=self.hostname) for issue in issues]
 
         except Exception as e:
             # Debug: Log errors
@@ -451,7 +476,11 @@ class GitLabClient(IssueTrackerClient):
 
             issue_data = json.loads(output)
             issue_number = issue_data['iid']  # GitLab uses 'iid' for issue number
-            issue_key = f'{repo}#{issue_number}'
+            # Include hostname for enterprise instances
+            if self.hostname and self.hostname != 'gitlab.com':
+                issue_key = f'{self.hostname}/{repo}#{issue_number}'
+            else:
+                issue_key = f'{repo}#{issue_number}'
 
             # Link to parent issue if provided
             if parent:

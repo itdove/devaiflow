@@ -202,12 +202,18 @@ class GitLabFieldMapper:
             separator = '\n\n' if description.strip() else ''
             return description + separator + ac_section
 
-    def map_gitlab_to_interface(self, issue_data: Dict, repository: Optional[str] = None) -> Dict:
+    def map_gitlab_to_interface(
+        self,
+        issue_data: Dict,
+        repository: Optional[str] = None,
+        hostname: Optional[str] = None
+    ) -> Dict:
         """Convert GitLab issue data to standardized interface format.
 
         Args:
             issue_data: GitLab issue dict from API
             repository: Optional repository in group/project format (e.g., "group/project")
+            hostname: Optional GitLab instance hostname (e.g., "gitlab.cee.redhat.com")
 
         Returns:
             Standardized ticket dictionary
@@ -253,8 +259,16 @@ class GitLabFieldMapper:
 
         # Build issue key with repository if provided
         # GitLab uses 'iid' for issue number (project-specific ID)
+        # For enterprise GitLab instances, include hostname for uniqueness
         issue_number = issue_data['iid']
-        if repository:
+        if hostname and hostname != 'gitlab.com':
+            # Enterprise instance: include hostname
+            if repository:
+                issue_key = f"{hostname}/{repository}#{issue_number}"
+            else:
+                issue_key = f"{hostname}#{issue_number}"
+        elif repository:
+            # gitlab.com (default): no hostname needed
             issue_key = f"{repository}#{issue_number}"
         else:
             issue_key = f"#{issue_number}"
