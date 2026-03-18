@@ -785,12 +785,18 @@ def sync_multi_backend(
         else:
             console_print("[dim]No JIRA sync filters configured, skipping JIRA sync[/dim]")
     else:
-        if config.jira and not config.jira.url:
-            console_print("[dim]JIRA URL not configured, skipping JIRA sync[/dim]")
-        elif config.jira and not config.jira.project:
-            console_print("[dim]JIRA project not configured, skipping JIRA sync[/dim]")
-        else:
-            console_print("[dim]JIRA not configured, skipping JIRA sync[/dim]")
+        # Only show JIRA messages when no workspace filters are used
+        # If workspace filters present, user explicitly requested workspace-only mode (silent)
+        has_workspace_filters = workspace_filter or repository_filter
+
+        if not has_workspace_filters:
+            # No workspace filters - user intended to sync JIRA, so show why we're not
+            if config.jira and not config.jira.url:
+                console_print("[dim]JIRA URL not configured, skipping JIRA sync[/dim]")
+            elif config.jira and not config.jira.project:
+                console_print("[dim]JIRA project not configured, skipping JIRA sync[/dim]")
+            else:
+                console_print("[dim]JIRA not configured, skipping JIRA sync[/dim]")
 
     # Phase 2: Scan workspaces for git repositories (if sync_workspaces=True)
     all_repositories = []
