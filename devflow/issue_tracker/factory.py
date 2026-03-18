@@ -9,13 +9,19 @@ from typing import Optional
 from devflow.issue_tracker.interface import IssueTrackerClient
 
 
-def create_issue_tracker_client(backend: Optional[str] = None, timeout: int = 30) -> IssueTrackerClient:
+def create_issue_tracker_client(
+    backend: Optional[str] = None,
+    timeout: int = 30,
+    hostname: Optional[str] = None
+) -> IssueTrackerClient:
     """Create an issue tracker client based on backend configuration.
 
     Args:
         backend: Backend type ("jira", "github", "gitlab", "mock", etc.).
                  If None, reads from config or defaults to "jira".
         timeout: Timeout for API requests in seconds
+        hostname: Hostname for enterprise instances (e.g., "gitlab.cee.redhat.com").
+                  Only applicable for GitHub/GitLab backends.
 
     Returns:
         IssueTrackerClient implementation for the specified backend
@@ -32,8 +38,11 @@ def create_issue_tracker_client(backend: Optional[str] = None, timeout: int = 30
         >>> # Create mock client for testing
         >>> client = create_issue_tracker_client("mock")
         >>>
-        >>> # Create GitHub Issues client (future)
+        >>> # Create GitHub Issues client
         >>> client = create_issue_tracker_client("github")
+        >>>
+        >>> # Create GitLab client for enterprise instance
+        >>> client = create_issue_tracker_client("gitlab", hostname="gitlab.cee.redhat.com")
     """
     # If no backend specified, try to read from config
     if backend is None:
@@ -78,7 +87,7 @@ def create_issue_tracker_client(backend: Optional[str] = None, timeout: int = 30
         except Exception:
             pass
 
-        return GitLabClient(timeout=timeout, repository=repository)
+        return GitLabClient(timeout=timeout, repository=repository, hostname=hostname)
     else:
         raise ValueError(
             f"Unsupported issue tracker backend: {backend}. "
