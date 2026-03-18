@@ -52,18 +52,20 @@ class GitLabClient(IssueTrackerClient):
             return MockIssueTrackerClient(timeout=timeout)
         return super().__new__(cls)
 
-    def __init__(self, timeout: int = 30, repository: Optional[str] = None):
+    def __init__(self, timeout: int = 30, repository: Optional[str] = None, hostname: Optional[str] = None):
         """Initialize GitLab Issues client.
 
         Args:
             timeout: Request timeout in seconds
             repository: Default repository in group/project format (e.g., "group/project")
+            hostname: GitLab instance hostname (e.g., "gitlab.cee.redhat.com"). Defaults to gitlab.com
         """
         # Only initialize if this is actually a GitLabClient instance
         # (not a MockIssueTrackerClient returned from __new__)
         if isinstance(self, GitLabClient):
             self.timeout = timeout
             self.repository = repository
+            self.hostname = hostname or 'gitlab.com'
             self.field_mapper = GitLabFieldMapper()
 
     def _run_glab_command(self, args: List[str]) -> str:
@@ -80,7 +82,15 @@ class GitLabClient(IssueTrackerClient):
             IssueTrackerConnectionError: If connection fails
             IssueTrackerApiError: If command fails
         """
-        cmd = ['glab'] + args
+        # Build command with hostname for enterprise GitLab instances
+        # Note: Only 'glab api' commands use --hostname flag, other commands infer from git remote
+        cmd = ['glab']
+
+        # Add --hostname for api commands when using enterprise GitLab
+        if args and args[0] == 'api' and self.hostname and self.hostname != 'gitlab.com':
+            cmd.extend(['--hostname', self.hostname])
+
+        cmd.extend(args)
 
         try:
             result = subprocess.run(

@@ -666,29 +666,43 @@ def sync_gitlab_repository(
             elif ssh_match:
                 hostname = ssh_match.group(1)
 
-        # Create GitLab client
+        # Create GitLab client with hostname for enterprise instances
         from devflow.gitlab.issues_client import GitLabClient
-        client = GitLabClient(repository=repository)
+        client = GitLabClient(repository=repository, hostname=hostname)
 
         # Get current GitLab username
         import subprocess
         try:
+            # Build glab api command with hostname if needed
+            glab_cmd = ['glab', 'api']
+
+            # Add --hostname if not gitlab.com (for enterprise instances)
+            if hostname and hostname != 'gitlab.com':
+                glab_cmd.extend(['--hostname', hostname])
+
+            glab_cmd.append('user')
+
             result = subprocess.run(
-                ['glab', 'api', 'user', '--fields', 'username'],
+                glab_cmd,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False
             )
-            # Parse JSON output from glab api
-            import json
-            user_data = json.loads(result.stdout.strip())
-            username = user_data.get('username', '@me')
 
-            if not username or username == '@me':
-                raise ValueError("Empty username from glab api")
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse JSON output from glab api (returns JSON by default)
+                import json
+                user_data = json.loads(result.stdout.strip())
+                username = user_data.get('username', '@me')
 
-            # Debug: Show detected username
-            console_print(f"[dim]  Detected GitLab user: {username}[/dim]")
+                if not username or username == '@me':
+                    raise ValueError("Empty username from glab api")
+
+                # Debug: Show detected username
+                console_print(f"[dim]  Detected GitLab user: {username}[/dim]")
+            else:
+                raise ValueError(f"glab api user failed: {result.stderr}")
         except Exception as e:
             username = '@me'  # Fallback to @me
             # Debug: Show fallback
