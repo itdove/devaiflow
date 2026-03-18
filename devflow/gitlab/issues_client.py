@@ -36,12 +36,13 @@ class GitLabClient(IssueTrackerClient):
     - GITLAB_TOKEN environment variable OR `glab auth login`
     """
 
-    def __new__(cls, timeout: int = 30, repository: Optional[str] = None):
+    def __new__(cls, timeout: int = 30, repository: Optional[str] = None, hostname: Optional[str] = None):
         """Create GitLab client or mock client based on environment.
 
         Args:
             timeout: Request timeout in seconds
             repository: Default repository in group/project format
+            hostname: GitLab instance hostname (e.g., "gitlab.cee.redhat.com")
 
         Returns:
             GitLabClient instance or MockIssueTrackerClient in mock mode
