@@ -5,13 +5,14 @@ from typing import Dict, Optional
 from rich.console import Console
 
 from devflow.cli.utils import output_json as json_output
-from devflow.github.issues_client import GitHubClient
+from devflow.issue_tracker.factory import create_issue_tracker_client
 from devflow.issue_tracker.exceptions import (
     IssueTrackerError,
     IssueTrackerAuthError,
     IssueTrackerApiError,
     IssueTrackerNotFoundError,
 )
+from devflow.utils.git_remote import GitRemoteDetector
 
 console = Console()
 
@@ -142,7 +143,7 @@ def git_view(
         session = next((s for s in sessions if str(s.session_id) == current_session_id), None)
 
         if not session or not session.issue_key:
-            console.print("[red]✗[/red] Current session has no GitHub issue associated")
+            console.print("[red]✗[/red] Current session has no GitHub/GitLab issue associated")
             console.print("[dim]Provide an issue key: daf git view 123[/dim]")
             sys.exit(1)
 
@@ -150,8 +151,25 @@ def git_view(
         console.print(f"[dim]Using issue from current session: {issue_key}[/dim]\n")
 
     try:
-        # Create GitHub client (automatically returns mock in mock mode)
-        client = GitHubClient(repository=repository)
+        # Detect platform from repository or git remote
+        detector = GitRemoteDetector()
+        platform_info = detector.parse_repository_info()
+
+        if platform_info:
+            platform, owner, repo_name = platform_info
+            backend = "gitlab" if platform == "gitlab" else "github"
+            if not repository:
+                repository = f"{owner}/{repo_name}"
+        else:
+            # Default to GitHub if can't detect
+            backend = "github"
+
+        # Create appropriate client (automatically returns mock in mock mode)
+        client = create_issue_tracker_client(backend=backend)
+
+        # Set repository if we have one
+        if repository and hasattr(client, 'repository'):
+            client.repository = repository
 
         # Fetch issue
         if comments:
@@ -177,18 +195,18 @@ def git_view(
             console.print(formatted_comments)
 
     except IssueTrackerNotFoundError as e:
-        console.print(f"[red]✗[/red] GitHub issue not found: {issue_key}")
+        console.print(f"[red]✗[/red] Issue not found: {issue_key}")
         if output_json:
             json_output(success=False, error=str(e))
         sys.exit(1)
     except IssueTrackerAuthError as e:
-        console.print(f"[red]✗[/red] GitHub authentication failed")
-        console.print(f"[dim]Run 'gh auth login' to authenticate[/dim]")
+        console.print(f"[red]✗[/red] Authentication failed")
+        console.print(f"[dim]Run 'gh auth login' (GitHub) or 'glab auth login' (GitLab) to authenticate[/dim]")
         if output_json:
             json_output(success=False, error=str(e))
         sys.exit(1)
     except IssueTrackerApiError as e:
-        console.print(f"[red]✗[/red] GitHub API error: {e}")
+        console.print(f"[red]✗[/red] API error: {e}")
         if output_json:
             json_output(success=False, error=str(e))
         sys.exit(1)

@@ -295,13 +295,33 @@ def create_git_issue_session(
 
     # Validate parent issue exists if provided
     if parent:
-        from devflow.github.issues_client import GitHubClient
+        from devflow.issue_tracker.factory import create_issue_tracker_client
+        from devflow.utils.git_remote import GitRemoteDetector
         from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError, IssueTrackerValidationError as ValidationError
 
         console_print(f"\n[cyan]Validating parent issue {parent}...[/cyan]")
         try:
-            client = GitHubClient(repository=repository)
-            parent_issue = client.get_issue(parent)
+            # Detect platform from repository or git remote
+            detector = GitRemoteDetector()
+            platform_info = detector.parse_repository_info()
+
+            if platform_info:
+                platform, owner, repo_name = platform_info
+                backend = "gitlab" if platform == "gitlab" else "github"
+                if not repository:
+                    repository = f"{owner}/{repo_name}"
+            else:
+                # Default to GitHub if can't detect
+                backend = "github"
+
+            # Create appropriate client
+            client = create_issue_tracker_client(backend=backend)
+
+            # Set repository if we have one
+            if repository and hasattr(client, 'repository'):
+                client.repository = repository
+
+            parent_issue = client.get_ticket(parent)
             if not parent_issue:
                 console_print(f"[red]✗[/red] Parent issue {parent} not found")
                 if is_json_mode():

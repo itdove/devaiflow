@@ -95,10 +95,19 @@ def mock_config_loader():
 @pytest.fixture
 def mock_github_client():
     """Mock GitHubClient."""
-    with patch('devflow.cli.commands.git_create_command.GitHubClient') as mock_client_class:
-        mock_client = Mock()
-        mock_client_class.return_value = mock_client
-        yield mock_client
+    # Patch GitRemoteDetector to return GitHub platform
+    with patch('devflow.cli.commands.git_create_command.GitRemoteDetector') as mock_detector_class:
+        mock_detector = Mock()
+        mock_detector.parse_repository_info.return_value = ('github', 'owner', 'repo')
+        mock_detector_class.return_value = mock_detector
+
+        # Patch the factory to return a mock client
+        with patch('devflow.cli.commands.git_create_command.create_issue_tracker_client') as mock_factory:
+            mock_client = Mock()
+            mock_client.repository = None
+            mock_client.field_mapper = Mock()
+            mock_factory.return_value = mock_client
+            yield mock_client
 
 
 class TestGitCreateSessionRename:

@@ -627,6 +627,184 @@ def sync_github_repository(
     return {'created_count': created_count, 'updated_count': updated_count}
 
 
+def sync_gitlab_repository(
+    repository: str,
+    session_manager: SessionManager,
+    config: Any,
+    repository_url: Optional[str] = None,
+    output_json: bool = False,
+    synced_tickets: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, int]:
+    """Sync issues from a GitLab repository.
+
+    Args:
+        repository: Repository in group/project format
+        session_manager: Session manager instance
+        config: Configuration object
+        repository_url: Optional Git remote URL (to extract hostname for uniqueness)
+        output_json: Whether to output JSON
+        synced_tickets: Optional list to track synced tickets for recap table
+
+    Returns:
+        Dictionary with created_count and updated_count
+    """
+    created_count = 0
+    updated_count = 0
+
+    try:
+        # Extract hostname from repository URL for uniqueness
+        # Example: https://gitlab.com/group/project.git → gitlab.com
+        # Example: https://gitlab.example.com/group/project.git → gitlab.example.com
+        hostname = 'gitlab.com'  # Default
+        if repository_url:
+            import re
+            # Match both HTTPS and SSH URLs
+            https_match = re.match(r'https?://([^/]+)/', repository_url)
+            ssh_match = re.match(r'git@([^:]+):', repository_url)
+            if https_match:
+                hostname = https_match.group(1)
+            elif ssh_match:
+                hostname = ssh_match.group(1)
+
+        # Create GitLab client
+        from devflow.gitlab.issues_client import GitLabClient
+        client = GitLabClient(repository=repository)
+
+        # Get current GitLab username
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['glab', 'api', 'user', '--fields', 'username'],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            # Parse JSON output from glab api
+            import json
+            user_data = json.loads(result.stdout.strip())
+            username = user_data.get('username', '@me')
+
+            if not username or username == '@me':
+                raise ValueError("Empty username from glab api")
+
+            # Debug: Show detected username
+            console_print(f"[dim]  Detected GitLab user: {username}[/dim]")
+        except Exception as e:
+            username = '@me'  # Fallback to @me
+            # Debug: Show fallback
+            console_print(f"[dim]  Username detection failed ({e}), using @me[/dim]")
+
+        # Fetch issues assigned to current user
+        tickets = client.list_tickets(
+            project=repository,
+            assignee=username,  # Use actual username
+            status=['open'],  # Only opened issues
+            max_results=100,
+        )
+
+        if not tickets:
+            console_print(f"[dim]  No issues found in {repository}[/dim]")
+            return {'created_count': 0, 'updated_count': 0}
+
+        console_print(f"[dim]  Found {len(tickets)} issues in {repository}[/dim]")
+
+        for ticket in tickets:
+            issue_key = ticket['key']  # Format: group/project#123
+
+            # Convert issue key to dash-separated session name
+            # Example: "group/project#60" → "group-project-60"
+            # Example: "gitlab.example.com/group/project#60" → "gitlab-example-com-group-project-60"
+            session_name = issue_key_to_session_name(issue_key, hostname=hostname)
+
+            # Check if session already exists
+            all_sessions = session_manager.index.get_sessions(issue_key)
+            existing = [s for s in all_sessions if s.session_type == "development"] if all_sessions else []
+
+            if not existing:
+                # Create new session
+                issue_summary = ticket.get('summary', '')
+                goal = f"{issue_key}: {issue_summary}" if issue_summary else issue_key
+
+                session = session_manager.create_session(
+                    name=session_name,
+                    issue_key=issue_key,
+                    goal=goal,
+                )
+
+                session.status = 'created'
+                session.issue_tracker = 'gitlab'
+                session.issue_key = issue_key
+                session.issue_updated = ticket.get('updated')
+
+                # Copy all fields to issue_metadata
+                session.issue_metadata = {
+                    k: v for k, v in ticket.items()
+                    if k not in ('key', 'updated') and v is not None
+                }
+
+                # Auto-inherit workspace from creation session
+                # If user created ticket with `daf git new --workspace X`, inherit workspace X
+                inherited_workspace = get_workspace_from_creation_session(session_manager, issue_key)
+                if inherited_workspace:
+                    session.workspace_name = inherited_workspace
+
+                session_manager.update_session(session)
+                created_count += 1
+
+                # Track for recap table
+                if synced_tickets is not None:
+                    synced_tickets.append({
+                        "session_name": session_name,  # Use converted session name, not issue key
+                        "title": issue_summary or issue_key,
+                        "action": "CREATED",
+                        "backend": "GitLab"
+                    })
+
+                console_print(f"[green]  ✓[/green] Created session: {session_name} ({issue_key})")
+            else:
+                # Update existing session if needed
+                for session in existing:
+                    ticket_updated = ticket.get('updated')
+                    session_updated = session.issue_updated
+
+                    needs_update = False
+                    if ticket_updated:
+                        if not session_updated or ticket_updated != session_updated:
+                            needs_update = True
+
+                    if needs_update:
+                        session.issue_tracker = 'gitlab'
+                        session.issue_updated = ticket_updated
+                        session.issue_metadata = {
+                            k: v for k, v in ticket.items()
+                            if k not in ('key', 'updated') and v is not None
+                        }
+
+                        session_manager.update_session(session)
+                        updated_count += 1
+
+                        # Track for recap table
+                        if synced_tickets is not None:
+                            issue_summary = ticket.get('summary', issue_key)
+                            synced_tickets.append({
+                                "session_name": session.name,  # Use actual session name from session object
+                                "title": issue_summary,
+                                "action": "UPDATED",
+                                "backend": "GitLab"
+                            })
+
+                        console_print(f"[cyan]  ↻[/cyan] Updated session: {issue_key}")
+
+    except IssueTrackerAuthError as e:
+        console_print(f"[yellow]  ⚠[/yellow] GitLab auth failed for {repository}: {e}")
+    except IssueTrackerApiError as e:
+        console_print(f"[yellow]  ⚠[/yellow] GitLab API error for {repository}: {e}")
+    except Exception as e:
+        console_print(f"[yellow]  ⚠[/yellow] Error syncing {repository}: {e}")
+
+    return {'created_count': created_count, 'updated_count': updated_count}
+
+
 @require_outside_claude
 def sync_multi_backend(
     field_filters: Optional[Dict[str, str]] = None,
@@ -902,7 +1080,29 @@ def sync_multi_backend(
 
         if gitlab_repos:
             console_print()
-            console_print(f"[yellow]ℹ[/yellow] Found {len(gitlab_repos)} GitLab repositories, but GitLab sync not yet implemented")
+            console_print(f"[cyan]Syncing {len(gitlab_repos)} GitLab repositories...[/cyan]")
+
+            gitlab_created = 0
+            gitlab_updated = 0
+
+            for repo_path, remote_url in gitlab_repos:
+                console_print(f"[dim]  Syncing {repo_path}...[/dim]")
+
+                result = sync_gitlab_repository(
+                    repository=repo_path,
+                    session_manager=session_manager,
+                    config=config,
+                    repository_url=remote_url,
+                    output_json=output_json,
+                    synced_tickets=synced_tickets,
+                )
+
+                gitlab_created += result['created_count']
+                gitlab_updated += result['updated_count']
+
+            backend_stats['gitlab'] = {'created': gitlab_created, 'updated': gitlab_updated}
+            total_created += gitlab_created
+            total_updated += gitlab_updated
 
     # Render recap table if there are synced tickets
     render_sync_recap_table(synced_tickets)
