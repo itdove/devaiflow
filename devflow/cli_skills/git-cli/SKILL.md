@@ -1,5 +1,7 @@
 ---
+name: git-cli
 description: Git version control commands used by daf tool for branch management, commits, status checks, merging, rebasing, and remote operations
+user-invocable: false
 ---
 
 # Git CLI Reference for daf tool

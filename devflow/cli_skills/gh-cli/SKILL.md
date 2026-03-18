@@ -1,5 +1,7 @@
 ---
+name: gh-cli
 description: GitHub CLI (gh) tool for creating pull requests, managing PRs, fetching files from private repositories, and GitHub API operations used by daf tool
+user-invocable: false
 ---
 
 # GitHub CLI (gh) Reference for daf tool

@@ -1,6 +1,8 @@
 ---
 name: daf-info
 description: Show detailed information about the current session
+user-invocable: true
+argument-hint: "[SESSION-NAME|TICKET-ID]"
 ---
 
 Display detailed session information including all conversations, branches, and Claude Code session UUIDs.

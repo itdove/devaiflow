@@ -1,6 +1,8 @@
 ---
 name: daf-read-conversation
 description: Read the conversation history from another repository in this multi-project session
+user-invocable: true
+argument-hint: "[CONVERSATION-UUID]"
 ---
 
 Read the conversation history from another repository in this multi-project session to understand work done in related codebases.

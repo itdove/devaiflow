@@ -1,6 +1,7 @@
 ---
 name: daf-status
 description: Show status and progress dashboard
+user-invocable: true
 ---
 
 Display progress, ticket status breakdown, and time tracking summary.

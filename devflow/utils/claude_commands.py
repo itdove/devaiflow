@@ -59,6 +59,9 @@ def list_bundled_skills() -> List[Path]:
 def _skill_has_name_field(skill_path: Path) -> bool:
     """Check if a skill has a 'name:' field in its SKILL.md frontmatter.
 
+    DEPRECATED: Use _skill_is_user_invocable() instead.
+    This function is kept for backwards compatibility.
+
     Args:
         skill_path: Path to skill directory
 
@@ -84,24 +87,56 @@ def _skill_has_name_field(skill_path: Path) -> bool:
     return False
 
 
+def _skill_is_user_invocable(skill_path: Path) -> bool:
+    """Check if a skill is user-invocable (can be invoked as slash command).
+
+    Args:
+        skill_path: Path to skill directory
+
+    Returns:
+        True if skill has 'user-invocable: true', False otherwise
+    """
+    skill_md = skill_path / "SKILL.md"
+    if not skill_md.exists():
+        return False
+
+    content = skill_md.read_text()
+    # Check for YAML frontmatter with user-invocable field
+    if content.startswith("---\n"):
+        try:
+            # Extract frontmatter (between first two ---)
+            parts = content.split("---\n", 2)
+            if len(parts) >= 2:
+                frontmatter = parts[1]
+                # Check for user-invocable: true
+                for line in frontmatter.split('\n'):
+                    line = line.strip()
+                    if line.startswith('user-invocable:'):
+                        value = line.split(':', 1)[1].strip().lower()
+                        return value == 'true'
+        except Exception:
+            pass
+    return False
+
+
 def list_slash_command_skills() -> List[Path]:
-    """List bundled skills that are slash commands (have 'name:' field).
+    """List bundled skills that are slash commands (user-invocable: true).
 
     Returns:
         List of Path objects for slash command skill directories
     """
     all_skills = list_bundled_skills()
-    return [s for s in all_skills if _skill_has_name_field(s)]
+    return [s for s in all_skills if _skill_is_user_invocable(s)]
 
 
 def list_reference_skills() -> List[Path]:
-    """List bundled skills that are reference skills (no 'name:' field).
+    """List bundled skills that are reference skills (user-invocable: false).
 
     Returns:
         List of Path objects for reference skill directories
     """
     all_skills = list_bundled_skills()
-    return [s for s in all_skills if not _skill_has_name_field(s)]
+    return [s for s in all_skills if not _skill_is_user_invocable(s)]
 
 
 def install_or_upgrade_slash_commands(

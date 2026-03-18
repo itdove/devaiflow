@@ -1,6 +1,8 @@
 ---
 name: daf-config
 description: View current configuration (read-only)
+user-invocable: true
+argument-hint: "show [--fields|--sync-filters|--prompts]"
 ---
 
 Display the current daf configuration including JIRA settings, workspace paths, and prompt defaults.
