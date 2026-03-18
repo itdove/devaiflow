@@ -398,13 +398,16 @@ def sync_jira(
 def scan_workspace_for_repositories(workspace_path: str) -> List[Dict[str, str]]:
     """Scan workspace directory for git repositories.
 
+    Scans ALL remotes (origin, upstream, etc.) so you can sync issues from
+    both your fork and the upstream repository.
+
     Args:
         workspace_path: Path to workspace directory
 
     Returns:
         List of repository info dictionaries with keys:
         - path: Absolute path to repository
-        - remote: Remote name used (upstream or origin)
+        - remote: Remote name used (upstream, origin, etc.)
         - url: Git remote URL
         - backend: Platform (github, gitlab)
         - repository: owner/repo format
@@ -421,29 +424,22 @@ def scan_workspace_for_repositories(workspace_path: str) -> List[Dict[str, str]]
             repo_path = root
             detector = GitRemoteDetector(repo_path)
 
-            # Try to parse repository info
-            info = detector.parse_repository_info()
-            if info:
-                platform, owner, repo = info
+            # Get ALL remotes (origin, upstream, etc.)
+            all_remotes = detector.list_all_remotes()
 
-                # Get which remote was used (upstream or origin)
-                remote_url = detector.get_remote_url()
-                remote_name = None
-                if remote_url:
-                    # Check which remote this URL came from
-                    upstream_url = detector.get_remote_url('upstream')
-                    if upstream_url == remote_url:
-                        remote_name = 'upstream'
-                    else:
-                        remote_name = 'origin'
+            # Parse repository info for each remote
+            for remote_name, remote_url in all_remotes.items():
+                info = detector.parse_repository_info(remote_url)
+                if info:
+                    platform, owner, repo = info
 
-                repositories.append({
-                    'path': repo_path,
-                    'remote': remote_name or 'origin',
-                    'url': remote_url or '',
-                    'backend': platform,
-                    'repository': f"{owner}/{repo}"
-                })
+                    repositories.append({
+                        'path': repo_path,
+                        'remote': remote_name,
+                        'url': remote_url,
+                        'backend': platform,
+                        'repository': f"{owner}/{repo}"
+                    })
 
             # Don't descend into .git or node_modules
             dirs[:] = [d for d in dirs if d not in {'.git', 'node_modules', '.venv', 'venv', '__pycache__'}]
