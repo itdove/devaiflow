@@ -33,6 +33,25 @@ class TestIssueKeyToSessionName:
         result = issue_key_to_session_name("owner/repo#123", "github.enterprise.com")
         assert result == "github-enterprise-com-owner-repo-123"
 
+    def test_with_hostname_gitlab_default(self):
+        """Test with default gitlab.com hostname (omitted from name)."""
+        assert issue_key_to_session_name("owner/repo#123", "gitlab.com") == "owner-repo-123"
+
+    def test_with_hostname_gitlab_enterprise(self):
+        """Test with enterprise GitLab hostname (included in name)."""
+        result = issue_key_to_session_name("owner/repo#123", "gitlab.cee.redhat.com")
+        assert result == "gitlab-cee-redhat-com-owner-repo-123"
+
+    def test_issue_key_with_embedded_hostname(self):
+        """Test issue key that already contains hostname."""
+        result = issue_key_to_session_name("gitlab.cee.redhat.com/dvernier/tools#1")
+        assert result == "gitlab-cee-redhat-com-dvernier-tools-1"
+
+    def test_issue_key_with_embedded_hostname_github(self):
+        """Test GitHub issue key that already contains hostname."""
+        result = issue_key_to_session_name("github.enterprise.com/owner/repo#123")
+        assert result == "github-enterprise-com-owner-repo-123"
+
 
 @pytest.fixture
 def mock_session_manager():

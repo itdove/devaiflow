@@ -1,6 +1,7 @@
 """Implementation of 'daf sync' command."""
 
 import os
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -112,10 +113,12 @@ def issue_key_to_session_name(issue_key: str, hostname: Optional[str] = None) ->
     work safely in shell commands and scripts.
 
     Args:
-        issue_key: Issue key in format "owner/repo#123" or "#123"
-        hostname: Optional hostname (e.g., "github.com", "github.enterprise.com")
-                  If github.com (default), hostname is omitted from session name.
-                  For self-hosted instances, hostname is included for uniqueness.
+        issue_key: Issue key in format "owner/repo#123", "#123",
+                  or "hostname/owner/repo#123" (for enterprise instances)
+        hostname: Optional hostname (e.g., "github.com", "gitlab.cee.redhat.com")
+                  If github.com or gitlab.com (defaults), hostname is omitted from session name.
+                  For enterprise instances, hostname is included for uniqueness.
+                  Note: If issue_key already contains hostname, this parameter is ignored.
 
     Returns:
         Dash-separated session name safe for bash usage
@@ -127,12 +130,22 @@ def issue_key_to_session_name(issue_key: str, hostname: Optional[str] = None) ->
         'itdove-devaiflow-60'
         >>> issue_key_to_session_name("itdove/devaiflow#60", "github.enterprise.com")
         'github-enterprise-com-itdove-devaiflow-60'
+        >>> issue_key_to_session_name("gitlab.cee.redhat.com/dvernier/tools#1")
+        'gitlab-cee-redhat-com-dvernier-tools-1'
     """
+    # Check if issue_key already contains hostname (e.g., "gitlab.cee.redhat.com/owner/repo#123")
+    # Pattern: starts with hostname (contains dots) followed by /
+    if re.match(r'^[\w.-]+\.\w+/', issue_key):
+        # Hostname is already embedded in issue_key
+        return issue_key.replace('/', '-').replace('#', '-').replace('.', '-')
+
     # Replace bash-problematic characters: / and # with -
     base_name = issue_key.replace('/', '-').replace('#', '-').lstrip('-')
 
-    if hostname and hostname != 'github.com':
-        # Include hostname for non-default GitHub instances (GitHub Enterprise, etc.)
+    # Check if hostname should be prepended
+    # Default hostnames (github.com, gitlab.com) don't need to be included
+    if hostname and hostname not in ['github.com', 'gitlab.com']:
+        # Include hostname for enterprise instances
         hostname_part = hostname.replace('.', '-')
         return f"{hostname_part}-{base_name}"
 

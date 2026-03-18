@@ -141,7 +141,8 @@ class GitLabClient(IssueTrackerClient):
         """Parse issue key into repository and issue number.
 
         Args:
-            issue_key: Issue key in format "#123" or "group/project#123"
+            issue_key: Issue key in format "#123", "group/project#123",
+                      or "hostname/group/project#123" (for enterprise instances)
 
         Returns:
             Tuple of (repository, issue_number)
@@ -154,11 +155,24 @@ class GitLabClient(IssueTrackerClient):
             (None, 123)  # Uses default repository
             >>> client._parse_issue_number("group/project#123")
             ('group/project', 123)
+            >>> client._parse_issue_number("gitlab.cee.redhat.com/group/project#123")
+            ('group/project', 123)  # Hostname is stripped
         """
+        # Format: hostname/group/project#123 (enterprise instances)
+        # Strip hostname if present (it matches self.hostname context)
+        match = re.match(r'^[\w.-]+(?:\.\w+)+/([\w-]+(?:/[\w.-]+)+)#(\d+)$', issue_key)
+        if match:
+            return match.group(1), int(match.group(2))
+
         # Format: group/project#123 or group/subgroup/project#123
         match = re.match(r'^([\w-]+(?:/[\w.-]+)+)#(\d+)$', issue_key)
         if match:
             return match.group(1), int(match.group(2))
+
+        # Format: hostname#123 (enterprise instances, uses default repository)
+        match = re.match(r'^[\w.-]+(?:\.\w+)+#(\d+)$', issue_key)
+        if match:
+            return None, int(match.group(1))
 
         # Format: #123
         match = re.match(r'^#?(\d+)$', issue_key)
@@ -167,7 +181,7 @@ class GitLabClient(IssueTrackerClient):
 
         raise IssueTrackerValidationError(
             f"Invalid GitLab issue key format: {issue_key}. "
-            f"Expected '#123' or 'group/project#123'"
+            f"Expected '#123', 'group/project#123', or 'hostname/group/project#123'"
         )
 
     def _get_repository(self, repository: Optional[str] = None) -> str:
@@ -249,7 +263,7 @@ class GitLabClient(IssueTrackerClient):
             ])
 
             issue_data = json.loads(output)
-            return self.field_mapper.map_gitlab_to_interface(issue_data, repository=repo)
+            return self.field_mapper.map_gitlab_to_interface(issue_data, repository=repo, hostname=self.hostname)
 
         except IssueTrackerApiError as e:
             if 'Not Found' in str(e) or '404' in str(e):
@@ -388,7 +402,7 @@ class GitLabClient(IssueTrackerClient):
             if os.environ.get('DAF_DEBUG'):
                 print(f"[DEBUG] Found {len(issues)} issues")
 
-            return [self.field_mapper.map_gitlab_to_interface(issue, repository=repo) for issue in issues]
+            return [self.field_mapper.map_gitlab_to_interface(issue, repository=repo, hostname=self.hostname) for issue in issues]
 
         except Exception as e:
             # Debug: Log errors
@@ -462,7 +476,11 @@ class GitLabClient(IssueTrackerClient):
 
             issue_data = json.loads(output)
             issue_number = issue_data['iid']  # GitLab uses 'iid' for issue number
-            issue_key = f'{repo}#{issue_number}'
+            # Include hostname for enterprise instances
+            if self.hostname and self.hostname != 'gitlab.com':
+                issue_key = f'{self.hostname}/{repo}#{issue_number}'
+            else:
+                issue_key = f'{repo}#{issue_number}'
 
             # Link to parent issue if provided
             if parent:
