@@ -22,10 +22,19 @@ def runner():
 @pytest.fixture
 def mock_github_client():
     """Mock GitHubClient for testing."""
-    with patch('devflow.cli.commands.git_create_command.GitHubClient') as mock_client_class:
-        mock_client = Mock()
-        mock_client_class.return_value = mock_client
-        yield mock_client
+    # Patch GitRemoteDetector to return GitHub platform
+    with patch('devflow.cli.commands.git_create_command.GitRemoteDetector') as mock_detector_class:
+        mock_detector = Mock()
+        mock_detector.parse_repository_info.return_value = ('github', 'owner', 'repo')
+        mock_detector_class.return_value = mock_detector
+
+        # Patch the factory to return a mock client
+        with patch('devflow.cli.commands.git_create_command.create_issue_tracker_client') as mock_factory:
+            mock_client = Mock()
+            mock_client.repository = None
+            mock_client.field_mapper = Mock()
+            mock_factory.return_value = mock_client
+            yield mock_client
 
 
 @pytest.fixture
@@ -360,7 +369,7 @@ def test_git_create_with_parent(runner, mock_github_client, mock_config):
     assert '#123' in result.output or 'Created' in result.output
 
     # Verify parent validation was called
-    mock_github_client.get_issue.assert_called_once_with('#456')
+    mock_github_client.get_ticket.assert_called_once_with('#456')
 
     # Verify create_issue was called with parent parameter
     call_args = mock_github_client.create_issue.call_args[1]
@@ -369,7 +378,7 @@ def test_git_create_with_parent(runner, mock_github_client, mock_config):
 
 def test_git_create_with_invalid_parent_format(runner, mock_github_client, mock_config):
     """Test creating issue with invalid parent key format."""
-    mock_github_client.get_issue.side_effect = IssueTrackerValidationError(
+    mock_github_client.get_ticket.side_effect = IssueTrackerValidationError(
         "Invalid format"
     )
 
@@ -389,7 +398,7 @@ def test_git_create_with_parent_not_found(runner, mock_github_client, mock_confi
     """Test creating issue when parent doesn't exist."""
     from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError
 
-    mock_github_client.get_issue.side_effect = IssueTrackerNotFoundError(
+    mock_github_client.get_ticket.side_effect = IssueTrackerNotFoundError(
         "Parent not found",
         resource_type="issue",
         resource_id="#999"

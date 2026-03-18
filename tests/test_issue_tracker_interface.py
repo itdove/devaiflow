@@ -50,11 +50,12 @@ class TestIssueTrackerFactory:
         client = create_issue_tracker_client("github")
         assert isinstance(client, GitHubClient)
 
-    def test_create_gitlab_client_not_implemented(self):
-        """Test GitLab backend raises NotImplementedError."""
-        with pytest.raises(NotImplementedError) as exc_info:
-            create_issue_tracker_client("gitlab")
-        assert "GitLab Issues backend is not yet implemented" in str(exc_info.value)
+    def test_create_gitlab_client(self):
+        """Test GitLab backend client creation."""
+        from devflow.gitlab.issues_client import GitLabClient
+        client = create_issue_tracker_client("gitlab")
+        assert isinstance(client, GitLabClient)
+        assert isinstance(client, IssueTrackerClient)
 
     def test_create_unsupported_backend(self):
         """Test unsupported backend raises ValueError."""
