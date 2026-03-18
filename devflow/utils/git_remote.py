@@ -134,15 +134,27 @@ class GitRemoteDetector:
     def _host_to_platform(self, host: str) -> Optional[str]:
         """Map hostname to platform name.
 
+        Supports both public instances (github.com, gitlab.com) and
+        enterprise/self-hosted instances (github.enterprise.com, gitlab.cee.redhat.com, etc.).
+
         Args:
-            host: Hostname (e.g., 'github.com')
+            host: Hostname (e.g., 'github.com', 'gitlab.cee.redhat.com')
 
         Returns:
             Platform name ('github', 'gitlab') or None if unsupported
+
+        Examples:
+            >>> detector._host_to_platform('github.com')
+            'github'
+            >>> detector._host_to_platform('github.enterprise.com')
+            'github'
+            >>> detector._host_to_platform('gitlab.cee.redhat.com')
+            'gitlab'
         """
-        if host in self.GITHUB_HOSTS:
+        host_lower = host.lower()
+        if 'github' in host_lower:
             return 'github'
-        elif host in self.GITLAB_HOSTS:
+        elif 'gitlab' in host_lower:
             return 'gitlab'
         return None
 

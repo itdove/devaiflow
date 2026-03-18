@@ -172,6 +172,48 @@ class TestGitRemoteDetector:
 
         assert result is None
 
+    def test_parse_repository_info_github_enterprise_https(self):
+        """Test parsing GitHub Enterprise HTTPS URL."""
+        detector = GitRemoteDetector()
+        result = detector.parse_repository_info('https://github.enterprise.com/owner/repo.git')
+
+        assert result == ('github', 'owner', 'repo')
+
+    def test_parse_repository_info_github_enterprise_ssh(self):
+        """Test parsing GitHub Enterprise SSH URL."""
+        detector = GitRemoteDetector()
+        result = detector.parse_repository_info('git@github.enterprise.com:owner/repo.git')
+
+        assert result == ('github', 'owner', 'repo')
+
+    def test_parse_repository_info_gitlab_enterprise_https(self):
+        """Test parsing GitLab Enterprise HTTPS URL."""
+        detector = GitRemoteDetector()
+        result = detector.parse_repository_info('https://gitlab.cee.redhat.com/group/project.git')
+
+        assert result == ('gitlab', 'group', 'project')
+
+    def test_parse_repository_info_gitlab_enterprise_ssh(self):
+        """Test parsing GitLab Enterprise SSH URL."""
+        detector = GitRemoteDetector()
+        result = detector.parse_repository_info('git@gitlab.cee.redhat.com:group/project.git')
+
+        assert result == ('gitlab', 'group', 'project')
+
+    def test_parse_repository_info_github_self_hosted(self):
+        """Test parsing self-hosted GitHub instance URL."""
+        detector = GitRemoteDetector()
+        result = detector.parse_repository_info('https://github.company.internal/owner/repo.git')
+
+        assert result == ('github', 'owner', 'repo')
+
+    def test_parse_repository_info_gitlab_self_hosted(self):
+        """Test parsing self-hosted GitLab instance URL."""
+        detector = GitRemoteDetector()
+        result = detector.parse_repository_info('https://gitlab.company.internal/group/project.git')
+
+        assert result == ('gitlab', 'group', 'project')
+
     def test_parse_repository_info_invalid_url(self):
         """Test parsing invalid URL."""
         detector = GitRemoteDetector()
@@ -290,6 +332,32 @@ upstream\thttps://github.com/main/repo.git (push)
         """Test mapping unsupported host."""
         detector = GitRemoteDetector()
         assert detector._host_to_platform('bitbucket.org') is None
+
+    def test_host_to_platform_github_enterprise(self):
+        """Test mapping GitHub Enterprise host."""
+        detector = GitRemoteDetector()
+        assert detector._host_to_platform('github.enterprise.com') == 'github'
+
+    def test_host_to_platform_gitlab_enterprise(self):
+        """Test mapping GitLab Enterprise host."""
+        detector = GitRemoteDetector()
+        assert detector._host_to_platform('gitlab.cee.redhat.com') == 'gitlab'
+
+    def test_host_to_platform_github_self_hosted(self):
+        """Test mapping self-hosted GitHub instance."""
+        detector = GitRemoteDetector()
+        assert detector._host_to_platform('github.company.internal') == 'github'
+
+    def test_host_to_platform_gitlab_self_hosted(self):
+        """Test mapping self-hosted GitLab instance."""
+        detector = GitRemoteDetector()
+        assert detector._host_to_platform('gitlab.company.internal') == 'gitlab'
+
+    def test_host_to_platform_case_insensitive(self):
+        """Test that platform detection is case-insensitive."""
+        detector = GitRemoteDetector()
+        assert detector._host_to_platform('GitHub.Enterprise.COM') == 'github'
+        assert detector._host_to_platform('GitLab.CEE.RedHat.COM') == 'gitlab'
 
 
 class TestConvenienceFunctions:
