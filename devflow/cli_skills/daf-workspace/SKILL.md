@@ -1,6 +1,8 @@
 ---
 name: daf-workspace
 description: List configured workspaces for multi-branch development
+user-invocable: true
+argument-hint: "list"
 ---
 
 View all configured workspaces and their paths.

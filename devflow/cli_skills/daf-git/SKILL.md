@@ -1,6 +1,8 @@
 ---
 name: daf-git
 description: Manage GitHub/GitLab issues and sessions
+user-invocable: true
+argument-hint: "[ISSUE-NUMBER|owner/repo#number]"
 ---
 
 Complete workflow for managing GitHub Issues and GitLab Issues in DevAIFlow.

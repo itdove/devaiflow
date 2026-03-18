@@ -1,5 +1,7 @@
 ---
+name: daf-cli
 description: Commands that work inside Claude Code sessions for JIRA integration, notes, and session management
+user-invocable: false
 ---
 
 # DAF CLI - Commands for Claude Code Sessions

@@ -1,6 +1,8 @@
 ---
 name: daf-notes
 description: View all progress notes for the current session
+user-invocable: true
+argument-hint: "[SESSION-NAME|TICKET-ID]"
 ---
 
 Display all notes for the current session in chronological order. This is a READ-ONLY view - it does not modify the session.
