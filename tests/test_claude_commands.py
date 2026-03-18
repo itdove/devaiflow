@@ -56,11 +56,11 @@ def test_list_bundled_skills():
 
 
 def test_list_slash_command_skills():
-    """Test listing slash command skills (with 'name:' field)."""
+    """Test listing slash command skills (user-invocable: true)."""
     slash_commands = list_slash_command_skills()
 
-    # Should have 11 daf-* slash commands
-    assert len(slash_commands) >= 11
+    # Should have 12 daf-* slash commands
+    assert len(slash_commands) >= 12
 
     # Check some expected slash commands
     skill_names = [s.name for s in slash_commands]
@@ -69,15 +69,15 @@ def test_list_slash_command_skills():
     assert "daf-list" in skill_names
     assert "daf-jira" in skill_names
 
-    # All should have SKILL.md with name: field
+    # All should have SKILL.md with user-invocable: true
     for skill in slash_commands:
         skill_md = skill / "SKILL.md"
         content = skill_md.read_text()
-        assert "name:" in content
+        assert "user-invocable: true" in content
 
 
 def test_list_reference_skills():
-    """Test listing reference skills (without 'name:' field)."""
+    """Test listing reference skills (user-invocable: false)."""
     reference_skills = list_reference_skills()
 
     # Should have 4 reference skills
@@ -90,14 +90,14 @@ def test_list_reference_skills():
     assert "git-cli" in skill_names
     assert "glab-cli" in skill_names
 
-    # None should have name: field in SKILL.md
+    # All should have user-invocable: false in SKILL.md
     for skill in reference_skills:
         skill_md = skill / "SKILL.md"
         content = skill_md.read_text()
-        # Check frontmatter doesn't have name: field
+        # Check frontmatter has user-invocable: false
         if content.startswith("---\n"):
             frontmatter = content.split("---\n")[1]
-            assert "name:" not in frontmatter
+            assert "user-invocable: false" in frontmatter
 
 
 # ============================================================================
@@ -218,7 +218,7 @@ def test_install_reference_skills_already_up_to_date(temp_user_home):
 
 
 def test_reference_skills_no_name_field(temp_user_home):
-    """Test that installed reference skills don't have name: field in frontmatter."""
+    """Test that installed reference skills have user-invocable: false in frontmatter."""
     install_or_upgrade_reference_skills(quiet=True)
 
     skills_dir = temp_user_home / ".claude" / "skills"
@@ -227,9 +227,10 @@ def test_reference_skills_no_name_field(temp_user_home):
 
     assert content.startswith("---\n")
     assert "description:" in content
-    # Verify frontmatter doesn't have name: field
+    # Verify frontmatter has name: and user-invocable: false
     frontmatter = content.split("---\n")[1]
-    assert "name:" not in frontmatter
+    assert "name:" in frontmatter
+    assert "user-invocable: false" in frontmatter
 
 
 # ============================================================================

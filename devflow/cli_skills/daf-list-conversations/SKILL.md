@@ -1,6 +1,7 @@
 ---
 name: daf-list-conversations
 description: List all conversations in the current multi-project session
+user-invocable: true
 ---
 
 List all conversations in the current multi-project session.

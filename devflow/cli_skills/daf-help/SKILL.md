@@ -1,6 +1,7 @@
 ---
 name: daf-help
 description: Show available daf commands and quick reference
+user-invocable: true
 ---
 
 Display a quick reference of commonly used daf commands.

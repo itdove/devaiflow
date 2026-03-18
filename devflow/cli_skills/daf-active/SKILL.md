@@ -1,6 +1,7 @@
 ---
 name: daf-active
 description: Show information about the currently active conversation
+user-invocable: true
 ---
 
 Display details about the currently active Claude Code conversation, including session info, branch, and other conversations in the session.

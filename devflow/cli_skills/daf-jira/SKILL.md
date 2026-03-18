@@ -1,6 +1,8 @@
 ---
 name: daf-jira
 description: View JIRA ticket details for current session
+user-invocable: true
+argument-hint: "[TICKET-ID]"
 ---
 
 View the JIRA ticket associated with the current session in Claude-friendly format.

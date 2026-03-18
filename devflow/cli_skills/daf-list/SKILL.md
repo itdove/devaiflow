@@ -1,6 +1,7 @@
 ---
 name: daf-list
 description: List all DevAIFlow sessions
+user-invocable: true
 ---
 
 List all daf sessions with their status and time tracking.
