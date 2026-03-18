@@ -1080,19 +1080,21 @@ def sync_multi_backend(
 
         if gitlab_repos:
             console_print()
-            console_print(f"[cyan]Syncing {len(gitlab_repos)} GitLab repositories...[/cyan]")
+            console_print(f"[bold cyan]Syncing GitLab issues ({len(gitlab_repos)} repositories)...[/bold cyan]")
 
             gitlab_created = 0
             gitlab_updated = 0
 
-            for repo_path, remote_url in gitlab_repos:
-                console_print(f"[dim]  Syncing {repo_path}...[/dim]")
+            for repo_info in gitlab_repos:
+                repository = repo_info['repository']
+                repository_url = repo_info.get('url')  # Git remote URL for hostname extraction
+                console_print(f"[cyan]• {repository}[/cyan]")
 
                 result = sync_gitlab_repository(
-                    repository=repo_path,
+                    repository=repository,
                     session_manager=session_manager,
                     config=config,
-                    repository_url=remote_url,
+                    repository_url=repository_url,
                     output_json=output_json,
                     synced_tickets=synced_tickets,
                 )
