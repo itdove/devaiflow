@@ -2566,8 +2566,43 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
             cmd.append("--draft")
         cmd.extend(["--title", title, "--body", description])
 
-        # If fork detected, add base repository
-        if upstream_info:
+        # If fork detected, determine target repository based on user's branch selection
+        if upstream_info and target_branch:
+            # Extract remote name from target_branch (e.g., "origin/main" -> "origin")
+            remote_name = None
+            if '/' in target_branch:
+                parts = target_branch.split('/', 1)
+                # Check if first part is a known remote prefix
+                if parts[0] in ['origin', 'upstream', 'fork']:
+                    remote_name = parts[0]
+
+            if remote_name == 'upstream':
+                # User explicitly selected upstream branch - create PR to upstream
+                base_repo = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
+                cmd.extend(["--repo", base_repo])
+                if upstream_info['detection_method'] == 'user_prompt':
+                    console.print(f"[dim]Creating PR to user-specified upstream: {base_repo}[/dim]")
+                else:
+                    console.print(f"[dim]Creating PR to upstream: {base_repo}[/dim]")
+            elif remote_name == 'origin':
+                # User explicitly selected origin branch - create PR to origin (their fork)
+                # Get origin repository info and explicitly set --repo
+                origin_info = _get_origin_repo_info(working_dir)
+                if origin_info:
+                    origin_repo = f"{origin_info['origin_owner']}/{origin_info['origin_repo']}"
+                    cmd.extend(["--repo", origin_repo])
+                    console.print(f"[dim]Creating PR to origin (your fork): {origin_repo}[/dim]")
+                else:
+                    # Fallback: don't add --repo (may still go to upstream)
+                    console.print(f"[dim]Creating PR to origin (your fork)[/dim]")
+                    console.print(f"[yellow]⚠[/yellow] Could not detect origin repository - PR may go to upstream")
+            else:
+                # No remote prefix or unknown remote - default to upstream for forks (backward compatible)
+                base_repo = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
+                cmd.extend(["--repo", base_repo])
+                console.print(f"[dim]Detected fork - creating PR to upstream: {base_repo}[/dim]")
+        elif upstream_info and not target_branch:
+            # No target branch specified but fork detected - default to upstream
             base_repo = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
             cmd.extend(["--repo", base_repo])
             if upstream_info['detection_method'] == 'user_prompt':
@@ -2614,6 +2649,52 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Exception creating PR: {e}")
         return None
+
+
+def _get_origin_repo_info(working_dir: Path) -> Optional[dict]:
+    """Get origin repository information from git remote.
+
+    Args:
+        working_dir: Working directory path
+
+    Returns:
+        Dictionary with origin repo info or None:
+        {
+            'origin_owner': str,  # Owner/org of origin repo
+            'origin_repo': str,   # Repository name
+            'origin_url': str     # URL of origin remote
+        }
+    """
+    try:
+        # Get origin remote URL
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+
+        origin_url = result.stdout.strip()
+        if not origin_url:
+            return None
+
+        # Parse GitLab/GitHub URL to extract owner and repo
+        import re
+        # Matches: git@gitlab.com:owner/repo.git or https://gitlab.com/owner/repo.git
+        match = re.search(r'[:/]([^/]+)/([^/\.]+)(?:\.git)?$', origin_url)
+        if match:
+            return {
+                'origin_owner': match.group(1),
+                'origin_repo': match.group(2),
+                'origin_url': origin_url
+            }
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    return None
 
 
 def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, config=None, target_branch: Optional[str] = None, upstream_info: Optional[dict] = None) -> Optional[str]:
@@ -2667,9 +2748,43 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
             cmd.append("--draft")
         cmd.extend(["--title", title, "--description", description])
 
-        # If fork detected, add target project
-        if upstream_info:
-            # For GitLab, use --target-project to specify upstream repo
+        # If fork detected, determine target repository based on user's branch selection
+        if upstream_info and target_branch:
+            # Extract remote name from target_branch (e.g., "origin/main" -> "origin")
+            remote_name = None
+            if '/' in target_branch:
+                parts = target_branch.split('/', 1)
+                # Check if first part is a known remote prefix
+                if parts[0] in ['origin', 'upstream', 'fork']:
+                    remote_name = parts[0]
+
+            if remote_name == 'upstream':
+                # User explicitly selected upstream branch - create MR to upstream
+                target_project = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
+                cmd.extend(["--target-project", target_project])
+                if upstream_info['detection_method'] == 'user_prompt':
+                    console.print(f"[dim]Creating MR to user-specified upstream: {target_project}[/dim]")
+                else:
+                    console.print(f"[dim]Creating MR to upstream: {target_project}[/dim]")
+            elif remote_name == 'origin':
+                # User explicitly selected origin branch - create MR to origin (their fork)
+                # Get origin repository info and explicitly set --target-project
+                origin_info = _get_origin_repo_info(working_dir)
+                if origin_info:
+                    origin_project = f"{origin_info['origin_owner']}/{origin_info['origin_repo']}"
+                    cmd.extend(["--target-project", origin_project])
+                    console.print(f"[dim]Creating MR to origin (your fork): {origin_project}[/dim]")
+                else:
+                    # Fallback: don't add --target-project (may still go to upstream)
+                    console.print(f"[dim]Creating MR to origin (your fork)[/dim]")
+                    console.print(f"[yellow]⚠[/yellow] Could not detect origin repository - MR may go to upstream")
+            else:
+                # No remote prefix or unknown remote - default to upstream for forks (backward compatible)
+                target_project = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
+                cmd.extend(["--target-project", target_project])
+                console.print(f"[dim]Detected fork - creating MR to upstream: {target_project}[/dim]")
+        elif upstream_info and not target_branch:
+            # No target branch specified but fork detected - default to upstream
             target_project = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
             cmd.extend(["--target-project", target_project])
             if upstream_info['detection_method'] == 'user_prompt':
