@@ -30,7 +30,8 @@ def mock_env_no_auth_type(monkeypatch):
     """Set up environment without JIRA_AUTH_TYPE (should default to bearer)."""
     monkeypatch.setenv("JIRA_API_TOKEN", "test-token-default")
     monkeypatch.setenv("JIRA_URL", "https://test.jira.com")
-    # Don't set JIRA_AUTH_TYPE to test default behavior
+    # Explicitly delete JIRA_AUTH_TYPE to test default behavior
+    monkeypatch.delenv("JIRA_AUTH_TYPE", raising=False)
 
 
 def test_get_auth_header_bearer(mock_env_bearer):
