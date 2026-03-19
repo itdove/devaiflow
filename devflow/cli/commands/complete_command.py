@@ -1377,26 +1377,51 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
                 console.print(f"[dim]Automatically using default branch: {default_branch} (configured in prompts)[/dim]")
                 return default_branch
 
-    # Determine which remote to query (upstream if fork, otherwise origin)
-    remote_name = "origin"
+    # Determine which remotes to query
     if upstream_info:
-        # Check if upstream remote exists
+        # Fork scenario: fetch from both upstream and origin
         upstream_url = upstream_info.get('upstream_url')
+        upstream_remote = None
         if upstream_url:
-            existing_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
-            if existing_remote:
-                remote_name = existing_remote
+            upstream_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
 
-    # Fetch remote branches
-    branches = GitUtils.list_remote_branches(working_dir, remote_name)
+        # Fetch branches from both remotes
+        remote_branches = {}
+        if upstream_remote:
+            upstream_branches = GitUtils.list_remote_branches(working_dir, upstream_remote)
+            if upstream_branches:
+                remote_branches[upstream_remote] = upstream_branches
 
-    # Filter out current branch (cannot create PR to same branch as source)
-    if current_branch and current_branch in branches:
-        branches = [b for b in branches if b != current_branch]
+        origin_branches = GitUtils.list_remote_branches(working_dir, "origin")
+        if origin_branches:
+            remote_branches["origin"] = origin_branches
+    else:
+        # Non-fork scenario: only fetch from origin
+        origin_branches = GitUtils.list_remote_branches(working_dir, "origin")
+        remote_branches = {"origin": origin_branches} if origin_branches else {}
+
+    # Build combined branch list with remote prefixes
+    branches = []
+    branch_to_remote = {}  # Map branch display name to (remote, actual_branch)
+    for remote, remote_branch_list in remote_branches.items():
+        for branch in remote_branch_list:
+            # Filter out current branch
+            if current_branch and branch == current_branch:
+                continue
+
+            # Use format "remote/branch" for display when multiple remotes
+            if len(remote_branches) > 1:
+                display_name = f"{remote}/{branch}"
+            else:
+                display_name = branch
+
+            branches.append(display_name)
+            branch_to_remote[display_name] = (remote, branch)
 
     # Handle empty branch list
     if not branches:
-        console.print(f"[yellow]⚠[/yellow] No branches found on remote '{remote_name}'")
+        remotes_str = ", ".join(remote_branches.keys()) if remote_branches else "configured remotes"
+        console.print(f"[yellow]⚠[/yellow] No branches found on {remotes_str}")
         console.print("[dim]Continuing without target branch selection[/dim]")
         return None
 
@@ -1404,15 +1429,21 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     default_branch = GitUtils.get_default_branch(working_dir)
 
     # Show branch selection prompt
-    console.print(f"\n[cyan]Select target branch for PR/MR (remote: {remote_name}):[/cyan]")
+    if len(remote_branches) > 1:
+        remotes_str = " and ".join(remote_branches.keys())
+        console.print(f"\n[cyan]Select target branch for PR/MR (remotes: {remotes_str}):[/cyan]")
+    else:
+        remote_name = list(remote_branches.keys())[0]
+        console.print(f"\n[cyan]Select target branch for PR/MR (remote: {remote_name}):[/cyan]")
 
     # Display branch options as numbered list
     console.print("\n[bold]Available branches:[/bold]")
-    for i, branch in enumerate(branches, 1):
-        if branch == default_branch:
-            console.print(f"{i}. {branch} [green](default)[/green]")
+    for i, branch_display in enumerate(branches, 1):
+        remote, actual_branch = branch_to_remote[branch_display]
+        if actual_branch == default_branch:
+            console.print(f"{i}. {branch_display} [green](default)[/green]")
         else:
-            console.print(f"{i}. {branch}")
+            console.print(f"{i}. {branch_display}")
 
     # Add "Skip" option
     skip_option_number = len(branches) + 1
@@ -1423,10 +1454,14 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     numeric_choices = [str(i) for i in range(1, skip_option_number + 1)]
 
     # Find default choice number (default branch if available, otherwise first branch)
-    if default_branch and default_branch in branches:
-        default_choice = str(branches.index(default_branch) + 1)
-    else:
-        default_choice = "1"
+    default_choice = "1"
+    if default_branch:
+        # Find the display name that corresponds to the default branch
+        for i, branch_display in enumerate(branches, 1):
+            remote, actual_branch = branch_to_remote[branch_display]
+            if actual_branch == default_branch:
+                default_choice = str(i)
+                break
 
     # Prompt for selection
     choice = Prompt.ask("Select option", choices=numeric_choices, default=default_choice)
