@@ -526,10 +526,14 @@ def test_select_target_branch_empty_after_filtering(monkeypatch, tmp_path):
 
 
 def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path):
-    """Test fork scenario - current local branch filtered from upstream branches."""
+    """Test fork scenario - current local branch filtered from both upstream and origin branches."""
     def mock_list_remote_branches(path, remote):
-        # Upstream branches including a branch with same name as local
-        return ["main", "develop", "feature-x", "release/2.5"]
+        # Return different branches for different remotes
+        if remote == "upstream":
+            return ["main", "develop", "feature-x", "release/2.5"]
+        elif remote == "origin":
+            return ["main", "develop", "release/2.5"]
+        return []
 
     def mock_get_default_branch(path):
         return "main"
@@ -543,8 +547,8 @@ def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path):
 
     # Mock Prompt.ask to simulate user selecting first option
     def mock_prompt_ask(prompt_text, choices, default):
-        # Should have 3 branches (feature-x filtered out) + skip = 4 options
-        assert choices == ["1", "2", "3", "4"]
+        # upstream: 3 branches (feature-x filtered out) + origin: 3 branches = 6 branches + skip = 7 options
+        assert choices == ["1", "2", "3", "4", "5", "6", "7"]
         return "1"
 
     monkeypatch.setattr("rich.prompt.Prompt.ask", mock_prompt_ask)
@@ -564,8 +568,8 @@ def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path):
     # Call with current_branch="feature-x"
     result = _select_target_branch(tmp_path, config, upstream_info=upstream_info, current_branch="feature-x")
 
-    # Should return main (first available after filtering)
-    assert result == "main"
+    # Should return upstream/main (first available after filtering, with remote prefix)
+    assert result == "upstream/main"
 
 
 def test_create_github_pr_strips_remote_prefix_from_target_branch(monkeypatch, tmp_path):
@@ -672,3 +676,101 @@ def test_create_gitlab_mr_strips_remote_prefix_from_target_branch(monkeypatch, t
     # Remote prefix should be stripped
     assert "develop" in glab_cmd
     assert "upstream/develop" not in glab_cmd
+
+
+def test_select_target_branch_shows_both_upstream_and_origin(monkeypatch, tmp_path):
+    """Test that branch selection shows branches from both upstream and origin when upstream exists."""
+
+    # Mock git utilities
+    def mock_list_remote_branches(path, remote):
+        # Return different branches for different remotes
+        if remote == "upstream":
+            return ["main", "develop", "release/2.5"]
+        elif remote == "origin":
+            return ["main", "develop", "feature-a", "feature-b"]
+        return []
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    def mock_get_remote_name_for_url(path, url):
+        # Return "upstream" for upstream URL
+        if "upstream" in url:
+            return "upstream"
+        return None
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_remote_name_for_url", mock_get_remote_name_for_url)
+
+    # Mock Prompt.ask to verify the options presented
+    selected_branch = None
+    def mock_prompt_ask(prompt_text, choices, default):
+        nonlocal selected_branch
+        # Verify we have branches from both remotes
+        # upstream: main, develop, release/2.5 (3 branches, but main is current so filtered = 2)
+        # origin: main, develop, feature-a, feature-b (4 branches, but main is current so filtered = 3)
+        # Total: 2 (upstream) + 3 (origin) = 5 branches + 1 skip = 6 options
+        assert choices == ["1", "2", "3", "4", "5", "6"], f"Expected 6 choices, got {choices}"
+        # Select the first option (upstream/develop)
+        selected_branch = "1"
+        return "1"
+
+    monkeypatch.setattr("rich.prompt.Prompt.ask", mock_prompt_ask)
+
+    # Create config
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=None)
+    )
+
+    # Mock upstream info (fork scenario)
+    upstream_info = {
+        'upstream_url': 'https://github.com/upstream/repo.git',
+        'upstream_owner': 'upstream',
+        'upstream_repo': 'repo',
+    }
+
+    # Call with current_branch="main" (to filter it out)
+    result = _select_target_branch(tmp_path, config, upstream_info=upstream_info, current_branch="main")
+
+    # Should return a branch with remote prefix format (e.g., "upstream/develop")
+    assert result is not None
+    assert "/" in result  # Should have remote prefix when multiple remotes
+
+
+def test_select_target_branch_origin_only_no_prefix(monkeypatch, tmp_path):
+    """Test that branch selection shows branches without prefix when only origin exists (no upstream)."""
+
+    # Mock git utilities
+    def mock_list_remote_branches(path, remote):
+        # Only origin exists
+        if remote == "origin":
+            return ["main", "develop", "feature-a"]
+        return []
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    # Mock Prompt.ask
+    def mock_prompt_ask(prompt_text, choices, default):
+        # 3 branches total (main filtered out leaves 2) + skip = 3 options
+        assert choices == ["1", "2", "3"]
+        return "1"
+
+    monkeypatch.setattr("rich.prompt.Prompt.ask", mock_prompt_ask)
+
+    # Create config
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=None)
+    )
+
+    # No upstream info (not a fork)
+    result = _select_target_branch(tmp_path, config, upstream_info=None, current_branch="main")
+
+    # Should return a branch WITHOUT remote prefix when only one remote
+    assert result is not None
+    # When only origin exists, branches should not have "origin/" prefix
+    assert result in ["develop", "feature-a"]
