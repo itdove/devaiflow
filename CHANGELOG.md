@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-19
+
 ### Added
 - Multi-project workflow support with shared context for cross-repository features (#149)
   - **Architecture:** Creates ONE conversation with SHARED CONTEXT across all selected projects
@@ -112,6 +114,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JIRA auto-transition for analysis-only sessions
 - Project path encoding for conversation files
 
-[unreleased]: https://github.com/itdove/devaiflow/compare/v1.0.0...HEAD
-
+[unreleased]: https://github.com/itdove/devaiflow/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/itdove/devaiflow/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/itdove/devaiflow/tags/v1.0.0
