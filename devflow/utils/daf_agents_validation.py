@@ -113,23 +113,53 @@ def _get_bundled_daf_agents_content() -> tuple[str | None, list[str]]:
 
 
 def _check_and_upgrade_daf_agents(installed_file: Path, location: str) -> bool:
-    """Check if installed DAF_AGENTS.md is outdated and offer upgrade.
+    """Check if installed DAF_AGENTS.md is outdated and offer upgrade or deletion.
+
+    If bundled DAF_AGENTS.md no longer exists, offers to delete the installed copy
+    (migration to daf-workflow skill). Otherwise, offers to upgrade if outdated.
 
     Args:
         installed_file: Path to the installed DAF_AGENTS.md
         location: Human-readable location description (e.g., "repository", "workspace")
 
     Returns:
-        True if file is up-to-date or successfully upgraded, False if user declined or upgrade failed
+        True if file is up-to-date, successfully upgraded, or successfully deleted
+        False if user declined or operation failed
     """
     # Get bundled content for comparison
     bundled_content, diagnostics = _get_bundled_daf_agents_content()
     if bundled_content is None:
-        # Can't check version if we can't read bundled file
-        # Continue anyway - don't block session opening
-        if diagnostics:
-            console.print(f"[yellow]⚠ Could not check for DAF_AGENTS.md updates[/yellow]")
-        return True
+        # Bundled file not found - DAF_AGENTS.md has been removed from package
+        # Offer to delete installed copy (migration to daf-workflow skill)
+        console.print(f"\n[cyan]ℹ DAF_AGENTS.md has been replaced by daf-workflow skill[/cyan]")
+        console.print(f"[dim]Workflow guidance is now in ~/.claude/skills/daf-workflow/ (auto-loaded)[/dim]")
+        console.print(f"\n[dim]Found old DAF_AGENTS.md at: {installed_file}[/dim]")
+
+        from devflow.utils import is_mock_mode
+        mock_mode = is_mock_mode()
+
+        should_delete = True
+        if not mock_mode:
+            console.print(f"\n[bold]Delete old DAF_AGENTS.md file?[/bold]")
+            console.print(f"[dim]This file is no longer used. Run 'daf upgrade' to install daf-workflow skill.[/dim]")
+            from rich.prompt import Confirm
+            should_delete = Confirm.ask("Delete old file?", default=True)
+        else:
+            console.print(f"[dim]Mock mode: Auto-deleting old DAF_AGENTS.md[/dim]")
+
+        if should_delete:
+            try:
+                installed_file.unlink()
+                console.print(f"[green]✓ Deleted old DAF_AGENTS.md from {location}[/green]")
+                console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+                return True
+            except Exception as e:
+                console.print(f"[yellow]⚠ Could not delete {installed_file}: {e}[/yellow]")
+                console.print(f"[dim]You can manually delete this file - it's no longer needed[/dim]")
+                return True  # Don't block session opening
+        else:
+            console.print(f"[dim]Keeping old file (will prompt again on next session)[/dim]")
+            return True
 
     # Read installed content
     try:
@@ -180,15 +210,18 @@ def _check_and_upgrade_daf_agents(installed_file: Path, location: str) -> bool:
 
 
 def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') -> bool:
-    """Validate that required context files exist before launching Claude.
+    """Validate DAF_AGENTS.md context files and handle migration to daf-workflow skill.
 
     Checks for DAF_AGENTS.md in this order:
     1. DEVAIFLOW_HOME directory (centralized, recommended)
     2. Repository directory (project-specific customization, backward compatibility)
     3. Workspace directory (shared across projects, backward compatibility)
-    4. Offer to auto-install bundled DAF_AGENTS.md if not found
 
-    If found, checks if installed version is outdated and prompts for upgrade.
+    If found, checks if it should be deleted (migration to daf-workflow skill).
+    If bundled version still exists, offers upgrade if outdated.
+
+    NOTE: DAF_AGENTS.md is being phased out in favor of the daf-workflow skill.
+    This function handles the migration by offering to delete old files.
 
     For ticket_creation and investigation sessions with temp directories:
     - Checks DEVAIFLOW_HOME first, then workspace (temp directory doesn't persist)
@@ -199,7 +232,7 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
         config_loader: Config loader to get workspace path
 
     Returns:
-        True if DAF_AGENTS.md is found or successfully installed, False otherwise
+        True (always succeeds - DAF_AGENTS.md is optional, daf-workflow skill is primary)
     """
     # For ticket_creation and investigation sessions with temp directories,
     # check DEVAIFLOW_HOME first, then workspace (temp directory is transient and gets deleted)
@@ -240,50 +273,10 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
                         return False
                     return True
 
-        # Not found - offer to install to DEVAIFLOW_HOME (recommended location)
-        console.print(f"\n[yellow]⚠ DAF_AGENTS.md not found[/yellow]")
-        console.print(f"\n[dim]DAF_AGENTS.md provides daf tool usage instructions to Claude.[/dim]")
-        console.print(f"\nSearched locations:")
-        console.print(f"  1. DEVAIFLOW_HOME: {daf_agents_home}")
-        if config and config.repos and config.repos.get_default_workspace_path():
-            console.print(f"  2. Workspace:      {cs_agents_workspace}")
-        console.print(f"\n[dim]Note: Cannot install to temporary directory (session_type: {session.session_type})[/dim]")
-
-        from devflow.utils import is_mock_mode
-        mock_mode = is_mock_mode()
-
-        should_install = True
-        if not mock_mode:
-            console.print(f"\n[bold]Install DAF_AGENTS.md to DEVAIFLOW_HOME?[/bold]")
-            console.print(f"[dim]This will copy the bundled DAF_AGENTS.md to: {daf_agents_home}[/dim]")
-            console.print(f"[dim]Recommended: Centralized location for all projects[/dim]")
-            should_install = Confirm.ask("Install DAF_AGENTS.md to DEVAIFLOW_HOME?", default=True)
-        else:
-            console.print(f"[dim]Mock mode: Auto-installing DAF_AGENTS.md to {daf_agents_home}[/dim]")
-
-        if not should_install:
-            console.print(f"\n[yellow]Cannot continue without DAF_AGENTS.md[/yellow]")
-            console.print(f"\n[bold]Manual installation:[/bold]")
-            console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {cs_home}/")
-            console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
-            return False
-
-        # Install bundled DAF_AGENTS.md to DEVAIFLOW_HOME
-        success, diagnostics = _install_bundled_cs_agents(daf_agents_home)
-        if success:
-            console.print(f"[green]✓ Installed DAF_AGENTS.md to DEVAIFLOW_HOME[/green]")
-            console.print(f"[dim]  Location: {daf_agents_home}[/dim]")
-            return True
-        else:
-            console.print(f"\n[red]✗ Failed to install DAF_AGENTS.md[/red]")
-            if diagnostics:
-                console.print(f"\n[yellow]Debug information:[/yellow]")
-                for diag in diagnostics:
-                    console.print(f"[dim]{diag}[/dim]")
-            console.print(f"\n[bold]Manual installation:[/bold]")
-            console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {cs_home}/")
-            console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
-            return False
+        # Not found - DAF_AGENTS.md has been replaced by daf-workflow skill
+        console.print(f"\n[dim]ℹ Using daf-workflow skill for workflow guidance[/dim]")
+        console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+        return True
 
     # Multi-project session: check DEVAIFLOW_HOME first, then workspace
     # (Claude launches from workspace root for multi-project sessions)
@@ -315,49 +308,10 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
                     return False
                 return True
 
-            # Not found - offer to install to DEVAIFLOW_HOME (recommended location)
-            console.print(f"\n[yellow]⚠ DAF_AGENTS.md not found[/yellow]")
-            console.print(f"\n[dim]DAF_AGENTS.md provides daf tool usage instructions to Claude.[/dim]")
-            console.print(f"\nSearched locations:")
-            console.print(f"  1. DEVAIFLOW_HOME: {daf_agents_home}")
-            console.print(f"  2. Workspace:      {cs_agents_workspace}")
-            console.print(f"\n[dim]Note: Multi-project sessions use DEVAIFLOW_HOME for centralized management[/dim]")
-
-            from devflow.utils import is_mock_mode
-            mock_mode = is_mock_mode()
-
-            should_install = True
-            if not mock_mode:
-                console.print(f"\n[bold]Install DAF_AGENTS.md to DEVAIFLOW_HOME?[/bold]")
-                console.print(f"[dim]This will copy the bundled DAF_AGENTS.md to: {daf_agents_home}[/dim]")
-                console.print(f"[dim]Recommended: Centralized location for all projects[/dim]")
-                should_install = Confirm.ask("Install DAF_AGENTS.md to DEVAIFLOW_HOME?", default=True)
-            else:
-                console.print(f"[dim]Mock mode: Auto-installing DAF_AGENTS.md to {daf_agents_home}[/dim]")
-
-            if not should_install:
-                console.print(f"\n[yellow]Cannot continue without DAF_AGENTS.md[/yellow]")
-                console.print(f"\n[bold]Manual installation:[/bold]")
-                console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {cs_home}/")
-                console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
-                return False
-
-            # Install bundled DAF_AGENTS.md to DEVAIFLOW_HOME
-            success, diagnostics = _install_bundled_cs_agents(daf_agents_home)
-            if success:
-                console.print(f"[green]✓ Installed DAF_AGENTS.md to DEVAIFLOW_HOME[/green]")
-                console.print(f"[dim]  Location: {daf_agents_home}[/dim]")
-                return True
-            else:
-                console.print(f"\n[red]✗ Failed to install DAF_AGENTS.md[/red]")
-                if diagnostics:
-                    console.print(f"\n[yellow]Debug information:[/yellow]")
-                    for diag in diagnostics:
-                        console.print(f"[dim]{diag}[/dim]")
-                console.print(f"\n[bold]Manual installation:[/bold]")
-                console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {cs_home}/")
-                console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
-                return False
+            # Not found - DAF_AGENTS.md has been replaced by daf-workflow skill
+            console.print(f"\n[dim]ℹ Using daf-workflow skill for workflow guidance (multi-project)[/dim]")
+            console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+            return True
 
         # No workspace path in multi-project session
         console.print(f"\n[red]✗ Multi-project session missing workspace_path[/red]")
@@ -413,70 +367,7 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
                 return False
             return True
 
-    # Not found - offer to install bundled DAF_AGENTS.md to DEVAIFLOW_HOME (recommended)
-    console.print(f"\n[yellow]⚠ DAF_AGENTS.md not found[/yellow]")
-    console.print(f"\n[dim]DAF_AGENTS.md provides daf tool usage instructions to Claude.[/dim]")
-    console.print(f"\nSearched locations:")
-    console.print(f"  1. DEVAIFLOW_HOME: {daf_agents_home}")
-    console.print(f"  2. Repository:     {cs_agents_repo}")
-    if config and config.repos and config.repos.get_default_workspace_path():
-        console.print(f"  3. Workspace:      {cs_agents_workspace}")
-
-    # Offer to install bundled DAF_AGENTS.md
-    # In mock mode, auto-install without prompting
-    from devflow.utils import is_mock_mode
-    mock_mode = is_mock_mode()
-
-    should_install = True
-    if not mock_mode:
-        console.print(f"\n[bold]Install DAF_AGENTS.md to DEVAIFLOW_HOME?[/bold]")
-        console.print(f"[dim]This will copy the bundled DAF_AGENTS.md to: {daf_agents_home}[/dim]")
-        console.print(f"[dim]Recommended: Centralized location for all projects[/dim]")
-        should_install = Confirm.ask("Install DAF_AGENTS.md to DEVAIFLOW_HOME?", default=True)
-    else:
-        console.print(f"[dim]Mock mode: Auto-installing DAF_AGENTS.md to {daf_agents_home}[/dim]")
-
-    if not should_install:
-        console.print(f"\n[yellow]Cannot continue without DAF_AGENTS.md[/yellow]")
-        console.print(f"\n[bold]Manual installation options:[/bold]")
-        console.print(f"\n  Option 1: Copy to DEVAIFLOW_HOME (recommended, centralized)")
-        console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {cs_home}/")
-        console.print(f"\n  Option 2: Copy to repository (project-specific)")
-        console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {repo_path}/")
-        console.print(f"\n  Option 3: Copy to workspace (shared across all projects)")
-        if config and config.repos and config.repos.get_default_workspace_path():
-            console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
-        console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
-        return False
-
-    # Install bundled DAF_AGENTS.md to DEVAIFLOW_HOME
-    success, diagnostics = _install_bundled_cs_agents(daf_agents_home)
-    if success:
-        console.print(f"[green]✓ Installed DAF_AGENTS.md to DEVAIFLOW_HOME[/green]")
-        console.print(f"[dim]  Location: {daf_agents_home}[/dim]")
-        console.print(f"\n[dim]You can customize DAF_AGENTS.md for your organization's needs.[/dim]")
-        console.print(f"[dim]See: docs/02-installation.md#customizing-for-your-organization[/dim]")
-        return True
-    else:
-        console.print(f"\n[red]✗ Failed to install DAF_AGENTS.md[/red]")
-
-        if diagnostics:
-            console.print(f"\n[yellow]Debug information:[/yellow]")
-            for diag in diagnostics:
-                console.print(f"[dim]{diag}[/dim]")
-
-        console.print(f"\n[yellow]This may indicate:[/yellow]")
-        console.print(f"  • DAF_AGENTS.md is not included in the package distribution (check setup.py)")
-        console.print(f"  • Package was installed incorrectly")
-        console.print(f"  • File permissions issue")
-
-        console.print(f"\n[bold]Manual installation options:[/bold]")
-        console.print(f"\n  Option 1: Copy to DEVAIFLOW_HOME (recommended, centralized)")
-        console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {cs_home}/")
-        console.print(f"\n  Option 2: Copy to repository (project-specific)")
-        console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {repo_path}/")
-        console.print(f"\n  Option 3: Copy to workspace (shared across all projects)")
-        if config and config.repos and config.repos.get_default_workspace_path():
-            console.print(f"    cp /path/to/devaiflow/DAF_AGENTS.md {workspace_path}/")
-        console.print(f"\nSee: https://github.com/itdove/devaiflow/blob/main/docs/02-installation.md")
-        return False
+    # Not found - DAF_AGENTS.md has been replaced by daf-workflow skill
+    console.print(f"\n[dim]ℹ Using daf-workflow skill for workflow guidance[/dim]")
+    console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+    return True

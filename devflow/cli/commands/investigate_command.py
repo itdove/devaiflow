@@ -289,7 +289,7 @@ def create_investigation_session(
     workspace = resolve_workspace_path(config, session.workspace_name)
     initial_prompt = _build_investigation_prompt(goal, parent, config, name, project_path=project_path, workspace=workspace)
 
-    # Validate that DAF_AGENTS.md exists before launching Claude
+    # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
         return
 
@@ -423,7 +423,7 @@ def _build_investigation_prompt(
     default_files = [
         ("AGENTS.md", "agent-specific instructions"),
         ("CLAUDE.md", "project guidelines and standards"),
-        ("DAF_AGENTS.md", "daf tool usage guide"),
+        # Note: daf-workflow skill is auto-loaded by Claude Code
     ]
 
     # Load configured context files
@@ -531,7 +531,7 @@ def _build_multiproject_investigation_prompt(
     default_files = [
         ("AGENTS.md", "agent-specific instructions"),
         ("CLAUDE.md", "project guidelines and standards"),
-        ("DAF_AGENTS.md", "daf tool usage guide"),
+        # Note: daf-workflow skill is auto-loaded by Claude Code
     ]
 
     # Load configured context files
@@ -685,7 +685,7 @@ def _create_multi_project_investigation_session(
         workspace=workspace_path,
     )
 
-    # Validate that DAF_AGENTS.md exists before launching Claude
+    # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
         return
 

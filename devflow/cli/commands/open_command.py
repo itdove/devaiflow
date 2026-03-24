@@ -721,7 +721,7 @@ def open_session(
     # Set up signal handlers for cleanup (using unified utility)
     setup_signal_handlers(session, session_manager, identifier, config)
 
-    # Validate that DAF_AGENTS.md exists before launching Claude
+    # Note: daf-workflow skill is auto-loaded, no validation needed
     if active_conv and not _validate_context_files(session, config_loader):
         return
 

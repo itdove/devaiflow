@@ -585,7 +585,7 @@ def create_git_issue_session(
         workspace_path = config.repos.get_default_workspace_path()
     initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, parent=parent, repository=repository)
 
-    # Validate that DAF_AGENTS.md exists before launching Claude
+    # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
         return
 
@@ -726,7 +726,7 @@ def _build_issue_creation_prompt(
     default_files = [
         ("AGENTS.md", "agent-specific instructions"),
         ("CLAUDE.md", "project guidelines and standards"),
-        ("DAF_AGENTS.md", "daf tool usage guide"),
+        # Note: daf-workflow skill is auto-loaded by Claude Code
     ]
 
     # Load configured context files from config

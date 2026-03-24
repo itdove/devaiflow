@@ -4,6 +4,7 @@ import pytest
 from devflow.cli.commands.new_command import _generate_initial_prompt
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_multiproject_prompt_includes_project_level_files():
     """Test that multi-project sessions include project-level context file instructions."""
     project_paths = {
@@ -38,6 +39,7 @@ def test_multiproject_prompt_includes_project_level_files():
     assert "frontend-app/DAF_AGENTS.md (daf tool usage guide)" in prompt
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_single_project_prompt_does_not_include_project_level_files():
     """Test that single-project sessions don't include project-level instructions."""
     prompt = _generate_initial_prompt(
