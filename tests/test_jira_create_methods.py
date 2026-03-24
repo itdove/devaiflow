@@ -143,10 +143,10 @@ def test_create_bug_with_epic(mock_jira_client, mock_field_mapper, monkeypatch):
     def mock_api_request(method, endpoint, **kwargs):
         response = Mock()
         if method == "POST" and "/rest/api/2/issue" in endpoint:
-            # Verify epic link is in payload
+            # Verify epic link is in payload with correct object format
             payload = kwargs.get("json", {})
             assert "customfield_12311140" in payload["fields"]
-            assert payload["fields"]["customfield_12311140"] == "PROJ-10000"
+            assert payload["fields"]["customfield_12311140"] == {"key": "PROJ-10000"}
 
             response.status_code = 201
             response.json.return_value = {"key": "PROJ-12346"}
@@ -258,10 +258,10 @@ def test_create_story_with_epic(mock_jira_client, mock_field_mapper, monkeypatch
     def mock_api_request(method, endpoint, **kwargs):
         response = Mock()
         if method == "POST" and "/rest/api/2/issue" in endpoint:
-            # Verify epic link is in payload
+            # Verify epic link is in payload with correct object format
             payload = kwargs.get("json", {})
             assert "customfield_12311140" in payload["fields"]
-            assert payload["fields"]["customfield_12311140"] == "PROJ-20000"
+            assert payload["fields"]["customfield_12311140"] == {"key": "PROJ-20000"}
 
             response.status_code = 201
             response.json.return_value = {"key": "PROJ-12349"}
@@ -675,10 +675,10 @@ def test_create_epic_with_parent(mock_jira_client, mock_field_mapper, monkeypatc
     def mock_api_request(method, endpoint, **kwargs):
         response = Mock()
         if method == "POST" and "/rest/api/2/issue" in endpoint:
-            # Verify parent link is in payload
+            # Verify parent link is in payload with correct object format
             payload = kwargs.get("json", {})
             assert "customfield_12311140" in payload["fields"]
-            assert payload["fields"]["customfield_12311140"] == "PROJ-10000"
+            assert payload["fields"]["customfield_12311140"] == {"key": "PROJ-10000"}
 
             response.status_code = 201
             response.json.return_value = {"key": "PROJ-12362"}

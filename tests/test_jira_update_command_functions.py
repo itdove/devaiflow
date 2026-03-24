@@ -125,6 +125,12 @@ class TestBuildFieldValue:
         result = build_field_value(field_info, "Plain text value", Mock())
         assert result == "Plain text value"
 
+    def test_parent_field(self):
+        """Test building value for parent field (standard JIRA field)."""
+        field_info = {"id": "parent", "type": "string", "schema": "string"}
+        result = build_field_value(field_info, "PROJ-123", Mock())
+        assert result == {"key": "PROJ-123"}
+
 
 class TestUpdateJiraIssue:
     """Tests for update_jira_issue function."""
@@ -285,6 +291,39 @@ class TestUpdateJiraIssue:
 
                     call_args = mock_client.update_issue.call_args
                     assert call_args[0][1]["fields"]["customfield_12319275"] == [{"value": "Platform"}]
+
+    def test_update_parent_field(self, mock_config, mock_field_mapper):
+        """Test updating parent field via custom fields."""
+        mock_loader = Mock()
+        mock_loader.load_config.return_value = mock_config
+        mock_config.jira.field_mappings["parent"] = {"id": "parent"}
+
+        mock_client = Mock()
+
+        # Mock field mapper to return parent field info
+        mock_field_mapper.get_field_id.side_effect = lambda field_name: {
+            "acceptance_criteria": "customfield_12315940",
+            "workstream": "customfield_12319275",
+            "git_pull_request": "customfield_12310220",
+            "parent": "parent",
+        }.get(field_name, None)
+        mock_field_mapper.discover_editable_fields.return_value = {
+            "parent": {
+                "id": "parent",
+                "type": "string",
+                "schema": "string",
+                "name": "Parent"
+            }
+        }
+
+        with patch('devflow.cli.commands.jira_update_command.ConfigLoader', return_value=mock_loader):
+            with patch('devflow.cli.commands.jira_update_command.JiraClient', return_value=mock_client):
+                with patch('devflow.cli.commands.jira_update_command.JiraFieldMapper', return_value=mock_field_mapper):
+                    update_jira_issue("PROJ-12345", custom_fields={"parent": "ANSTRAT-1979"})
+
+                    call_args = mock_client.update_issue.call_args
+                    # Verify parent field is sent in object format
+                    assert call_args[0][1]["fields"]["parent"] == {"key": "ANSTRAT-1979"}
 
     def test_update_git_pull_request(self, mock_config, mock_field_mapper):
         """Test updating git pull request links."""

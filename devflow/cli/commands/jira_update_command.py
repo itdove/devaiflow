@@ -27,6 +27,12 @@ def build_field_value(field_info: Dict[str, Any], value: str, field_mapper: Jira
     """
     field_type = field_info.get("type", "string")
     schema = field_info.get("schema", "string")
+    field_id = field_info.get("id", "")
+
+    # Handle parent field (requires object format {"key": "..."})
+    # The parent_field_mapping config resolves to "parent" for modern JIRA
+    if field_id == "parent":
+        return {"key": value}
 
     # Handle different field types
     # IMPORTANT: Check array fields BEFORE single-select fields

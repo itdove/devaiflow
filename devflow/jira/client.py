@@ -1637,7 +1637,7 @@ class JiraClient(IssueTrackerClient):
 
         # Add parent link if provided and field is configured
         if parent and parent_field_id:
-            payload["fields"][parent_field_id] = parent
+            payload["fields"][parent_field_id] = {"key": parent}
 
         # Add custom fields
         for field_id, field_value in custom_fields.items():
