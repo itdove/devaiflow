@@ -3373,7 +3373,7 @@ class ConfigTUI(App):
                 "GitHub Issue Types",
                 "organization.github_issue_types",
                 value=github_issue_types_value,
-                help_text="Valid issue types for GitHub/GitLab (comma-separated, e.g., bug,enhancement,task,spike,epic)",
+                help_text="Valid issue types for GitHub/GitLab (comma-separated, e.g., bug,enhancement,task,spike,epic,story)",
             )
 
             yield Static("\n[dim]Advanced: Sync Filters[/dim]", classes="subsection-title")
