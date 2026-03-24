@@ -616,9 +616,19 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                         _update_issue_pr_field(session, config, pr_status['url'], no_issue_update)
                 elif pr_status and pr_status['state'] in ['merged', 'closed']:
                     # PR exists but is merged/closed
-                    # Check if there are changes from base branch before prompting for new PR
-                    if has_uncommitted or commit_made_this_cycle:
-                        # Has work this cycle - prompt to create PR
+                    # Check if there are changes from base branch BEFORE prompting for new PR
+                    # Determine if there are any changes that warrant creating a new PR
+                    has_changes = has_uncommitted or commit_made_this_cycle
+
+                    # If no work this cycle, check for changes from base branch
+                    if not has_changes:
+                        base_branch = _get_base_branch(active_conv, working_dir)
+                        if base_branch:
+                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
+                            has_changes = bool(changed_files)
+
+                    # Only prompt if there are actual changes
+                    if has_changes:
                         console.print(f"\n[dim]Previous PR/MR for this branch was {pr_status['state']}.[/dim]")
                         should_create_pr = True
                         if no_pr:
@@ -638,40 +648,27 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                             if pr_url and session.issue_key:
                                 _update_issue_pr_field(session, config, pr_url, no_issue_update)
                     else:
-                        # No work this cycle - check if branch has changes from base
+                        # No changes from base branch - skip PR creation
                         base_branch = _get_base_branch(active_conv, working_dir)
                         if base_branch:
-                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
-                            if changed_files:
-                                # Branch has changes from base - prompt to create PR
-                                console.print(f"\n[dim]Previous PR/MR for this branch was {pr_status['state']}.[/dim]")
-                                should_create_pr = True
-                                if no_pr:
-                                    should_create_pr = False
-                                    console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
-                                elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
-                                    should_create_pr = config.prompts.auto_create_pr_on_complete
-                                    if should_create_pr:
-                                        console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
-                                else:
-                                    should_create_pr = Confirm.ask("Create a new PR/MR?", default=True)
-
-                                if should_create_pr:
-                                    pr_url = _create_pr_mr(session, working_dir, session_manager)
-
-                                    # Update issue tracker ticket with PR URL if created successfully
-                                    if pr_url and session.issue_key:
-                                        _update_issue_pr_field(session, config, pr_url, no_issue_update)
-                            else:
-                                # No changes from base branch - skip PR creation
-                                console.print(f"\n[dim]Previous PR/MR was {pr_status['state']} and branch has no changes from {base_branch} - skipping PR creation.[/dim]")
+                            console.print(f"\n[dim]Previous PR/MR was {pr_status['state']} and branch has no changes from {base_branch} - skipping PR creation.[/dim]")
                         else:
                             console.print(f"\n[dim]Previous PR/MR was {pr_status['state']} and no new commits - skipping PR creation.[/dim]")
                 else:
                     # No existing PR for this branch
                     # Check if we should create a PR based on work done and changes from base
-                    if has_uncommitted or commit_made_this_cycle:
-                        # Has work this cycle - prompt to create PR
+                    # Determine if there are any changes that warrant creating a PR
+                    has_changes = has_uncommitted or commit_made_this_cycle
+
+                    # If no work this cycle, check for changes from base branch
+                    if not has_changes:
+                        base_branch = _get_base_branch(active_conv, working_dir)
+                        if base_branch:
+                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
+                            has_changes = bool(changed_files)
+
+                    # Only prompt if there are actual changes
+                    if has_changes:
                         console.print("\n[dim]No PR/MR found for this branch.[/dim]")
 
                         should_create_pr = True
@@ -692,34 +689,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                             if pr_url and session.issue_key:
                                 _update_issue_pr_field(session, config, pr_url, no_issue_update)
                     else:
-                        # No work this cycle - check if branch has changes from base
+                        # No changes from base branch - skip PR creation
                         base_branch = _get_base_branch(active_conv, working_dir)
                         if base_branch:
-                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
-                            if changed_files:
-                                # Branch has changes from base - prompt to create PR
-                                console.print("\n[dim]No PR/MR found for this branch.[/dim]")
-
-                                should_create_pr = True
-                                if no_pr:
-                                    should_create_pr = False
-                                    console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
-                                elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
-                                    should_create_pr = config.prompts.auto_create_pr_on_complete
-                                    if should_create_pr:
-                                        console.print("[dim]Automatically creating PR (configured in prompts)[/dim]")
-                                else:
-                                    should_create_pr = Confirm.ask("Create a PR/MR now?", default=True)
-
-                                if should_create_pr:
-                                    pr_url = _create_pr_mr(session, working_dir, session_manager)
-
-                                    # Update issue tracker ticket with PR URL if created successfully
-                                    if pr_url and session.issue_key:
-                                        _update_issue_pr_field(session, config, pr_url, no_issue_update)
-                            else:
-                                # No changes from base branch - skip PR creation
-                                console.print(f"\n[dim]Branch has no changes from {base_branch} - skipping PR creation.[/dim]")
+                            console.print(f"\n[dim]Branch has no changes from {base_branch} - skipping PR creation.[/dim]")
                         else:
                             console.print("\n[dim]No new commits - skipping PR creation.[/dim]")
 
