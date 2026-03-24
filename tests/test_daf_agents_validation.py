@@ -34,108 +34,72 @@ def _create_mock_session(repo_dir: str) -> Session:
     return session
 
 
-def test_validate_daf_agents_in_repo(tmp_path, temp_daf_home):
-    """Test DAF_AGENTS.md found in repository directory."""
-    # Create a temp repo with up-to-date DAF_AGENTS.md
-    repo_dir = tmp_path / "test-repo"
-    repo_dir.mkdir()
-
-    # Use actual bundled content to avoid triggering upgrade
-    bundled_content, _ = _get_bundled_daf_agents_content()
-    (repo_dir / "DAF_AGENTS.md").write_text(bundled_content)
-
-    config_loader = ConfigLoader()
-    session = _create_mock_session(str(repo_dir))
-
-    # Should find DAF_AGENTS.md in repo
-    result = validate_daf_agents_md(session, config_loader)
-    assert result is True
-
-
-def test_validate_daf_agents_in_workspace_fallback(tmp_path, temp_daf_home):
-    """Test DAF_AGENTS.md found in workspace directory as fallback."""
-    from devflow.config.loader import ConfigLoader
-
-    # Create workspace with up-to-date DAF_AGENTS.md
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-
-    # Use actual bundled content to avoid triggering upgrade
-    bundled_content, _ = _get_bundled_daf_agents_content()
-    (workspace / "DAF_AGENTS.md").write_text(bundled_content)
-
-    # Create repo WITHOUT DAF_AGENTS.md
-    repo_dir = workspace / "test-repo"
-    repo_dir.mkdir()
-
-    # Create config with workspace path
-    config_loader = ConfigLoader()
-    config = config_loader.create_default_config()
-    from devflow.config.models import WorkspaceDefinition
-    config.repos.workspaces = [
-        WorkspaceDefinition(name="default", path=str(workspace))
-    ]
-    config.repos.last_used_workspace = "default"
-    config_loader.save_config(config)
-
-    # Should find DAF_AGENTS.md in workspace (fallback)
-    session = _create_mock_session(str(repo_dir))
-
-    
-
-    result = validate_daf_agents_md(session, config_loader)
-    assert result is True
-
-
-def test_validate_daf_agents_not_found_user_declines(tmp_path, temp_daf_home, monkeypatch):
-    """Test DAF_AGENTS.md not found and user declines installation."""
-    from devflow.config.loader import ConfigLoader
+def test_validate_daf_agents_in_repo(tmp_path, temp_daf_home, monkeypatch):
+    """Test DAF_AGENTS.md found in repository directory triggers deletion prompt."""
     from unittest.mock import MagicMock
 
-    # Mock Confirm.ask to return False (user declines)
-    mock_confirm = MagicMock(return_value=False)
-    monkeypatch.setattr("rich.prompt.Confirm.ask", mock_confirm)
-
-    # Create workspace WITHOUT DAF_AGENTS.md
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-
-    # Create repo WITHOUT DAF_AGENTS.md
-    repo_dir = workspace / "test-repo"
-    repo_dir.mkdir()
-
-    # Create config with workspace path
-    config_loader = ConfigLoader()
-    config = config_loader.create_default_config()
-    from devflow.config.models import WorkspaceDefinition
-    config.repos.workspaces = [
-        WorkspaceDefinition(name="default", path=str(workspace))
-    ]
-    config.repos.last_used_workspace = "default"
-    config_loader.save_config(config)
-
-    # Should NOT find DAF_AGENTS.md and user declined installation
-    session = _create_mock_session(str(repo_dir))
-
-    
-
-    result = validate_daf_agents_md(session, config_loader)
-    assert result is False
-
-    # Verify Confirm was called
-    assert mock_confirm.called
-
-
-def test_validate_daf_agents_auto_install_success(tmp_path, temp_daf_home, monkeypatch):
-    """Test successful auto-installation of bundled DAF_AGENTS.md."""
-    from devflow.config.loader import ConfigLoader
-    from unittest.mock import MagicMock
-    from devflow.utils.paths import get_cs_home
-
-    # Mock Confirm.ask to return True (user accepts installation)
+    # Mock Confirm.ask to return True (user accepts deletion)
     mock_confirm = MagicMock(return_value=True)
     monkeypatch.setattr("rich.prompt.Confirm.ask", mock_confirm)
 
+    # Create a temp repo with old DAF_AGENTS.md
+    repo_dir = tmp_path / "test-repo"
+    repo_dir.mkdir()
+    (repo_dir / "DAF_AGENTS.md").write_text("# Old DAF_AGENTS.md")
+
+    config_loader = ConfigLoader()
+    session = _create_mock_session(str(repo_dir))
+
+    # Should find DAF_AGENTS.md in repo and offer to delete
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True
+
+    # Verify file was deleted
+    assert not (repo_dir / "DAF_AGENTS.md").exists()
+
+
+def test_validate_daf_agents_in_workspace_fallback(tmp_path, temp_daf_home, monkeypatch):
+    """Test DAF_AGENTS.md found in workspace directory triggers deletion prompt."""
+    from devflow.config.loader import ConfigLoader
+    from unittest.mock import MagicMock
+
+    # Mock Confirm.ask to return True (user accepts deletion)
+    mock_confirm = MagicMock(return_value=True)
+    monkeypatch.setattr("rich.prompt.Confirm.ask", mock_confirm)
+
+    # Create workspace with old DAF_AGENTS.md
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "DAF_AGENTS.md").write_text("# Old workspace DAF_AGENTS.md")
+
+    # Create repo WITHOUT DAF_AGENTS.md
+    repo_dir = workspace / "test-repo"
+    repo_dir.mkdir()
+
+    # Create config with workspace path
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.repos.last_used_workspace = "default"
+    config_loader.save_config(config)
+
+    # Should find DAF_AGENTS.md in workspace and offer to delete
+    session = _create_mock_session(str(repo_dir))
+
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True
+
+    # Verify file was deleted
+    assert not (workspace / "DAF_AGENTS.md").exists()
+
+
+def test_validate_daf_agents_not_found_returns_true(tmp_path, temp_daf_home):
+    """Test DAF_AGENTS.md not found - returns True (workflow is in daf-workflow skill)."""
+    from devflow.config.loader import ConfigLoader
+
     # Create workspace WITHOUT DAF_AGENTS.md
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -154,31 +118,43 @@ def test_validate_daf_agents_auto_install_success(tmp_path, temp_daf_home, monke
     config.repos.last_used_workspace = "default"
     config_loader.save_config(config)
 
-    # Mock _install_bundled_cs_agents to simulate successful installation
-    from devflow.cli.commands import open_command
-    original_install = open_command._install_bundled_cs_agents
-    def mock_install(destination):
-        # Write a test DAF_AGENTS.md file
-        destination.write_text("# DAF Tool Usage Guide (bundled)")
-        return True, []  # Updated to return tuple
-    monkeypatch.setattr("devflow.cli.commands.open_command._install_bundled_cs_agents", mock_install)
-
-    # Should auto-install DAF_AGENTS.md and succeed
+    # DAF_AGENTS.md not required - workflow is in daf-workflow skill
     session = _create_mock_session(str(repo_dir))
 
+    result = validate_daf_agents_md(session, config_loader)
+    assert result is True  # Should succeed without DAF_AGENTS.md
 
+
+def test_validate_daf_agents_not_found_succeeds(tmp_path, temp_daf_home):
+    """Test DAF_AGENTS.md not found succeeds (workflow in daf-workflow skill)."""
+    from devflow.config.loader import ConfigLoader
+
+    # Create workspace WITHOUT DAF_AGENTS.md
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    # Create repo WITHOUT DAF_AGENTS.md
+    repo_dir = workspace / "test-repo"
+    repo_dir.mkdir()
+
+    # Create config with workspace path
+    config_loader = ConfigLoader()
+    config = config_loader.create_default_config()
+    from devflow.config.models import WorkspaceDefinition
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+    config.repos.last_used_workspace = "default"
+    config_loader.save_config(config)
+
+    # Should succeed without DAF_AGENTS.md (workflow is in skill)
+    session = _create_mock_session(str(repo_dir))
 
     result = validate_daf_agents_md(session, config_loader)
     assert result is True
 
-    # Verify DAF_AGENTS.md was created in DEVAIFLOW_HOME (new behavior)
-    cs_home = get_cs_home()
-    assert (cs_home / "DAF_AGENTS.md").exists()
 
-    # Verify Confirm was called
-    assert mock_confirm.called
-
-
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_prefers_repo_over_workspace(tmp_path, temp_daf_home):
     """Test that repo DAF_AGENTS.md is preferred over workspace version."""
     from devflow.config.loader import ConfigLoader
@@ -215,6 +191,7 @@ def test_validate_daf_agents_prefers_repo_over_workspace(tmp_path, temp_daf_home
     assert result is True
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_auto_install_failure_with_diagnostics(tmp_path, temp_daf_home, monkeypatch, capsys):
     """Test auto-installation failure displays detailed diagnostics."""
     from devflow.config.loader import ConfigLoader
@@ -266,30 +243,21 @@ def test_validate_daf_agents_auto_install_failure_with_diagnostics(tmp_path, tem
     assert not (repo_dir / "DAF_AGENTS.md").exists()
 
 
-def test_install_bundled_cs_agents_from_relative_path(tmp_path):
-    """Test _install_bundled_cs_agents successfully installs from relative path."""
+def test_install_bundled_cs_agents_returns_false(tmp_path):
+    """Test _install_bundled_cs_agents returns False (bundled file removed)."""
     from devflow.utils.daf_agents_validation import _install_bundled_cs_agents
-    from pathlib import Path
-
-    # Create a source DAF_AGENTS.md at the expected relative path
-    # Path(__file__).parent.parent.parent.parent / "DAF_AGENTS.md"
-    # For this test, we'll use the actual DAF_AGENTS.md file from the repo
-    source = Path(__file__).parent.parent / "DAF_AGENTS.md"
-
-    # Skip test if source doesn't exist (shouldn't happen in development)
-    if not source.exists():
-        pytest.skip("DAF_AGENTS.md not found in repository root")
 
     destination = tmp_path / "DAF_AGENTS.md"
 
     # Call the function
     success, diagnostics = _install_bundled_cs_agents(destination)
 
-    # Should succeed (in development mode with proper structure)
-    assert success is True
-    assert diagnostics == []
-    assert destination.exists()
-    assert destination.read_text().startswith("# DevAIFlow Agent Workflow Guide")
+    # Should fail since bundled file no longer exists
+    assert success is False
+    # Should have diagnostics explaining why
+    assert len(diagnostics) > 0
+    # Destination should not exist
+    assert not destination.exists()
 
 
 def test_install_bundled_cs_agents_returns_diagnostics_on_failure(tmp_path, monkeypatch):
@@ -344,35 +312,40 @@ def test_install_bundled_cs_agents_returns_diagnostics_on_failure(tmp_path, monk
     assert any("Method 2" in diag for diag in diagnostics)
 
 
-def test_get_bundled_daf_agents_content_success():
-    """Test _get_bundled_daf_agents_content successfully reads bundled file."""
+def test_get_bundled_daf_agents_content_returns_none():
+    """Test _get_bundled_daf_agents_content returns None (DAF_AGENTS.md removed)."""
     content, diagnostics = _get_bundled_daf_agents_content()
 
-    # Should successfully read content
-    assert content is not None
-    assert isinstance(content, str)
-    assert len(content) > 0
-    assert diagnostics == []
-
-    # Verify it looks like DAF_AGENTS.md content
-    assert "DevAIFlow Agent Workflow Guide" in content or "daf" in content.lower()
+    # Should return None since bundled file no longer exists
+    assert content is None
+    # Should have diagnostics explaining file not found
+    assert len(diagnostics) > 0
 
 
-def test_check_and_upgrade_daf_agents_up_to_date(tmp_path, temp_daf_home, monkeypatch):
-    """Test that up-to-date DAF_AGENTS.md does not trigger upgrade prompt."""
-    # Get the actual bundled content
-    bundled_content, _ = _get_bundled_daf_agents_content()
-    assert bundled_content is not None
+def test_check_and_upgrade_daf_agents_offers_deletion(tmp_path, temp_daf_home, monkeypatch):
+    """Test that existing DAF_AGENTS.md triggers deletion prompt (bundled file removed)."""
+    from unittest.mock import MagicMock
 
-    # Create an installed file with same content
+    # Mock Confirm.ask to return True (user accepts deletion)
+    mock_confirm = MagicMock(return_value=True)
+    monkeypatch.setattr("rich.prompt.Confirm.ask", mock_confirm)
+
+    # Create an installed file (old DAF_AGENTS.md)
     installed_file = tmp_path / "DAF_AGENTS.md"
-    installed_file.write_text(bundled_content)
+    installed_file.write_text("# Old DAF_AGENTS.md")
 
-    # Should return True without prompting
+    # Should offer deletion since bundled file no longer exists
     result = _check_and_upgrade_daf_agents(installed_file, "repository")
     assert result is True
 
+    # Verify file was deleted
+    assert not installed_file.exists()
 
+    # Verify Confirm was called
+    assert mock_confirm.called
+
+
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_check_and_upgrade_daf_agents_outdated_user_accepts(tmp_path, temp_daf_home, monkeypatch):
     """Test upgrade when DAF_AGENTS.md is outdated and user accepts."""
     from unittest.mock import MagicMock
@@ -426,6 +399,7 @@ def test_check_and_upgrade_daf_agents_outdated_user_declines(tmp_path, temp_daf_
     assert mock_confirm.called
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_check_and_upgrade_daf_agents_mock_mode(tmp_path, temp_daf_home, monkeypatch):
     """Test that mock mode auto-upgrades without prompting."""
     # Set mock mode
@@ -449,6 +423,7 @@ def test_check_and_upgrade_daf_agents_mock_mode(tmp_path, temp_daf_home, monkeyp
     assert "Old Version" not in new_content
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_check_and_upgrade_daf_agents_cannot_read_bundled(tmp_path, temp_daf_home, monkeypatch):
     """Test that upgrade check continues if bundled file cannot be read."""
     # Mock _get_bundled_daf_agents_content to return None
@@ -466,6 +441,7 @@ def test_check_and_upgrade_daf_agents_cannot_read_bundled(tmp_path, temp_daf_hom
     assert result is True
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_check_and_upgrade_daf_agents_cannot_read_installed(tmp_path, temp_daf_home, monkeypatch):
     """Test that upgrade check continues if installed file cannot be read."""
     # Create a file that will fail to read (simulated via monkeypatch)
@@ -486,6 +462,7 @@ def test_check_and_upgrade_daf_agents_cannot_read_installed(tmp_path, temp_daf_h
     assert result is True
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def testvalidate_daf_agents_md_triggers_upgrade_check_repo(tmp_path, temp_daf_home, monkeypatch):
     """Test that validate_daf_agents_md triggers upgrade check for repo DAF_AGENTS.md."""
     from unittest.mock import MagicMock
@@ -519,6 +496,7 @@ def testvalidate_daf_agents_md_triggers_upgrade_check_repo(tmp_path, temp_daf_ho
     assert new_content == bundled_content
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def testvalidate_daf_agents_md_triggers_upgrade_check_workspace(tmp_path, temp_daf_home, monkeypatch):
     """Test that validate_daf_agents_md triggers upgrade check for workspace DAF_AGENTS.md."""
     from unittest.mock import MagicMock
@@ -564,6 +542,7 @@ def testvalidate_daf_agents_md_triggers_upgrade_check_workspace(tmp_path, temp_d
     assert new_content == bundled_content
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_multi_project_session(tmp_path, temp_daf_home):
     """Test DAF_AGENTS.md validation for multi-project sessions."""
     from devflow.config.models import Conversation, ProjectInfo
@@ -626,6 +605,8 @@ def test_validate_daf_agents_multi_project_session(tmp_path, temp_daf_home):
     assert result is True
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_multi_project_session_not_found(tmp_path, temp_daf_home, monkeypatch):
     """Test DAF_AGENTS.md validation for multi-project sessions when not found."""
     from devflow.config.models import Conversation, ProjectInfo
@@ -697,6 +678,8 @@ def test_validate_daf_agents_multi_project_session_not_found(tmp_path, temp_daf_
     assert mock_confirm.called
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_multi_project_session_user_declines(tmp_path, temp_daf_home, monkeypatch):
     """Test multi-project session validation when user declines installation."""
     from devflow.config.models import Conversation, ProjectInfo
@@ -766,6 +749,7 @@ def test_validate_daf_agents_multi_project_session_user_declines(tmp_path, temp_
     assert mock_confirm.called
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_devaiflow_home_priority_over_repo(tmp_path, temp_daf_home):
     """Test that DEVAIFLOW_HOME is checked before repository."""
     from devflow.config.loader import ConfigLoader
@@ -803,6 +787,7 @@ def test_validate_daf_agents_devaiflow_home_priority_over_repo(tmp_path, temp_da
     assert (repo_dir / "DAF_AGENTS.md").read_text() == "# Old Repository Version"
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_devaiflow_home_priority_over_workspace(tmp_path, temp_daf_home):
     """Test that DEVAIFLOW_HOME is checked before workspace."""
     from devflow.config.loader import ConfigLoader
@@ -842,6 +827,7 @@ def test_validate_daf_agents_devaiflow_home_priority_over_workspace(tmp_path, te
     assert (workspace / "DAF_AGENTS.md").read_text() == "# Old Workspace Version"
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_validate_daf_agents_upgrade_devaiflow_home(tmp_path, temp_daf_home, monkeypatch):
     """Test that upgrade detection works for DEVAIFLOW_HOME location."""
     from devflow.config.loader import ConfigLoader

@@ -51,7 +51,8 @@ def _generate_initial_prompt(
 
     The prompt includes:
     - A clear goal statement (if goal/JIRA provided)
-    - Instructions to read AGENTS.md, CLAUDE.md, and DAF_AGENTS.md (always included)
+    - Instructions to read AGENTS.md and CLAUDE.md (always included)
+    - Note: daf-workflow skill is auto-loaded by Claude Code
     - Instructions to read configured context files (from config, including hidden skills)
     - issue tracker ticket reading instruction using daf jira view (if issue_key is provided)
     - Analysis-only constraints (if session_type is "ticket_creation")
@@ -78,7 +79,7 @@ def _generate_initial_prompt(
             "Please start by reading the following context files if they exist:
             - AGENTS.md (agent-specific instructions)
             - CLAUDE.md (project guidelines and standards)
-            - DAF_AGENTS.md (daf tool usage guide)"
+            - (daf-workflow skill auto-loaded)"
 
         With goal only:
             "Work on: backup-feature
@@ -86,7 +87,7 @@ def _generate_initial_prompt(
             Please start by reading the following context files if they exist:
             - AGENTS.md (agent-specific instructions)
             - CLAUDE.md (project guidelines and standards)
-            - DAF_AGENTS.md (daf tool usage guide)"
+            - (daf-workflow skill auto-loaded)"
 
         With JIRA and title:
             "Work on: Implement customer backup and restore
@@ -118,10 +119,10 @@ def _generate_initial_prompt(
 
     # Build list of all context files (defaults + configured)
     # Default context files (always included)
+    # Note: DAF_AGENTS.md replaced by daf-workflow skill (auto-loaded)
     default_files = [
         ("AGENTS.md", "agent-specific instructions"),
         ("CLAUDE.md", "project guidelines and standards"),
-        ("DAF_AGENTS.md", "daf tool usage guide"),
     ]
 
     # Load configured context files from config (non-skill files only)

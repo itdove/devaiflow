@@ -6,7 +6,6 @@ from devflow.cli.commands.new_command import _generate_initial_prompt
 from devflow.config.models import ContextFile
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_defaults_only(temp_daf_home):
     """Test generating initial prompt with only default context files."""
     from devflow.config.loader import ConfigLoader
@@ -31,7 +30,6 @@ def test_generate_initial_prompt_defaults_only(temp_daf_home):
     assert "ARCHITECTURE.md" not in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_with_configured_local_file(temp_daf_home):
     """Test generating initial prompt with configured local context file."""
     from devflow.config.loader import ConfigLoader
@@ -59,7 +57,6 @@ def test_generate_initial_prompt_with_configured_local_file(temp_daf_home):
     assert "ARCHITECTURE.md (system architecture)" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_with_configured_url(temp_daf_home):
     """Test generating initial prompt with configured URL context file."""
     from devflow.config.loader import ConfigLoader
@@ -89,7 +86,6 @@ def test_generate_initial_prompt_with_configured_url(temp_daf_home):
     assert "(coding standards)" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_with_multiple_configured_files(temp_daf_home):
     """Test generating initial prompt with multiple configured context files."""
     from devflow.config.loader import ConfigLoader
@@ -132,7 +128,6 @@ def test_generate_initial_prompt_with_multiple_configured_files(temp_daf_home):
     assert agent_pos < claude_pos < arch_pos < design_pos
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_with_jira_and_context_files(temp_daf_home):
     """Test generating initial prompt with JIRA and configured context files."""
     from devflow.config.loader import ConfigLoader
@@ -167,7 +162,6 @@ def test_generate_initial_prompt_with_jira_and_context_files(temp_daf_home):
     assert "daf jira view PROJ-12345 --comments" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_no_config(temp_daf_home):
     """Test generating initial prompt when config doesn't exist (graceful degradation)."""
     # Don't create config - should still work with defaults
@@ -184,7 +178,6 @@ def test_generate_initial_prompt_no_config(temp_daf_home):
     assert "DAF_AGENTS.md (daf tool usage guide)" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_empty_context_files(temp_daf_home):
     """Test generating initial prompt when context_files config exists but is empty."""
     from devflow.config.loader import ConfigLoader
@@ -212,7 +205,6 @@ def test_generate_initial_prompt_empty_context_files(temp_daf_home):
     assert len(context_section) == 3  # Only AGENTS.md, CLAUDE.md, and DAF_AGENTS.md
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_ticket_creation_type(temp_daf_home):
     """Test generating initial prompt for ticket_creation session type."""
     from devflow.config.loader import ConfigLoader
@@ -241,7 +233,6 @@ def test_generate_initial_prompt_ticket_creation_type(temp_daf_home):
     assert "DAF_AGENTS.md (daf tool usage guide)" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_development_type(temp_daf_home):
     """Test generating initial prompt for development session type (default)."""
     from devflow.config.loader import ConfigLoader
@@ -298,7 +289,6 @@ def test_generate_initial_prompt_ticket_creation_with_jira(temp_daf_home):
     assert "PROJ-59038: Implement backup and restore" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_development_with_unit_tests_enabled(temp_daf_home):
     """Test generating initial prompt for development session with testing prompt enabled (default)."""
     from devflow.config.loader import ConfigLoader
@@ -333,7 +323,6 @@ def test_generate_initial_prompt_development_with_unit_tests_enabled(temp_daf_ho
     assert "DAF_AGENTS.md (daf tool usage guide)" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_development_with_unit_tests_disabled(temp_daf_home):
     """Test generating initial prompt for development session with testing prompt disabled."""
     from devflow.config.loader import ConfigLoader
@@ -392,7 +381,6 @@ def test_generate_initial_prompt_ticket_creation_no_unit_tests_even_if_enabled(t
     assert "AGENTS.md (agent-specific instructions)" in prompt
 
 
-@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_with_github_issue(temp_daf_home):
     """Test generating initial prompt with GitHub issue key suggests daf git view."""
     from devflow.config.loader import ConfigLoader

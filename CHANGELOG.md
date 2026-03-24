@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **daf-workflow skill** for centralized workflow guidance (#263)
+  - Global skill auto-loaded from `~/.claude/skills/daf-workflow/`
+  - Comprehensive guidance for AI agents on development workflows
+  - Issue tracker auto-detection (GitHub/GitLab/JIRA) based on git remote URLs
+  - Guidance on when to use Atlassian MCP vs daf CLI commands (#242)
+  - Multi-project session workflows and best practices
+  - Standard development and ticket creation session patterns
+  - Run `daf upgrade` to install the skill
+
+### Changed
+- **BREAKING**: Removed DAF_AGENTS.md in favor of daf-workflow skill (#263)
+  - Workflow guidance now provided via global daf-workflow skill instead of per-project DAF_AGENTS.md files
+  - Eliminates duplication across multiple repositories
+  - Auto-migration: opening sessions with old DAF_AGENTS.md files prompts for deletion
+  - All command prompts updated to reference daf-workflow skill instead of DAF_AGENTS.md
+  - Run `daf upgrade` to install daf-workflow skill
+
+### Removed
+- DAF_AGENTS.md bundled file - replaced by daf-workflow skill (#263)
+  - Session validation now offers to delete old DAF_AGENTS.md files found in repositories
+  - Context file loading no longer includes DAF_AGENTS.md
+  - All references removed from command prompts and documentation
+
 ### Fixed
 - Parent field linking now works without `parent_field_mapping` configuration (#256)
   - `daf jira create --parent` now defaults to standard JIRA `parent` field
