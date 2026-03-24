@@ -127,40 +127,84 @@ def git_create(
         sys.exit(1)
 
     # Normalize and validate issue type if provided
+    from devflow.github.field_mapper import GitHubFieldMapper
+
     issue_type_lower = None
     if issue_type:
-        # Get valid types from config hierarchy (enterprise > organization > default)
-        valid_types = ["bug", "enhancement", "task", "spike", "epic"]  # Default
-        if config.github and config.github.issue_types:
+        # Check if validation is configured
+        if config.github and config.github.issue_types is not None:
+            # Explicit list provided - validate against it
             valid_types = config.github.issue_types
+            issue_type_lower = issue_type.lower()
+            valid_types_lower = [t.lower() for t in valid_types]
 
-        # Case-insensitive validation
-        issue_type_lower = issue_type.lower()
-        valid_types_lower = [t.lower() for t in valid_types]
+            if issue_type_lower not in valid_types_lower:
+                console.print(f"[red]✗[/red] Invalid issue type '{issue_type}'.")
+                console.print(f"[yellow]Valid types:[/yellow] {', '.join(valid_types)}")
+                console.print()
+                console.print("[dim]Configure valid types in enterprise.json or organization.json:[/dim]")
+                console.print(f'[dim]  "github_issue_types": {valid_types}[/dim]')
+                if output_json:
+                    json_output(
+                        success=False,
+                        error={
+                            "message": f"Invalid issue type '{issue_type}'",
+                            "code": "INVALID_ISSUE_TYPE",
+                            "valid_types": valid_types
+                        }
+                    )
+                sys.exit(1)
 
-        if issue_type_lower not in valid_types_lower:
-            console.print(f"[red]✗[/red] Invalid issue type '{issue_type}'.")
-            console.print(f"[yellow]Valid types:[/yellow] {', '.join(valid_types)}")
-            console.print()
-            console.print("[dim]Configure valid types in enterprise.json or organization.json:[/dim]")
-            console.print('[dim]  "github_issue_types": ["bug", "enhancement", "task", "spike", "epic"][/dim]')
+            # Normalize to configured case
+            for vt in valid_types:
+                if vt.lower() == issue_type_lower:
+                    issue_type = vt
+                    issue_type_lower = vt.lower()
+                    break
+        elif config.github and config.github.issue_types is None:
+            # Explicitly set to null - issue types disabled
+            console.print("[red]✗[/red] Issue types are disabled in configuration.")
+            console.print("Set [cyan]github_issue_types[/cyan] to a list to enable type validation,")
+            console.print("or omit the TYPE parameter to create issues without types.")
             if output_json:
                 json_output(
                     success=False,
                     error={
-                        "message": f"Invalid issue type '{issue_type}'",
-                        "code": "INVALID_ISSUE_TYPE",
-                        "valid_types": valid_types
+                        "message": "Issue types are disabled in configuration",
+                        "code": "ISSUE_TYPES_DISABLED"
                     }
                 )
             sys.exit(1)
+        else:
+            # No config - use field mapper defaults
+            valid_types = list(GitHubFieldMapper.ISSUE_TYPES.values())
 
-        # Normalize to the configured case (find matching type in valid_types)
-        for vt in valid_types:
-            if vt.lower() == issue_type_lower:
-                issue_type = vt
-                issue_type_lower = vt.lower()
-                break
+            issue_type_lower = issue_type.lower()
+            valid_types_lower = [t.lower() for t in valid_types]
+
+            if issue_type_lower not in valid_types_lower:
+                console.print(f"[red]✗[/red] Invalid issue type '{issue_type}'.")
+                console.print(f"[yellow]Valid types:[/yellow] {', '.join(valid_types)}")
+                console.print()
+                console.print("[dim]Configure valid types in enterprise.json or organization.json:[/dim]")
+                console.print(f'[dim]  "github_issue_types": {valid_types}[/dim]')
+                if output_json:
+                    json_output(
+                        success=False,
+                        error={
+                            "message": f"Invalid issue type '{issue_type}'",
+                            "code": "INVALID_ISSUE_TYPE",
+                            "valid_types": valid_types
+                        }
+                    )
+                sys.exit(1)
+
+            # Normalize to field mapper case
+            for vt in valid_types:
+                if vt.lower() == issue_type_lower:
+                    issue_type = vt
+                    issue_type_lower = vt.lower()
+                    break
 
     # Get description from template if not provided
     if not description:
