@@ -159,10 +159,10 @@ def test_create_issue_with_parent_without_config(config_without_parent_mapping, 
     def mock_api_request(method, endpoint, **kwargs):
         response = Mock()
         if method == "POST" and "/rest/api/2/issue" in endpoint:
-            # Verify parent link is in payload using standard "parent" field
+            # Verify parent link is in payload using standard "parent" field with correct object format
             payload = kwargs.get("json", {})
             assert "parent" in payload["fields"], "Parent field should be in payload"
-            assert payload["fields"]["parent"] == "PROJ-10000"
+            assert payload["fields"]["parent"] == {"key": "PROJ-10000"}
 
             response.status_code = 201
             response.json.return_value = {"key": "PROJ-12345"}
@@ -190,10 +190,10 @@ def test_create_issue_with_parent_with_epic_link_config(config_with_parent_mappi
     def mock_api_request(method, endpoint, **kwargs):
         response = Mock()
         if method == "POST" and "/rest/api/2/issue" in endpoint:
-            # Verify parent link uses custom field ID from epic_link mapping
+            # Verify parent link uses custom field ID from epic_link mapping with correct object format
             payload = kwargs.get("json", {})
             assert "customfield_12311140" in payload["fields"], "Epic link custom field should be in payload"
-            assert payload["fields"]["customfield_12311140"] == "PROJ-10000"
+            assert payload["fields"]["customfield_12311140"] == {"key": "PROJ-10000"}
 
             response.status_code = 201
             response.json.return_value = {"key": "PROJ-12346"}

@@ -252,9 +252,9 @@ def test_create_issue_with_parent(mock_jira_client, mock_field_mapper, monkeypat
         response = Mock()
         if method == "POST" and "/rest/api/2/issue" in endpoint:
             payload = kwargs.get("json", {})
-            # Verify parent field is set
+            # Verify parent field is set with correct object format
             assert "customfield_12311140" in payload["fields"]
-            assert payload["fields"]["customfield_12311140"] == "PROJ-999"
+            assert payload["fields"]["customfield_12311140"] == {"key": "PROJ-999"}
             response.status_code = 201
             response.json.return_value = {"key": "PROJ-105"}
         return response
