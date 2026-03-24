@@ -1,0 +1,114 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devaiflow"
+version = "2.1.0-dev"
+description = "DevAIFlow - Manage AI coding assistant sessions with optional issue tracker integration"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [
+    {name = "Dominique Vernier"}
+]
+keywords = [
+    "ai",
+    "claude",
+    "github-copilot",
+    "cursor",
+    "windsurf",
+    "development-workflow",
+    "jira",
+    "project-management",
+    "automation",
+    "session-manager",
+    "devops",
+    "cli",
+    "ai-assistant",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "click>=8.1.7",
+    "pydantic>=2.5.0",
+    "rich>=13.7.0",
+    "textual>=0.47.0",
+    "anthropic>=0.40.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0",
+    "jsonschema>=4.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-cov>=4.1.0",
+    "black>=23.12.1",
+    "ruff>=0.1.9",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+daf = "devflow.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/itdove/devaiflow"
+"Bug Tracker" = "https://github.com/itdove/devaiflow/issues"
+Documentation = "https://github.com/itdove/devaiflow/blob/main/README.md"
+"Source Code" = "https://github.com/itdove/devaiflow"
+Logo = "https://raw.githubusercontent.com/itdove/devaiflow/main/images/daf-logo-160x160.png"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["devflow*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md"]
+
+[tool.pytest.ini_options]
+# Test discovery patterns
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+# Test directories
+testpaths = ["tests"]
+
+# Output options
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--disable-warnings",
+]
+
+# Markers for categorizing tests
+markers = [
+    "jira: Tests that require JIRA mocking",
+    "integration: Integration tests",
+    "unit: Unit tests",
+    "slow: Slow-running tests",
+]
+
+[tool.coverage.run]
+source = ["devflow"]
+omit = [
+    "tests/*",
+    "**/__pycache__/*",
+    "**/venv/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
