@@ -12,10 +12,92 @@ This file defines the workflow and behavioral constraints for Claude agents work
 - All daf command documentation (syntax, flags, options, examples)
 - Available commands in Claude sessions vs restricted commands
 
+**For JIRA field intelligence:** See **daf-jira-fields skill** in `.claude/skills/daf-jira-fields/`
+- Field mapping structure and validation rules
+- System vs custom field handling
+- Default value application
+- Discovering YOUR JIRA's custom fields
+
 **For JIRA templates:** See **ORGANIZATION.md**
 - JIRA Wiki markup syntax requirements
 - Issue templates (Epic, Story, Spike, Bug, Task)
 - Organization-specific JIRA policies and field mappings
+
+---
+
+## JIRA Integration Workflow
+
+DevAIFlow provides two complementary approaches for JIRA operations:
+
+### 1. Reading JIRA Issues - Use Atlassian MCP
+
+For **fast JIRA reads** (viewing tickets, checking status), use the Atlassian MCP server:
+
+```
+mcp__atlassian__getTeamworkGraphObject
+```
+
+**Advantages:**
+- Faster than CLI commands
+- Direct API access
+- Rich structured data
+
+**When to use:**
+- Reading JIRA ticket details
+- Checking issue status and fields
+- Viewing comments and history
+
+### 2. JIRA Operations - Use daf CLI
+
+For **creating/updating JIRA issues**, use `daf jira` commands (documented in daf-cli skill):
+
+```bash
+daf jira create story --summary "..." --parent PROJ-1234
+daf jira update PROJ-12345 --field custom_field=value
+daf jira add-comment PROJ-12345 "Progress update"
+```
+
+**When to use:**
+- Creating new JIRA issues
+- Updating issue fields
+- Adding comments
+- Complex operations requiring validation
+
+### 3. Field Mappings - Use daf-jira-fields Skill
+
+**CRITICAL**: Before creating/updating JIRA issues, understand field mappings:
+
+```bash
+# Discover YOUR JIRA's custom fields
+daf config show --fields
+```
+
+The **daf-jira-fields skill** teaches you:
+- System fields vs custom fields (CRITICAL distinction)
+- Required fields for each issue type
+- Allowed values for select fields
+- How defaults are applied
+
+**Common mistakes to avoid:**
+```bash
+# ❌ WRONG - System field with --field
+daf jira create bug --field components=backend
+
+# ✅ CORRECT - System field with dedicated option
+daf jira create bug --components backend
+
+# ❌ WRONG - Using customfield ID directly
+daf jira create story --field customfield_12345=value
+
+# ✅ CORRECT - Using mapped field name
+daf jira create story --field team_assignment=value
+```
+
+**Workflow example:**
+1. Read field mappings: `daf config show --fields`
+2. Identify required fields for issue type (e.g., Story)
+3. Use correct syntax (system options vs `--field`)
+4. Create issue with all required fields
 
 ---
 
