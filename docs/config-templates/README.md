@@ -44,9 +44,15 @@ Example manual field mapping:
 }
 ```
 
-### Parent Field Mapping
+### Parent Field Mapping (Optional)
 
-Maps issue types to their parent link field names. Configure in `organization.json`:
+**This configuration is OPTIONAL.** By default, DevAIFlow uses the standard JIRA `parent` field for parent-child relationships, which works on modern JIRA instances.
+
+**Only configure this if:**
+- Your JIRA instance uses legacy custom fields (e.g., `epic_link`) for parent relationships
+- You need to override the default behavior for specific issue types
+
+Example configuration in `organization.json`:
 ```json
 {
   "parent_field_mapping": {
@@ -59,7 +65,14 @@ Maps issue types to their parent link field names. Configure in `organization.js
 }
 ```
 
-This is organization-specific hierarchy policy. Leave null for auto-discovery.
+**Default behavior (no configuration):**
+- All issue types use the standard `parent` field
+- Works on JIRA Cloud and modern JIRA Server/Data Center instances
+- No configuration required
+
+**Legacy behavior (with configuration):**
+- Maps specific issue types to custom field names
+- Required for older JIRA instances using `epic_link` custom fields
 
 ### Sync Filters
 

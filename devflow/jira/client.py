@@ -1515,22 +1515,24 @@ class JiraClient(IssueTrackerClient):
 
         Returns:
             Field ID string (e.g., "customfield_12311140", or "parent" for sub-task)
-            Returns None if parent_field_mapping not configured or field not found
+            Returns "parent" (standard field) if parent_field_mapping not configured or field not found
         """
         try:
             from devflow.config.loader import ConfigLoader
             config_loader = ConfigLoader()
             config = config_loader.load_config()
 
+            # If no parent_field_mapping configured, use standard parent field
             if not config or not config.jira or not config.jira.parent_field_mapping:
-                return None
+                return "parent"
 
             # Get logical field name from parent_field_mapping (e.g., "epic_link" or "parent")
             issue_type_lower = issue_type.lower()
             logical_field_name = config.jira.parent_field_mapping.get(issue_type_lower)
 
+            # Fall back to standard field if issue type not mapped
             if not logical_field_name:
-                return None
+                return "parent"
 
             # If logical field is "parent" (standard field for sub-tasks), return it directly
             if logical_field_name == "parent":
@@ -1540,7 +1542,8 @@ class JiraClient(IssueTrackerClient):
             return field_mapper.get_field_id(logical_field_name)
 
         except Exception:
-            return None
+            # Fall back to standard field on any error
+            return "parent"
 
     def create_issue(
         self,

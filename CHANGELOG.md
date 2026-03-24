@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Parent field linking now works without `parent_field_mapping` configuration (#256)
+  - `daf jira create --parent` now defaults to standard JIRA `parent` field
+  - Previously failed silently when `parent_field_mapping` was not configured
+  - Eliminates need to configure `parent_field_mapping` for modern JIRA instances
+  - Maintains backward compatibility with legacy configurations using `epic_link`
+  - Configuration is now truly optional (only needed for legacy custom fields)
+
 ## [2.0.0] - 2026-03-19
 
 ### Added
