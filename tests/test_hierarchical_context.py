@@ -290,6 +290,7 @@ def test_load_hierarchical_context_files_integration_partial_files(temp_daf_home
     assert "TEAM.md" not in prompt
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_load_hierarchical_context_files_integration_no_files(temp_daf_home):
     """Integration test: Verify prompt works when no hierarchical files exist."""
     from devflow.cli.commands.new_command import _generate_initial_prompt

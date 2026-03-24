@@ -15,6 +15,7 @@ def test_load_hierarchical_context_files_empty(temp_daf_home):
     assert context_files == []
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_load_hierarchical_context_files_with_daf_agents(temp_daf_home):
     """Test that DAF_AGENTS.md is loaded when it exists in DEVAIFLOW_HOME."""
     cs_home = get_cs_home()
@@ -33,6 +34,7 @@ def test_load_hierarchical_context_files_with_daf_agents(temp_daf_home):
     assert description == "daf tool usage guide"
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_load_hierarchical_context_files_all_files(temp_daf_home):
     """Test loading all hierarchical context files."""
     cs_home = get_cs_home()
@@ -62,6 +64,7 @@ def test_load_hierarchical_context_files_all_files(temp_daf_home):
     assert "daf tool usage guide" in descriptions
 
 
+@pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_load_hierarchical_context_files_order(temp_daf_home):
     """Test that context files are loaded in the expected order."""
     cs_home = get_cs_home()

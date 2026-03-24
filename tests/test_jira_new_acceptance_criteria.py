@@ -164,6 +164,7 @@ class TestBuildTicketCreationPrompt:
         assert "⚠️  CRITICAL: Acceptance Criteria Field Requirements" not in prompt
         assert "For all issue types (epic/story/spike/bug/task), --acceptance-criteria is REQUIRED" not in prompt
 
+    @pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
     def test_includes_default_context_files(self, mock_config, temp_daf_home):
         """Test that default context files are included."""
         prompt = _build_ticket_creation_prompt(
