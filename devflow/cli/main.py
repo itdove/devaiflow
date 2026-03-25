@@ -2787,6 +2787,140 @@ def workspace_rename(ctx: click.Context, old_name: str, new_name: str) -> None:
     rename_workspace(old_name, new_name)
 
 
+@cli.group()
+@json_option
+def model(ctx: click.Context) -> None:
+    """Manage model provider profiles for alternative AI providers."""
+    pass
+
+
+@model.command(name="list")
+@json_option
+def model_list(ctx: click.Context) -> None:
+    """List all configured model provider profiles.
+
+    Shows profile name, base URL, model, type, and default status.
+
+    Example:
+        daf model list
+        daf model list --json
+    """
+    from devflow.cli.commands.model_commands import list_profiles
+
+    list_profiles(output_json=ctx.obj.get('output_json', False))
+
+
+@model.command(name="add")
+@json_option
+@click.argument("name", required=False)
+def model_add(ctx: click.Context, name: str) -> None:
+    """Add a new model provider profile.
+
+    NAME is a unique profile identifier (e.g., 'vertex', 'llama-cpp', 'openrouter').
+
+    If not provided, will prompt for input and guide through profile configuration.
+
+    Supported providers:
+      - Anthropic Claude (default)
+      - Google Vertex AI
+      - Local llama.cpp server
+      - Custom providers (OpenRouter, etc.)
+
+    Examples:
+        daf model add vertex              # Interactive wizard for Vertex AI
+        daf model add llama-cpp           # Interactive wizard for llama.cpp
+        daf model add                     # Interactive mode (prompts for name)
+    """
+    from devflow.cli.commands.model_commands import add_profile
+
+    add_profile(name=name, interactive=True, output_json=ctx.obj.get('output_json', False))
+
+
+@model.command(name="remove")
+@json_option
+@click.argument("name", required=False)
+def model_remove(ctx: click.Context, name: str) -> None:
+    """Remove a model provider profile.
+
+    NAME is the profile to remove.
+    If not provided, will show a list and prompt for selection.
+
+    Examples:
+        daf model remove llama-cpp
+        daf model remove          # Interactive mode
+    """
+    from devflow.cli.commands.model_commands import remove_profile
+
+    remove_profile(name=name, output_json=ctx.obj.get('output_json', False))
+
+
+@model.command(name="set-default")
+@json_option
+@click.argument("name", required=False)
+def model_set_default(ctx: click.Context, name: str) -> None:
+    """Set a profile as the default.
+
+    NAME is the profile to set as default.
+    If not provided, will show a list and prompt for selection.
+
+    The default profile is used when no --model-profile flag is provided
+    in daf new/open commands.
+
+    Examples:
+        daf model set-default vertex
+        daf model set-default          # Interactive mode
+    """
+    from devflow.cli.commands.model_commands import set_default_profile
+
+    set_default_profile(name=name, output_json=ctx.obj.get('output_json', False))
+
+
+@model.command(name="show")
+@json_option
+@click.argument("name", required=False)
+def model_show(ctx: click.Context, name: str) -> None:
+    """Show configuration for a specific profile.
+
+    NAME is the profile to show.
+    If not provided, shows the default profile.
+
+    Examples:
+        daf model show vertex
+        daf model show              # Shows default profile
+        daf model show --json
+    """
+    from devflow.cli.commands.model_commands import show_profile
+
+    show_profile(name=name, output_json=ctx.obj.get('output_json', False))
+
+
+@model.command(name="test")
+@json_option
+@click.argument("name", required=False)
+def model_test(ctx: click.Context, name: str) -> None:
+    """Test and validate a profile configuration.
+
+    NAME is the profile to test.
+    If not provided, tests the default profile.
+
+    Validates:
+      - Required fields are present
+      - URL formats are correct
+      - Configuration is internally consistent
+
+    Note: This validates configuration only. To test actual connectivity,
+    use the profile with Claude Code.
+
+    Examples:
+        daf model test vertex
+        daf model test              # Tests default profile
+        daf model test --json
+    """
+    from devflow.cli.commands.model_commands import test_profile
+
+    test_profile(name=name, output_json=ctx.obj.get('output_json', False))
+
+
 @cli.command()
 @click.option("--refresh", is_flag=True, help="Refresh automatically discovered data (custom field mappings)")
 @click.option("--reset", is_flag=True, help="Re-prompt for all configuration values")

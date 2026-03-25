@@ -49,10 +49,17 @@ cd llama.cpp
     --alias "Qwen3-Coder" --port 8000 --jinja --ctx-size 64000
 
 # 3. Configure daf (choose one method)
-# Method A: Interactive TUI (recommended)
+# Method A: CLI commands (recommended)
+daf model add llama-cpp
+# Select "3. Local llama.cpp server" when prompted
+# Base URL: http://localhost:8000
+# Model name: Qwen3-Coder
+# Set as default: Yes
+
+# Method B: Interactive TUI
 daf config edit  # Navigate to "Model Providers" → Add Custom Provider
 
-# Method B: Manual config
+# Method C: Manual config
 # Add to ~/.daf-sessions/config.json:
 # {
 #   "model_provider": {
@@ -92,9 +99,21 @@ daf open PROJ-123
 # Sign up and generate API key
 # Add credits to account
 
-# 2. Configure daf
+# 2. Configure daf (choose one method)
+# Method A: CLI commands (recommended)
+daf model add openrouter-deepseek
+# Select "4. Custom" when prompted
+# Base URL: https://openrouter.ai/api/v1
+# Auth token: (leave empty)
+# API key: or-YOUR-KEY-HERE
+# Model name: deepseek/deepseek-coder
+# Set as default: Yes
+
+# Method B: Interactive TUI
 daf config edit  # Navigate to "Model Providers" → Add Custom Provider
-# Or manually edit ~/.daf-sessions/config.json:
+
+# Method C: Manual config
+# Manually edit ~/.daf-sessions/config.json:
 # {
 #   "model_provider": {
 #     "default_profile": "openrouter-deepseek",
@@ -288,7 +307,39 @@ Profiles can be defined at multiple levels:
 
 ### Managing Profiles
 
-**Interactive TUI (Recommended)**:
+**Method 1: CLI Commands (Recommended)**:
+
+```bash
+# List all profiles
+daf model list
+
+# Add a new profile (interactive wizard)
+daf model add llama-cpp
+# - Choose provider type (Anthropic, Vertex AI, llama.cpp, Custom)
+# - Configure settings interactively
+# - Optionally set as default
+
+# Show profile configuration
+daf model show llama-cpp
+
+# Set default profile
+daf model set-default llama-cpp
+
+# Test profile configuration
+daf model test llama-cpp
+
+# Remove a profile
+daf model remove old-profile
+```
+
+**Benefits:**
+- Interactive wizard guides you through profile setup
+- Validates configuration before saving
+- No need to remember JSON structure
+- Supports all profile types (Anthropic, Vertex AI, llama.cpp, Custom)
+- JSON output available with `--json` flag for automation
+
+**Method 2: Interactive TUI**:
 ```bash
 daf config edit
 # Navigate to "Model Providers" tab
@@ -304,7 +355,7 @@ The TUI provides:
 - Delete profiles (except base `anthropic` profile)
 - Preview profile settings before saving
 
-**Manual JSON Editing**:
+**Method 3: Manual JSON Editing**:
 
 Add to `~/.daf-sessions/config.json`:
 ```json
