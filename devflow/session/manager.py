@@ -98,6 +98,9 @@ class SessionManager:
             session.work_sessions.append(WorkSession(start=datetime.now()))
             session.time_tracking_state = "running"
 
+        # Audit log: Track model provider usage for compliance
+        self._audit_log_session_creation(session)
+
         self.index.add_session(session)
         self._mark_modified(session)
         self._save_index()
@@ -420,6 +423,65 @@ class SessionManager:
 
         # Clear modified sessions tracker after successful save
         self._modified_sessions.clear()
+
+    def _audit_log_session_creation(self, session: Session) -> None:
+        """Audit log session creation with model provider details.
+
+        Args:
+            session: Session object being created
+        """
+        from devflow.utils.audit_log import log_model_provider_usage
+        from devflow.utils.model_provider import get_active_profile, get_profile_display_name
+
+        # Load configuration to determine model provider usage
+        config = self.config_loader.load_config()
+        if not config:
+            return
+
+        # Get active model provider profile (respects session.model_profile override)
+        profile = get_active_profile(config, override_profile_name=session.model_profile)
+
+        # Determine enforcement source
+        enforcement_source = None
+        enterprise_config = self.config_loader._load_enterprise_config()
+        team_config = self.config_loader._load_team_config()
+
+        if enterprise_config and enterprise_config.model_provider:
+            enforcement_source = "enterprise"
+        elif team_config and team_config.model_provider:
+            enforcement_source = "team"
+
+        # Extract profile details for logging
+        profile_name = session.model_profile or (config.model_provider.default_profile if config.model_provider else None) or "anthropic"
+        model_name = profile.get("model_name") if profile else None
+        base_url = profile.get("base_url") if profile else None
+        use_vertex = profile.get("use_vertex", False) if profile else False
+        vertex_region = profile.get("vertex_region") if profile else None
+
+        # Extract cost tracking details
+        cost_per_million_input_tokens = profile.get("cost_per_million_input_tokens") if profile else None
+        cost_per_million_output_tokens = profile.get("cost_per_million_output_tokens") if profile else None
+        cost_center = profile.get("cost_center") if profile else None
+
+        # Log the event
+        log_model_provider_usage(
+            event_type="session_created",
+            session_name=session.name,
+            profile_name=profile_name,
+            enforcement_source=enforcement_source,
+            model_name=model_name,
+            base_url=base_url,
+            use_vertex=use_vertex,
+            vertex_region=vertex_region,
+            cost_per_million_input_tokens=cost_per_million_input_tokens,
+            cost_per_million_output_tokens=cost_per_million_output_tokens,
+            cost_center=cost_center,
+            additional_data={
+                "issue_key": session.issue_key,
+                "goal": session.goal,
+                "working_directory": session.working_directory,
+            }
+        )
 
     def _save_session_metadata(self, session: Session) -> None:
         """Save session metadata to session directory.

@@ -301,15 +301,24 @@ All commands use this profile unless overridden.
 
 ### Priority Resolution
 
+**When model provider is NOT enforced by enterprise/team:**
+
 Profile selection follows this priority (highest to lowest):
 
-1. **`--model-profile` flag** (per-command override)
-2. **`session.model_profile`** (stored in session from previous `--model-profile`)
-3. **`MODEL_PROVIDER_PROFILE` env var** (terminal session override)
-4. **`config.model_provider.default_profile`** (persistent default)
-5. **Anthropic API** (fallback)
+1. **`session.model_profile`** (stored in session from previous `--model-profile`)
+2. **`MODEL_PROVIDER_PROFILE` env var** (terminal session override)
+3. **`config.model_provider.default_profile`** (persistent default)
+4. **Anthropic API** (fallback)
 
-**Example Workflow**:
+**When model provider IS enforced by enterprise/team:**
+
+The enforced configuration takes absolute precedence. Users cannot override it via:
+- ❌ `--model-profile` flag (command will use enforced profile)
+- ❌ `MODEL_PROVIDER_PROFILE` env var (ignored)
+- ❌ `config.model_provider.default_profile` (overridden by enforcement)
+- ❌ TUI configuration editor (UI disabled)
+
+**Example Workflow (No Enforcement)**:
 
 ```bash
 # Set work profile as default in config
@@ -326,6 +335,22 @@ daf open PROJ-123
 
 # Force back to Vertex for deployment testing
 daf open PROJ-123 --model-profile vertex
+```
+
+**Example Workflow (Enterprise Enforcement)**:
+
+```bash
+# Enterprise has enforced vertex-prod profile in enterprise.json
+
+# Create session - uses vertex-prod (enforced)
+daf new --name PROJ-123 --goal "Fix bug"
+
+# Attempt to use local model - STILL uses vertex-prod (enforced)
+daf open PROJ-123 --model-profile llama-cpp
+
+# TUI config editor shows warning and disables profile management
+daf config edit
+# "⚠ Model provider configuration is enforced by enterprise configuration"
 ```
 
 ## Configuration
@@ -351,18 +376,27 @@ Each profile contains:
 Profiles can be defined at multiple levels:
 
 1. **Enterprise** (`enterprise.json`) - Company-wide enforcement
-2. **Organization** (`organization.json`) - Project-specific
-3. **Team** (`team.json`) - Team defaults
-4. **User** (`config.json`) - Personal profiles
+2. **Team** (`team.json`) - Team defaults
+3. **User** (`config.json`) - Personal profiles
 
-**Config Merge Priority**: User > Team > Organization > Enterprise
+**Config Merge Priority (Enforcement)**: Enterprise > Team > User
+
+> **⚠ Important**: The model_provider configuration follows an **enforcement hierarchy**
+> (Enterprise > Team > User), not a preference hierarchy. This means:
+> - If enterprise.json defines model_provider, it **enforces** those profiles company-wide
+> - Users **cannot override** enterprise-enforced profiles
+> - Teams can enforce profiles if enterprise hasn't
+> - Users can only choose profiles if neither enterprise nor team has enforced them
 
 **Runtime Profile Selection Priority** (highest to lowest):
-1. `--model-profile` CLI flag
-2. `session.model_profile` (stored from previous `--model-profile`)
-3. `MODEL_PROVIDER_PROFILE` environment variable
-4. `config.model_provider.default_profile`
-5. Anthropic API (fallback)
+1. **`session.model_profile`** (stored in session from previous `--model-profile`)
+2. **`MODEL_PROVIDER_PROFILE` env var** (temporary override - only works if not enforced)
+3. **`config.model_provider.default_profile`** (persistent default - only works if not enforced)
+4. **Anthropic API** (fallback)
+
+> **Note**: The `--model-profile` CLI flag has been replaced by `session.model_profile`
+> for consistency. Use `daf open --model-profile <name>` to switch profiles, which stores
+> the profile in the session.
 
 ### Managing Profiles
 
@@ -985,7 +1019,7 @@ MODEL_PROVIDER_PROFILE=anthropic daf open PROJ-789
 
 ## Enterprise Configuration
 
-Enterprises can enforce model provider usage across all users.
+Enterprises can enforce model provider usage across all users for compliance, cost control, and security.
 
 ### Enforce Vertex AI Company-Wide
 
@@ -994,20 +1028,38 @@ Enterprises can enforce model provider usage across all users.
 ```json
 {
   "model_provider": {
-    "default_profile": "vertex",
+    "default_profile": "vertex-prod",
     "profiles": {
-      "vertex": {
-        "name": "vertex",
+      "vertex-prod": {
+        "name": "Vertex AI Production",
         "use_vertex": true,
         "vertex_project_id": "company-gcp-project",
-        "vertex_region": "us-east5"
+        "vertex_region": "us-east5",
+        "cost_per_million_input_tokens": 3.00,
+        "cost_per_million_output_tokens": 15.00,
+        "monthly_budget_usd": 5000.00,
+        "cost_center": "ENG-PLATFORM"
       }
     }
   }
 }
 ```
 
-Users cannot override enterprise settings (only use allowed profiles).
+**Enforcement Behavior:**
+- ✅ Users **cannot add, edit, or delete profiles** in the UI (buttons disabled)
+- ✅ Users **cannot change the default profile** (dropdown disabled)
+- ✅ Config file saves **do not persist** user model_provider overrides
+- ✅ Warning message displayed: "Model provider configuration is enforced by enterprise configuration"
+- ✅ Audit logs track all model provider usage with enforcement source
+
+**Cost Tracking:**
+- `cost_per_million_input_tokens`: Estimated cost per million input tokens in USD
+- `cost_per_million_output_tokens`: Estimated cost per million output tokens in USD
+- `monthly_budget_usd`: Monthly budget limit for alerts and tracking
+- `cost_center`: Department or cost center code for accounting/chargeback
+
+All model provider usage is logged to `~/.daf-sessions/audit.log` with cost tracking metadata
+for enterprise budget management and compliance reporting.
 
 ### Provide Shared llama.cpp Server
 

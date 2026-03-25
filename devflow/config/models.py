@@ -90,6 +90,12 @@ class ModelProviderProfile(BaseModel):
     vertex_region: Optional[str] = Field(default=None, description="ANTHROPIC_VERTEX_REGION for Vertex AI (e.g., 'us-east5')")
     env_vars: Dict[str, str] = Field(default_factory=dict, description="Additional environment variables")
 
+    # Cost tracking fields (for enterprise budget management)
+    cost_per_million_input_tokens: Optional[float] = Field(default=None, description="Estimated cost per million input tokens in USD (e.g., 3.00 for Claude Sonnet)")
+    cost_per_million_output_tokens: Optional[float] = Field(default=None, description="Estimated cost per million output tokens in USD (e.g., 15.00 for Claude Sonnet)")
+    monthly_budget_usd: Optional[float] = Field(default=None, description="Monthly budget limit in USD (optional, for budget alerts)")
+    cost_center: Optional[str] = Field(default=None, description="Cost center or department code for accounting (e.g., 'ENG-PLATFORM')")
+
 
 class ModelProviderConfig(BaseModel):
     """Model provider configuration for alternative AI providers.

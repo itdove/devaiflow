@@ -97,15 +97,19 @@ class TestClaudeAgent:
         mock_process = Mock()
         mock_popen.return_value = mock_process
 
-        result = agent.launch_session(project_path)
+        result = agent.launch_session(
+            project_path,
+            model_provider_profile=None,
+            session_name=None,
+            profile_name=None,
+            enforcement_source=None
+        )
 
         mock_require_tool.assert_called_once_with("claude", "launch Claude Code session")
         mock_popen.assert_called_once_with(
             ["claude", "code"],
             cwd=project_path,
             env=ANY,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
         )
         assert result == mock_process
 
@@ -127,8 +131,6 @@ class TestClaudeAgent:
             ["claude", "--resume", session_id],
             cwd=project_path,
             env=ANY,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
         )
         assert result == mock_process
 

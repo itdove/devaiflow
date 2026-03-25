@@ -52,21 +52,27 @@ def mock_config_loader(mock_config_multi_workspace, tmp_path):
     """Create a mock config loader."""
     config_loader = MagicMock(spec=ConfigLoader)
     config_loader.load_config.return_value = mock_config_multi_workspace
-    config_loader.sessions_dir = tmp_path / "sessions"
-    config_loader.sessions_dir.mkdir(parents=True, exist_ok=True)
-    config_loader.sessions_file = config_loader.sessions_dir / "sessions.json"
+
+    # Use real Path objects for file system paths to avoid JSON serialization errors
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    config_loader.sessions_dir = sessions_dir
+    config_loader.sessions_file = sessions_dir / "sessions.json"
+
     return config_loader
 
 
 @pytest.fixture
 def mock_session(mock_config_loader):
     """Create a mock session."""
-    session_manager = SessionManager(mock_config_loader)
-    session = session_manager.create_session(
-        name="test-session",
-        issue_key="AAP-12345",
-        goal="Test goal"
-    )
+    # Mock audit logging to avoid JSON serialization errors with MagicMock
+    with patch("devflow.utils.audit_log.log_model_provider_usage"):
+        session_manager = SessionManager(mock_config_loader)
+        session = session_manager.create_session(
+            name="test-session",
+            issue_key="AAP-12345",
+            goal="Test goal"
+        )
     return session
 
 

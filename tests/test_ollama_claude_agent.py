@@ -67,15 +67,19 @@ def test_launch_session(mock_popen, mock_require_tool):
     mock_process = Mock()
     mock_popen.return_value = mock_process
 
-    result = agent.launch_session(project_path)
+    result = agent.launch_session(
+        project_path,
+        model_provider_profile=None,
+        session_name=None,
+        profile_name=None,
+        enforcement_source=None
+    )
 
     mock_require_tool.assert_called_once_with("ollama", "launch Claude Code with Ollama")
     mock_popen.assert_called_once_with(
         ["ollama", "launch", "claude"],
         cwd=project_path,
         env=ANY,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
     )
     assert result == mock_process
 
@@ -124,8 +128,6 @@ def test_resume_session(mock_popen, mock_require_tool):
         ["ollama", "launch", "claude"],
         cwd=project_path,
         env=ANY,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
     )
     assert result == mock_process
 

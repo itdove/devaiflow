@@ -61,6 +61,9 @@ class OllamaClaudeAgent(AgentInterface):
         self,
         project_path: str,
         model_provider_profile: Optional[Dict[str, Any]] = None,
+        session_name: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        enforcement_source: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with a local model.
 
@@ -68,6 +71,9 @@ class OllamaClaudeAgent(AgentInterface):
             project_path: Absolute path to project
             model_provider_profile: Model provider profile dict (optional)
                 Contains: model_name (Ollama model to use)
+            session_name: Session name for audit logging (optional)
+            profile_name: Profile name for audit logging (optional)
+            enforcement_source: Enforcement source for audit logging (optional)
 
         Returns:
             Subprocess handle for the launched process
@@ -76,6 +82,23 @@ class OllamaClaudeAgent(AgentInterface):
             ToolNotFoundError: If ollama command is not installed
         """
         require_tool("ollama", "launch Claude Code with Ollama")
+
+        # Audit log: Track model provider usage when launching session
+        if session_name:
+            from devflow.utils.audit_log import log_model_provider_usage
+            model_name = self._get_model_name(model_provider_profile)
+            log_model_provider_usage(
+                event_type="session_launched",
+                session_name=session_name,
+                profile_name=profile_name,
+                enforcement_source=enforcement_source,
+                model_name=model_name,
+                base_url="ollama://local",
+                use_vertex=False,
+                cost_per_million_input_tokens=model_provider_profile.get("cost_per_million_input_tokens") if model_provider_profile else None,
+                cost_per_million_output_tokens=model_provider_profile.get("cost_per_million_output_tokens") if model_provider_profile else None,
+                cost_center=model_provider_profile.get("cost_center") if model_provider_profile else None,
+            )
 
         # Build command: ollama launch claude [--model <model>]
         cmd = ["ollama", "launch", "claude"]
@@ -89,8 +112,7 @@ class OllamaClaudeAgent(AgentInterface):
             cmd,
             cwd=project_path,
             env=os.environ.copy(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
     def launch_with_prompt(
@@ -102,6 +124,9 @@ class OllamaClaudeAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        session_name: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        enforcement_source: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with initial prompt (for new sessions).
 
@@ -118,6 +143,9 @@ class OllamaClaudeAgent(AgentInterface):
             session_id: Session UUID (currently not used)
             model_provider_profile: Model provider profile dict (optional)
             skills_dirs: Skills directories (currently not used)
+            session_name: Session name for audit logging (optional)
+            profile_name: Profile name for audit logging (optional)
+            enforcement_source: Enforcement source for audit logging (optional)
             workspace_path: Workspace path (currently not used)
             config: Configuration object (currently not used)
 
@@ -134,6 +162,23 @@ class OllamaClaudeAgent(AgentInterface):
         # Users will need to send the initial prompt manually
 
         require_tool("ollama", "launch Claude Code with Ollama")
+
+        # Audit log: Track model provider usage when launching session
+        if session_name:
+            from devflow.utils.audit_log import log_model_provider_usage
+            model_name = self._get_model_name(model_provider_profile)
+            log_model_provider_usage(
+                event_type="session_launched",
+                session_name=session_name,
+                profile_name=profile_name,
+                enforcement_source=enforcement_source,
+                model_name=model_name,
+                base_url="ollama://local",
+                use_vertex=False,
+                cost_per_million_input_tokens=model_provider_profile.get("cost_per_million_input_tokens") if model_provider_profile else None,
+                cost_per_million_output_tokens=model_provider_profile.get("cost_per_million_output_tokens") if model_provider_profile else None,
+                cost_center=model_provider_profile.get("cost_center") if model_provider_profile else None,
+            )
 
         # Build command: ollama launch claude [--model <model>]
         cmd = ["ollama", "launch", "claude"]
@@ -152,8 +197,7 @@ class OllamaClaudeAgent(AgentInterface):
             cmd,
             cwd=project_path,
             env=os.environ.copy(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
     def resume_session(
@@ -195,8 +239,7 @@ class OllamaClaudeAgent(AgentInterface):
                 cmd,
                 cwd=project_path,
                 env=os.environ.copy(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
             )
         except Exception:
             # Fall back to regular claude --resume
@@ -205,8 +248,7 @@ class OllamaClaudeAgent(AgentInterface):
                 ["claude", "--resume", session_id],
                 cwd=project_path,
                 env=os.environ.copy(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
             )
 
     def capture_session_id(

@@ -978,18 +978,20 @@ class ModelProviderProfileEntry(Container):
             super().__init__()
             self.profile_name = profile_name
 
-    def __init__(self, profile_name: str, profile_data: Dict[str, Any], is_default: bool = False, **kwargs):
+    def __init__(self, profile_name: str, profile_data: Dict[str, Any], is_default: bool = False, enforced: bool = False, **kwargs):
         """Initialize profile entry.
 
         Args:
             profile_name: Name of the profile
             profile_data: Profile configuration data
             is_default: Whether this is the default profile
+            enforced: Whether model provider is enforced by enterprise/team
         """
         super().__init__(**kwargs)
         self.profile_name = profile_name
         self.profile_data = profile_data
         self.is_default = is_default
+        self.enforced = enforced
 
     def compose(self) -> ComposeResult:
         """Compose the profile entry widgets."""
@@ -1020,11 +1022,11 @@ class ModelProviderProfileEntry(Container):
         # Buttons in a horizontal row at the bottom
         with Horizontal(classes="button-row"):
             if not self.is_default:
-                yield Button("Set Default", variant="success", id=f"default_{btn_id_base}")
-            yield Button("Edit", variant="primary", id=f"edit_{btn_id_base}")
+                yield Button("Set Default", variant="success", id=f"default_{btn_id_base}", disabled=self.enforced)
+            yield Button("Edit", variant="primary", id=f"edit_{btn_id_base}", disabled=self.enforced)
             # Don't allow removing default profile or anthropic profile
             if not self.is_default and self.profile_name != "anthropic":
-                yield Button("Delete", variant="error", id=f"remove_{btn_id_base}")
+                yield Button("Delete", variant="error", id=f"remove_{btn_id_base}", disabled=self.enforced)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
@@ -1475,6 +1477,29 @@ class ConfigTUI(App):
         if enterprise_config and enterprise_config.agent_backend:
             return "enterprise"
         elif team_config and team_config.agent_backend:
+            return "team"
+        else:
+            return None
+
+    def _get_model_provider_enforcement_source(self) -> Optional[str]:
+        """Check if model_provider is enforced by enterprise, organization, or team config.
+
+        Returns:
+            "enterprise" if enforced by enterprise config
+            "organization" if enforced by organization config
+            "team" if enforced by team config
+            None if user can choose
+        """
+        # Load enterprise, organization, and team configs to check if they enforce model_provider
+        enterprise_config = self.config_loader._load_enterprise_config()
+        organization_config = self.config_loader._load_organization_config()
+        team_config = self.config_loader._load_team_config()
+
+        if enterprise_config and enterprise_config.model_provider:
+            return "enterprise"
+        elif organization_config and organization_config.model_provider:
+            return "organization"
+        elif team_config and team_config.model_provider:
             return "team"
         else:
             return None
@@ -2269,6 +2294,18 @@ class ConfigTUI(App):
                 classes="section-help",
             )
 
+            # Check if model_provider is enforced by enterprise or team
+            provider_enforced_by = self._get_model_provider_enforcement_source()
+
+            if provider_enforced_by:
+                # Model provider is enforced - show as read-only
+                yield Static(
+                    f"[yellow]⚠ Model provider configuration is enforced by {provider_enforced_by} configuration[/yellow]\n"
+                    f"[dim]Users cannot modify model provider profiles or default profile selection.[/dim]\n"
+                    f"[dim]Contact your {provider_enforced_by} administrator to request changes.[/dim]",
+                    classes="section-help",
+                )
+
             yield Static("[bold]Available Profiles[/bold]", classes="subsection-title")
 
             # Container for profile entries (will be updated dynamically)
@@ -2277,26 +2314,33 @@ class ConfigTUI(App):
                     default_profile = self.config.model_provider.default_profile or "anthropic"
                     for profile_name, profile_data in self.config.model_provider.profiles.items():
                         is_default = (profile_name == default_profile)
-                        yield ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default)
+                        yield ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default, enforced=bool(provider_enforced_by))
                 else:
                     yield Static(
                         "[dim]No profiles configured. Add your first profile below.[/dim]",
                         id="empty_profiles_message"
                     )
 
-            # Add button
+            # Add button (disabled if enforced)
             with Horizontal(classes="button-bar"):
-                yield Button("Add Profile", variant="success", id="add_profile")
+                yield Button("Add Profile", variant="success", id="add_profile", disabled=bool(provider_enforced_by))
 
             # Help text
-            yield Static(
-                "\n[dim]Tips:[/dim]\n"
-                "[dim]• Default profile (marked with ⭐) is used unless overridden[/dim]\n"
-                "[dim]• Override per session: MODEL_PROVIDER_PROFILE=profile-name daf open[/dim]\n"
-                "[dim]• The 'anthropic' profile is the base fallback and cannot be deleted[/dim]\n"
-                "[dim]• See docs/alternative-model-providers.md for setup guides[/dim]",
-                classes="section-help"
-            )
+            help_text = "\n[dim]Tips:[/dim]\n"
+            if not provider_enforced_by:
+                help_text += (
+                    "[dim]• Default profile (marked with ⭐) is used unless overridden[/dim]\n"
+                    "[dim]• Override per session: MODEL_PROVIDER_PROFILE=profile-name daf open[/dim]\n"
+                    "[dim]• The 'anthropic' profile is the base fallback and cannot be deleted[/dim]\n"
+                    "[dim]• See docs/alternative-model-providers.md for setup guides[/dim]"
+                )
+            else:
+                help_text += (
+                    f"[dim]• Model provider configuration is managed by {provider_enforced_by} administrators[/dim]\n"
+                    f"[dim]• View-only access - changes must be made in {provider_enforced_by} configuration files[/dim]"
+                )
+
+            yield Static(help_text, classes="section-help")
 
     def _compose_workspaces_tab(self) -> ComposeResult:
         """Compose workspaces configuration tab content."""
@@ -2566,6 +2610,16 @@ class ConfigTUI(App):
         Args:
             message: The edit pressed message containing profile name and data
         """
+        # Check if model_provider is enforced
+        enforcement_source = self._get_model_provider_enforcement_source()
+        if enforcement_source:
+            self.notify(
+                f"Cannot edit profile: Model provider is enforced by {enforcement_source} configuration",
+                severity="error",
+                timeout=5
+            )
+            return
+
         def handle_edit_result(result):
             """Handle the result from the edit screen."""
             if result:
@@ -2606,6 +2660,16 @@ class ConfigTUI(App):
         Args:
             message: The remove pressed message containing profile name
         """
+        # Check if model_provider is enforced
+        enforcement_source = self._get_model_provider_enforcement_source()
+        if enforcement_source:
+            self.notify(
+                f"Cannot remove profile: Model provider is enforced by {enforcement_source} configuration",
+                severity="error",
+                timeout=5
+            )
+            return
+
         # Remove the profile from config
         if self.config.model_provider and message.profile_name in self.config.model_provider.profiles:
             del self.config.model_provider.profiles[message.profile_name]
@@ -2624,6 +2688,16 @@ class ConfigTUI(App):
         Args:
             message: The set as default message containing profile name
         """
+        # Check if model_provider is enforced
+        enforcement_source = self._get_model_provider_enforcement_source()
+        if enforcement_source:
+            self.notify(
+                f"Cannot change default profile: Model provider is enforced by {enforcement_source} configuration",
+                severity="error",
+                timeout=5
+            )
+            return
+
         if self.config.model_provider:
             self.config.model_provider.default_profile = message.profile_name
             self._refresh_profiles_list()
@@ -2774,6 +2848,16 @@ class ConfigTUI(App):
             self.push_screen(AddEditWorkspaceScreen(), handle_add_workspace_result)
 
         elif event.button.id == "add_profile":
+            # Check if model_provider is enforced
+            enforcement_source = self._get_model_provider_enforcement_source()
+            if enforcement_source:
+                self.notify(
+                    f"Cannot add profile: Model provider is enforced by {enforcement_source} configuration",
+                    severity="error",
+                    timeout=5
+                )
+                return
+
             def handle_template_selection(template_id):
                 """Handle template selection - show profile form with selected template."""
                 if template_id:

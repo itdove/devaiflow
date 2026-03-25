@@ -748,16 +748,18 @@ class ConfigLoader:
             or "claude"  # Default to claude if not set anywhere
         )
 
-        # Merge model_provider with priority: User > Team > Organization > Enterprise
-        # User preferences take priority for model provider (personal choice)
-        # But enterprise/org/team can provide shared profiles and defaults
+        # Merge model_provider with priority: Enterprise > Organization > Team > User
+        # Enterprise can enforce model provider for compliance/cost control (company-wide)
+        # Organization can enforce model provider if enterprise hasn't (project-specific budgets)
+        # Team can enforce model provider if enterprise/org haven't enforced it
+        # User can only choose if enterprise/org/team haven't enforced it
         from .models import ModelProviderConfig
         model_provider = (
-            user_config.model_provider  # User takes highest precedence for model provider
-            or team_config.model_provider  # Then team
-            or org_config.model_provider  # Then organization
-            or enterprise_config.model_provider  # Then enterprise
-            or ModelProviderConfig()  # Default if not set anywhere
+            enterprise_config.model_provider  # Enterprise takes highest precedence
+            or org_config.model_provider      # Then organization (project-specific)
+            or team_config.model_provider     # Then team
+            or user_config.model_provider     # Then user
+            or ModelProviderConfig()          # Default if not set anywhere
         )
 
         # Construct final Config object
@@ -865,6 +867,16 @@ class ConfigLoader:
             JiraBackendConfig,
         )
 
+        # Check if model_provider is enforced by enterprise, organization, or team
+        # If enforced, don't save it in user config (prevent user override)
+        enterprise_config = self._load_enterprise_config()
+        organization_config = self._load_organization_config()
+        team_config = self._load_team_config()
+        user_model_provider = config.model_provider
+        if enterprise_config.model_provider or organization_config.model_provider or team_config.model_provider:
+            # Model provider is enforced - don't save user override
+            user_model_provider = None
+
         # Extract user config
         user_config = UserConfig(
             backend_config_source=config.backend_config_source,
@@ -877,7 +889,7 @@ class ConfigLoader:
             pr_template_url=config.pr_template_url,
             storage=config.storage,  # Storage backend config
             mock_services=config.mock_services,
-            model_provider=config.model_provider,  # Model provider profiles (user preferences)
+            model_provider=user_model_provider,  # Model provider profiles (only if not enforced)
             gcp_vertex_region=config.gcp_vertex_region,
             update_checker_timeout=config.update_checker_timeout,
             jira_affected_version=config.jira.affected_version,
