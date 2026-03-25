@@ -360,7 +360,10 @@ class TestAuditLogging:
 
     def test_log_model_provider_usage_with_cost_tracking(self, tmp_path):
         """Test that audit log captures cost tracking metadata."""
-        from devflow.utils.audit_log import log_model_provider_usage
+        from devflow.utils.audit_log import log_model_provider_usage, audit_logger
+
+        # Clear any existing handlers to ensure clean state
+        audit_logger.handlers.clear()
 
         # Set up audit log in temp directory
         with patch("devflow.utils.audit_log.get_cs_home", return_value=tmp_path):
@@ -377,6 +380,10 @@ class TestAuditLogging:
                 cost_per_million_output_tokens=15.00,
                 cost_center="ENG-PLATFORM",
             )
+
+            # Flush handlers to ensure log is written
+            for handler in audit_logger.handlers:
+                handler.flush()
 
             # Verify audit log was created and contains expected fields
             audit_log_path = tmp_path / "audit.log"
