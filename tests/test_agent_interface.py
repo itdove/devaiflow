@@ -13,6 +13,8 @@ from devflow.agent import (
     GitHubCopilotAgent,
     CursorAgent,
     WindsurfAgent,
+    AiderAgent,
+    ContinueAgent,
     create_agent_client,
 )
 from devflow.utils.dependencies import ToolNotFoundError
@@ -368,6 +370,36 @@ class TestAgentFactory:
 
         assert isinstance(agent, WindsurfAgent)
         assert agent.windsurf_dir == custom_home
+
+    def test_create_aider_agent(self):
+        """Test factory creates AiderAgent for 'aider' backend."""
+        agent = create_agent_client("aider")
+
+        assert isinstance(agent, AiderAgent)
+        assert agent.get_agent_name() == "aider"
+
+    def test_create_aider_custom_home(self):
+        """Test factory passes custom agent_home to AiderAgent."""
+        custom_home = Path("/tmp/custom-aider")
+        agent = create_agent_client("aider", agent_home=custom_home)
+
+        assert isinstance(agent, AiderAgent)
+        assert agent.aider_dir == custom_home
+
+    def test_create_continue_agent(self):
+        """Test factory creates ContinueAgent for 'continue' backend."""
+        agent = create_agent_client("continue")
+
+        assert isinstance(agent, ContinueAgent)
+        assert agent.get_agent_name() == "continue"
+
+    def test_create_continue_custom_home(self):
+        """Test factory passes custom agent_home to ContinueAgent."""
+        custom_home = Path("/tmp/custom-continue")
+        agent = create_agent_client("continue", agent_home=custom_home)
+
+        assert isinstance(agent, ContinueAgent)
+        assert agent.continue_dir == custom_home
 
     def test_unsupported_backend_raises_error(self):
         """Test factory raises ValueError for unsupported backend."""
@@ -902,6 +934,405 @@ class TestWindsurfAgent:
     def test_get_session_message_count_returns_zero(self):
         """Test get_session_message_count returns 0 (not supported)."""
         agent = WindsurfAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 0
+
+
+class TestAiderAgent:
+    """Test AiderAgent implementation."""
+
+    def test_init_default_aider_dir(self):
+        """Test AiderAgent initialization with default aider_dir."""
+        agent = AiderAgent()
+
+        assert agent.aider_dir == Path.home() / ".aider"
+        assert agent.chat_history_dir == Path.home() / ".aider" / "chat_history"
+
+    def test_init_custom_aider_dir(self):
+        """Test AiderAgent initialization with custom aider_dir."""
+        custom_dir = Path("/tmp/custom-aider")
+        agent = AiderAgent(aider_dir=custom_dir)
+
+        assert agent.aider_dir == custom_dir
+        assert agent.chat_history_dir == custom_dir / "chat_history"
+
+    def test_get_agent_name(self):
+        """Test get_agent_name returns 'aider'."""
+        agent = AiderAgent()
+        assert agent.get_agent_name() == "aider"
+
+    def test_get_agent_home_dir(self):
+        """Test get_agent_home_dir returns aider_dir."""
+        custom_dir = Path("/tmp/aider")
+        agent = AiderAgent(aider_dir=custom_dir)
+        assert agent.get_agent_home_dir() == custom_dir
+
+    def test_encode_project_path(self):
+        """Test encode_project_path replaces / and _ with -."""
+        agent = AiderAgent()
+
+        # Test / replacement
+        assert agent.encode_project_path("/home/user/project") == "-home-user-project"
+
+        # Test _ replacement
+        assert agent.encode_project_path("/home/my_project") == "-home-my-project"
+
+        # Test both
+        assert agent.encode_project_path("/home/user/my_project") == "-home-user-my-project"
+
+    @patch("devflow.agent.aider_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_session(self, mock_popen, mock_require_tool):
+        """Test launch_session calls aider command."""
+        agent = AiderAgent()
+        project_path = "/home/user/project"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_session(project_path)
+
+        mock_require_tool.assert_called_once_with("aider", "launch Aider AI assistant")
+        mock_popen.assert_called_once_with(
+            ["aider"],
+            cwd=project_path,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.aider_agent.time.time")
+    def test_capture_session_id(self, mock_time):
+        """Test capture_session_id generates timestamp-based ID."""
+        mock_time.return_value = 1234567890
+        agent = AiderAgent()
+        project_path = "/home/user/project"
+
+        session_id = agent.capture_session_id(project_path)
+
+        assert session_id.startswith("aider--home-user-project-")
+        assert "1234567890" in session_id
+
+    @patch("devflow.agent.aider_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt(self, mock_popen, mock_require_tool, tmp_path):
+        """Test launch_with_prompt saves prompt and launches aider."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+        initial_prompt = "Test prompt for Aider"
+        session_id = "test-session-123"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_with_prompt(project_path, initial_prompt, session_id)
+
+        # Check prompt file was created
+        prompt_file = agent.chat_history_dir / f"{session_id}_initial_prompt.txt"
+        assert prompt_file.exists()
+        assert prompt_file.read_text() == initial_prompt
+
+        # Check aider was launched with chat history file
+        mock_require_tool.assert_called_once_with("aider", "launch Aider AI assistant")
+        expected_chat_file = agent.chat_history_dir / f"{session_id}_chat.txt"
+        mock_popen.assert_called_once_with(
+            ["aider", "--chat-history-file", str(expected_chat_file)],
+            cwd=project_path,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.aider_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_resume_session(self, mock_popen, mock_require_tool, tmp_path):
+        """Test resume_session loads chat history file."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create chat history file
+        chat_file = agent.chat_history_dir / f"{session_id}_chat.txt"
+        chat_file.parent.mkdir(parents=True, exist_ok=True)
+        chat_file.write_text("Previous chat content")
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.resume_session(session_id, project_path)
+
+        mock_require_tool.assert_called_once_with("aider", "resume Aider AI assistant")
+        mock_popen.assert_called_once_with(
+            ["aider", "--chat-history-file", str(chat_file)],
+            cwd=project_path,
+        )
+        assert result == mock_process
+
+    def test_get_session_file_path(self):
+        """Test get_session_file_path returns correct path."""
+        agent = AiderAgent(aider_dir=Path("/tmp/aider"))
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        expected = Path("/tmp/aider/chat_history/test-session-id_chat.txt")
+        assert result == expected
+
+    def test_session_exists_true(self, tmp_path):
+        """Test session_exists returns True when chat file exists."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+        session_id = "test-uuid"
+
+        # Create chat history file
+        chat_file = agent.get_session_file_path(session_id, project_path)
+        chat_file.parent.mkdir(parents=True, exist_ok=True)
+        chat_file.touch()
+
+        assert agent.session_exists(session_id, project_path) is True
+
+    def test_session_exists_false(self, tmp_path):
+        """Test session_exists returns False when chat file doesn't exist."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+        session_id = "nonexistent-uuid"
+
+        assert agent.session_exists(session_id, project_path) is False
+
+    def test_get_existing_sessions(self, tmp_path):
+        """Test get_existing_sessions returns set of session IDs."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+        encoded_path = agent.encode_project_path(project_path)
+
+        # Create chat history directory
+        agent.chat_history_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create chat files
+        (agent.chat_history_dir / f"aider-{encoded_path}-1234567890_chat.txt").touch()
+        (agent.chat_history_dir / f"aider-{encoded_path}-1234567891_chat.txt").touch()
+        (agent.chat_history_dir / f"aider-other-project-1234567892_chat.txt").touch()
+
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == {
+            f"aider-{encoded_path}-1234567890",
+            f"aider-{encoded_path}-1234567891"
+        }
+
+    def test_get_existing_sessions_empty(self, tmp_path):
+        """Test get_existing_sessions returns empty set when no sessions."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == set()
+
+    def test_get_session_message_count(self, tmp_path):
+        """Test get_session_message_count counts non-empty lines."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create chat file with some content
+        chat_file = agent.get_session_file_path(session_id, project_path)
+        chat_file.parent.mkdir(parents=True, exist_ok=True)
+        chat_file.write_text("Message 1\nMessage 2\n\nMessage 3\n")
+
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 3  # 3 non-empty lines
+
+    def test_get_session_message_count_zero_when_file_not_exists(self, tmp_path):
+        """Test get_session_message_count returns 0 when file doesn't exist."""
+        agent = AiderAgent(aider_dir=tmp_path / "aider")
+        project_path = "/home/user/project"
+        session_id = "nonexistent-session"
+
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 0
+
+
+class TestContinueAgent:
+    """Test ContinueAgent implementation."""
+
+    def test_init_default_continue_dir(self):
+        """Test ContinueAgent initialization with default continue_dir."""
+        agent = ContinueAgent()
+
+        assert agent.continue_dir == Path.home() / ".continue"
+        assert agent.vscode_dir == Path.home() / ".vscode"
+        assert agent.workspace_storage == Path.home() / ".vscode" / "User" / "workspaceStorage"
+
+    def test_init_custom_continue_dir(self):
+        """Test ContinueAgent initialization with custom continue_dir."""
+        custom_dir = Path("/tmp/custom-continue")
+        agent = ContinueAgent(continue_dir=custom_dir)
+
+        assert agent.continue_dir == custom_dir
+        # VS Code dir is always ~/.vscode
+        assert agent.vscode_dir == Path.home() / ".vscode"
+
+    def test_get_agent_name(self):
+        """Test get_agent_name returns 'continue'."""
+        agent = ContinueAgent()
+        assert agent.get_agent_name() == "continue"
+
+    def test_get_agent_home_dir(self):
+        """Test get_agent_home_dir returns continue_dir."""
+        custom_dir = Path("/tmp/continue")
+        agent = ContinueAgent(continue_dir=custom_dir)
+        assert agent.get_agent_home_dir() == custom_dir
+
+    def test_encode_project_path(self):
+        """Test encode_project_path replaces / and _ with -."""
+        agent = ContinueAgent()
+
+        # Test / replacement
+        assert agent.encode_project_path("/home/user/project") == "-home-user-project"
+
+        # Test _ replacement
+        assert agent.encode_project_path("/home/my_project") == "-home-my-project"
+
+        # Test both
+        assert agent.encode_project_path("/home/user/my_project") == "-home-user-my-project"
+
+    @patch("devflow.agent.continue_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_session(self, mock_popen, mock_require_tool):
+        """Test launch_session calls code command."""
+        agent = ContinueAgent()
+        project_path = "/home/user/project"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_session(project_path)
+
+        mock_require_tool.assert_called_once_with("code", "launch VS Code with Continue extension")
+        mock_popen.assert_called_once_with(
+            ["code", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.continue_agent.time.time")
+    def test_capture_session_id(self, mock_time):
+        """Test capture_session_id generates workspace-based ID."""
+        mock_time.return_value = 1234567890
+        agent = ContinueAgent()
+        project_path = "/home/user/project"
+
+        session_id = agent.capture_session_id(project_path)
+
+        assert session_id.startswith("continue--home-user-project-")
+        assert "1234567890" in session_id
+
+    @patch("devflow.agent.continue_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt(self, mock_popen, mock_require_tool, tmp_path):
+        """Test launch_with_prompt saves prompt and launches VS Code."""
+        agent = ContinueAgent(continue_dir=tmp_path / "continue")
+        project_path = "/home/user/project"
+        initial_prompt = "Test prompt for Continue"
+        session_id = "test-session-456"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_with_prompt(project_path, initial_prompt, session_id)
+
+        # Check prompt file was created
+        prompt_file = agent.continue_dir / f"{session_id}_initial_prompt.txt"
+        assert prompt_file.exists()
+        assert prompt_file.read_text() == initial_prompt
+
+        # Check VS Code was launched
+        mock_require_tool.assert_called_once_with("code", "launch VS Code with Continue extension")
+        mock_popen.assert_called_once_with(
+            ["code", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.continue_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_resume_session(self, mock_popen, mock_require_tool):
+        """Test resume_session calls code command."""
+        agent = ContinueAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.resume_session(session_id, project_path)
+
+        mock_require_tool.assert_called_once_with("code", "resume VS Code with Continue extension")
+        mock_popen.assert_called_once_with(
+            ["code", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    def test_get_session_file_path(self):
+        """Test get_session_file_path returns workspace storage path."""
+        custom_dir = Path("/tmp/continue")
+        agent = ContinueAgent(continue_dir=custom_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        # Note: VS Code dir is always ~/.vscode, not custom_dir
+        expected = Path.home() / ".vscode" / "User" / "workspaceStorage" / "-home-user-project"
+        assert result == expected
+
+    def test_session_exists_when_storage_exists(self, tmp_path):
+        """Test session_exists returns True when workspace storage exists."""
+        agent = ContinueAgent(continue_dir=tmp_path / "continue")
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create workspace storage directory
+        workspace_dir = agent.workspace_storage / "-home-user-project"
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+
+        assert agent.session_exists(session_id, project_path) is True
+
+    def test_session_exists_returns_false_when_not_exists(self, tmp_path):
+        """Test session_exists returns False when workspace storage doesn't exist."""
+        # Use a different vscode_dir to avoid conflicts with real VS Code
+        agent = ContinueAgent(continue_dir=tmp_path / "continue")
+        # Override workspace_storage to use tmp_path
+        agent.workspace_storage = tmp_path / "vscode" / "User" / "workspaceStorage"
+
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        assert agent.session_exists(session_id, project_path) is False
+
+    def test_get_existing_sessions_returns_empty_set(self):
+        """Test get_existing_sessions returns empty set (Continue manages sessions via VS Code)."""
+        agent = ContinueAgent()
+        project_path = "/home/user/project"
+
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == set()
+
+    def test_get_session_message_count_returns_zero(self):
+        """Test get_session_message_count returns 0 (not supported)."""
+        agent = ContinueAgent()
         project_path = "/home/user/project"
         session_id = "test-session-id"
 

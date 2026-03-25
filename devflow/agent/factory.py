@@ -14,13 +14,15 @@ from devflow.agent.github_copilot_agent import GitHubCopilotAgent
 from devflow.agent.cursor_agent import CursorAgent
 from devflow.agent.windsurf_agent import WindsurfAgent
 from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
+from devflow.agent.aider_agent import AiderAgent
+from devflow.agent.continue_agent import ContinueAgent
 
 
 def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = None) -> AgentInterface:
     """Create an agent client for the specified backend.
 
     Args:
-        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf")
+        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue")
         agent_home: Optional custom home directory for the agent
 
     Returns:
@@ -55,13 +57,23 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         >>> agent.get_agent_name()
         'windsurf'
 
+        >>> # Create Aider agent
+        >>> agent = create_agent_client("aider")
+        >>> agent.get_agent_name()
+        'aider'
+
+        >>> # Create Continue agent
+        >>> agent = create_agent_client("continue")
+        >>> agent.get_agent_name()
+        'continue'
+
         >>> # Create with custom home directory
         >>> agent = create_agent_client("claude", Path("/custom/path"))
 
     Note:
         Only Claude Code and Ollama have been fully tested. Other agents (GitHub Copilot,
-        Cursor, Windsurf) are experimental and may have limitations in session
-        management, conversation export, and message counting capabilities.
+        Cursor, Windsurf, Aider, Continue) are experimental and may have limitations in
+        session management, conversation export, and message counting capabilities.
     """
     backend = backend.lower()
 
@@ -75,8 +87,12 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         return CursorAgent(cursor_dir=agent_home)
     elif backend == "windsurf":
         return WindsurfAgent(windsurf_dir=agent_home)
+    elif backend == "aider":
+        return AiderAgent(aider_dir=agent_home)
+    elif backend == "continue":
+        return ContinueAgent(continue_dir=agent_home)
     else:
         raise ValueError(
             f"Unsupported agent backend: {backend}. "
-            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf"
+            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf, aider, continue"
         )
