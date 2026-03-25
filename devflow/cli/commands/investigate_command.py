@@ -356,8 +356,6 @@ def create_investigation_session(
 
         # Keep env reference for finally block
         _ = env
-            check=False
-        )
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] Claude session completed")
@@ -763,8 +761,6 @@ def _create_multi_project_investigation_session(
 
         # Keep env reference for finally block
         _ = env
-            check=False
-        )
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] Claude session completed")
