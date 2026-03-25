@@ -36,6 +36,12 @@ In-depth guides for specific topics:
 - **[Hierarchical Skills](guides/hierarchical-skills.md)** - Custom Claude Code skills system
 - **[SSL Configuration](guides/ssl-configuration.md)** - SSL/TLS configuration for enterprise
 
+### 🎓 Tutorials
+Step-by-step tutorials for common tasks:
+
+- **[Tutorials Index](tutorials/)** - All available tutorials
+- **[Run Claude Code with Local Models](tutorials/local-llama-cpp-setup.md)** - Save 100% on costs with llama.cpp (FREE, offline)
+
 ### 👨‍💻 Developer
 Documentation for contributors and maintainers:
 

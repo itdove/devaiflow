@@ -1,58 +1,172 @@
 # Alternative Model Providers
 
-DevAIFlow supports running Claude Code with alternative AI model providers through environment variable configuration. This allows you to use local models (llama.cpp, LM Studio) or cloud providers (OpenRouter, Minimax, etc.) instead of the default Anthropic API.
+DevAIFlow supports running Claude Code with alternative AI model providers through environment variable configuration. This allows you to use local models (llama.cpp, LM Studio) or cloud providers (OpenRouter, Vertex AI, etc.) instead of the default Anthropic API.
 
 **⚠️ Important:** Ollama is **NOT compatible** with Claude Code due to API differences. Use llama.cpp for local model support.
 
+## Table of Contents
+
+1. [Why Use Alternative Providers?](#why-use-alternative-providers)
+2. [Quick Start Guides](#quick-start-guides) - **Start here!**
+   - [Local/Offline: llama.cpp](#-localoffline-llamacpp-free---recommended)
+   - [Cloud: OpenRouter](#-cloud-openrouter-98-cheaper---to-be-tested)
+   - [Enterprise: Vertex AI](#-enterprise-google-vertex-ai---tested)
+3. [Using Profiles](#using-profiles) - How to switch between providers
+4. [Configuration](#configuration) - Profile structure and settings
+5. [Provider Setup Guides](#provider-setup-guides) - Detailed setup instructions
+6. [Troubleshooting](#troubleshooting) - Common issues and solutions
+7. [Performance Comparison](#performance-comparison) - Benchmarks and costs
+8. [Decision Matrix](#decision-matrix-which-solution-to-use) - Which provider to choose
+9. [Best Practices](#best-practices) - Tips and recommendations
+
 ## Why Use Alternative Providers?
 
-- **Cost savings**: Up to 98% cheaper than Claude Opus 4.5
+- **Cost savings**: Up to 98% cheaper than Claude Opus 4.6 ($15/M tokens → $0.28/M tokens)
 - **Privacy**: Run models completely locally (no internet needed)
 - **Flexibility**: Test different models for different use cases
 - **No vendor lock-in**: Switch providers anytime
 
-## Quick Start
+## Quick Start Guides
 
-### 1. Configure a Profile
+Choose your path based on your needs:
 
-Add to your `~/.daf-sessions/config.json`:
+### 🏠 Local/Offline: llama.cpp (FREE) - ✅ Recommended
 
-```json
-{
-  "model_provider": {
-    "default_profile": "llama-cpp",
-    "profiles": {
-      "llama-cpp": {
-        "name": "llama-cpp",
-        "base_url": "http://localhost:8000",
-        "auth_token": "llama-cpp",
-        "api_key": "",
-        "model_name": "Qwen3-Coder"
-      }
-    }
-  }
-}
-```
+**Best for:** Privacy, offline work, zero cost, full IDE integration
 
-### 2. Install and Start the Provider
+**Time:** 15-20 minutes | **Cost:** FREE | **Status:** ✅ Tested & Working
 
 ```bash
-# Example: llama.cpp
+# 1. Build llama.cpp (one-time)
 git clone https://github.com/ggml-org/llama.cpp
-cmake llama.cpp -B llama.cpp/build -DGGML_METAL=ON
+cmake llama.cpp -B llama.cpp/build -DGGML_METAL=ON  # macOS
+# OR: cmake llama.cpp -B llama.cpp/build -DGGML_CUDA=ON  # Linux with GPU
 cmake --build llama.cpp/build --config Release -j
+
+# 2. Start server with a coding model
 cd llama.cpp
 ./llama-server -hf bartowski/cerebras_Qwen3-Coder-REAP-25B-A3B-GGUF:Q4_K_M \
-    --alias "Qwen3-Coder" --port 8000 --jinja \
-    --ctx-size 64000
+    --alias "Qwen3-Coder" --port 8000 --jinja --ctx-size 64000
+
+# 3. Configure daf (choose one method)
+# Method A: Interactive TUI (recommended)
+daf config edit  # Navigate to "Model Providers" → Add Custom Provider
+
+# Method B: Manual config
+# Add to ~/.daf-sessions/config.json:
+# {
+#   "model_provider": {
+#     "default_profile": "llama-cpp",
+#     "profiles": {
+#       "llama-cpp": {
+#         "name": "llama-cpp",
+#         "base_url": "http://localhost:8000",
+#         "auth_token": "llama-cpp",
+#         "api_key": "",
+#         "model_name": "Qwen3-Coder"
+#       }
+#     }
+#   }
+# }
+
+# 4. Use with daf
+daf open PROJ-123
+# Claude Code will now use your local Qwen3-Coder model!
 ```
 
-### 3. Use DevAIFlow
+**First Response Time:** 30-60 seconds (normal - processing 35k tokens of tool definitions)
+
+**See detailed guide below** for hardware requirements, model recommendations, and troubleshooting.
+
+---
+
+### ☁️ Cloud: OpenRouter (98% cheaper) - ⚠️ To Be Tested
+
+**Best for:** Cloud convenience, 100+ model options, very low cost
+
+**Time:** 2 minutes | **Cost:** $0.28-3/M tokens (98% cheaper than Claude Opus) | **Status:** ⚠️ Not yet tested with DevAIFlow
 
 ```bash
-# Uses default profile (llama-cpp)
+# 1. Get API key
+# Visit https://openrouter.ai
+# Sign up and generate API key
+# Add credits to account
+
+# 2. Configure daf
+daf config edit  # Navigate to "Model Providers" → Add Custom Provider
+# Or manually edit ~/.daf-sessions/config.json:
+# {
+#   "model_provider": {
+#     "default_profile": "openrouter-deepseek",
+#     "profiles": {
+#       "openrouter-deepseek": {
+#         "name": "openrouter-deepseek",
+#         "base_url": "https://openrouter.ai/api",
+#         "auth_token": "YOUR_OPENROUTER_KEY",
+#         "api_key": "",
+#         "model_name": "deepseek/deepseek-v3"
+#       }
+#     }
+#   }
+# }
+
+# 3. Use with daf
+daf open PROJ-123 --model-profile openrouter-deepseek
+```
+
+**Popular OpenRouter Models:**
+- `deepseek/deepseek-v3` - $0.28/M tokens (best value)
+- `openai/gpt-oss-120b:free` - FREE tier
+- `anthropic/claude-3.5-sonnet` - $3/M tokens (80% cheaper than direct Anthropic)
+
+**See detailed guide below** for more model options and configuration.
+
+---
+
+### 🏢 Enterprise: Google Vertex AI - ✅ Tested
+
+**Best for:** Enterprise GCP users, compliance requirements
+
+**Time:** 5 minutes | **Cost:** ~$3/M tokens | **Status:** ✅ Tested & Working
+
+```bash
+# 1. Set up GCP authentication
+gcloud auth application-default login
+
+# 2. Configure daf
+daf config edit  # Navigate to "Model Providers" → Add Vertex AI
+# Or manually edit ~/.daf-sessions/config.json:
+# {
+#   "model_provider": {
+#     "default_profile": "vertex",
+#     "profiles": {
+#       "vertex": {
+#         "name": "vertex",
+#         "use_vertex": true,
+#         "vertex_project_id": "your-gcp-project-id",
+#         "vertex_region": "us-east5",
+#         "model_name": "claude-3-5-sonnet-v2@20250929"
+#       }
+#     }
+#   }
+# }
+
+# 3. Use with daf
 daf open PROJ-123
 ```
+
+**See detailed guide below** for Vertex AI setup and configuration.
+
+---
+
+### ❌ What About Ollama?
+
+**Ollama does NOT work with Claude Code.** This is due to fundamental API incompatibility:
+- Ollama uses OpenAI-compatible API format
+- Claude Code requires Anthropic Messages API format
+- These formats are incompatible (like USB-A vs USB-C)
+
+**Use llama.cpp instead** - it provides the same local model experience with full Claude Code compatibility.
 
 ## Using Profiles
 
@@ -809,97 +923,241 @@ Teams can use the shared server without individual setup.
 
 ## Troubleshooting
 
-### "I followed Ollama setup but it doesn't work"
+### Common Issues by Category
 
-**Problem:** You're trying to use Ollama with Claude Code and getting:
+#### 🚫 Ollama Compatibility Issues
+
+**Problem:** "I followed Ollama setup but it doesn't work"
+
+**Symptoms:**
 - 500 errors: `{"type":"error","error":{"type":"api_error",...}}`
 - Infinite hangs: `✽ Deliberating…` never completes
+- Tool calling fails or file editing doesn't work
 
-**Root Cause:** Ollama uses OpenAI-compatible API, but Claude Code requires Anthropic's API format. These are incompatible.
+**Root Cause:** Ollama uses OpenAI-compatible API, but Claude Code requires Anthropic's API format. These are fundamentally incompatible (like trying to plug USB-A into USB-C).
 
-**Solution:** Use llama.cpp instead:
-1. Follow llama.cpp setup guide in Option 1 above
+**Solution:** ✅ Use llama.cpp instead:
+1. Follow [llama.cpp setup guide](#option-1-llamacpp-server-recommended-for-local-models) above
 2. Key difference: llama.cpp has `--jinja` flag for tool calling compatibility
 3. llama.cpp server can be configured to match Anthropic API expectations
 
 **Why articles claim Ollama works:**
-- They actually use llama.cpp (not Ollama)
+- They actually use llama.cpp (not Ollama) but title says "Ollama"
 - They use API translation layers (litellm, OpenRouter)
-- Information is outdated
+- Information is outdated from older Claude Code versions
 
-### llama.cpp Hangs Forever
+---
 
-**Problem:** Server logs show "prompt processing progress" but never completes
+#### 🐌 Performance Issues
 
-**Check:**
-1. **Wait longer** - First prompt is ~35k tokens, takes 30-60 seconds
-2. **Hardware** - Model too large for available RAM?
-3. **Batch size** - Reduce `--batch-size` if using limited RAM
+**Problem:** llama.cpp hangs forever / very slow first response
 
-**If still stuck after 2 minutes:**
-1. Check server logs for errors
-2. Verify model supports instruct format
-3. Try smaller model (14B instead of 30B)
-4. Reduce `--ctx-size` to 32000
+**Expected Behavior:**
+- First prompt: 30-60 seconds (processing ~35k tokens of tool definitions)
+- Subsequent prompts: Much faster (context already loaded)
 
-### Missing `--jinja` Flag
+**If stuck after 2+ minutes:**
 
-**Problem:** Claude Code hangs or gives tool calling errors
+1. **Check Hardware Requirements:**
+   - Model too large for available RAM?
+   - Try smaller quantization (Q4_K_M instead of Q6_K)
+   - Try smaller model (14B instead of 25B)
+
+2. **Reduce Resource Usage:**
+   ```bash
+   # Reduce context size
+   --ctx-size 32000  # instead of 64000
+
+   # Reduce batch size (slower but less memory)
+   --batch-size 2048 --ubatch-size 512
+   ```
+
+3. **Check Server Logs:**
+   - Look for out-of-memory errors
+   - Look for model loading failures
+   - Verify model supports instruct format
+
+**Performance Tuning:**
+- **16GB RAM**: Use Q4_K_M quantized models, 14B-16B parameters max
+- **32GB RAM**: Use Q4_K_M or Q5_K_M, 25B-30B parameters comfortable
+- **64GB+ RAM**: Larger models and higher quantization
+
+---
+
+#### 🔧 Configuration Issues
+
+**Problem:** Profile not found
+
+**Error Message:**
+```
+Warning: MODEL_PROVIDER_PROFILE=llama-cpp not found in configuration
+```
+
+**Solutions:**
+1. Check profile name in `~/.daf-sessions/config.json`
+2. Profile names are **case-sensitive** (`llama-cpp` ≠ `Llama-Cpp`)
+3. Verify JSON syntax is valid (use `daf config validate`)
+4. Try using TUI: `daf config edit` to visually verify profiles
+
+---
+
+**Problem:** Missing `--jinja` flag
 
 **Symptoms:**
 - Server starts fine
 - Claude Code connects
 - Hangs on first prompt or tool use fails
+- File editing doesn't work
 
 **Solution:**
 ```bash
-# WRONG (missing --jinja)
+# ❌ WRONG (missing --jinja)
 ./llama-server -hf model --port 8000
 
-# CORRECT (includes --jinja)
+# ✅ CORRECT (includes --jinja)
 ./llama-server -hf model --port 8000 --jinja
 ```
 
-**The `--jinja` flag is REQUIRED for Claude Code to work!**
+**The `--jinja` flag is REQUIRED for Claude Code tool calling to work!**
 
-### Profile Not Found
+---
 
-```
-Warning: MODEL_PROVIDER_PROFILE=llama-cpp not found in configuration
-```
+#### 🌐 Connection Issues
 
-**Solution**: Check profile name in `~/.daf-sessions/config.json`. Profile names are case-sensitive.
+**Problem:** Connection refused
 
-### Connection Refused
-
+**Error Message:**
 ```
 Error: Failed to connect to http://localhost:8000
 ```
 
-**Solutions**:
-1. Check if server is running: `curl http://localhost:8000/health`
-2. Verify port number matches profile `base_url`
-3. For llama.cpp: Check terminal where `llama-server` is running
-4. Verify no firewall blocking localhost connections
+**Debugging Steps:**
 
-### Model Not Found
+1. **Verify server is running:**
+   ```bash
+   curl http://localhost:8000/health
+   # OR
+   curl http://localhost:8000/v1/models
+   ```
 
+2. **Check port number:**
+   - Does `base_url` in profile match server port?
+   - Is another process using the port? `lsof -i :8000`
+
+3. **For llama.cpp:**
+   - Check terminal where `llama-server` is running
+   - Look for startup errors or crashes
+
+4. **Firewall/Network:**
+   - Verify no firewall blocking localhost connections
+   - Try `127.0.0.1` instead of `localhost`
+
+---
+
+**Problem:** Model not found
+
+**Error Message:**
 ```
 Error: model 'Qwen3-Coder' not found
 ```
 
-**Solutions**:
-1. Verify `--alias` flag matches `model_name` in profile
-2. Check llama-server startup logs for model loading errors
-3. Try different model from HuggingFace
+**Solutions:**
 
-### Vertex AI Authentication Failed
+1. **Verify alias matches:**
+   - Server `--alias` flag must match profile `model_name`
+   - Example: `--alias "Qwen3-Coder"` → `"model_name": "Qwen3-Coder"`
 
-**Solutions**:
-1. Run: `gcloud auth application-default login`
-2. Verify `vertex_project_id` is correct
-3. Check Vertex AI API is enabled in GCP project
-4. Verify `vertex_region` matches your project configuration
+2. **Check server logs:**
+   - Look for model loading errors
+   - Verify model downloaded successfully from HuggingFace
+
+3. **Try different model:**
+   - Test with known-working model first
+   - Example: `bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M`
+
+---
+
+#### ☁️ Cloud Provider Issues
+
+**Problem:** Vertex AI authentication failed
+
+**Solutions:**
+
+1. **Re-authenticate:**
+   ```bash
+   gcloud auth application-default login
+   ```
+
+2. **Verify project ID:**
+   - Check `vertex_project_id` is correct
+   - Run `gcloud projects list` to see available projects
+
+3. **Enable API:**
+   - Vertex AI API must be enabled: `gcloud services enable aiplatform.googleapis.com`
+
+4. **Check region:**
+   - Verify `vertex_region` is valid (e.g., `us-east5`, `us-central1`)
+   - Not all regions support all models
+
+---
+
+**Problem:** OpenRouter API errors
+
+**Common Issues:**
+
+1. **Invalid API key:**
+   - Verify key is correct in profile `auth_token`
+   - Check key hasn't been revoked at openrouter.ai
+
+2. **Insufficient credits:**
+   - Add credits to your OpenRouter account
+
+3. **Model not available:**
+   - Check model name is exact (case-sensitive)
+   - Verify model is available at openrouter.ai/models
+
+---
+
+#### 📋 General Debugging Tips
+
+**Enable verbose logging:**
+```bash
+# For llama.cpp
+./llama-server --log-enable --log-file server.log ...
+
+# For daf commands
+daf open PROJ-123 --verbose
+```
+
+**Test with curl:**
+```bash
+# Test if server responds
+curl http://localhost:8000/v1/models
+
+# Test basic completion (OpenAI format)
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Qwen3-Coder","messages":[{"role":"user","content":"Hi"}]}'
+```
+
+**Check daf configuration:**
+```bash
+# Validate config syntax
+daf config validate
+
+# Show active configuration
+daf config show
+
+# Show all profiles
+daf config show-profiles
+```
+
+**Test step-by-step:**
+1. ✅ Server running? (`curl http://localhost:8000/health`)
+2. ✅ Profile configured? (`daf config show-profiles`)
+3. ✅ Profile selected? (`daf open --model-profile llama-cpp`)
+4. ✅ Claude Code launches? (check for errors)
+5. ✅ First response? (wait 30-60 seconds)
 
 ## Performance Comparison
 

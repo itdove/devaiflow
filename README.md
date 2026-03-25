@@ -83,7 +83,7 @@ Each session is an **isolated workspace** with its own:
 
 **Key Features:**
 - 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf
-- 🔌 **Alternative Model Providers** - Run Claude Code with local models (llama.cpp) or cloud providers (OpenRouter, Vertex AI) via configuration profiles - save up to 98% on costs or run completely offline
+- 💰 **Alternative Model Providers** - Run Claude Code with **local models** (llama.cpp) or **cheaper cloud providers** (OpenRouter, Vertex AI) - **save up to 98% on costs** or run **completely offline**
 - 📂 **Multi-Repository Workflows** - Work on one ticket across multiple repositories with shared context - Claude can coordinate changes across all projects in a single conversation
 - 🏢 **Named Workspaces** - Multiple workspaces for concurrent multi-branch development
 - 🎫 **Optional Issue Tracker** - GitHub Issues, GitLab Issues, or JIRA (your choice, or none at all)
@@ -256,6 +256,78 @@ The TUI provides:
 - **Complete Guide**: [Quick Start Guide](docs/getting-started/quick-start.md) - Full walkthrough with examples
 - **All Workflows**: [WORKFLOWS.md](docs/workflows/WORKFLOWS.md) - Step-by-step workflow documentation
 
+## 💰 Alternative Model Providers - Save 98% on Costs
+
+**Run Claude Code with local models or cheaper cloud providers instead of Anthropic API.**
+
+### Why Use Alternative Providers?
+
+- 💵 **Save Money**: Up to 98% cheaper than Claude Opus ($15/M tokens vs $0.28/M tokens)
+- 🔒 **Privacy**: Run completely offline with local models (no data leaves your machine)
+- ⚡ **Flexibility**: Test different models for different use cases
+- 🌐 **No Vendor Lock-in**: Switch providers anytime via simple config changes
+
+### Quick Cost Comparison
+
+| Provider | Model | Cost per 1M Tokens | vs Claude Opus | Best For |
+|----------|-------|-------------------|----------------|----------|
+| **Anthropic** | Claude Opus 4.6 | $15.00 | — | Production quality |
+| **Vertex AI** | Claude Sonnet 3.5 v2 | ~$3.00 | 80% savings | Enterprise GCP users |
+| **OpenRouter** | DeepSeek v3 | $0.28 | **98% savings** | Cost-conscious cloud |
+| **llama.cpp** | Local models | **FREE** | **100% savings** | Offline/privacy |
+
+### Popular Options
+
+**🏠 Local/Offline (FREE)**
+- **llama.cpp** - Run Qwen3-Coder, DeepSeek-Coder locally (✅ Tested & Working)
+- Setup time: 15-20 minutes | No internet required | Full IDE integration
+
+**☁️ Cloud Providers (CHEAP)**
+- **OpenRouter** - Access 100+ models at $0.28-3/M tokens (⚠️ To be tested)
+- **Vertex AI** - Enterprise GCP with Claude models (✅ Tested & Working)
+
+**❌ NOT Compatible**
+- **Ollama** - Does NOT work with Claude Code (API incompatibility)
+
+### Quick Start Example
+
+**Using llama.cpp (Free Local Model):**
+
+```bash
+# 1. Start llama.cpp server (one-time setup)
+./llama-server -hf bartowski/cerebras_Qwen3-Coder-REAP-25B-A3B-GGUF:Q4_K_M \
+    --alias "Qwen3-Coder" --port 8000 --jinja --ctx-size 64000
+
+# 2. Configure daf profile
+daf config edit  # Navigate to "Model Providers" tab
+
+# 3. Use with daf
+daf open PROJ-123 --model-profile llama-cpp
+```
+
+**Using OpenRouter (Cloud, 98% cheaper):**
+
+```bash
+# 1. Get API key from openrouter.ai
+# 2. Configure profile in daf config edit
+# 3. Use with daf
+daf open PROJ-123 --model-profile openrouter-deepseek
+```
+
+### Learn More
+
+📖 **[Complete Alternative Model Provider Guide](docs/reference/alternative-model-providers.md)**
+- Detailed setup instructions for each provider
+- Performance benchmarks and testing results
+- Troubleshooting guide for common issues
+- Model recommendations by use case
+
+🎓 **[Step-by-Step Tutorial: Local llama.cpp Setup](docs/tutorials/local-llama-cpp-setup.md)**
+- Complete beginner-friendly guide (15-20 minutes)
+- Save 100% on AI costs forever
+- Works completely offline
+- Full Claude Code IDE integration
+
 ## Documentation
 
 **New to DevAIFlow?** Choose your path:
@@ -288,6 +360,7 @@ The TUI provides:
 
 **Additional Resources:**
 - **[Alternative Model Providers](docs/reference/alternative-model-providers.md)** - Run Claude Code with local models (llama.cpp) or alternative cloud providers (Vertex AI, OpenRouter)
+- **[Tutorial: Local llama.cpp Setup](docs/tutorials/local-llama-cpp-setup.md)** - Step-by-step guide to save 100% on costs with free local models
 - **[AI Agent Support](docs/reference/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
 - **[Uninstall Guide](docs/getting-started/uninstall.md)** - Complete uninstallation instructions
 
