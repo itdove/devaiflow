@@ -562,6 +562,58 @@
           "description": "Additional environment variables",
           "title": "Env Vars",
           "type": "object"
+        },
+        "cost_per_million_input_tokens": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Estimated cost per million input tokens in USD (e.g., 3.00 for Claude Sonnet)",
+          "title": "Cost Per Million Input Tokens"
+        },
+        "cost_per_million_output_tokens": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Estimated cost per million output tokens in USD (e.g., 15.00 for Claude Sonnet)",
+          "title": "Cost Per Million Output Tokens"
+        },
+        "monthly_budget_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Monthly budget limit in USD (optional, for budget alerts)",
+          "title": "Monthly Budget Usd"
+        },
+        "cost_center": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cost center or department code for accounting (e.g., 'ENG-PLATFORM')",
+          "title": "Cost Center"
         }
       },
       "required": [

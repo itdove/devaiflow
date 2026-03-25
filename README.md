@@ -367,6 +367,40 @@ daf open PROJ-123 --model-profile openrouter-deepseek
 **Validation:**
 - **[config.schema.json](config.schema.json)** - JSON Schema for validating config.json (use `daf config validate`)
 
+## Supported AI Agents
+
+DevAIFlow integrates with multiple AI coding assistants through a unified agent interface:
+
+| Agent | Status | Installation | Features |
+|-------|--------|-------------|----------|
+| **Claude Code** | ✅ Fully Supported | `pip install claude-cli` | All features supported: session capture, resume, initial prompts, conversation export |
+| **Ollama** | ✅ Supported | `brew install ollama` | Run Claude locally with llama.cpp - all Claude Code features supported |
+| **GitHub Copilot** | ⚠️ Experimental | VS Code extension | Limited: No initial prompts, workspace-based sessions |
+| **Cursor** | ⚠️ Experimental | https://cursor.sh | Limited: No initial prompts, workspace-based sessions |
+| **Windsurf** | ⚠️ Experimental | https://codeium.com/windsurf | Limited: No initial prompts, workspace-based sessions |
+
+**Configuration:**
+```bash
+# Set via environment variable
+export DAF_AGENT_BACKEND="claude"  # or "ollama", "github-copilot", "cursor", "windsurf"
+
+# Or in config file (~/.daf-sessions/config.json)
+{
+  "agent_backend": "claude"
+}
+```
+
+**Experimental Agent Limitations:**
+- ❌ Cannot send initial prompts via CLI (must paste manually)
+- ❌ No discrete session files (workspace-based tracking only)
+- ❌ Cannot export/import conversations
+- ❌ Message counting not supported
+- ⚠️ Time tracking is approximate
+
+**→ For production workflows, use Claude Code.** Experimental agents are best for developers who already use those specific editors.
+
+📚 **See [Experimental Agents Guide](docs/experimental-agents.md) for detailed limitations, troubleshooting, and migration path.**
+
 ## Supported Platforms
 
 DevAIFlow officially supports:

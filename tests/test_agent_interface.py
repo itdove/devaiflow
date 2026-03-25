@@ -448,6 +448,105 @@ class TestGitHubCopilotAgent:
         assert session_id.startswith("copilot--home-user-project-")
         assert "1234567890" in session_id
 
+    @patch("devflow.agent.github_copilot_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt(self, mock_popen, mock_require_tool):
+        """Test launch_with_prompt calls launch_session (initial prompt ignored)."""
+        agent = GitHubCopilotAgent()
+        project_path = "/home/user/project"
+        initial_prompt = "Test prompt"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_with_prompt(project_path, initial_prompt, session_id)
+
+        # Should call launch_session (initial_prompt and session_id are ignored)
+        mock_require_tool.assert_called_once_with("code", "launch VS Code with GitHub Copilot")
+        mock_popen.assert_called_once_with(
+            ["code", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.github_copilot_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_resume_session(self, mock_popen, mock_require_tool):
+        """Test resume_session calls code command."""
+        agent = GitHubCopilotAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.resume_session(session_id, project_path)
+
+        mock_require_tool.assert_called_once_with("code", "resume VS Code with GitHub Copilot")
+        mock_popen.assert_called_once_with(
+            ["code", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    def test_get_session_file_path(self):
+        """Test get_session_file_path returns workspace storage path."""
+        custom_dir = Path("/tmp/vscode")
+        agent = GitHubCopilotAgent(copilot_dir=custom_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        expected = custom_dir / "User" / "workspaceStorage" / "-home-user-project" / "state.vscdb"
+        assert result == expected
+
+    def test_session_exists_when_directory_exists(self, tmp_path):
+        """Test session_exists returns True when workspace storage directory exists."""
+        copilot_dir = tmp_path / "vscode"
+        agent = GitHubCopilotAgent(copilot_dir=copilot_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create workspace storage directory
+        workspace_dir = copilot_dir / "User" / "workspaceStorage" / "-home-user-project"
+        workspace_dir.mkdir(parents=True)
+
+        assert agent.session_exists(session_id, project_path) is True
+
+    def test_session_exists_returns_false_when_not_exists(self, tmp_path):
+        """Test session_exists returns False when workspace storage doesn't exist."""
+        copilot_dir = tmp_path / "vscode"
+        agent = GitHubCopilotAgent(copilot_dir=copilot_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        assert agent.session_exists(session_id, project_path) is False
+
+    def test_get_existing_sessions_returns_empty_set(self):
+        """Test get_existing_sessions returns empty set (VS Code manages sessions)."""
+        agent = GitHubCopilotAgent()
+        project_path = "/home/user/project"
+
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == set()
+
+    def test_get_session_message_count_returns_zero(self):
+        """Test get_session_message_count returns 0 (not supported)."""
+        agent = GitHubCopilotAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 0
+
 
 class TestCursorAgent:
     """Test CursorAgent implementation."""
@@ -509,6 +608,126 @@ class TestCursorAgent:
         assert session_id.startswith("cursor--home-user-project-")
         assert "1234567890" in session_id
 
+    @patch("devflow.agent.cursor_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt(self, mock_popen, mock_require_tool):
+        """Test launch_with_prompt calls launch_session (initial prompt ignored)."""
+        agent = CursorAgent()
+        project_path = "/home/user/project"
+        initial_prompt = "Test prompt"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_with_prompt(project_path, initial_prompt, session_id)
+
+        # Should call launch_session (initial_prompt and session_id are ignored)
+        mock_require_tool.assert_called_once_with("cursor", "launch Cursor editor")
+        mock_popen.assert_called_once_with(
+            ["cursor", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.cursor_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_resume_session(self, mock_popen, mock_require_tool):
+        """Test resume_session calls cursor command."""
+        agent = CursorAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.resume_session(session_id, project_path)
+
+        mock_require_tool.assert_called_once_with("cursor", "resume Cursor editor")
+        mock_popen.assert_called_once_with(
+            ["cursor", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    def test_get_session_file_path_fallback(self):
+        """Test get_session_file_path returns fallback path when workspace storage doesn't exist."""
+        custom_dir = Path("/tmp/cursor")
+        agent = CursorAgent(cursor_dir=custom_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        expected = custom_dir / "User" / "workspaceStorage" / "-home-user-project" / "state.vscdb"
+        assert result == expected
+
+    def test_get_session_file_path_with_existing_workspace(self, tmp_path):
+        """Test get_session_file_path finds existing workspace state file."""
+        cursor_dir = tmp_path / "cursor"
+        agent = CursorAgent(cursor_dir=cursor_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create workspace storage with state file
+        workspace_dir = cursor_dir / "User" / "workspaceStorage" / "workspace-id-123"
+        workspace_dir.mkdir(parents=True)
+        workspace_json = workspace_dir / "workspace.json"
+        workspace_json.write_text('{"folder": "/home/user/project"}')
+        state_file = workspace_dir / "state.vscdb"
+        state_file.touch()
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        # Should find the existing state file
+        assert result.exists()
+        assert result.name == "state.vscdb"
+
+    def test_session_exists_when_directory_exists(self, tmp_path):
+        """Test session_exists returns True when workspace storage exists."""
+        cursor_dir = tmp_path / "cursor"
+        agent = CursorAgent(cursor_dir=cursor_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create workspace storage directory
+        workspace_dir = cursor_dir / "User" / "workspaceStorage" / "-home-user-project"
+        workspace_dir.mkdir(parents=True)
+
+        assert agent.session_exists(session_id, project_path) is True
+
+    def test_session_exists_returns_false_when_not_exists(self, tmp_path):
+        """Test session_exists returns False when workspace storage doesn't exist."""
+        cursor_dir = tmp_path / "cursor"
+        agent = CursorAgent(cursor_dir=cursor_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        assert agent.session_exists(session_id, project_path) is False
+
+    def test_get_existing_sessions_returns_empty_set(self):
+        """Test get_existing_sessions returns empty set (Cursor manages sessions internally)."""
+        agent = CursorAgent()
+        project_path = "/home/user/project"
+
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == set()
+
+    def test_get_session_message_count_returns_zero(self):
+        """Test get_session_message_count returns 0 (not supported)."""
+        agent = CursorAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 0
+
 
 class TestWindsurfAgent:
     """Test WindsurfAgent implementation."""
@@ -569,3 +788,123 @@ class TestWindsurfAgent:
 
         assert session_id.startswith("windsurf--home-user-project-")
         assert "1234567890" in session_id
+
+    @patch("devflow.agent.windsurf_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt(self, mock_popen, mock_require_tool):
+        """Test launch_with_prompt calls launch_session (initial prompt ignored)."""
+        agent = WindsurfAgent()
+        project_path = "/home/user/project"
+        initial_prompt = "Test prompt"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_with_prompt(project_path, initial_prompt, session_id)
+
+        # Should call launch_session (initial_prompt and session_id are ignored)
+        mock_require_tool.assert_called_once_with("windsurf", "launch Windsurf editor")
+        mock_popen.assert_called_once_with(
+            ["windsurf", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.windsurf_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_resume_session(self, mock_popen, mock_require_tool):
+        """Test resume_session calls windsurf command."""
+        agent = WindsurfAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.resume_session(session_id, project_path)
+
+        mock_require_tool.assert_called_once_with("windsurf", "resume Windsurf editor")
+        mock_popen.assert_called_once_with(
+            ["windsurf", project_path],
+            cwd=project_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert result == mock_process
+
+    def test_get_session_file_path_fallback(self):
+        """Test get_session_file_path returns fallback path when workspace storage doesn't exist."""
+        custom_dir = Path("/tmp/windsurf")
+        agent = WindsurfAgent(windsurf_dir=custom_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        expected = custom_dir / "User" / "workspaceStorage" / "-home-user-project" / "state.vscdb"
+        assert result == expected
+
+    def test_get_session_file_path_with_existing_workspace(self, tmp_path):
+        """Test get_session_file_path finds existing workspace state file."""
+        windsurf_dir = tmp_path / "windsurf"
+        agent = WindsurfAgent(windsurf_dir=windsurf_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create workspace storage with state file
+        workspace_dir = windsurf_dir / "User" / "workspaceStorage" / "workspace-id-456"
+        workspace_dir.mkdir(parents=True)
+        workspace_json = workspace_dir / "workspace.json"
+        workspace_json.write_text('{"folder": "/home/user/project"}')
+        state_file = workspace_dir / "state.vscdb"
+        state_file.touch()
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        # Should find the existing state file
+        assert result.exists()
+        assert result.name == "state.vscdb"
+
+    def test_session_exists_when_directory_exists(self, tmp_path):
+        """Test session_exists returns True when workspace storage exists."""
+        windsurf_dir = tmp_path / "windsurf"
+        agent = WindsurfAgent(windsurf_dir=windsurf_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create workspace storage directory
+        workspace_dir = windsurf_dir / "User" / "workspaceStorage" / "-home-user-project"
+        workspace_dir.mkdir(parents=True)
+
+        assert agent.session_exists(session_id, project_path) is True
+
+    def test_session_exists_returns_false_when_not_exists(self, tmp_path):
+        """Test session_exists returns False when workspace storage doesn't exist."""
+        windsurf_dir = tmp_path / "windsurf"
+        agent = WindsurfAgent(windsurf_dir=windsurf_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        assert agent.session_exists(session_id, project_path) is False
+
+    def test_get_existing_sessions_returns_empty_set(self):
+        """Test get_existing_sessions returns empty set (Windsurf manages sessions internally)."""
+        agent = WindsurfAgent()
+        project_path = "/home/user/project"
+
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == set()
+
+    def test_get_session_message_count_returns_zero(self):
+        """Test get_session_message_count returns 0 (not supported)."""
+        agent = WindsurfAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 0
