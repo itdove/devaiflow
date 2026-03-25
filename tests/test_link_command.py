@@ -114,8 +114,12 @@ def test_unlink_jira_from_session(mock_jira_cli, temp_daf_home):
     assert sessions[0].issue_key is None
 
 
-def test_link_updates_all_sessions_in_group(mock_jira_cli, temp_daf_home):
+def test_link_updates_all_sessions_in_group(mock_jira_cli, temp_daf_home, monkeypatch):
     """Test that linking JIRA updates the session."""
+    # Explicitly ensure env vars are cleared for this test
+    monkeypatch.delenv("DEVAIFLOW_IN_SESSION", raising=False)
+    monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
     # Setup: Configure a mock issue tracker ticket
     mock_jira_cli.set_ticket("PROJ-12345", {
         "key": "PROJ-12345",
@@ -124,22 +128,25 @@ def test_link_updates_all_sessions_in_group(mock_jira_cli, temp_daf_home):
 
     runner = CliRunner()
 
+    # Environment without AI session vars
+    env = {"DEVAIFLOW_IN_SESSION": None, "AI_AGENT_SESSION_ID": None}
+
     # Step 1: Create session
     result = runner.invoke(cli, [
         "new",
         "--name", "multi-project",
         "--goal", "Backend work",
         "--path", str(temp_daf_home / "backend")
-    ], input="y\nn\n")  # Accept session creation, don't launch Claude
-    assert result.exit_code == 0
+    ], input="y\nn\n", env=env)  # Accept session creation, don't launch Claude
+    assert result.exit_code == 0, f"Session creation failed with exit code {result.exit_code}. Output:\n{result.output}"
 
     # Step 2: Link issue tracker to the session
     result = runner.invoke(cli, [
         "link",
         "multi-project",
         "--jira", "PROJ-12345"
-    ])
-    assert result.exit_code == 0
+    ], env=env)
+    assert result.exit_code == 0, f"Link command failed with exit code {result.exit_code}. Output:\n{result.output}"
 
     # Verify: Session has issue key
     config_loader = ConfigLoader()
