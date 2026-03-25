@@ -748,16 +748,18 @@ class ConfigLoader:
             or "claude"  # Default to claude if not set anywhere
         )
 
-        # Merge model_provider with priority: Enterprise > Team > User
-        # Enterprise can enforce model provider for compliance/cost control
-        # Team can enforce model provider if enterprise hasn't
-        # User can only choose if enterprise/team haven't enforced it
+        # Merge model_provider with priority: Enterprise > Organization > Team > User
+        # Enterprise can enforce model provider for compliance/cost control (company-wide)
+        # Organization can enforce model provider if enterprise hasn't (project-specific budgets)
+        # Team can enforce model provider if enterprise/org haven't enforced it
+        # User can only choose if enterprise/org/team haven't enforced it
         from .models import ModelProviderConfig
         model_provider = (
             enterprise_config.model_provider  # Enterprise takes highest precedence
-            or team_config.model_provider  # Then team
-            or user_config.model_provider  # Then user
-            or ModelProviderConfig()  # Default if not set anywhere
+            or org_config.model_provider      # Then organization (project-specific)
+            or team_config.model_provider     # Then team
+            or user_config.model_provider     # Then user
+            or ModelProviderConfig()          # Default if not set anywhere
         )
 
         # Construct final Config object
@@ -865,12 +867,13 @@ class ConfigLoader:
             JiraBackendConfig,
         )
 
-        # Check if model_provider is enforced by enterprise or team
+        # Check if model_provider is enforced by enterprise, organization, or team
         # If enforced, don't save it in user config (prevent user override)
         enterprise_config = self._load_enterprise_config()
+        organization_config = self._load_organization_config()
         team_config = self._load_team_config()
         user_model_provider = config.model_provider
-        if enterprise_config.model_provider or team_config.model_provider:
+        if enterprise_config.model_provider or organization_config.model_provider or team_config.model_provider:
             # Model provider is enforced - don't save user override
             user_model_provider = None
 

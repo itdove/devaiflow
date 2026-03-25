@@ -70,8 +70,23 @@ def user_profile():
     )
 
 
+@pytest.fixture
+def organization_profile():
+    """Organization-level Vertex AI profile for project-specific budget."""
+    return ModelProviderProfile(
+        name="AAP Project Vertex AI",
+        use_vertex=True,
+        vertex_project_id="aap-gcp-project",
+        vertex_region="us-east5",
+        cost_per_million_input_tokens=3.00,
+        cost_per_million_output_tokens=15.00,
+        monthly_budget_usd=2000.00,
+        cost_center="ENG-AAP-PROJECT",
+    )
+
+
 class TestConfigurationHierarchy:
-    """Test model_provider configuration hierarchy (Enterprise > Team > User)."""
+    """Test model_provider configuration hierarchy (Enterprise > Organization > Team > User)."""
 
     def test_enterprise_overrides_team_and_user(self, temp_config_dir, enterprise_profile, team_profile, user_profile):
         """Test that enterprise config takes precedence over team and user configs."""
@@ -120,6 +135,55 @@ class TestConfigurationHierarchy:
         assert config.model_provider.default_profile == "vertex-prod"
         assert "vertex-prod" in config.model_provider.profiles
         assert config.model_provider.profiles["vertex-prod"].name == "Vertex AI Production"
+
+    def test_organization_overrides_team_and_user_when_no_enterprise(self, temp_config_dir, organization_profile, team_profile, user_profile):
+        """Test that organization config takes precedence over team and user when enterprise doesn't enforce."""
+        # Create organization config
+        organization_config = OrganizationConfig(
+            jira_project="AAP",
+            model_provider=ModelProviderConfig(
+                default_profile="aap-vertex",
+                profiles={"aap-vertex": organization_profile}
+            )
+        )
+        with open(temp_config_dir / "organization.json", "w") as f:
+            json.dump(organization_config.model_dump(), f)
+
+        # Create team config (should be ignored)
+        team_config = TeamConfig(
+            model_provider=ModelProviderConfig(
+                default_profile="llama-cpp",
+                profiles={"llama-cpp": team_profile}
+            )
+        )
+        with open(temp_config_dir / "team.json", "w") as f:
+            json.dump(team_config.model_dump(), f)
+
+        # Create user config (should be ignored)
+        user_config = UserConfig(
+            repos=RepoConfig(),
+            model_provider=ModelProviderConfig(
+                default_profile="anthropic",
+                profiles={"anthropic": user_profile}
+            )
+        )
+        with open(temp_config_dir / "config.json", "w") as f:
+            json.dump(user_config.model_dump(), f)
+
+        # Create minimal backend config
+        backends_dir = temp_config_dir / "backends"
+        backends_dir.mkdir()
+        with open(backends_dir / "jira.json", "w") as f:
+            json.dump({"url": "https://jira.example.com"}, f)
+
+        # Load merged config
+        loader = ConfigLoader(config_dir=temp_config_dir)
+        config = loader.load_config()
+
+        # Organization config should win
+        assert config.model_provider.default_profile == "aap-vertex"
+        assert "aap-vertex" in config.model_provider.profiles
+        assert config.model_provider.profiles["aap-vertex"].name == "AAP Project Vertex AI"
 
     def test_team_overrides_user_when_no_enterprise(self, temp_config_dir, team_profile, user_profile):
         """Test that team config takes precedence over user when enterprise doesn't enforce."""
@@ -233,6 +297,49 @@ class TestSaveValidation:
         # model_provider should not be in user config when enforced
         assert saved_user_config.get("model_provider") is None
 
+    def test_save_does_not_persist_user_model_provider_when_organization_enforces(self, temp_config_dir, organization_profile):
+        """Test that save_config doesn't persist user model_provider when organization enforces."""
+        # Create organization config
+        organization_config = OrganizationConfig(
+            jira_project="AAP",
+            model_provider=ModelProviderConfig(
+                default_profile="aap-vertex",
+                profiles={"aap-vertex": organization_profile}
+            )
+        )
+        with open(temp_config_dir / "organization.json", "w") as f:
+            json.dump(organization_config.model_dump(), f)
+
+        # Create minimal backend configs
+        backends_dir = temp_config_dir / "backends"
+        backends_dir.mkdir()
+        with open(backends_dir / "jira.json", "w") as f:
+            json.dump({"url": "https://jira.example.com"}, f)
+        with open(temp_config_dir / "team.json", "w") as f:
+            json.dump({}, f)
+        with open(temp_config_dir / "config.json", "w") as f:
+            json.dump({"repos": {"workspace": str(Path.home() / "development")}}, f)
+
+        # Load config (gets organization-enforced profile)
+        loader = ConfigLoader(config_dir=temp_config_dir)
+        config = loader.load_config()
+
+        # User attempts to add their own profile
+        user_profile = ModelProviderProfile(name="My Local Profile", base_url="http://localhost:8000")
+        config.model_provider.profiles["my-local"] = user_profile
+        config.model_provider.default_profile = "my-local"
+
+        # Save config
+        loader.save_config(config)
+
+        # Reload and verify user profile was NOT saved
+        saved_user_config_path = temp_config_dir / "config.json"
+        with open(saved_user_config_path) as f:
+            saved_user_config = json.load(f)
+
+        # model_provider should not be in user config when organization enforces
+        assert saved_user_config.get("model_provider") is None
+
     def test_save_persists_user_model_provider_when_not_enforced(self, temp_config_dir, user_profile):
         """Test that save_config DOES persist user model_provider when no enforcement."""
         # No enterprise or team config - only user config
@@ -284,6 +391,7 @@ class TestTUIEnforcement:
                 profiles={"vertex-prod": enterprise_profile}
             )
         )
+        mock_loader._load_organization_config.return_value = OrganizationConfig()
         mock_loader._load_team_config.return_value = TeamConfig()
 
         # Import and test (would normally be in TUI class)
@@ -306,10 +414,40 @@ class TestTUIEnforcement:
             assert source == "enterprise"
 
     @patch("devflow.ui.config_tui.ConfigLoader")
+    def test_get_model_provider_enforcement_source_organization(self, mock_loader_class, organization_profile):
+        """Test _get_model_provider_enforcement_source detects organization enforcement."""
+        mock_loader = Mock()
+        mock_loader._load_enterprise_config.return_value = EnterpriseConfig()
+        mock_loader._load_organization_config.return_value = OrganizationConfig(
+            jira_project="AAP",
+            model_provider=ModelProviderConfig(
+                default_profile="aap-vertex",
+                profiles={"aap-vertex": organization_profile}
+            )
+        )
+        mock_loader._load_team_config.return_value = TeamConfig()
+
+        from devflow.ui.config_tui import ConfigTUI
+
+        config = Config(
+            jira=JiraConfig(url="https://jira.example.com", transitions={}),
+            repos=RepoConfig(),
+        )
+
+        with patch.object(ConfigTUI, "__init__", lambda self, *args, **kwargs: None):
+            tui = ConfigTUI()
+            tui.config_loader = mock_loader
+            tui.config = config
+
+            source = tui._get_model_provider_enforcement_source()
+            assert source == "organization"
+
+    @patch("devflow.ui.config_tui.ConfigLoader")
     def test_get_model_provider_enforcement_source_team(self, mock_loader_class, team_profile):
         """Test _get_model_provider_enforcement_source detects team enforcement."""
         mock_loader = Mock()
         mock_loader._load_enterprise_config.return_value = EnterpriseConfig()
+        mock_loader._load_organization_config.return_value = OrganizationConfig()
         mock_loader._load_team_config.return_value = TeamConfig(
             model_provider=ModelProviderConfig(
                 default_profile="llama-cpp",
@@ -337,6 +475,7 @@ class TestTUIEnforcement:
         """Test _get_model_provider_enforcement_source returns None when no enforcement."""
         mock_loader = Mock()
         mock_loader._load_enterprise_config.return_value = EnterpriseConfig()
+        mock_loader._load_organization_config.return_value = OrganizationConfig()
         mock_loader._load_team_config.return_value = TeamConfig()
 
         from devflow.ui.config_tui import ConfigTUI

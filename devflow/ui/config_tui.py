@@ -1482,19 +1482,23 @@ class ConfigTUI(App):
             return None
 
     def _get_model_provider_enforcement_source(self) -> Optional[str]:
-        """Check if model_provider is enforced by enterprise or team config.
+        """Check if model_provider is enforced by enterprise, organization, or team config.
 
         Returns:
             "enterprise" if enforced by enterprise config
+            "organization" if enforced by organization config
             "team" if enforced by team config
             None if user can choose
         """
-        # Load enterprise and team configs to check if they enforce model_provider
+        # Load enterprise, organization, and team configs to check if they enforce model_provider
         enterprise_config = self.config_loader._load_enterprise_config()
+        organization_config = self.config_loader._load_organization_config()
         team_config = self.config_loader._load_team_config()
 
         if enterprise_config and enterprise_config.model_provider:
             return "enterprise"
+        elif organization_config and organization_config.model_provider:
+            return "organization"
         elif team_config and team_config.model_provider:
             return "team"
         else:

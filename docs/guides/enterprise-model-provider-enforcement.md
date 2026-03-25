@@ -12,8 +12,9 @@ This guide explains how enterprise administrators can enforce approved model pro
 6. [Audit Logging and Compliance](#audit-logging-and-compliance)
 7. [User Experience](#user-experience)
 8. [Team-Level Enforcement](#team-level-enforcement)
-9. [Best Practices](#best-practices)
-10. [Troubleshooting](#troubleshooting)
+9. [Organization-Level Enforcement](#organization-level-enforcement)
+10. [Best Practices](#best-practices)
+11. [Troubleshooting](#troubleshooting)
 
 ## Overview
 
@@ -69,14 +70,19 @@ Enterprise enforcement uses a hierarchical configuration system:
 ```
 ~/.daf-sessions/
 ├── enterprise.json     # Enterprise-wide enforcement (highest priority)
-├── team.json          # Team-level defaults (can enforce if enterprise doesn't)
-├── organization.json  # Organization settings (no enforcement for model_provider)
+├── organization.json  # Organization/project-specific enforcement
+├── team.json          # Team-level defaults (can enforce if enterprise/org don't)
 └── config.json        # User preferences (overridden by enforcement)
 ```
 
-**Hierarchy**: Enterprise > Team > User
+**Hierarchy**: Enterprise > Organization > Team > User
 
-When `enterprise.json` defines `model_provider`, it takes absolute precedence.
+- **Enterprise** (`enterprise.json`) - Company-wide enforcement
+- **Organization** (`organization.json`) - Project-specific enforcement (useful for project budgets)
+- **Team** (`team.json`) - Team-level enforcement
+- **User** (`config.json`) - Personal preferences (only when not enforced)
+
+When any higher-level config defines `model_provider`, it takes precedence over lower levels.
 
 ## Setting Up Enforcement
 
@@ -370,7 +376,41 @@ Teams can enforce profiles if enterprise hasn't:
 
 **Use Case**: Teams can standardize on a shared infrastructure without enterprise-wide enforcement.
 
-**Hierarchy**: Team enforcement is overridden if enterprise defines `model_provider`.
+**Hierarchy**: Team enforcement is overridden if enterprise or organization defines `model_provider`.
+
+## Organization-Level Enforcement
+
+Organizations/projects can enforce profiles if enterprise hasn't:
+
+`~/.daf-sessions/organization.json`:
+
+```json
+{
+  "jira_project": "AAP",
+  "model_provider": {
+    "default_profile": "aap-vertex",
+    "profiles": {
+      "aap-vertex": {
+        "name": "AAP Project Vertex AI",
+        "use_vertex": true,
+        "vertex_project_id": "aap-gcp-project",
+        "vertex_region": "us-east5",
+        "cost_per_million_input_tokens": 3.00,
+        "cost_per_million_output_tokens": 15.00,
+        "monthly_budget_usd": 2000.00,
+        "cost_center": "ENG-AAP-PROJECT"
+      }
+    }
+  }
+}
+```
+
+**Use Case**: Projects with dedicated budgets can enforce provider usage for cost tracking:
+- AAP project has $2,000/month budget → enforce Vertex AI with AAP cost center
+- Security project requires on-premise AI → enforce llama.cpp (no external APIs)
+- Experimental project needs latest models → enforce Anthropic API
+
+**Hierarchy**: Organization enforcement is overridden if enterprise defines `model_provider`, but overrides team and user configs.
 
 ## Best Practices
 
