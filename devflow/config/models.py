@@ -104,6 +104,24 @@ class ModelProviderConfig(BaseModel):
     profiles: Dict[str, ModelProviderProfile] = Field(default_factory=dict, description="Named provider profiles")
 
 
+class OllamaConfig(BaseModel):
+    """Ollama configuration for local model support.
+
+    Ollama provides the simplest way to use local models with Claude Code
+    via the `ollama launch claude` command.
+
+    Model selection priority:
+    1. default_model (from this config)
+    2. OLLAMA_MODEL environment variable
+    3. Ollama's default from ~/.ollama/config.json
+    """
+
+    default_model: Optional[str] = Field(
+        default=None,
+        description="Default Ollama model to use (e.g., 'qwen3-coder', 'llama3.3')"
+    )
+
+
 class EnterpriseConfig(BaseModel):
     """Enterprise-wide configuration (enterprise.json).
 
@@ -460,7 +478,8 @@ class Config(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)  # Storage backend config
     backend_config_source: str = "local"  # "local" or "central_db" (future) - NEW in PROJ-62719
     issue_tracker_backend: str = "jira"  # Issue tracker backend: "jira", "github", "gitlab", etc. - NEW in PROJ-63197
-    agent_backend: str = "claude"  # AI agent backend: "claude", "copilot", etc. - NEW in PROJ-63294
+    agent_backend: str = "claude"  # AI agent backend: "claude", "ollama", "copilot", etc. - NEW in PROJ-63294
+    ollama: Optional[OllamaConfig] = None  # Ollama configuration for local models - NEW in itdove/devaiflow#241
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use (mock mode uses DAF_MOCK_MODE env var)
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4") - DEPRECATED: use model_provider instead
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests (default: 10)

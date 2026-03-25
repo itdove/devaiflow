@@ -14,7 +14,7 @@ Following the IssueTrackerClient pattern from devflow/issue_tracker/interface.py
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, List, Dict, Any
 
 
 class AgentInterface(ABC):
@@ -39,6 +39,49 @@ class AgentInterface(ABC):
         Raises:
             ToolNotFoundError: If agent command is not installed
             RuntimeError: If launch fails
+        """
+        pass
+
+    @abstractmethod
+    def launch_with_prompt(
+        self,
+        project_path: str,
+        initial_prompt: str,
+        session_id: str,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+        skills_dirs: Optional[List[str]] = None,
+        workspace_path: Optional[str] = None,
+        config = None,
+    ) -> subprocess.Popen:
+        """Launch agent with initial prompt (for new sessions).
+
+        This method is used when creating new sessions that need an initial prompt
+        sent to the agent. It combines launching and sending the prompt in one operation.
+
+        Args:
+            project_path: Absolute path to project
+            initial_prompt: Initial prompt to send to the agent
+            session_id: Session UUID to use
+            model_provider_profile: Model provider profile dict (optional)
+                Contains: base_url, auth_token, api_key, model_name, use_vertex,
+                         vertex_project_id, vertex_region, env_vars
+            skills_dirs: List of skill directories to add (optional, will be auto-discovered if None)
+            workspace_path: Workspace path for auto-discovering workspace skills (optional)
+            config: Configuration object for context files discovery (optional)
+
+        Returns:
+            Subprocess handle for the launched agent
+
+        Raises:
+            ToolNotFoundError: If agent command is not installed
+            RuntimeError: If launch fails
+
+        Note:
+            Skills discovery order (if skills_dirs is None):
+            1. User-level: ~/.claude/skills/
+            2. Workspace-level: <workspace>/.claude/skills/
+            3. Hierarchical: $DEVAIFLOW_HOME/.claude/skills/
+            4. Project-level: <project>/.claude/skills/
         """
         pass
 

@@ -128,7 +128,12 @@ def git_view(
 
         config_loader = ConfigLoader()
         session_manager = SessionManager(config_loader)
-        capture = SessionCapture()
+        config = config_loader.load_config()
+
+        from devflow.agent import create_agent_client
+        agent_backend = config.agent_backend if config else "claude"
+        agent = create_agent_client(agent_backend)
+        capture = SessionCapture(agent=agent)
 
         # Get current session from environment
         current_session_id = capture.get_current_session_id()

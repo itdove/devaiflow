@@ -312,17 +312,11 @@ def create_multi_project_session(
         session.status = "in_progress"
         session_manager.start_work_session(name)
 
-        # Build command with all skills and context directories
-        from devflow.utils.claude_commands import build_claude_command
+        # Get agent backend from config
+        from devflow.agent import create_agent_client
 
-        cmd = build_claude_command(
-            session_id=session_id,
-            initial_prompt=initial_prompt,
-            project_path=workspace_path,  # Launch at workspace root
-            workspace_path=workspace_path,
-            config=config,
-            model_provider_profile=model_profile
-        )
+        agent_backend = config.agent_backend if config else "claude"
+        agent = create_agent_client(agent_backend)
 
         # Set environment variables for the AI agent process
         import os
@@ -338,10 +332,20 @@ def create_multi_project_session(
         from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
         setup_signal_handlers(session, session_manager, name, config)
 
-        # Execute claude in the workspace directory with the environment
+        # Execute agent in the workspace directory with the environment
         try:
             import subprocess
-            subprocess.run(cmd, cwd=workspace_path, env=env)
+            # Launch agent with initial prompt
+            process = agent.launch_with_prompt(
+                project_path=workspace_path,  # Launch at workspace root
+                initial_prompt=initial_prompt,
+                session_id=session_id,
+                model_provider_profile=model_profile,
+                skills_dirs=None,  # Will be auto-discovered
+                workspace_path=workspace_path,
+                config=config
+            )
+            process.wait()
         finally:
             if not is_cleanup_done():
                 console.print(f"\n[green]✓[/green] Claude session completed")

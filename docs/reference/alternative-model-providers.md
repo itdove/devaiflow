@@ -1,14 +1,15 @@
 # Alternative Model Providers
 
-DevAIFlow supports running Claude Code with alternative AI model providers through environment variable configuration. This allows you to use local models (llama.cpp, LM Studio) or cloud providers (OpenRouter, Vertex AI, etc.) instead of the default Anthropic API.
+DevAIFlow supports running Claude Code with alternative AI model providers. This allows you to use local models (Ollama, llama.cpp) or cloud providers (OpenRouter, Vertex AI, etc.) instead of the default Anthropic API.
 
-**⚠️ Important:** Ollama is **NOT compatible** with Claude Code due to API differences. Use llama.cpp for local model support.
+**✨ New:** Ollama is now fully supported through native integration! Use `ollama launch claude` for the simplest local model setup.
 
 ## Table of Contents
 
 1. [Why Use Alternative Providers?](#why-use-alternative-providers)
 2. [Quick Start Guides](#quick-start-guides) - **Start here!**
-   - [Local/Offline: llama.cpp](#-localoffline-llamacpp-free---recommended)
+   - [Local/Offline: Ollama](#-localoffline-ollama-free---simplest-recommended)
+   - [Local/Offline: llama.cpp](#-localoffline-llamacpp-free---advanced)
    - [Cloud: OpenRouter](#-cloud-openrouter-98-cheaper---to-be-tested)
    - [Enterprise: Vertex AI](#-enterprise-google-vertex-ai---tested)
 3. [Using Profiles](#using-profiles) - How to switch between providers
@@ -25,12 +26,70 @@ DevAIFlow supports running Claude Code with alternative AI model providers throu
 - **Privacy**: Run models completely locally (no internet needed)
 - **Flexibility**: Test different models for different use cases
 - **No vendor lock-in**: Switch providers anytime
+- **Simplicity**: Ollama integration requires zero configuration
 
 ## Quick Start Guides
 
 Choose your path based on your needs:
 
-### 🏠 Local/Offline: llama.cpp (FREE) - ✅ Recommended
+### 🚀 Local/Offline: Ollama (FREE) - ✨ Simplest (RECOMMENDED)
+
+**Best for:** Simplest local setup, zero configuration, quick start
+
+**Time:** 2-5 minutes | **Cost:** FREE | **Status:** ✅ Fully integrated & tested
+
+```bash
+# 1. Install Ollama (one-time)
+# macOS/Linux:
+curl -fsSL https://ollama.com/install.sh | sh
+# Or download from: https://ollama.com
+
+# 2. Pull a coding model
+ollama pull qwen3-coder  # Recommended: Qwen3-Coder (25B - excellent for coding)
+# OR: ollama pull llama3.3  # Alternative: Llama 3.3 (70B - slower but powerful)
+
+# 3. Configure daf
+daf config edit
+# Set "AI Agent Backend" to "Ollama (local models)"
+# Optionally set "Default Model" under "Ollama Configuration"
+
+# OR manually edit ~/.daf-sessions/config.json:
+# {
+#   "agent_backend": "ollama",
+#   "ollama": {
+#     "default_model": "qwen3-coder"
+#   }
+# }
+
+# 4. Use with daf
+daf open PROJ-123
+# Ollama will automatically launch Claude Code with your local model!
+```
+
+**Model Selection Priority:**
+1. Model provider profile (if configured)
+2. `OLLAMA_MODEL` environment variable
+3. Ollama's default from `~/.ollama/config.json`
+4. Ollama's built-in default
+
+**Popular Ollama Models for Coding:**
+- `qwen3-coder` - 25B parameters, excellent for coding (recommended)
+- `llama3.3` - 70B parameters, powerful but slower
+- `codellama` - Meta's coding-specific model
+- `mistral` - Fast and capable
+
+**Advantages over llama.cpp:**
+- ✅ Zero configuration - works out of the box
+- ✅ Automatic server management - no manual server start needed
+- ✅ Model management - `ollama pull`, `ollama list`, etc.
+- ✅ Native integration - uses `ollama launch claude` command
+- ✅ Simpler setup - one install command
+
+**See detailed guide below** for model recommendations and troubleshooting.
+
+---
+
+### 🏠 Local/Offline: llama.cpp (FREE) - Advanced
 
 **Best for:** Privacy, offline work, zero cost, full IDE integration
 

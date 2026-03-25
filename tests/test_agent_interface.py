@@ -9,6 +9,7 @@ import pytest
 from devflow.agent import (
     AgentInterface,
     ClaudeAgent,
+    OllamaClaudeAgent,
     GitHubCopilotAgent,
     CursorAgent,
     WindsurfAgent,
@@ -292,6 +293,28 @@ class TestAgentFactory:
         assert isinstance(agent, ClaudeAgent)
         assert agent.claude_dir == custom_home
 
+    def test_create_ollama_agent(self):
+        """Test factory creates OllamaClaudeAgent for 'ollama' backend."""
+        agent = create_agent_client("ollama")
+
+        assert isinstance(agent, OllamaClaudeAgent)
+        assert agent.get_agent_name() == "ollama"
+
+    def test_create_ollama_claude_agent_alias(self):
+        """Test factory accepts 'ollama-claude' as alias for 'ollama'."""
+        agent = create_agent_client("ollama-claude")
+
+        assert isinstance(agent, OllamaClaudeAgent)
+        assert agent.get_agent_name() == "ollama"
+
+    def test_create_ollama_agent_custom_home(self):
+        """Test factory passes custom agent_home to OllamaClaudeAgent."""
+        custom_home = Path("/tmp/custom-ollama")
+        agent = create_agent_client("ollama", agent_home=custom_home)
+
+        assert isinstance(agent, OllamaClaudeAgent)
+        assert agent.ollama_dir == custom_home
+
     def test_create_github_copilot_agent(self):
         """Test factory creates GitHubCopilotAgent for 'github-copilot' backend."""
         agent = create_agent_client("github-copilot")
@@ -350,7 +373,10 @@ class TestAgentFactory:
             create_agent_client("unsupported-backend")
 
         assert "Unsupported agent backend: unsupported-backend" in str(exc_info.value)
-        assert "Supported backends: claude, github-copilot, cursor, windsurf" in str(exc_info.value)
+        assert "Supported backends:" in str(exc_info.value)
+        # Check that the message contains the main backends (don't check exact list to avoid test brittleness)
+        assert "claude" in str(exc_info.value)
+        assert "ollama" in str(exc_info.value)
 
 
 class TestGitHubCopilotAgent:

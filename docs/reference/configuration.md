@@ -1041,6 +1041,137 @@ daf config edit
 - The region selector appears in the TUI only when `CLAUDE_CODE_USE_VERTEX` environment variable is set
 - This setting applies to all Claude Code launches from `daf open`, `daf new`, and `daf jira new`
 
+## AI Agent Backend Configuration
+
+### agent_backend
+
+**Type:** string (optional)
+**Required:** No
+**Default:** `"claude"` (Claude Code)
+**Description:** AI coding assistant to use for development sessions
+
+DevAIFlow supports multiple AI coding assistants through a pluggable agent architecture. This setting determines which AI agent is launched when you run `daf open`, `daf new`, or `daf jira new`.
+
+**Supported backends:**
+- `claude` - Claude Code (fully tested, recommended)
+- `ollama` - Ollama with local models (fully integrated, zero configuration)
+- `github-copilot` - GitHub Copilot via VS Code (experimental)
+- `cursor` - Cursor editor (experimental)
+- `windsurf` - Windsurf editor (experimental)
+
+**Configuration in TUI:**
+```bash
+daf config edit
+# Navigate to "AI" tab
+# Under "AI Agent Backend" section
+# Select your preferred agent from the dropdown
+```
+
+**Configuration via JSON:**
+```json
+{
+  "agent_backend": "claude"
+}
+```
+
+**Examples:**
+
+Use Ollama for local models:
+```json
+{
+  "agent_backend": "ollama",
+  "ollama": {
+    "default_model": "qwen3-coder"
+  }
+}
+```
+
+Use GitHub Copilot:
+```json
+{
+  "agent_backend": "github-copilot"
+}
+```
+
+**See Also:**
+- [AI Agent Support Matrix](ai-agent-support-matrix.md) - Detailed comparison of all agents
+- [Alternative Model Providers](alternative-model-providers.md) - Guide for local and cloud models
+
+## Ollama Configuration
+
+### ollama.default_model
+
+**Type:** string (optional)
+**Required:** No
+**Default:** None (uses Ollama's default)
+**Description:** Default Ollama model to use for Claude Code sessions
+
+This setting only applies when `agent_backend` is set to `"ollama"` or `"ollama-claude"`. It specifies which local model to use when launching Claude Code through Ollama.
+
+**Model selection priority:**
+1. Model provider profile (if configured via `model_provider.profiles`)
+2. `OLLAMA_MODEL` environment variable
+3. This config setting (`ollama.default_model`)
+4. Ollama's default from `~/.ollama/config.json`
+5. Ollama's built-in default
+
+**Configuration in TUI:**
+```bash
+daf config edit
+# Navigate to "AI" tab
+# Ensure "AI Agent Backend" is set to "Ollama (local models)"
+# Under "Ollama Configuration" section
+# Enter your preferred model name
+```
+
+**Configuration via JSON:**
+```json
+{
+  "agent_backend": "ollama",
+  "ollama": {
+    "default_model": "qwen3-coder"
+  }
+}
+```
+
+**Popular models for coding:**
+- `qwen3-coder` - 25B parameters, excellent for coding (recommended)
+- `llama3.3` - 70B parameters, powerful but slower
+- `codellama` - Meta's coding-specific model
+- `mistral` - Fast and capable
+
+**Example configuration:**
+```json
+{
+  "agent_backend": "ollama",
+  "ollama": {
+    "default_model": "qwen3-coder"
+  }
+}
+```
+
+**Install and pull models:**
+```bash
+# Install Ollama (one-time)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull a coding model
+ollama pull qwen3-coder
+
+# List installed models
+ollama list
+```
+
+**Notes:**
+- Leave empty to use Ollama's default model
+- Model must be pulled before use (`ollama pull <model>`)
+- Invalid model names will cause Ollama to fail
+- This setting appears in TUI only when `agent_backend` is set to `"ollama"`
+
+**See Also:**
+- [Alternative Model Providers](alternative-model-providers.md) - Complete Ollama setup guide
+- [AI Agent Support Matrix](ai-agent-support-matrix.md) - Ollama features and comparison
+
 ## Update Checker Configuration
 
 ### update_checker_timeout

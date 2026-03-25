@@ -316,37 +316,46 @@ def create_investigation_session(
     if config and config.gcp_vertex_region and not model_provider_profile:
         env["CLOUD_ML_REGION"] = config.gcp_vertex_region
 
-    # Launch Claude Code
+    # Launch agent
     try:
-        # Build command with all skills and context directories
-        from devflow.utils.claude_commands import build_claude_command
+        # Get agent backend from config
+        from devflow.agent import create_agent_client
+
+        agent_backend = config.agent_backend if config else "claude"
+        agent = create_agent_client(agent_backend)
+
+        # Get model provider profile if configured
+        model_profile = None
+        if config and config.model_provider:
+            model_profile = config.model_provider.get_active_profile()
 
         # AAP-64886: Get workspace path from session instead of using default
         workspace_path = resolve_workspace_path(config, session.workspace_name)
 
-        cmd = build_claude_command(
-            session_id=ai_agent_session_id,
-            initial_prompt=initial_prompt,
-            project_path=project_path,
-            workspace_path=workspace_path,
-            config=config
-        )
-
         # Debug output
-        console_print(f"\n[dim]Debug - Command:[/dim]")
-        console_print(f"[dim]  claude executable: {cmd[0]}[/dim]")
-        console_print(f"[dim]  --session-id: {cmd[2]}[/dim]")
-        console_print(f"[dim]  --add-dir flags: {len([x for x in cmd if x == '--add-dir'])}[/dim]")
-        console_print(f"[dim]  Prompt (first 100 chars): {cmd[-1][:100]}...[/dim]")
+        console_print(f"\n[dim]Debug - Agent launch:[/dim]")
+        console_print(f"[dim]  Agent backend: {agent_backend}[/dim]")
+        console_print(f"[dim]  Session ID: {ai_agent_session_id}[/dim]")
+        console_print(f"[dim]  Workspace path: {workspace_path}[/dim]")
+        console_print(f"[dim]  Prompt (first 100 chars): {initial_prompt[:100]}...[/dim]")
         console_print(f"[dim]  Working directory: {project_path}[/dim]")
         console_print()
 
-        subprocess.run(
-            cmd,
-            cwd=project_path,
-            env=env,
-            check=False
+        # Launch agent with initial prompt
+        process = agent.launch_with_prompt(
+            project_path=project_path,
+            initial_prompt=initial_prompt,
+            session_id=ai_agent_session_id,
+            model_provider_profile=model_profile,
+            skills_dirs=None,  # Will be auto-discovered
+            workspace_path=workspace_path,
+            config=config
         )
+        # Wait for the agent process to complete
+        process.wait()
+
+        # Keep env reference for finally block
+        _ = env
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] Claude session completed")
@@ -712,36 +721,46 @@ def _create_multi_project_investigation_session(
     if config and config.gcp_vertex_region and not model_provider_profile:
         env["CLOUD_ML_REGION"] = config.gcp_vertex_region
 
-    # Launch Claude Code at workspace level with all projects accessible
+    # Launch agent at workspace level with all projects accessible
     try:
-        from devflow.utils.claude_commands import build_claude_command
+        # Get agent backend from config
+        from devflow.agent import create_agent_client
+
+        agent_backend = config.agent_backend if config else "claude"
+        agent = create_agent_client(agent_backend)
+
+        # Get model provider profile if configured
+        model_profile = None
+        if config and config.model_provider:
+            model_profile = config.model_provider.get_active_profile()
 
         # Use workspace path as the primary directory
         workspace_resolved = resolve_workspace_path(config, session.workspace_name)
 
-        cmd = build_claude_command(
-            session_id=ai_agent_session_id,
-            initial_prompt=initial_prompt,
-            project_path=workspace_path,  # Launch at workspace level
-            workspace_path=workspace_resolved,
-            config=config
-        )
-
         # Debug output
-        console_print(f"\n[dim]Debug - Command:[/dim]")
-        console_print(f"[dim]  claude executable: {cmd[0]}[/dim]")
-        console_print(f"[dim]  --session-id: {cmd[2]}[/dim]")
-        console_print(f"[dim]  --add-dir flags: {len([x for x in cmd if x == '--add-dir'])}[/dim]")
-        console_print(f"[dim]  Prompt (first 100 chars): {cmd[-1][:100]}...[/dim]")
+        console_print(f"\n[dim]Debug - Agent launch:[/dim]")
+        console_print(f"[dim]  Agent backend: {agent_backend}[/dim]")
+        console_print(f"[dim]  Session ID: {ai_agent_session_id}[/dim]")
+        console_print(f"[dim]  Workspace path: {workspace_resolved}[/dim]")
+        console_print(f"[dim]  Prompt (first 100 chars): {initial_prompt[:100]}...[/dim]")
         console_print(f"[dim]  Working directory: {workspace_path}[/dim]")
         console_print()
 
-        subprocess.run(
-            cmd,
-            cwd=workspace_path,
-            env=env,
-            check=False
+        # Launch agent with initial prompt at workspace level
+        process = agent.launch_with_prompt(
+            project_path=workspace_path,  # Launch at workspace level
+            initial_prompt=initial_prompt,
+            session_id=ai_agent_session_id,
+            model_provider_profile=model_profile,
+            skills_dirs=None,  # Will be auto-discovered
+            workspace_path=workspace_resolved,
+            config=config
         )
+        # Wait for the agent process to complete
+        process.wait()
+
+        # Keep env reference for finally block
+        _ = env
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] Claude session completed")

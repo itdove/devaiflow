@@ -14,7 +14,7 @@ enhanced AI integration features.
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, List, Dict, Any
 
 from devflow.agent.interface import AgentInterface
 from devflow.utils.dependencies import require_tool
@@ -71,6 +71,41 @@ class CursorAgent(AgentInterface):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+
+    def launch_with_prompt(
+        self,
+        project_path: str,
+        initial_prompt: str,
+        session_id: str,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+        skills_dirs: Optional[List[str]] = None,
+        workspace_path: Optional[str] = None,
+        config = None,
+    ) -> subprocess.Popen:
+        """Launch Cursor editor.
+
+        Note: Cursor doesn't support initial prompts via CLI.
+        The initial_prompt parameter is ignored. Users must manually
+        send the prompt through the Cursor AI Chat interface after launch.
+
+        Args:
+            project_path: Absolute path to project
+            initial_prompt: Initial prompt (ignored - not supported by Cursor CLI)
+            session_id: Session UUID (ignored - Cursor manages sessions)
+            model_provider_profile: Model provider profile (ignored)
+            skills_dirs: Skills directories (ignored)
+            workspace_path: Workspace path (ignored)
+            config: Configuration object (ignored)
+
+        Returns:
+            Subprocess handle for Cursor process
+
+        Raises:
+            ToolNotFoundError: If cursor command is not installed
+        """
+        # Cursor doesn't support CLI-based prompts or session IDs
+        # Just launch Cursor and let the user interact with AI Chat manually
+        return self.launch_session(project_path)
 
     def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
         """Resume Cursor in a project directory.

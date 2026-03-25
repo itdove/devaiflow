@@ -15,7 +15,7 @@ limitations compared to Claude Code.
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, List, Dict, Any
 
 from devflow.agent.interface import AgentInterface
 from devflow.utils.dependencies import require_tool
@@ -69,6 +69,41 @@ class GitHubCopilotAgent(AgentInterface):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+
+    def launch_with_prompt(
+        self,
+        project_path: str,
+        initial_prompt: str,
+        session_id: str,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+        skills_dirs: Optional[List[str]] = None,
+        workspace_path: Optional[str] = None,
+        config = None,
+    ) -> subprocess.Popen:
+        """Launch VS Code with GitHub Copilot.
+
+        Note: GitHub Copilot doesn't support initial prompts via CLI.
+        The initial_prompt parameter is ignored. Users must manually
+        send the prompt through the Copilot Chat interface after launch.
+
+        Args:
+            project_path: Absolute path to project
+            initial_prompt: Initial prompt (ignored - not supported by Copilot CLI)
+            session_id: Session UUID (ignored - VS Code manages sessions)
+            model_provider_profile: Model provider profile (ignored)
+            skills_dirs: Skills directories (ignored)
+            workspace_path: Workspace path (ignored)
+            config: Configuration object (ignored)
+
+        Returns:
+            Subprocess handle for VS Code process
+
+        Raises:
+            ToolNotFoundError: If code command is not installed
+        """
+        # GitHub Copilot doesn't support CLI-based prompts or session IDs
+        # Just launch VS Code and let the user interact with Copilot Chat manually
+        return self.launch_session(project_path)
 
     def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
         """Resume VS Code in a project directory.

@@ -13,13 +13,14 @@ from devflow.agent.claude_agent import ClaudeAgent
 from devflow.agent.github_copilot_agent import GitHubCopilotAgent
 from devflow.agent.cursor_agent import CursorAgent
 from devflow.agent.windsurf_agent import WindsurfAgent
+from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
 
 
 def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = None) -> AgentInterface:
     """Create an agent client for the specified backend.
 
     Args:
-        backend: Agent backend to use ("claude", "github-copilot", "cursor", "windsurf")
+        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf")
         agent_home: Optional custom home directory for the agent
 
     Returns:
@@ -33,6 +34,11 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         >>> agent = create_agent_client("claude")
         >>> agent.get_agent_name()
         'claude'
+
+        >>> # Create Ollama + Claude Code agent (local models)
+        >>> agent = create_agent_client("ollama")
+        >>> agent.get_agent_name()
+        'ollama'
 
         >>> # Create GitHub Copilot agent
         >>> agent = create_agent_client("github-copilot")
@@ -53,7 +59,7 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         >>> agent = create_agent_client("claude", Path("/custom/path"))
 
     Note:
-        Only Claude Code has been fully tested. Other agents (GitHub Copilot,
+        Only Claude Code and Ollama have been fully tested. Other agents (GitHub Copilot,
         Cursor, Windsurf) are experimental and may have limitations in session
         management, conversation export, and message counting capabilities.
     """
@@ -61,6 +67,8 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
 
     if backend == "claude":
         return ClaudeAgent(claude_dir=agent_home)
+    elif backend in ("ollama", "ollama-claude"):
+        return OllamaClaudeAgent(ollama_dir=agent_home)
     elif backend in ("github-copilot", "copilot"):
         return GitHubCopilotAgent(copilot_dir=agent_home)
     elif backend == "cursor":
@@ -70,5 +78,5 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
     else:
         raise ValueError(
             f"Unsupported agent backend: {backend}. "
-            f"Supported backends: claude, github-copilot, cursor, windsurf"
+            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf"
         )
