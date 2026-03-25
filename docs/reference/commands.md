@@ -5303,3 +5303,242 @@ If you encounter issues during migration:
 - Use `daf config show` to view current configuration
 - Use `daf config validate` to check for errors
 - Report issues: https://github.com/itdove/devaiflow/issues
+
+## Model Provider Management
+
+Manage model provider profiles for alternative AI providers (Vertex AI, llama.cpp, OpenRouter, etc.).
+
+See also: [Alternative Model Providers Guide](alternative-model-providers.md) for detailed setup instructions.
+
+### daf model list - List Profiles
+
+List all configured model provider profiles.
+
+```bash
+daf model list [OPTIONS]
+```
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Examples:**
+```bash
+# List all profiles
+daf model list
+
+# JSON output for automation
+daf model list --json
+```
+
+**Output example:**
+```
+┌─ Configured Model Provider Profiles ─────┐
+│ Name         Base URL              Type  │
+│ anthropic    -                     Anthropic │
+│ vertex       -                     Vertex AI │
+│ llama-cpp    http://localhost:8000 Custom    │
+└──────────────────────────────────────────┘
+```
+
+### daf model add - Add Profile
+
+Add a new model provider profile with interactive wizard.
+
+```bash
+daf model add [NAME] [OPTIONS]
+```
+
+**Arguments:**
+- `NAME` - Profile name (optional, will prompt if not provided)
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Examples:**
+```bash
+# Interactive wizard (recommended)
+daf model add llama-cpp
+# - Choose provider type
+# - Configure settings interactively
+# - Optionally set as default
+
+# Non-interactive (name only, then prompts for details)
+daf model add vertex
+```
+
+**Supported Provider Types:**
+1. **Anthropic Claude** - Default cloud provider
+2. **Google Vertex AI** - Enterprise cloud (requires GCP project)
+3. **Local llama.cpp** - Local model server (free, offline)
+4. **Custom** - OpenRouter, custom endpoints, etc.
+
+### daf model remove - Remove Profile
+
+Remove a model provider profile.
+
+```bash
+daf model remove [NAME] [OPTIONS]
+```
+
+**Arguments:**
+- `NAME` - Profile name (optional, will show list if not provided)
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Examples:**
+```bash
+# Remove specific profile
+daf model remove old-profile
+
+# Interactive selection
+daf model remove
+```
+
+**Notes:**
+- Requires confirmation before removing
+- If removing default profile, automatically sets a new default
+
+### daf model set-default - Set Default Profile
+
+Set a profile as the default.
+
+```bash
+daf model set-default [NAME] [OPTIONS]
+```
+
+**Arguments:**
+- `NAME` - Profile name (optional, will show list if not provided)
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Examples:**
+```bash
+# Set specific profile as default
+daf model set-default llama-cpp
+
+# Interactive selection
+daf model set-default
+```
+
+**Notes:**
+- Default profile is used when no `--model-profile` flag is provided
+- Can be overridden per-session with `--model-profile` flag
+
+### daf model show - Show Profile Configuration
+
+Display configuration for a specific profile.
+
+```bash
+daf model show [NAME] [OPTIONS]
+```
+
+**Arguments:**
+- `NAME` - Profile name (optional, shows default profile if not provided)
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Examples:**
+```bash
+# Show specific profile
+daf model show vertex
+
+# Show default profile
+daf model show
+
+# JSON output
+daf model show llama-cpp --json
+```
+
+**Output example:**
+```
+Profile: llama-cpp
+✓ Default profile
+
+Type: Custom
+
+Configuration:
+  Base URL: http://localhost:8000
+  Auth Token: llama-cpp
+  API Key: (empty)
+  Model Name: Qwen3-Coder
+```
+
+### daf model test - Test Profile
+
+Test and validate a profile configuration.
+
+```bash
+daf model test [NAME] [OPTIONS]
+```
+
+**Arguments:**
+- `NAME` - Profile name (optional, tests default profile if not provided)
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Examples:**
+```bash
+# Test specific profile
+daf model test vertex
+
+# Test default profile
+daf model test
+
+# JSON output
+daf model test llama-cpp --json
+```
+
+**What it validates:**
+- Required fields are present
+- URL formats are correct
+- Configuration is internally consistent
+- Provider-specific requirements (Vertex AI project ID, etc.)
+
+**Notes:**
+- Only validates configuration, does not test actual connectivity
+- To test connectivity, use the profile with `daf open` or `daf new`
+
+### Using Profiles
+
+After configuring profiles, use them in daf commands:
+
+```bash
+# Use specific profile for a session
+daf new PROJ-123 --model-profile llama-cpp
+
+# Profile is remembered - next open uses same profile
+daf open PROJ-123
+
+# Override with different profile
+daf open PROJ-123 --model-profile vertex
+
+# Environment variable override
+MODEL_PROVIDER_PROFILE=llama-cpp daf open PROJ-123
+```
+
+**Profile Selection Priority** (highest to lowest):
+1. `--model-profile` CLI flag
+2. `session.model_profile` (stored from previous `--model-profile`)
+3. `MODEL_PROVIDER_PROFILE` environment variable
+4. `config.model_provider.default_profile` (set with `daf model set-default`)
+5. Anthropic API (fallback)
+
+### Configuration Location
+
+Model provider profiles are stored in:
+- **User**: `~/.daf-sessions/config.json` (`.model_provider`)
+- **Team**: `~/.daf-sessions/team.json` (`.model_provider`)
+- **Organization**: `~/.daf-sessions/organization.json` (`.model_provider`)
+- **Enterprise**: `~/.daf-sessions/enterprise.json` (`.model_provider`)
+
+Profiles merge across levels with user > team > organization > enterprise priority.
+
+### See Also
+
+- [Alternative Model Providers Guide](alternative-model-providers.md) - Detailed setup instructions
+- [Configuration Guide](configuration.md) - Configuration hierarchy and schema
+- `daf config show` - View merged configuration
