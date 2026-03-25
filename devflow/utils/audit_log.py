@@ -60,6 +60,9 @@ def log_model_provider_usage(
     base_url: Optional[str] = None,
     use_vertex: bool = False,
     vertex_region: Optional[str] = None,
+    cost_per_million_input_tokens: Optional[float] = None,
+    cost_per_million_output_tokens: Optional[float] = None,
+    cost_center: Optional[str] = None,
     additional_data: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Log model provider usage for audit trail.
@@ -73,6 +76,9 @@ def log_model_provider_usage(
         base_url: API base URL being used
         use_vertex: Whether Vertex AI is being used
         vertex_region: Vertex AI region (if applicable)
+        cost_per_million_input_tokens: Cost per million input tokens in USD
+        cost_per_million_output_tokens: Cost per million output tokens in USD
+        cost_center: Cost center or department code
         additional_data: Additional data to include in log entry
     """
     _ensure_audit_log_handler()
@@ -92,6 +98,14 @@ def log_model_provider_usage(
 
     if vertex_region:
         log_entry["vertex_region"] = vertex_region
+
+    # Cost tracking fields (for enterprise budget management)
+    if cost_per_million_input_tokens is not None:
+        log_entry["cost_per_million_input_tokens"] = cost_per_million_input_tokens
+    if cost_per_million_output_tokens is not None:
+        log_entry["cost_per_million_output_tokens"] = cost_per_million_output_tokens
+    if cost_center:
+        log_entry["cost_center"] = cost_center
 
     if additional_data:
         log_entry["additional_data"] = additional_data

@@ -458,6 +458,11 @@ class SessionManager:
         use_vertex = profile.get("use_vertex", False) if profile else False
         vertex_region = profile.get("vertex_region") if profile else None
 
+        # Extract cost tracking details
+        cost_per_million_input_tokens = profile.get("cost_per_million_input_tokens") if profile else None
+        cost_per_million_output_tokens = profile.get("cost_per_million_output_tokens") if profile else None
+        cost_center = profile.get("cost_center") if profile else None
+
         # Log the event
         log_model_provider_usage(
             event_type="session_created",
@@ -468,6 +473,9 @@ class SessionManager:
             base_url=base_url,
             use_vertex=use_vertex,
             vertex_region=vertex_region,
+            cost_per_million_input_tokens=cost_per_million_input_tokens,
+            cost_per_million_output_tokens=cost_per_million_output_tokens,
+            cost_center=cost_center,
             additional_data={
                 "issue_key": session.issue_key,
                 "goal": session.goal,

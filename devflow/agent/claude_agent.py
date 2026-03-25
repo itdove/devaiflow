@@ -74,6 +74,9 @@ class ClaudeAgent(AgentInterface):
                 base_url=model_provider_profile.get("base_url") if model_provider_profile else None,
                 use_vertex=model_provider_profile.get("use_vertex", False) if model_provider_profile else False,
                 vertex_region=model_provider_profile.get("vertex_region") if model_provider_profile else None,
+                cost_per_million_input_tokens=model_provider_profile.get("cost_per_million_input_tokens") if model_provider_profile else None,
+                cost_per_million_output_tokens=model_provider_profile.get("cost_per_million_output_tokens") if model_provider_profile else None,
+                cost_center=model_provider_profile.get("cost_center") if model_provider_profile else None,
             )
 
         # Build environment and command based on profile
@@ -133,6 +136,9 @@ class ClaudeAgent(AgentInterface):
                 base_url=model_provider_profile.get("base_url") if model_provider_profile else None,
                 use_vertex=model_provider_profile.get("use_vertex", False) if model_provider_profile else False,
                 vertex_region=model_provider_profile.get("vertex_region") if model_provider_profile else None,
+                cost_per_million_input_tokens=model_provider_profile.get("cost_per_million_input_tokens") if model_provider_profile else None,
+                cost_per_million_output_tokens=model_provider_profile.get("cost_per_million_output_tokens") if model_provider_profile else None,
+                cost_center=model_provider_profile.get("cost_center") if model_provider_profile else None,
             )
 
         # Build environment and base command from profile

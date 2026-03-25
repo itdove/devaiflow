@@ -95,6 +95,9 @@ class OllamaClaudeAgent(AgentInterface):
                 model_name=model_name,
                 base_url="ollama://local",
                 use_vertex=False,
+                cost_per_million_input_tokens=model_provider_profile.get("cost_per_million_input_tokens") if model_provider_profile else None,
+                cost_per_million_output_tokens=model_provider_profile.get("cost_per_million_output_tokens") if model_provider_profile else None,
+                cost_center=model_provider_profile.get("cost_center") if model_provider_profile else None,
             )
 
         # Build command: ollama launch claude [--model <model>]
@@ -172,6 +175,9 @@ class OllamaClaudeAgent(AgentInterface):
                 model_name=model_name,
                 base_url="ollama://local",
                 use_vertex=False,
+                cost_per_million_input_tokens=model_provider_profile.get("cost_per_million_input_tokens") if model_provider_profile else None,
+                cost_per_million_output_tokens=model_provider_profile.get("cost_per_million_output_tokens") if model_provider_profile else None,
+                cost_center=model_provider_profile.get("cost_center") if model_provider_profile else None,
             )
 
         # Build command: ollama launch claude [--model <model>]
