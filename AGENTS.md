@@ -232,22 +232,22 @@ For complete documentation, refer to DAF_AGENTS.md.
 
 **Commands BLOCKED inside Claude Code** (will exit with error):
 - Session lifecycle: `daf new`, `daf open`, `daf complete`, `daf delete`
-- Session metadata: `daf update`, `daf sync`, `daf link`, `daf note` (add notes)
+- Session metadata: `daf update`, `daf sync`, `daf link`, `daf unlink`
 - Session creation: `daf jira new` (creates sessions)
 - Data operations: `daf export`, `daf import`, `daf backup`, `daf restore`
 - Maintenance: `daf cleanup`, `daf cleanup-sessions`, `daf discover`, `daf repair`
-- Configuration: `daf context add/remove/reset`, `daf template save/delete`
+- Configuration changes: `daf context add/remove/reset`, `daf template save/delete`, `daf workspace add/remove/rename/set-default`
 - Time tracking writes: `daf pause`, `daf resume`
 
 **Commands ALLOWED inside Claude Code** (read-only or specifically designed for use inside sessions):
-- Query commands: `daf active`, `daf status`, `daf list`, `daf info`
+- Query commands: `daf active`, `daf status`, `daf list`, `daf info`, `daf summary`
 - JIRA operations: `daf jira view`, `daf jira create`, `daf jira update`, `daf jira add-comment` (API operations only)
 - GitHub/GitLab operations: `daf git view`, `daf git create`, `daf git update`, `daf git add-comment` (API operations only)
-- Session notes: `daf notes` (view notes)
-- Configuration: `daf config show`
+- Session notes: `daf note` (add notes), `daf notes` (view notes)
+- Configuration: `daf config show`, `daf context list`
 - Templates: `daf template list`, `daf template show`
-- Context: `daf context list`
-- Time tracking: `daf time`
+- Workspaces: `daf workspace list`
+- Time tracking: `daf time` (read-only)
 - Release: `daf release --dry-run`, `daf release --suggest`, `daf release <M.m.p> approve --dry-run` (read-only modes)
 
 **Implementation**:
