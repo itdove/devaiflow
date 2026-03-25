@@ -47,6 +47,9 @@ daf notes                        # View notes
 daf info [PROJ-12345|--latest]  # Session details
 daf list [--active]              # List sessions
 daf status                       # Status dashboard
+daf summary [PROJ-12345|--latest] # Session summary
+daf summary --detail             # Detailed summary with all files
+daf summary --ai-summary         # AI-powered summary
 ```
 
 ## Configuration
@@ -55,6 +58,20 @@ daf status                       # Status dashboard
 daf config show                  # Merged configuration
 daf config show --fields         # YOUR JIRA's custom fields
 daf config refresh-jira-fields   # Refresh from JIRA API
+daf config context list          # List context files
+```
+
+## Templates
+
+```bash
+daf template list                # List all templates
+daf template show <name>         # Show template details
+```
+
+## Workspaces
+
+```bash
+daf workspace list               # List all workspaces
 ```
 
 ## Key Principles

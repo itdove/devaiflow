@@ -570,6 +570,26 @@
       "title": "ModelProviderProfile",
       "type": "object"
     },
+    "OllamaConfig": {
+      "description": "Ollama configuration for local model support.\n\nOllama provides the simplest way to use local models with Claude Code\nvia the `ollama launch claude` command.\n\nModel selection priority:\n1. default_model (from this config)\n2. OLLAMA_MODEL environment variable\n3. Ollama's default from ~/.ollama/config.json",
+      "properties": {
+        "default_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default Ollama model to use (e.g., 'qwen3-coder', 'llama3.3')",
+          "title": "Default Model"
+        }
+      },
+      "title": "OllamaConfig",
+      "type": "object"
+    },
     "PromptsConfig": {
       "description": "User prompt preferences configuration.\n\nAllows users to configure automatic answers for common prompts\nto skip repetitive questions in daf new/open/complete commands.",
       "properties": {
@@ -988,6 +1008,17 @@
       "default": "claude",
       "title": "Agent Backend",
       "type": "string"
+    },
+    "ollama": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OllamaConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "mock_services": {
       "anyOf": [
