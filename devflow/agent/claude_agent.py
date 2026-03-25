@@ -39,6 +39,9 @@ class ClaudeAgent(AgentInterface):
         self,
         project_path: str,
         model_provider_profile: Optional[Dict[str, any]] = None,
+        session_name: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        enforcement_source: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch a new Claude Code session in a project directory.
 
@@ -47,6 +50,9 @@ class ClaudeAgent(AgentInterface):
             model_provider_profile: Model provider profile dict (optional)
                 Contains: base_url, auth_token, api_key, model_name, use_vertex,
                          vertex_project_id, vertex_region, env_vars
+            session_name: Session name for audit logging (optional)
+            profile_name: Profile name for audit logging (optional)
+            enforcement_source: Enforcement source for audit logging (optional)
 
         Returns:
             Subprocess handle for the launched Claude Code process
@@ -56,6 +62,20 @@ class ClaudeAgent(AgentInterface):
         """
         require_tool("claude", "launch Claude Code session")
 
+        # Audit log: Track model provider usage when launching session
+        if session_name:
+            from devflow.utils.audit_log import log_model_provider_usage
+            log_model_provider_usage(
+                event_type="session_launched",
+                session_name=session_name,
+                profile_name=profile_name,
+                enforcement_source=enforcement_source,
+                model_name=model_provider_profile.get("model_name") if model_provider_profile else None,
+                base_url=model_provider_profile.get("base_url") if model_provider_profile else None,
+                use_vertex=model_provider_profile.get("use_vertex", False) if model_provider_profile else False,
+                vertex_region=model_provider_profile.get("vertex_region") if model_provider_profile else None,
+            )
+
         # Build environment and command based on profile
         env, cmd = self._build_env_and_cmd(model_provider_profile)
 
@@ -63,8 +83,7 @@ class ClaudeAgent(AgentInterface):
             cmd,
             cwd=project_path,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
     def launch_with_prompt(
@@ -76,6 +95,9 @@ class ClaudeAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        session_name: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        enforcement_source: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code with initial prompt (for new sessions).
 
@@ -87,6 +109,9 @@ class ClaudeAgent(AgentInterface):
             skills_dirs: List of skill directories to add (optional, will be auto-discovered if None)
             workspace_path: Workspace path for auto-discovering workspace skills (optional)
             config: Configuration object for context files discovery (optional)
+            session_name: Session name for audit logging (optional)
+            profile_name: Profile name for audit logging (optional)
+            enforcement_source: Enforcement source for audit logging (optional)
 
         Returns:
             Subprocess handle for the launched Claude Code process
@@ -95,6 +120,20 @@ class ClaudeAgent(AgentInterface):
             ToolNotFoundError: If claude command is not installed
         """
         require_tool("claude", "launch Claude Code session")
+
+        # Audit log: Track model provider usage when launching session
+        if session_name:
+            from devflow.utils.audit_log import log_model_provider_usage
+            log_model_provider_usage(
+                event_type="session_launched",
+                session_name=session_name,
+                profile_name=profile_name,
+                enforcement_source=enforcement_source,
+                model_name=model_provider_profile.get("model_name") if model_provider_profile else None,
+                base_url=model_provider_profile.get("base_url") if model_provider_profile else None,
+                use_vertex=model_provider_profile.get("use_vertex", False) if model_provider_profile else False,
+                vertex_region=model_provider_profile.get("vertex_region") if model_provider_profile else None,
+            )
 
         # Build environment and base command from profile
         env, base_cmd = self._build_env_and_cmd(model_provider_profile)
@@ -118,8 +157,7 @@ class ClaudeAgent(AgentInterface):
             cmd,
             cwd=project_path,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
     def resume_session(
@@ -151,8 +189,7 @@ class ClaudeAgent(AgentInterface):
             cmd,
             cwd=project_path,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
     def capture_session_id(
