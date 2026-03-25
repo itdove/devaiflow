@@ -2053,6 +2053,8 @@ class ConfigTUI(App):
                 # Agent backend is enforced - show as read-only
                 agent_display_name = {
                     "claude": "Claude Code (fully tested)",
+                    "ollama": "Ollama (local models)",
+                    "ollama-claude": "Ollama (local models)",
                     "github-copilot": "GitHub Copilot (experimental)",
                     "cursor": "Cursor (experimental)",
                     "windsurf": "Windsurf (experimental)",
@@ -2070,6 +2072,7 @@ class ConfigTUI(App):
                     "agent_backend",
                     choices=[
                         ("Claude Code (fully tested)", "claude"),
+                        ("Ollama (local models)", "ollama"),
                         ("GitHub Copilot (experimental)", "github-copilot"),
                         ("Cursor (experimental)", "cursor"),
                         ("Windsurf (experimental)", "windsurf"),
@@ -2110,6 +2113,33 @@ class ConfigTUI(App):
                         "[dim]GCP Vertex AI Region: [italic]Not available[/italic][/dim]\n"
                         "[dim]This setting is only available when using Claude Code with GCP Vertex AI.[/dim]\n"
                         "[dim]Set CLAUDE_CODE_USE_VERTEX environment variable to enable this feature.[/dim]"
+                    )
+
+            # Ollama-specific settings (only shown when Ollama is selected)
+            is_ollama = self.config.agent_backend in ("ollama", "ollama-claude")
+
+            with Vertical(id="ollama_section"):
+                yield Static("[bold]Ollama Configuration (Ollama only)[/bold]", classes="subsection-title")
+
+                if is_ollama:
+                    # Ollama is selected - show configuration
+                    yield ConfigInput(
+                        "Default Model",
+                        "ollama.default_model",
+                        value=self.config.ollama.default_model if self.config.ollama and self.config.ollama.default_model else "",
+                        help_text="Default Ollama model to use (e.g., 'qwen3-coder', 'llama3.3'). Leave empty to use Ollama's default.",
+                    )
+                    yield Static(
+                        "[dim]Popular models: qwen3-coder, llama3.3, codellama, mistral[/dim]\n"
+                        "[dim]Use 'ollama list' to see available models[/dim]\n"
+                        "[dim]Install models with 'ollama pull <model-name>'[/dim]",
+                        classes="section-help",
+                    )
+                else:
+                    # Ollama not selected - show disabled field
+                    yield Static(
+                        "[dim]Ollama Configuration: [italic]Not available[/italic][/dim]\n"
+                        "[dim]This setting is only available when Ollama is selected as the AI agent.[/dim]"
                     )
 
             yield Static("[bold]Session Summary[/bold]", classes="subsection-title")
@@ -2626,12 +2656,13 @@ class ConfigTUI(App):
     def _on_agent_backend_changed(self, agent_backend: str) -> None:
         """Handle agent backend selection changes.
 
-        Shows/hides Claude-specific sections based on selected agent.
+        Shows/hides Claude-specific and Ollama-specific sections based on selected agent.
 
         Args:
             agent_backend: The selected agent backend value
         """
         is_claude = agent_backend == "claude"
+        is_ollama = agent_backend in ("ollama", "ollama-claude")
 
         # Toggle visibility of Claude-specific sections
         try:
@@ -2646,6 +2677,10 @@ class ConfigTUI(App):
             # Multi-Conversation Sessions section
             multi_conv_section = self.query_one("#claude_multi_conversation_section", Vertical)
             multi_conv_section.display = is_claude
+
+            # Ollama Configuration section
+            ollama_section = self.query_one("#ollama_section", Vertical)
+            ollama_section.display = is_ollama
 
             # Update API key visibility (depends on both agent and summary mode)
             self._update_api_key_visibility()
@@ -3137,6 +3172,21 @@ class ConfigTUI(App):
                     region_val = self.query_one(key_to_id("select", "gcp_vertex_region"), Select).value
                     self.config.gcp_vertex_region = region_val if region_val != Select.BLANK else None
                 # If Vertex AI not available or not using Claude, keep existing value
+
+                # Ollama configuration (only when Ollama is selected)
+                if self.config.agent_backend in ("ollama", "ollama-claude"):
+                    try:
+                        # Ensure ollama config exists
+                        if not hasattr(self.config, 'ollama') or self.config.ollama is None:
+                            from devflow.config.models import OllamaConfig
+                            self.config.ollama = OllamaConfig()
+
+                        # Collect default model value
+                        default_model_val = self.query_one(key_to_id("input", "ollama.default_model"), Input).value.strip()
+                        self.config.ollama.default_model = default_model_val if default_model_val else None
+                    except NoMatches:
+                        # Field doesn't exist yet (initial composition) - keep existing value
+                        pass
 
                 # Session summary settings (works for all agents)
                 summary_mode = self.query_one(key_to_id("select", "session_summary.mode"), Select).value

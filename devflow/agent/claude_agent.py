@@ -8,7 +8,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional, Set, Dict
+from typing import Optional, Set, Dict, List, Any
 
 from devflow.agent.interface import AgentInterface
 from devflow.utils.dependencies import require_tool
@@ -58,6 +58,61 @@ class ClaudeAgent(AgentInterface):
 
         # Build environment and command based on profile
         env, cmd = self._build_env_and_cmd(model_provider_profile)
+
+        return subprocess.Popen(
+            cmd,
+            cwd=project_path,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def launch_with_prompt(
+        self,
+        project_path: str,
+        initial_prompt: str,
+        session_id: str,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+        skills_dirs: Optional[List[str]] = None,
+        workspace_path: Optional[str] = None,
+        config = None,
+    ) -> subprocess.Popen:
+        """Launch Claude Code with initial prompt (for new sessions).
+
+        Args:
+            project_path: Absolute path to project
+            initial_prompt: Initial prompt to send to Claude
+            session_id: Session UUID to use
+            model_provider_profile: Model provider profile dict (optional)
+            skills_dirs: List of skill directories to add (optional, will be auto-discovered if None)
+            workspace_path: Workspace path for auto-discovering workspace skills (optional)
+            config: Configuration object for context files discovery (optional)
+
+        Returns:
+            Subprocess handle for the launched Claude Code process
+
+        Raises:
+            ToolNotFoundError: If claude command is not installed
+        """
+        require_tool("claude", "launch Claude Code session")
+
+        # Build environment and base command from profile
+        env, base_cmd = self._build_env_and_cmd(model_provider_profile)
+
+        # Build full command with session ID and prompt
+        # Format: claude [--model model] --session-id <uuid> "<prompt>" --add-dir ...
+        if model_provider_profile and model_provider_profile.get("model_name"):
+            cmd = ["claude", "--model", model_provider_profile["model_name"], "--session-id", session_id, initial_prompt]
+        else:
+            cmd = ["claude", "--session-id", session_id, initial_prompt]
+
+        # Discover and add skills directories if not provided
+        if skills_dirs is None:
+            skills_dirs = self._discover_skills_dirs(project_path, workspace_path, config)
+
+        # Add all skills directories
+        for skills_dir in skills_dirs:
+            cmd.extend(["--add-dir", skills_dir])
 
         return subprocess.Popen(
             cmd,
@@ -307,3 +362,63 @@ class ClaudeAgent(AgentInterface):
             cmd = ["claude", "--model", model_provider_profile["model_name"]]
 
         return env, cmd
+
+    def _discover_skills_dirs(
+        self,
+        project_path: str,
+        workspace_path: Optional[str] = None,
+        config = None,
+    ) -> List[str]:
+        """Discover skills directories in priority order.
+
+        Skills discovery order:
+        1. User-level: ~/.claude/skills/
+        2. Workspace-level: <workspace>/.claude/skills/
+        3. Hierarchical: $DEVAIFLOW_HOME/.claude/skills/
+        4. Project-level: <project>/.claude/skills/
+
+        Args:
+            project_path: Absolute path to project
+            workspace_path: Workspace path (optional)
+            config: Configuration object (optional)
+
+        Returns:
+            List of skill directory paths that exist
+        """
+        skills_dirs = []
+
+        # 1. User-level skills: ~/.claude/skills/
+        user_skills = Path.home() / ".claude" / "skills"
+        if user_skills.exists():
+            skills_dirs.append(str(user_skills))
+
+        # 2. Workspace-level skills: <workspace>/.claude/skills/
+        if workspace_path:
+            from devflow.utils.claude_commands import get_workspace_skills_dir
+            workspace_skills = get_workspace_skills_dir(workspace_path)
+            if workspace_skills.exists():
+                skills_dirs.append(str(workspace_skills))
+
+        # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/
+        from devflow.utils.paths import get_cs_home
+        cs_home = get_cs_home()
+        hierarchical_skills = cs_home / ".claude" / "skills"
+        if hierarchical_skills.exists():
+            skills_dirs.append(str(hierarchical_skills))
+
+        # 4. Project-level skills: <project>/.claude/skills/
+        if project_path:
+            project_skills = Path(project_path) / ".claude" / "skills"
+            if project_skills.exists():
+                skills_dirs.append(str(project_skills))
+
+        # Add DEVAIFLOW_HOME for hierarchical context files (if they exist)
+        if config:
+            from devflow.utils.context_files import load_hierarchical_context_files
+            hierarchical_files = load_hierarchical_context_files(config)
+            if hierarchical_files and cs_home.exists():
+                # Only add if not already added (avoid duplication)
+                if str(cs_home) not in skills_dirs:
+                    skills_dirs.append(str(cs_home))
+
+        return skills_dirs

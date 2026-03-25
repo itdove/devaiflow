@@ -600,9 +600,18 @@ def create_git_issue_session(
     if config and config.gcp_vertex_region:
         env["CLOUD_ML_REGION"] = config.gcp_vertex_region
 
-    # Launch Claude Code with the session ID and initial prompt
+    # Launch agent with the session ID and initial prompt
     try:
-        from devflow.utils.claude_commands import build_claude_command
+        # Get agent backend from config
+        from devflow.agent import create_agent_client
+
+        agent_backend = config.agent_backend if config else "claude"
+        agent = create_agent_client(agent_backend)
+
+        # Get model provider profile if configured
+        model_profile = None
+        if config and config.model_provider:
+            model_profile = config.model_provider.get_active_profile()
 
         workspace_path_for_skills = None
         if session.workspace_name and config and config.repos:
@@ -610,29 +619,27 @@ def create_git_issue_session(
         elif config and config.repos and config.repos.workspaces:
             workspace_path_for_skills = config.repos.get_default_workspace_path()
 
-        cmd = build_claude_command(
-            session_id=ai_agent_session_id,
-            initial_prompt=initial_prompt,
-            project_path=project_path,
-            workspace_path=workspace_path_for_skills,
-            config=config
-        )
-
-        # Debug: Print command being executed
-        console_print(f"\n[dim]Debug - Command:[/dim]")
-        console_print(f"[dim]  claude executable: {cmd[0]}[/dim]")
-        console_print(f"[dim]  --session-id: {cmd[2]}[/dim]")
-        console_print(f"[dim]  --add-dir flags: {len([x for x in cmd if x == '--add-dir'])}[/dim]")
-        console_print(f"[dim]  Prompt (first 100 chars): {cmd[-1][:100]}...[/dim]")
+        # Debug: Print agent being executed
+        console_print(f"\n[dim]Debug - Agent launch:[/dim]")
+        console_print(f"[dim]  Agent backend: {agent_backend}[/dim]")
+        console_print(f"[dim]  Session ID: {ai_agent_session_id}[/dim]")
+        console_print(f"[dim]  Workspace path: {workspace_path_for_skills}[/dim]")
+        console_print(f"[dim]  Prompt (first 100 chars): {initial_prompt[:100]}...[/dim]")
         console_print(f"[dim]  Working directory: {project_path}[/dim]")
         console_print()
 
-        subprocess.run(
-            cmd,
-            cwd=project_path,
-            env=env,
-            check=False
+        # Launch agent with initial prompt
+        process = agent.launch_with_prompt(
+            project_path=project_path,
+            initial_prompt=initial_prompt,
+            session_id=ai_agent_session_id,
+            model_provider_profile=model_profile,
+            skills_dirs=None,  # Will be auto-discovered
+            workspace_path=workspace_path_for_skills,
+            config=config
         )
+        # Wait for the agent process to complete
+        process.wait()
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] Claude session completed")

@@ -818,18 +818,16 @@ def create_new_session(
             project_path=project_path, workspace=workspace
         )
 
-        # Build command with all skills and context directories
-        from devflow.utils.claude_commands import build_claude_command
+        # Get agent backend from config
+        from devflow.agent import create_agent_client
 
-        # Note: workspace_path already resolved earlier in the function
+        agent_backend = config.agent_backend if config else "claude"
+        agent = create_agent_client(agent_backend)
 
-        cmd = build_claude_command(
-            session_id=session_id,
-            initial_prompt=initial_prompt,
-            project_path=project_path,
-            workspace_path=workspace_path,
-            config=config
-        )
+        # Get model provider profile if configured
+        model_profile = None
+        if config and config.model_provider:
+            model_profile = config.model_provider.get_active_profile()
 
         # Set environment variables for the AI agent process
         # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
@@ -838,20 +836,35 @@ def create_new_session(
         env["DEVAIFLOW_IN_SESSION"] = "1"
         env["AI_AGENT_SESSION_ID"] = session_id
 
-        # Set GCP Vertex AI region if configured
+        # Set GCP Vertex AI region if configured (deprecated - for backward compatibility)
         if config and config.gcp_vertex_region:
             env["CLOUD_ML_REGION"] = config.gcp_vertex_region
 
-        # Validate that DAF_AGENTS.md exists before launching Claude
+        # Apply environment variables to current process (so agent sees them)
+        for key, value in env.items():
+            if key not in os.environ:
+                os.environ[key] = value
+
+        # Validate that DAF_AGENTS.md exists before launching agent
         if not validate_daf_agents_md(session, config_loader):
             return
 
         # Set up signal handlers for cleanup (using unified utility)
         setup_signal_handlers(session, session_manager, name, config)
 
-        # Execute claude in the project directory with the environment
+        # Launch agent with initial prompt
         try:
-            subprocess.run(cmd, cwd=project_path, env=env)
+            process = agent.launch_with_prompt(
+                project_path=project_path,
+                initial_prompt=initial_prompt,
+                session_id=session_id,
+                model_provider_profile=model_profile,
+                skills_dirs=None,  # Will be auto-discovered
+                workspace_path=workspace_path,
+                config=config
+            )
+            # Wait for the agent process to complete
+            process.wait()
         finally:
             if not is_cleanup_done():
                 console.print(f"\n[green]✓[/green] Claude session completed")

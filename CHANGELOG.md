@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Ollama integration for local model support** (#241)
+  - Native `OllamaClaudeAgent` backend using `ollama launch claude` command
+  - Zero configuration required - works out of the box with Ollama
+  - Automatic server management (no manual server start needed)
+  - Model selection priority: config → `OLLAMA_MODEL` env var → Ollama default
+  - Sessions stored in `~/.claude` (same as Claude Code for compatibility)
+  - Full Claude Code features: session management, skills, conversation export, AI summaries
+  - Configure via `agent_backend: "ollama"` in config or TUI (AI tab)
+  - Optional `ollama.default_model` config setting (e.g., "qwen3-coder")
+  - Simplest local model setup - one install command, no environment variables
+  - See [Alternative Model Providers](docs/reference/alternative-model-providers.md) for setup guide
+- **Agent abstraction with `launch_with_prompt()` method**
+  - Added `launch_with_prompt()` to `AgentInterface` for initial prompt support
+  - Implemented in all agents: Claude, Ollama, GitHub Copilot, Cursor, Windsurf
+  - Enables launching agents with initial prompts and session IDs
+  - Skills directories auto-discovery for Claude Code integration
 - **daf-workflow skill** for centralized workflow guidance (#263)
   - Global skill auto-loaded from `~/.claude/skills/daf-workflow/`
   - Comprehensive guidance for AI agents on development workflows

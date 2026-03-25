@@ -29,7 +29,12 @@ def cleanup_sessions(dry_run: bool = False, force: bool = False) -> None:
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
-    capture = SessionCapture()
+    config = config_loader.load_config()
+
+    from devflow.agent import create_agent_client
+    agent_backend = config.agent_backend if config else "claude"
+    agent = create_agent_client(agent_backend)
+    capture = SessionCapture(agent=agent)
 
     console.print("\n[bold]Scanning for orphaned sessions...[/bold]\n")
 

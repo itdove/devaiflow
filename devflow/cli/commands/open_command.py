@@ -431,7 +431,10 @@ def open_session(
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
         # For ticket_creation and investigation sessions, check conversation file at stable location
         # Stable location uses original_project_path for sessions with temp_directory
-        capture = SessionCapture()
+        from devflow.agent import create_agent_client
+        agent_backend = config.agent_backend if config else "claude"
+        agent = create_agent_client(agent_backend)
+        capture = SessionCapture(agent=agent)
 
         # Determine the correct location to check for conversation file
         if session.session_type in ("ticket_creation", "investigation") and active_conv and active_conv.original_project_path:
@@ -499,14 +502,17 @@ def open_session(
 
     # Handle temporary directory for ticket_creation and investigation sessions
     if session.session_type in ("ticket_creation", "investigation"):
-        _handle_temp_directory_for_ticket_creation(session, session_manager)
+        _handle_temp_directory_for_ticket_creation(session, session_manager, config)
         # Refresh active_conv after temp directory handling
         active_conv = session.active_conversation
 
         # After temp directory handling, verify if conversation file was restored
         # If not, we need to treat this as a first launch
         if not is_first_launch and active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
-            capture = SessionCapture()
+            from devflow.agent import create_agent_client
+            agent_backend = config.agent_backend if config else "claude"
+            agent = create_agent_client(agent_backend)
+            capture = SessionCapture(agent=agent)
             session_dir = capture.get_session_dir(active_conv.project_path)
             conversation_file = session_dir / f"{active_conv.ai_agent_session_id}.jsonl"
 
@@ -798,8 +804,8 @@ def open_session(
                 project_paths=project_paths_dict,
             )
 
-            # Build command with all skills and context directories
-            from devflow.utils.claude_commands import build_claude_command
+            # Get agent backend from config
+            from devflow.agent import create_agent_client
 
             # Get workspace path for skills discovery
             # AAP-XXXXX: Use selected workspace instead of default workspace
@@ -819,21 +825,26 @@ def open_session(
                 project_path = active_conv.project_path if active_conv else None
                 launch_dir = active_conv.project_path if active_conv else None
 
-            cmd = build_claude_command(
-                session_id=active_conv.ai_agent_session_id,
-                initial_prompt=initial_prompt,
-                project_path=project_path,
-                workspace_path=workspace_path_for_cmd,
-                config=config,
-                model_provider_profile=model_provider_profile
-            )
+            # Get agent backend from config
+            agent_backend = config.agent_backend if config else "claude"
+            agent = create_agent_client(agent_backend)
 
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
 
             try:
                 if active_conv and launch_dir:
-                    subprocess.run(cmd, cwd=launch_dir, env=env)
+                    # Launch agent with initial prompt
+                    process = agent.launch_with_prompt(
+                        project_path=project_path,
+                        initial_prompt=initial_prompt,
+                        session_id=active_conv.ai_agent_session_id,
+                        model_provider_profile=model_provider_profile,
+                        skills_dirs=None,  # Will be auto-discovered
+                        workspace_path=workspace_path_for_cmd,
+                        config=config
+                    )
+                    process.wait()
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")
@@ -849,7 +860,7 @@ def open_session(
 
                     # Save conversation file to stable location before cleaning up temp directory
                     if session.active_conversation and session.active_conversation.temp_directory:
-                        _copy_conversation_from_temp(session, session.active_conversation.temp_directory)
+                        _copy_conversation_from_temp(session, session.active_conversation.temp_directory, config)
 
                     # Clean up temporary directory if present (for ticket_creation sessions)
                     if session.active_conversation and session.active_conversation.temp_directory:
@@ -859,65 +870,96 @@ def open_session(
                     _prompt_for_complete_on_exit(session, config)
         else:
             # Resume existing session
-            # On resume, we only need --add-dir flags for auto-approval
-            # The initial prompt and skills are already in the conversation context
+            # Get agent backend from config
+            from devflow.agent import create_agent_client
 
-            # Build command with --model flag if using alternative provider
-            if model_provider_profile and model_provider_profile.get("model_name"):
-                cmd = ["claude", "--model", model_provider_profile["model_name"], "--resume", active_conv.ai_agent_session_id]
-            else:
-                cmd = ["claude", "--resume", active_conv.ai_agent_session_id]
+            agent_backend = config.agent_backend if config else "claude"
+            agent = create_agent_client(agent_backend)
 
-            # Add all skills directories to allowed paths (auto-approve skill file reads)
-            # Skills can be in 3 locations: user-level, workspace-level, project-level
-            skills_dirs = []
+            # For Claude and Ollama agents, use resume with skills directories
+            # Other agents may not support resume in the same way
+            if agent_backend in ("claude", "ollama", "ollama-claude"):
+                # Build resume command with --model flag if using alternative provider
+                agent_cmd = "ollama" if agent_backend in ("ollama", "ollama-claude") else "claude"
+                base_cmd = [agent_cmd]
 
-            # 1. User-level skills: ~/.claude/skills/
-            user_skills = Path.home() / ".claude" / "skills"
-            if user_skills.exists():
-                skills_dirs.append(str(user_skills))
+                # Add model flag for alternative providers
+                if model_provider_profile and model_provider_profile.get("model_name"):
+                    if agent_backend in ("ollama", "ollama-claude"):
+                        base_cmd.extend(["launch", "claude", "--model", model_provider_profile["model_name"]])
+                    else:
+                        base_cmd.extend(["--model", model_provider_profile["model_name"]])
+                elif agent_backend in ("ollama", "ollama-claude"):
+                    base_cmd.extend(["launch", "claude"])
 
-            # 2. Workspace-level skills: <workspace>/.claude/skills/
-            # AAP-XXXXX: Use selected workspace instead of default workspace
-            workspace_for_skills = None
-            if selected_workspace_name and config and config.repos:
-                workspace_for_skills = get_workspace_path(config, selected_workspace_name)
-            elif config and config.repos:
-                workspace_for_skills = config.repos.get_default_workspace_path()
+                # Add resume flag with session ID
+                base_cmd.extend(["--resume", active_conv.ai_agent_session_id])
+                cmd = base_cmd
 
-            if workspace_for_skills:
-                from devflow.utils.claude_commands import get_workspace_skills_dir
-                workspace_skills = get_workspace_skills_dir(workspace_for_skills)
-                if workspace_skills.exists():
-                    skills_dirs.append(str(workspace_skills))
+                # Add all skills directories to allowed paths (auto-approve skill file reads)
+                # Skills can be in 3 locations: user-level, workspace-level, project-level
+                skills_dirs = []
 
-            # 3. Project-level skills: <project>/.claude/skills/
-            # For multi-project sessions, check all projects for skills
-            if active_conv:
-                if active_conv.is_multi_project and active_conv.projects:
-                    # Multi-project: check each project for skills
-                    for proj_info in active_conv.projects.values():
-                        project_skills = Path(proj_info.project_path) / ".claude" / "skills"
+                # 1. User-level skills: ~/.claude/skills/
+                user_skills = Path.home() / ".claude" / "skills"
+                if user_skills.exists():
+                    skills_dirs.append(str(user_skills))
+
+                # 2. Workspace-level skills: <workspace>/.claude/skills/
+                # AAP-XXXXX: Use selected workspace instead of default workspace
+                workspace_for_skills = None
+                if selected_workspace_name and config and config.repos:
+                    workspace_for_skills = get_workspace_path(config, selected_workspace_name)
+                elif config and config.repos:
+                    workspace_for_skills = config.repos.get_default_workspace_path()
+
+                if workspace_for_skills:
+                    from devflow.utils.claude_commands import get_workspace_skills_dir
+                    workspace_skills = get_workspace_skills_dir(workspace_for_skills)
+                    if workspace_skills.exists():
+                        skills_dirs.append(str(workspace_skills))
+
+                # 3. Project-level skills: <project>/.claude/skills/
+                # For multi-project sessions, check all projects for skills
+                if active_conv:
+                    if active_conv.is_multi_project and active_conv.projects:
+                        # Multi-project: check each project for skills
+                        for proj_info in active_conv.projects.values():
+                            project_skills = Path(proj_info.project_path) / ".claude" / "skills"
+                            if project_skills.exists():
+                                skills_dirs.append(str(project_skills))
+                    elif active_conv.project_path:
+                        # Single project: check main project path
+                        project_skills = Path(active_conv.project_path) / ".claude" / "skills"
                         if project_skills.exists():
                             skills_dirs.append(str(project_skills))
-                elif active_conv.project_path:
-                    # Single project: check main project path
-                    project_skills = Path(active_conv.project_path) / ".claude" / "skills"
-                    if project_skills.exists():
-                        skills_dirs.append(str(project_skills))
 
-            # Add all discovered skills directories
-            for skills_dir in skills_dirs:
-                cmd.extend(["--add-dir", skills_dir])
+                # Add all discovered skills directories
+                for skills_dir in skills_dirs:
+                    cmd.extend(["--add-dir", skills_dir])
 
-            # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
-            # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
-            from devflow.utils.paths import get_cs_home
-            cs_home = get_cs_home()
-            if cs_home.exists():
-                hierarchical_files = load_hierarchical_context_files(config)
-                if hierarchical_files:
-                    cmd.extend(["--add-dir", str(cs_home)])
+                # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
+                # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
+                from devflow.utils.paths import get_cs_home
+                cs_home = get_cs_home()
+                if cs_home.exists():
+                    hierarchical_files = load_hierarchical_context_files(config)
+                    if hierarchical_files:
+                        cmd.extend(["--add-dir", str(cs_home)])
+            else:
+                # For other agent backends (GitHub Copilot, Cursor, Windsurf),
+                # launch a new session since they don't support resume
+                # Determine project path
+                if active_conv and active_conv.is_multi_project:
+                    project_path = active_conv.workspace_path or workspace_path
+                else:
+                    project_path = active_conv.project_path if active_conv else None
+
+                # Launch new session
+                if project_path:
+                    process = agent.launch_session(project_path)
+                    # Note: We don't wait here, we'll handle it in the try block below
+                    cmd = None  # Signal that we've already launched
 
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
@@ -933,12 +975,15 @@ def open_session(
                 launch_dir = None
 
             try:
-                if launch_dir:
+                if cmd and launch_dir:
                     subprocess.run(
                         cmd,
                         cwd=launch_dir,
                         env=env,
                     )
+                elif not cmd and 'process' in locals():
+                    # For non-resumable agents, wait for the launched process
+                    process.wait()
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")
@@ -954,7 +999,7 @@ def open_session(
 
                     # Save conversation file to stable location before cleaning up temp directory
                     if session.active_conversation and session.active_conversation.temp_directory:
-                        _copy_conversation_from_temp(session, session.active_conversation.temp_directory)
+                        _copy_conversation_from_temp(session, session.active_conversation.temp_directory, config)
 
                     # Clean up temporary directory if present (for ticket_creation sessions)
                     if session.active_conversation and session.active_conversation.temp_directory:
@@ -2867,7 +2912,7 @@ def _cleanup_temp_directory_on_exit(temp_dir: Optional[str]) -> None:
         console.print(f"[dim]You may need to manually delete: {temp_dir}[/dim]")
 
 
-def _copy_conversation_to_temp(session, temp_dir: str) -> bool:
+def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
     """Copy conversation file from stable location to temp directory.
 
     For ticket_creation sessions, we store conversation files using the original_project_path
@@ -2876,6 +2921,7 @@ def _copy_conversation_to_temp(session, temp_dir: str) -> bool:
     Args:
         session: Session object
         temp_dir: Temporary directory path
+        config: Optional Config object for agent backend selection
 
     Returns:
         True if conversation was copied, False otherwise
@@ -2890,7 +2936,10 @@ def _copy_conversation_to_temp(session, temp_dir: str) -> bool:
         return False
 
     # Get conversation file from stable location (based on original_project_path)
-    capture = SessionCapture()
+    from devflow.agent import create_agent_client
+    agent_backend = config.agent_backend if config else "claude"
+    agent = create_agent_client(agent_backend)
+    capture = SessionCapture(agent=agent)
     stable_session_dir = capture.get_session_dir(conv.original_project_path)
     stable_conversation_file = stable_session_dir / f"{conv.ai_agent_session_id}.jsonl"
 
@@ -2920,7 +2969,7 @@ def _copy_conversation_to_temp(session, temp_dir: str) -> bool:
         return False
 
 
-def _copy_conversation_from_temp(session, temp_dir: str) -> bool:
+def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
     """Copy conversation file from temp directory back to stable location.
 
     After Claude exits, copy the conversation file from the temp directory
@@ -2929,6 +2978,7 @@ def _copy_conversation_from_temp(session, temp_dir: str) -> bool:
     Args:
         session: Session object
         temp_dir: Temporary directory path
+        config: Optional Config object for agent backend selection
 
     Returns:
         True if conversation was copied, False otherwise
@@ -2945,7 +2995,10 @@ def _copy_conversation_from_temp(session, temp_dir: str) -> bool:
     # Get conversation file from temp directory
     # Use resolved path to handle macOS /var -> /private/var canonicalization
     # SessionCapture now correctly encodes underscores as dashes
-    capture = SessionCapture()
+    from devflow.agent import create_agent_client
+    agent_backend = config.agent_backend if config else "claude"
+    agent = create_agent_client(agent_backend)
+    capture = SessionCapture(agent=agent)
     temp_path_resolved = str(Path(temp_dir).resolve())
 
     temp_session_dir = capture.get_session_dir(temp_path_resolved)
@@ -2970,7 +3023,7 @@ def _copy_conversation_from_temp(session, temp_dir: str) -> bool:
         return False
 
 
-def _handle_temp_directory_for_ticket_creation(session, session_manager) -> None:
+def _handle_temp_directory_for_ticket_creation(session, session_manager, config=None) -> None:
     """Handle temporary directory management for ticket_creation and investigation sessions.
 
     This function:
@@ -3074,7 +3127,7 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager) -> None
 
         # Restore conversation file from stable location to new temp directory
         # This uses original_project_path as stable identifier
-        if _copy_conversation_to_temp(session, new_temp_dir):
+        if _copy_conversation_to_temp(session, new_temp_dir, config):
             console.print(f"[green]✓[/green] Restored conversation history from stable storage")
         else:
             console.print(f"[dim]No previous conversation to restore (this may be first launch)[/dim]")

@@ -7,6 +7,7 @@ DevAIFlow supports multiple AI coding assistants through a pluggable agent archi
 | Agent | Backend Name | Status | CLI Command | Session Management |
 |-------|--------------|--------|-------------|-------------------|
 | **Claude Code** | `claude` | ✅ Fully Tested | `claude` | Full support |
+| **Ollama** | `ollama`, `ollama-claude` | ✅ Fully Integrated | `ollama launch claude` | Full support (via Claude Code) |
 | **GitHub Copilot** | `github-copilot`, `copilot` | ⚠️  Experimental | `code` (VS Code) | Limited |
 | **Cursor** | `cursor` | ⚠️  Experimental | `cursor` | Limited |
 | **Windsurf** | `windsurf` | ⚠️  Experimental | `windsurf` | Limited |
@@ -18,13 +19,17 @@ Set your preferred AI agent in the configuration:
 ```bash
 # Using daf config (recommended)
 daf config set agent_backend claude
+daf config set agent_backend ollama
 daf config set agent_backend github-copilot
 daf config set agent_backend cursor
 daf config set agent_backend windsurf
 
 # Or manually edit $DEVAIFLOW_HOME/config.json
 {
-  "agent_backend": "claude"  // or "github-copilot", "cursor", "windsurf"
+  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf"
+  "ollama": {
+    "default_model": "qwen3-coder"  // optional, only for ollama backend
+  }
 }
 ```
 
@@ -32,28 +37,28 @@ daf config set agent_backend windsurf
 
 ### Core Features
 
-| Feature | Claude Code | GitHub Copilot | Cursor | Windsurf |
-|---------|-------------|----------------|--------|----------|
-| Launch session | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| Resume session | ✅ Full | ⚠️  Workspace-based | ⚠️  Workspace-based | ⚠️  Workspace-based |
-| Session ID capture | ✅ Automatic | ⚠️  Generated | ⚠️  Generated | ⚠️  Generated |
-| Conversation files | ✅ .jsonl | ❌ Not accessible | ❌ Not accessible | ❌ Not accessible |
-| Message counting | ✅ Accurate | ❌ Not supported | ❌ Not supported | ❌ Not supported |
-| Session history | ✅ Full | ⚠️  Limited | ⚠️  Limited | ⚠️  Limited |
-| Conversation export | ✅ Full | ❌ Not supported | ❌ Not supported | ❌ Not supported |
-| Conversation repair | ✅ Full | ❌ Not applicable | ❌ Not applicable | ❌ Not applicable |
+| Feature | Claude Code | Ollama | GitHub Copilot | Cursor | Windsurf |
+|---------|-------------|--------|----------------|--------|----------|
+| Launch session | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Resume session | ✅ Full | ✅ Full | ⚠️  Workspace-based | ⚠️  Workspace-based | ⚠️  Workspace-based |
+| Session ID capture | ✅ Automatic | ✅ Automatic | ⚠️  Generated | ⚠️  Generated | ⚠️  Generated |
+| Conversation files | ✅ .jsonl | ✅ .jsonl | ❌ Not accessible | ❌ Not accessible | ❌ Not accessible |
+| Message counting | ✅ Accurate | ✅ Accurate | ❌ Not supported | ❌ Not supported | ❌ Not supported |
+| Session history | ✅ Full | ✅ Full | ⚠️  Limited | ⚠️  Limited | ⚠️  Limited |
+| Conversation export | ✅ Full | ✅ Full | ❌ Not supported | ❌ Not supported | ❌ Not supported |
+| Conversation repair | ✅ Full | ✅ Full | ❌ Not applicable | ❌ Not applicable | ❌ Not applicable |
 
 ### Integration Features
 
-| Feature | Claude Code | GitHub Copilot | Cursor | Windsurf |
-|---------|-------------|----------------|--------|----------|
-| JIRA integration | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| Git workflows | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| Time tracking | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| Session notes | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| Multi-conversation | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| Session templates | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| AI-powered summaries | ✅ Full | ❌ Not supported | ❌ Not supported | ❌ Not supported |
+| Feature | Claude Code | Ollama | GitHub Copilot | Cursor | Windsurf |
+|---------|-------------|--------|----------------|--------|----------|
+| JIRA integration | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Git workflows | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Time tracking | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Session notes | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Multi-conversation | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Session templates | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| AI-powered summaries | ✅ Full | ✅ Full | ❌ Not supported | ❌ Not supported | ❌ Not supported |
 
 ## Agent-Specific Details
 
@@ -145,6 +150,93 @@ MODEL_PROVIDER_PROFILE=vertex daf open PROJ-123
 - Troubleshooting common issues
 
 **External Reference**: [Run Claude Code on Local/Cloud Models](https://medium.com/@luongnv89/run-claude-code-on-local-cloud-models-in-5-minutes-ollama-openrouter-llama-cpp-6dfeaee03cda)
+
+---
+
+### Ollama (Fully Integrated)
+
+**Backend:** `ollama` or `ollama-claude`
+
+**Features:**
+- ✅ Full session management with `.jsonl` conversation files (same as Claude Code)
+- ✅ Automatic session ID detection
+- ✅ Precise message counting
+- ✅ Conversation export/import
+- ✅ Conversation file repair
+- ✅ Resume exact conversation state
+- ✅ Local model support (free, private, offline)
+- ✅ Zero configuration required
+
+**CLI Commands:**
+```bash
+ollama launch claude              # Launch new session
+ollama launch claude --model <model>  # Launch with specific model
+# Note: --resume support coming soon (currently uses Claude Code's resume)
+```
+
+**Session Storage:**
+- Location: `~/.claude/projects/<encoded-path>/<uuid>.jsonl`
+- Format: JSONL (same as Claude Code)
+- **Note:** Sessions are stored in `~/.claude` regardless of launcher for compatibility
+
+**Model Selection Priority:**
+1. DAF config (`config.ollama.default_model` or model provider profile)
+2. Environment variable (`OLLAMA_MODEL`)
+3. Ollama's default from `~/.ollama/config.json`
+4. Ollama's built-in default
+
+**Configuration:**
+```bash
+# Method 1: daf config TUI
+daf config edit
+# Set "AI Agent Backend" to "Ollama (local models)"
+# Optionally set "Default Model" under "Ollama Configuration"
+
+# Method 2: Manual config in ~/.daf-sessions/config.json
+{
+  "agent_backend": "ollama",
+  "ollama": {
+    "default_model": "qwen3-coder"
+  }
+}
+```
+
+**Popular Models:**
+- `qwen3-coder` - 25B parameters, excellent for coding (recommended)
+- `llama3.3` - 70B parameters, powerful but slower
+- `codellama` - Meta's coding-specific model
+- `mistral` - Fast and capable
+
+**Advantages:**
+- ✅ Simplest local model setup (one install command)
+- ✅ Automatic server management (no manual server start)
+- ✅ Model management built-in (`ollama pull`, `ollama list`)
+- ✅ Native integration with `ollama launch claude`
+- ✅ Same session management as Claude Code
+- ✅ Free and private (runs locally)
+
+**AI-Powered Summaries:**
+- ✅ Full support (same as Claude Code)
+- Works with any Ollama model
+- Uses local model for summary generation (free)
+- Configure in TUI: AI tab → Session Summary → mode: "ai" or "both"
+
+**Known Issues:**
+- ⚠️  `--resume` flag not yet supported by Ollama CLI (falls back to regular Claude resume)
+- ⚠️  `--session-id` and `--add-dir` flags not yet supported (TODO in Ollama)
+
+**Installation:**
+```bash
+# macOS/Linux:
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Or download from: https://ollama.com
+
+# Pull a model:
+ollama pull qwen3-coder
+```
+
+**See Also:** [Alternative Model Providers](alternative-model-providers.md) for detailed setup guide
 
 ---
 
@@ -293,6 +385,15 @@ windsurf <project-path>  # Launch/resume Windsurf
 - You want conversation repair capabilities
 - You need AI-powered session summaries
 - You need proven, production-tested functionality
+- You want to use Anthropic's Claude API
+
+**Use Ollama when:**
+- You want local models (free, private, offline)
+- You need the simplest local model setup
+- You want to avoid API costs
+- Privacy is important (data stays local)
+- You want full Claude Code features with local models
+- You're okay with slightly lower quality than Claude Opus/Sonnet
 
 **Use GitHub Copilot when:**
 - Your team already uses VS Code with Copilot
