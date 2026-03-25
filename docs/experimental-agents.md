@@ -1,10 +1,10 @@
 # Experimental AI Agents
 
-This document provides comprehensive information about experimental AI agent support in DevAIFlow, including GitHub Copilot, Cursor, and Windsurf.
+This document provides comprehensive information about experimental AI agent support in DevAIFlow, including GitHub Copilot, Cursor, Windsurf, Aider, and Continue.
 
 ## Overview
 
-DevAIFlow supports multiple AI coding assistants through a unified agent interface. While Claude Code is fully tested and production-ready, GitHub Copilot, Cursor, and Windsurf are currently experimental with known limitations.
+DevAIFlow supports multiple AI coding assistants through a unified agent interface. While Claude Code is fully tested and production-ready, GitHub Copilot, Cursor, Windsurf, Aider, and Continue are currently experimental with known limitations.
 
 ## Support Status
 
@@ -15,6 +15,8 @@ DevAIFlow supports multiple AI coding assistants through a unified agent interfa
 | **GitHub Copilot** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ❌ Not Supported |
 | **Cursor** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ❌ Not Supported |
 | **Windsurf** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ❌ Not Supported |
+| **Aider** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ⚠️ Partial |
+| **Continue** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ❌ Not Supported |
 
 ## Feature Comparison Matrix
 
@@ -185,6 +187,8 @@ export DAF_AGENT_BACKEND="github-copilot"  # or "cursor" or "windsurf"
 - `"github-copilot"` or `"copilot"` - GitHub Copilot (experimental)
 - `"cursor"` - Cursor (experimental)
 - `"windsurf"` - Windsurf (experimental)
+- `"aider"` - Aider (experimental)
+- `"continue"` - Continue (experimental)
 
 ### Enterprise Enforcement
 
@@ -540,3 +544,92 @@ Help improve experimental agent support:
 - [Enterprise Configuration](ENTERPRISE.md)
 - [Configuration Guide](06-configuration.md)
 - [Troubleshooting Guide](11-troubleshooting.md)
+
+### Aider
+
+**Architecture:** Command-line AI pair programming tool with git-first approach
+
+**Limitations:**
+1. **Chat History File Management**
+   - Aider stores chat history in text files
+   - DevAIFlow creates separate files per session
+   - Session IDs are timestamp-based, not UUID-based
+   - Chat history must be explicitly saved/loaded
+
+2. **Limited Initial Prompt Support**
+   - `daf open` saves initial prompt to file for reference
+   - Users must manually paste prompt into Aider chat
+   - Cannot send prompts programmatically via CLI arguments
+   - Automated context loading requires manual intervention
+
+3. **Git-Based Workflow**
+   - Every Aider edit creates a git commit
+   - Sessions tied to git branches
+   - Cannot track sessions independent of git
+   - Requires git repository to function
+
+4. **Approximate Message Counting**
+   - Counts non-empty lines in chat history file
+   - Not true message count (includes context, commands)
+   - `get_session_message_count()` returns approximate value
+
+5. **No Session File Discovery**
+   - Aider doesn't create discrete session files like Claude Code
+   - DevAIFlow generates timestamp-based IDs
+   - Cannot automatically detect new sessions
+   - Session tracking relies on chat history files
+
+**When to Use Aider:**
+- ✅ When you prefer terminal-based workflows
+- ✅ For git-first development with automatic commits
+- ✅ When you want structured mode planning features
+- ✅ For working with local LLMs via Aider's model support
+- ❌ For automated initial prompt workflows
+- ❌ For session workflows independent of git
+- ❌ For precise conversation message tracking
+
+### Continue
+
+**Architecture:** VS Code/JetBrains extension with both IDE integration and separate CLI tool
+
+**Limitations:**
+1. **VS Code-Based Sessions**
+   - Continue runs as VS Code extension
+   - Sessions managed by VS Code workspace storage
+   - Cannot create discrete sessions independent of workspace
+   - Session IDs are timestamp-based
+
+2. **No Initial Prompt Support**
+   - `daf open` launches VS Code but cannot send prompts
+   - Users must manually interact with Continue chat interface
+   - No CLI support for sending prompts to extension
+   - Automated context loading not supported
+
+3. **Limited Session Detection**
+   - Session state stored in VS Code extension storage
+   - Internal format not publicly documented
+   - DevAIFlow uses workspace-based tracking
+   - Cannot detect or enumerate sessions
+
+4. **No Message Counting**
+   - Chat history managed by extension's internal storage
+   - No public API to access conversation data
+   - `get_session_message_count()` always returns 0
+   - Cannot export or count messages
+
+5. **No Session Resume API**
+   - `daf open` reopens workspace
+   - VS Code restores extension state automatically
+   - Cannot programmatically resume specific conversation
+   - Users must manually navigate to previous chat
+
+**When to Use Continue:**
+- ✅ When you already use VS Code or JetBrains IDEs
+- ✅ For Continue's multiple interaction modes (Agent, Chat, Autocomplete, Edit)
+- ✅ When you want Model Context Protocol (MCP) integration
+- ✅ For working with multiple AI models in one interface
+- ❌ For automated session workflows
+- ❌ For session export/import and team collaboration
+- ❌ For accurate conversation tracking
+- ❌ For CLI-only workflows (requires IDE)
+

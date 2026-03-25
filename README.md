@@ -9,7 +9,7 @@ A CLI tool to manage AI coding assistant sessions with optional issue tracker in
 
 ![Alt DevAIFlow](https://raw.githubusercontent.com/itdove/devaiflow/main/images/daf-logo-160x160.png)
 
-**AI Assistants:** Claude Code (fully tested) | GitHub Copilot, Cursor, Windsurf (experimental)
+**AI Assistants:** Claude Code (fully tested) | GitHub Copilot, Cursor, Windsurf, Aider, Continue (experimental)
 **Issue Trackers:** GitHub Issues, GitLab Issues, JIRA (all fully supported)
 
 > **Note on Support Status:**
@@ -82,7 +82,7 @@ Each session is an **isolated workspace** with its own:
 - Gradually adopt features as needed
 
 **Key Features:**
-- 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf
+- 🤖 **Multi-AI Support** - Works with Claude Code, GitHub Copilot, Cursor, Windsurf, Aider, Continue
 - 💰 **Alternative Model Providers** - Run Claude Code with **local models** (llama.cpp) or **cheaper cloud providers** (OpenRouter, Vertex AI) - **save up to 98% on costs** or run **completely offline**
 - 📂 **Multi-Repository Workflows** - Work on one ticket across multiple repositories with shared context - Claude can coordinate changes across all projects in a single conversation
 - 🏢 **Named Workspaces** - Multiple workspaces for concurrent multi-branch development
