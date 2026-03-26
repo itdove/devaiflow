@@ -218,6 +218,29 @@ daf git create bug --description "### Bug Description
 \`\`\`"
 ```
 
+## Ticket Creation Sessions
+
+Create analysis-only sessions for creating GitHub/GitLab issues:
+
+```bash
+# Create ticket creation session
+daf git new enhancement --goal "Add caching layer"
+daf git new bug --goal "Fix timeout in API"
+daf git new task --goal "Refactor auth module" --parent "#123"
+```
+
+**Purpose:** Analyze the codebase to create a well-informed issue
+
+**Constraints:**
+- ❌ DO NOT modify code or files
+- ❌ DO NOT run git commands
+- ✅ ONLY read files, search code, analyze architecture
+- ✅ Create issue when analysis is complete using `daf git create`
+
+**See also:** daf-workflow skill for complete ticket creation workflow.
+
+---
+
 ## Typical Workflows
 
 **Workflow: Working on existing issue**

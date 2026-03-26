@@ -207,9 +207,57 @@ daf git add-comment owner/repo#123 "Fixed authentication bug"
 
 ---
 
+## Choosing Your Issue Tracker
+
+**Before creating tickets, determine which issue tracker to use.**
+
+### Auto-Detection (Recommended)
+
+DevAIFlow automatically detects your issue tracker from git remote URLs:
+- `github.com` → GitHub Issues (`daf git` commands)
+- `gitlab.com` → GitLab Issues (`daf git` commands)
+- `JIRA_URL` env var → JIRA (`daf jira` commands)
+
+### User Confirmation Pattern
+
+**If JIRA is configured (`JIRA_URL` is set), confirm with the user before creating tickets:**
+
+```
+I detected GitHub Issues from your git remote, but JIRA is also configured. Should I:
+1. Create a GitHub issue (recommended based on git remote)
+2. Create a JIRA ticket instead
+```
+
+**If JIRA is NOT configured:** Use auto-detected issue tracker from git remote (GitHub or GitLab) - no confirmation needed.
+
+**Why:** Users with both systems configured may prefer one over the other for specific workflows.
+
+### Command Equivalents
+
+Both issue trackers support the same workflows:
+
+| Action | JIRA Command | GitHub/GitLab Command |
+|--------|--------------|------------------------|
+| Ticket creation session | `daf jira new` | `daf git new` |
+| Create ticket (no session) | `daf jira create` | `daf git create` |
+| View ticket | `daf jira view` | `daf git view` |
+| Update ticket | `daf jira update` | `daf git update` |
+| Add comment | `daf jira add-comment` | `daf git add-comment` |
+
+---
+
 ## Workflow: Ticket Creation Sessions
 
-For sessions opened via `daf jira new` (analysis-only sessions):
+**Choose Your Issue Tracker:**
+- For JIRA: `daf jira new` (analysis-only sessions)
+- For GitHub/GitLab: `daf git new` (analysis-only sessions)
+
+**Before creating a ticket, determine which issue tracker to use:**
+1. DevAIFlow auto-detects from git remote URLs
+2. If JIRA is also configured, ask the user to confirm or override the detection
+3. Use the appropriate command based on their choice
+
+For sessions opened via `daf jira new` or `daf git new` (analysis-only sessions):
 
 **Purpose:** Analyze the codebase to create a well-informed issue
 
