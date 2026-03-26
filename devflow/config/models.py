@@ -392,6 +392,8 @@ class PromptsConfig(BaseModel):
     auto_select_target_branch: Optional[bool] = None  # Auto-select target branch for PR/MR: True (use default branch), False (skip selection), None (prompt user)
     default_branch_strategy: Optional[str] = None  # "from_default" or "from_current"
     remember_last_repo_per_project: Dict[str, str] = Field(default_factory=dict)  # Map: {"PROJ": "backend-api"}
+    remember_last_repo_per_git_repo: Dict[str, str] = Field(default_factory=dict)  # Map: {"owner/repo": "local-repo"}
+    last_used_repo_per_workspace: Dict[str, str] = Field(default_factory=dict)  # Map: {"workspace-name": "repo-name"}
     show_prompt_unit_tests: bool = True  # Show testing instructions in initial prompt for development sessions
     auto_load_related_conversations: bool = False  # Auto-prompt AI agent to read other conversations in multi-project sessions
     use_issue_key_as_branch: bool = True  # Use issue key as branch name (default: true)

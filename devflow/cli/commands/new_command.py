@@ -947,28 +947,40 @@ def _suggest_and_select_repository(
         # No workspace configured or no repos found
         return None
 
-    # Check if we have a remembered repository for this JIRA project
+    # Calculate default repository using 3-tier priority system
+    default_repo = None
+
     if config and config.prompts and issue_key:
-        project_key = issue_key.split('-')[0] if '-' in issue_key else None
+        # Tier 1: Project-specific memory (JIRA project key or Git owner/repo)
+        # Check for JIRA project key (format: "PROJ-123")
+        project_key = issue_key.split('-')[0] if '-' in issue_key and not issue_key.startswith('#') else None
         if project_key and config.prompts.remember_last_repo_per_project:
             remembered_repo = config.prompts.remember_last_repo_per_project.get(project_key)
             if remembered_repo and remembered_repo in available_repos:
-                console.print(f"\n[cyan]Using remembered repository for {project_key}: {remembered_repo}[/cyan]")
-                console.print("[dim]Run [cyan]daf config unset-prompts --all[/cyan] to clear remembered repos[/dim]")
-                if workspace_path:
-                    selected_path = str(workspace_path / remembered_repo)
-                    # Still record selection for learning
-                    if issue_metadata_dict:
-                        suggester = RepositorySuggester()
-                        suggester.record_selection(
-                            repository=remembered_repo,
-                            issue_key=issue_key,
-                            ticket_type=issue_metadata_dict.get("type"),
-                            summary=issue_metadata_dict.get("summary", ""),
-                            description=issue_metadata_dict.get("description"),
-                            labels=issue_metadata_dict.get("labels", []),
-                        )
-                    return selected_path
+                default_repo = remembered_repo
+                console.print(f"\n[cyan]Remembered repository for {project_key}: {remembered_repo}[/cyan]")
+                console.print("[dim]Press Enter to use it, or type a different selection[/dim]")
+
+        # Check for Git issue key (format: "owner/repo#123" or "#123")
+        if not default_repo and '#' in issue_key:
+            # Extract owner/repo part if present
+            if '/' in issue_key and '#' in issue_key:
+                git_repo_key = issue_key.split('#')[0]  # Extract "owner/repo"
+                if config.prompts.remember_last_repo_per_git_repo:
+                    remembered_repo = config.prompts.remember_last_repo_per_git_repo.get(git_repo_key)
+                    if remembered_repo and remembered_repo in available_repos:
+                        default_repo = remembered_repo
+                        console.print(f"\n[cyan]Remembered repository for {git_repo_key}: {remembered_repo}[/cyan]")
+                        console.print("[dim]Press Enter to use it, or type a different selection[/dim]")
+
+    # Tier 2: Workspace-level last-used repo (fallback)
+    if not default_repo and config and config.prompts and workspace_name:
+        if config.prompts.last_used_repo_per_workspace:
+            remembered_repo = config.prompts.last_used_repo_per_workspace.get(workspace_name)
+            if remembered_repo and remembered_repo in available_repos:
+                default_repo = remembered_repo
+                console.print(f"\n[cyan]Last used repository in workspace '{workspace_name}': {remembered_repo}[/cyan]")
+                console.print("[dim]Press Enter to use it, or type a different selection[/dim]")
 
     # Generate repository suggestions using the learning model
     suggester = RepositorySuggester()
@@ -1020,7 +1032,20 @@ def _suggest_and_select_repository(
     console.print(f"  • Enter an absolute path (starting with / or ~)")
     console.print(f"  • Enter 'cancel' or 'q' to use current directory")
 
-    selection = Prompt.ask("Selection")
+    # Tier 3: Calculate default selection based on suggestions or default_repo
+    default_selection = "1"  # Final fallback: first repository
+    if default_repo and default_repo in available_repos:
+        # Use the remembered repo index as default
+        default_index = available_repos.index(default_repo) + 1
+        default_selection = str(default_index)
+    elif suggestions:
+        # Use first suggestion as default
+        suggested_repo = suggestions[0].repository
+        if suggested_repo in available_repos:
+            default_index = available_repos.index(suggested_repo) + 1
+            default_selection = str(default_index)
+
+    selection = Prompt.ask("Selection", default=default_selection)
 
     # Validate input is not empty
     if not selection or selection.strip() == "":
@@ -1052,13 +1077,31 @@ def _suggest_and_select_repository(
                         labels=issue_metadata_dict.get("labels", []),
                     )
 
-                # Remember this repository for the JIRA project
-                if issue_key and config:
-                    project_key = issue_key.split('-')[0] if '-' in issue_key else None
-                    if project_key:
+                # Remember this repository (project-specific, git-specific, and workspace-level)
+                if config:
+                    config_updated = False
+
+                    # Save for JIRA project (format: "PROJ-123")
+                    if issue_key and '-' in issue_key and not issue_key.startswith('#'):
+                        project_key = issue_key.split('-')[0]
                         config.prompts.remember_last_repo_per_project[project_key] = repo_name
-                        config_loader.save_config(config)
                         console.print(f"[dim]Remembered {repo_name} for {project_key} tickets[/dim]")
+                        config_updated = True
+
+                    # Save for Git repository (format: "owner/repo#123")
+                    if issue_key and '#' in issue_key and '/' in issue_key:
+                        git_repo_key = issue_key.split('#')[0]  # Extract "owner/repo"
+                        config.prompts.remember_last_repo_per_git_repo[git_repo_key] = repo_name
+                        console.print(f"[dim]Remembered {repo_name} for {git_repo_key} issues[/dim]")
+                        config_updated = True
+
+                    # Always save as last-used repo for this workspace (fallback)
+                    if workspace_name:
+                        config.prompts.last_used_repo_per_workspace[workspace_name] = repo_name
+                        config_updated = True
+
+                    if config_updated:
+                        config_loader.save_config(config)
 
                 return selected_path
         else:
@@ -1109,6 +1152,32 @@ def _suggest_and_select_repository(
                     description=issue_metadata_dict.get("description"),
                     labels=issue_metadata_dict.get("labels", []),
                 )
+
+            # Remember this repository (project-specific, git-specific, and workspace-level)
+            if config:
+                config_updated = False
+
+                # Save for JIRA project (format: "PROJ-123")
+                if issue_key and '-' in issue_key and not issue_key.startswith('#'):
+                    project_key = issue_key.split('-')[0]
+                    config.prompts.remember_last_repo_per_project[project_key] = repo_name
+                    console.print(f"[dim]Remembered {repo_name} for {project_key} tickets[/dim]")
+                    config_updated = True
+
+                # Save for Git repository (format: "owner/repo#123")
+                if issue_key and '#' in issue_key and '/' in issue_key:
+                    git_repo_key = issue_key.split('#')[0]  # Extract "owner/repo"
+                    config.prompts.remember_last_repo_per_git_repo[git_repo_key] = repo_name
+                    console.print(f"[dim]Remembered {repo_name} for {git_repo_key} issues[/dim]")
+                    config_updated = True
+
+                # Always save as last-used repo for this workspace (fallback)
+                if workspace_name:
+                    config.prompts.last_used_repo_per_workspace[workspace_name] = repo_name
+                    config_updated = True
+
+                if config_updated:
+                    config_loader.save_config(config)
 
             return str(project_path)
         else:
