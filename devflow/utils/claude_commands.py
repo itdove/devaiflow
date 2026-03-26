@@ -11,7 +11,7 @@ a single system. All slash commands are now skills with SKILL.md files.
 """
 
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 import shutil
 from rich.console import Console
 
@@ -363,6 +363,156 @@ def _are_skill_dirs_identical(src_dir: Path, dest_dir: Path) -> bool:
             return False
 
     return True
+
+
+def install_skills_to_agents(
+    agents: List[str],
+    level: str = 'global',
+    project_path: Optional[Path] = None,
+    skip_confirmation: bool = False,
+    dry_run: bool = False,
+    quiet: bool = False
+) -> Dict[str, Tuple[List[str], List[str], List[str]]]:
+    """Install bundled skills to multiple AI agents.
+
+    This function installs both slash commands and reference skills to the specified
+    agents at the specified level (global, project, or both).
+
+    Args:
+        agents: List of agent names (e.g., ['claude', 'cursor', 'windsurf'])
+        level: Installation level - 'global', 'project', or 'both'
+        project_path: Project directory path (required for 'project' and 'both' levels)
+        skip_confirmation: Skip user confirmation prompt (for automation)
+        dry_run: If True, only report what would be changed without actually changing
+        quiet: If True, suppress console output (errors still shown)
+
+    Returns:
+        Dictionary mapping agent name to tuple of (changed, up_to_date, failed) skill names
+
+    Raises:
+        ValueError: If level is invalid or project_path is missing when required
+
+    Example:
+        >>> results = install_skills_to_agents(
+        ...     agents=['claude', 'cursor'],
+        ...     level='global'
+        ... )
+        >>> results['claude']  # (changed, up_to_date, failed)
+        (['daf-cli', 'git-cli'], ['commit'], [])
+    """
+    from devflow.agent.skill_directories import get_skill_install_paths, validate_agent_names
+
+    # Validate and normalize agent names
+    validated_agents = validate_agent_names(agents)
+
+    # Get installation paths for all agents
+    try:
+        install_paths = get_skill_install_paths(
+            agents=validated_agents,
+            level=level,
+            project_path=project_path
+        )
+    except ValueError as e:
+        raise ValueError(f"Invalid configuration: {e}")
+
+    # Ask for confirmation unless skipped
+    if not skip_confirmation and not dry_run and not quiet:
+        from rich.prompt import Confirm
+
+        console.print(f"\n[bold]Installing skills to {len(install_paths)} location(s):[/bold]")
+        for agent, path in install_paths:
+            console.print(f"  • {agent}: {path}")
+
+        if not Confirm.ask("\nProceed with installation?", default=True):
+            console.print("[yellow]Installation cancelled.[/yellow]")
+            return {}
+
+    # Track results per agent
+    results_by_agent: Dict[str, Tuple[List[str], List[str], List[str]]] = {}
+
+    # Get all bundled skills
+    all_skills = list_bundled_skills()
+
+    if not all_skills:
+        if not quiet:
+            console.print("[yellow]No bundled skills found to install.[/yellow]")
+        return results_by_agent
+
+    # Install to each agent and path
+    for agent, target_dir in install_paths:
+        if not quiet:
+            console.print(f"\n[bold cyan]Installing to {agent} ({target_dir})...[/bold cyan]")
+
+        # Create target directory
+        if not dry_run:
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+        changed: List[str] = []
+        up_to_date: List[str] = []
+        failed: List[str] = []
+
+        # Install each skill
+        for src_dir in all_skills:
+            skill_name = src_dir.name
+            dest_dir = target_dir / skill_name
+
+            try:
+                # Check if skill directory exists and compare contents
+                if dest_dir.exists():
+                    is_up_to_date = _are_skill_dirs_identical(src_dir, dest_dir)
+                    if is_up_to_date:
+                        up_to_date.append(skill_name)
+                        if not quiet:
+                            console.print(f"  [dim]✓ {skill_name} (up-to-date)[/dim]")
+                        continue
+
+                # Install or upgrade skill directory
+                if not dry_run:
+                    # Remove old version if exists
+                    if dest_dir.exists():
+                        shutil.rmtree(dest_dir)
+                    # Copy entire directory tree
+                    shutil.copytree(src_dir, dest_dir)
+
+                changed.append(skill_name)
+                if not quiet:
+                    action = "Would install" if dry_run else "Installed"
+                    console.print(f"  [green]✓[/green] {action} {skill_name}")
+
+            except Exception as e:
+                if not quiet:
+                    console.print(f"  [red]✗[/red] Failed to process {skill_name}: {e}")
+                failed.append(skill_name)
+
+        # Store results for this agent
+        if agent not in results_by_agent:
+            results_by_agent[agent] = ([], [], [])
+
+        # Merge results (for 'both' level where same agent appears twice)
+        prev_changed, prev_up_to_date, prev_failed = results_by_agent[agent]
+        results_by_agent[agent] = (
+            prev_changed + changed,
+            prev_up_to_date + up_to_date,
+            prev_failed + failed
+        )
+
+    # Print summary unless quiet
+    if not quiet and not dry_run:
+        console.print("\n[bold]Installation Summary:[/bold]")
+        for agent, (changed, up_to_date, failed) in results_by_agent.items():
+            total = len(changed) + len(up_to_date) + len(failed)
+            console.print(f"\n{agent}:")
+            if changed:
+                console.print(f"  [green]✓[/green] Installed/Updated: {len(changed)}")
+            if up_to_date:
+                console.print(f"  [dim]Already up-to-date: {len(up_to_date)}[/dim]")
+            if failed:
+                console.print(f"  [red]✗[/red] Failed: {len(failed)}")
+
+    elif not quiet and dry_run:
+        console.print("\n[bold yellow]Dry run complete. No changes were made.[/bold yellow]")
+
+    return results_by_agent
 
 
 def get_skill_status(workspace: str, skill_name: str) -> Optional[str]:

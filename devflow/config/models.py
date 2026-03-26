@@ -427,6 +427,39 @@ class MockServicesConfig(BaseModel):
     )
 
 
+class AgentConfig(BaseModel):
+    """AI agent skill installation configuration.
+
+    Controls which AI agents should receive skill installations and at what level.
+    Supports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf, Aider, Continue).
+    """
+
+    enabled_agents: List[str] = Field(
+        default=['claude'],
+        description="List of AI agents to install skills to (e.g., ['claude', 'cursor', 'windsurf'])"
+    )
+    install_level: str = Field(
+        default='global',
+        description="Installation level: 'global' (~/.agent/skills/), 'project' (<project>/.agent/skills/), or 'both'"
+    )
+
+    @field_validator('install_level')
+    @classmethod
+    def validate_install_level(cls, v: str) -> str:
+        """Validate install_level is one of the supported values."""
+        valid_levels = ['global', 'project', 'both']
+        if v not in valid_levels:
+            raise ValueError(f"install_level must be one of {valid_levels}, got '{v}'")
+        return v
+
+    @field_validator('enabled_agents')
+    @classmethod
+    def validate_enabled_agents(cls, v: List[str]) -> List[str]:
+        """Validate and normalize agent names."""
+        from devflow.agent.skill_directories import validate_agent_names
+        return validate_agent_names(v)
+
+
 class StorageConfig(BaseModel):
     """Storage backend configuration.
 
@@ -457,6 +490,7 @@ class UserConfig(BaseModel):
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests
     jira_affected_version: Optional[str] = None  # User's current affected version for bug creation (e.g., "v1.0.0")
     model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration (user-level profiles)
+    agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration
 
 
 class Config(BaseModel):
@@ -492,6 +526,7 @@ class Config(BaseModel):
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4") - DEPRECATED: use model_provider instead
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests (default: 10)
     model_provider: ModelProviderConfig = Field(default_factory=ModelProviderConfig)  # Model provider configuration (merged from enterprise/org/team/user)
+    agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration (user-level)
 
 
     class Config:

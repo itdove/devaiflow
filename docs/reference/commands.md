@@ -4848,7 +4848,7 @@ You can also use `daf config refresh-jira-fields` to refresh field mappings spec
 
 ### daf upgrade - Upgrade Bundled Skills
 
-Install or upgrade the bundled Claude Code skills globally.
+Install or upgrade the bundled skills globally or to specific AI agents.
 
 ```bash
 daf upgrade [OPTIONS]
@@ -4856,6 +4856,10 @@ daf upgrade [OPTIONS]
 
 **Options:**
 - `--dry-run` - Preview what would be upgraded without making changes
+- `--agent TEXT` - AI agent to install to (claude, cursor, windsurf, copilot, aider, continue)
+- `--level [global|project|both]` - Installation level (default: global)
+- `--all-agents` - Install to all supported agents (claude, cursor, windsurf, copilot, aider, continue)
+- `--project-path PATH` - Project directory for project-level installation
 - `--commands-only` - (Deprecated) Legacy flag, now installs slash commands only
 - `--skills-only` - (Deprecated) Legacy flag, now installs reference skills only
 
@@ -4865,20 +4869,38 @@ The `daf upgrade` command manages bundled skills that provide helpful prompts an
 - **Installs** skills if they don't exist yet
 - **Upgrades** skills if they're outdated
 - **Skips** skills that are already up-to-date
+- **Supports multiple AI agents** - Install to Claude, Cursor, Windsurf, Copilot, Aider, and Continue
 
-Skills are installed globally to `~/.claude/skills/` directory and are available in all Claude Code sessions.
+By default, skills are installed globally to `~/.claude/skills/` and are available in all Claude Code sessions.
 
 **Requirements:**
-- **Claude Code 2.1.3 or higher** is required for slash command support
+- **Claude Code 2.1.3 or higher** is required for slash command support (for Claude)
+- Other agents may have different skill/context file support
 
 **Examples:**
 
 ```bash
-# Upgrade all skills
+# Upgrade all skills (default: Claude only, global)
 daf upgrade
 
 # Preview what would be upgraded
 daf upgrade --dry-run
+
+# Install to a specific agent
+daf upgrade --agent cursor
+daf upgrade --agent windsurf
+
+# Install to all supported agents
+daf upgrade --all-agents
+
+# Install to project directory (can be committed to git for team)
+daf upgrade --level project --project-path .
+
+# Install to both global and project
+daf upgrade --level both --project-path .
+
+# Combine flags for advanced usage
+daf upgrade --all-agents --level both --project-path .
 ```
 
 **Sample Output:**
@@ -4959,22 +4981,31 @@ All slash commands are READ-ONLY and safe to run inside Claude Code sessions.
 **Managing Skills:**
 
 **Installation:**
-- Skills are installed globally to `~/.claude/skills/`
-- Available in all Claude Code sessions automatically
-- No per-project or per-workspace configuration needed
+- **Global**: Skills are installed to `~/.claude/skills/` (or `~/.agent/skills/` for other agents)
+- **Project**: Skills can be installed to `<project>/.claude/skills/` for team sharing
+- Available in all sessions automatically
+- **Multi-agent support**: Install to multiple AI agents with `--all-agents` flag
+
+**Installation Locations by Agent:**
+- Claude Code: `~/.claude/skills/` or `<project>/.claude/skills/`
+- GitHub Copilot: `~/.copilot/skills/` or `<project>/.github-copilot/skills/`
+- Cursor: `~/.cursor/skills/` or `<project>/.cursor/skills/`
+- Windsurf: `~/.codeium/windsurf/skills/` or `<project>/.windsurf/skills/`
+- Aider: `~/.aider/skills/` or `<project>/.aider/skills/`
+- Continue: `~/.continue/skills/` or `<project>/.continue/skills/`
 
 **Removal:**
 If you want to remove the bundled skills:
 
 ```bash
-# Remove all bundled slash commands
-rm -rf ~/.claude/skills/daf-*
+# Remove all bundled skills from Claude
+rm -rf ~/.claude/skills/daf-* ~/.claude/skills/gh-cli ~/.claude/skills/git-cli ~/.claude/skills/glab-cli
 
-# Or remove specific skill
-rm -rf ~/.claude/skills/daf-help
+# Remove from specific agent
+rm -rf ~/.cursor/skills/daf-*
 
-# Remove all reference skills
-rm -rf ~/.claude/skills/gh-cli ~/.claude/skills/git-cli ~/.claude/skills/glab-cli
+# Remove from all agents
+rm -rf ~/.claude/skills/daf-* ~/.copilot/skills/daf-* ~/.cursor/skills/daf-* ~/.codeium/windsurf/skills/daf-* ~/.aider/skills/daf-* ~/.continue/skills/daf-*
 ```
 
 **Custom Skills:**

@@ -32,9 +32,11 @@ Detailed technical documentation:
 In-depth guides for specific topics:
 
 - **[Session Management](guides/session-management.md)** - Understanding sessions, conversations, and workspaces
+- **[Multi-Agent Skill Installation](guides/multi-agent-skill-installation.md)** - Install skills to multiple AI agents
 - **[Troubleshooting](guides/troubleshooting.md)** - Common issues and solutions
 - **[Hierarchical Skills](guides/hierarchical-skills.md)** - Custom Claude Code skills system
 - **[SSL Configuration](guides/ssl-configuration.md)** - SSL/TLS configuration for enterprise
+- **[Enterprise Model Provider Enforcement](guides/enterprise-model-provider-enforcement.md)** - Enforce model providers at enterprise level
 
 ### 🎓 Tutorials
 Step-by-step tutorials for common tasks:

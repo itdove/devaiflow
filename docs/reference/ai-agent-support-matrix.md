@@ -4,13 +4,15 @@ DevAIFlow supports multiple AI coding assistants through a pluggable agent archi
 
 ## Supported AI Agents
 
-| Agent | Backend Name | Status | CLI Command | Session Management |
-|-------|--------------|--------|-------------|-------------------|
-| **Claude Code** | `claude` | ✅ Fully Tested | `claude` | Full support |
-| **Ollama** | `ollama`, `ollama-claude` | ✅ Fully Integrated | `ollama launch claude` | Full support (via Claude Code) |
-| **GitHub Copilot** | `github-copilot`, `copilot` | ⚠️  Experimental | `code` (VS Code) | Limited |
-| **Cursor** | `cursor` | ⚠️  Experimental | `cursor` | Limited |
-| **Windsurf** | `windsurf` | ⚠️  Experimental | `windsurf` | Limited |
+| Agent | Backend Name | Status | CLI Command | Session Management | Skill Installation |
+|-------|--------------|--------|-------------|-------------------|-------------------|
+| **Claude Code** | `claude` | ✅ Fully Tested | `claude` | Full support | ✅ Full support |
+| **Ollama** | `ollama`, `ollama-claude` | ✅ Fully Integrated | `ollama launch claude` | Full support (via Claude Code) | ✅ Full support |
+| **GitHub Copilot** | `github-copilot`, `copilot` | ⚠️  Experimental | `code` (VS Code) | Limited | ✅ Experimental |
+| **Cursor** | `cursor` | ⚠️  Experimental | `cursor` | Limited | ✅ Experimental |
+| **Windsurf** | `windsurf` | ⚠️  Experimental | `windsurf` | Limited | ✅ Experimental |
+| **Aider** | `aider` | ⚠️  Experimental | `aider` | Limited | ✅ Experimental |
+| **Continue** | `continue` | ⚠️  Experimental | `continue` (VS Code ext) | Limited | ✅ Experimental |
 
 ## Configuration
 
@@ -23,15 +25,108 @@ daf config set agent_backend ollama
 daf config set agent_backend github-copilot
 daf config set agent_backend cursor
 daf config set agent_backend windsurf
+daf config set agent_backend aider
+daf config set agent_backend continue
 
 # Or manually edit $DEVAIFLOW_HOME/config.json
 {
-  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf"
+  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue"
   "ollama": {
     "default_model": "qwen3-coder"  // optional, only for ollama backend
   }
 }
 ```
+
+## Multi-Agent Skill Installation
+
+**NEW:** DevAIFlow can install skills to multiple AI agents simultaneously, making it easier to maintain consistent tooling across different coding assistants.
+
+### Quick Start
+
+```bash
+# Install skills to all supported agents
+daf upgrade --all-agents
+
+# Install to a specific agent
+daf upgrade --agent cursor
+daf upgrade --agent windsurf
+
+# Install to project directory (instead of global)
+daf upgrade --level project --project-path .
+
+# Install to both global and project
+daf upgrade --level both --project-path .
+```
+
+### Skill Directory Locations
+
+Each agent has its own skills directory where DevAIFlow installs bundled skills:
+
+| Agent | Global Skills Directory | Project Skills Directory | Environment Variable |
+|-------|------------------------|-------------------------|---------------------|
+| **Claude Code** | `~/.claude/skills/` | `<project>/.claude/skills/` | `$CLAUDE_CONFIG_DIR` |
+| **GitHub Copilot** | `~/.copilot/skills/` | `<project>/.github-copilot/skills/` | `$COPILOT_HOME` |
+| **Cursor** | `~/.cursor/skills/` | `<project>/.cursor/skills/` | _(none)_ |
+| **Windsurf** | `~/.codeium/windsurf/skills/` | `<project>/.windsurf/skills/` | _(none)_ |
+| **Aider** | `~/.aider/skills/` | `<project>/.aider/skills/` | _(none)_ |
+| **Continue** | `~/.continue/skills/` | `<project>/.continue/skills/` | _(none)_ |
+
+**Note:** Claude Code and GitHub Copilot support environment variables to override the default config directory.
+
+### Installation Levels
+
+**Global Installation (default):**
+- Installs to `~/.agent/skills/`
+- Available in all projects
+- Recommended for personal use
+
+**Project Installation:**
+- Installs to `<project>/.agent/skills/`
+- Only available in that specific project
+- Recommended for team sharing (commit to git)
+
+**Both:**
+- Installs to both global and project directories
+- Useful for ensuring skills are always available
+
+### Use Cases
+
+**Personal Development:**
+```bash
+# Install to all your agents globally
+daf upgrade --all-agents
+```
+
+**Team Collaboration:**
+```bash
+# Install to project and commit to git
+cd /path/to/project
+daf upgrade --level project --project-path .
+git add .claude/skills .cursor/skills
+git commit -m "Add DevAIFlow skills for team"
+```
+
+**Switching Between Agents:**
+```bash
+# You have skills already installed for Claude
+# Now add them for Cursor too
+daf upgrade --agents cursor
+```
+
+### Compatibility
+
+**Fully Tested:**
+- ✅ Claude Code - Skills work natively with skill system
+- ✅ Ollama - Uses Claude Code's skill system
+
+**Experimental:**
+- ⚠️  GitHub Copilot - Skills may work as context files
+- ⚠️  Cursor - Skills may work as context files
+- ⚠️  Windsurf - Skills may work as context files
+- ⚠️  Aider - Skills may work with `--read` flag
+- ⚠️  Continue - Skills may work as context files
+
+**Note:** Only Claude Code and Ollama have native skill support. Other agents may be able to use the skill files as context/documentation, but functionality is not guaranteed.
 
 ## Feature Support Matrix
 
