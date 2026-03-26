@@ -325,9 +325,10 @@ def create_investigation_session(
         agent = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
+        from devflow.utils.model_provider import get_active_profile as get_model_profile
         model_profile = None
         if config and config.model_provider:
-            model_profile = config.model_provider.get_active_profile()
+            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
 
         # AAP-64886: Get workspace path from session instead of using default
         workspace_path = resolve_workspace_path(config, session.workspace_name)
@@ -730,9 +731,10 @@ def _create_multi_project_investigation_session(
         agent = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
+        from devflow.utils.model_provider import get_active_profile as get_model_profile
         model_profile = None
         if config and config.model_provider:
-            model_profile = config.model_provider.get_active_profile()
+            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
 
         # Use workspace path as the primary directory
         workspace_resolved = resolve_workspace_path(config, session.workspace_name)

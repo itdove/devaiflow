@@ -6,6 +6,7 @@ Complete reference for all CLI commands with examples.
 
 - [Core Session Commands](#core-session-commands)
 - [Workspace Management](#workspace-management)
+- [Agent Management](#agent-management)
 - [JIRA Integration Commands](#jira-integration-commands)
 - [Notes and Progress](#notes-and-progress)
 - [Time Tracking](#time-tracking)
@@ -1658,6 +1659,313 @@ daf new --name PROJ-123 -w experiments --path ~/experiments/myproject
 ```
 
 The tool uses `(project_path, workspace_name)` tuple for concurrent session checking, allowing parallel work in different workspaces.
+
+---
+
+## Agent Management
+
+### What are Agents?
+
+Agents are AI coding assistants that integrate with DevAIFlow. DevAIFlow supports multiple agent backends, allowing you to choose the AI assistant that best fits your needs.
+
+**Supported Agents:**
+- **Claude Code** (fully tested) - Anthropic's official Claude Code CLI
+- **Ollama + Claude Code** (fully tested) - Local models via Ollama
+- **GitHub Copilot** (experimental) - GitHub Copilot in VS Code
+- **Cursor** (experimental) - Cursor AI editor
+- **Windsurf** (experimental) - Windsurf (Codeium) editor
+- **Aider** (experimental) - AI pair programming in terminal
+- **Continue** (experimental) - VS Code extension for AI assistance
+
+**Note:** Only Claude Code and Ollama have been fully tested. Other agents are experimental and may have limitations.
+
+---
+
+### daf agent list - List Available Agents
+
+View all supported AI agents with their installation status and capabilities.
+
+```bash
+daf agent list
+daf agent list --json
+```
+
+**What it shows:**
+- Agent name and description
+- Installation status (✓ installed or ✗ not installed)
+- Testing status (Stable or Experimental)
+- Default agent marker
+
+**Output example:**
+```
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━┓
+┃ Agent              ┃ Description             ┃ Status       ┃ Installed ┃ Default ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━┩
+│ Claude Code        │ Anthropic's official... │ Stable       │ ✓         │ ✓       │
+│ Ollama + Claude... │ Local models via Oll... │ Stable       │ ✓         │         │
+│ GitHub Copilot     │ GitHub Copilot in VS... │ Experimental │ ✗         │         │
+│ Cursor             │ Cursor AI editor        │ Experimental │ ✗         │         │
+└────────────────────┴─────────────────────────┴──────────────┴───────────┴─────────┘
+
+Legend:
+  Stable - Fully tested and supported
+  Experimental - Limited testing, may have issues
+```
+
+**When to use:**
+- Check which agents are installed on your system
+- See which agent is currently set as default
+- Understand agent capabilities and testing status
+- Before setting a default agent
+
+---
+
+### daf agent active - Show Active Agent
+
+Show the currently active/default agent configuration.
+
+```bash
+daf agent active
+daf agent active --json
+```
+
+**What it shows:**
+- Agent name and description
+- Installation status and CLI path
+- Version information
+- Supported features
+- Additional requirements (if any)
+
+**Output example:**
+```
+Claude Code
+Anthropic's official Claude Code CLI
+
+Status: Stable
+✓ Installed: /Users/user/.local/bin/claude
+  Version: 2.1.83 (Claude Code)
+
+Installation:
+  https://docs.claude.com/en/docs/claude-code/installation
+
+Supported Features:
+  ✓ Session Management
+  ✓ Conversation Export
+  ✓ Message Counting
+  ✓ Resume Support
+  ✓ Skills Support
+```
+
+**When to use:**
+- Quick check of which agent is currently active
+- Verify agent installation and version
+- Confirm agent capabilities before starting a session
+
+**Equivalent to:**
+```bash
+daf agent info  # Without specifying an agent name
+```
+
+---
+
+### daf agent set-default - Set Default Agent
+
+Set the default AI agent backend for DevAIFlow sessions.
+
+```bash
+daf agent set-default <NAME>
+daf agent set-default        # Interactive mode
+```
+
+**Arguments:**
+- `<NAME>` - Agent to use (e.g., "claude", "ollama", "cursor")
+
+**Examples:**
+```bash
+# Set Claude Code as default
+daf agent set-default claude
+
+# Set Ollama for local models
+daf agent set-default ollama
+
+# Set Cursor editor
+daf agent set-default cursor
+
+# Interactive mode (prompts for selection)
+daf agent set-default
+```
+
+**What it does:**
+1. Validates agent name
+2. Checks if agent is installed
+3. Verifies all requirements are met
+4. Updates config.agent_backend
+5. Shows confirmation
+
+**Validation:**
+- Agent must be a supported backend
+- Agent CLI must be installed and available in PATH
+- Additional requirements must be met (e.g., Ollama requires both `ollama` and `claude`)
+
+**When to use:**
+- Switching between different AI assistants
+- Setting up DevAIFlow for the first time
+- Experimenting with different agents
+
+**Common errors:**
+```
+✗ Agent 'Cursor' is not installed
+  Install from: https://cursor.sh/
+
+✗ Missing requirements:
+  - claude (Claude Code CLI)
+```
+
+---
+
+### daf agent test - Test Agent Availability
+
+Test if an agent is available and ready to use.
+
+```bash
+daf agent test <NAME>
+daf agent test              # Test default agent
+```
+
+**Arguments:**
+- `<NAME>` - Agent to test (optional, defaults to configured default)
+
+**Examples:**
+```bash
+# Test Claude Code
+daf agent test claude
+
+# Test Ollama
+daf agent test ollama
+
+# Test default agent
+daf agent test
+```
+
+**What it shows:**
+- CLI availability and path
+- Version information (if available)
+- Requirements check
+- Overall readiness status
+
+**Output example:**
+```
+Testing Claude Code
+
+✓ CLI available: /usr/local/bin/claude
+  Version: 1.2.3
+✓ All requirements met
+
+✓ Claude Code is ready to use
+```
+
+**With missing requirements:**
+```
+Testing Ollama + Claude Code
+
+✓ CLI available: /usr/local/bin/ollama
+  Version: 0.1.0
+✗ Missing requirements:
+  - claude (Claude Code CLI)
+
+✗ Ollama + Claude Code is not ready
+```
+
+**When to use:**
+- Before setting a new default agent
+- Troubleshooting agent installation issues
+- Verifying environment setup
+- In CI/CD to check prerequisites
+
+---
+
+### daf agent info - Show Agent Details
+
+Show detailed information about an agent including installation instructions, features, and requirements.
+
+```bash
+daf agent info <NAME>
+daf agent info              # Show default agent
+```
+
+**Arguments:**
+- `<NAME>` - Agent to show info for (optional, defaults to configured default)
+
+**Examples:**
+```bash
+# Show Claude Code info
+daf agent info claude
+
+# Show Ollama info
+daf agent info ollama
+
+# Show default agent info
+daf agent info
+```
+
+**What it shows:**
+- Full agent name and description
+- Testing status (Stable or Experimental)
+- Installation status and CLI path
+- Version information
+- Installation URL
+- Supported features (session management, conversation export, etc.)
+- Additional requirements
+- Notes and limitations
+
+**Output example:**
+```
+Claude Code
+Anthropic's official Claude Code CLI
+
+Status: Stable
+✓ Installed: /usr/local/bin/claude
+  Version: 1.2.3
+
+Installation:
+  https://docs.claude.com/en/docs/claude-code/installation
+
+Supported Features:
+  ✓ Session Management
+  ✓ Conversation Export
+  ✓ Message Counting
+  ✓ Resume Support
+  ✓ Skills Support
+```
+
+**For experimental agents:**
+```
+Cursor
+Cursor AI editor
+
+Status: Experimental
+✗ Not installed
+  CLI command: cursor
+
+Installation:
+  https://cursor.sh/
+
+Supported Features:
+  ✗ Session Management
+  ✗ Conversation Export
+  ✗ Message Counting
+  ✗ Resume Support
+  ✗ Skills Support
+
+Notes:
+  Limited integration - experimental support only
+```
+
+**When to use:**
+- Learning about available agents
+- Understanding agent capabilities
+- Getting installation instructions
+- Checking feature support before switching
 
 ---
 
@@ -5310,12 +5618,12 @@ Manage model provider profiles for alternative AI providers (Vertex AI, llama.cp
 
 See also: [Alternative Model Providers Guide](alternative-model-providers.md) for detailed setup instructions.
 
-### daf model list - List Profiles
+### daf provider list - List Profiles
 
 List all configured model provider profiles.
 
 ```bash
-daf model list [OPTIONS]
+daf provider list [OPTIONS]
 ```
 
 **Options:**
@@ -5324,10 +5632,10 @@ daf model list [OPTIONS]
 **Examples:**
 ```bash
 # List all profiles
-daf model list
+daf provider list
 
 # JSON output for automation
-daf model list --json
+daf provider list --json
 ```
 
 **Output example:**
@@ -5340,12 +5648,54 @@ daf model list --json
 └──────────────────────────────────────────┘
 ```
 
-### daf model add - Add Profile
+### daf provider active - Show Active Profile
+
+Show the currently active/default model provider profile.
+
+```bash
+daf provider active [OPTIONS]
+```
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Examples:**
+```bash
+# Show active profile
+daf provider active
+
+# JSON output
+daf provider active --json
+```
+
+**Output example:**
+```
+Profile: vertex
+✓ Default profile
+
+Type: Google Vertex AI
+
+Configuration:
+  Vertex Project ID: my-project-123
+  Vertex Region: us-east5
+```
+
+**When to use:**
+- Quick check of which profile is currently active
+- Verify current model provider configuration
+- Confirm settings before starting a session
+
+**Equivalent to:**
+```bash
+daf provider show  # Without specifying a profile name
+```
+
+### daf provider add - Add Profile
 
 Add a new model provider profile with interactive wizard.
 
 ```bash
-daf model add [NAME] [OPTIONS]
+daf provider add [NAME] [OPTIONS]
 ```
 
 **Arguments:**
@@ -5357,13 +5707,13 @@ daf model add [NAME] [OPTIONS]
 **Examples:**
 ```bash
 # Interactive wizard (recommended)
-daf model add llama-cpp
+daf provider add llama-cpp
 # - Choose provider type
 # - Configure settings interactively
 # - Optionally set as default
 
 # Non-interactive (name only, then prompts for details)
-daf model add vertex
+daf provider add vertex
 ```
 
 **Supported Provider Types:**
@@ -5372,12 +5722,12 @@ daf model add vertex
 3. **Local llama.cpp** - Local model server (free, offline)
 4. **Custom** - OpenRouter, custom endpoints, etc.
 
-### daf model remove - Remove Profile
+### daf provider remove - Remove Profile
 
 Remove a model provider profile.
 
 ```bash
-daf model remove [NAME] [OPTIONS]
+daf provider remove [NAME] [OPTIONS]
 ```
 
 **Arguments:**
@@ -5389,22 +5739,22 @@ daf model remove [NAME] [OPTIONS]
 **Examples:**
 ```bash
 # Remove specific profile
-daf model remove old-profile
+daf provider remove old-profile
 
 # Interactive selection
-daf model remove
+daf provider remove
 ```
 
 **Notes:**
 - Requires confirmation before removing
 - If removing default profile, automatically sets a new default
 
-### daf model set-default - Set Default Profile
+### daf provider set-default - Set Default Profile
 
 Set a profile as the default.
 
 ```bash
-daf model set-default [NAME] [OPTIONS]
+daf provider set-default [NAME] [OPTIONS]
 ```
 
 **Arguments:**
@@ -5416,22 +5766,22 @@ daf model set-default [NAME] [OPTIONS]
 **Examples:**
 ```bash
 # Set specific profile as default
-daf model set-default llama-cpp
+daf provider set-default llama-cpp
 
 # Interactive selection
-daf model set-default
+daf provider set-default
 ```
 
 **Notes:**
 - Default profile is used when no `--model-profile` flag is provided
 - Can be overridden per-session with `--model-profile` flag
 
-### daf model show - Show Profile Configuration
+### daf provider show - Show Profile Configuration
 
 Display configuration for a specific profile.
 
 ```bash
-daf model show [NAME] [OPTIONS]
+daf provider show [NAME] [OPTIONS]
 ```
 
 **Arguments:**
@@ -5443,13 +5793,13 @@ daf model show [NAME] [OPTIONS]
 **Examples:**
 ```bash
 # Show specific profile
-daf model show vertex
+daf provider show vertex
 
 # Show default profile
-daf model show
+daf provider show
 
 # JSON output
-daf model show llama-cpp --json
+daf provider show llama-cpp --json
 ```
 
 **Output example:**
@@ -5466,12 +5816,12 @@ Configuration:
   Model Name: Qwen3-Coder
 ```
 
-### daf model test - Test Profile
+### daf provider test - Test Profile
 
 Test and validate a profile configuration.
 
 ```bash
-daf model test [NAME] [OPTIONS]
+daf provider test [NAME] [OPTIONS]
 ```
 
 **Arguments:**
@@ -5483,13 +5833,13 @@ daf model test [NAME] [OPTIONS]
 **Examples:**
 ```bash
 # Test specific profile
-daf model test vertex
+daf provider test vertex
 
 # Test default profile
-daf model test
+daf provider test
 
 # JSON output
-daf model test llama-cpp --json
+daf provider test llama-cpp --json
 ```
 
 **What it validates:**
@@ -5524,7 +5874,7 @@ MODEL_PROVIDER_PROFILE=llama-cpp daf open PROJ-123
 1. `--model-profile` CLI flag
 2. `session.model_profile` (stored from previous `--model-profile`)
 3. `MODEL_PROVIDER_PROFILE` environment variable
-4. `config.model_provider.default_profile` (set with `daf model set-default`)
+4. `config.model_provider.default_profile` (set with `daf provider set-default`)
 5. Anthropic API (fallback)
 
 ### Configuration Location

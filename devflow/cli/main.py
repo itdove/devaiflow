@@ -2789,31 +2789,134 @@ def workspace_rename(ctx: click.Context, old_name: str, new_name: str) -> None:
 
 @cli.group()
 @json_option
-def model(ctx: click.Context) -> None:
+def agent(ctx: click.Context) -> None:
+    """Manage AI agent backends and switch between agents."""
+    pass
+
+
+@agent.command(name="list")
+@json_option
+def agent_list(ctx: click.Context) -> None:
+    """List all supported AI agents with installation status.
+
+    Shows agent name, description, installation status, and capabilities.
+
+    Example:
+        daf agent list
+        daf agent list --json
+    """
+    from devflow.cli.commands.agent_commands import list_agents
+
+    list_agents(output_json=ctx.obj.get('output_json', False))
+
+
+@agent.command(name="set-default")
+@json_option
+@click.argument("name", required=False)
+def agent_set_default(ctx: click.Context, name: str) -> None:
+    """Set the default AI agent backend.
+
+    NAME is the agent to use (e.g., 'claude', 'ollama', 'cursor').
+
+    If not provided, will prompt with a list of available agents.
+
+    Examples:
+        daf agent set-default claude
+        daf agent set-default ollama
+        daf agent set-default          # Interactive mode
+    """
+    from devflow.cli.commands.agent_commands import set_default_agent
+
+    set_default_agent(name, output_json=ctx.obj.get('output_json', False))
+
+
+@agent.command(name="test")
+@json_option
+@click.argument("name", required=False)
+def agent_test(ctx: click.Context, name: str) -> None:
+    """Test if an agent is available and working.
+
+    NAME is the agent to test (e.g., 'claude', 'ollama').
+    Defaults to the active/default agent if not specified.
+
+    Examples:
+        daf agent test claude
+        daf agent test ollama
+        daf agent test              # Test default agent
+    """
+    from devflow.cli.commands.agent_commands import test_agent
+
+    test_agent(name, output_json=ctx.obj.get('output_json', False))
+
+
+@agent.command(name="info")
+@json_option
+@click.argument("name", required=False)
+def agent_info(ctx: click.Context, name: str) -> None:
+    """Show detailed information about an agent.
+
+    NAME is the agent to show info for (e.g., 'claude', 'ollama').
+    Defaults to the active/default agent if not specified.
+
+    Displays:
+    - Installation status and CLI path
+    - Supported features
+    - Installation instructions
+    - Additional requirements
+
+    Examples:
+        daf agent info claude
+        daf agent info ollama
+        daf agent info              # Show default agent
+    """
+    from devflow.cli.commands.agent_commands import show_agent_info
+
+    show_agent_info(name, output_json=ctx.obj.get('output_json', False))
+
+
+@agent.command(name="active")
+@json_option
+def agent_active(ctx: click.Context) -> None:
+    """Show the currently active/default agent.
+
+    Convenient alias for 'daf agent info' without arguments.
+
+    Examples:
+        daf agent active
+        daf agent active --json
+    """
+    from devflow.cli.commands.agent_commands import show_agent_info
+
+    show_agent_info(None, output_json=ctx.obj.get('output_json', False))
+
+
+@cli.group()
+@json_option
+def provider(ctx: click.Context) -> None:
     """Manage model provider profiles for alternative AI providers."""
     pass
 
 
-@model.command(name="list")
+@provider.command(name="list")
 @json_option
-def model_list(ctx: click.Context) -> None:
+def provider_list(ctx: click.Context) -> None:
     """List all configured model provider profiles.
 
     Shows profile name, base URL, model, type, and default status.
 
     Example:
-        daf model list
-        daf model list --json
+        daf provider list
+        daf provider list --json
     """
-    from devflow.cli.commands.model_commands import list_profiles
+    from devflow.cli.commands.provider_commands import list_profiles
 
     list_profiles(output_json=ctx.obj.get('output_json', False))
 
 
-@model.command(name="add")
+@provider.command(name="add")
 @json_option
 @click.argument("name", required=False)
-def model_add(ctx: click.Context, name: str) -> None:
+def provider_add(ctx: click.Context, name: str) -> None:
     """Add a new model provider profile.
 
     NAME is a unique profile identifier (e.g., 'vertex', 'llama-cpp', 'openrouter').
@@ -2827,37 +2930,37 @@ def model_add(ctx: click.Context, name: str) -> None:
       - Custom providers (OpenRouter, etc.)
 
     Examples:
-        daf model add vertex              # Interactive wizard for Vertex AI
-        daf model add llama-cpp           # Interactive wizard for llama.cpp
-        daf model add                     # Interactive mode (prompts for name)
+        daf provider add vertex              # Interactive wizard for Vertex AI
+        daf provider add llama-cpp           # Interactive wizard for llama.cpp
+        daf provider add                     # Interactive mode (prompts for name)
     """
-    from devflow.cli.commands.model_commands import add_profile
+    from devflow.cli.commands.provider_commands import add_profile
 
     add_profile(name=name, interactive=True, output_json=ctx.obj.get('output_json', False))
 
 
-@model.command(name="remove")
+@provider.command(name="remove")
 @json_option
 @click.argument("name", required=False)
-def model_remove(ctx: click.Context, name: str) -> None:
+def provider_remove(ctx: click.Context, name: str) -> None:
     """Remove a model provider profile.
 
     NAME is the profile to remove.
     If not provided, will show a list and prompt for selection.
 
     Examples:
-        daf model remove llama-cpp
-        daf model remove          # Interactive mode
+        daf provider remove llama-cpp
+        daf provider remove          # Interactive mode
     """
-    from devflow.cli.commands.model_commands import remove_profile
+    from devflow.cli.commands.provider_commands import remove_profile
 
     remove_profile(name=name, output_json=ctx.obj.get('output_json', False))
 
 
-@model.command(name="set-default")
+@provider.command(name="set-default")
 @json_option
 @click.argument("name", required=False)
-def model_set_default(ctx: click.Context, name: str) -> None:
+def provider_set_default(ctx: click.Context, name: str) -> None:
     """Set a profile as the default.
 
     NAME is the profile to set as default.
@@ -2867,41 +2970,57 @@ def model_set_default(ctx: click.Context, name: str) -> None:
     in daf new/open commands.
 
     Examples:
-        daf model set-default vertex
-        daf model set-default          # Interactive mode
+        daf provider set-default vertex
+        daf provider set-default          # Interactive mode
     """
-    from devflow.cli.commands.model_commands import set_default_profile
+    from devflow.cli.commands.provider_commands import set_default_profile
 
     set_default_profile(name=name, output_json=ctx.obj.get('output_json', False))
 
 
-@model.command(name="show")
+@provider.command(name="show")
 @json_option
 @click.argument("name", required=False)
-def model_show(ctx: click.Context, name: str) -> None:
+def provider_show(ctx: click.Context, name: str) -> None:
     """Show configuration for a specific profile.
 
     NAME is the profile to show.
-    If not provided, shows the default profile.
+    Defaults to the active/default profile if not specified.
 
     Examples:
-        daf model show vertex
-        daf model show              # Shows default profile
-        daf model show --json
+        daf provider show vertex
+        daf provider show              # Shows default profile
+        daf provider show --json
     """
-    from devflow.cli.commands.model_commands import show_profile
+    from devflow.cli.commands.provider_commands import show_profile
 
     show_profile(name=name, output_json=ctx.obj.get('output_json', False))
 
 
-@model.command(name="test")
+@provider.command(name="active")
+@json_option
+def provider_active(ctx: click.Context) -> None:
+    """Show the currently active/default model profile.
+
+    Convenient alias for 'daf provider show' without arguments.
+
+    Examples:
+        daf provider active
+        daf provider active --json
+    """
+    from devflow.cli.commands.provider_commands import show_profile
+
+    show_profile(name=None, output_json=ctx.obj.get('output_json', False))
+
+
+@provider.command(name="test")
 @json_option
 @click.argument("name", required=False)
-def model_test(ctx: click.Context, name: str) -> None:
+def provider_test(ctx: click.Context, name: str) -> None:
     """Test and validate a profile configuration.
 
     NAME is the profile to test.
-    If not provided, tests the default profile.
+    Defaults to the active/default profile if not specified.
 
     Validates:
       - Required fields are present
@@ -2912,11 +3031,11 @@ def model_test(ctx: click.Context, name: str) -> None:
     use the profile with Claude Code.
 
     Examples:
-        daf model test vertex
-        daf model test              # Tests default profile
-        daf model test --json
+        daf provider test vertex
+        daf provider test              # Tests default profile
+        daf provider test --json
     """
-    from devflow.cli.commands.model_commands import test_profile
+    from devflow.cli.commands.provider_commands import test_profile
 
     test_profile(name=name, output_json=ctx.obj.get('output_json', False))
 

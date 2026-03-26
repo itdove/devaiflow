@@ -8,30 +8,32 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from devflow.cli.utils import require_outside_claude, output_json
+from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import ModelProviderProfile
 
 console = Console()
 
 
-def list_profiles(json_mode: bool = False) -> None:
+def list_profiles(output_json: bool = False) -> None:
     """List all configured model provider profiles.
 
     Args:
-        json_mode: Output in JSON format
+        output_json: Output in JSON format
     """
+    from devflow.cli.utils import output_json as json_output_func
+
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
     if not config:
-        if json_mode:
-            output_json(success=False, error={"message": "No configuration found. Run 'daf init' first."})
+        if output_json:
+            json_output_func(success=False, error={"message": "No configuration found. Run 'daf init' first."})
         else:
             console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
         return
 
-    if json_mode:
+    if output_json:
         # JSON output
         profiles_data = {}
         for name, profile in config.model_provider.profiles.items():
@@ -44,7 +46,7 @@ def list_profiles(json_mode: bool = False) -> None:
                 "vertex_region": profile.vertex_region,
             }
 
-        output_json(
+        json_output_func(
             success=True,
             data={
                 "default_profile": config.model_provider.default_profile,
@@ -90,7 +92,7 @@ def list_profiles(json_mode: bool = False) -> None:
 
 
 @require_outside_claude
-def add_profile(name: Optional[str] = None, interactive: bool = True, json_mode: bool = False) -> None:
+def add_profile(name: Optional[str] = None, interactive: bool = True, output_json: bool = False) -> None:
     """Add a new model provider profile.
 
     Args:
@@ -98,12 +100,14 @@ def add_profile(name: Optional[str] = None, interactive: bool = True, json_mode:
         interactive: Use interactive wizard
         output_json: Output in JSON format
     """
+    from devflow.cli.utils import output_json as json_output_func
+
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
     if not config:
-        if json_mode:
-            output_json(success=False, error={"message": "No configuration found. Run 'daf init' first."})
+        if output_json:
+            json_output_func(success=False, error={"message": "No configuration found. Run 'daf init' first."})
         else:
             console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
         return
@@ -120,8 +124,8 @@ def add_profile(name: Optional[str] = None, interactive: bool = True, json_mode:
         name = Prompt.ask("Profile name")
 
     if not name or not name.strip():
-        if json_mode:
-            output_json(success=False, error={"message": "Profile name cannot be empty"})
+        if output_json:
+            json_output_func(success=False, error={"message": "Profile name cannot be empty"})
         else:
             console.print("[yellow]⚠[/yellow] Profile name cannot be empty")
         return
@@ -130,8 +134,8 @@ def add_profile(name: Optional[str] = None, interactive: bool = True, json_mode:
 
     # Check if profile already exists
     if name in config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": f"Profile already exists: {name}"})
+        if output_json:
+            json_output_func(success=False, error={"message": f"Profile already exists: {name}"})
         else:
             console.print(f"[yellow]⚠[/yellow] Profile already exists: {name}")
         return
@@ -231,8 +235,8 @@ def add_profile(name: Optional[str] = None, interactive: bool = True, json_mode:
         # Save config
         config_loader.save_config(config)
 
-        if json_mode:
-            output_json(
+        if output_json:
+            json_output_func(
                 success=True,
                 message=f"Added profile: {name}",
                 data={"name": name, "default": set_default}
@@ -247,33 +251,35 @@ def add_profile(name: Optional[str] = None, interactive: bool = True, json_mode:
                 console.print(f"[dim]Default: Yes[/dim]")
     else:
         # Non-interactive mode (for testing or scripting)
-        if json_mode:
-            output_json(success=False, error={"message": "Non-interactive mode not yet implemented"})
+        if output_json:
+            json_output_func(success=False, error={"message": "Non-interactive mode not yet implemented"})
         else:
             console.print("[yellow]⚠[/yellow] Non-interactive mode requires all parameters")
 
 
 @require_outside_claude
-def remove_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
+def remove_profile(name: Optional[str] = None, output_json: bool = False) -> None:
     """Remove a model provider profile.
 
     Args:
         name: Profile name to remove
         output_json: Output in JSON format
     """
+    from devflow.cli.utils import output_json as json_output_func
+
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
     if not config:
-        if json_mode:
-            output_json(success=False, error={"message": "No configuration found. Run 'daf init' first."})
+        if output_json:
+            json_output_func(success=False, error={"message": "No configuration found. Run 'daf init' first."})
         else:
             console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
         return
 
     if not config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": "No profiles configured to remove"})
+        if output_json:
+            json_output_func(success=False, error={"message": "No profiles configured to remove"})
         else:
             console.print("[yellow]⚠[/yellow] No profiles configured to remove")
         return
@@ -312,14 +318,14 @@ def remove_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
 
     # Find profile
     if name not in config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": f"Profile not found: {name}"})
+        if output_json:
+            json_output_func(success=False, error={"message": f"Profile not found: {name}"})
         else:
             console.print(f"[red]✗[/red] Profile not found: {name}")
         return
 
     # Confirm removal
-    if not json_mode:
+    if not output_json:
         console.print(f"\n[yellow]Remove profile '{name}'?[/yellow]")
         if not Confirm.ask("Continue?", default=False):
             console.print("[dim]Cancelled[/dim]")
@@ -333,43 +339,45 @@ def remove_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
     if was_default:
         if config.model_provider.profiles:
             config.model_provider.default_profile = list(config.model_provider.profiles.keys())[0]
-            if not json_mode:
+            if not output_json:
                 console.print(f"[dim]Set '{config.model_provider.default_profile}' as new default[/dim]")
         else:
             config.model_provider.default_profile = "anthropic"
-            if not json_mode:
+            if not output_json:
                 console.print(f"[dim]Reset default to 'anthropic'[/dim]")
 
     # Save config
     config_loader.save_config(config)
 
-    if json_mode:
-        output_json(success=True, message=f"Removed profile: {name}")
+    if output_json:
+        json_output_func(success=True, message=f"Removed profile: {name}")
     else:
         console.print(f"\n[green]✓[/green] Removed profile: {name}")
 
 
 @require_outside_claude
-def set_default_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
+def set_default_profile(name: Optional[str] = None, output_json: bool = False) -> None:
     """Set a profile as the default.
 
     Args:
         name: Profile name to set as default
         output_json: Output in JSON format
     """
+    from devflow.cli.utils import output_json as json_output_func
+
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
     if not config:
-        if json_mode:
-            output_json(success=False, error={"message": "No configuration found. Run 'daf init' first."})
+        if output_json:
+            json_output_func(success=False, error={"message": "No configuration found. Run 'daf init' first."})
         else:
             console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
         return
 
     if not config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": "No profiles configured"})
+        if output_json:
+            json_output_func(success=False, error={"message": "No profiles configured"})
         else:
             console.print("[yellow]⚠[/yellow] No profiles configured")
             console.print("[dim]Add a profile with: daf model add <name>[/dim]")
@@ -409,16 +417,16 @@ def set_default_profile(name: Optional[str] = None, json_mode: bool = False) -> 
 
     # Find profile
     if name not in config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": f"Profile not found: {name}"})
+        if output_json:
+            json_output_func(success=False, error={"message": f"Profile not found: {name}"})
         else:
             console.print(f"[red]✗[/red] Profile not found: {name}")
         return
 
     # Already default?
     if config.model_provider.default_profile == name:
-        if json_mode:
-            output_json(success=True, message=f"Profile '{name}' is already the default")
+        if output_json:
+            json_output_func(success=True, message=f"Profile '{name}' is already the default")
         else:
             console.print(f"[yellow]⚠[/yellow] Profile '{name}' is already the default")
         return
@@ -429,32 +437,34 @@ def set_default_profile(name: Optional[str] = None, json_mode: bool = False) -> 
     # Save config
     config_loader.save_config(config)
 
-    if json_mode:
-        output_json(success=True, message=f"Set '{name}' as default profile")
+    if output_json:
+        json_output_func(success=True, message=f"Set '{name}' as default profile")
     else:
         console.print(f"\n[green]✓[/green] Set '{name}' as default profile")
 
 
-def show_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
+def show_profile(name: Optional[str] = None, output_json: bool = False) -> None:
     """Show configuration for a specific profile.
 
     Args:
         name: Profile name to show
         output_json: Output in JSON format
     """
+    from devflow.cli.utils import output_json as json_output_func
+
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
     if not config:
-        if json_mode:
-            output_json(success=False, error={"message": "No configuration found. Run 'daf init' first."})
+        if output_json:
+            json_output_func(success=False, error={"message": "No configuration found. Run 'daf init' first."})
         else:
             console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
         return
 
     if not config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": "No profiles configured"})
+        if output_json:
+            json_output_func(success=False, error={"message": "No profiles configured"})
         else:
             console.print("[yellow]⚠[/yellow] No profiles configured")
         return
@@ -465,16 +475,16 @@ def show_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
 
     # Find profile
     if name not in config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": f"Profile not found: {name}"})
+        if output_json:
+            json_output_func(success=False, error={"message": f"Profile not found: {name}"})
         else:
             console.print(f"[red]✗[/red] Profile not found: {name}")
         return
 
     profile = config.model_provider.profiles[name]
 
-    if json_mode:
-        output_json(
+    if output_json:
+        json_output_func(
             success=True,
             data={
                 "name": profile.name,
@@ -527,26 +537,28 @@ def show_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
     console.print()
 
 
-def test_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
+def test_profile(name: Optional[str] = None, output_json: bool = False) -> None:
     """Test connectivity and validate a profile.
 
     Args:
         name: Profile name to test
         output_json: Output in JSON format
     """
+    from devflow.cli.utils import output_json as json_output_func
+
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 
     if not config:
-        if json_mode:
-            output_json(success=False, error={"message": "No configuration found. Run 'daf init' first."})
+        if output_json:
+            json_output_func(success=False, error={"message": "No configuration found. Run 'daf init' first."})
         else:
             console.print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
         return
 
     if not config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": "No profiles configured"})
+        if output_json:
+            json_output_func(success=False, error={"message": "No profiles configured"})
         else:
             console.print("[yellow]⚠[/yellow] No profiles configured")
         return
@@ -557,15 +569,15 @@ def test_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
 
     # Find profile
     if name not in config.model_provider.profiles:
-        if json_mode:
-            output_json(success=False, error={"message": f"Profile not found: {name}"})
+        if output_json:
+            json_output_func(success=False, error={"message": f"Profile not found: {name}"})
         else:
             console.print(f"[red]✗[/red] Profile not found: {name}")
         return
 
     profile = config.model_provider.profiles[name]
 
-    if not json_mode:
+    if not output_json:
         console.print(f"\n[bold]Testing profile: {name}[/bold]\n")
 
     # Validation checks
@@ -585,8 +597,8 @@ def test_profile(name: Optional[str] = None, json_mode: bool = False) -> None:
             issues.append(f"Invalid base_url format: {profile.base_url}")
 
     # Report results
-    if json_mode:
-        output_json(
+    if output_json:
+        json_output_func(
             success=len(issues) == 0,
             data={
                 "profile": name,
