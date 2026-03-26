@@ -68,3 +68,99 @@ daf jira create bug --summary "..."    # Create new JIRA bug
 daf jira create story --summary "..."  # Create new JIRA story
 daf jira update PROJ-12345 --priority Major  # Update ticket fields
 ```
+
+## JIRA Wiki Markup
+
+**CRITICAL:** JIRA uses **Wiki markup syntax**, NOT Markdown.
+
+When using `daf jira create`, `daf jira add-comment`, or `daf jira update` commands, all text fields (descriptions, comments, acceptance criteria) **MUST** use **JIRA Wiki markup** formatting.
+
+### Syntax Reference
+
+| Element | ✅ JIRA Wiki Markup (CORRECT) | ❌ Markdown (WRONG) |
+|---------|-------------------------------|---------------------|
+| Header 2 | `h2. Header` | `## Header` |
+| Header 3 | `h3. Header` | `### Header` |
+| Bold | `*bold*` | `**bold**` |
+| Italic | `_italic_` | `*italic*` |
+| Code block | `{code:bash}\ncode\n{code}` | ` ```bash\ncode\n``` ` |
+| Inline code | `{{code}}` | `` `code` `` |
+| Unordered list | `* item` | `- item` |
+| Ordered list | `# item` | `1. item` |
+| Link | `[text|url]` | `[text](url)` |
+| Checkbox | `- [] item` | `- [ ] item` |
+
+### Why This Matters
+
+- JIRA will NOT render Markdown correctly
+- Using `## Header` will display as plain text, not a header
+- Using ` ```bash ` code blocks will not format as code
+- Acceptance criteria must use `- []` format (not `- [ ]`)
+
+### Example: Creating JIRA Ticket with Wiki Markup
+
+```bash
+# Correct JIRA Wiki markup formatting
+daf jira create story --summary "Add caching layer" \
+  --description "h3. Overview
+
+Implement Redis caching to improve API performance.
+
+h3. Requirements
+
+* Cache should store subscription lookups
+* Configurable TTL (default: 5 minutes)
+* Handle cache misses gracefully
+
+h3. Implementation Notes
+
+Use {{redis-py}} client with the following configuration:
+
+{code:python}
+redis_client = Redis(
+    host='localhost',
+    port=6379,
+    decode_responses=True
+)
+{code}
+
+*Target:* 50ms response time" \
+  --field acceptance_criteria="- [] Unit tests pass
+- [] Integration tests pass
+- [] Performance benchmarks meet targets"
+```
+
+### Common Mistakes
+
+❌ **DON'T** use Markdown in JIRA tickets:
+```bash
+# WRONG - Markdown will not render in JIRA
+daf jira create bug --description "### Bug Description
+
+**Problem:** API times out
+
+\`\`\`python
+# broken code
+\`\`\`"
+```
+
+✅ **DO** use JIRA Wiki markup:
+```bash
+# CORRECT - JIRA Wiki markup
+daf jira create bug --description "h3. Bug Description
+
+*Problem:* API times out
+
+{code:python}
+# broken code
+{code}"
+```
+
+### When to Use JIRA Wiki Markup
+
+**✅ Use JIRA Wiki markup for all JIRA operations:**
+- `daf jira create` - Creating JIRA tickets
+- `daf jira add-comment` - Adding JIRA comments
+- `daf jira update` - Updating JIRA descriptions
+
+**Note:** For GitHub/GitLab operations (`daf git create`, `daf git add-comment`, `daf git update`), use Markdown syntax instead. See **daf-git skill** for complete Markdown syntax reference.

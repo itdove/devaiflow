@@ -137,7 +137,6 @@ Running these commands inside Claude Code can cause:
 1. **Fields:** See **daf-jira-fields skill** for system vs custom field syntax
 2. **Discover:** Run `daf config show --fields` to see YOUR custom fields
 3. **Read JIRA:** Use Atlassian MCP for fast reads
-4. **JIRA markup:** Use JIRA Wiki markup (NOT Markdown)
 
 ## See Also
 
