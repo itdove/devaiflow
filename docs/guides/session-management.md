@@ -131,6 +131,89 @@ daf workspace set-default primary
 
 See [Configuration Guide - Workspaces](../reference/configuration.md#workspaces-multiple-named-workspaces) for detailed workspace configuration.
 
+## Concurrent Sessions FAQ
+
+### Why can't I open 2 sessions on the same repository?
+
+DevAIFlow prevents multiple concurrent sessions in the same repository **within the same workspace** to protect you from several issues:
+
+**1. Branch Switching Conflicts**
+
+If Session A is on `feature-a` and Session B tries to checkout `feature-b` in the same directory, git will either block the operation or force you to stash uncommitted work.
+
+**2. Uncommitted Work Loss**
+
+If Session A has uncommitted changes and Session B switches branches, you risk losing work or creating merge conflicts.
+
+**3. User Confusion**
+
+With 2 sessions active in the same directory, it's easy to:
+- Forget which branch you're on
+- Commit Session B's work to Session A's branch
+- Lose track of which session is active
+
+**4. Git State Corruption**
+
+Concurrent git operations (commits, checkouts, merges) in the same repository can corrupt git state, especially with file locks and race conditions.
+
+**5. Time Tracking Conflicts**
+
+Both sessions would try to track time in the same repository, creating metadata conflicts.
+
+### How do I work on the same project concurrently?
+
+**Use different workspaces!** Workspaces provide complete isolation:
+
+```bash
+# Setup: Create workspaces
+daf workspace add primary ~/development
+daf workspace add experiments ~/experiments
+
+# Terminal 1: Main development
+daf new PROJ-123 -w primary --path ~/development/myproject
+# Works on feature-a branch
+
+# Terminal 2: Experimental feature (completely isolated)
+daf new PROJ-456 -w experiments --path ~/experiments/myproject
+# Works on feature-b branch - no conflicts!
+```
+
+**Key Benefits:**
+- Complete physical isolation (different directories)
+- No branch switching conflicts
+- No uncommitted work risks
+- No git state corruption
+- Clear separation of concerns
+
+**Use Cases:**
+- Main branch + experimental feature branch
+- Different products in same codebase
+- Client-specific customizations
+- Testing vs production work
+
+See [Workspaces](#workspaces-concurrent-multi-branch-development) for complete documentation.
+
+### What if I don't want to use workspaces?
+
+You must complete the active session first:
+
+```bash
+# Check which session is active
+daf list --active
+
+# Complete the active session
+daf complete session-name
+
+# Now create the new session
+daf new PROJ-456 --path /path/to/repo
+```
+
+Or resume the existing session if that's what you intended:
+
+```bash
+daf open session-name
+```
+
 ## Working Across Multiple Repositories
 
 **Recommended: Use Multi-Project Sessions with Shared Context (New!)**
