@@ -811,7 +811,7 @@ This allows you to easily switch between repositories in a multi-repo session. T
 
 ### daf list - List Sessions
 
-List all sessions with optional filtering and pagination.
+List all sessions with token usage statistics, optional filtering, and pagination.
 
 ```bash
 daf list [OPTIONS]
@@ -882,25 +882,27 @@ daf list --working-directory backend-api --since "yesterday" --page 2
 When listing with default settings (fewer than 25 sessions):
 ```
 Your Sessions
-┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┓
-┃ Status   ┃ Name            ┃ JIRA       ┃ Summary                  ┃ Working Dir ┃  Time ┃
-┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━┩
-│ Active   │ session1 (#1)   │ PROJ-12345  │ Implement backup feature │ backend-api │ 5h 45m│
-│ Complete │ session2 (#2)   │ PROJ-12346  │ Fix login bug            │ frontend    │ 1h 20m│
-└──────────┴─────────────────┴────────────┴──────────────────────────┴─────────────┴───────┘
+┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Status   ┃ Name            ┃ JIRA       ┃ Summary                  ┃ Working Dir ┃  Time ┃ Tokens ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│ Active   │ session1 (#1)   │ PROJ-12345  │ Implement backup feature │ backend-api │ 5h 45m│  1.2M  │
+│ Complete │ session2 (#2)   │ PROJ-12346  │ Fix login bug            │ frontend    │ 1h 20m│ 450.5K │
+└──────────┴─────────────────┴────────────┴──────────────────────────┴─────────────┴───────┴────────┘
 
 Total: 2 sessions | 7h 5m tracked
 ```
 
+**Note:** Token usage column shows total tokens (input + output) for the active conversation when using Claude Code. Displayed with K/M suffixes for readability. Shows "-" for agents that don't support token tracking.
+
 When interactive pagination is active (more than limit sessions):
 ```
 Your Sessions
-┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┓
-┃ Status   ┃ Name            ┃ JIRA       ┃ Summary                  ┃ Working Dir ┃  Time ┃
-┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━┩
-│ Active   │ session1 (#1)   │ PROJ-12345  │ Implement backup feature │ backend-api │ 5h 45m│
-│ Complete │ session2 (#2)   │ PROJ-12346  │ Fix login bug            │ frontend    │ 1h 20m│
-└──────────┴─────────────────┴────────────┴──────────────────────────┴─────────────┴───────┘
+┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Status   ┃ Name            ┃ JIRA       ┃ Summary                  ┃ Working Dir ┃  Time ┃ Tokens ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│ Active   │ session1 (#1)   │ PROJ-12345  │ Implement backup feature │ backend-api │ 5h 45m│  1.2M  │
+│ Complete │ session2 (#2)   │ PROJ-12346  │ Fix login bug            │ frontend    │ 1h 20m│ 450.5K │
+└──────────┴─────────────────┴────────────┴──────────────────────────┴─────────────┴───────┴────────┘
 
 Showing 1-25 of 50 sessions (page 1/2) | 7h 5m on this page
 
@@ -2084,7 +2086,7 @@ Estimated Remaining: ~16h
 
 ### daf active - Show Active Conversation
 
-Show currently active Claude Code conversation (if any).
+Show currently active Claude Code conversation with token usage statistics (if any).
 
 ```bash
 daf active
@@ -2101,6 +2103,7 @@ daf active
 │ Branch: feature/PROJ-12345                          │
 │ Time (this session): 1h 23m                        │
 │ Status: in_progress                                │
+│ Tokens: 1,234,567                                  │
 │                                                     │
 │ Other conversations in this session:               │
 │   • frontend-app (branch: feature/PROJ-12345-ui)    │
@@ -3144,7 +3147,12 @@ Next Steps:
 
 ### daf info - Display Session Details
 
-Show detailed session information including Claude Code session UUIDs. Displays all conversations (with active and archived Claude sessions) for multi-conversation sessions.
+Show detailed session information including Claude Code session UUIDs, token usage statistics, and cost estimates. Displays all conversations (with active and archived Claude sessions) for multi-conversation sessions.
+
+**Token usage tracking** (Claude Code only):
+- Shows total tokens (input + output), cache creation/reads, and cache efficiency
+- Estimates session cost based on model pricing (when configured)
+- Token statistics automatically hidden for agents that don't support tracking
 
 ```bash
 daf info [NAME-or-JIRA] [OPTIONS]
@@ -3194,6 +3202,10 @@ Conversations: 2
   Created: 2025-12-05 13:07:00
   Last Active: 2025-12-05 18:30:15
   Messages: 45
+  Token Usage:
+    Total: 1,234,567 (Input: 890,123 | Output: 344,444)
+    Cache: 234,567 created, 456,789 read (66.1% efficiency)
+    Estimated Cost: $4.23
   PRs: https://github.com/org/repo/pull/123
 
   Archived Sessions (1):

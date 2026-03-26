@@ -210,3 +210,34 @@ class AgentInterface(ABC):
             Agent name (e.g., "claude", "copilot", "chatgpt")
         """
         pass
+
+    @abstractmethod
+    def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
+        """Extract token usage statistics from a session.
+
+        Parses the agent's conversation/session file to extract token usage data
+        including input tokens, output tokens, cache tokens, etc.
+
+        Args:
+            session_id: Session UUID
+            project_path: Absolute path to project
+
+        Returns:
+            Dictionary with token usage statistics, or None if:
+            - Agent doesn't support token tracking
+            - Session file doesn't exist
+            - Session file has no token usage data
+
+            Expected keys in returned dict (when supported):
+            - input_tokens: Total input tokens consumed
+            - output_tokens: Total output tokens generated
+            - cache_creation_input_tokens: Tokens written to prompt cache
+            - cache_read_input_tokens: Tokens read from cache (90% cost savings)
+            - message_count: Number of messages with usage data
+            - total_tokens: Sum of input + output tokens
+
+        Note:
+            Only Claude Code fully supports token tracking. Other agents
+            (GitHub Copilot, Cursor, Windsurf) return None.
+        """
+        pass

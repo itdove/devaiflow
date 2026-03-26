@@ -312,3 +312,17 @@ class AiderAgent(AgentInterface):
             "aider"
         """
         return "aider"
+
+    def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
+        """Extract token usage statistics from session.
+
+        Args:
+            session_id: Session UUID
+            project_path: Absolute path to project
+
+        Returns:
+            None - Aider does not expose token usage data
+
+        TODO: Implement token tracking if Aider provides usage data in chat history
+        """
+        return None

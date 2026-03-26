@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 import click
 from rich.console import Console
@@ -14,6 +14,7 @@ from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 from devflow.config.models import Session, ConversationContext
 from devflow.utils.paths import get_claude_config_dir
+from devflow.agent import create_agent_client
 
 console = Console()
 
@@ -393,6 +394,9 @@ def _display_conversation(
     if conv.message_count > 0:
         console.print(f"  [dim]Messages:[/dim] {conv.message_count}")
 
+    # Display token usage if available
+    _display_token_usage(conv, config_loader)
+
     # Display summary if available
     if conv.summary:
         console.print(f"  [dim]Summary:[/dim] {conv.summary}")
@@ -400,6 +404,74 @@ def _display_conversation(
     # Display PRs if any
     if conv.prs:
         console.print(f"  [dim]PRs:[/dim] {', '.join(conv.prs)}")
+
+
+def _display_token_usage(conv: ConversationContext, config_loader: ConfigLoader) -> None:
+    """Display token usage statistics for a conversation.
+
+    Args:
+        conv: ConversationContext object
+        config_loader: ConfigLoader instance
+    """
+    if not conv.project_path or not conv.ai_agent_session_id:
+        return
+
+    try:
+        # Create agent client
+        config = config_loader.load_config()
+        agent_backend = config.agent_backend or "claude"
+        agent = create_agent_client(agent_backend)
+
+        # Extract token usage
+        token_usage = agent.extract_token_usage(
+            conv.ai_agent_session_id,
+            conv.project_path
+        )
+
+        if not token_usage:
+            # Agent doesn't support token tracking or no usage data
+            return
+
+        # Display token statistics
+        input_tokens = token_usage.get("input_tokens", 0)
+        output_tokens = token_usage.get("output_tokens", 0)
+        cache_creation = token_usage.get("cache_creation_input_tokens", 0)
+        cache_read = token_usage.get("cache_read_input_tokens", 0)
+        total_tokens = token_usage.get("total_tokens", 0)
+
+        console.print(f"  [dim]Token Usage:[/dim]")
+        console.print(f"    Input: {input_tokens:,} tokens")
+        console.print(f"    Output: {output_tokens:,} tokens")
+        if cache_creation > 0:
+            console.print(f"    Cache Creation: {cache_creation:,} tokens")
+        if cache_read > 0:
+            console.print(f"    Cache Read: {cache_read:,} tokens (90% cost savings)")
+            # Calculate cache efficiency
+            cache_efficiency = (cache_read / (input_tokens + cache_read)) * 100 if (input_tokens + cache_read) > 0 else 0
+            console.print(f"    Cache Efficiency: {cache_efficiency:.1f}%")
+        console.print(f"    Total: {total_tokens:,} tokens")
+
+        # Estimate cost if model provider profile is configured
+        if hasattr(config, "model_provider") and config.model_provider:
+            default_profile_name = config.model_provider.get("default_profile")
+            if default_profile_name:
+                profiles = config.model_provider.get("profiles", {})
+                profile = profiles.get(default_profile_name)
+                if profile:
+                    input_cost = profile.get("cost_per_million_input_tokens")
+                    output_cost = profile.get("cost_per_million_output_tokens")
+                    if input_cost is not None and output_cost is not None:
+                        # Calculate cost
+                        regular_input_cost = (input_tokens / 1_000_000) * input_cost
+                        regular_output_cost = (output_tokens / 1_000_000) * output_cost
+                        cache_write_cost = (cache_creation / 1_000_000) * input_cost * 1.25
+                        cache_read_cost = (cache_read / 1_000_000) * input_cost * 0.1
+                        total_cost = regular_input_cost + regular_output_cost + cache_write_cost + cache_read_cost
+                        console.print(f"    [bold]Estimated Cost:[/bold] [green]${total_cost:.4f}[/green]")
+
+    except Exception:
+        # Silently skip if token extraction fails
+        pass
 
 
 def _get_conversation_file_path(project_path: str, ai_agent_session_id: str) -> str:

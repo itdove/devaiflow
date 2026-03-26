@@ -7,6 +7,7 @@ from typing import Dict, Optional
 from rich.console import Console
 from rich.table import Table
 
+from devflow.agent import create_agent_client
 from devflow.cli.utils import get_active_conversation, get_status_display, output_json as json_output, serialize_sessions
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -35,6 +36,7 @@ def _display_page(
     """
     # Detect active conversation (if any)
     config_loader = ConfigLoader()
+    config = config_loader.load_config()
     session_manager = SessionManager(config_loader)
     active_result = get_active_conversation(session_manager)
     active_session_name = None
@@ -44,7 +46,11 @@ def _display_page(
     if active_result:
         active_session, active_conversation, active_working_dir = active_result
         active_session_name = active_session.name
-            # Create table
+
+    # Get agent backend for token extraction
+    agent_backend = config.agent_backend or "claude"
+
+    # Create table
     table = Table(title="Your Sessions", show_header=True, header_style="bold magenta")
     table.add_column("Status")
     table.add_column("Name", style="bold")
@@ -54,6 +60,7 @@ def _display_page(
     table.add_column("Conversations", style="dim")
     table.add_column("Last Activity", style="dim", justify="right")
     table.add_column("Time", justify="right")
+    table.add_column("Tokens", justify="right", style="dim")
 
     for session in sessions_page:
         # Check if this session is currently active
@@ -137,6 +144,30 @@ def _display_page(
                     minutes_ago = int((time_diff.total_seconds() % 3600) // 60)
                     last_session_display = f"{minutes_ago}m ago" if minutes_ago > 0 else "just now"
 
+        # Get token usage for active conversation
+        token_display = "-"
+        if session.active_conversation:
+            conv = session.active_conversation
+            if conv.project_path and conv.ai_agent_session_id:
+                try:
+                    agent = create_agent_client(agent_backend)
+                    token_usage = agent.extract_token_usage(
+                        conv.ai_agent_session_id,
+                        conv.project_path
+                    )
+                    if token_usage:
+                        total_tokens = token_usage.get("total_tokens", 0)
+                        if total_tokens > 0:
+                            # Format tokens with K/M suffix for readability
+                            if total_tokens >= 1_000_000:
+                                token_display = f"{total_tokens / 1_000_000:.1f}M"
+                            elif total_tokens >= 1_000:
+                                token_display = f"{total_tokens / 1_000:.1f}K"
+                            else:
+                                token_display = str(total_tokens)
+                except Exception:
+                    pass  # Silently ignore errors
+
         # Add row
         table.add_row(
             status_display,
@@ -147,6 +178,7 @@ def _display_page(
             conversations_display,
             last_session_display,
             time_str,
+            token_display,
         )
 
     console.print(table)

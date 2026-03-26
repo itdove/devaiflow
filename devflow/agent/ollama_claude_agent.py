@@ -404,6 +404,20 @@ class OllamaClaudeAgent(AgentInterface):
         """
         return "ollama"
 
+    def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
+        """Extract token usage statistics from session.
+
+        Args:
+            session_id: Session UUID
+            project_path: Absolute path to project
+
+        Returns:
+            None - Ollama does not expose token usage data
+
+        TODO: Implement token tracking if Ollama provides usage data through Claude Code
+        """
+        return None
+
     def _get_session_dir(self, project_path: str) -> Path:
         """Get the session directory for a project.
 

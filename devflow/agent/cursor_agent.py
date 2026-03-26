@@ -271,3 +271,17 @@ class CursorAgent(AgentInterface):
             "cursor"
         """
         return "cursor"
+
+    def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
+        """Extract token usage statistics from session.
+
+        Args:
+            session_id: Session UUID
+            project_path: Absolute path to project
+
+        Returns:
+            None - Cursor does not expose token usage data
+
+        TODO: Implement token tracking if Cursor API provides usage data
+        """
+        return None

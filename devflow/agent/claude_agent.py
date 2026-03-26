@@ -4,6 +4,7 @@ This module implements the AgentInterface for Claude Code, encapsulating all
 Claude-specific logic that was previously in SessionCapture.
 """
 
+import json
 import os
 import subprocess
 import time
@@ -479,3 +480,88 @@ class ClaudeAgent(AgentInterface):
                     skills_dirs.append(str(cs_home))
 
         return skills_dirs
+
+    def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
+        """Extract token usage statistics from Claude Code conversation file.
+
+        Parses the .jsonl conversation file to extract token usage data from
+        assistant messages. Each assistant message may contain a usage object with:
+        - input_tokens: Input tokens consumed
+        - output_tokens: Output tokens generated
+        - cache_creation_input_tokens: Tokens written to prompt cache
+        - cache_read_input_tokens: Tokens read from cache (90% cost savings)
+
+        Args:
+            session_id: Session UUID
+            project_path: Absolute path to project
+
+        Returns:
+            Dictionary with aggregated token statistics, or None if:
+            - Session file doesn't exist
+            - Session file has no token usage data
+            - Error parsing session file
+
+            Returned dict contains:
+            - input_tokens: Total input tokens
+            - output_tokens: Total output tokens
+            - cache_creation_input_tokens: Total cache creation tokens
+            - cache_read_input_tokens: Total cache read tokens
+            - message_count: Number of messages with usage data
+            - total_tokens: Sum of input + output tokens
+        """
+        session_file = self.get_session_file_path(session_id, project_path)
+
+        if not session_file.exists():
+            return None
+
+        # Aggregate token usage across all assistant messages
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cache_creation_tokens = 0
+        total_cache_read_tokens = 0
+        message_count = 0
+
+        try:
+            with open(session_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        msg = json.loads(line)
+
+                        # Look for assistant messages with usage data
+                        # Claude Code format: {"type": "assistant", "message": {"usage": {...}}}
+                        if isinstance(msg, dict) and msg.get("type") == "assistant":
+                            inner_msg = msg.get("message", {})
+                            usage = inner_msg.get("usage")
+
+                            if usage and isinstance(usage, dict):
+                                # Extract token counts (default to 0 if missing)
+                                total_input_tokens += usage.get("input_tokens", 0)
+                                total_output_tokens += usage.get("output_tokens", 0)
+                                total_cache_creation_tokens += usage.get("cache_creation_input_tokens", 0)
+                                total_cache_read_tokens += usage.get("cache_read_input_tokens", 0)
+                                message_count += 1
+
+                    except json.JSONDecodeError:
+                        # Skip malformed lines
+                        continue
+
+        except (IOError, OSError):
+            # File read error
+            return None
+
+        # Return None if no usage data found
+        if message_count == 0:
+            return None
+
+        return {
+            "input_tokens": total_input_tokens,
+            "output_tokens": total_output_tokens,
+            "cache_creation_input_tokens": total_cache_creation_tokens,
+            "cache_read_input_tokens": total_cache_read_tokens,
+            "message_count": message_count,
+            "total_tokens": total_input_tokens + total_output_tokens,
+        }

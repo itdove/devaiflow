@@ -10,6 +10,7 @@ from devflow.session.summary import (
     generate_prose_summary,
     SessionSummary,
 )
+from devflow.agent.claude_agent import ClaudeAgent
 
 
 def test_extract_todo_history_empty():
@@ -1068,3 +1069,334 @@ def test_generate_prose_summary_agent_backend_none_defaults_to_ai():
     result = generate_prose_summary(summary, mode="ai", agent_backend=None)
     # Will fail gracefully to local since no API key, but shouldn't explicitly downgrade
     assert "created 1 new files" in result or "file" in result.lower()
+
+
+# ============================================================================
+# Token Usage Tracking Tests
+# ============================================================================
+
+def test_session_summary_token_fields_defaults():
+    """Test that SessionSummary has token fields with correct defaults."""
+    summary = SessionSummary()
+
+    assert summary.total_input_tokens == 0
+    assert summary.total_output_tokens == 0
+    assert summary.total_cache_creation_tokens == 0
+    assert summary.total_cache_read_tokens == 0
+    assert summary.total_messages_with_usage == 0
+    assert summary.total_tokens == 0
+
+
+def test_session_summary_total_tokens_property():
+    """Test that total_tokens computed property works correctly."""
+    summary = SessionSummary(
+        total_input_tokens=1000,
+        total_output_tokens=500,
+    )
+
+    assert summary.total_tokens == 1500
+
+
+def test_session_summary_estimate_cost_basic():
+    """Test basic cost estimation without cache."""
+    summary = SessionSummary(
+        total_input_tokens=1_000_000,  # 1M input tokens
+        total_output_tokens=500_000,   # 500K output tokens
+    )
+
+    # $3 per million input, $15 per million output
+    cost = summary.estimate_cost(
+        input_cost_per_million=3.0,
+        output_cost_per_million=15.0,
+    )
+
+    # Expected: (1M / 1M) * $3 + (500K / 1M) * $15 = $3 + $7.50 = $10.50
+    assert cost == 10.50
+
+
+def test_session_summary_estimate_cost_with_cache():
+    """Test cost estimation with cache creation and reads."""
+    summary = SessionSummary(
+        total_input_tokens=500_000,           # 500K regular input
+        total_output_tokens=200_000,          # 200K output
+        total_cache_creation_tokens=100_000,  # 100K cache write (1.25x cost)
+        total_cache_read_tokens=400_000,      # 400K cache read (0.1x cost)
+    )
+
+    # Sonnet 4: $3 input, $15 output
+    cost = summary.estimate_cost(
+        input_cost_per_million=3.0,
+        output_cost_per_million=15.0,
+        cache_write_cost_multiplier=1.25,
+        cache_read_cost_multiplier=0.1,
+    )
+
+    # Expected calculation:
+    # Regular input: (500K / 1M) * $3 = $1.50
+    # Output: (200K / 1M) * $15 = $3.00
+    # Cache creation: (100K / 1M) * $3 * 1.25 = $0.375
+    # Cache reads: (400K / 1M) * $3 * 0.1 = $0.12
+    # Total: $1.50 + $3.00 + $0.375 + $0.12 = $4.995
+    expected_cost = 1.5 + 3.0 + 0.375 + 0.12
+    assert abs(cost - expected_cost) < 0.001
+
+
+def test_session_summary_estimate_cost_zero_tokens():
+    """Test cost estimation with zero tokens."""
+    summary = SessionSummary()
+
+    cost = summary.estimate_cost(
+        input_cost_per_million=3.0,
+        output_cost_per_million=15.0,
+    )
+
+    assert cost == 0.0
+
+
+def test_claude_agent_extract_token_usage(tmp_path):
+    """Test ClaudeAgent.extract_token_usage() with valid conversation file."""
+    # Create a temporary conversation file
+    project_path = str(tmp_path / "project")
+    session_id = "test-session-123"
+
+    # Create agent and get expected session file path
+    agent = ClaudeAgent()
+    session_file = agent.get_session_file_path(session_id, project_path)
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create mock conversation with Claude Code format: {"type": "assistant", "message": {"usage": {...}}}
+    conversation_data = [
+        # User message (no usage)
+        {"type": "user", "message": {"content": "Hello"}},
+        # Assistant message with usage
+        {
+            "type": "assistant",
+            "message": {
+                "content": "Hi there!",
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cache_creation_input_tokens": 20,
+                    "cache_read_input_tokens": 30,
+                }
+            }
+        },
+        # User message
+        {"type": "user", "message": {"content": "Help me code"}},
+        # Assistant message with more usage
+        {
+            "type": "assistant",
+            "message": {
+                "content": "Sure!",
+                "usage": {
+                    "input_tokens": 200,
+                    "output_tokens": 150,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 100,
+                }
+            }
+        },
+    ]
+
+    # Write conversation to file
+    with open(session_file, "w") as f:
+        for line in conversation_data:
+            f.write(json.dumps(line) + "\n")
+
+    # Extract token usage
+    usage = agent.extract_token_usage(session_id, project_path)
+
+    assert usage is not None
+    assert usage["input_tokens"] == 300  # 100 + 200
+    assert usage["output_tokens"] == 200  # 50 + 150
+    assert usage["cache_creation_input_tokens"] == 20  # 20 + 0
+    assert usage["cache_read_input_tokens"] == 130  # 30 + 100
+    assert usage["message_count"] == 2  # 2 assistant messages with usage
+    assert usage["total_tokens"] == 500  # 300 + 200
+
+
+def test_claude_agent_extract_token_usage_no_file(tmp_path):
+    """Test ClaudeAgent.extract_token_usage() with nonexistent file."""
+    project_path = str(tmp_path / "project")
+    session_id = "nonexistent-session"
+
+    agent = ClaudeAgent()
+    usage = agent.extract_token_usage(session_id, project_path)
+
+    assert usage is None
+
+
+def test_claude_agent_extract_token_usage_empty_file(tmp_path):
+    """Test ClaudeAgent.extract_token_usage() with empty conversation file."""
+    project_path = str(tmp_path / "project")
+    session_id = "empty-session"
+
+    agent = ClaudeAgent()
+    session_file = agent.get_session_file_path(session_id, project_path)
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.touch()  # Create empty file
+
+    usage = agent.extract_token_usage(session_id, project_path)
+
+    assert usage is None
+
+
+def test_claude_agent_extract_token_usage_no_usage_data(tmp_path):
+    """Test ClaudeAgent.extract_token_usage() with messages but no usage data."""
+    project_path = str(tmp_path / "project")
+    session_id = "no-usage-session"
+
+    agent = ClaudeAgent()
+    session_file = agent.get_session_file_path(session_id, project_path)
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Messages without usage field (Claude Code format)
+    conversation_data = [
+        {"type": "user", "message": {"content": "Hello"}},
+        {"type": "assistant", "message": {"content": "Hi!"}},
+    ]
+
+    with open(session_file, "w") as f:
+        for line in conversation_data:
+            f.write(json.dumps(line) + "\n")
+
+    usage = agent.extract_token_usage(session_id, project_path)
+
+    assert usage is None
+
+
+def test_claude_agent_extract_token_usage_partial_fields(tmp_path):
+    """Test ClaudeAgent.extract_token_usage() with partial usage fields."""
+    project_path = str(tmp_path / "project")
+    session_id = "partial-session"
+
+    agent = ClaudeAgent()
+    session_file = agent.get_session_file_path(session_id, project_path)
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Message with only input/output tokens (no cache fields) - Claude Code format
+    conversation_data = [
+        {
+            "type": "assistant",
+            "message": {
+                "content": "Response",
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                }
+            }
+        },
+    ]
+
+    with open(session_file, "w") as f:
+        for line in conversation_data:
+            f.write(json.dumps(line) + "\n")
+
+    usage = agent.extract_token_usage(session_id, project_path)
+
+    assert usage is not None
+    assert usage["input_tokens"] == 100
+    assert usage["output_tokens"] == 50
+    assert usage["cache_creation_input_tokens"] == 0
+    assert usage["cache_read_input_tokens"] == 0
+    assert usage["message_count"] == 1
+    assert usage["total_tokens"] == 150
+
+
+def test_claude_agent_extract_token_usage_malformed_json(tmp_path):
+    """Test ClaudeAgent.extract_token_usage() handles malformed JSON gracefully."""
+    project_path = str(tmp_path / "project")
+    session_id = "malformed-session"
+
+    agent = ClaudeAgent()
+    session_file = agent.get_session_file_path(session_id, project_path)
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write malformed JSON - Claude Code format
+    with open(session_file, "w") as f:
+        f.write('{"type": "assistant", "message": {"content": "Hi",\n')  # Invalid JSON
+        f.write('{"type": "assistant", "message": {"content": "Valid", "usage": {"input_tokens": 100, "output_tokens": 50}}}\n')
+
+    usage = agent.extract_token_usage(session_id, project_path)
+
+    # Should still extract from valid line
+    assert usage is not None
+    assert usage["input_tokens"] == 100
+    assert usage["output_tokens"] == 50
+
+
+def test_generate_session_summary_includes_token_usage(tmp_path, monkeypatch):
+    """Test that generate_session_summary includes token usage when agent_client provided."""
+    from devflow.session.summary import generate_session_summary
+    from devflow.config.models import Session, ConversationContext, Conversation
+    from unittest.mock import Mock
+
+    # Create mock agent client
+    mock_agent = Mock()
+    mock_agent.extract_token_usage.return_value = {
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "cache_creation_input_tokens": 100,
+        "cache_read_input_tokens": 200,
+        "message_count": 5,
+        "total_tokens": 1500,
+    }
+
+    # Create session with conversation
+    project_path = str(tmp_path / "project")
+    session_id = "test-session"
+
+    # Create conversation file with at least one message so parse doesn't return empty
+    conversation_file = tmp_path / "conversation.jsonl"
+    with open(conversation_file, "w") as f:
+        # Add at least one message so parsing succeeds
+        f.write('{"type": "user", "message": {"content": "test"}}\n')
+
+    # Mock find_conversation_file to return our test file
+    def mock_find_conversation_file(session):
+        return conversation_file
+
+    monkeypatch.setattr(
+        "devflow.session.summary.find_conversation_file",
+        mock_find_conversation_file
+    )
+
+    session = Session(name="test", issue_key="TEST-1", goal="Test")
+    conversation_context = ConversationContext(
+        project_path=project_path,
+        ai_agent_session_id=session_id,
+    )
+    conversation = Conversation(
+        active_session=conversation_context,
+        archived_sessions=[]
+    )
+    session.conversations[project_path] = conversation
+    session.working_directory = project_path
+
+    # Generate summary with agent client
+    summary = generate_session_summary(session, agent_client=mock_agent)
+
+    # Verify token usage was extracted and included
+    assert summary.total_input_tokens == 1000
+    assert summary.total_output_tokens == 500
+    assert summary.total_cache_creation_tokens == 100
+    assert summary.total_cache_read_tokens == 200
+    assert summary.total_messages_with_usage == 5
+    assert summary.total_tokens == 1500
+
+
+def test_generate_session_summary_no_agent_client(tmp_path, monkeypatch):
+    """Test that generate_session_summary works without agent_client (backward compatibility)."""
+    from devflow.session.summary import generate_session_summary
+    from devflow.config.models import Session
+
+    session = Session(name="test", issue_key="TEST-1", goal="Test")
+    # No working directory, so no active conversation
+
+    summary = generate_session_summary(session, agent_client=None)
+
+    # Should have default token values
+    assert summary.total_input_tokens == 0
+    assert summary.total_output_tokens == 0
+    assert summary.total_cache_creation_tokens == 0
+    assert summary.total_cache_read_tokens == 0

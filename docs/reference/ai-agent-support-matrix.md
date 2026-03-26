@@ -2,6 +2,183 @@
 
 DevAIFlow supports multiple AI coding assistants through a pluggable agent architecture. This document describes the capabilities and limitations of each supported agent.
 
+## Concepts & Terminology
+
+Before diving into the agent matrix, it's important to understand the three distinct concepts in the AI coding assistant ecosystem:
+
+### 1. Agent (Agent Backend)
+
+**What it is:** The coding assistant tool or interface you interact with.
+
+**Think of it as:** "What tool am I typing into?" or "What application launches when I run `daf open`?"
+
+**Examples:**
+- Claude Code (standalone CLI)
+- GitHub Copilot (VS Code extension)
+- Cursor (IDE)
+- Windsurf (IDE)
+- Ollama (CLI that launches Claude Code)
+- Aider (TUI)
+- Crush (TUI)
+
+**Configuration:**
+```json
+{
+  "agent_backend": "claude"  // or "ollama", "cursor", "github-copilot", etc.
+}
+```
+
+**Key Point:** DevAIFlow needs to know which agent you're using so it can launch sessions correctly, find conversation files, and extract statistics.
+
+---
+
+### 2. Model Provider
+
+**What it is:** The AI service or API backend that hosts and serves the AI models.
+
+**Think of it as:** "Who/what is processing my requests?" or "Where do my prompts get sent?"
+
+**Examples:**
+- Anthropic API (official Claude API)
+- Vertex AI (Google Cloud's Claude API)
+- OpenRouter (multi-model proxy)
+- llama.cpp (local inference server)
+- Ollama (local model server)
+- OpenAI API
+- AWS Bedrock
+
+**Configuration (Claude Code only):**
+```json
+{
+  "model_provider": {
+    "default_profile": "anthropic",
+    "profiles": {
+      "anthropic": {
+        "name": "anthropic"
+      },
+      "llama-cpp": {
+        "name": "llama-cpp",
+        "base_url": "http://localhost:8000",
+        "model_name": "Qwen3-Coder"
+      },
+      "vertex": {
+        "name": "vertex",
+        "use_vertex": true,
+        "vertex_project_id": "my-gcp-project"
+      }
+    }
+  }
+}
+```
+
+**Key Point:** Model providers are **only relevant for Claude Code agent**. Other agents (Cursor, Copilot, etc.) manage their own backend connections internally.
+
+---
+
+### 3. Model
+
+**What it is:** The specific AI model (neural network) doing the thinking.
+
+**Think of it as:** "Which AI brain is answering my questions?"
+
+**Examples:**
+- Claude Sonnet 4 (Anthropic's mid-tier model)
+- Claude Opus 4 (Anthropic's most capable model)
+- Claude Haiku 4 (Anthropic's fastest model)
+- Qwen3-Coder (local coding model)
+- DeepSeek Coder (local coding model)
+- GPT-4 (OpenAI's model)
+
+**Configuration:**
+```json
+{
+  // For Claude Code with custom provider
+  "model_provider": {
+    "profiles": {
+      "llama-cpp": {
+        "model_name": "Qwen3-Coder"
+      }
+    }
+  },
+
+  // For Ollama agent
+  "ollama": {
+    "default_model": "qwen3-coder"
+  }
+}
+```
+
+**Key Point:** The model determines the quality, speed, and capabilities of responses. Different models excel at different tasks.
+
+---
+
+### How They Work Together
+
+The relationship forms a hierarchy:
+
+```
+┌─────────────────────────────────────────────┐
+│ Agent: Claude Code                          │
+│ (What tool launches)                        │
+│                                             │
+│  ├─> Model Provider: Anthropic API          │
+│  │   (Where prompts are sent)              │
+│  │   └─> Model: Claude Sonnet 4            │
+│  │       (Which AI brain responds)         │
+│  │                                          │
+│  ├─> Model Provider: llama.cpp              │
+│  │   (Alternative backend)                 │
+│  │   └─> Model: Qwen3-Coder                │
+│  │       (Local model)                     │
+│  │                                          │
+│  └─> Model Provider: Vertex AI              │
+│      (Google Cloud)                        │
+│      └─> Model: Claude Opus 4              │
+│          (Premium model)                   │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ Agent: Ollama                               │
+│ (Launches Claude Code with Ollama)         │
+│                                             │
+│  └─> Model Provider: Ollama Service         │
+│      (Built-in local server)               │
+│      └─> Model: qwen3-coder                 │
+│          (Local model)                     │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ Agent: Cursor                               │
+│ (IDE)                                       │
+│                                             │
+│  └─> Model Provider: Cursor's Backend       │
+│      (Managed internally)                  │
+│      └─> Model: Various                     │
+│          (Cursor manages this)             │
+└─────────────────────────────────────────────┘
+```
+
+### Token Usage Tracking Context
+
+Now that you understand these concepts, here's how they relate to **token usage tracking**:
+
+- **Agent determines IF tracking is possible**: Only Claude Code can parse `.jsonl` conversation files
+- **Model Provider determines token metadata format**: Each provider may report tokens differently
+- **Model determines token counts**: Different models tokenize text differently
+
+**Current Support:**
+- ✅ **Claude Code + Anthropic API**: Full token tracking (input, output, cache creation, cache reads)
+- ✅ **Claude Code + Alternative Providers**: Full tracking IF the provider exposes usage data
+- ❌ **Ollama Agent**: No tracking (conversation files don't include token usage)
+- ❌ **Other Agents**: No tracking (conversation files not accessible)
+
+This is why token tracking is currently **Claude Code only** - it's the only agent that:
+1. Exposes conversation files in a parseable format (`.jsonl`)
+2. Includes token usage metadata in those files
+3. Provides consistent access to this data
+
+---
+
 ## Supported AI Agents
 
 | Agent | Backend Name | Status | CLI Command | Session Management | Skill Installation |
@@ -142,6 +319,7 @@ daf skills --agents cursor
 | Session ID capture | ✅ Automatic | ✅ Automatic | ⚠️  Generated | ⚠️  Generated | ⚠️  Generated |
 | Conversation files | ✅ .jsonl | ✅ .jsonl | ❌ Not accessible | ❌ Not accessible | ❌ Not accessible |
 | Message counting | ✅ Accurate | ✅ Accurate | ❌ Not supported | ❌ Not supported | ❌ Not supported |
+| Token usage tracking | ✅ Full | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported |
 | Session history | ✅ Full | ✅ Full | ⚠️  Limited | ⚠️  Limited | ⚠️  Limited |
 | Conversation export | ✅ Full | ✅ Full | ❌ Not supported | ❌ Not supported | ❌ Not supported |
 | Conversation repair | ✅ Full | ✅ Full | ❌ Not applicable | ❌ Not applicable | ❌ Not applicable |
@@ -168,6 +346,7 @@ daf skills --agents cursor
 - ✅ Full session management with `.jsonl` conversation files
 - ✅ Automatic session ID detection
 - ✅ Precise message counting
+- ✅ Token usage tracking with cost estimation
 - ✅ Conversation export/import
 - ✅ Conversation file repair
 - ✅ Resume exact conversation state
@@ -181,6 +360,16 @@ claude --resume <uuid>  # Resume existing session
 **Session Storage:**
 - Location: `~/.claude/projects/<encoded-path>/<uuid>.jsonl`
 - Format: JSONL (one JSON object per line)
+
+**Token Usage Tracking:**
+- ✅ Extract token statistics from conversation files
+- Shows input tokens, output tokens, cache creation, cache reads
+- Calculates cache efficiency percentage (cache reads / total cacheable)
+- Estimates session cost based on model pricing
+- Displays in `daf info`, `daf active`, `daf list` commands
+- Includes in markdown exports via `daf export`
+- Supports prompt caching metrics (90% cost savings on cache reads)
+- Tracks: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`
 
 **AI-Powered Summaries:**
 - ✅ Full support via Anthropic API
@@ -319,9 +508,15 @@ daf config edit
 - Uses local model for summary generation (free)
 - Configure in TUI: AI tab → Session Summary → mode: "ai" or "both"
 
+**Token Usage Tracking:**
+- ❌ Not yet supported (Ollama doesn't expose token usage in conversation files)
+- TODO: Implement if Ollama adds token usage data to Claude Code sessions
+- For now, token statistics are not available when using Ollama backend
+
 **Known Issues:**
 - ⚠️  `--resume` flag not yet supported by Ollama CLI (falls back to regular Claude resume)
 - ⚠️  `--session-id` and `--add-dir` flags not yet supported (TODO in Ollama)
+- ⚠️  Token usage tracking not available (Ollama doesn't provide usage data)
 
 **Installation:**
 ```bash
@@ -583,6 +778,7 @@ Crush (formerly OpenCode) was created by Kujtim and later acquired by Charmbrace
 **Use Claude Code when:**
 - You need full conversation history and export
 - Message counting is important
+- Token usage tracking and cost estimation are needed
 - You want conversation repair capabilities
 - You need AI-powered session summaries
 - You need proven, production-tested functionality
