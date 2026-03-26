@@ -16,6 +16,9 @@ from devflow.cli.utils import (
     add_jira_comment,
     get_status_display,
     resolve_goal_input,
+    process_goal_options,
+    _is_valid_file_or_url,
+    _resolve_file_or_url,
     require_outside_claude,
     _read_goal_from_file,
     _fetch_goal_from_url,
@@ -713,3 +716,237 @@ def test_require_outside_claude_decorator_with_empty_session_id(monkeypatch):
     # Empty string is falsy, so should allow execution
     result = test_function()
     assert result == "success"
+
+
+# Tests for process_goal_options function
+
+
+def test_process_goal_options_with_goal_only():
+    """Test process_goal_options with only --goal provided (plain text)."""
+    goal = "This is a plain text goal"
+    result = process_goal_options(goal, None)
+    assert result == goal
+
+
+def test_process_goal_options_with_goal_file_only(tmp_path):
+    """Test process_goal_options with only --goal-file provided (file path)."""
+    # Create a test file
+    test_file = tmp_path / "requirements.md"
+    test_content = "# Requirements\n\nFile content goal"
+    test_file.write_text(test_content, encoding="utf-8")
+
+    result = process_goal_options(None, str(test_file))
+    assert result == test_content
+
+
+def test_process_goal_options_with_goal_file_url(monkeypatch):
+    """Test process_goal_options with --goal-file as URL."""
+    url = "https://example.com/spec.md"
+    expected_content = "# Specification\n\nURL content"
+
+    # Mock the requests.get function
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = expected_content
+
+    def mock_get(*args, **kwargs):
+        return mock_response
+
+    monkeypatch.setattr(requests, "get", mock_get)
+
+    result = process_goal_options(None, url)
+    assert result == expected_content
+
+
+def test_process_goal_options_mutual_exclusion():
+    """Test process_goal_options raises error when both --goal and --goal-file provided."""
+    with pytest.raises(click.ClickException) as exc_info:
+        process_goal_options("plain text goal", "file.md")
+
+    assert "Cannot specify both --goal and --goal-file" in str(exc_info.value)
+
+
+def test_process_goal_options_neither_provided():
+    """Test process_goal_options returns None when neither option provided."""
+    result = process_goal_options(None, None)
+    assert result is None
+
+
+def test_process_goal_options_goal_file_plain_text_error():
+    """Test process_goal_options raises error when --goal-file is plain text."""
+    # Multi-word text without path-like characteristics
+    plain_text = "This is plain text not a file"
+
+    with pytest.raises(click.ClickException) as exc_info:
+        process_goal_options(None, plain_text)
+
+    assert "--goal-file must be a file path or URL" in str(exc_info.value)
+
+
+def test_process_goal_options_goal_file_nonexistent_file():
+    """Test process_goal_options raises error when --goal-file points to nonexistent file."""
+    # This looks like a file path (has extension) but doesn't exist
+    nonexistent_file = "/tmp/nonexistent_requirements_12345.md"
+
+    with pytest.raises(click.ClickException) as exc_info:
+        process_goal_options(None, nonexistent_file)
+
+    assert "File not found" in str(exc_info.value)
+
+
+def test_process_goal_options_goal_auto_detection_file(tmp_path):
+    """Test process_goal_options with --goal auto-detecting a file path."""
+    # Create a test file
+    test_file = tmp_path / "spec.txt"
+    test_content = "Auto-detected file content"
+    test_file.write_text(test_content, encoding="utf-8")
+
+    # Use --goal (not --goal-file) - should auto-detect as file
+    result = process_goal_options(str(test_file), None)
+    assert result == test_content
+
+
+def test_process_goal_options_goal_auto_detection_url(monkeypatch):
+    """Test process_goal_options with --goal auto-detecting a URL."""
+    url = "https://example.com/requirements.md"
+    expected_content = "Auto-detected URL content"
+
+    # Mock the requests.get function
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = expected_content
+
+    def mock_get(*args, **kwargs):
+        return mock_response
+
+    monkeypatch.setattr(requests, "get", mock_get)
+
+    # Use --goal (not --goal-file) - should auto-detect as URL
+    result = process_goal_options(url, None)
+    assert result == expected_content
+
+
+# Tests for _is_valid_file_or_url helper
+
+
+def test_is_valid_file_or_url_http_url():
+    """Test _is_valid_file_or_url recognizes http:// URLs."""
+    assert _is_valid_file_or_url("http://example.com/file.md") is True
+
+
+def test_is_valid_file_or_url_https_url():
+    """Test _is_valid_file_or_url recognizes https:// URLs."""
+    assert _is_valid_file_or_url("https://example.com/spec.txt") is True
+
+
+def test_is_valid_file_or_url_file_prefix():
+    """Test _is_valid_file_or_url recognizes file:// prefix."""
+    assert _is_valid_file_or_url("file:///path/to/file.md") is True
+
+
+def test_is_valid_file_or_url_existing_file(tmp_path):
+    """Test _is_valid_file_or_url recognizes existing files."""
+    test_file = tmp_path / "test.md"
+    test_file.write_text("content")
+
+    assert _is_valid_file_or_url(str(test_file)) is True
+
+
+def test_is_valid_file_or_url_relative_path():
+    """Test _is_valid_file_or_url recognizes relative paths with extension."""
+    assert _is_valid_file_or_url("requirements.md") is True
+    assert _is_valid_file_or_url("./spec.txt") is True
+
+
+def test_is_valid_file_or_url_absolute_path():
+    """Test _is_valid_file_or_url recognizes absolute paths."""
+    assert _is_valid_file_or_url("/absolute/path/to/file.md") is True
+
+
+def test_is_valid_file_or_url_tilde_path():
+    """Test _is_valid_file_or_url recognizes ~ paths."""
+    assert _is_valid_file_or_url("~/docs/spec.txt") is True
+
+
+def test_is_valid_file_or_url_plain_text_rejected():
+    """Test _is_valid_file_or_url rejects plain text without path characteristics."""
+    assert _is_valid_file_or_url("This is plain text") is False
+    assert _is_valid_file_or_url("Some goal description") is False
+
+
+def test_is_valid_file_or_url_empty_string():
+    """Test _is_valid_file_or_url handles empty string."""
+    assert _is_valid_file_or_url("") is False
+
+
+def test_is_valid_file_or_url_whitespace_rejected():
+    """Test _is_valid_file_or_url rejects strings with whitespace."""
+    # Multi-word text is not a file path
+    assert _is_valid_file_or_url("file with spaces.md") is False
+
+
+# Tests for _resolve_file_or_url helper
+
+
+def test_resolve_file_or_url_http_url(monkeypatch):
+    """Test _resolve_file_or_url fetches HTTP URL."""
+    url = "http://example.com/file.md"
+    expected_content = "HTTP content"
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = expected_content
+
+    def mock_get(*args, **kwargs):
+        return mock_response
+
+    monkeypatch.setattr(requests, "get", mock_get)
+
+    result = _resolve_file_or_url(url)
+    assert result == expected_content
+
+
+def test_resolve_file_or_url_https_url(monkeypatch):
+    """Test _resolve_file_or_url fetches HTTPS URL."""
+    url = "https://example.com/spec.md"
+    expected_content = "HTTPS content"
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = expected_content
+
+    def mock_get(*args, **kwargs):
+        return mock_response
+
+    monkeypatch.setattr(requests, "get", mock_get)
+
+    result = _resolve_file_or_url(url)
+    assert result == expected_content
+
+
+def test_resolve_file_or_url_file_prefix(tmp_path):
+    """Test _resolve_file_or_url handles file:// prefix."""
+    test_file = tmp_path / "test.txt"
+    test_content = "File prefix content"
+    test_file.write_text(test_content, encoding="utf-8")
+
+    result = _resolve_file_or_url(f"file://{test_file}")
+    assert result == test_content
+
+
+def test_resolve_file_or_url_bare_file_path(tmp_path):
+    """Test _resolve_file_or_url reads bare file path."""
+    test_file = tmp_path / "requirements.md"
+    test_content = "Bare file path content"
+    test_file.write_text(test_content, encoding="utf-8")
+
+    result = _resolve_file_or_url(str(test_file))
+    assert result == test_content
+
+
+def test_resolve_file_or_url_nonexistent_file():
+    """Test _resolve_file_or_url raises error for nonexistent file."""
+    with pytest.raises(click.ClickException) as exc_info:
+        _resolve_file_or_url("/tmp/nonexistent_file_12345.md")
+
+    assert "File not found" in str(exc_info.value)
