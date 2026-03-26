@@ -109,7 +109,7 @@ def show_active(output_json: bool = False) -> None:
         # Get token usage if available
         token_usage = None
         if conversation.project_path and conversation.ai_agent_session_id:
-            agent_backend = config.agent_backend or "claude"
+            agent_backend = config.agent_backend if config else "claude"
             token_usage = _get_token_usage(
                 conversation.ai_agent_session_id,
                 conversation.project_path,
@@ -161,7 +161,7 @@ def show_active(output_json: bool = False) -> None:
     # Get token usage for display
     token_usage_display = None
     if conversation.project_path and conversation.ai_agent_session_id:
-        agent_backend = config.agent_backend or "claude"
+        agent_backend = config.agent_backend if config else "claude"
         token_usage_display = _get_token_usage(
             conversation.ai_agent_session_id,
             conversation.project_path,

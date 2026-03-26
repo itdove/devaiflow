@@ -48,7 +48,7 @@ def _display_page(
         active_session_name = active_session.name
 
     # Get agent backend for token extraction
-    agent_backend = config.agent_backend or "claude"
+    agent_backend = config.agent_backend if config else "claude"
 
     # Create table
     table = Table(title="Your Sessions", show_header=True, header_style="bold magenta")
