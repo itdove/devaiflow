@@ -26,28 +26,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from conftest import clear_all_ci_env_vars, restore_env_vars
 
 
-# List of all CI environment variables that trigger non-interactive mode
-CI_ENV_VARS = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'TRAVIS', 'CIRCLECI', 'DAF_NON_INTERACTIVE']
-
-
-def clear_all_ci_env_vars():
-    """Clear all CI-related environment variables and return their original values."""
-    original_values = {}
-    for var in CI_ENV_VARS:
-        original_values[var] = os.environ.get(var)
-        os.environ.pop(var, None)
-    return original_values
-
-
-def restore_env_vars(original_values):
-    """Restore environment variables to their original values."""
-    for var, value in original_values.items():
-        if value is not None:
-            os.environ[var] = value
-        else:
-            os.environ.pop(var, None)
-
-
 class TestNonInteractiveFlag:
     """Test the global --non-interactive flag."""
 
