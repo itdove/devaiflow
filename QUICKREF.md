@@ -8,7 +8,7 @@ Single-page reference for all essential commands.
 # One-time setup
 pip install devaiflow                   # Install devaiflow
 daf init                                # Interactive configuration wizard
-daf upgrade                             # Install Claude Code skills & commands
+daf skills                             # Install Claude Code skills & commands
 
 # Authentication (if using issue trackers)
 gh auth login                           # GitHub CLI

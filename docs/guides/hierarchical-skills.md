@@ -29,7 +29,7 @@ Hierarchical skills are organization-specific AI agent instructions that are:
 
 **Benefits:**
 - **Centralized Management**: Update organization policies in one place
-- **Automatic Distribution**: All users get updates via `daf upgrade`
+- **Automatic Distribution**: All users get updates via `daf skills`
 - **Guaranteed Order**: Skills load in priority order (enterprise overrides all)
 - **Separation of Concerns**: Policy (config files) vs. Instructions (skills)
 - **Version Control**: Store skills in Git for change tracking
@@ -96,7 +96,7 @@ When Claude Code starts, skills are loaded in this order:
 2. **Hierarchical skills** (`$DEVAIFLOW_HOME/.claude/skills/01-*`, `02-*`, etc.) - Organization skills
 3. **Project skills** (`project/.claude/skills/`) - Project-specific
 
-**Note:** Workspace-level skills are no longer supported. All bundled daf skills are installed globally to `~/.claude/skills/` via `daf upgrade`.
+**Note:** Workspace-level skills are no longer supported. All bundled daf skills are installed globally to `~/.claude/skills/` via `daf skills`.
 
 ---
 
@@ -104,7 +104,7 @@ When Claude Code starts, skills are loaded in this order:
 
 ### Installation Workflow
 
-When you run `daf upgrade`, DevAIFlow:
+When you run `daf skills`, DevAIFlow:
 
 1. **Reads** `organization.json` to find `hierarchical_config_source`
 2. **Downloads** config files (.md) from the source location
@@ -148,7 +148,7 @@ Here's the complete flow from remote configuration to local skill installation:
 │ }                                                               │
 └─────────────────────────────────────────────────────────────────┘
                             │
-                            │ User runs: daf upgrade
+                            │ User runs: daf skills
                             ▼
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -501,7 +501,7 @@ daf init
 
 Optional: URL to organization-wide config files (ENTERPRISE.md, ORGANIZATION.md, etc.)
 This enables automatic distribution of organization policies and AI agent skills.
-After setting this, run 'daf upgrade' to download config files and skills.
+After setting this, run 'daf skills' to download config files and skills.
 
 Examples:
   - file:///company/shared/devaiflow/configs
@@ -534,7 +534,7 @@ daf config edit --advanced
 
 ```bash
 # Install all hierarchical skills
-daf upgrade
+daf skills
 
 # Verify installation
 ls ~/.daf-sessions/.claude/skills/
@@ -683,7 +683,7 @@ my-org-devaiflow/
 
 ### User Installation Layout
 
-After running `daf upgrade`, users will have:
+After running `daf skills`, users will have:
 
 ```
 ~/.daf-sessions/
@@ -748,7 +748,7 @@ EOF
 
 **User Installation:**
 ```bash
-daf upgrade
+daf skills
 # ✓ Downloaded ENTERPRISE.md to: ~/.daf-sessions/ENTERPRISE.md
 # ✓ Installed enterprise skill to: ~/.daf-sessions/.claude/skills/01-enterprise
 ```
@@ -805,7 +805,7 @@ git push -u origin main
 
 **User Installation:**
 ```bash
-daf upgrade
+daf skills
 # Downloads from GitHub raw URLs automatically
 ```
 
@@ -907,7 +907,7 @@ sed -i 's/ansible/my-project/g' docs/example.md
 4. **Test Before Distribution**
    ```bash
    # Test installation locally
-   daf upgrade --dry-run
+   daf skills --dry-run
 
    # Verify skills load correctly
    daf open
@@ -921,7 +921,7 @@ sed -i 's/ansible/my-project/g' docs/example.md
 6. **Validate Regularly**
    ```bash
    # Check for broken skill URLs
-   daf upgrade --dry-run
+   daf skills --dry-run
 
    # Verify all config files are valid
    daf config validate
@@ -932,7 +932,7 @@ sed -i 's/ansible/my-project/g' docs/example.md
 1. **Keep Skills Updated**
    ```bash
    # Update weekly or when notified
-   daf upgrade
+   daf skills
    ```
 
 2. **Verify Installation**
@@ -946,7 +946,7 @@ sed -i 's/ansible/my-project/g' docs/example.md
 
 3. **Report Issues**
    - If skills fail to install, contact your admin
-   - Provide error messages from `daf upgrade`
+   - Provide error messages from `daf skills`
 
 4. **Customize User Skills**
    - Add personal skills to `~/.claude/skills/`
@@ -959,7 +959,7 @@ sed -i 's/ansible/my-project/g' docs/example.md
 
 ### Skills Not Installing
 
-**Problem**: `daf upgrade` shows "Failed to install enterprise skill"
+**Problem**: `daf skills` shows "Failed to install enterprise skill"
 
 **Solution**:
 ```bash
@@ -971,7 +971,7 @@ ls /path/to/configs/  # For file:// URLs
 curl https://github.com/company/repo/configs/ENTERPRISE.md  # For HTTP URLs
 
 # Check dry-run output
-daf upgrade --dry-run
+daf skills --dry-run
 ```
 
 ### Skills Not Loading in Session
@@ -1015,7 +1015,7 @@ skill_url: file:///company/shared/devaiflow/daf-skills/enterprise
 **Solution**:
 ```bash
 # Re-download all config files
-daf upgrade
+daf skills
 
 # Or manually update
 cp /company/shared/devaiflow/configs/*.md ~/.daf-sessions/
@@ -1023,7 +1023,7 @@ cp /company/shared/devaiflow/configs/*.md ~/.daf-sessions/
 
 ### SSL Certificate Verification Failed
 
-**Problem**: `daf upgrade` fails with SSL certificate error when downloading from internal GitLab/GitHub:
+**Problem**: `daf skills` fails with SSL certificate error when downloading from internal GitLab/GitHub:
 
 ```
 SSL certificate verification failed for https://gitlab.internal.company.com/.../ENTERPRISE.md
@@ -1038,7 +1038,7 @@ Error: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
 **1. Use custom CA bundle (RECOMMENDED):**
 ```bash
 export DAF_SSL_VERIFY=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
-daf upgrade
+daf skills
 ```
 
 **2. Configure permanently in organization.json:**
@@ -1055,7 +1055,7 @@ daf upgrade
 **3. Disable SSL verification (INSECURE - testing only):**
 ```bash
 export DAF_SSL_VERIFY=false
-daf upgrade
+daf skills
 ```
 
 ⚠️ **Security Warning:** Option 3 is insecure and should only be used for testing!
@@ -1081,7 +1081,7 @@ Enable debug output to see what's happening:
 
 ```bash
 # Run with verbose output
-daf upgrade --dry-run
+daf skills --dry-run
 
 # Check the logs
 # Look for messages like:
@@ -1121,11 +1121,11 @@ Fetches: https://company.com/devaiflow/configs/ENTERPRISE.md
 **Administrators:**
 1. Update skills in source repository
 2. Commit and push changes
-3. Notify users to run `daf upgrade`
+3. Notify users to run `daf skills`
 4. (Optional) Tag release: `git tag v1.2.0`
 
 **Automatic Updates (future):**
-- Could add `daf upgrade --auto` to crontab
+- Could add `daf skills --auto` to crontab
 - Check for updates daily
 - Notify on changes
 
@@ -1153,7 +1153,7 @@ Fetches: https://company.com/devaiflow/configs/ENTERPRISE.md
 **Key Points:**
 
 1. **Two-Level Architecture**: Config files (.md) contain policy, Skills (SKILL.md) contain instructions
-2. **Automatic Distribution**: `daf upgrade` downloads both config and skills from central source
+2. **Automatic Distribution**: `daf skills` downloads both config and skills from central source
 3. **Numbered Loading**: 01-enterprise → 02-organization → 03-team → 04-user
 4. **Relative Paths**: Resolved from source location, not installed location
 5. **Separation of Concerns**: Don't duplicate - reference config files from skills
@@ -1178,7 +1178,7 @@ echo "# Instructions\nHow to..." > my-org/daf-skills/enterprise/SKILL.md
 daf config edit  # Set hierarchical_config_source
 
 # 2. Install skills
-daf upgrade
+daf skills
 
 # 3. Verify
 ls ~/.daf-sessions/.claude/skills/
@@ -1186,5 +1186,5 @@ ls ~/.daf-sessions/.claude/skills/
 
 **Next Steps:**
 - See [Configuration Reference](../reference/configuration.md) for all config options
-- See [Commands Reference](../reference/commands.md) for `daf upgrade` details
+- See [Commands Reference](../reference/commands.md) for `daf skills` details
 - See example repositories for complete implementations

@@ -1,0 +1,483 @@
+"""Implementation of 'daf skills' command group."""
+
+from pathlib import Path
+from typing import Optional
+
+import click
+from rich.console import Console
+
+from devflow.config.loader import ConfigLoader
+from devflow.utils.claude_commands import install_skills_to_agents
+
+console = Console()
+
+
+@click.command()
+@click.argument("skill_name", required=False)
+@click.option("--install", is_flag=True, help="Install skills (default action)")
+@click.option("--upgrade", is_flag=True, help="Upgrade skills (same as --install)")
+@click.option("--uninstall", is_flag=True, help="Uninstall skills")
+@click.option("--list", "list_skills", is_flag=True, help="List available or installed skills")
+@click.option("--available", is_flag=True, help="Show available bundled skills (use with --list)")
+@click.option("--installed", is_flag=True, help="Show installed skills (use with --list)")
+@click.option("--dry-run", is_flag=True, help="Show what would be changed without actually changing")
+@click.option("--agent", type=str, help="AI agent to target (claude, cursor, windsurf, copilot, aider, continue)")
+@click.option("--all-agents", is_flag=True, help="Target all supported agents")
+@click.option("--level", type=click.Choice(['global', 'project', 'both']), help="Installation level (default: global)")
+@click.option("--project-path", type=click.Path(), help="Project directory for project-level operations")
+def skills(
+    skill_name: Optional[str],
+    install: bool,
+    upgrade: bool,
+    uninstall: bool,
+    list_skills: bool,
+    available: bool,
+    installed: bool,
+    dry_run: bool,
+    agent: Optional[str],
+    all_agents: bool,
+    level: Optional[str],
+    project_path: Optional[str]
+) -> None:
+    """Manage DevAIFlow skills for AI agents.
+
+    Install, upgrade, or uninstall bundled skills to one or more AI agents.
+
+    \b
+    Examples:
+        # Install all skills to Claude (default)
+        daf skills
+
+        # Install all skills to Cursor
+        daf skills --agent cursor
+
+        # Install all skills to all agents
+        daf skills --all-agents
+
+        # Install specific skill to Claude
+        daf skills daf-help
+
+        # Install specific skill to Cursor
+        daf skills daf-help --agent cursor
+
+        # Uninstall all skills from Cursor
+        daf skills --uninstall --agent cursor
+
+        # Uninstall specific skill from all agents
+        daf skills daf-help --uninstall --all-agents
+
+        # Install to project directory
+        daf skills --level project --project-path .
+
+        # Preview changes without applying
+        daf skills --dry-run --all-agents
+
+        # List available bundled skills
+        daf skills --list --available
+
+        # List installed skills for all agents
+        daf skills --list --installed
+
+        # List installed skills for specific agent
+        daf skills --list --installed --agent cursor
+    """
+    # Handle list action first (doesn't need config validation)
+    if list_skills:
+        # Determine which agents to list for
+        agents_list = None
+        if all_agents:
+            from devflow.agent.skill_directories import SUPPORTED_AGENTS
+            agents_list = [a for a in SUPPORTED_AGENTS if a != 'github-copilot']
+        elif agent:
+            agents_list = [agent]
+        else:
+            agents_list = ['claude']  # Default to Claude
+
+        # Determine installation level for listing
+        install_level = level or 'global'
+
+        # Validate project_path if needed
+        project_path_obj = None
+        if install_level in ('project', 'both'):
+            if not project_path:
+                console.print("[red]✗[/red] --project-path is required for level=project or level=both")
+                return
+            project_path_obj = Path(project_path).expanduser().resolve()
+            if not project_path_obj.exists():
+                console.print(f"[red]✗[/red] Project path does not exist: {project_path_obj}")
+                return
+            if not project_path_obj.is_dir():
+                console.print(f"[red]✗[/red] Project path is not a directory: {project_path_obj}")
+                return
+
+        _list_skills(
+            available=available,
+            installed=installed,
+            agents=agents_list,
+            level=install_level,
+            project_path=project_path_obj
+        )
+        return
+
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+
+    if not config or not config.repos:
+        console.print("[red]✗[/red] Configuration not found")
+        console.print("[dim]Run 'daf init' to configure your setup[/dim]")
+        return
+
+    if not config.repos.workspaces:
+        console.print("[yellow]⚠[/yellow] No workspaces configured")
+        console.print("[dim]Add a workspace with: daf workspace add <name> <path>[/dim]")
+        return
+
+    # Determine action (default: install)
+    action = "install"
+    if uninstall:
+        action = "uninstall"
+    elif upgrade:
+        action = "upgrade"  # Same as install, just clearer intent
+    elif install:
+        action = "install"
+
+    # Determine which agents to target
+    agents_list = None
+    if all_agents:
+        from devflow.agent.skill_directories import SUPPORTED_AGENTS
+        agents_list = [a for a in SUPPORTED_AGENTS if a != 'github-copilot']
+    elif agent:
+        agents_list = [agent]
+    # else: agents_list remains None, will default to ['claude']
+
+    # Determine installation level
+    install_level = level or 'global'
+
+    # Validate project_path if needed
+    project_path_obj = None
+    if install_level in ('project', 'both'):
+        if not project_path:
+            console.print("[red]✗[/red] --project-path is required for level=project or level=both")
+            return
+
+        project_path_obj = Path(project_path).expanduser().resolve()
+        if not project_path_obj.exists():
+            console.print(f"[red]✗[/red] Project path does not exist: {project_path_obj}")
+            return
+        if not project_path_obj.is_dir():
+            console.print(f"[red]✗[/red] Project path is not a directory: {project_path_obj}")
+            return
+
+    # Execute action
+    if action == "uninstall":
+        _uninstall_skills(
+            skill_name=skill_name,
+            agents=agents_list,
+            level=install_level,
+            project_path=project_path_obj,
+            dry_run=dry_run
+        )
+    else:
+        # Install or upgrade
+        _install_skills(
+            skill_name=skill_name,
+            agents=agents_list,
+            level=install_level,
+            project_path=project_path_obj,
+            dry_run=dry_run
+        )
+
+
+def _install_skills(
+    skill_name: Optional[str],
+    agents: Optional[list],
+    level: str,
+    project_path: Optional[Path],
+    dry_run: bool
+) -> None:
+    """Install or upgrade skills."""
+    if skill_name:
+        # Install specific skill
+        _install_specific_skill(skill_name, agents, level, project_path, dry_run)
+    else:
+        # Install all skills
+        _install_all_skills(agents, level, project_path, dry_run)
+
+
+def _install_all_skills(
+    agents: Optional[list],
+    level: str,
+    project_path: Optional[Path],
+    dry_run: bool
+) -> None:
+    """Install all bundled skills."""
+    if not dry_run:
+        console.print("[cyan]Installing bundled skills...[/cyan]")
+        console.print()
+    else:
+        console.print("[cyan]Checking for updates (dry run)...[/cyan]")
+        console.print()
+
+    try:
+        results = install_skills_to_agents(
+            agents=agents or ['claude'],
+            level=level,
+            project_path=project_path,
+            skip_confirmation=True,
+            dry_run=dry_run,
+            quiet=False
+        )
+
+        # Results are already printed by install_skills_to_agents
+        # Just handle hierarchical skills if needed
+        _install_hierarchical_skills(dry_run)
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Installation failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
+
+def _install_specific_skill(
+    skill_name: str,
+    agents: Optional[list],
+    level: str,
+    project_path: Optional[Path],
+    dry_run: bool
+) -> None:
+    """Install a specific skill by name."""
+    from devflow.utils.claude_commands import get_bundled_skills_dir
+    from devflow.agent.skill_directories import get_skill_install_paths
+    import shutil
+
+    # Find the skill in bundled skills
+    bundled_dir = get_bundled_skills_dir()
+    skill_dir = bundled_dir / skill_name
+
+    if not skill_dir.exists() or not (skill_dir / "SKILL.md").exists():
+        console.print(f"[red]✗[/red] Skill '{skill_name}' not found in bundled skills")
+        console.print(f"[dim]Available skills in: {bundled_dir}[/dim]")
+        return
+
+    # Get installation paths
+    agents_list = agents or ['claude']
+    try:
+        install_paths = get_skill_install_paths(
+            agents=agents_list,
+            level=level,
+            project_path=project_path
+        )
+    except ValueError as e:
+        console.print(f"[red]✗[/red] Invalid configuration: {e}")
+        return
+
+    if not dry_run:
+        console.print(f"[cyan]Installing skill '{skill_name}'...[/cyan]")
+        console.print()
+    else:
+        console.print(f"[cyan]Checking skill '{skill_name}' (dry run)...[/cyan]")
+        console.print()
+
+    # Install to each agent and path
+    for agent_name, target_dir in install_paths:
+        console.print(f"[bold cyan]{'Would install' if dry_run else 'Installing'} to {agent_name} ({target_dir})...[/bold cyan]")
+
+        dest_dir = target_dir / skill_name
+
+        try:
+            if not dry_run:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir)
+                shutil.copytree(skill_dir, dest_dir)
+                console.print(f"  [green]✓[/green] Installed {skill_name}")
+            else:
+                if dest_dir.exists():
+                    console.print(f"  [yellow]Would upgrade[/yellow] {skill_name}")
+                else:
+                    console.print(f"  [green]Would install[/green] {skill_name}")
+
+        except Exception as e:
+            console.print(f"  [red]✗[/red] Failed: {e}")
+
+    if dry_run:
+        console.print("\n[bold yellow]Dry run complete. No changes were made.[/bold yellow]")
+
+
+def _uninstall_skills(
+    skill_name: Optional[str],
+    agents: Optional[list],
+    level: str,
+    project_path: Optional[Path],
+    dry_run: bool
+) -> None:
+    """Uninstall skills."""
+    from devflow.agent.skill_directories import get_skill_install_paths
+    import shutil
+
+    agents_list = agents or ['claude']
+
+    # Get installation paths
+    try:
+        install_paths = get_skill_install_paths(
+            agents=agents_list,
+            level=level,
+            project_path=project_path
+        )
+    except ValueError as e:
+        console.print(f"[red]✗[/red] Invalid configuration: {e}")
+        return
+
+    if not dry_run:
+        console.print("[cyan]Uninstalling skills...[/cyan]")
+        console.print()
+    else:
+        console.print("[cyan]Checking what would be uninstalled (dry run)...[/cyan]")
+        console.print()
+
+    # Uninstall from each agent and path
+    for agent_name, target_dir in install_paths:
+        console.print(f"[bold cyan]{'Would uninstall from' if dry_run else 'Uninstalling from'} {agent_name} ({target_dir})...[/bold cyan]")
+
+        if skill_name:
+            # Uninstall specific skill
+            skill_dir = target_dir / skill_name
+            if skill_dir.exists():
+                if not dry_run:
+                    shutil.rmtree(skill_dir)
+                    console.print(f"  [green]✓[/green] Uninstalled {skill_name}")
+                else:
+                    console.print(f"  [yellow]Would uninstall[/yellow] {skill_name}")
+            else:
+                console.print(f"  [dim]Skill '{skill_name}' not installed[/dim]")
+        else:
+            # Uninstall all bundled skills
+            if not target_dir.exists():
+                console.print(f"  [dim]No skills directory found[/dim]")
+                continue
+
+            # Find all skill directories
+            skills = [d for d in target_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
+
+            if not skills:
+                console.print(f"  [dim]No skills installed[/dim]")
+                continue
+
+            for skill_dir in skills:
+                if not dry_run:
+                    shutil.rmtree(skill_dir)
+                    console.print(f"  [green]✓[/green] Uninstalled {skill_dir.name}")
+                else:
+                    console.print(f"  [yellow]Would uninstall[/yellow] {skill_dir.name}")
+
+    if dry_run:
+        console.print("\n[bold yellow]Dry run complete. No changes were made.[/bold yellow]")
+    else:
+        console.print("\n[bold green]✓[/bold green] Uninstall complete")
+
+
+def _install_hierarchical_skills(dry_run: bool) -> None:
+    """Install hierarchical skills from configuration files."""
+    console.print("\n[bold]Hierarchical Skills (from config files):[/bold]")
+
+    from devflow.utils.hierarchical_skills import install_hierarchical_skills
+
+    try:
+        changed, up_to_date, failed = install_hierarchical_skills(
+            dry_run=dry_run,
+            quiet=False
+        )
+        # Results already printed by install_hierarchical_skills
+    except Exception as e:
+        console.print(f"[red]✗[/red] Hierarchical skill installation failed: {e}")
+
+
+def _list_skills(
+    available: bool,
+    installed: bool,
+    agents: list,
+    level: str,
+    project_path: Optional[Path]
+) -> None:
+    """List available or installed skills."""
+    from devflow.utils.claude_commands import get_bundled_skills_dir
+    from devflow.agent.skill_directories import get_skill_install_paths
+    from rich.table import Table
+
+    # Default to showing available skills if neither flag is specified
+    if not available and not installed:
+        available = True
+
+    # List available bundled skills
+    if available:
+        console.print("[bold cyan]Available Bundled Skills:[/bold cyan]\n")
+
+        bundled_dir = get_bundled_skills_dir()
+        skills = sorted([
+            d.name for d in bundled_dir.iterdir()
+            if d.is_dir() and (d / "SKILL.md").exists()
+        ])
+
+        if not skills:
+            console.print("[dim]No bundled skills found[/dim]")
+        else:
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Skill Name", style="cyan")
+            table.add_column("Type", style="yellow")
+
+            for skill in skills:
+                # Determine type based on naming convention
+                # Skills starting with "daf-" are user-invocable commands
+                # Others (gh-cli, git-cli, glab-cli) are reference documentation
+                if skill.startswith("daf-"):
+                    skill_type = "Command"
+                else:
+                    skill_type = "Reference"
+
+                table.add_row(skill, skill_type)
+
+            console.print(table)
+            console.print(f"\n[dim]Total: {len(skills)} skills[/dim]")
+
+    # List installed skills
+    if installed:
+        if available:
+            console.print()  # Add spacing between sections
+
+        console.print("[bold cyan]Installed Skills:[/bold cyan]\n")
+
+        try:
+            install_paths = get_skill_install_paths(
+                agents=agents,
+                level=level,
+                project_path=project_path
+            )
+        except ValueError as e:
+            console.print(f"[red]✗[/red] Invalid configuration: {e}")
+            return
+
+        any_skills_found = False
+        for agent_name, target_dir in install_paths:
+            # Find all installed skills
+            if not target_dir.exists():
+                console.print(f"[bold]{agent_name}[/bold] ([dim]{target_dir}[/dim]): [dim]No skills directory[/dim]")
+                continue
+
+            skills = sorted([
+                d.name for d in target_dir.iterdir()
+                if d.is_dir() and (d / "SKILL.md").exists()
+            ])
+
+            if not skills:
+                console.print(f"[bold]{agent_name}[/bold] ([dim]{target_dir}[/dim]): [dim]No skills installed[/dim]")
+            else:
+                any_skills_found = True
+                console.print(f"[bold]{agent_name}[/bold] ([dim]{target_dir}[/dim]):")
+                for skill in skills:
+                    console.print(f"  [green]✓[/green] {skill}")
+                console.print(f"  [dim]Total: {len(skills)} skills[/dim]")
+
+            console.print()  # Add spacing between agents
+
+        if not any_skills_found:
+            console.print("[yellow]⚠[/yellow] No skills installed for the specified agents and level")

@@ -3750,22 +3750,49 @@ def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
         raise
 
 
+# Add skills command
+from devflow.cli.commands.skills_command import skills
+cli.add_command(skills)
+
+
 @cli.command()
 @click.option("--dry-run", is_flag=True, help="Show what would be upgraded without actually upgrading")
 @click.option("--commands-only", is_flag=True, help="Upgrade only bundled slash commands")
 @click.option("--skills-only", is_flag=True, help="Upgrade only bundled skills")
 @click.option("--project-path", type=click.Path(), help="Install skills to project directory (e.g., '.', '/path/to/project')")
+@click.option("--agent", type=str, help="AI agent to install to (claude, cursor, windsurf, copilot, aider, continue)")
+@click.option("--level", type=click.Choice(['global', 'project', 'both']), help="Installation level (default: global)")
+@click.option("--all-agents", is_flag=True, help="Install to all supported agents (claude, cursor, windsurf, copilot, aider, continue)")
 @json_option
-def upgrade(ctx: click.Context, dry_run: bool, commands_only: bool, skills_only: bool, project_path: str) -> None:
-    """Upgrade bundled Claude Code skills.
+def upgrade(
+    ctx: click.Context,
+    dry_run: bool,
+    commands_only: bool,
+    skills_only: bool,
+    project_path: str,
+    agent: str,
+    level: str,
+    all_agents: bool
+) -> None:
+    """[DEPRECATED] Upgrade bundled Claude Code skills.
+
+    ⚠️  DEPRECATED: Use 'daf skills' instead. This command will be removed in version 3.0.
+
+    Upgrade bundled Claude Code skills.
 
     This command installs skills to ~/.claude/skills/ (global) by default.
-    Use --project-path to install to a specific project directory instead.
+    Use --level to control installation location, or --agent/--all-agents for multi-agent installation.
 
     Installation locations:
     - Default: ~/.claude/skills/ (available in all projects)
-    - With --project-path: <project>/.claude/skills/ (project-specific)
+    - With --level project: <project>/.claude/skills/ (project-specific)
+    - With --level both: Both global and project-level
     - Hierarchical skills: ~/.daf-sessions/.claude/skills/ (organization config)
+
+    Multi-agent support:
+    - Use --agent to install to a specific agent (e.g., --agent cursor)
+    - Use --all-agents to install to all supported agents
+    - Supported agents: claude, cursor, windsurf, copilot (github-copilot), aider, continue
 
     Skills installed:
     - Slash commands: /daf-active, /daf-help, /daf-info, etc.
@@ -3775,20 +3802,60 @@ def upgrade(ctx: click.Context, dry_run: bool, commands_only: bool, skills_only:
     Items that are already up-to-date will be skipped.
 
     Examples:
-        daf upgrade                      # Install to ~/.claude/skills/ (global)
-        daf upgrade --project-path .     # Install to current directory
-        daf upgrade --project-path /path # Install to specific project
-        daf upgrade --dry-run            # Preview what would be upgraded
+        daf upgrade                                    # Install to ~/.claude/skills/ (global, Claude only)
+        daf upgrade --level project --project-path .   # Install to current project only
+        daf upgrade --level both --project-path .      # Install to both global and project
+        daf upgrade --agent cursor                     # Install to Cursor only
+        daf upgrade --agent windsurf                   # Install to Windsurf only
+        daf upgrade --all-agents                       # Install to all supported agents
+        daf upgrade --dry-run                          # Preview what would be upgraded
     """
     from devflow.cli.commands.upgrade_command import upgrade_all
 
-    # commands_only and skills_only are deprecated but kept for backward compatibility
-    if commands_only or skills_only:
-        console.print("[yellow]⚠[/yellow] Note: --commands-only and --skills-only are deprecated.")
-        console.print("[dim]All slash commands are now skills. Upgrading all skills...[/dim]")
+    # Get output_json flag from context
+    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+
+    # Show deprecation warning (only in non-JSON mode)
+    if not output_json:
+        console.print("[yellow]⚠[/yellow] [bold]DEPRECATED:[/bold] The 'daf upgrade' command is deprecated.")
+        console.print("[dim]Use 'daf skills' instead. This command will be removed in version 3.0.[/dim]")
         console.print()
 
-    upgrade_all(dry_run=dry_run, upgrade_skills=True, project_path=project_path)
+    # commands_only and skills_only are deprecated but kept for backward compatibility
+    if commands_only or skills_only:
+        if not output_json:
+            console.print("[yellow]⚠[/yellow] Note: --commands-only and --skills-only are deprecated.")
+            console.print("[dim]All slash commands are now skills. Upgrading all skills...[/dim]")
+            console.print()
+
+    # Determine which agents to install to
+    agents_list = None
+
+    if all_agents:
+        # Install to all supported agents
+        from devflow.agent.skill_directories import SUPPORTED_AGENTS
+        agents_list = [a for a in SUPPORTED_AGENTS if a != 'github-copilot']  # Exclude alias
+    elif agent:
+        # Install to single specified agent
+        agents_list = [agent]
+    # else: agents_list remains None, will default to ['claude'] in upgrade_all()
+
+    # Determine installation level
+    install_level = level
+    if project_path and not level:
+        # Backward compatibility: --project-path implies level=project
+        install_level = 'project'
+    elif not install_level:
+        # Default to global if no level specified
+        install_level = 'global'
+
+    upgrade_all(
+        dry_run=dry_run,
+        upgrade_skills=True,
+        project_path=project_path,
+        agents=agents_list,
+        level=install_level
+    )
 
 
 # Note: 'import' is a Python keyword, so we name the function import_cmd

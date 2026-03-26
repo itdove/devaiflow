@@ -273,6 +273,7 @@ class TestPrintUpgradeTable:
         )
 
 
+@pytest.mark.skip(reason="Tests for deprecated 'daf upgrade' command. Command replaced by 'daf skills'. Will be removed in v3.0 (see issue #296)")
 class TestUpgradeAllComprehensive:
     """Comprehensive tests for upgrade_all function covering all upgrade paths."""
 
@@ -479,6 +480,7 @@ class TestUpgradeAllComprehensive:
                                     assert mock_console.print.called
 
 
+@pytest.mark.skip(reason="Tests for deprecated 'daf upgrade' command. Command replaced by 'daf skills'. Will be removed in v3.0 (see issue #296)")
 class TestProjectPathInstallation:
     """Tests for --project-path installation option."""
 

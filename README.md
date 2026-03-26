@@ -134,7 +134,7 @@ gh auth login
 daf init  # Configures workspaces, GitHub settings, etc.
 
 # Install Claude Code commands and skills
-daf upgrade  # Installs /daf-* slash commands into Claude Code
+daf skills  # Installs /daf-* slash commands into Claude Code
 
 # Path A: Create new issue with analysis
 daf git new --goal "Add two-factor authentication"
@@ -172,7 +172,7 @@ export JIRA_URL="https://jira.example.com"
 
 # Initialize and upgrade
 daf init
-daf upgrade
+daf skills
 
 # Path A: Create new ticket with analysis
 daf jira new story --parent PROJ-59038 --goal "Add two-factor authentication"
@@ -503,7 +503,7 @@ DevAIFlow supports the following environment variables for customization:
 - **Example**:
   ```bash
   export CLAUDE_CONFIG_DIR="~/.config/claude"
-  daf upgrade  # Skills will be installed to $CLAUDE_CONFIG_DIR/skills/
+  daf skills  # Skills will be installed to $CLAUDE_CONFIG_DIR/skills/
   ```
 - **Documentation**: https://code.claude.com/docs/en/env-vars
 

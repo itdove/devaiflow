@@ -123,7 +123,7 @@ DevAIFlow respects the following environment variables for customization:
 - **Example**:
   ```bash
   export CLAUDE_CONFIG_DIR="~/.config/claude"
-  daf upgrade  # Skills install to $CLAUDE_CONFIG_DIR/skills/
+  daf skills  # Skills install to $CLAUDE_CONFIG_DIR/skills/
   daf open PROJ-123  # Session files in $CLAUDE_CONFIG_DIR/projects/
   ```
 - **Documentation**: https://code.claude.com/docs/en/env-vars
@@ -1339,7 +1339,7 @@ When you create or open a session, context files are loaded in this order:
    - Files configured via `daf config context add`
 
 7. **Skills** (from workspace):
-   - `.claude/skills/` (deployed via `daf upgrade`)
+   - `.claude/skills/` (deployed via `daf skills`)
 
 **CRITICAL**: Files are only loaded if they physically exist on disk. Missing files are silently skipped with no errors.
 

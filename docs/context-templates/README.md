@@ -27,7 +27,7 @@ Context files are loaded in this order:
    - Files configured via `daf config context add`
 
 7. **Skills** (from workspace):
-   - .claude/skills/ (deployed via `daf upgrade`)
+   - .claude/skills/ (deployed via `daf skills`)
 
 **IMPORTANT**: Files are only loaded if they physically exist on disk. Missing files are silently skipped (no errors).
 

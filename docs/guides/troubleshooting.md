@@ -1293,19 +1293,19 @@ Find your organization's CA certificate:
 ```bash
 # Red Hat/CentOS - Use the system CA bundle
 export DAF_SSL_VERIFY=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
-daf upgrade
+daf skills
 
 # Or use a specific internal CA
 export DAF_SSL_VERIFY=/etc/pki/ca-trust/source/anchors/company-ca.crt
-daf upgrade
+daf skills
 
 # Debian/Ubuntu
 export DAF_SSL_VERIFY=/etc/ssl/certs/ca-certificates.crt
-daf upgrade
+daf skills
 
 # macOS
 export DAF_SSL_VERIFY=/etc/ssl/cert.pem
-daf upgrade
+daf skills
 ```
 
 **2. Configure Permanently (organization.json):**
@@ -1322,7 +1322,7 @@ daf upgrade
 **3. Disable SSL Verification (INSECURE - testing only):**
 ```bash
 export DAF_SSL_VERIFY=false
-daf upgrade
+daf skills
 ```
 
 ⚠️ **Security Warning:** Only use `DAF_SSL_VERIFY=false` for:
