@@ -288,7 +288,15 @@ def test_set_default_agent_no_config(capsys):
     mock_loader.load_config.return_value = None
 
     with patch('devflow.cli.commands.agent_commands.ConfigLoader', return_value=mock_loader):
-        set_default_agent("claude", output_json=False)
+        with patch('devflow.cli.commands.agent_commands.detect_agent_installation') as mock_detect:
+            mock_detect.return_value = {
+                "installed": True,
+                "cli_path": "/usr/local/bin/claude",
+                "version": "1.0.0",
+                "additional_requirements": [],
+            }
+
+            set_default_agent("claude", output_json=False)
 
     captured = capsys.readouterr()
     assert "No configuration found" in captured.out
