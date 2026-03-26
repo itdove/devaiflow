@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import Optional
 
+from devflow.utils.paths import get_claude_config_dir
+
 
 def discover_skills(project_path: Optional[str] = None, workspace: Optional[str] = None) -> list[tuple[str, str]]:
     """Discover all skills from user-level, workspace-level, hierarchical (DEVAIFLOW_HOME), and project-level locations.
@@ -47,8 +49,8 @@ def discover_skills(project_path: Optional[str] = None, workspace: Optional[str]
 
         return (str(skill_file.resolve()), description)
 
-    # 1. User-level skills: ~/.claude/skills/ (generic skills like daf-cli, git-cli)
-    user_skills_dir = Path.home() / ".claude" / "skills"
+    # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/) - generic skills like daf-cli, git-cli
+    user_skills_dir = get_claude_config_dir() / "skills"
     if user_skills_dir.exists():
         for skill_dir in sorted(user_skills_dir.iterdir()):
             if skill_dir.is_dir():

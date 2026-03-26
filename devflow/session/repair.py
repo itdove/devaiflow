@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Tuple
 
 from rich.console import Console
 
+from devflow.utils.paths import get_claude_config_dir
+
 console = Console()
 
 
@@ -26,7 +28,7 @@ def get_conversation_file_path(ai_agent_session_id: str) -> Optional[Path]:
     Returns:
         Path to conversation file if found, None otherwise
     """
-    claude_home = Path.home() / ".claude"
+    claude_home = get_claude_config_dir()
     projects_dir = claude_home / "projects"
 
     if not projects_dir.exists():
@@ -339,7 +341,7 @@ def scan_all_conversations() -> List[Tuple[str, Path, Dict[str, any]]]:
     Returns:
         List of tuples: (ai_agent_session_id, file_path, corruption_info)
     """
-    claude_home = Path.home() / ".claude"
+    claude_home = get_claude_config_dir()
     projects_dir = claude_home / "projects"
 
     if not projects_dir.exists():

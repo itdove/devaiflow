@@ -483,6 +483,35 @@ DevAIFlow automatically checks GitHub authentication before operations and provi
 
 See [Troubleshooting Guide](docs/guides/troubleshooting.md#githubd-authentication---fine-grained-token-required) for common authentication issues.
 
+## Environment Variables
+
+DevAIFlow supports the following environment variables for customization:
+
+### DEVAIFLOW_HOME
+- **Purpose**: Customize where DevAIFlow stores session data and configuration
+- **Default**: `~/.daf-sessions`
+- **Example**:
+  ```bash
+  export DEVAIFLOW_HOME="~/custom/devaiflow-data"
+  daf init
+  ```
+
+### CLAUDE_CONFIG_DIR
+- **Purpose**: Customize where Claude Code stores its configuration and data files (official Claude Code variable)
+- **Default**: `~/.claude`
+- **Use Case**: Useful for testing with multiple Claude Code configurations or custom storage locations
+- **Example**:
+  ```bash
+  export CLAUDE_CONFIG_DIR="~/.config/claude"
+  daf upgrade  # Skills will be installed to $CLAUDE_CONFIG_DIR/skills/
+  ```
+- **Documentation**: https://code.claude.com/docs/en/env-vars
+
+### JIRA_AUTH_TYPE, JIRA_API_TOKEN, JIRA_URL
+- **Purpose**: Authenticate with JIRA instance
+- **Required for**: JIRA integration
+- **See**: Quick Start section above for examples
+
 ## For Other Organizations
 
 **DevAIFlow is fully generic and works with GitHub, GitLab, or JIRA.** Configuration is file-based and can be customized for your organization.

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from devflow.config.loader import ConfigLoader
+from devflow.utils.paths import get_claude_config_dir
 
 
 class ArchiveManagerBase:
@@ -33,7 +34,7 @@ class ArchiveManagerBase:
         Returns:
             Path to .jsonl file if found, None otherwise
         """
-        claude_dir = Path.home() / ".claude" / "projects"
+        claude_dir = get_claude_config_dir() / "projects"
         if not claude_dir.exists():
             return None
 

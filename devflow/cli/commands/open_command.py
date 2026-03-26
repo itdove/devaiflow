@@ -29,6 +29,7 @@ from devflow.session.summary import generate_session_summary
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.utils.context_files import load_hierarchical_context_files
 from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
+from devflow.utils.paths import get_claude_config_dir
 from devflow.utils.daf_agents_validation import (
     validate_daf_agents_md as _validate_context_files,
     _install_bundled_cs_agents,
@@ -926,8 +927,8 @@ def open_session(
                 # Skills can be in 3 locations: user-level, workspace-level, project-level
                 skills_dirs = []
 
-                # 1. User-level skills: ~/.claude/skills/
-                user_skills = Path.home() / ".claude" / "skills"
+                # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/)
+                user_skills = get_claude_config_dir() / "skills"
                 if user_skills.exists():
                     skills_dirs.append(str(user_skills))
 

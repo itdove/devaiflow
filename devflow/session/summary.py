@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel
 
 from devflow.config.models import Session
+from devflow.utils.paths import get_claude_config_dir
 
 
 class CommandExecution(BaseModel):
@@ -380,7 +381,7 @@ def find_conversation_file(session: Session) -> Optional[Path]:
     # Note: Claude Code KEEPS the leading dash in directory names
     # Do NOT remove it
 
-    claude_dir = Path.home() / ".claude" / "projects" / encoded_path
+    claude_dir = get_claude_config_dir() / "projects" / encoded_path
     conversation_file = claude_dir / f"{active_conv.ai_agent_session_id}.jsonl"
 
     if conversation_file.exists():

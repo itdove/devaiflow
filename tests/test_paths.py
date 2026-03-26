@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from devflow.utils.paths import get_cs_home, is_mock_mode
+from devflow.utils.paths import get_cs_home, is_mock_mode, get_claude_config_dir
 
 
 def test_get_cs_home_default(monkeypatch, tmp_path):
@@ -134,3 +134,104 @@ def test_is_mock_mode_with_daf_set_to_zero(monkeypatch):
     monkeypatch.setenv("DAF_MOCK_MODE", "0")
 
     assert is_mock_mode() is False
+
+
+# Tests for get_claude_config_dir()
+
+
+def test_get_claude_config_dir_default(monkeypatch, tmp_path):
+    """Test get_claude_config_dir returns ~/.claude by default."""
+    # Ensure environment variable is not set
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+
+    # Mock Path.home() to use tmp_path to avoid side effects
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = get_claude_config_dir()
+    expected = tmp_path / ".claude"
+
+    assert result == expected
+    assert isinstance(result, Path)
+
+
+def test_get_claude_config_dir_with_env_var(monkeypatch, tmp_path):
+    """Test get_claude_config_dir returns CLAUDE_CONFIG_DIR value when set."""
+    custom_path = tmp_path / "custom-claude-config"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(custom_path))
+
+    result = get_claude_config_dir()
+
+    assert result == custom_path
+    assert isinstance(result, Path)
+
+
+def test_get_claude_config_dir_with_tilde_expansion(monkeypatch):
+    """Test get_claude_config_dir expands tilde in CLAUDE_CONFIG_DIR."""
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "~/.config/claude")
+
+    result = get_claude_config_dir()
+    expected = Path.home() / ".config/claude"
+
+    assert result == expected
+    assert not str(result).startswith("~")
+
+
+def test_get_claude_config_dir_with_relative_path(monkeypatch):
+    """Test get_claude_config_dir resolves relative paths to absolute."""
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "relative/claude/path")
+
+    result = get_claude_config_dir()
+
+    assert result.is_absolute()
+    assert str(result).endswith("relative/claude/path")
+
+
+def test_get_claude_config_dir_with_absolute_path(monkeypatch, tmp_path):
+    """Test get_claude_config_dir handles absolute paths."""
+    custom_path = tmp_path / "absolute-claude-config"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(custom_path))
+
+    result = get_claude_config_dir()
+
+    assert result == custom_path
+    assert result.is_absolute()
+
+
+def test_get_claude_config_dir_consistency(monkeypatch, tmp_path):
+    """Test get_claude_config_dir returns same value on multiple calls."""
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+
+    # Mock Path.home() to use tmp_path to avoid side effects
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result1 = get_claude_config_dir()
+    result2 = get_claude_config_dir()
+
+    assert result1 == result2
+
+
+def test_get_claude_config_dir_with_complex_path(monkeypatch, tmp_path):
+    """Test get_claude_config_dir handles paths with spaces and special chars."""
+    complex_path = tmp_path / "my config" / "claude-data"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(complex_path))
+
+    result = get_claude_config_dir()
+
+    assert result == complex_path
+    assert isinstance(result, Path)
+
+
+def test_get_claude_config_dir_different_from_devaiflow_home(monkeypatch, tmp_path):
+    """Test get_claude_config_dir and get_cs_home can have different values."""
+    claude_path = tmp_path / "claude-config"
+    devaiflow_path = tmp_path / "devaiflow-sessions"
+
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude_path))
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(devaiflow_path))
+
+    claude_result = get_claude_config_dir()
+    devaiflow_result = get_cs_home()
+
+    assert claude_result != devaiflow_result
+    assert claude_result == claude_path
+    assert devaiflow_result == devaiflow_path

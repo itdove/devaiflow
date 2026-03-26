@@ -37,6 +37,34 @@ def get_cs_home() -> Path:
     return Path.home() / ".daf-sessions"
 
 
+def get_claude_config_dir() -> Path:
+    """Get Claude Code config directory, respecting CLAUDE_CONFIG_DIR.
+
+    This function respects the official Claude Code environment variable
+    CLAUDE_CONFIG_DIR, which allows users to customize where Claude Code
+    stores its configuration and data files.
+
+    Returns:
+        Path to Claude config directory:
+        - $CLAUDE_CONFIG_DIR if set (official Claude Code variable)
+        - ~/.claude otherwise (backward compatible)
+
+    Examples:
+        >>> # With CLAUDE_CONFIG_DIR not set
+        >>> get_claude_config_dir()
+        PosixPath('/home/user/.claude')
+
+        >>> # With CLAUDE_CONFIG_DIR set to custom path
+        >>> os.environ['CLAUDE_CONFIG_DIR'] = '~/.config/claude'
+        >>> get_claude_config_dir()
+        PosixPath('/home/user/.config/claude')
+    """
+    claude_config_dir = os.getenv("CLAUDE_CONFIG_DIR")
+    if claude_config_dir:
+        return Path(claude_config_dir).expanduser().resolve()
+    return Path.home() / ".claude"
+
+
 def is_mock_mode() -> bool:
     """Check if mock mode is enabled.
 

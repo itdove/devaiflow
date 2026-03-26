@@ -15,6 +15,8 @@ from typing import List, Tuple, Optional
 import shutil
 from rich.console import Console
 
+from devflow.utils.paths import get_claude_config_dir
+
 console = Console()
 
 
@@ -159,9 +161,9 @@ def install_or_upgrade_slash_commands(
     if not slash_commands:
         return ([], [], [])
 
-    # Install to user-level ~/.claude/skills/
-    user_home = Path.home()
-    skills_dir = user_home / ".claude" / "skills"
+    # Install to user-level ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/)
+    claude_config = get_claude_config_dir()
+    skills_dir = claude_config / "skills"
 
     if not dry_run:
         skills_dir.mkdir(parents=True, exist_ok=True)
@@ -221,9 +223,9 @@ def install_or_upgrade_reference_skills(
     if not bundled_skills:
         return ([], [], [])
 
-    # Install to user-level ~/.claude/skills/
-    user_home = Path.home()
-    skills_dir = user_home / ".claude" / "skills"
+    # Install to user-level ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/)
+    claude_config = get_claude_config_dir()
+    skills_dir = claude_config / "skills"
 
     if not dry_run:
         skills_dir.mkdir(parents=True, exist_ok=True)
@@ -445,8 +447,9 @@ def build_claude_command(
     # Collect all skills directories
     skills_dirs = []
 
-    # 1. User-level skills: ~/.claude/skills/
-    user_skills = Path.home() / ".claude" / "skills"
+    # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/)
+    claude_config = get_claude_config_dir()
+    user_skills = claude_config / "skills"
     if user_skills.exists():
         skills_dirs.append(str(user_skills))
 

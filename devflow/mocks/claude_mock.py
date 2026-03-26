@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from devflow.mocks.persistence import MockDataStore
+from devflow.utils.paths import get_claude_config_dir
 
 
 class MockClaudeCode:
@@ -196,7 +197,7 @@ class MockClaudeCode:
 
         # Determine Claude home directory
         if claude_home is None:
-            claude_home = Path.home() / ".claude"
+            claude_home = get_claude_config_dir()
 
         # Create projects directory (encoding project path)
         project_path = session.get("project_path", "")

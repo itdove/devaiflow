@@ -13,7 +13,7 @@ from rich.prompt import Confirm
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_home, get_claude_config_dir
 from devflow.utils.time_parser import parse_duration
 
 console = Console()
@@ -287,7 +287,7 @@ def _find_conversation_file(ai_agent_session_id: str) -> Optional[Path]:
     Returns:
         Path to conversation file if found, None otherwise
     """
-    claude_projects = Path.home() / ".claude" / "projects"
+    claude_projects = get_claude_config_dir() / "projects"
     if not claude_projects.exists():
         return None
 

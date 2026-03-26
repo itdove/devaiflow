@@ -13,6 +13,7 @@ from devflow.cli.utils import get_status_display, output_json as json_output, se
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 from devflow.config.models import Session, ConversationContext
+from devflow.utils.paths import get_claude_config_dir
 
 console = Console()
 
@@ -417,8 +418,8 @@ def _get_conversation_file_path(project_path: str, ai_agent_session_id: str) -> 
     if encoded_path.startswith("-"):
         encoded_path = encoded_path[1:]
 
-    # Claude Code stores sessions in ~/.claude/projects/{encoded-path}/
-    claude_dir = Path.home() / ".claude" / "projects" / encoded_path
+    # Claude Code stores sessions in ~/.claude/projects/{encoded-path}/ (or $CLAUDE_CONFIG_DIR/projects/{encoded-path}/)
+    claude_dir = get_claude_config_dir() / "projects" / encoded_path
     conv_file = claude_dir / f"{ai_agent_session_id}.jsonl"
 
     # Check if file exists

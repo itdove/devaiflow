@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from devflow.utils.paths import get_claude_config_dir
+
 
 @dataclass
 class DiscoveredSession:
@@ -27,9 +29,9 @@ class SessionDiscovery:
         """Initialize session discovery.
 
         Args:
-            claude_dir: Path to .claude directory. Defaults to ~/.claude
+            claude_dir: Path to .claude directory. Defaults to ~/.claude or $CLAUDE_CONFIG_DIR
         """
-        self.claude_dir = claude_dir or Path.home() / ".claude"
+        self.claude_dir = claude_dir or get_claude_config_dir()
         self.projects_dir = self.claude_dir / "projects"
 
     def discover_sessions(self) -> List[DiscoveredSession]:
