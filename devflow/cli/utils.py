@@ -174,6 +174,141 @@ def resolve_goal_input(goal_text: str) -> str:
     return goal_text
 
 
+def process_goal_options(goal: Optional[str], goal_file: Optional[str]) -> Optional[str]:
+    """Process --goal and --goal-file options with mutual exclusion and validation.
+
+    This function handles the mutual exclusion between --goal and --goal-file,
+    validates that --goal-file input is actually a file path or URL (not plain text),
+    and resolves the goal content from the appropriate source.
+
+    Args:
+        goal: Plain text goal or auto-detected file/URL from --goal option
+        goal_file: Explicit file path or URL from --goal-file option
+
+    Returns:
+        Resolved goal content as a string, or None if neither option provided
+
+    Raises:
+        click.ClickException: If both options are provided or if --goal-file is invalid
+
+    Examples:
+        >>> process_goal_options("plain text goal", None)
+        'plain text goal'
+        >>> process_goal_options(None, "/path/to/file.md")
+        '<file content>'
+        >>> process_goal_options("text", "/path/to/file.md")
+        ClickException: Cannot specify both --goal and --goal-file
+        >>> process_goal_options(None, "plain text without path")
+        ClickException: --goal-file must be a file path or URL
+    """
+    # Check for mutual exclusion
+    if goal and goal_file:
+        raise click.ClickException(
+            "Cannot specify both --goal and --goal-file. "
+            "Use --goal for plain text (with auto-detection) or --goal-file for explicit file/URL input."
+        )
+
+    # If --goal-file is provided, validate it's a file path or URL
+    if goal_file:
+        # Validate that it's actually a file path or URL, not plain text
+        if not _is_valid_file_or_url(goal_file):
+            raise click.ClickException(
+                f"--goal-file must be a file path or URL, not plain text.\n"
+                f"Invalid input: {goal_file}\n\n"
+                f"Valid examples:\n"
+                f"  --goal-file requirements.md\n"
+                f"  --goal-file ~/docs/spec.txt\n"
+                f"  --goal-file /absolute/path/to/file.md\n"
+                f"  --goal-file https://example.com/requirements.md\n\n"
+                f"For plain text goals, use --goal instead."
+            )
+
+        # Resolve the file/URL to get content
+        return _resolve_file_or_url(goal_file)
+
+    # If --goal is provided, use auto-detection (existing behavior)
+    if goal:
+        return resolve_goal_input(goal)
+
+    # Neither option provided
+    return None
+
+
+def _is_valid_file_or_url(input_str: str) -> bool:
+    """Check if input string is a valid file path or URL.
+
+    Args:
+        input_str: String to validate
+
+    Returns:
+        True if input is a file path or URL, False if it's plain text
+    """
+    if not input_str:
+        return False
+
+    # Check if it's a URL (http:// or https://)
+    parsed = urlparse(input_str)
+    if parsed.scheme in ("http", "https"):
+        return True
+
+    # Check if it's a file:// URL
+    if input_str.startswith("file://"):
+        return True
+
+    # A path must be a single token (no whitespace) to be considered a file path
+    # Multi-word text is always treated as plain text
+    if " " in input_str or "\t" in input_str or "\n" in input_str:
+        return False
+
+    # Expand ~ to home directory for checking
+    potential_path = Path(input_str).expanduser()
+
+    # Check if file exists (valid file path)
+    if potential_path.exists():
+        return True
+
+    # Check if it looks like a file path (even if file doesn't exist)
+    # Heuristic: contains path separators or common file extensions
+    looks_like_path = (
+        "/" in input_str or
+        "\\" in input_str or
+        input_str.startswith("~") or
+        input_str.startswith(".") or
+        any(input_str.endswith(ext) for ext in [".md", ".txt", ".doc", ".docx", ".pdf", ".json", ".yaml", ".yml"])
+    )
+
+    return looks_like_path
+
+
+def _resolve_file_or_url(input_str: str) -> str:
+    """Resolve file path or URL to get content.
+
+    This is similar to resolve_goal_input but assumes the input is already
+    validated as a file path or URL.
+
+    Args:
+        input_str: File path or URL
+
+    Returns:
+        Resolved content as string
+
+    Raises:
+        click.ClickException: If file is not found or URL fetch fails
+    """
+    # Check if it's a URL (http:// or https://)
+    parsed = urlparse(input_str)
+    if parsed.scheme in ("http", "https"):
+        return _fetch_goal_from_url(input_str)
+
+    # Check if it's a file path (file:// prefix)
+    if input_str.startswith("file://"):
+        file_path = input_str[7:]  # Remove "file://" prefix
+        return _read_goal_from_file(file_path)
+
+    # Otherwise, treat as a bare file path
+    return _read_goal_from_file(input_str)
+
+
 def _read_goal_from_file(file_path: str) -> str:
     """Read goal content from a local file.
 

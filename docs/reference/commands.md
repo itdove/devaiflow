@@ -111,7 +111,8 @@ daf new --name <NAME> --goal "..." [OPTIONS]
 
 **Options:**
 - `--name` - Session name
-- `--goal` - What you're trying to accomplish (required; supports file:// paths and http(s):// URLs)
+- `--goal` - What you're trying to accomplish (supports auto-detection of file:// paths and http(s):// URLs)
+- `--goal-file` - Explicit file path or URL for goal input (mutually exclusive with `--goal`)
 - `--jira` - JIRA ticket key (optional)
 - `--path` - Project path (auto-detected if not specified; mutually exclusive with `--projects`)
 - `--projects` - Comma-separated list of projects for multi-project session (e.g., "backend,frontend,docs")
@@ -121,10 +122,18 @@ daf new --name <NAME> --goal "..." [OPTIONS]
 - `--model-profile` - Model provider profile to use (e.g., "vertex", "llama-cpp"; stored in session for future use)
 
 **Goal Input Formats:**
+
+**Using --goal (with auto-detection):**
 - **Plain text**: Any multi-word text is treated as plain text
 - **File path (with prefix)**: `file:///path/to/file.md` - reads file content
 - **Bare file path**: `/path/to/file.md` or `requirements.md` - must be a single token (no spaces)
 - **URL**: `https://example.com/spec.txt` - fetches content from URL
+
+**Using --goal-file (explicit file/URL input):**
+- **File path**: `requirements.md`, `~/docs/spec.txt`, `/absolute/path/to/file.md` - reads file content
+- **URL**: `https://example.com/spec.txt` - fetches content from URL
+- **Validation**: Ensures input is actually a file path or URL (not plain text)
+- **Mutual exclusion**: Cannot use both `--goal` and `--goal-file` together
 
 **Examples:**
 ```bash
@@ -143,13 +152,21 @@ daf new --name "new-feature" --goal "Build API" --template my-backend-template
 # Goal from local file (with file:// prefix)
 daf new --name "complex-feature" --goal "file:///path/to/requirements.md"
 
-# Goal from local file (bare path - must be single token, no spaces)
+# Goal from local file using --goal (bare path - must be single token, no spaces)
 daf new --name "complex-feature" --goal "/path/to/requirements.md"
 daf new --name "complex-feature" --goal "~/Documents/requirements.md"
 daf new --name "complex-feature" --goal "requirements.md"
 
+# Goal from local file using --goal-file (explicit, allows any path)
+daf new --name "complex-feature" --goal-file "requirements.md"
+daf new --name "complex-feature" --goal-file "~/Documents/spec.txt"
+daf new --name "complex-feature" --goal-file "/absolute/path/to/requirements.md"
+
 # Goal from URL
 daf new --name "spec-impl" --goal "https://docs.example.com/specification.txt"
+
+# Goal from URL using --goal-file (explicit)
+daf new --name "spec-impl" --goal-file "https://docs.example.com/specification.txt"
 
 # Multi-word text with special characters is always treated as plain text
 daf new --name "bug-fix" --goal "Fix error in help.py when using --output flag"
@@ -2218,7 +2235,8 @@ daf jira new <TYPE> --parent <PARENT> --goal <GOAL> [OPTIONS]
 
 **Required Options:**
 - `--parent <KEY>` - Parent JIRA key (epic for story/task/bug, story for subtask)
-- `--goal <TEXT>` - Goal/description for the ticket (supports file:// paths and http(s):// URLs)
+- `--goal <TEXT>` - Goal/description for the ticket (auto-detection of file:// paths and http(s):// URLs)
+- `--goal-file <PATH|URL>` - Explicit file path or URL for goal input (mutually exclusive with `--goal`)
 
 **Optional Options:**
 - `--name <NAME>` - Session name (auto-generated from goal if not provided)
@@ -2226,10 +2244,18 @@ daf jira new <TYPE> --parent <PARENT> --goal <GOAL> [OPTIONS]
 - `--json` - Output in JSON format (for automation and scripting)
 
 **Goal Input Formats:**
+
+**Using --goal (with auto-detection):**
 - **Plain text**: Any multi-word text is treated as plain text
 - **File path (with prefix)**: `file:///path/to/file.md` - reads file content
 - **Bare file path**: `/path/to/file.md` or `requirements.md` - must be a single token (no spaces)
 - **URL**: `https://example.com/spec.txt` - fetches content from URL
+
+**Using --goal-file (explicit file/URL input):**
+- **File path**: `requirements.md`, `~/docs/spec.txt`, `/absolute/path/to/file.md` - reads file content
+- **URL**: `https://example.com/spec.txt` - fetches content from URL
+- **Validation**: Ensures input is actually a file path or URL (not plain text)
+- **Mutual exclusion**: Cannot use both `--goal` and `--goal-file` together
 
 **What This Command Does:**
 
@@ -2259,13 +2285,21 @@ daf jira new epic --parent PROJ-59038 --goal "Implement advanced monitoring feat
 # Goal from local requirements file (with file:// prefix)
 daf jira new story --parent PROJ-59038 --goal "file:///path/to/requirements.md"
 
-# Goal from local requirements file (bare path - must be single token, no spaces)
+# Goal from local requirements file using --goal (bare path - must be single token, no spaces)
 daf jira new story --parent PROJ-59038 --goal "/path/to/requirements.md"
 daf jira new story --parent PROJ-59038 --goal "~/Documents/requirements.md"
 daf jira new story --parent PROJ-59038 --goal "requirements.md"
 
+# Goal from local requirements file using --goal-file (explicit, allows any path)
+daf jira new story --parent PROJ-59038 --goal-file "requirements.md"
+daf jira new story --parent PROJ-59038 --goal-file "~/Documents/spec.txt"
+daf jira new story --parent PROJ-59038 --goal-file "/absolute/path/to/requirements.md"
+
 # Goal from remote documentation URL
 daf jira new task --parent PROJ-59038 --goal "https://docs.example.com/feature-spec.txt"
+
+# Goal from remote documentation URL using --goal-file (explicit)
+daf jira new task --parent PROJ-59038 --goal-file "https://docs.example.com/feature-spec.txt"
 
 # Multi-word text with special characters is always treated as plain text
 daf jira new bug --parent PROJ-59038 --goal "Fix error in help.py when using --output flag"
@@ -2381,7 +2415,8 @@ daf investigate --goal <GOAL> [OPTIONS]
 ```
 
 **Required Options:**
-- `--goal <TEXT>` - Goal/description for the investigation (supports file:// paths and http(s):// URLs)
+- `--goal <TEXT>` - Goal/description for the investigation (auto-detection of file:// paths and http(s):// URLs)
+- `--goal-file <PATH|URL>` - Explicit file path or URL for goal input (mutually exclusive with `--goal`)
 
 **Optional Options:**
 - `--parent <KEY>` - Optional parent JIRA key (for tracking investigation under an epic)
@@ -2391,10 +2426,18 @@ daf investigate --goal <GOAL> [OPTIONS]
 - `--json` - Output in JSON format (for automation and scripting)
 
 **Goal Input Formats:**
+
+**Using --goal (with auto-detection):**
 - **Plain text**: Any multi-word text is treated as plain text
 - **File path (with prefix)**: `file:///path/to/file.md` - reads file content
 - **Bare file path**: `/path/to/file.md` or `requirements.md` - must be a single token (no spaces)
 - **URL**: `https://example.com/spec.txt` - fetches content from URL
+
+**Using --goal-file (explicit file/URL input):**
+- **File path**: `requirements.md`, `~/docs/spec.txt`, `/absolute/path/to/file.md` - reads file content
+- **URL**: `https://example.com/spec.txt` - fetches content from URL
+- **Validation**: Ensures input is actually a file path or URL (not plain text)
+- **Mutual exclusion**: Cannot use both `--goal` and `--goal-file` together
 
 **What This Command Does:**
 
@@ -2422,12 +2465,20 @@ daf investigate --goal "Explore API refactoring approaches" --name api-refactor-
 # Goal from local requirements file (with file:// prefix)
 daf investigate --goal "file:///path/to/research-notes.md"
 
-# Goal from local requirements file (bare path)
+# Goal from local requirements file using --goal (bare path)
 daf investigate --goal "/path/to/research-notes.md"
 daf investigate --goal "~/Documents/investigation-plan.md"
 
+# Goal from local requirements file using --goal-file (explicit)
+daf investigate --goal-file "research-notes.md"
+daf investigate --goal-file "~/Documents/investigation-plan.md"
+daf investigate --goal-file "/absolute/path/to/research-notes.md"
+
 # Goal from remote documentation URL
 daf investigate --goal "https://docs.example.com/requirements.txt"
+
+# Goal from remote documentation URL using --goal-file (explicit)
+daf investigate --goal-file "https://docs.example.com/requirements.txt"
 
 # Non-interactive mode for automation (with --path and --json)
 daf investigate \
@@ -4359,7 +4410,8 @@ daf import-session <UUID> [OPTIONS]
 
 **Options:**
 - `--jira <KEY>` - Link to JIRA ticket
-- `--goal <GOAL>` - Session goal
+- `--goal <GOAL>` - Session goal (auto-detection of file:// paths and http(s):// URLs)
+- `--goal-file <PATH|URL>` - Explicit file path or URL for goal input (mutually exclusive with `--goal`)
 - `--name <NAME>` - Session name
 
 **Examples:**
@@ -4367,8 +4419,14 @@ daf import-session <UUID> [OPTIONS]
 # Interactive import
 daf import-session 7a0bca58-c6c6-4b02-8fbf-9c223cd52a57
 
-# Non-interactive import
+# Non-interactive import with plain text goal
 daf import-session 7a0bca58... --jira PROJ-12345 --goal "Feature work"
+
+# Non-interactive import with goal from file
+daf import-session 7a0bca58... --jira PROJ-12345 --goal-file "requirements.md"
+
+# Non-interactive import with goal from URL
+daf import-session 7a0bca58... --jira PROJ-12345 --goal-file "https://docs.example.com/spec.txt"
 ```
 
 **Workflow:**

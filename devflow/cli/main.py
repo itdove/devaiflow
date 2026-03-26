@@ -294,7 +294,8 @@ def cli(ctx: click.Context) -> None:
 
 @cli.command()
 @click.option("--name", help="Session name (will prompt if not provided)")
-@click.option("--goal", help="Session goal/description (supports file:// paths and http(s):// URLs)")
+@click.option("--goal", help="Session goal/description (supports auto-detection of file:// paths and http(s):// URLs)")
+@click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
 @click.option("--jira", help="issue tracker key (optional, e.g., PROJ-12345)")
 @click.option("--working-directory", help="Working directory name (defaults to directory name)")
 @click.option("--path", help="Project path (defaults to current directory)")
@@ -305,7 +306,7 @@ def cli(ctx: click.Context) -> None:
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str) -> None:
+def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -322,7 +323,7 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
     Use --template to create a session from a saved template configuration.
     """
     from devflow.cli.commands.new_command import create_new_session
-    from devflow.cli.utils import resolve_goal_input
+    from devflow.cli.utils import process_goal_options
     from rich.prompt import Prompt
     from rich.console import Console
 
@@ -341,6 +342,11 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
         console.print("[red]✗[/red] Goal cannot be empty (omit --goal flag if not needed)")
         sys.exit(1)
 
+    # Validate goal_file if provided (distinguish between None and empty string)
+    if goal_file is not None and not goal_file.strip():
+        console.print("[red]✗[/red] Goal file cannot be empty (omit --goal-file flag if not needed)")
+        sys.exit(1)
+
     # Prompt for name if not provided
     if name is None:
         if jira:
@@ -355,14 +361,13 @@ def new(ctx: click.Context, name: str, goal: str, jira: str, working_directory: 
             sys.exit(1)
 
     # Prompt for goal if not provided (allow empty input since goal is optional for daf new)
-    if not goal and not jira:
+    if not goal and not goal_file and not jira:
         goal = click.prompt("Enter session goal/description (optional, press Enter to skip)", default="", show_default=False)
         if not goal:  # Convert empty string to None
             goal = None
 
-    # Resolve goal input (file:// or http(s):// URL)
-    if goal:
-        goal = resolve_goal_input(goal)
+    # Process --goal and --goal-file options (mutual exclusion and resolution)
+    goal = process_goal_options(goal, goal_file)
 
     # Validate --projects requires --workspace
     if projects and not workspace:
@@ -1113,9 +1118,10 @@ def discover(ctx: click.Context) -> None:
 @cli.command(name="import-session")
 @click.argument("uuid")
 @click.option("--jira", help="issue tracker key (will prompt if not provided)")
-@click.option("--goal", help="Session goal (will prompt if not provided)")
+@click.option("--goal", help="Session goal (auto-detection of file:// paths and http(s):// URLs)")
+@click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
 @json_option
-def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str) -> None:
+def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str, goal_file: str) -> None:
     """Import an existing Claude Code session that is not yet managed by daf tool.
 
     This registers a Claude Code session (created manually with 'claude --session-id')
@@ -1126,6 +1132,10 @@ def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str) -> N
     Note: This is different from 'daf import', which imports sessions from export files.
     """
     from devflow.cli.commands.import_session_command import import_session
+    from devflow.cli.utils import process_goal_options
+
+    # Process --goal and --goal-file options (mutual exclusion and resolution)
+    goal = process_goal_options(goal, goal_file)
 
     import_session(uuid, issue_key=jira, goal=goal)
 
@@ -1418,13 +1428,14 @@ jira.add_command(create_jira_update_command())
 @json_option
 @click.argument("issue_type", type=click.Choice(["epic", "story", "task", "bug"], case_sensitive=False))
 @click.option("--parent", required=False, help="Parent issue key (epic for story/task/bug, story for subtask)")
-@click.option("--goal", help="Goal/description for the ticket (supports file:// paths and http(s):// URLs)")
+@click.option("--goal", help="Goal/description for the ticket (auto-detection of file:// paths and http(s):// URLs)")
+@click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
 @workspace_option()
 @click.option("--affects-versions", help="Affected version for bugs (required for bug type)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, name: str, path: str, branch: str, workspace: str, affects_versions: Optional[str]) -> None:
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, affects_versions: Optional[str]) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1439,17 +1450,17 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
         daf jira new task --parent PROJ-59038 --goal "https://docs.example.com/spec.txt"
     """
     from devflow.cli.commands.jira_new_command import create_jira_ticket_session
-    from devflow.cli.utils import resolve_goal_input
+    from devflow.cli.utils import process_goal_options
 
     # Capitalize issue_type to match JIRA field_mappings format (e.g., "bug" -> "Bug")
     issue_type = issue_type.capitalize()
 
     # Prompt for goal if not provided
-    if not goal:
+    if not goal and not goal_file:
         goal = click.prompt("Enter goal/description for the ticket")
 
-    # Resolve goal input (file:// or http(s):// URL)
-    goal = resolve_goal_input(goal)
+    # Process --goal and --goal-file options (mutual exclusion and resolution)
+    goal = process_goal_options(goal, goal_file)
 
     # Handle affects_versions - check if required for current issue type
     from devflow.config.loader import ConfigLoader
@@ -1669,14 +1680,15 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> N
 @git.command(name="new")
 @json_option
 @click.argument("issue_type", required=False, default=None)
-@click.option("--goal", help="Goal/description for the issue (supports file:// paths and http(s):// URLs)")
+@click.option("--goal", help="Goal/description for the issue (auto-detection of file:// paths and http(s):// URLs)")
+@click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
 @click.option("--parent", help="Parent issue key (owner/repo#123 or #123)")
 @workspace_option()
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, repository: Optional[str]) -> None:
+def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, repository: Optional[str]) -> None:
     """Create GitHub/GitLab issue with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1696,27 +1708,28 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
         daf git new enhancement --goal "Add caching" --parent "owner/repo#456"
     """
     from devflow.cli.commands.git_new_command import create_git_issue_session
-    from devflow.cli.utils import resolve_goal_input
+    from devflow.cli.utils import process_goal_options
 
     # Prompt for goal if not provided
-    if not goal:
+    if not goal and not goal_file:
         goal = click.prompt("Enter goal/description for the issue")
 
-    # Resolve goal input (file:// or http(s):// URL)
-    goal = resolve_goal_input(goal)
+    # Process --goal and --goal-file options (mutual exclusion and resolution)
+    goal = process_goal_options(goal, goal_file)
 
     create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository)
 
 
 @cli.command(name="investigate")
 @json_option
-@click.option("--goal", help="Goal/description for the investigation (supports file:// paths and http(s):// URLs)")
+@click.option("--goal", help="Goal/description for the investigation (auto-detection of file:// paths and http(s):// URLs)")
+@click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
 @click.option("--parent", required=False, help="Optional parent issue key (for tracking investigation under an epic)")
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @workspace_option()
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
-def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str, path: str, workspace: str, model_profile: str) -> None:
+def investigate(ctx: click.Context, goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, model_profile: str) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1734,14 +1747,14 @@ def investigate(ctx: click.Context, goal: str, parent: Optional[str], name: str,
         daf investigate --goal "https://docs.example.com/requirements.txt" --parent PROJ-60000
     """
     from devflow.cli.commands.investigate_command import create_investigation_session
-    from devflow.cli.utils import resolve_goal_input
+    from devflow.cli.utils import process_goal_options
 
     # Prompt for goal if not provided
-    if not goal:
+    if not goal and not goal_file:
         goal = click.prompt("Enter goal/description for the investigation")
 
-    # Resolve goal input (file:// or http(s):// URL)
-    goal = resolve_goal_input(goal)
+    # Process --goal and --goal-file options (mutual exclusion and resolution)
+    goal = process_goal_options(goal, goal_file)
 
     create_investigation_session(goal, parent, name, path, workspace, model_profile)
 
