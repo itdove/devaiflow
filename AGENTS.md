@@ -387,13 +387,18 @@ devflow/
 **❌ DO NOT EDIT DIRECTLY (Deployment Targets):**
 1. **`.claude/skills/daf-cli/SKILL.md`** (in this repository)
    - Development workspace copy
-   - Deployed by `daf upgrade` from `devflow/cli_skills/`
+   - Deployed by `daf upgrade --project-path .` from `devflow/cli_skills/`
    - Used for testing during development of DevAIFlow itself
 
 2. **`~/.claude/skills/daf-cli/SKILL.md`** (user home directory)
-   - User's local copy
+   - User's global copy
    - Deployed by `daf upgrade` from bundled version
-   - End users interact with this file
+   - Available in all projects by default
+
+3. **`<project>/.claude/skills/daf-cli/SKILL.md`** (project-specific)
+   - Project-level copy
+   - Deployed by `daf upgrade --project-path <project>` from bundled version
+   - Allows different skill versions per project
 
 **Why this matters:**
 - Skills must only document commands that work **inside Claude Code sessions**
@@ -414,9 +419,55 @@ devflow/
 
 **Update workflow:**
 1. Edit `devflow/cli_skills/daf-cli/SKILL.md` (bundled/primary version) ✅
-2. Run `daf upgrade` in development workspace to deploy to `.claude/skills/`
+2. Deploy to your development workspace:
+   - Global: `daf upgrade` → deploys to `~/.claude/skills/`
+   - Project: `daf upgrade --project-path .` → deploys to `.claude/skills/`
 3. Test the skill in a Claude Code session
-4. Users run `daf upgrade` to sync to their `~/.claude/skills/` directory
+4. Users install via:
+   - Global: `daf upgrade` → available in all projects
+   - Project-specific: `daf upgrade --project-path /path/to/project` → only in that project
+
+#### Project-Level Installation Examples
+
+**Use cases for project-level installation:**
+- Different skill versions for different projects
+- Project-specific skill customizations (not recommended for official skills)
+- Local development and testing of skill modifications
+- Team-specific skills that should not be installed globally
+
+**Installation commands:**
+
+```bash
+# Install to current project directory
+cd /path/to/your/project
+daf upgrade --project-path .
+
+# Install to specific project
+daf upgrade --project-path /path/to/project
+
+# Preview what would be installed
+daf upgrade --project-path . --dry-run
+
+# Install to global location (default)
+daf upgrade
+```
+
+**How skills are discovered:**
+
+Skills are loaded in this order (generic before organization-specific):
+1. User-level: `~/.claude/skills/` - Global, available everywhere
+2. Workspace-level: `<workspace>/.claude/skills/` - Workspace-specific
+3. Hierarchical: `$DEVAIFLOW_HOME/.claude/skills/` - Organization-specific
+4. Project-level: `<project>/.claude/skills/` - Project-specific
+
+If the same skill exists in multiple locations, all versions are loaded in order. Organization-specific skills (hierarchical) extend generic skills, so they must be loaded after generic ones.
+
+**Benefits of project-level installation:**
+- **Flexibility**: Choose installation location based on needs
+- **Project Isolation**: Different projects can have different skill versions
+- **Development Workflow**: Test skill changes locally before global deployment
+- **Team Collaboration**: Project-level skills can be committed to version control
+- **Backward Compatible**: Default behavior unchanged (installs globally)
 
 #### Claude Commands
 1. **Bundled commands (source of truth)**: `devflow/claude_commands/*.md`

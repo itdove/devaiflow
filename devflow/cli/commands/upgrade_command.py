@@ -17,13 +17,14 @@ def upgrade_all(
     dry_run: bool = False,
     quiet: bool = False,
     upgrade_skills: bool = True,
-    upgrade_hierarchical_skills: bool = True
+    upgrade_hierarchical_skills: bool = True,
+    project_path: str = None
 ) -> None:
     """Upgrade bundled Claude Code skills.
 
     This command will:
-    - Install slash commands (daf-*) to ~/.claude/skills/ (global, available everywhere)
-    - Install reference skills (daf-cli, gh-cli, etc.) to ~/.claude/skills/ (global)
+    - Install slash commands (daf-*) to target directory
+    - Install reference skills (daf-cli, gh-cli, etc.) to target directory
     - Install organization-specific skills from hierarchical config files
     - Skip items that are already up-to-date
 
@@ -32,11 +33,12 @@ def upgrade_all(
         quiet: If True, suppress console output (errors still shown)
         upgrade_skills: If True, upgrade bundled skills (slash commands + reference skills)
         upgrade_hierarchical_skills: If True, install hierarchical skills from config files
+        project_path: Project directory path for project-level installation (default: None = global)
 
     Note:
-        All bundled skills are installed globally to ~/.claude/skills/ so they're
-        available in any project. Hierarchical skills are installed to
-        ~/.daf-sessions/.claude/skills/ for organization-specific context.
+        By default, skills are installed globally to ~/.claude/skills/.
+        With --project-path, skills are installed to <project>/.claude/skills/.
+        Hierarchical skills are always installed to ~/.daf-sessions/.claude/skills/.
     """
     config_loader = ConfigLoader()
     config = config_loader.load_config()
@@ -51,6 +53,23 @@ def upgrade_all(
         console.print("[dim]Add a workspace with: daf workspace add <name> <path>[/dim]")
         return
 
+    # Validate and determine target directory for skill installation
+    target_dir = None
+    if project_path:
+        project_path_obj = Path(project_path).expanduser().resolve()
+
+        # Validate that project path exists
+        if not project_path_obj.exists():
+            console.print(f"[red]✗[/red] Project path does not exist: {project_path_obj}")
+            return
+
+        if not project_path_obj.is_dir():
+            console.print(f"[red]✗[/red] Project path is not a directory: {project_path_obj}")
+            return
+
+        # Set target directory to <project>/.claude/skills/
+        target_dir = project_path_obj / ".claude" / "skills"
+
     if not quiet:
         if dry_run:
             console.print("[cyan]Checking for updates (dry run)...[/cyan]")
@@ -63,17 +82,21 @@ def upgrade_all(
     all_up_to_date = []
     all_failed = []
 
-    # Install slash commands globally
+    # Install slash commands
     if upgrade_skills:
         if not quiet:
             console.print("[bold]Slash Commands:[/bold]")
-            console.print(f"[dim]Installing to: ~/.claude/skills/[/dim]")
+            if target_dir:
+                console.print(f"[dim]Installing to: {target_dir}/[/dim]")
+            else:
+                console.print(f"[dim]Installing to: ~/.claude/skills/[/dim]")
             console.print()
 
         try:
             changed, up_to_date, failed = install_or_upgrade_slash_commands(
                 dry_run=dry_run,
-                quiet=quiet
+                quiet=quiet,
+                target_dir=target_dir
             )
             all_changed.extend([f"slash:{name}" for name in changed])
             all_up_to_date.extend([f"slash:{name}" for name in up_to_date])
@@ -90,17 +113,21 @@ def upgrade_all(
         if not quiet:
             console.print()
 
-    # Install reference skills globally
+    # Install reference skills
     if upgrade_skills:
         if not quiet:
             console.print("[bold]Reference Skills:[/bold]")
-            console.print(f"[dim]Installing to: ~/.claude/skills/[/dim]")
+            if target_dir:
+                console.print(f"[dim]Installing to: {target_dir}/[/dim]")
+            else:
+                console.print(f"[dim]Installing to: ~/.claude/skills/[/dim]")
             console.print()
 
         try:
             changed, up_to_date, failed = install_or_upgrade_reference_skills(
                 dry_run=dry_run,
-                quiet=quiet
+                quiet=quiet,
+                target_dir=target_dir
             )
             all_changed.extend([f"ref:{name}" for name in changed])
             all_up_to_date.extend([f"ref:{name}" for name in up_to_date])
@@ -170,7 +197,10 @@ def upgrade_all(
 
         # Show locations
         if upgrade_skills:
-            console.print(f"\n[dim]Bundled skills: ~/.claude/skills/[/dim]")
+            if target_dir:
+                console.print(f"\n[dim]Bundled skills: {target_dir}/[/dim]")
+            else:
+                console.print(f"\n[dim]Bundled skills: ~/.claude/skills/[/dim]")
 
         if upgrade_hierarchical_skills:
             from devflow.utils.paths import get_cs_home
