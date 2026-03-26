@@ -507,7 +507,17 @@ def open_session(
         console.print(f"\n[yellow]⚠ Session is missing working directory information[/yellow]")
         console.print(f"[dim]This can happen when sessions are created via 'daf sync'[/dim]")
 
-        if not _prompt_for_working_directory(session, config_loader, session_manager, selected_workspace_name):
+        if not _prompt_for_working_directory(
+            session,
+            config_loader,
+            session_manager,
+            selected_workspace_name,
+            create_branch=create_branch,
+            source_branch=source_branch,
+            on_branch_exists=on_branch_exists,
+            allow_uncommitted=allow_uncommitted,
+            sync_upstream=sync_upstream,
+        ):
             # User cancelled or failed to set working directory
             # Error message already printed in _prompt_for_working_directory
             return
@@ -2323,7 +2333,17 @@ def _create_multi_project_conversation_for_open(
     return True
 
 
-def _prompt_for_working_directory(session, config_loader, session_manager, selected_workspace_name=None) -> bool:
+def _prompt_for_working_directory(
+    session,
+    config_loader,
+    session_manager,
+    selected_workspace_name=None,
+    create_branch: Optional[bool] = None,
+    source_branch: Optional[str] = None,
+    on_branch_exists: Optional[str] = None,
+    allow_uncommitted: bool = False,
+    sync_upstream: Optional[bool] = None,
+) -> bool:
     """Prompt user to select a working directory for a session.
 
     This is used when opening sessions that were created via 'daf sync' without
@@ -2336,6 +2356,11 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
         config_loader: ConfigLoader instance
         session_manager: SessionManager instance
         selected_workspace_name: Optional workspace name selected via -w flag or session preference
+        create_branch: Whether to create a new branch (None = prompt)
+        source_branch: Source branch to create from (None = prompt/default)
+        on_branch_exists: Action when branch exists (error/use-existing/add-suffix/skip)
+        allow_uncommitted: Allow uncommitted changes when switching branches
+        sync_upstream: Sync with upstream before creating branch (None = prompt)
 
     Returns:
         True if working directory was set successfully, False if user cancelled

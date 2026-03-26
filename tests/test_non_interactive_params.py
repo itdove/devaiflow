@@ -54,21 +54,39 @@ class TestNonInteractiveFlag:
 
     def test_is_non_interactive_with_flag(self):
         """Test _is_non_interactive() detects DAF_NON_INTERACTIVE env var."""
-        # Test without flag
-        os.environ.pop('DAF_NON_INTERACTIVE', None)
-        assert not _is_non_interactive()
+        # Save original value
+        original_value = os.environ.get('DAF_NON_INTERACTIVE')
 
-        # Test with flag
-        os.environ['DAF_NON_INTERACTIVE'] = '1'
-        assert _is_non_interactive()
+        try:
+            # Test without flag
+            os.environ.pop('DAF_NON_INTERACTIVE', None)
+            assert not _is_non_interactive()
 
-        # Clean up
-        os.environ.pop('DAF_NON_INTERACTIVE', None)
+            # Test with flag
+            os.environ['DAF_NON_INTERACTIVE'] = '1'
+            assert _is_non_interactive()
+        finally:
+            # Clean up - restore original value
+            os.environ.pop('DAF_NON_INTERACTIVE', None)
+            if original_value is not None:
+                os.environ['DAF_NON_INTERACTIVE'] = original_value
 
     def test_is_non_interactive_with_json_mode(self):
         """Test _is_non_interactive() detects JSON mode."""
-        assert _is_non_interactive(output_json=True)
-        assert not _is_non_interactive(output_json=False)
+        # Save original value
+        original_value = os.environ.get('DAF_NON_INTERACTIVE')
+
+        try:
+            # Clear any existing flag to ensure clean test
+            os.environ.pop('DAF_NON_INTERACTIVE', None)
+
+            assert _is_non_interactive(output_json=True)
+            assert not _is_non_interactive(output_json=False)
+        finally:
+            # Restore original value
+            os.environ.pop('DAF_NON_INTERACTIVE', None)
+            if original_value is not None:
+                os.environ['DAF_NON_INTERACTIVE'] = original_value
 
     @pytest.mark.parametrize('ci_var', [
         'CI',
@@ -80,18 +98,30 @@ class TestNonInteractiveFlag:
     ])
     def test_is_non_interactive_detects_ci_environments(self, ci_var):
         """Test _is_non_interactive() detects CI environment variables."""
-        # Save original value
-        original_value = os.environ.get(ci_var)
+        # Save original values
+        original_ci_value = os.environ.get(ci_var)
+        original_daf_value = os.environ.get('DAF_NON_INTERACTIVE')
 
-        # Set CI variable
-        os.environ[ci_var] = '1'
-        assert _is_non_interactive()
+        try:
+            # Clear DAF_NON_INTERACTIVE to ensure clean test
+            os.environ.pop('DAF_NON_INTERACTIVE', None)
 
-        # Restore
-        if original_value is None:
+            # Set CI variable
+            os.environ[ci_var] = '1'
+            assert _is_non_interactive()
+
+            # Clear CI variable and verify it returns to False
             os.environ.pop(ci_var, None)
-        else:
-            os.environ[ci_var] = original_value
+            assert not _is_non_interactive()
+        finally:
+            # Restore original values
+            os.environ.pop(ci_var, None)
+            os.environ.pop('DAF_NON_INTERACTIVE', None)
+
+            if original_ci_value is not None:
+                os.environ[ci_var] = original_ci_value
+            if original_daf_value is not None:
+                os.environ['DAF_NON_INTERACTIVE'] = original_daf_value
 
 
 class TestDafNewNonInteractiveParams:
