@@ -609,9 +609,10 @@ def create_git_issue_session(
         agent = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
+        from devflow.utils.model_provider import get_active_profile as get_model_profile
         model_profile = None
         if config and config.model_provider:
-            model_profile = config.model_provider.get_active_profile()
+            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
 
         workspace_path_for_skills = None
         if session.workspace_name and config and config.repos:

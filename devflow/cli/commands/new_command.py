@@ -825,9 +825,10 @@ def create_new_session(
         agent = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
+        from devflow.utils.model_provider import get_active_profile as get_model_profile
         model_profile = None
         if config and config.model_provider:
-            model_profile = config.model_provider.get_active_profile()
+            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
 
         # Set environment variables for the AI agent process
         # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
