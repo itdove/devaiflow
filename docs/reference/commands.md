@@ -219,7 +219,7 @@ Creating branch: aap-12345-fix-bug-retry...
 
 **Uncommitted Changes Check:**
 
-Before creating a new branch, daf checks if you have uncommitted changes in the current branch:
+Before creating a new branch, daf init --checks if you have uncommitted changes in the current branch:
 
 ```bash
 ✓ Detected git repository
@@ -4298,12 +4298,12 @@ rm -rf $DEVAIFLOW_HOME/mocks/
 
 ## Utility Commands
 
-### daf check - Check Dependencies
+### daf init --check - Check Dependencies
 
 Verify that all required and optional external tools are installed and available.
 
 ```bash
-daf check [OPTIONS]
+daf init --check [OPTIONS]
 ```
 
 **Options:**
@@ -4312,10 +4312,10 @@ daf check [OPTIONS]
 **Examples:**
 ```bash
 # Check all dependencies
-daf check
+daf init --check
 
 # JSON output for scripting
-daf check --json
+daf init --check --json
 ```
 
 **What it checks:**
@@ -4524,12 +4524,12 @@ daf update PROJ-12345 --goal "Updated goal description"
 
 ---
 
-### daf edit - Edit Session Metadata Interactively
+### daf open --edit - Edit Session Metadata Interactively
 
 Launch an interactive TUI (Text User Interface) to edit session metadata, manage conversations, and update JIRA integration settings.
 
 ```bash
-daf edit <NAME-or-JIRA>
+daf open --edit <NAME-or-JIRA>
 ```
 
 **What it does:**
@@ -4566,14 +4566,14 @@ daf edit <NAME-or-JIRA>
 **Examples:**
 ```bash
 # Edit by JIRA key
-daf edit PROJ-60989
+daf open --edit PROJ-60989
 
 # Edit by session name
-daf edit my-feature-session
+daf open --edit my-feature-session
 
 # Edit most recent session
 daf list  # Get session name
-daf edit <session-name>
+daf open --edit <session-name>
 ```
 
 **Keyboard Shortcuts:**
@@ -4586,7 +4586,7 @@ daf edit <session-name>
 - `Q` / `Ctrl+C` - Quit
 
 **Workflow:**
-1. Launch editor with `daf edit <identifier>`
+1. Launch editor with `daf open --edit <identifier>`
 2. Navigate tabs to find fields to edit
 3. Make changes to metadata
 4. Press `Ctrl+S` or click "Save Changes" button
@@ -4605,7 +4605,7 @@ daf edit <session-name>
 **Fix Incorrect JIRA Association:**
 ```bash
 # Session was linked to wrong ticket
-daf edit my-session
+daf open --edit my-session
 # → Navigate to JIRA Integration tab
 # → Update JIRA key field
 # → Save
@@ -4614,7 +4614,7 @@ daf edit my-session
 **Update Session Goal:**
 ```bash
 # Goal needs clarification
-daf edit PROJ-12345
+daf open --edit PROJ-12345
 # → Navigate to Core Metadata tab
 # → Edit goal field
 # → Save
@@ -4623,7 +4623,7 @@ daf edit PROJ-12345
 **Manage Multi-Repository Conversations:**
 ```bash
 # Working on feature across multiple repos
-daf edit cross-repo-feature
+daf open --edit cross-repo-feature
 # → Navigate to Conversations tab
 # → Click "Add Conversation"
 # → Enter Claude session UUID, path, and branch
@@ -4633,7 +4633,7 @@ daf edit cross-repo-feature
 **Change Session Type:**
 ```bash
 # Converting ticket_creation session to development
-daf edit PROJ-60989
+daf open --edit PROJ-60989
 # → Navigate to Core Metadata tab
 # → Change "Session Type" dropdown
 # → Save
@@ -4642,7 +4642,7 @@ daf edit PROJ-60989
 **Fix Corrupted Metadata:**
 ```bash
 # Session has invalid or missing fields
-daf edit broken-session
+daf open --edit broken-session
 # → Review and correct fields
 # → Validation will show errors
 # → Fix errors and save
@@ -5440,9 +5440,11 @@ daf backup                  # Backup everything
 | `daf search` | Search sessions | No |
 | `daf maintenance discover` | Find sessions | No |
 | `daf template` | Manage templates | No |
-| `daf edit` | Interactive metadata editor | No |
+| `daf open --edit` | Interactive metadata editor | No |
 | `daf update` | CLI metadata updates | No |
-| `daf completion` | Auto-completion | No |
+| `daf completion` | Auto-completion (hidden) | No |
+| `daf check` | Check dependencies (hidden) | No |
+| `daf edit` | Metadata editor (hidden, use daf open --edit) | No |
 
 ## Next Steps
 

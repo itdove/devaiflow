@@ -419,6 +419,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 
 @cli.command()
 @click.argument("identifier", shell_complete=complete_session_identifiers)
+@click.option("--edit", is_flag=True, help="Edit session metadata via TUI instead of opening")
 @click.option("--path", help="Project path (auto-detects conversation in multi-conversation sessions)")
 @workspace_option("Workspace name to use (overrides session stored workspace)")
 @click.option("--projects", help="Add multiple projects to session (comma-separated, requires --workspace)")
@@ -433,7 +434,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--auto-workspace", is_flag=True, help="Auto-select workspace without prompting")
 @click.option("--sync-strategy", type=click.Choice(['merge', 'rebase', 'skip'], case_sensitive=False), help="Strategy for syncing with upstream (merge/rebase/skip)")
 @json_option
-def open(ctx: click.Context, identifier: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
+def open(ctx: click.Context, identifier: str, edit: bool, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -463,6 +464,12 @@ def open(ctx: click.Context, identifier: str, path: str, workspace: str, project
         # Add multiple projects to existing session
         daf open PROJ-123 -w primary --projects backend,frontend,shared
     """
+    # Handle --edit flag (edit session metadata via TUI)
+    if edit:
+        from devflow.ui.session_editor_tui import run_session_editor_tui
+        run_session_editor_tui(identifier)
+        return
+
     from devflow.cli.commands.open_command import open_session
 
     # Validate --projects and --path are mutually exclusive
@@ -992,17 +999,21 @@ def info_cmd(ctx: click.Context, identifier: str, uuid_only: bool, conversation_
     session_info(identifier, uuid_only, conversation_id, latest=latest, output_json=ctx.obj.get('output_json', False))
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.argument("identifier", required=True, shell_complete=complete_session_identifiers)
 def edit(identifier: str) -> None:
-    """Edit session metadata interactively via TUI.
+    """[Hidden] Edit session metadata interactively via TUI.
+
+    Use 'daf open <identifier> --edit' instead.
 
     IDENTIFIER can be a session name or issue key.
 
     \b
     Examples:
-        daf edit PROJ-60989          # Edit by issue key
-        daf edit my-session         # Edit by session name
+        daf edit PROJ-60989          # Edit by issue key (old)
+        daf open PROJ-60989 --edit   # Edit by issue key (new)
+        daf edit my-session          # Edit by session name (old)
+        daf open my-session --edit   # Edit by session name (new)
     """
     from devflow.ui.session_editor_tui import run_session_editor_tui
 
@@ -3179,11 +3190,12 @@ def provider_test(ctx: click.Context, name: str) -> None:
 
 
 @cli.command()
+@click.option("--check", is_flag=True, help="Check external tool dependencies instead of initializing")
 @click.option("--refresh", is_flag=True, help="Refresh automatically discovered data (custom field mappings)")
 @click.option("--reset", is_flag=True, help="Re-prompt for all configuration values")
 @click.option("--skip-jira-discovery", is_flag=True, help="Skip JIRA field discovery during init")
 @json_option
-def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bool) -> None:
+def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_discovery: bool) -> None:
     """Initialize, refresh, or review configuration.
 
     Use --refresh to update automatically discovered data (JIRA custom field mappings)
@@ -3191,6 +3203,13 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
 
     Use --reset to re-prompt for all configuration values using current values as defaults.
     """
+    # Handle --check flag (check external dependencies)
+    if check:
+        from devflow.cli.commands.check_command import check_dependencies
+        output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+        exit_code = check_dependencies(output_json=output_json)
+        raise SystemExit(exit_code)
+
     from devflow.config.loader import ConfigLoader
     from devflow.jira.client import JiraClient
     from devflow.jira.field_mapper import JiraFieldMapper
@@ -3580,10 +3599,12 @@ def _get_config_changes(old_config, new_config) -> list:
     return changes
 
 
-@cli.command()
+@cli.command(hidden=True)
 @json_option
 def check(ctx: click.Context) -> None:
-    """Check external tool dependencies.
+    """[Hidden] Check external tool dependencies.
+
+    Use 'daf init --check' instead.
 
     Verifies that all required and optional external tools are installed
     and available in PATH. Displays version information for available tools

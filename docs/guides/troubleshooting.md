@@ -13,7 +13,7 @@ Common issues and their solutions.
 **Solution:**
 1. **Check if git is installed:**
    ```bash
-   daf check
+   daf init --check
    ```
 
 2. **Install git:**
@@ -24,7 +24,7 @@ Common issues and their solutions.
 3. **Verify installation:**
    ```bash
    git --version
-   daf check
+   daf init --check
    ```
 
 ### Missing Required Tool - claude command not found
@@ -40,7 +40,7 @@ Common issues and their solutions.
 2. **Verify installation:**
    ```bash
    claude --version
-   daf check
+   daf init --check
    ```
 
 ### Missing Optional Tool - gh/glab not found
@@ -65,7 +65,7 @@ Common issues and their solutions.
 3. **Verify:**
    ```bash
    gh --version
-   daf check
+   daf init --check
    ```
 
 **For GitLab (glab):**
@@ -81,7 +81,7 @@ Common issues and their solutions.
 3. **Verify:**
    ```bash
    glab --version
-   daf check
+   daf init --check
    ```
 
 **Note:** These are optional - you can manually create PRs/MRs if these tools aren't installed.
@@ -92,7 +92,7 @@ Common issues and their solutions.
 
 After installing the daf tool, run:
 ```bash
-daf check
+daf init --check
 ```
 
 This verifies all dependencies are correctly installed and shows which optional features are available.
@@ -100,10 +100,10 @@ This verifies all dependencies are correctly installed and shows which optional 
 **In CI/CD pipelines:**
 ```bash
 # Check dependencies and fail if required tools missing
-daf check || exit 1
+daf init --check || exit 1
 
 # Or check with JSON output for parsing
-daf check --json | jq '.data.all_required_available'
+daf init --check --json | jq '.data.all_required_available'
 ```
 
 ## Claude Code Permission Issues

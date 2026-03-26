@@ -73,7 +73,7 @@ daf --help
 
 **Check dependencies:**
 ```bash
-daf check
+daf init --check
 ```
 
 This will verify all required and optional tools are installed. See [Verifying Dependencies](#verifying-dependencies) below.
@@ -152,7 +152,7 @@ pip install .
 
 # Verify installation
 daf --version
-daf check
+daf init --check
 ```
 
 **Using Command Prompt:**
@@ -166,7 +166,7 @@ pip install .
 
 # Verify installation
 daf --version
-daf check
+daf init --check
 ```
 
 ### Windows-Specific Configuration
@@ -590,7 +590,7 @@ _DAF_COMPLETE=fish_source daf > ~/.config/fish/completions/daf.fish
 After installation, verify all required and optional tools are installed:
 
 ```bash
-daf check
+daf init --check
 ```
 
 **Expected output:**
