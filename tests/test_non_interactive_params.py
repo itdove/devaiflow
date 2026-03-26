@@ -20,6 +20,28 @@ from devflow.cli.main import cli
 from devflow.cli.commands.new_command import _is_non_interactive
 
 
+# List of all CI environment variables that trigger non-interactive mode
+CI_ENV_VARS = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'TRAVIS', 'CIRCLECI', 'DAF_NON_INTERACTIVE']
+
+
+def clear_all_ci_env_vars():
+    """Clear all CI-related environment variables and return their original values."""
+    original_values = {}
+    for var in CI_ENV_VARS:
+        original_values[var] = os.environ.get(var)
+        os.environ.pop(var, None)
+    return original_values
+
+
+def restore_env_vars(original_values):
+    """Restore environment variables to their original values."""
+    for var, value in original_values.items():
+        if value is not None:
+            os.environ[var] = value
+        else:
+            os.environ.pop(var, None)
+
+
 class TestNonInteractiveFlag:
     """Test the global --non-interactive flag."""
 
@@ -54,39 +76,29 @@ class TestNonInteractiveFlag:
 
     def test_is_non_interactive_with_flag(self):
         """Test _is_non_interactive() detects DAF_NON_INTERACTIVE env var."""
-        # Save original value
-        original_value = os.environ.get('DAF_NON_INTERACTIVE')
+        original_values = clear_all_ci_env_vars()
 
         try:
-            # Test without flag
-            os.environ.pop('DAF_NON_INTERACTIVE', None)
+            # Test without flag - should be False
             assert not _is_non_interactive()
 
-            # Test with flag
+            # Test with flag - should be True
             os.environ['DAF_NON_INTERACTIVE'] = '1'
             assert _is_non_interactive()
         finally:
-            # Clean up - restore original value
-            os.environ.pop('DAF_NON_INTERACTIVE', None)
-            if original_value is not None:
-                os.environ['DAF_NON_INTERACTIVE'] = original_value
+            restore_env_vars(original_values)
 
     def test_is_non_interactive_with_json_mode(self):
         """Test _is_non_interactive() detects JSON mode."""
-        # Save original value
-        original_value = os.environ.get('DAF_NON_INTERACTIVE')
+        original_values = clear_all_ci_env_vars()
 
         try:
-            # Clear any existing flag to ensure clean test
-            os.environ.pop('DAF_NON_INTERACTIVE', None)
-
+            # JSON mode should return True regardless of env vars
             assert _is_non_interactive(output_json=True)
+            # Non-JSON mode with no env vars should return False
             assert not _is_non_interactive(output_json=False)
         finally:
-            # Restore original value
-            os.environ.pop('DAF_NON_INTERACTIVE', None)
-            if original_value is not None:
-                os.environ['DAF_NON_INTERACTIVE'] = original_value
+            restore_env_vars(original_values)
 
     @pytest.mark.parametrize('ci_var', [
         'CI',
@@ -98,30 +110,21 @@ class TestNonInteractiveFlag:
     ])
     def test_is_non_interactive_detects_ci_environments(self, ci_var):
         """Test _is_non_interactive() detects CI environment variables."""
-        # Save original values
-        original_ci_value = os.environ.get(ci_var)
-        original_daf_value = os.environ.get('DAF_NON_INTERACTIVE')
+        original_values = clear_all_ci_env_vars()
 
         try:
-            # Clear DAF_NON_INTERACTIVE to ensure clean test
-            os.environ.pop('DAF_NON_INTERACTIVE', None)
+            # Should be False with no env vars set
+            assert not _is_non_interactive()
 
-            # Set CI variable
+            # Set the specific CI variable - should return True
             os.environ[ci_var] = '1'
             assert _is_non_interactive()
 
-            # Clear CI variable and verify it returns to False
+            # Clear the specific CI variable - should return False again
             os.environ.pop(ci_var, None)
             assert not _is_non_interactive()
         finally:
-            # Restore original values
-            os.environ.pop(ci_var, None)
-            os.environ.pop('DAF_NON_INTERACTIVE', None)
-
-            if original_ci_value is not None:
-                os.environ[ci_var] = original_ci_value
-            if original_daf_value is not None:
-                os.environ['DAF_NON_INTERACTIVE'] = original_daf_value
+            restore_env_vars(original_values)
 
 
 class TestDafNewNonInteractiveParams:
