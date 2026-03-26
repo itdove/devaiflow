@@ -382,28 +382,28 @@ devflow/
 - **`devflow/cli_skills/daf-cli/SKILL.md`** - Bundled skill (ships with pip package)
   - This is the ONLY file you should edit when updating skills
   - **DO NOT edit `.claude/skills/` directly** - those files are deployment targets
-  - Changes here automatically deploy via `daf upgrade` command
+  - Changes here automatically deploy via `daf skills` command
 
 **❌ DO NOT EDIT DIRECTLY (Deployment Targets):**
 1. **`.claude/skills/daf-cli/SKILL.md`** (in this repository)
    - Development workspace copy
-   - Deployed by `daf upgrade --project-path .` from `devflow/cli_skills/`
+   - Deployed by `daf skills --project-path .` from `devflow/cli_skills/`
    - Used for testing during development of DevAIFlow itself
 
 2. **`~/.claude/skills/daf-cli/SKILL.md`** (user home directory)
    - User's global copy
-   - Deployed by `daf upgrade` from bundled version
+   - Deployed by `daf skills` from bundled version
    - Available in all projects by default
 
 3. **`<project>/.claude/skills/daf-cli/SKILL.md`** (project-specific)
    - Project-level copy
-   - Deployed by `daf upgrade --project-path <project>` from bundled version
+   - Deployed by `daf skills --project-path <project>` from bundled version
    - Allows different skill versions per project
 
 **Why this matters:**
 - Skills must only document commands that work **inside Claude Code sessions**
 - Commands like `daf open`, `daf new`, `daf investigate` launch Claude and cannot run inside sessions
-- Editing deployment targets creates confusion - your changes get overwritten by `daf upgrade`
+- Editing deployment targets creates confusion - your changes get overwritten by `daf skills`
 
 **When to update skills:**
 - After adding/modifying daf CLI commands that work inside Claude sessions
@@ -415,17 +415,17 @@ devflow/
 **⚠️ CRITICAL: Always edit the SOURCE OF TRUTH**
 - **ONLY edit:** `devflow/cli_skills/daf-cli/SKILL.md` (bundled/primary version)
 - **NEVER edit:** `.claude/skills/daf-cli/SKILL.md` or `~/.claude/skills/daf-cli/SKILL.md` directly
-- Those are deployment targets and get overwritten by `daf upgrade`
+- Those are deployment targets and get overwritten by `daf skills`
 
 **Update workflow:**
 1. Edit `devflow/cli_skills/daf-cli/SKILL.md` (bundled/primary version) ✅
 2. Deploy to your development workspace:
-   - Global: `daf upgrade` → deploys to `~/.claude/skills/`
-   - Project: `daf upgrade --project-path .` → deploys to `.claude/skills/`
+   - Global: `daf skills` → deploys to `~/.claude/skills/`
+   - Project: `daf skills --project-path .` → deploys to `.claude/skills/`
 3. Test the skill in a Claude Code session
 4. Users install via:
-   - Global: `daf upgrade` → available in all projects
-   - Project-specific: `daf upgrade --project-path /path/to/project` → only in that project
+   - Global: `daf skills` → available in all projects
+   - Project-specific: `daf skills --project-path /path/to/project` → only in that project
 
 #### Project-Level Installation Examples
 
@@ -440,16 +440,16 @@ devflow/
 ```bash
 # Install to current project directory
 cd /path/to/your/project
-daf upgrade --project-path .
+daf skills --project-path .
 
 # Install to specific project
-daf upgrade --project-path /path/to/project
+daf skills --project-path /path/to/project
 
 # Preview what would be installed
-daf upgrade --project-path . --dry-run
+daf skills --project-path . --dry-run
 
 # Install to global location (default)
-daf upgrade
+daf skills
 ```
 
 **How skills are discovered:**
@@ -472,11 +472,11 @@ If the same skill exists in multiple locations, all versions are loaded in order
 #### Claude Commands
 1. **Bundled commands (source of truth)**: `devflow/claude_commands/*.md`
    - Authoritative versions that ship with the package
-   - Updated via `daf upgrade` command
+   - Updated via `daf skills` command
 
 2. **User workspace**: `~/.claude/commands/*.md`
-   - User's local copies installed via `daf upgrade`
-   - Gets updated when user runs `daf upgrade`
+   - User's local copies installed via `daf skills`
+   - Gets updated when user runs `daf skills`
 
 **When to update Claude commands:**
 - After adding new daf-specific workflows
@@ -485,7 +485,7 @@ If the same skill exists in multiple locations, all versions are loaded in order
 
 **Update workflow:**
 1. Edit files in `devflow/claude_commands/` (bundled versions)
-2. Users run `daf upgrade` to sync to their workspace
+2. Users run `daf skills` to sync to their workspace
 3. During development, also update `~/.claude/commands/*.md` for immediate testing
 
 ### Error Handling
@@ -1498,7 +1498,7 @@ class Session(BaseModel):
   - Added YAML frontmatter with description field to daf-list-conversations.md
   - Added YAML frontmatter with description field to daf-read-conversation.md
   - Commands now follow Claude Code plugin documentation standards
-  - daf upgrade command preserves frontmatter during installation
+  - daf skills command preserves frontmatter during installation
   - Commands execute correctly in Claude Code with frontmatter
   - Commands appear in /help with proper descriptions
   - Added 2 new tests to verify frontmatter preservation during install and upgrade
@@ -1523,7 +1523,7 @@ class Session(BaseModel):
   - Common mistakes section with wrong/correct examples
   - Prominent placement in JIRA Integration section of skill
   - Updated "Tips for Claude Code Sessions" to lead with Wiki markup requirement
-  - Skills deployed to workspace via daf upgrade command
+  - Skills deployed to workspace via daf skills command
   - Makes Wiki markup requirement more visible than DAF_AGENTS.md alone
   - Addresses issue of Claude forgetting to use JIRA Wiki markup in daf jira new sessions
   - All 1229 tests pass

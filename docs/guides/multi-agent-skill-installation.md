@@ -20,22 +20,22 @@ DevAIFlow includes bundled skills that provide:
 - **Slash commands**: Interactive commands like `/daf-help`, `/daf-list`, `/daf-active`
 - **Reference skills**: Auto-loaded documentation (daf-cli, gh-cli, git-cli, glab-cli)
 
-These skills can be installed to multiple AI agents using the `daf upgrade` command with multi-agent flags.
+These skills can be installed to multiple AI agents using the `daf skills` command with multi-agent flags.
 
 ## Quick Start
 
 ```bash
 # Install to all supported agents
-daf upgrade --all-agents
+daf skills --all-agents
 
 # Install to specific agents
-daf upgrade --agent cursor
+daf skills --agent cursor
 
 # Install to project directory (for team sharing)
-daf upgrade --level project --project-path .
+daf skills --level project --project-path .
 
 # Install to both global and project
-daf upgrade --level both --project-path .
+daf skills --level both --project-path .
 ```
 
 ## Supported Agents
@@ -70,7 +70,7 @@ Installs skills to the agent's global configuration directory (e.g., `~/.claude/
 
 **Example:**
 ```bash
-daf upgrade --agent cursor
+daf skills --agent cursor
 ```
 
 ### Project Installation
@@ -89,7 +89,7 @@ Installs skills to the project directory (e.g., `<project>/.claude/skills/`).
 **Example:**
 ```bash
 cd /path/to/project
-daf upgrade --level project --project-path .
+daf skills --level project --project-path .
 git add .claude/skills .cursor/skills
 git commit -m "Add DevAIFlow skills for team"
 ```
@@ -109,7 +109,7 @@ Installs to both global and project directories.
 
 **Example:**
 ```bash
-daf upgrade --level both --project-path .
+daf skills --level both --project-path .
 ```
 
 ## Use Cases
@@ -120,7 +120,7 @@ daf upgrade --level both --project-path .
 
 ```bash
 # Install to all agents globally
-daf upgrade --all-agents
+daf skills --all-agents
 ```
 
 Now all skills are available in Claude Code, Cursor, Windsurf, etc.
@@ -132,7 +132,7 @@ Now all skills are available in Claude Code, Cursor, Windsurf, etc.
 ```bash
 # Project lead installs to project
 cd /path/to/shared-project
-daf upgrade --level project --project-path . --all-agents
+daf skills --level project --project-path . --all-agents
 
 # Commit to git
 git add .claude/skills .cursor/skills .windsurf/skills
@@ -147,9 +147,9 @@ git push
 **Scenario**: You primarily use Claude Code but sometimes use Cursor for pair programming.
 
 ```bash
-# You already have skills for Claude (from daf upgrade)
+# You already have skills for Claude (from daf skills)
 # Now add them for Cursor
-daf upgrade --agents cursor
+daf skills --agents cursor
 ```
 
 ### Experimenting with New Agents
@@ -158,7 +158,7 @@ daf upgrade --agents cursor
 
 ```bash
 # Try Windsurf with DevAIFlow skills
-daf upgrade --agent windsurf
+daf skills --agent windsurf
 
 # Launch a session
 daf open PROJ-123
@@ -201,12 +201,12 @@ Project-level installations follow a consistent pattern:
 ```bash
 # Claude Code
 export CLAUDE_CONFIG_DIR=/custom/claude
-daf upgrade --agents claude
+daf skills --agents claude
 # Installs to /custom/claude/skills/
 
 # GitHub Copilot
 export COPILOT_HOME=/custom/copilot
-daf upgrade --agents copilot
+daf skills --agents copilot
 # Installs to /custom/copilot/skills/
 ```
 
@@ -237,7 +237,7 @@ Other agents may support skills as context files or documentation:
 Preview what would be installed without making changes:
 
 ```bash
-daf upgrade --all-agents --dry-run
+daf skills --all-agents --dry-run
 ```
 
 Output:
@@ -263,10 +263,10 @@ Install to only the agents you use:
 
 ```bash
 # Just Claude and Cursor
-daf upgrade --agent cursor
+daf skills --agent cursor
 
 # Just Windsurf
-daf upgrade --agent windsurf
+daf skills --agent windsurf
 ```
 
 ### Combining Flags
@@ -275,25 +275,25 @@ Combine multiple flags for complex scenarios:
 
 ```bash
 # Install to all agents, both global and project
-daf upgrade --all-agents --level both --project-path .
+daf skills --all-agents --level both --project-path .
 
 # Install to specific agents, project only
-daf upgrade --agent cursor --level project --project-path .
+daf skills --agent cursor --level project --project-path .
 
 # Preview all-agents installation to project
-daf upgrade --all-agents --level project --project-path . --dry-run
+daf skills --all-agents --level project --project-path . --dry-run
 ```
 
 ### Upgrading Existing Installations
 
-When you run `daf upgrade`, it automatically:
+When you run `daf skills`, it automatically:
 - **Installs** skills that don't exist
 - **Upgrades** skills that are outdated
 - **Skips** skills that are already up-to-date
 
 ```bash
 # Update all agents to latest skills
-daf upgrade --all-agents
+daf skills --all-agents
 ```
 
 ## Troubleshooting
@@ -308,7 +308,7 @@ daf upgrade --all-agents
 
 ### Installation Failed
 
-**Problem**: `daf upgrade --agents cursor` fails with error.
+**Problem**: `daf skills --agents cursor` fails with error.
 
 **Possible Causes**:
 1. Agent name misspelled (use `claude`, `cursor`, `windsurf`, `copilot`, `aider`, `continue`)
@@ -318,14 +318,14 @@ daf upgrade --all-agents
 **Solution**:
 ```bash
 # Check agent name
-daf upgrade --help | grep -A 3 "all-agents"
+daf skills --help | grep -A 3 "all-agents"
 
 # Check/create directory
 ls -la ~/.cursor/skills/
 mkdir -p ~/.cursor/skills/
 
 # Try with dry-run first
-daf upgrade --agents cursor --dry-run
+daf skills --agents cursor --dry-run
 ```
 
 ### Skills Not Found by Agent
@@ -350,7 +350,7 @@ daf upgrade --agents cursor --dry-run
 ```bash
 # If you use CLAUDE_CONFIG_DIR
 echo $CLAUDE_CONFIG_DIR
-daf upgrade --agents claude
+daf skills --agents claude
 # Installs to $CLAUDE_CONFIG_DIR/skills/, not ~/.claude/skills/
 ```
 
@@ -358,7 +358,7 @@ daf upgrade --agents claude
 ```bash
 # If you use COPILOT_HOME
 echo $COPILOT_HOME
-daf upgrade --agents copilot
+daf skills --agents copilot
 # Installs to $COPILOT_HOME/skills/, not ~/.copilot/skills/
 ```
 
@@ -376,11 +376,11 @@ rm -rf ~/.claude/skills/daf-* \
        ~/.continue/skills/daf-*
 
 # Then reinstall fresh
-daf upgrade --all-agents
+daf skills --all-agents
 ```
 
 ## See Also
 
 - [AI Agent Support Matrix](../reference/ai-agent-support-matrix.md) - Detailed agent comparison
-- [Commands Reference](../reference/commands.md) - Full `daf upgrade` documentation
+- [Commands Reference](../reference/commands.md) - Full `daf skills` documentation
 - [Hierarchical Skills](hierarchical-skills.md) - Organization-specific skill management

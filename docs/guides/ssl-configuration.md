@@ -15,15 +15,15 @@ Quick override for testing or one-time use:
 ```bash
 # Use system certificates (default - SECURE)
 export DAF_SSL_VERIFY=true
-daf upgrade
+daf skills
 
 # Disable SSL verification (INSECURE - testing only)
 export DAF_SSL_VERIFY=false
-daf upgrade
+daf skills
 
 # Use custom CA bundle (RECOMMENDED for internal CAs)
 export DAF_SSL_VERIFY=/etc/pki/ca-trust/source/anchors/company-ca.crt
-daf upgrade
+daf skills
 ```
 
 ### Option 2: Configuration File (Persistent)
@@ -90,7 +90,7 @@ For internal certificate authorities:
 
 3. **Verify it works:**
    ```bash
-   daf upgrade
+   daf skills
    ```
 
 ## Environment Variables
@@ -120,11 +120,11 @@ Error: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
 Solutions:
   1. Use custom CA bundle (RECOMMENDED for production):
      export DAF_SSL_VERIFY=/path/to/ca-bundle.crt
-     daf upgrade
+     daf skills
 
   2. Disable SSL verification (INSECURE - testing only):
      export DAF_SSL_VERIFY=false
-     daf upgrade
+     daf skills
 
   3. Configure permanently in organization.json:
      {
@@ -141,7 +141,7 @@ See docs/ssl-configuration.md for more information.
 1. **Use custom CA bundle (RECOMMENDED):**
    ```bash
    export DAF_SSL_VERIFY=/path/to/company-ca.crt
-   daf upgrade
+   daf skills
    ```
 
 2. **Install CA certificate system-wide:**
@@ -158,7 +158,7 @@ See docs/ssl-configuration.md for more information.
 3. **Temporary workaround (INSECURE):**
    ```bash
    export DAF_SSL_VERIFY=false
-   daf upgrade
+   daf skills
    ```
 
 ### Warnings from urllib3
@@ -205,7 +205,7 @@ export PYTHONWARNINGS="ignore:Unverified HTTPS request"
 ```bash
 # One-time use only - DO NOT commit this to version control
 export DAF_SSL_VERIFY=false
-daf upgrade
+daf skills
 ```
 
 ## Testing
@@ -215,7 +215,7 @@ Verify SSL configuration is working:
 ```bash
 # Test with environment variable
 export DAF_SSL_VERIFY=/path/to/ca-bundle.crt
-daf upgrade
+daf skills
 
 # Check what's configured
 daf config show --json | jq '.http_client'

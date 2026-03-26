@@ -1,5 +1,29 @@
 {
   "$defs": {
+    "AgentConfig": {
+      "description": "AI agent skill installation configuration.\n\nControls which AI agents should receive skill installations and at what level.\nSupports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf, Aider, Continue).",
+      "properties": {
+        "enabled_agents": {
+          "default": [
+            "claude"
+          ],
+          "description": "List of AI agents to install skills to (e.g., ['claude', 'cursor', 'windsurf'])",
+          "items": {
+            "type": "string"
+          },
+          "title": "Enabled Agents",
+          "type": "array"
+        },
+        "install_level": {
+          "default": "global",
+          "description": "Installation level: 'global' (~/.agent/skills/), 'project' (<project>/.agent/skills/), or 'both'",
+          "title": "Install Level",
+          "type": "string"
+        }
+      },
+      "title": "AgentConfig",
+      "type": "object"
+    },
     "ContextFile": {
       "description": "Configuration for a single context file to include in initial prompts.",
       "properties": {
@@ -1116,6 +1140,9 @@
     },
     "model_provider": {
       "$ref": "#/$defs/ModelProviderConfig"
+    },
+    "agent": {
+      "$ref": "#/$defs/AgentConfig"
     }
   },
   "required": [

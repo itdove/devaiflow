@@ -45,17 +45,17 @@ daf config set agent_backend continue
 
 ```bash
 # Install skills to all supported agents
-daf upgrade --all-agents
+daf skills --all-agents
 
 # Install to a specific agent
-daf upgrade --agent cursor
-daf upgrade --agent windsurf
+daf skills --agent cursor
+daf skills --agent windsurf
 
 # Install to project directory (instead of global)
-daf upgrade --level project --project-path .
+daf skills --level project --project-path .
 
 # Install to both global and project
-daf upgrade --level both --project-path .
+daf skills --level both --project-path .
 ```
 
 ### Skill Directory Locations
@@ -94,14 +94,14 @@ Each agent has its own skills directory where DevAIFlow installs bundled skills:
 **Personal Development:**
 ```bash
 # Install to all your agents globally
-daf upgrade --all-agents
+daf skills --all-agents
 ```
 
 **Team Collaboration:**
 ```bash
 # Install to project and commit to git
 cd /path/to/project
-daf upgrade --level project --project-path .
+daf skills --level project --project-path .
 git add .claude/skills .cursor/skills
 git commit -m "Add DevAIFlow skills for team"
 ```
@@ -110,7 +110,7 @@ git commit -m "Add DevAIFlow skills for team"
 ```bash
 # You have skills already installed for Claude
 # Now add them for Cursor too
-daf upgrade --agents cursor
+daf skills --agents cursor
 ```
 
 ### Compatibility

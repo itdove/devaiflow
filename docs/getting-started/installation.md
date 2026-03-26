@@ -490,7 +490,7 @@ For detailed configuration options and multi-file structure, see [Multi-File Con
 After initializing configuration, install the DevAIFlow skills into Claude Code:
 
 ```bash
-daf upgrade
+daf skills
 ```
 
 This installs all bundled skills globally to `~/.claude/skills/`:
@@ -502,10 +502,10 @@ These enable you to use DevAIFlow features directly within Claude Code sessions.
 **Example usage:**
 ```bash
 # Preview what would be installed
-daf upgrade --dry-run
+daf skills --dry-run
 
 # Install all skills (slash commands + reference skills)
-daf upgrade
+daf skills
 ```
 
 **Note:** Skills are installed globally to `~/.claude/skills/` and are available in all Claude Code sessions. Claude Code 2.1.3+ is required for slash command support.

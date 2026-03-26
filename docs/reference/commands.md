@@ -4846,26 +4846,33 @@ You can also use `daf config refresh-jira-fields` to refresh field mappings spec
 
 ---
 
-### daf upgrade - Upgrade Bundled Skills
+### daf skills - Manage AI Agent Skills
 
-Install or upgrade the bundled skills globally or to specific AI agents.
+Install, upgrade, uninstall, or list bundled skills for multiple AI agents.
 
 ```bash
-daf upgrade [OPTIONS]
+daf skills [SKILL_NAME] [OPTIONS]
 ```
 
+**Arguments:**
+- `SKILL_NAME` - (Optional) Specific skill to install/uninstall (e.g., `daf-help`, `gh-cli`)
+
 **Options:**
-- `--dry-run` - Preview what would be upgraded without making changes
-- `--agent TEXT` - AI agent to install to (claude, cursor, windsurf, copilot, aider, continue)
+- `--install` - Install skills (default action)
+- `--upgrade` - Upgrade skills (same as --install)
+- `--uninstall` - Uninstall skills
+- `--list` - List available or installed skills
+- `--available` - Show available bundled skills (use with --list)
+- `--installed` - Show installed skills (use with --list)
+- `--dry-run` - Preview what would be changed without making changes
+- `--agent TEXT` - AI agent to target (claude, cursor, windsurf, copilot, aider, continue)
 - `--level [global|project|both]` - Installation level (default: global)
-- `--all-agents` - Install to all supported agents (claude, cursor, windsurf, copilot, aider, continue)
-- `--project-path PATH` - Project directory for project-level installation
-- `--commands-only` - (Deprecated) Legacy flag, now installs slash commands only
-- `--skills-only` - (Deprecated) Legacy flag, now installs reference skills only
+- `--all-agents` - Target all supported agents
+- `--project-path PATH` - Project directory for project-level operations
 
 **What This Does:**
 
-The `daf upgrade` command manages bundled skills that provide helpful prompts and reference documentation:
+The `daf skills` command manages bundled skills that provide helpful prompts and reference documentation:
 - **Installs** skills if they don't exist yet
 - **Upgrades** skills if they're outdated
 - **Skips** skills that are already up-to-date
@@ -4880,27 +4887,42 @@ By default, skills are installed globally to `~/.claude/skills/` and are availab
 **Examples:**
 
 ```bash
-# Upgrade all skills (default: Claude only, global)
-daf upgrade
+# Install all skills (default: Claude only, global)
+daf skills
+
+# List available bundled skills
+daf skills --list --available
+
+# List installed skills for all agents
+daf skills --list --installed --all-agents
+
+# Install specific skill to Claude
+daf skills daf-help
+
+# Install specific skill to Cursor
+daf skills daf-help --agent cursor
 
 # Preview what would be upgraded
-daf upgrade --dry-run
+daf skills --dry-run
 
 # Install to a specific agent
-daf upgrade --agent cursor
-daf upgrade --agent windsurf
+daf skills --agent cursor
+daf skills --agent windsurf
 
 # Install to all supported agents
-daf upgrade --all-agents
+daf skills --all-agents
 
 # Install to project directory (can be committed to git for team)
-daf upgrade --level project --project-path .
+daf skills --level project --project-path .
 
 # Install to both global and project
-daf upgrade --level both --project-path .
+daf skills --level both --project-path .
 
-# Combine flags for advanced usage
-daf upgrade --all-agents --level both --project-path .
+# Uninstall all skills from Cursor
+daf skills --uninstall --agent cursor
+
+# Uninstall specific skill from all agents
+daf skills daf-help --uninstall --all-agents
 ```
 
 **Sample Output:**
@@ -5013,6 +5035,20 @@ You can create your own custom skills by adding skill directories to `~/.claude/
 
 **Note:** Skills are only loaded when Claude Code sessions start. Changes to skills require restarting the session (closing and reopening with `daf open`) to take effect - they are NOT hot-reloaded on `--resume`.
 
+**Deprecated Command:**
+
+⚠️ **`daf upgrade` is deprecated** and will be removed in version 3.0. Use `daf skills` instead.
+
+The `daf upgrade` command still works for backward compatibility but shows a deprecation warning. All functionality has been moved to `daf skills` with additional features:
+- Install specific skills by name: `daf skills daf-help`
+- Uninstall skills: `daf skills --uninstall`
+- List available and installed skills: `daf skills --list --available`
+
+**Migration:**
+- `daf upgrade` → `daf skills`
+- `daf upgrade --agent cursor` → `daf skills --agent cursor`
+- `daf upgrade --all-agents` → `daf skills --all-agents`
+
 ---
 
 ## Using Slash Commands in Multi-Repository Sessions
@@ -5033,7 +5069,7 @@ You can create your own custom skills by adding skill directories to `~/.claude/
 
 ### Available Slash Commands
 
-After running `daf upgrade`, the following commands are available in Claude Code:
+After running `daf skills`, the following commands are available in Claude Code:
 
 #### `/daf list-conversations`
 
@@ -5181,7 +5217,7 @@ daf list
 
 ### Best Practices
 
-1. **Always run `daf upgrade`** after updating the tool to get latest slash commands
+1. **Always run `daf skills`** after updating the tool to get latest slash commands
 2. **Use multi-conversation (default)** - Don't use `--new-session` flag when adding work to other repos
 3. **Use `/daf list-conversations`** first to see what's available
 4. **Only read other conversations**, not your current one
@@ -5364,7 +5400,7 @@ daf config import EXPORT_FILE [--merge|--replace] [--force]
 2. Shows preview of what will be imported
 3. Prompts for confirmation
 4. Imports configuration files
-5. Suggests running `daf upgrade` to install skills
+5. Suggests running `daf skills` to install skills
 
 **Examples:**
 ```bash
@@ -5378,14 +5414,14 @@ daf config import config-export.tar.gz --replace
 daf config import config-export.tar.gz --force
 
 # After import, install skills
-daf upgrade
+daf skills
 ```
 
 **Typical onboarding workflow:**
 1. Team member exports: `daf config export --output team-config.tar.gz`
 2. New user imports: `daf config import team-config.tar.gz`
 3. New user adjusts workspace paths: `daf config edit`
-4. New user installs skills: `daf upgrade`
+4. New user installs skills: `daf skills`
 
 **When to use:**
 - Onboarding to a new project
@@ -5464,7 +5500,7 @@ daf backup                  # Backup everything
 | `daf init` | Initialize config | No |
 | `daf init --refresh` | Refresh field mappings | Yes |
 | `daf init --reset` | Review/update config | No |
-| `daf upgrade` | Upgrade slash commands | No |
+| `daf skills` | Manage AI agent skills | No |
 | `daf config edit` | Interactive configuration | No |
 | `daf config refresh-jira-fields` | Refresh field mappings | Yes |
 | **Utilities** |
@@ -5616,7 +5652,7 @@ daf config import config-export.tar.gz --force
 **After importing:**
 ```bash
 # Install skills and update field mappings
-daf upgrade
+daf skills
 ```
 
 **Typical onboarding workflow:**
@@ -5624,7 +5660,7 @@ daf upgrade
 2. New user receives the archive
 3. New user imports: `daf config import team-config.tar.gz`
 4. New user adjusts workspace paths if needed: `daf config edit`
-5. New user installs skills: `daf upgrade`
+5. New user installs skills: `daf skills`
 
 ### Configuration Examples
 
