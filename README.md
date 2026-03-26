@@ -429,6 +429,60 @@ All core features work across platforms with automatic platform-specific handlin
 
 See the [Installation Guide](docs/getting-started/installation.md) for detailed setup instructions including issue tracker configuration.
 
+### GitHub Authentication Setup
+
+If you're using GitHub Issues or creating PRs to GitHub repositories:
+
+**Install GitHub CLI:**
+```bash
+# macOS
+brew install gh
+
+# Linux (Debian/Ubuntu)
+sudo apt install gh
+
+# Windows
+winget install GitHub.cli
+```
+
+**Authenticate:**
+```bash
+# Interactive authentication (recommended)
+gh auth login
+
+# Follow the prompts to authenticate via browser or token
+```
+
+**For repositories requiring fine-grained tokens:**
+
+Some organizations (like `ansible-automation-platform`) require fine-grained personal access tokens instead of classic tokens for enhanced security.
+
+1. Create fine-grained token: https://github.com/settings/personal-access-tokens/new
+2. Grant access to specific repository
+3. Set required permissions:
+   - Contents: Read and write
+   - Issues: Read and write
+   - Pull requests: Read and write
+4. Authenticate: `gh auth login` and paste the token
+
+**Verify authentication:**
+```bash
+# Check authentication status
+gh auth status
+
+# Or use daf built-in check
+daf git check-auth owner/repo
+```
+
+**Pre-flight authentication checks:**
+
+DevAIFlow automatically checks GitHub authentication before operations and provides clear error messages:
+- Detects when fine-grained tokens are required
+- Provides actionable solutions for auth failures
+- Prevents cryptic errors in CI/CD environments
+
+See [Troubleshooting Guide](docs/guides/troubleshooting.md#githubd-authentication---fine-grained-token-required) for common authentication issues.
+
 ## For Other Organizations
 
 **DevAIFlow is fully generic and works with GitHub, GitLab, or JIRA.** Configuration is file-based and can be customized for your organization.

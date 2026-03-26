@@ -20,6 +20,32 @@ class JiraBackendValidator(BaseBackendValidator):
         r"TODO:.*jira",
     ]
 
+    def validate_dict(self, data: Dict[str, Any]):
+        """Validate JIRA backend config, but skip placeholder warnings if using default.
+
+        If the JIRA URL is still the default placeholder, we assume the user is not
+        using JIRA and suppress all placeholder-related warnings for this file.
+        """
+        from devflow.config.validators.base import ValidationResult
+
+        # Check if JIRA is actually configured (not just placeholder)
+        jira_url = data.get("url", "")
+        is_placeholder_url = not jira_url or "example.com" in jira_url
+
+        if is_placeholder_url:
+            # Don't warn about placeholders in jira.json if the URL itself is a placeholder
+            # This means the user is likely using GitHub/GitLab and hasn't configured JIRA
+            issues = []
+            # Still do schema validation
+            issues.extend(self._validate_with_schema(data))
+            # Still do custom validations (but skip placeholder checks)
+            issues.extend(self.custom_validations(data))
+            is_complete = len(issues) == 0
+            return ValidationResult(is_complete=is_complete, issues=issues)
+        else:
+            # JIRA is configured, do full validation including placeholder checks
+            return super().validate_dict(data)
+
     def custom_validations(self, data: Dict[str, Any]) -> List[ValidationIssue]:
         """JIRA-specific validations.
 

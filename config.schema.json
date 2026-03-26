@@ -813,6 +813,20 @@
           "title": "Remember Last Repo Per Project",
           "type": "object"
         },
+        "remember_last_repo_per_git_repo": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Remember Last Repo Per Git Repo",
+          "type": "object"
+        },
+        "last_used_repo_per_workspace": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Last Used Repo Per Workspace",
+          "type": "object"
+        },
         "show_prompt_unit_tests": {
           "default": true,
           "title": "Show Prompt Unit Tests",

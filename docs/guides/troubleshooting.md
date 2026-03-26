@@ -659,6 +659,270 @@ Field 'acceptance_criteria' is required
 
 **Note:** Debug output is automatically disabled when using `--json` flag to prevent breaking JSON output format.
 
+## GitHub/GitLab Integration Issues
+
+### GitHub Authentication - Fine-Grained Token Required
+
+**Problem:** Error message when accessing repository: "forbids access via a personal access token (classic)"
+
+**Example Error:**
+```
+✗ GitHub authentication failed for ansible-automation-platform/repo
+Reason: Repository requires fine-grained token
+
+Solution: This repository requires a fine-grained personal access token.
+
+1. Create a fine-grained token:
+   https://github.com/settings/personal-access-tokens/new
+
+2. Grant access to repository: ansible-automation-platform/repo
+
+3. Authenticate with the new token:
+   gh auth login
+   or
+   export GITHUB_TOKEN=github_pat_xxxxxxxxxxxx
+```
+
+**Cause:**
+Some GitHub organizations (like `ansible-automation-platform`) have security policies that forbid classic personal access tokens. They require fine-grained tokens with explicit repository access.
+
+**Solutions:**
+
+1. **Create a fine-grained personal access token:**
+   - Go to: https://github.com/settings/personal-access-tokens/new
+   - Give it a descriptive name (e.g., "DevAIFlow CLI")
+   - Set expiration (90 days recommended)
+   - Under "Repository access", select "Only select repositories"
+   - Choose the specific repository you need to access
+   - Under "Permissions", grant:
+     - **Repository permissions:**
+       - Contents: Read and write (for reading issue data)
+       - Issues: Read and write (for creating/updating issues)
+       - Pull requests: Read and write (for creating PRs)
+       - Metadata: Read-only (automatically included)
+   - Click "Generate token"
+   - **Copy the token immediately** (you won't be able to see it again)
+
+2. **Authenticate with the new token:**
+   ```bash
+   # Option 1: Interactive authentication (recommended)
+   gh auth login
+   # Select "GitHub.com"
+   # Select "Paste an authentication token"
+   # Paste your fine-grained token
+
+   # Option 2: Environment variable
+   export GITHUB_TOKEN=github_pat_xxxxxxxxxxxx
+   ```
+
+3. **Verify authentication:**
+   ```bash
+   daf git check-auth owner/repo
+   ```
+   This will verify that authentication is working and you have access to the repository.
+
+**Note:** Fine-grained tokens are more secure than classic tokens because they:
+- Have limited access to specific repositories
+- Have explicit permission scopes
+- Can be audited per-repository
+
+### GitHub Authentication - Not Logged In
+
+**Problem:** Error message: "Not logged in to GitHub"
+
+**Solutions:**
+
+1. **Authenticate with gh CLI:**
+   ```bash
+   gh auth login
+   ```
+   Follow the interactive prompts.
+
+2. **Or use a personal access token:**
+   ```bash
+   export GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+   gh auth login --with-token < <(echo $GITHUB_TOKEN)
+   ```
+
+3. **Verify authentication:**
+   ```bash
+   gh auth status
+   daf git check-auth owner/repo
+   ```
+
+### GitHub Authentication - Insufficient Permissions
+
+**Problem:** Error message: "Authentication invalid or expired" or "Insufficient permissions"
+
+**Solutions:**
+
+1. **Refresh authentication with required scopes:**
+   ```bash
+   gh auth refresh -s repo -s workflow
+   ```
+
+2. **Or create a new token with 'repo' scope:**
+   - Classic token: https://github.com/settings/tokens/new
+   - Fine-grained token: https://github.com/settings/personal-access-tokens/new
+
+3. **Re-authenticate:**
+   ```bash
+   gh auth login
+   ```
+
+### GitHub Authentication - Repository Not Found
+
+**Problem:** Error message: "Repository not found or no access"
+
+**Troubleshooting:**
+
+1. **Verify repository name is correct:**
+   ```bash
+   # Format should be: owner/repo
+   daf git check-auth ansible-saas/devaiflow
+   ```
+
+2. **Check if you're authenticated to the correct GitHub account:**
+   ```bash
+   gh auth status
+   ```
+
+3. **For private repositories, ensure your token has 'repo' scope:**
+   - Check current token scopes: `gh auth status`
+   - Refresh with correct scopes: `gh auth refresh -s repo`
+
+4. **Verify you have access to the repository:**
+   - Go to https://github.com/owner/repo in your browser
+   - Confirm you can view the repository
+   - If you can't access it, request access from the repository owner
+
+### GitLab Authentication Issues
+
+**Problem:** glab authentication failures when accessing GitLab repositories
+
+**Solutions:**
+
+1. **For GitLab.com:**
+   ```bash
+   glab auth login
+   ```
+
+2. **For self-hosted GitLab (e.g., gitlab.cee.redhat.com):**
+   ```bash
+   # Full authentication with explicit parameters
+   glab auth login --hostname gitlab.cee.redhat.com \
+     --api-host gitlab.cee.redhat.com \
+     --api-protocol https \
+     --git-protocol git \
+     -t $GITLAB_TOKEN
+   ```
+
+3. **Create GitLab personal access token:**
+   - Go to GitLab Settings > Access Tokens
+   - Create token with `api` scope
+   - Save as `GITLAB_TOKEN` environment variable
+
+4. **Verify authentication:**
+   ```bash
+   glab auth status
+   ```
+
+### Checking Authentication Before Operations
+
+**Best Practice:**
+
+Use the `daf git check-auth` command to verify authentication before starting work:
+
+```bash
+# Auto-detect repository from git remote
+daf git check-auth
+
+# Or specify repository explicitly
+daf git check-auth owner/repo
+```
+
+**Example Output (Success):**
+```
+Checking GitHub authentication for: owner/repo
+
+✓ GitHub authentication: OK
+✓ Repository access: OK
+
+Account: username
+Token: gho_xxxxxxxxxxxx
+scopes: repo, workflow
+```
+
+**Example Output (Failure):**
+```
+Checking GitHub authentication for: ansible-automation-platform/repo
+
+✗ GitHub authentication: FAILED
+✗ Error type: fine_grained_required
+✗ Error message: Repository requires fine-grained token
+
+⚠  This repository requires a fine-grained personal access token.
+
+Solution:
+  1. Create fine-grained token: https://github.com/settings/personal-access-tokens/new
+  2. Grant access to: ansible-automation-platform/repo
+  3. Authenticate: gh auth login
+```
+
+**When to Use:**
+- Before starting a new session with GitHub/GitLab issues
+- After changing GitHub accounts
+- When troubleshooting authentication errors
+- In CI/CD pipelines to verify credentials
+
+### Non-Interactive Environments (CI/CD)
+
+**Problem:** Authentication prompts hang in CI/CD pipelines
+
+**Environment Detection:**
+
+DevAIFlow automatically detects non-interactive environments and provides appropriate error messages without attempting to prompt for input.
+
+**Detected as non-interactive:**
+- CI/CD environments (CI=1, GITHUB_ACTIONS, GITLAB_CI, JENKINS_HOME)
+- Non-TTY environments (stdin not a terminal)
+- When DAF_NO_PROMPT=1 is set
+
+**Example Error Message (Non-Interactive):**
+```
+✗ GitHub authentication failed for owner/repo
+Reason: Not logged in to GitHub
+
+Solution: Run the following command to authenticate:
+  gh auth login
+
+Or set a personal access token:
+  export GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+
+Note: Running in non-interactive mode (CI/automation detected)
+```
+
+**CI/CD Best Practices:**
+
+1. **Set GITHUB_TOKEN as a secret:**
+   ```yaml
+   # GitHub Actions
+   env:
+     GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+   ```
+
+2. **Or use gh CLI in CI:**
+   ```bash
+   # Authenticate using token from environment
+   echo "$GITHUB_TOKEN" | gh auth login --with-token
+   ```
+
+3. **Disable interactive prompts explicitly:**
+   ```bash
+   export DAF_NO_PROMPT=1
+   daf git view owner/repo#123
+   ```
+
 ## Conversation Issues
 
 ### Corrupted Conversation File

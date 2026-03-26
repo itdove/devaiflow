@@ -17,6 +17,9 @@ console = Console(stderr=True)
 class ConfigLoader:
     """Load and manage configuration files."""
 
+    # Class-level flag to track if validation warnings have been shown
+    _validation_warnings_shown = False
+
     def __init__(self, config_dir: Optional[Path] = None):
         """Initialize the config loader.
 
@@ -782,11 +785,15 @@ class ConfigLoader:
             update_checker_timeout=user_config.update_checker_timeout,
         )
 
-        # Validate configuration and show warnings
+        # Validate configuration and show warnings (only once per command execution)
         from .validator import ConfigValidator
         validator = ConfigValidator(self.config_dir)
         validation_result = validator.validate_split_config_files()
-        validator.print_validation_warnings_on_load(validation_result)
+
+        # Only show warnings once per command execution to avoid spam
+        if not ConfigLoader._validation_warnings_shown:
+            validator.print_validation_warnings_on_load(validation_result)
+            ConfigLoader._validation_warnings_shown = True
 
         return config
 

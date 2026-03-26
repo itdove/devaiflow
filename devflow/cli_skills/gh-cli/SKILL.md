@@ -63,6 +63,98 @@ gh auth refresh
 4. Generate and save token securely
 5. Set as `GITHUB_TOKEN` environment variable
 
+### Fine-Grained Personal Access Tokens
+
+Some GitHub organizations (like `ansible-automation-platform`) require fine-grained tokens instead of classic tokens for enhanced security.
+
+**When you need a fine-grained token:**
+- Error message: "forbids access via a personal access token (classic)"
+- Organization security policies require repository-specific access
+
+**Creating a fine-grained token:**
+
+1. Go to: https://github.com/settings/personal-access-tokens/new
+2. Give it a descriptive name (e.g., "DevAIFlow CLI")
+3. Set expiration (90 days recommended)
+4. Under "Repository access", select "Only select repositories"
+5. Choose the specific repository you need to access
+6. Under "Permissions", grant:
+   - **Repository permissions:**
+     - Contents: Read and write
+     - Issues: Read and write
+     - Pull requests: Read and write
+     - Metadata: Read-only (automatically included)
+7. Click "Generate token"
+8. **Copy the token immediately** (format: `github_pat_xxxxxxxxxxxx`)
+
+**Authenticate with fine-grained token:**
+```bash
+# Interactive (recommended)
+gh auth login
+# Select "GitHub.com"
+# Select "Paste an authentication token"
+# Paste your token
+
+# Or via environment variable
+export GITHUB_TOKEN=github_pat_xxxxxxxxxxxx
+```
+
+**Verify token works:**
+```bash
+daf git check-auth owner/repo
+```
+
+### Pre-Flight Authentication Checks
+
+DevAIFlow automatically checks GitHub authentication **before** making API calls to provide clear error messages and prevent cryptic failures.
+
+**What is checked:**
+1. Is `gh` CLI authenticated?
+2. Does authentication have access to the repository?
+3. Is fine-grained token required?
+
+**When checks run:**
+- Before viewing GitHub issues (`daf git view`)
+- Before creating GitHub issues (`daf git create`)
+- Before updating GitHub issues (`daf git update`)
+- Before any GitHub API operation
+
+**Example: Fine-grained token required**
+```
+✗ GitHub authentication failed for ansible-automation-platform/repo
+Reason: Repository requires fine-grained token
+
+Solution: This repository requires a fine-grained personal access token.
+
+1. Create a fine-grained token:
+   https://github.com/settings/personal-access-tokens/new
+
+2. Grant access to repository: ansible-automation-platform/repo
+
+3. Authenticate with the new token:
+   gh auth login
+   or
+   export GITHUB_TOKEN=github_pat_xxxxxxxxxxxx
+```
+
+**Manual authentication check:**
+```bash
+# Auto-detect repository from git remote
+daf git check-auth
+
+# Or specify repository explicitly
+daf git check-auth owner/repo
+```
+
+**Environment detection:**
+
+DevAIFlow detects non-interactive environments (CI/CD) and adjusts error messages accordingly:
+- **Interactive terminal**: Provides helpful tips and suggestions
+- **CI/CD (CI=1, GITHUB_ACTIONS, etc.)**: Clear error messages without interactive prompts
+- **DAF_NO_PROMPT=1**: Explicit non-interactive mode
+
+This prevents authentication prompts from hanging in automated environments.
+
 ## Pull Request Operations
 
 ### Creating Pull Requests

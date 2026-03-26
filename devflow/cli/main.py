@@ -1720,6 +1720,23 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
     create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository)
 
 
+@git.command(name="check-auth")
+@click.argument("repository", required=False)
+def git_check_auth(ctx: click.Context, repository: Optional[str]) -> None:
+    """Check GitHub authentication and repository access.
+
+    REPOSITORY is optional repository in owner/repo format.
+    If not provided, auto-detects from git remotes.
+
+    Examples:
+        daf git check-auth owner/repo
+        daf git check-auth  # Auto-detect from git remote
+    """
+    from devflow.cli.commands.git_check_auth_command import check_auth_command
+
+    check_auth_command.callback(repository)
+
+
 @cli.command(name="investigate")
 @json_option
 @click.option("--goal", help="Goal/description for the investigation (auto-detection of file:// paths and http(s):// URLs)")
