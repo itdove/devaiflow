@@ -248,7 +248,7 @@ DevAIFlow supports running Claude Code with alternative AI models for cost savin
 - Vertex AI - Google Cloud AI models
 - Minimax - Chinese market AI provider
 
-**Configuration:** Use `daf config tui` to configure model provider profiles. See [docs/alternative-model-providers.md](reference/alternative-model-providers.md) for setup instructions.
+**Configuration:** Use `daf config edit` to configure model provider profiles. See [docs/alternative-model-providers.md](reference/alternative-model-providers.md) for setup instructions.
 
 **⚠️ Note:** Ollama is NOT compatible with Claude Code. Use llama.cpp instead.
 

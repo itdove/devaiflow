@@ -28,7 +28,7 @@ A **conversation** represents work in a specific project directory with:
 - **Archived conversations** - Previous Claude Code conversations in the same repository
   - Full conversation history preserved
   - Summary of what was accomplished
-  - Can be viewed with `daf sessions list`
+  - Can be viewed with `daf list`
 
 **Key Points:**
 - **Multi-project sessions** create ONE conversation with SHARED CONTEXT across all selected projects - enabling Claude to coordinate changes across repositories
@@ -371,7 +371,7 @@ daf open PROJ-12345 --new-conversation
 See all conversations (active + archived) for a session:
 
 ```bash
-daf sessions list PROJ-12345
+daf list PROJ-12345
 ```
 
 **Example output:**

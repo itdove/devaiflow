@@ -58,7 +58,7 @@ def test_init_config_already_exists_no_refresh(temp_daf_home):
     assert result.exit_code == 0
     assert "Configuration already exists" in result.output
     assert "daf init --refresh" in result.output
-    assert "Edit config.json manually" in result.output or "daf config tui" in result.output
+    assert "Edit config.json manually" in result.output or "daf config edit" in result.output
 
 
 def test_init_refresh_updates_field_mappings(temp_daf_home, mock_jira_cli, monkeypatch):

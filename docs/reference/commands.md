@@ -422,7 +422,7 @@ Level 1: SESSION (issue_key: "PROJ-12345")
 
 - **Level 3 - Archived Conversations**: Previous Claude sessions for same repository
   - Preserved when starting fresh with `--new-conversation`
-  - Accessible via `daf sessions list` command
+  - Accessible via `daf list` command
 
 **What `daf list` shows:**
 ```bash
@@ -2940,7 +2940,7 @@ The default comment visibility is configured in `$DEVAIFLOW_HOME/config.json`:
 
 To change default visibility:
 ```bash
-daf config tui
+daf config edit
 # Navigate to "JIRA Integration" tab
 # Set "Comment Visibility Type" to "group"
 # Set "Comment Visibility Value" to "Developers"
@@ -3260,21 +3260,19 @@ daf info PROJ-60039 --conversation-id 2 --uuid-only
 
 ---
 
-### daf sessions list - View Conversation History
+### daf sessions list - View Conversation History (REMOVED)
 
-Show all conversations (active + archived) for a session, revealing the full history of Claude Code sessions in each repository.
+**This command has been removed.** Use `daf list` instead.
 
+The deprecated `daf sessions` command group has been removed to simplify the CLI. All functionality is available through `daf list`.
+
+**Migration:**
 ```bash
-daf sessions list <NAME-or-JIRA>
-```
-
-**Examples:**
-```bash
-# View all conversations for a JIRA ticket
+# Old (removed)
 daf sessions list PROJ-12345
 
-# View all conversations for a session name
-daf sessions list my-session
+# New (use this instead)
+daf list PROJ-12345
 ```
 
 **Output:**
@@ -4228,9 +4226,9 @@ daf cleanup-sessions --force
 
 ---
 
-### daf purge-mock-data - Clear Mock Data
+### daf purge-mock-data - Clear Mock Data (Hidden)
 
-Purge all mock data used for integration testing.
+**Hidden developer utility** - This command is hidden from `daf --help` but still available for developers and automated testing.
 
 ```bash
 daf purge-mock-data [OPTIONS]
@@ -4246,6 +4244,9 @@ daf purge-mock-data
 
 # Purge without confirmation
 daf purge-mock-data --force
+
+# Alternative: manually delete mock data directory
+rm -rf $DEVAIFLOW_HOME/mocks/
 ```
 
 **What it clears:**
@@ -4266,7 +4267,7 @@ daf purge-mock-data --force
 - Reset mock environment for demos
 - Clean up after development work
 
-**Note:** This command is specifically for development and testing. It has no effect on production sessions or data.
+**Note:** This command is hidden from the main command list to reduce CLI complexity. It's specifically for development and testing, and has no effect on production sessions or data. You can also manually delete the `$DEVAIFLOW_HOME/mocks/` directory to achieve the same result.
 
 ---
 
@@ -4731,7 +4732,7 @@ $ daf init --reset
 
 DevAIFlow Configuration Wizard
 
-All settings can be changed later using 'daf config tui'
+All settings can be changed later using 'daf config edit'
 
 === JIRA Configuration ===
 
@@ -4745,7 +4746,7 @@ JIRA Project Key (optional, press Enter to skip) (PROJ):
 === JIRA Comment Visibility ===
 
 Control who can see comments that DevAIFlow adds to JIRA tickets.
-Can be set later via 'daf config tui'.
+Can be set later via 'daf config edit'.
 
 Choose visibility type:
   1. group - Restrict by JIRA group membership (most common)
@@ -4764,7 +4765,7 @@ Workspace path (~/development/myproject):
 
 Optional: Keywords help suggest repositories when working across multiple repos.
 DevAIFlow learns from your usage patterns, so keywords are only needed if you want
-explicit routing rules. You can skip this and configure later via 'daf config tui'.
+explicit routing rules. You can skip this and configure later via 'daf config edit'.
 
 Configure keyword mappings now? [y/n] (n): n
 
@@ -4772,7 +4773,7 @@ Configure keyword mappings now? [y/n] (n): n
 
 Optional: Configure how AI generates PR/MR descriptions.
 Templates are auto-discovered from organization and repository locations.
-Manual configuration can be added later via 'daf config tui' or by editing config.json.
+Manual configuration can be added later via 'daf config edit' or by editing config.json.
 
 You have three options for generating PR/MR descriptions:
   1. Provide a template URL - AI will fill your organization's template
@@ -5021,7 +5022,7 @@ You can configure Claude to automatically be prompted to read related conversati
 
 **Via TUI:**
 ```bash
-daf config tui
+daf config edit
 ```
 
 Navigate to **Prompts** tab → **Multi-Conversation Sessions** → Set "Auto-load related conversations prompt" to **Enable**.
@@ -5181,16 +5182,16 @@ daf config edit
 - Visual review of all settings
 - When you prefer GUI over command line
 
-**Alternative:** Use `daf config tui` (alias for this command)
+**Alternative:** Use `daf config edit` (alias for this command)
 
 ---
 
-### daf config tui - Interactive Configuration Editor (Alias)
+### daf config edit - Interactive Configuration Editor (Alias)
 
 Alias for `daf config edit`. See [daf config edit](#daf-config-edit---interactive-configuration-editor) for details.
 
 ```bash
-daf config tui
+daf config edit
 ```
 
 ---
@@ -5325,7 +5326,7 @@ daf upgrade
 **Typical onboarding workflow:**
 1. Team member exports: `daf config export --output team-config.tar.gz`
 2. New user imports: `daf config import team-config.tar.gz`
-3. New user adjusts workspace paths: `daf config tui`
+3. New user adjusts workspace paths: `daf config edit`
 4. New user installs skills: `daf upgrade`
 
 **When to use:**
@@ -5397,13 +5398,13 @@ daf backup                  # Backup everything
 | **Maintenance** |
 | `daf cleanup-conversation` | Clean history | No |
 | `daf cleanup-sessions` | Fix orphaned | No |
-| `daf purge-mock-data` | Clear mock data | No |
+| `daf purge-mock-data` | Clear mock data (hidden) | No |
 | **Configuration** |
 | `daf init` | Initialize config | No |
 | `daf init --refresh` | Refresh field mappings | Yes |
 | `daf init --reset` | Review/update config | No |
 | `daf upgrade` | Upgrade slash commands | No |
-| `daf config tui` | Interactive configuration | No |
+| `daf config edit` | Interactive configuration | No |
 | `daf config refresh-jira-fields` | Refresh field mappings | Yes |
 | **Utilities** |
 | `daf search` | Search sessions | No |
@@ -5433,7 +5434,7 @@ The `daf config set-*` commands have been removed as of version 2.0. Use the alt
 
 
 ```bash
-daf config tui
+daf config edit
 ```
 
 Features:
@@ -5559,7 +5560,7 @@ daf upgrade
 1. Team member exports their config: `daf config export --output team-config.tar.gz`
 2. New user receives the archive
 3. New user imports: `daf config import team-config.tar.gz`
-4. New user adjusts workspace paths if needed: `daf config tui`
+4. New user adjusts workspace paths if needed: `daf config edit`
 5. New user installs skills: `daf upgrade`
 
 ### Configuration Examples
@@ -5568,7 +5569,7 @@ daf upgrade
 
 **Using TUI:**
 ```bash
-daf config tui
+daf config edit
 # Navigate to "JIRA Integration" tab
 # Set "Project Key" field to "PROJ"
 # Press Save
@@ -5584,7 +5585,7 @@ mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 
 **Using TUI:**
 ```bash
-daf config tui
+daf config edit
 # Navigate to "Repository" tab
 # Set "Workspace" field to "~/development"
 # TUI shows repo count after save
@@ -5601,7 +5602,7 @@ mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 
 **Using TUI:**
 ```bash
-daf config tui
+daf config edit
 # Navigate to "JIRA Transitions" tab
 # Configure "On Start" section
 # Press Save

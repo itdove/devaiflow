@@ -238,8 +238,8 @@ daf complete PROJ-123
 # Launch the interactive configuration editor
 daf config edit
 
-# Or use the alias
-daf config tui
+# Launch interactive configuration editor
+daf config edit
 ```
 
 The TUI provides:
@@ -504,7 +504,7 @@ See [Troubleshooting Guide](docs/guides/troubleshooting.md#githubd-authenticatio
 
 2. **Interactive Config**: Use the TUI for easy configuration management
    ```bash
-   daf config tui  # Launch interactive configuration editor
+   daf config edit  # Launch interactive configuration editor
    ```
 
 3. **Workspace Configuration** (Recommended for teams):
@@ -581,9 +581,10 @@ export DAF_MOCK_MODE=1
 # All commands now use mock services with isolated data
 daf list              # Shows mock sessions only
 daf new my-test       # Creates mock session
-daf purge-mock-data   # Clear all mock data
 
-# Mock data is stored separately in $DEVAIFLOW_HOME/mocks/
+# Mock data is stored in $DEVAIFLOW_HOME/mocks/
+# To clear: manually delete the mocks/ directory or use hidden command:
+# daf purge-mock-data (developer utility, not shown in --help)
 ```
 
 Mock services include:

@@ -211,7 +211,7 @@ class GitLabClient(IssueTrackerClient):
                 raise IssueTrackerConfigError(
                     "No GitLab repository specified and auto-detection failed. "
                     "Either:\n"
-                    "  1. Set repository in config (daf config tui)\n"
+                    "  1. Set repository in config (daf config edit)\n"
                     "  2. Ensure you're in a git repository with GitLab remote\n"
                     "  3. Pass repository explicitly (e.g., group/project#123)"
                 )

@@ -525,7 +525,7 @@ Edit `~/.daf-sessions/organization.json`:
 **Option C: Using the TUI**
 
 ```bash
-daf config tui --advanced
+daf config edit --advanced
 # Navigate to Organization tab
 # Set "Hierarchical Config Source" field
 ```
@@ -1175,7 +1175,7 @@ echo "# Instructions\nHow to..." > my-org/daf-skills/enterprise/SKILL.md
 **Quick Start for Users:**
 ```bash
 # 1. Configure source
-daf config tui  # Set hierarchical_config_source
+daf config edit  # Set hierarchical_config_source
 
 # 2. Install skills
 daf upgrade

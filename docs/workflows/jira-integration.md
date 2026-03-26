@@ -346,14 +346,14 @@ For creating JIRA issues, you need to configure your project and any custom fiel
 
 ```bash
 # Set JIRA project key
-daf config tui  # Navigate to JIRA Integration → Project Key PROJ
+daf config edit  # Navigate to JIRA Integration → Project Key PROJ
 
 # Set custom field defaults (e.g., workstream, team, etc.)
-daf config tui  # Navigate to JIRA Integration → Custom Field Defaults
+daf config edit  # Navigate to JIRA Integration → Custom Field Defaults
                 # Example: {"workstream": "Platform", "team": "Backend"}
 
 # Set affected version for bugs (one-time configuration)
-daf config tui  # Navigate to JIRA Integration → Affected Version v1.0.0
+daf config edit  # Navigate to JIRA Integration → Affected Version v1.0.0
 ```
 
 These values are saved to `config.json` and used automatically when creating issues.
@@ -376,10 +376,10 @@ Configure how tickets transition between statuses when you start or complete wor
 **Configure on_start transition (when opening a session):**
 ```bash
 # Interactive mode
-daf config tui
+daf config edit
 
 # Command-line mode
-daf config tui
+daf config edit
   --from-status "New" \
   --from-status "To Do" \
   --to "In Progress" \
@@ -389,13 +389,13 @@ daf config tui
 **Configure on_complete transition (when completing a session):**
 ```bash
 # Interactive mode (recommended)
-daf config tui
+daf config edit
 
 # Interactive selection from available transitions
-daf config tui
+daf config edit
 
 # Automatic transition to specific status
-daf config tui
+daf config edit
   --no-prompt \
   --to "Done"
 ```

@@ -1181,7 +1181,7 @@ Run 'daf config show --validate' for details and suggestions
 
 3. **Use interactive TUI editor:**
    ```bash
-   daf config tui
+   daf config edit
    ```
    The TUI provides input validation and helps you set required values correctly.
 
@@ -1219,7 +1219,7 @@ Run 'daf config show --validate' for details and suggestions
 2. **Update workspace path:**
    ```bash
    # Update to directory containing your repositories
-   daf config tui /Users/username/development/workspace
+   daf config edit /Users/username/development/workspace
    ```
 
 3. **Verify repositories found:**
@@ -1230,7 +1230,7 @@ Run 'daf config show --validate' for details and suggestions
 ```bash
 # Before: workspace was /Users/username/development (15 repos)
 # After: workspace is /Users/username/development/workspace (52 repos)
-daf config tui ~/development/workspace
+daf config edit ~/development/workspace
 # ✓ Workspace set to: /Users/username/development/workspace
 # Found 52 directories in workspace
 ```
@@ -1880,8 +1880,8 @@ export DEVAIFLOW_HOME="$HOME/.daf-sessions-test"
 # Developer A
 export DEVAIFLOW_HOME="$HOME/.daf-sessions-dev-a"
 daf init
-daf config tui PROJ
-daf config tui ~/development/workspace
+daf config edit PROJ
+daf config edit ~/development/workspace
 daf jira new story --parent PROJ-XXXXX --goal "Test feature"
 # Work in Claude Code, then export:
 daf sync PROJ-12345
@@ -1890,8 +1890,8 @@ daf export PROJ-12345 --output /tmp/session-export.tar.gz
 # Developer B
 export DEVAIFLOW_HOME="$HOME/.daf-sessions-dev-b"
 daf init
-daf config tui PROJ
-daf config tui ~/development/workspace
+daf config edit PROJ
+daf config edit ~/development/workspace
 daf import /tmp/session-export.tar.gz
 daf open PROJ-12345  # Continue with full conversation history
 ```
@@ -2087,7 +2087,7 @@ export JIRA_AUTH_TYPE="Bearer"
 
 3. **Avoid spaces in workspace path:**
    ```powershell
-   daf config tui
+   daf config edit
    # Set workspace to: C:\development\workspace
    # Not: C:\Users\My Name\Documents\Development
    ```

@@ -106,7 +106,7 @@ daf workspace set-default <name>            # Set default workspace
 
 ```bash
 # Configure alternative AI models (save 98% on costs or run offline)
-daf config tui                          # Interactive config editor
+daf config edit                          # Interactive config editor
 # See docs/alternative-model-providers.md for:
 # - llama.cpp (local models, 100% offline)
 # - OpenRouter (cloud models, 98% cheaper)

@@ -175,7 +175,7 @@ def _get_required_custom_fields(
             if config_value and config_value != flag_value:
                 console_print(f"[dim]ℹ Current {field_name} in config: \"{config_value}\"[/dim]")
                 console_print(f"[dim]ℹ Command uses {field_name}: \"{flag_value}\"[/dim]")
-                console_print(f"[dim]Not updating config (use 'daf config tui' to change default)[/dim]")
+                console_print(f"[dim]Not updating config (use 'daf config edit' to change default)[/dim]")
                 console_print()
 
             custom_fields[field_name] = flag_value
@@ -222,7 +222,7 @@ def _get_required_custom_fields(
             config.jira.custom_field_defaults[field_name] = field_value
             config_loader.save_config(config)
             console_print(f"\n[green]ℹ[/green] {field_name.title()} set to \"{field_value}\" and saved to config")
-            console_print(f"[dim]You can change it later with: daf config tui[/dim]\n")
+            console_print(f"[dim]You can change it later with: daf config edit[/dim]\n")
 
             custom_fields[field_name] = field_value
         else:
@@ -255,7 +255,7 @@ def _get_project(config, config_loader, flag_value: Optional[str]) -> Optional[s
         if config.jira.project and config.jira.project != flag_value:
             console_print(f"[dim]ℹ Current project in config: \"{config.jira.project}\"[/dim]")
             console_print(f"[dim]ℹ Command uses project: \"{flag_value}\"[/dim]")
-            console_print(f"[dim]Not updating config (use 'daf config tui' to change default)[/dim]")
+            console_print(f"[dim]Not updating config (use 'daf config edit' to change default)[/dim]")
             console_print()
 
         return flag_value
@@ -425,7 +425,7 @@ def _get_required_system_fields(
             config.jira.system_field_defaults[field_key] = field_value
             config_loader.save_config(config)
             console_print(f"\n[green]ℹ[/green] {field_key.title()} set to \"{field_value}\" and saved to config")
-            console_print(f"[dim]You can change it later with: daf config tui[/dim]\n")
+            console_print(f"[dim]You can change it later with: daf config edit[/dim]\n")
 
             system_fields[field_key] = field_value
         else:
@@ -469,7 +469,7 @@ def _get_affected_version(config, config_loader, field_mapper, flag_value: Optio
         if config.jira.affected_version and config.jira.affected_version != flag_value:
             console_print(f"[dim]ℹ Current affected version in config: \"{config.jira.affected_version}\"[/dim]")
             console_print(f"[dim]ℹ Command uses affected version: \"{flag_value}\"[/dim]")
-            console_print(f"[dim]Not updating config (use 'daf config tui' to change default)[/dim]")
+            console_print(f"[dim]Not updating config (use 'daf config edit' to change default)[/dim]")
             console_print()
 
         return flag_value
@@ -514,7 +514,7 @@ def _get_affected_version(config, config_loader, field_mapper, flag_value: Optio
         config.jira.affected_version = affected_version
         config_loader.save_config(config)
         console_print(f"\n[green]ℹ[/green] Affected version set to \"{affected_version}\" and saved to config.json")
-        console_print(f"[dim]You can change it later with: daf config tui <VERSION>[/dim]\n")
+        console_print(f"[dim]You can change it later with: daf config edit <VERSION>[/dim]\n")
         return affected_version
 
     # Fallback to default if user somehow provides empty string
@@ -951,7 +951,7 @@ def create_issue(
                 f"  [dim]Fix by doing ONE of:[/dim]\n"
                 f"  [dim]1. Set default in team.json: {{\"jira_system_field_defaults\": {{\"components\": [\"your-component\"]}}}}[/dim]\n"
                 f"  [dim]2. Use --components flag: daf jira create {issue_type} --components your-component[/dim]\n"
-                f"  [dim]3. Use TUI to set default: daf config tui → JIRA Integration → Component dropdown[/dim]"
+                f"  [dim]3. Use TUI to set default: daf config edit → JIRA Integration → Component dropdown[/dim]"
             )
             if output_json:
                 json_output(
@@ -963,7 +963,7 @@ def create_issue(
                         "solutions": [
                             "Set default in team.json: {\"jira_system_field_defaults\": {\"components\": [\"your-component\"]}}",
                             f"Use --components flag: daf jira create {issue_type} --components your-component",
-                            "Use TUI: daf config tui"
+                            "Use TUI: daf config edit"
                         ]
                     }
                 )

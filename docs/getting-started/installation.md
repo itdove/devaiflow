@@ -438,7 +438,7 @@ This launches an interactive wizard that:
   - **JIRA settings** - URL, project key, comment visibility (if using JIRA)
   - **Optional settings** - Keyword mappings for multi-repo suggestions, PR template URL
 
-All settings can be changed later using `daf config tui`.
+All settings can be changed later using `daf config edit`.
 
 #### Configuration Files Created
 
@@ -852,7 +852,7 @@ That's it! Most configuration is automatic or done via `daf config`.
 
 ```bash
 # Interactive configuration (recommended)
-daf config tui
+daf config edit
 ```
 
 **What's configurable** (via `daf config edit` TUI):

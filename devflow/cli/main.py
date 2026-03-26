@@ -608,37 +608,6 @@ def session_set_workspace(session_name: str, workspace_name: str) -> None:
     set_workspace_for_session(session_name, workspace_name)
 
 
-# Keep 'sessions' group for backward compatibility (deprecated)
-@cli.group()
-@json_option
-def sessions(ctx: click.Context) -> None:
-    """[Deprecated] Use 'daf session' instead."""
-    pass
-
-
-@sessions.command(name="list")
-@click.argument("identifier", shell_complete=complete_session_identifiers)
-@json_option
-def sessions_list_cmd(ctx: click.Context, identifier: str) -> None:
-    """[Deprecated] Use 'daf session list-conversations' instead.
-
-    Shows all Claude Code conversations (active and archived) across all repositories
-    in the session.
-
-    IDENTIFIER can be either a session name or issue tracker key.
-
-    Example:
-        daf sessions list PROJ-12345  (deprecated)
-        daf session list-conversations PROJ-12345  (use this)
-    """
-    from devflow.cli.commands.sessions_list_command import sessions_list
-
-    console.print("[yellow]⚠ Command 'daf sessions list' is deprecated.[/yellow]")
-    console.print("[dim]Use 'daf session list-conversations' instead[/dim]\n")
-
-    sessions_list(identifier, output_json=ctx.obj.get('output_json', False))
-
-
 @cli.command()
 @click.option("--active", is_flag=True, help="Show only active sessions")
 @click.option("--status", help="Filter by session status: created, in_progress, paused, complete (comma-separated for multiple)")
@@ -2319,27 +2288,6 @@ def config_edit(ctx: click.Context, advanced: bool) -> None:
         console.print("[dim]You can still edit configuration manually in config.json[/dim]")
 
 
-@config.command(name="tui")
-@json_option
-@click.option("--advanced", is_flag=True, help="Start in Advanced Mode (file-based tabs)")
-def config_tui(ctx: click.Context, advanced: bool) -> None:
-    """Alias for 'daf config edit' - launch interactive TUI.
-
-    This is an alias for the 'edit' command, provided for convenience.
-
-    Examples:
-        daf config tui                # Start in Simple Mode (default)
-        daf config tui --advanced     # Start in Advanced Mode
-    """
-    from devflow.ui.config_tui import run_config_tui
-
-    try:
-        run_config_tui(advanced_mode=advanced)
-    except Exception as e:
-        console.print(f"[red]✗[/red] Failed to launch configuration TUI: {e}")
-        console.print("[dim]You can still edit configuration manually in config.json[/dim]")
-
-
 @config.command(name="unset-prompts")
 @json_option
 @click.option("--auto-commit", is_flag=True, help="Unset auto-commit setting")
@@ -3259,7 +3207,7 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
                 elif not config.jira.project:
                     console.print("\n[yellow]⚠[/yellow] Project key not set - skipping field discovery")
                     console.print("[dim]  Limited functionality: Cannot create JIRA issues until project key is set[/dim]")
-                    console.print("[dim]  Set project key with: [cyan]daf config tui[/cyan] or [cyan]daf init --reset[/cyan][/dim]")
+                    console.print("[dim]  Set project key with: [cyan]daf config edit[/cyan] or [cyan]daf init --reset[/cyan][/dim]")
                     console.print("[dim]  Then run: [cyan]daf config refresh-jira-fields[/cyan][/dim]")
                 else:
                     # Ask if user wants to discover fields now
@@ -3279,7 +3227,7 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
         console.print("  - JIRA URL and project")
         console.print("  - Repository workspace path")
         console.print("  - Keyword mappings for smart repo detection")
-        console.print("  - Custom field defaults (if needed) via [cyan]daf config tui[/cyan]")
+        console.print("  - Custom field defaults (if needed) via [cyan]daf config edit[/cyan]")
 
         console.print("\n[bold cyan]Next Step: Install Claude Code Commands[/bold cyan]")
         console.print("To use DevAIFlow commands in Claude Code sessions:")
@@ -3302,7 +3250,7 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
         console.print()
         console.print("To update specific configuration values:")
         console.print("  - Edit config.json manually")
-        console.print("  - Use: [cyan]daf config tui <WORKSTREAM>[/cyan]")
+        console.print("  - Use: [cyan]daf config edit <WORKSTREAM>[/cyan]")
         return
 
     # Refresh mode - only update automatically discovered data
@@ -3544,6 +3492,50 @@ def completion(ctx: click.Context, shell: str) -> None:
     console.print("[dim]See COMPLETION.md for more details and troubleshooting.[/dim]")
 
 
+@cli.command(name="purge-mock-data", hidden=True)
+@json_option
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
+    """Purge all mock data (hidden developer/testing utility).
+
+    This command is hidden from main help but available for developers
+    and automated testing. To clean mock data, you can also manually
+    delete the $DEVAIFLOW_HOME/mocks/ directory.
+    """
+    from devflow.mocks.persistence import MockDataStore
+    from rich.prompt import Confirm
+
+    store = MockDataStore()
+
+    console.print()
+    console.print("[bold yellow]⚠️  WARNING: This will purge ALL mock data[/bold yellow]")
+    console.print()
+    console.print("The following will be [bold red]permanently deleted[/bold red]:")
+    console.print("  • Mock sessions")
+    console.print("  • Mock issue tracker tickets and comments")
+    console.print("  • Mock GitHub pull requests")
+    console.print("  • Mock GitLab merge requests")
+    console.print("  • Mock Claude Code sessions")
+    console.print()
+    console.print(f"[dim]Location: {store.data_dir}[/dim]")
+    console.print()
+
+    if not force:
+        if not Confirm.ask("[yellow]Are you sure you want to purge all mock data?[/yellow]", default=False):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    try:
+        store.clear_all()
+        console.print()
+        console.print("[green]✓[/green] Mock data purged successfully")
+        console.print("[dim]You can now start fresh with mock testing.[/dim]")
+    except Exception as e:
+        console.print()
+        console.print(f"[red]✗[/red] Failed to purge mock data: {e}")
+        raise
+
+
 @cli.command()
 @click.option("--dry-run", is_flag=True, help="Show what would be upgraded without actually upgrading")
 @click.option("--commands-only", is_flag=True, help="Upgrade only bundled slash commands")
@@ -3584,70 +3576,6 @@ cli.add_command(import_cmd, name="import")
 
 if __name__ == "__main__":
     cli()
-
-
-@cli.command(name="purge-mock-data")
-@json_option
-@click.option("--force", is_flag=True, help="Skip confirmation prompt")
-def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
-    """Purge all mock data (sessions, JIRA, GitHub, GitLab, Claude).
-
-    This command completely clears all mock service data stored in
-    the DevAIFlow home/mocks/ directory, allowing you to start fresh with mock testing.
-
-    \b
-    What it clears:
-        - Mock sessions (sessions.json)
-        - Mock issue tracker tickets, comments, transitions (jira.json)
-        - Mock GitHub PRs (github.json)
-        - Mock GitLab MRs (gitlab.json)
-        - Mock Claude Code sessions (claude.json)
-
-    \b
-    Note: This only affects mock data. Your real sessions and data
-    are never touched.
-
-    \b
-    Examples:
-        daf purge-mock-data              # Purge with confirmation
-        daf purge-mock-data --force      # Purge without confirmation
-    """
-    from devflow.mocks.persistence import MockDataStore
-    from rich.prompt import Confirm
-
-    # Get mock data store
-    store = MockDataStore()
-
-    # Show what will be cleared
-    console.print()
-    console.print("[bold yellow]⚠️  WARNING: This will purge ALL mock data[/bold yellow]")
-    console.print()
-    console.print("The following will be [bold red]permanently deleted[/bold red]:")
-    console.print("  • Mock sessions")
-    console.print("  • Mock issue tracker tickets and comments")
-    console.print("  • Mock GitHub pull requests")
-    console.print("  • Mock GitLab merge requests")
-    console.print("  • Mock Claude Code sessions")
-    console.print()
-    console.print(f"[dim]Location: {store.data_dir}[/dim]")
-    console.print()
-
-    # Confirm unless --force
-    if not force:
-        if not Confirm.ask("[yellow]Are you sure you want to purge all mock data?[/yellow]", default=False):
-            console.print("[dim]Cancelled.[/dim]")
-            return
-
-    # Purge all mock data
-    try:
-        store.clear_all()
-        console.print()
-        console.print("[green]✓[/green] Mock data purged successfully")
-        console.print("[dim]You can now start fresh with mock testing.[/dim]")
-    except Exception as e:
-        console.print()
-        console.print(f"[red]✗[/red] Failed to purge mock data: {e}")
-        raise
 
 
 @cli.command()

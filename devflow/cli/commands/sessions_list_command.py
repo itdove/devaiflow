@@ -1,4 +1,4 @@
-"""Implementation of 'daf sessions list' command."""
+"""Implementation of 'daf list' command (formerly 'daf sessions list')."""
 
 from typing import Optional
 
@@ -23,8 +23,8 @@ def sessions_list(identifier: str, output_json: bool = False) -> None:
         output_json: If True, output results in JSON format
 
     Example:
-        daf sessions list PROJ-12345
-        daf sessions list my-session --json
+        daf list PROJ-12345
+        daf list my-session --json
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)

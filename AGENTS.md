@@ -222,7 +222,7 @@ The DAF_AGENTS.md file is automatically loaded when you open sessions via `daf o
 - Create JIRA issues: `daf jira create {bug|story|task} --summary "..." --parent PROJ-12345`
 - Update JIRA issues: `daf jira update PROJ-12345 --description "..."`
 - Session management: `daf new`, `daf open`, `daf complete`
-- Configuration: `daf config tui
+- Configuration: `daf config edit`
 
 For complete documentation, refer to DAF_AGENTS.md.
 
