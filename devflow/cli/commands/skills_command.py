@@ -14,18 +14,19 @@ console = Console()
 
 @click.command()
 @click.argument("skill_name", required=False)
-@click.option("--install", is_flag=True, help="Install skills (default action)")
-@click.option("--upgrade", is_flag=True, help="Upgrade skills (same as --install)")
-@click.option("--uninstall", is_flag=True, help="Uninstall skills")
-@click.option("--list", "list_skills", is_flag=True, help="List available or installed skills")
+@click.option("--install", is_flag=True, help="Install assets (default action)")
+@click.option("--upgrade", is_flag=True, help="Upgrade assets (same as --install)")
+@click.option("--uninstall", is_flag=True, help="Uninstall assets")
+@click.option("--list", "list_skills", is_flag=True, help="List available or installed assets")
 @click.option("--available", is_flag=True, help="Show available bundled skills (use with --list)")
 @click.option("--installed", is_flag=True, help="Show installed skills (use with --list)")
+@click.option("--type", "asset_type", type=click.Choice(['all', 'bundled', 'hierarchical']), help="Type of assets to install (default: all)")
 @click.option("--dry-run", is_flag=True, help="Show what would be changed without actually changing")
 @click.option("--agent", type=str, help="AI agent to target (claude, cursor, windsurf, copilot, aider, continue)")
 @click.option("--all-agents", is_flag=True, help="Target all supported agents")
 @click.option("--level", type=click.Choice(['global', 'project', 'both']), help="Installation level (default: global)")
 @click.option("--project-path", type=click.Path(), help="Project directory for project-level operations")
-def skills(
+def assets(
     skill_name: Optional[str],
     install: bool,
     upgrade: bool,
@@ -33,53 +34,67 @@ def skills(
     list_skills: bool,
     available: bool,
     installed: bool,
+    asset_type: Optional[str],
     dry_run: bool,
     agent: Optional[str],
     all_agents: bool,
     level: Optional[str],
     project_path: Optional[str]
 ) -> None:
-    """Manage DevAIFlow skills for AI agents.
+    """Manage DevAIFlow assets (skills and config) for AI agents.
 
-    Install, upgrade, or uninstall bundled skills to one or more AI agents.
+    Install, upgrade, or uninstall bundled skills and hierarchical configuration
+    to one or more AI agents.
+
+    \b
+    Asset Types:
+        - bundled: Skills bundled with DevAIFlow (daf-help, daf-cli, etc.)
+        - hierarchical: Organization-specific skills from config files
+        - all: Both bundled and hierarchical (default)
 
     \b
     Examples:
-        # Install all skills to Claude (default)
-        daf skills
+        # Install all assets to Claude (default)
+        daf assets
 
-        # Install all skills to Cursor
-        daf skills --agent cursor
+        # Install only bundled skills
+        daf assets --type bundled
 
-        # Install all skills to all agents
-        daf skills --all-agents
+        # Install only hierarchical skills
+        daf assets --type hierarchical
+
+        # Install all assets to Cursor
+        daf assets --agent cursor
+
+        # Install all assets to all agents
+        daf assets --all-agents
 
         # Install specific skill to Claude
-        daf skills daf-help
+        daf assets daf-help
 
         # Install specific skill to Cursor
-        daf skills daf-help --agent cursor
+        daf assets daf-help --agent cursor
 
-        # Uninstall all skills from Cursor
-        daf skills --uninstall --agent cursor
+        # Uninstall all assets from Cursor
+        daf assets --uninstall --agent cursor
 
         # Uninstall specific skill from all agents
-        daf skills daf-help --uninstall --all-agents
+        daf assets daf-help --uninstall --all-agents
 
         # Install to project directory
-        daf skills --level project --project-path .
+        daf assets --level project --project-path .
 
         # Preview changes without applying
-        daf skills --dry-run --all-agents
+        daf assets --dry-run --all-agents
 
         # List available bundled skills
-        daf skills --list --available
+        daf assets --list --available
 
         # List installed skills for all agents
-        daf skills --list --installed
+        daf assets --list --installed
 
         # List installed skills for specific agent
-        daf skills --list --installed --agent cursor
+        daf assets --list --installed --agent cursor
     """
     # Handle list action first (doesn't need config validation)
     if list_skills:
@@ -168,6 +183,10 @@ def skills(
             console.print(f"[red]✗[/red] Project path is not a directory: {project_path_obj}")
             return
 
+    # Default asset_type to 'all' if not specified
+    if asset_type is None:
+        asset_type = 'all'
+
     # Execute action
     if action == "uninstall":
         _uninstall_skills(
@@ -184,7 +203,8 @@ def skills(
             agents=agents_list,
             level=install_level,
             project_path=project_path_obj,
-            dry_run=dry_run
+            dry_run=dry_run,
+            asset_type=asset_type
         )
 
 
@@ -193,44 +213,131 @@ def _install_skills(
     agents: Optional[list],
     level: str,
     project_path: Optional[Path],
-    dry_run: bool
+    dry_run: bool,
+    asset_type: str = 'all'
 ) -> None:
-    """Install or upgrade skills."""
+    """Install or upgrade skills.
+
+    Args:
+        skill_name: Specific skill name to install, or None for all
+        agents: List of agent names to target
+        level: Installation level ('global', 'project', or 'both')
+        project_path: Project directory path (required for 'project' or 'both' level)
+        dry_run: If True, only show what would be installed
+        asset_type: Type of assets to install ('all', 'bundled', 'hierarchical')
+    """
     if skill_name:
-        # Install specific skill
-        _install_specific_skill(skill_name, agents, level, project_path, dry_run)
+        # Install specific skill (only bundled skills have names, so install bundled + hierarchical)
+        _install_specific_skill(skill_name, agents, level, project_path, dry_run, asset_type)
     else:
         # Install all skills
-        _install_all_skills(agents, level, project_path, dry_run)
+        _install_all_skills(agents, level, project_path, dry_run, asset_type)
 
 
 def _install_all_skills(
     agents: Optional[list],
     level: str,
     project_path: Optional[Path],
-    dry_run: bool
+    dry_run: bool,
+    asset_type: str = 'all'
 ) -> None:
-    """Install all bundled skills."""
+    """Install all bundled skills and/or hierarchical skills.
+
+    Args:
+        agents: List of agent names to target
+        level: Installation level ('global', 'project', or 'both')
+        project_path: Project directory path
+        dry_run: If True, only show what would be installed
+        asset_type: Type of assets to install ('all', 'bundled', 'hierarchical')
+    """
+    install_bundled = asset_type in ('all', 'bundled')
+    install_hierarchical = asset_type in ('all', 'hierarchical')
+
     if not dry_run:
-        console.print("[cyan]Installing bundled skills...[/cyan]")
+        if asset_type == 'bundled':
+            console.print("[cyan]Installing bundled skills...[/cyan]")
+        elif asset_type == 'hierarchical':
+            console.print("[cyan]Installing hierarchical skills...[/cyan]")
+        else:
+            console.print("[cyan]Installing bundled and hierarchical skills...[/cyan]")
         console.print()
     else:
         console.print("[cyan]Checking for updates (dry run)...[/cyan]")
         console.print()
 
     try:
-        results = install_skills_to_agents(
-            agents=agents or ['claude'],
-            level=level,
-            project_path=project_path,
-            skip_confirmation=True,
-            dry_run=dry_run,
-            quiet=False
-        )
+        # Install bundled skills if requested (split into slash commands and reference skills)
+        if install_bundled:
+            from devflow.agent.skill_directories import get_skill_install_paths
+            from devflow.utils.claude_commands import (
+                install_or_upgrade_slash_commands,
+                install_or_upgrade_reference_skills
+            )
 
-        # Results are already printed by install_skills_to_agents
-        # Just handle hierarchical skills if needed
-        _install_hierarchical_skills(dry_run)
+            # Get installation paths for all agents
+            agents_list = agents or ['claude']
+            install_paths = get_skill_install_paths(
+                agents=agents_list,
+                level=level,
+                project_path=project_path
+            )
+
+            # Install slash commands to each location
+            all_slash_changed = []
+            all_slash_up_to_date = []
+            all_slash_failed = []
+
+            for agent_name, target_dir in install_paths:
+                if not dry_run:
+                    target_dir.mkdir(parents=True, exist_ok=True)
+
+                changed, up_to_date, failed = install_or_upgrade_slash_commands(
+                    dry_run=dry_run,
+                    quiet=True,
+                    target_dir=target_dir
+                )
+                all_slash_changed.extend(changed)
+                all_slash_up_to_date.extend(up_to_date)
+                all_slash_failed.extend(failed)
+
+            # Print slash commands table
+            _print_skills_table(
+                "Slash Commands",
+                list(set(all_slash_changed)),
+                list(set(all_slash_up_to_date)),
+                list(set(all_slash_failed)),
+                {},
+                dry_run
+            )
+
+            # Install reference skills to each location
+            all_ref_changed = []
+            all_ref_up_to_date = []
+            all_ref_failed = []
+
+            for agent_name, target_dir in install_paths:
+                changed, up_to_date, failed = install_or_upgrade_reference_skills(
+                    dry_run=dry_run,
+                    quiet=True,
+                    target_dir=target_dir
+                )
+                all_ref_changed.extend(changed)
+                all_ref_up_to_date.extend(up_to_date)
+                all_ref_failed.extend(failed)
+
+            # Print reference skills table
+            _print_skills_table(
+                "Reference Skills",
+                list(set(all_ref_changed)),
+                list(set(all_ref_up_to_date)),
+                list(set(all_ref_failed)),
+                {},
+                dry_run
+            )
+
+        # Install hierarchical skills if requested
+        if install_hierarchical:
+            _install_hierarchical_skills(dry_run)
 
     except Exception as e:
         console.print(f"[red]✗[/red] Installation failed: {e}")
@@ -243,12 +350,25 @@ def _install_specific_skill(
     agents: Optional[list],
     level: str,
     project_path: Optional[Path],
-    dry_run: bool
+    dry_run: bool,
+    asset_type: str = 'all'
 ) -> None:
-    """Install a specific skill by name."""
+    """Install a specific skill by name.
+
+    Args:
+        skill_name: Name of the skill to install
+        agents: List of agent names to target
+        level: Installation level ('global', 'project', or 'both')
+        project_path: Project directory path
+        dry_run: If True, only show what would be installed
+        asset_type: Type of assets to install ('all', 'bundled', 'hierarchical')
+    """
     from devflow.utils.claude_commands import get_bundled_skills_dir
     from devflow.agent.skill_directories import get_skill_install_paths
     import shutil
+
+    install_bundled = asset_type in ('all', 'bundled')
+    install_hierarchical = asset_type in ('all', 'hierarchical')
 
     # Find the skill in bundled skills
     bundled_dir = get_bundled_skills_dir()
@@ -272,36 +392,47 @@ def _install_specific_skill(
         return
 
     if not dry_run:
-        console.print(f"[cyan]Installing skill '{skill_name}'...[/cyan]")
+        if asset_type == 'bundled':
+            console.print(f"[cyan]Installing skill '{skill_name}'...[/cyan]")
+        elif asset_type == 'hierarchical':
+            console.print(f"[cyan]Installing hierarchical skills...[/cyan]")
+        else:
+            console.print(f"[cyan]Installing skill '{skill_name}' and hierarchical skills...[/cyan]")
         console.print()
     else:
         console.print(f"[cyan]Checking skill '{skill_name}' (dry run)...[/cyan]")
         console.print()
 
-    # Install to each agent and path
-    for agent_name, target_dir in install_paths:
-        console.print(f"[bold cyan]{'Would install' if dry_run else 'Installing'} to {agent_name} ({target_dir})...[/bold cyan]")
+    # Install bundled skill if requested
+    if install_bundled:
+        # Install to each agent and path
+        for agent_name, target_dir in install_paths:
+            console.print(f"[bold cyan]{'Would install' if dry_run else 'Installing'} to {agent_name} ({target_dir})...[/bold cyan]")
 
-        dest_dir = target_dir / skill_name
+            dest_dir = target_dir / skill_name
 
-        try:
-            if not dry_run:
-                target_dir.mkdir(parents=True, exist_ok=True)
-                if dest_dir.exists():
-                    shutil.rmtree(dest_dir)
-                shutil.copytree(skill_dir, dest_dir)
-                console.print(f"  [green]✓[/green] Installed {skill_name}")
-            else:
-                if dest_dir.exists():
-                    console.print(f"  [yellow]Would upgrade[/yellow] {skill_name}")
+            try:
+                if not dry_run:
+                    target_dir.mkdir(parents=True, exist_ok=True)
+                    if dest_dir.exists():
+                        shutil.rmtree(dest_dir)
+                    shutil.copytree(skill_dir, dest_dir)
+                    console.print(f"  [green]✓[/green] Installed {skill_name}")
                 else:
-                    console.print(f"  [green]Would install[/green] {skill_name}")
+                    if dest_dir.exists():
+                        console.print(f"  [yellow]Would upgrade[/yellow] {skill_name}")
+                    else:
+                        console.print(f"  [green]Would install[/green] {skill_name}")
 
-        except Exception as e:
-            console.print(f"  [red]✗[/red] Failed: {e}")
+            except Exception as e:
+                console.print(f"  [red]✗[/red] Failed: {e}")
 
     if dry_run:
         console.print("\n[bold yellow]Dry run complete. No changes were made.[/bold yellow]")
+
+    # Install hierarchical skills if requested (from config files)
+    if install_hierarchical:
+        _install_hierarchical_skills(dry_run)
 
 
 def _uninstall_skills(
@@ -376,20 +507,90 @@ def _uninstall_skills(
         console.print("\n[bold green]✓[/bold green] Uninstall complete")
 
 
+def _print_skills_table(
+    title: str,
+    changed: list,
+    up_to_date: list,
+    failed: list,
+    statuses_before: dict,
+    dry_run: bool
+) -> None:
+    """Print detailed table for skill installation results.
+
+    Args:
+        title: Table title (e.g., "Slash Commands", "Reference Skills")
+        changed: List of changed skill names
+        up_to_date: List of up-to-date skill names
+        failed: List of failed skill names
+        statuses_before: Dict mapping skill names to status before upgrade
+        dry_run: Whether this was a dry run
+    """
+    from rich.table import Table
+
+    if not (changed or up_to_date or failed):
+        return
+
+    console.print(f"\n[bold]{title}:[/bold]\n")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Skill", style="cyan")
+    table.add_column("Status Before")
+    table.add_column("Status After")
+
+    # Show changed items
+    for skill_name in sorted(changed):
+        status_before = statuses_before.get(skill_name, "not_installed")
+
+        if status_before == "not_installed":
+            status_before_display = "[yellow]not installed[/yellow]"
+            status_after_display = "[green]installed[/green]" if not dry_run else "[yellow]would install[/yellow]"
+        else:
+            status_before_display = "[yellow]outdated[/yellow]"
+            status_after_display = "[green]upgraded[/green]" if not dry_run else "[yellow]would upgrade[/yellow]"
+
+        table.add_row(skill_name, status_before_display, status_after_display)
+
+    # Show up-to-date items
+    for skill_name in sorted(up_to_date):
+        table.add_row(skill_name, "[green]up-to-date[/green]", "[dim]no change[/dim]")
+
+    # Show failed items
+    for skill_name in sorted(failed):
+        status_before = statuses_before.get(skill_name, "unknown")
+        table.add_row(skill_name, f"[dim]{status_before}[/dim]", "[red]failed[/red]")
+
+    console.print(table)
+    console.print()
+
+
 def _install_hierarchical_skills(dry_run: bool) -> None:
     """Install hierarchical skills from configuration files."""
-    console.print("\n[bold]Hierarchical Skills (from config files):[/bold]")
+    from devflow.utils.hierarchical_skills import (
+        install_hierarchical_skills,
+        get_hierarchical_skill_statuses
+    )
 
-    from devflow.utils.hierarchical_skills import install_hierarchical_skills
+    # Get status before installation
+    statuses_before = get_hierarchical_skill_statuses()
 
     try:
         changed, up_to_date, failed = install_hierarchical_skills(
             dry_run=dry_run,
             quiet=False
         )
-        # Results already printed by install_hierarchical_skills
+
+        # Display detailed table using shared function
+        _print_skills_table(
+            "Hierarchical Skills (from config files)",
+            changed,
+            up_to_date,
+            failed,
+            statuses_before,
+            dry_run
+        )
+
     except Exception as e:
-        console.print(f"[red]✗[/red] Hierarchical skill installation failed: {e}")
+        console.print(f"\n[red]✗[/red] Hierarchical skill installation failed: {e}")
 
 
 def _list_skills(
