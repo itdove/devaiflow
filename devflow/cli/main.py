@@ -2753,7 +2753,7 @@ def config_import(export_file: str, merge: bool, replace: bool, force: bool) -> 
     - --merge (default): Merge with existing config, preserving workspace paths
     - --replace: Replace existing config entirely
 
-    After importing, you should run 'daf upgrade' to install skills and update
+    After importing, you should run 'daf assets' to install skills and update
     field mappings.
 
     Example:
@@ -3750,9 +3750,9 @@ def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
         raise
 
 
-# Add skills command
-from devflow.cli.commands.skills_command import skills
-cli.add_command(skills)
+# Add assets command (manages both bundled skills and hierarchical config)
+from devflow.cli.commands.skills_command import assets
+cli.add_command(assets)
 
 
 @cli.command()
@@ -3776,7 +3776,7 @@ def upgrade(
 ) -> None:
     """[DEPRECATED] Upgrade bundled Claude Code skills.
 
-    ⚠️  DEPRECATED: Use 'daf skills' instead. This command will be removed in version 3.0.
+    ⚠️  DEPRECATED: Use 'daf assets' instead. This command will be removed in version 3.0.
 
     Upgrade bundled Claude Code skills.
 
@@ -3818,7 +3818,7 @@ def upgrade(
     # Show deprecation warning (only in non-JSON mode)
     if not output_json:
         console.print("[yellow]⚠[/yellow] [bold]DEPRECATED:[/bold] The 'daf upgrade' command is deprecated.")
-        console.print("[dim]Use 'daf skills' instead. This command will be removed in version 3.0.[/dim]")
+        console.print("[dim]Use 'daf assets' instead. This command will be removed in version 3.0.[/dim]")
         console.print()
 
     # commands_only and skills_only are deprecated but kept for backward compatibility
