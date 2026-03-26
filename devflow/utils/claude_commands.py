@@ -143,9 +143,10 @@ def list_reference_skills() -> List[Path]:
 
 def install_or_upgrade_slash_commands(
     dry_run: bool = False,
-    quiet: bool = False
+    quiet: bool = False,
+    target_dir: Optional[Path] = None
 ) -> Tuple[List[str], List[str], List[str]]:
-    """Install or upgrade bundled slash commands to user-level ~/.claude/skills directory.
+    """Install or upgrade bundled slash commands to specified directory.
 
     Slash commands are skills with a 'name:' field in their frontmatter that should be
     globally available across all projects.
@@ -153,6 +154,7 @@ def install_or_upgrade_slash_commands(
     Args:
         dry_run: If True, only report what would be changed without actually changing
         quiet: If True, suppress console output (errors still shown)
+        target_dir: Target directory for installation (default: ~/.claude/skills/)
 
     Returns:
         Tuple of (installed/upgraded, up_to_date, failed) skill names
@@ -161,9 +163,12 @@ def install_or_upgrade_slash_commands(
     if not slash_commands:
         return ([], [], [])
 
-    # Install to user-level ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/)
-    claude_config = get_claude_config_dir()
-    skills_dir = claude_config / "skills"
+    # Install to specified directory or default to user-level ~/.claude/skills/
+    if target_dir is None:
+        claude_config = get_claude_config_dir()
+        skills_dir = claude_config / "skills"
+    else:
+        skills_dir = target_dir
 
     if not dry_run:
         skills_dir.mkdir(parents=True, exist_ok=True)
@@ -204,9 +209,10 @@ def install_or_upgrade_slash_commands(
 
 def install_or_upgrade_reference_skills(
     dry_run: bool = False,
-    quiet: bool = False
+    quiet: bool = False,
+    target_dir: Optional[Path] = None
 ) -> Tuple[List[str], List[str], List[str]]:
-    """Install or upgrade bundled reference skills to user-level ~/.claude/skills directory.
+    """Install or upgrade bundled reference skills to specified directory.
 
     Reference skills are skills WITHOUT a 'name:' field that provide context and
     documentation (like daf-cli, gh-cli, git-cli, glab-cli).
@@ -214,6 +220,7 @@ def install_or_upgrade_reference_skills(
     Args:
         dry_run: If True, only report what would be changed without actually changing
         quiet: If True, suppress console output (errors still shown)
+        target_dir: Target directory for installation (default: ~/.claude/skills/)
 
     Returns:
         Tuple of (installed/upgraded, up_to_date, failed) skill names
@@ -223,9 +230,12 @@ def install_or_upgrade_reference_skills(
     if not bundled_skills:
         return ([], [], [])
 
-    # Install to user-level ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/)
-    claude_config = get_claude_config_dir()
-    skills_dir = claude_config / "skills"
+    # Install to specified directory or default to user-level ~/.claude/skills/
+    if target_dir is None:
+        claude_config = get_claude_config_dir()
+        skills_dir = claude_config / "skills"
+    else:
+        skills_dir = target_dir
 
     if not dry_run:
         skills_dir.mkdir(parents=True, exist_ok=True)

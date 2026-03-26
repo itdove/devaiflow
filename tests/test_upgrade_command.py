@@ -477,3 +477,190 @@ class TestUpgradeAllComprehensive:
 
                                     # Both location messages should be printed
                                     assert mock_console.print.called
+
+
+class TestProjectPathInstallation:
+    """Tests for --project-path installation option."""
+
+    def test_upgrade_with_valid_project_path(self, mock_config, mock_config_loader, tmp_path):
+        """Test upgrade with valid project path."""
+        # Create project directory
+        project_dir = tmp_path / "test-project"
+        project_dir.mkdir()
+
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console'):
+                        mock_slash.return_value = (["daf-list"], [], [])
+                        mock_ref.return_value = (["gh-cli"], [], [])
+
+                        upgrade_all(
+                            upgrade_skills=True,
+                            upgrade_hierarchical_skills=False,
+                            project_path=str(project_dir)
+                        )
+
+                        # Verify target_dir was passed to install functions
+                        expected_target = project_dir / ".claude" / "skills"
+                        assert mock_slash.call_args[1]['target_dir'] == expected_target
+                        assert mock_ref.call_args[1]['target_dir'] == expected_target
+
+    def test_upgrade_with_current_directory(self, mock_config, mock_config_loader, tmp_path, monkeypatch):
+        """Test upgrade with current directory (.)."""
+        # Create project directory and change to it
+        project_dir = tmp_path / "test-project"
+        project_dir.mkdir()
+        monkeypatch.chdir(project_dir)
+
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console'):
+                        mock_slash.return_value = ([], [], [])
+                        mock_ref.return_value = ([], [], [])
+
+                        upgrade_all(
+                            upgrade_skills=True,
+                            upgrade_hierarchical_skills=False,
+                            project_path="."
+                        )
+
+                        # Verify target_dir resolves to absolute path
+                        call_args = mock_slash.call_args[1]
+                        assert call_args['target_dir'] is not None
+                        assert call_args['target_dir'].is_absolute()
+
+    def test_upgrade_with_nonexistent_project_path(self, mock_config, mock_config_loader, tmp_path):
+        """Test upgrade with nonexistent project path."""
+        nonexistent_path = tmp_path / "nonexistent"
+
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
+                        upgrade_all(
+                            upgrade_skills=True,
+                            upgrade_hierarchical_skills=False,
+                            project_path=str(nonexistent_path)
+                        )
+
+                        # Should print error and return early
+                        assert mock_console.print.called
+                        # Should not call install functions
+                        mock_slash.assert_not_called()
+                        mock_ref.assert_not_called()
+
+    def test_upgrade_with_project_path_as_file(self, mock_config, mock_config_loader, tmp_path):
+        """Test upgrade with project path pointing to a file."""
+        # Create a file instead of directory
+        file_path = tmp_path / "test-file.txt"
+        file_path.write_text("test")
+
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
+                        upgrade_all(
+                            upgrade_skills=True,
+                            upgrade_hierarchical_skills=False,
+                            project_path=str(file_path)
+                        )
+
+                        # Should print error and return early
+                        assert mock_console.print.called
+                        # Should not call install functions
+                        mock_slash.assert_not_called()
+                        mock_ref.assert_not_called()
+
+    def test_upgrade_without_project_path_uses_global(self, mock_config, mock_config_loader):
+        """Test upgrade without project path defaults to global installation."""
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console'):
+                        mock_slash.return_value = ([], [], [])
+                        mock_ref.return_value = ([], [], [])
+
+                        upgrade_all(
+                            upgrade_skills=True,
+                            upgrade_hierarchical_skills=False,
+                            project_path=None
+                        )
+
+                        # Verify target_dir is None (defaults to global)
+                        assert mock_slash.call_args[1]['target_dir'] is None
+                        assert mock_ref.call_args[1]['target_dir'] is None
+
+    def test_upgrade_project_path_dry_run(self, mock_config, mock_config_loader, tmp_path):
+        """Test dry run with project path."""
+        project_dir = tmp_path / "test-project"
+        project_dir.mkdir()
+
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console'):
+                        mock_slash.return_value = (["daf-list"], [], [])
+                        mock_ref.return_value = (["gh-cli"], [], [])
+
+                        upgrade_all(
+                            dry_run=True,
+                            upgrade_skills=True,
+                            upgrade_hierarchical_skills=False,
+                            project_path=str(project_dir)
+                        )
+
+                        # Verify both dry_run and target_dir are passed
+                        assert mock_slash.call_args[1]['dry_run'] is True
+                        assert mock_ref.call_args[1]['dry_run'] is True
+                        expected_target = project_dir / ".claude" / "skills"
+                        assert mock_slash.call_args[1]['target_dir'] == expected_target
+                        assert mock_ref.call_args[1]['target_dir'] == expected_target
+
+    def test_upgrade_project_path_output_message(self, mock_config, mock_config_loader, tmp_path):
+        """Test that output message shows correct installation path."""
+        project_dir = tmp_path / "test-project"
+        project_dir.mkdir()
+
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
+                        mock_slash.return_value = (["daf-list"], [], [])
+                        mock_ref.return_value = ([], [], [])
+
+                        upgrade_all(
+                            upgrade_skills=True,
+                            upgrade_hierarchical_skills=False,
+                            project_path=str(project_dir),
+                            quiet=False
+                        )
+
+                        # Verify console.print was called with project path
+                        assert mock_console.print.called
+                        # Check if any call contains the project path
+                        calls = [str(call) for call in mock_console.print.call_args_list]
+                        assert any(str(project_dir) in call for call in calls)
+
+    def test_upgrade_project_path_with_tilde(self, mock_config, mock_config_loader, tmp_path):
+        """Test upgrade with project path containing tilde (~)."""
+        # Note: We can't actually test with real home directory, so we mock expanduser
+        with patch('devflow.cli.commands.upgrade_command.ConfigLoader', return_value=mock_config_loader):
+            with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_slash_commands') as mock_slash:
+                with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
+                    with patch('devflow.cli.commands.upgrade_command.console'):
+                        with patch('pathlib.Path.expanduser') as mock_expanduser:
+                            with patch('pathlib.Path.exists', return_value=True):
+                                with patch('pathlib.Path.is_dir', return_value=True):
+                                    mock_slash.return_value = ([], [], [])
+                                    mock_ref.return_value = ([], [], [])
+
+                                    upgrade_all(
+                                        upgrade_skills=True,
+                                        upgrade_hierarchical_skills=False,
+                                        project_path="~/projects/test"
+                                    )
+
+                                    # Should have called expanduser
+                                    assert mock_expanduser.called

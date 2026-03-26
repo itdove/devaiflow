@@ -3754,22 +3754,31 @@ def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
 @click.option("--dry-run", is_flag=True, help="Show what would be upgraded without actually upgrading")
 @click.option("--commands-only", is_flag=True, help="Upgrade only bundled slash commands")
 @click.option("--skills-only", is_flag=True, help="Upgrade only bundled skills")
+@click.option("--project-path", type=click.Path(), help="Install skills to project directory (e.g., '.', '/path/to/project')")
 @json_option
-def upgrade(ctx: click.Context, dry_run: bool, commands_only: bool, skills_only: bool) -> None:
+def upgrade(ctx: click.Context, dry_run: bool, commands_only: bool, skills_only: bool, project_path: str) -> None:
     """Upgrade bundled Claude Code skills.
 
-    This command installs all skills to ~/.claude/skills/ (global):
+    This command installs skills to ~/.claude/skills/ (global) by default.
+    Use --project-path to install to a specific project directory instead.
+
+    Installation locations:
+    - Default: ~/.claude/skills/ (available in all projects)
+    - With --project-path: <project>/.claude/skills/ (project-specific)
+    - Hierarchical skills: ~/.daf-sessions/.claude/skills/ (organization config)
+
+    Skills installed:
     - Slash commands: /daf-active, /daf-help, /daf-info, etc.
     - Reference skills: daf-cli, gh-cli, git-cli, glab-cli
-    - Hierarchical skills from organization config (to ~/.daf-sessions/)
+    - Hierarchical skills from organization config files
 
     Items that are already up-to-date will be skipped.
 
-    Note: All skills are installed globally so they work in any project.
-
     Examples:
-        daf upgrade           # Upgrade all skills
-        daf upgrade --dry-run # Preview what would be upgraded
+        daf upgrade                      # Install to ~/.claude/skills/ (global)
+        daf upgrade --project-path .     # Install to current directory
+        daf upgrade --project-path /path # Install to specific project
+        daf upgrade --dry-run            # Preview what would be upgraded
     """
     from devflow.cli.commands.upgrade_command import upgrade_all
 
@@ -3779,7 +3788,7 @@ def upgrade(ctx: click.Context, dry_run: bool, commands_only: bool, skills_only:
         console.print("[dim]All slash commands are now skills. Upgrading all skills...[/dim]")
         console.print()
 
-    upgrade_all(dry_run=dry_run, upgrade_skills=True)
+    upgrade_all(dry_run=dry_run, upgrade_skills=True, project_path=project_path)
 
 
 # Note: 'import' is a Python keyword, so we name the function import_cmd
