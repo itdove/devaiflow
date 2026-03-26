@@ -65,6 +65,7 @@ class OllamaClaudeAgent(AgentInterface):
         session_name: Optional[str] = None,
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with a local model.
 
@@ -75,6 +76,7 @@ class OllamaClaudeAgent(AgentInterface):
             session_name: Session name for audit logging (optional)
             profile_name: Profile name for audit logging (optional)
             enforcement_source: Enforcement source for audit logging (optional)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the launched process
@@ -112,7 +114,7 @@ class OllamaClaudeAgent(AgentInterface):
         return subprocess.Popen(
             cmd,
             cwd=project_path,
-            env=os.environ.copy(),
+            env=env if env is not None else os.environ.copy(),
             # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
@@ -128,6 +130,7 @@ class OllamaClaudeAgent(AgentInterface):
         session_name: Optional[str] = None,
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with initial prompt (for new sessions).
 
@@ -149,6 +152,7 @@ class OllamaClaudeAgent(AgentInterface):
             enforcement_source: Enforcement source for audit logging (optional)
             workspace_path: Workspace path (currently not used)
             config: Configuration object (currently not used)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the launched process
@@ -197,7 +201,7 @@ class OllamaClaudeAgent(AgentInterface):
         return subprocess.Popen(
             cmd,
             cwd=project_path,
-            env=os.environ.copy(),
+            env=env if env is not None else os.environ.copy(),
             # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
@@ -206,6 +210,7 @@ class OllamaClaudeAgent(AgentInterface):
         session_id: str,
         project_path: str,
         model_provider_profile: Optional[Dict[str, Any]] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Resume an existing Claude Code session via Ollama.
 
@@ -216,6 +221,7 @@ class OllamaClaudeAgent(AgentInterface):
             session_id: Session UUID to resume
             project_path: Absolute path to project
             model_provider_profile: Model provider profile dict (optional)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the resumed process
@@ -239,7 +245,7 @@ class OllamaClaudeAgent(AgentInterface):
             return subprocess.Popen(
                 cmd,
                 cwd=project_path,
-                env=os.environ.copy(),
+                env=env if env is not None else os.environ.copy(),
                 # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
             )
         except Exception:
@@ -248,7 +254,7 @@ class OllamaClaudeAgent(AgentInterface):
             return subprocess.Popen(
                 ["claude", "--resume", session_id],
                 cwd=project_path,
-                env=os.environ.copy(),
+                env=env if env is not None else os.environ.copy(),
                 # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
             )
 

@@ -51,11 +51,12 @@ class WindsurfAgent(AgentInterface):
         self.windsurf_dir = windsurf_dir
         self.workspace_storage = windsurf_dir / "User" / "workspaceStorage"
 
-    def launch_session(self, project_path: str) -> subprocess.Popen:
+    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Launch Windsurf in a project directory.
 
         Args:
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Windsurf process
@@ -70,6 +71,7 @@ class WindsurfAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def launch_with_prompt(
@@ -81,6 +83,7 @@ class WindsurfAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch Windsurf editor.
 
@@ -96,6 +99,7 @@ class WindsurfAgent(AgentInterface):
             skills_dirs: Skills directories (ignored)
             workspace_path: Workspace path (ignored)
             config: Configuration object (ignored)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Windsurf process
@@ -105,9 +109,9 @@ class WindsurfAgent(AgentInterface):
         """
         # Windsurf doesn't support CLI-based prompts or session IDs
         # Just launch Windsurf and let the user interact with AI Chat/Cascade manually
-        return self.launch_session(project_path)
+        return self.launch_session(project_path, env=env)
 
-    def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
+    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Resume Windsurf in a project directory.
 
         Windsurf automatically restores the previous workspace state including
@@ -116,6 +120,7 @@ class WindsurfAgent(AgentInterface):
         Args:
             session_id: Session identifier (tracked by DevAIFlow)
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Windsurf process
@@ -131,6 +136,7 @@ class WindsurfAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def capture_session_id(

@@ -43,6 +43,7 @@ class ClaudeAgent(AgentInterface):
         session_name: Optional[str] = None,
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch a new Claude Code session in a project directory.
 
@@ -54,6 +55,7 @@ class ClaudeAgent(AgentInterface):
             session_name: Session name for audit logging (optional)
             profile_name: Profile name for audit logging (optional)
             enforcement_source: Enforcement source for audit logging (optional)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the launched Claude Code process
@@ -81,12 +83,12 @@ class ClaudeAgent(AgentInterface):
             )
 
         # Build environment and command based on profile
-        env, cmd = self._build_env_and_cmd(model_provider_profile)
+        final_env, cmd = self._build_env_and_cmd(model_provider_profile, base_env=env)
 
         return subprocess.Popen(
             cmd,
             cwd=project_path,
-            env=env,
+            env=final_env,
             # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
@@ -102,6 +104,7 @@ class ClaudeAgent(AgentInterface):
         session_name: Optional[str] = None,
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code with initial prompt (for new sessions).
 
@@ -116,6 +119,7 @@ class ClaudeAgent(AgentInterface):
             session_name: Session name for audit logging (optional)
             profile_name: Profile name for audit logging (optional)
             enforcement_source: Enforcement source for audit logging (optional)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the launched Claude Code process
@@ -143,7 +147,7 @@ class ClaudeAgent(AgentInterface):
             )
 
         # Build environment and base command from profile
-        env, base_cmd = self._build_env_and_cmd(model_provider_profile)
+        final_env, base_cmd = self._build_env_and_cmd(model_provider_profile, base_env=env)
 
         # Build full command with session ID and prompt
         # Format: claude [--model model] --session-id <uuid> "<prompt>" --add-dir ...
@@ -163,7 +167,7 @@ class ClaudeAgent(AgentInterface):
         return subprocess.Popen(
             cmd,
             cwd=project_path,
-            env=env,
+            env=final_env,
             # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
@@ -172,6 +176,7 @@ class ClaudeAgent(AgentInterface):
         session_id: str,
         project_path: str,
         model_provider_profile: Optional[Dict[str, any]] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Resume an existing Claude Code session.
 
@@ -179,6 +184,7 @@ class ClaudeAgent(AgentInterface):
             session_id: Session UUID to resume
             project_path: Absolute path to project
             model_provider_profile: Model provider profile dict (optional)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the resumed Claude Code process
@@ -189,13 +195,13 @@ class ClaudeAgent(AgentInterface):
         require_tool("claude", "resume Claude Code session")
 
         # Build environment (command is always claude --resume for resume)
-        env, _ = self._build_env_and_cmd(model_provider_profile)
+        final_env, _ = self._build_env_and_cmd(model_provider_profile, base_env=env)
         cmd = ["claude", "--resume", session_id]
 
         return subprocess.Popen(
             cmd,
             cwd=project_path,
-            env=env,
+            env=final_env,
             # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction
         )
 
@@ -354,18 +360,24 @@ class ClaudeAgent(AgentInterface):
         return self.projects_dir / encoded
 
     def _build_env_and_cmd(
-        self, model_provider_profile: Optional[Dict[str, any]] = None
+        self,
+        model_provider_profile: Optional[Dict[str, any]] = None,
+        base_env: Optional[Dict[str, str]] = None
     ) -> tuple[Dict[str, str], list[str]]:
         """Build environment variables and command from model provider profile.
 
         Args:
             model_provider_profile: Model provider profile dict (optional)
+            base_env: Base environment dict to start from (optional, defaults to os.environ)
 
         Returns:
             Tuple of (environment dict, command list)
         """
-        # Start with copy of current environment
-        env = os.environ.copy()
+        # Start with copy of base environment (or current environment if not provided)
+        if base_env is not None:
+            env = base_env.copy()
+        else:
+            env = os.environ.copy()
 
         # Default command
         cmd = ["claude", "code"]

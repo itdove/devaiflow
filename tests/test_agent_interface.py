@@ -15,6 +15,7 @@ from devflow.agent import (
     WindsurfAgent,
     AiderAgent,
     ContinueAgent,
+    CrushAgent,
     create_agent_client,
 )
 from devflow.utils.dependencies import ToolNotFoundError
@@ -401,6 +402,28 @@ class TestAgentFactory:
         assert isinstance(agent, ContinueAgent)
         assert agent.continue_dir == custom_home
 
+    def test_create_crush_agent(self):
+        """Test factory creates CrushAgent for 'crush' backend."""
+        agent = create_agent_client("crush")
+
+        assert isinstance(agent, CrushAgent)
+        assert agent.get_agent_name() == "crush"
+
+    def test_create_opencode_agent_alias(self):
+        """Test factory accepts 'opencode' as alias for 'crush'."""
+        agent = create_agent_client("opencode")
+
+        assert isinstance(agent, CrushAgent)
+        assert agent.get_agent_name() == "crush"
+
+    def test_create_crush_custom_home(self):
+        """Test factory passes custom agent_home to CrushAgent."""
+        custom_home = Path("/tmp/custom-crush")
+        agent = create_agent_client("crush", agent_home=custom_home)
+
+        assert isinstance(agent, CrushAgent)
+        assert agent.crush_dir == custom_home
+
     def test_unsupported_backend_raises_error(self):
         """Test factory raises ValueError for unsupported backend."""
         with pytest.raises(ValueError) as exc_info:
@@ -465,6 +488,7 @@ class TestGitHubCopilotAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -501,6 +525,7 @@ class TestGitHubCopilotAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -523,6 +548,7 @@ class TestGitHubCopilotAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -625,6 +651,7 @@ class TestCursorAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -661,6 +688,7 @@ class TestCursorAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -683,6 +711,7 @@ class TestCursorAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -806,6 +835,7 @@ class TestWindsurfAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -842,6 +872,7 @@ class TestWindsurfAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -864,6 +895,7 @@ class TestWindsurfAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -1000,6 +1032,7 @@ class TestAiderAgent:
         mock_popen.assert_called_once_with(
             ["aider"],
             cwd=project_path,
+            env=None,
         )
         assert result == mock_process
 
@@ -1040,6 +1073,7 @@ class TestAiderAgent:
         mock_popen.assert_called_once_with(
             ["aider", "--chat-history-file", str(expected_chat_file)],
             cwd=project_path,
+            env=None,
         )
         assert result == mock_process
 
@@ -1065,6 +1099,7 @@ class TestAiderAgent:
         mock_popen.assert_called_once_with(
             ["aider", "--chat-history-file", str(chat_file)],
             cwd=project_path,
+            env=None,
         )
         assert result == mock_process
 
@@ -1218,6 +1253,7 @@ class TestContinueAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -1259,6 +1295,7 @@ class TestContinueAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -1281,6 +1318,7 @@ class TestContinueAgent:
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=None,
         )
         assert result == mock_process
 
@@ -1336,6 +1374,243 @@ class TestContinueAgent:
         project_path = "/home/user/project"
         session_id = "test-session-id"
 
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 0
+
+
+class TestCrushAgent:
+    """Test CrushAgent implementation."""
+
+    def test_init_default_crush_dir(self):
+        """Test CrushAgent initialization with default directory (~/.local/share/crush)."""
+        agent = CrushAgent()
+
+        assert agent.crush_dir == Path.home() / ".local" / "share" / "crush"
+        assert agent.db_path == Path.home() / ".local" / "share" / "crush" / "crush.db"
+
+    def test_init_custom_crush_dir(self):
+        """Test CrushAgent initialization with custom directory."""
+        custom_dir = Path("/tmp/custom-crush")
+        agent = CrushAgent(crush_dir=custom_dir)
+
+        assert agent.crush_dir == custom_dir
+        assert agent.db_path == custom_dir / "crush.db"
+
+    def test_get_agent_name(self):
+        """Test get_agent_name returns 'crush'."""
+        agent = CrushAgent()
+        assert agent.get_agent_name() == "crush"
+
+    def test_get_agent_home_dir(self):
+        """Test get_agent_home_dir returns crush_dir."""
+        custom_dir = Path("/tmp/crush")
+        agent = CrushAgent(crush_dir=custom_dir)
+        assert agent.get_agent_home_dir() == custom_dir
+
+    def test_encode_project_path(self):
+        """Test encode_project_path returns original path (no encoding for Crush)."""
+        agent = CrushAgent()
+
+        # Crush doesn't encode paths since it uses a global SQLite database
+        assert agent.encode_project_path("/home/user/project") == "/home/user/project"
+        assert agent.encode_project_path("/home/my_project") == "/home/my_project"
+
+    @patch("devflow.agent.crush_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_session(self, mock_popen, mock_require_tool):
+        """Test launch_session calls crush command with env=None."""
+        agent = CrushAgent()
+        project_path = "/home/user/project"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_session(project_path)
+
+        mock_require_tool.assert_called_once_with("crush", "launch Crush AI assistant")
+        mock_popen.assert_called_once_with(
+            ["crush"],
+            cwd=project_path,
+            env=ANY,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.crush_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt(self, mock_popen, mock_require_tool):
+        """Test launch_with_prompt calls 'crush --session {session_id}'."""
+        agent = CrushAgent()
+        project_path = "/home/user/project"
+        initial_prompt = "Test prompt for Crush"
+        session_id = "test-session-789"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.launch_with_prompt(project_path, initial_prompt, session_id)
+
+        # Crush doesn't support initial prompts via CLI, but uses --session flag
+        mock_require_tool.assert_called_once_with("crush", "launch Crush AI assistant")
+        mock_popen.assert_called_once_with(
+            ["crush", "--session", session_id],
+            cwd=project_path,
+            env=ANY,
+        )
+        assert result == mock_process
+
+    @patch("devflow.agent.crush_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_resume_session(self, mock_popen, mock_require_tool):
+        """Test resume_session calls 'crush --session {session_id}'."""
+        agent = CrushAgent()
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        result = agent.resume_session(session_id, project_path)
+
+        mock_require_tool.assert_called_once_with("crush", "resume Crush AI assistant")
+        mock_popen.assert_called_once_with(
+            ["crush", "--session", session_id],
+            cwd=project_path,
+            env=ANY,
+        )
+        assert result == mock_process
+
+    def test_get_session_file_path(self):
+        """Test returns the db_path (~/.local/share/crush/crush.db)."""
+        agent = CrushAgent(crush_dir=Path("/tmp/crush"))
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        result = agent.get_session_file_path(session_id, project_path)
+
+        # All sessions are stored in the same database
+        expected = Path("/tmp/crush/crush.db")
+        assert result == expected
+
+    @patch("devflow.agent.crush_agent.sqlite3.connect")
+    def test_session_exists_when_db_exists_and_has_session(self, mock_connect, tmp_path):
+        """Test with mocked SQLite connection."""
+        crush_dir = tmp_path / "crush"
+        agent = CrushAgent(crush_dir=crush_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-uuid"
+
+        # Create the database file
+        db_path = crush_dir / "crush.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.touch()
+
+        # Mock SQLite connection
+        mock_conn = Mock()
+        mock_cursor = Mock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = ("test-session-uuid",)  # Session exists
+        mock_connect.return_value = mock_conn
+
+        assert agent.session_exists(session_id, project_path) is True
+
+        # Verify SQL query
+        mock_cursor.execute.assert_called_once_with(
+            "SELECT id FROM sessions WHERE id = ?", (session_id,)
+        )
+        mock_conn.close.assert_called_once()
+
+    def test_session_exists_returns_false_when_db_not_exists(self, tmp_path):
+        """Test when database doesn't exist."""
+        crush_dir = tmp_path / "crush"
+        agent = CrushAgent(crush_dir=crush_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Database doesn't exist
+        assert agent.session_exists(session_id, project_path) is False
+
+    @patch("devflow.agent.crush_agent.sqlite3.connect")
+    def test_get_existing_sessions_returns_session_ids(self, mock_connect, tmp_path):
+        """Test with mocked SQLite query."""
+        crush_dir = tmp_path / "crush"
+        agent = CrushAgent(crush_dir=crush_dir)
+        project_path = "/home/user/project"
+
+        # Create the database file
+        db_path = crush_dir / "crush.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.touch()
+
+        # Mock SQLite connection
+        mock_conn = Mock()
+        mock_cursor = Mock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = [
+            ("session-1",),
+            ("session-2",),
+            ("session-3",),
+        ]
+        mock_connect.return_value = mock_conn
+
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == {"session-1", "session-2", "session-3"}
+
+        # Verify SQL query
+        mock_cursor.execute.assert_called_once_with("SELECT id FROM sessions")
+        mock_conn.close.assert_called_once()
+
+    def test_get_existing_sessions_returns_empty_when_db_not_exists(self, tmp_path):
+        """Test empty set."""
+        crush_dir = tmp_path / "crush"
+        agent = CrushAgent(crush_dir=crush_dir)
+        project_path = "/home/user/project"
+
+        # Database doesn't exist
+        sessions = agent.get_existing_sessions(project_path)
+
+        assert sessions == set()
+
+    @patch("devflow.agent.crush_agent.sqlite3.connect")
+    def test_get_session_message_count(self, mock_connect, tmp_path):
+        """Test with mocked SQLite query."""
+        crush_dir = tmp_path / "crush"
+        agent = CrushAgent(crush_dir=crush_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Create the database file
+        db_path = crush_dir / "crush.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.touch()
+
+        # Mock SQLite connection
+        mock_conn = Mock()
+        mock_cursor = Mock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (42,)  # 42 messages
+        mock_connect.return_value = mock_conn
+
+        count = agent.get_session_message_count(session_id, project_path)
+
+        assert count == 42
+
+        # Verify SQL query
+        mock_cursor.execute.assert_called_once_with(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+            (session_id,)
+        )
+        mock_conn.close.assert_called_once()
+
+    def test_get_session_message_count_zero_when_db_not_exists(self, tmp_path):
+        """Test returns 0."""
+        crush_dir = tmp_path / "crush"
+        agent = CrushAgent(crush_dir=crush_dir)
+        project_path = "/home/user/project"
+        session_id = "test-session-id"
+
+        # Database doesn't exist
         count = agent.get_session_message_count(session_id, project_path)
 
         assert count == 0

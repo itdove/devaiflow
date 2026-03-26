@@ -414,7 +414,8 @@ def create_investigation_session(
             model_provider_profile=model_profile,
             skills_dirs=None,  # Will be auto-discovered
             workspace_path=workspace_path,
-            config=config
+            config=config,
+            env=env
         )
         # Wait for the agent process to complete
         process.wait()
@@ -820,7 +821,8 @@ def _create_multi_project_investigation_session(
             model_provider_profile=model_profile,
             skills_dirs=None,  # Will be auto-discovered
             workspace_path=workspace_resolved,
-            config=config
+            config=config,
+            env=env
         )
         # Wait for the agent process to complete
         process.wait()

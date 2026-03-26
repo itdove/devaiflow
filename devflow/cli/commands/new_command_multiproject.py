@@ -363,7 +363,8 @@ def create_multi_project_session(
                 model_provider_profile=model_profile,
                 skills_dirs=None,  # Will be auto-discovered
                 workspace_path=workspace_path,
-                config=config
+                config=config,
+                env=env
             )
             process.wait()
         finally:

@@ -49,11 +49,12 @@ class GitHubCopilotAgent(AgentInterface):
         else:
             self.copilot_dir = copilot_dir
 
-    def launch_session(self, project_path: str) -> subprocess.Popen:
+    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Launch VS Code with GitHub Copilot in a project directory.
 
         Args:
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for VS Code process
@@ -68,6 +69,7 @@ class GitHubCopilotAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def launch_with_prompt(
@@ -79,6 +81,7 @@ class GitHubCopilotAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch VS Code with GitHub Copilot.
 
@@ -94,6 +97,7 @@ class GitHubCopilotAgent(AgentInterface):
             skills_dirs: Skills directories (ignored)
             workspace_path: Workspace path (ignored)
             config: Configuration object (ignored)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for VS Code process
@@ -103,9 +107,9 @@ class GitHubCopilotAgent(AgentInterface):
         """
         # GitHub Copilot doesn't support CLI-based prompts or session IDs
         # Just launch VS Code and let the user interact with Copilot Chat manually
-        return self.launch_session(project_path)
+        return self.launch_session(project_path, env=env)
 
-    def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
+    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Resume VS Code in a project directory.
 
         Note: VS Code manages its own window sessions. The session_id parameter
@@ -114,6 +118,7 @@ class GitHubCopilotAgent(AgentInterface):
         Args:
             session_id: Session identifier (currently unused)
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for VS Code process
@@ -129,6 +134,7 @@ class GitHubCopilotAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def capture_session_id(

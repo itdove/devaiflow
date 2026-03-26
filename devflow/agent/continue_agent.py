@@ -65,11 +65,12 @@ class ContinueAgent(AgentInterface):
         self.vscode_dir = Path.home() / ".vscode"
         self.workspace_storage = self.vscode_dir / "User" / "workspaceStorage"
 
-    def launch_session(self, project_path: str) -> subprocess.Popen:
+    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Launch VS Code with Continue extension in a project directory.
 
         Args:
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for VS Code process
@@ -86,6 +87,7 @@ class ContinueAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def launch_with_prompt(
@@ -97,6 +99,7 @@ class ContinueAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch VS Code with Continue extension.
 
@@ -112,6 +115,7 @@ class ContinueAgent(AgentInterface):
             skills_dirs: Skills directories (ignored)
             workspace_path: Workspace path (ignored)
             config: Configuration object (ignored)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for VS Code process
@@ -132,9 +136,10 @@ class ContinueAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
-    def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
+    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Resume VS Code with Continue extension.
 
         VS Code and Continue automatically restore the previous workspace state
@@ -143,6 +148,7 @@ class ContinueAgent(AgentInterface):
         Args:
             session_id: Session identifier (used for tracking)
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for VS Code process
@@ -158,6 +164,7 @@ class ContinueAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def capture_session_id(

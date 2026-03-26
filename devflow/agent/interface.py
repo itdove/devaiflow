@@ -27,11 +27,12 @@ class AgentInterface(ABC):
     """
 
     @abstractmethod
-    def launch_session(self, project_path: str) -> subprocess.Popen:
+    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Launch a new agent session in a project directory.
 
         Args:
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the launched agent
@@ -52,6 +53,7 @@ class AgentInterface(ABC):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch agent with initial prompt (for new sessions).
 
@@ -68,6 +70,7 @@ class AgentInterface(ABC):
             skills_dirs: List of skill directories to add (optional, will be auto-discovered if None)
             workspace_path: Workspace path for auto-discovering workspace skills (optional)
             config: Configuration object for context files discovery (optional)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the launched agent
@@ -86,12 +89,13 @@ class AgentInterface(ABC):
         pass
 
     @abstractmethod
-    def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
+    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Resume an existing agent session.
 
         Args:
             session_id: Session UUID to resume
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for the resumed agent
