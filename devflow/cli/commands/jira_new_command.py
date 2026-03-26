@@ -228,6 +228,8 @@ def create_jira_ticket_session(
     branch: Optional[str] = None,
     workspace: Optional[str] = None,
     affects_versions: Optional[str] = None,
+    projects: Optional[str] = None,
+    temp_clone: Optional[bool] = None,
 ) -> None:
     """Create a new session for issue tracker ticket creation.
 
@@ -240,6 +242,13 @@ def create_jira_ticket_session(
         issue_type: Type of JIRA issue (epic, story, task, bug)
         parent: Optional parent issue key (epic for story/task/bug, story for subtask)
         goal: Goal/description for the ticket
+        name: Optional session name (auto-generated if not provided)
+        path: Optional project path (bypasses interactive selection)
+        branch: Optional git branch name
+        workspace: Optional workspace name
+        affects_versions: Optional affected version for bugs
+        projects: Optional comma-separated list of project names for multi-project mode
+        temp_clone: Whether to clone to temp directory (None = prompt, True = clone, False = no clone)
         name: Optional session name (auto-generated from goal if not provided)
         path: Optional project path (bypasses interactive selection if provided)
         branch: Optional git branch name
@@ -297,7 +306,49 @@ def create_jira_ticket_session(
 
     # Determine project path
     selected_workspace_name = None
-    if path is not None:
+    if projects and workspace:
+        # Multi-project mode via --projects flag
+        # Parse project names
+        project_names = [p.strip() for p in projects.split(',')]
+
+        # Get workspace path
+        from devflow.cli.utils import get_workspace_path
+        workspace_path = get_workspace_path(config, workspace)
+        if not workspace_path:
+            console_print(f"[red]✗[/red] Workspace '{workspace}' not found")
+            if is_json_mode():
+                output_json(success=False, error={"message": f"Workspace '{workspace}' not found", "code": "INVALID_WORKSPACE"})
+            return
+
+        # Build full paths for each project
+        project_paths = []
+        workspace_path_obj = Path(workspace_path)
+        for proj_name in project_names:
+            proj_path = workspace_path_obj / proj_name
+            if not proj_path.exists():
+                console_print(f"[red]✗[/red] Project not found: {proj_path}")
+                if is_json_mode():
+                    output_json(success=False, error={"message": f"Project not found: {proj_path}", "code": "INVALID_PROJECT"})
+                return
+            project_paths.append(str(proj_path))
+
+        console_print(f"[dim]Using {len(project_paths)} projects from workspace: {workspace}[/dim]")
+        selected_workspace_name = workspace
+
+        # Multi-project ticket creation session
+        return _create_multi_project_jira_session(
+            config=config,
+            config_loader=config_loader,
+            name=name,
+            goal=goal,
+            issue_type=issue_type,
+            parent=parent,
+            project_paths=project_paths,
+            workspace=workspace,
+            selected_workspace_name=selected_workspace_name,
+            affects_versions=affects_versions,
+        )
+    elif path is not None:
         # Use provided path
         project_path = str(Path(path).absolute())
         # Validate path exists
@@ -348,12 +399,33 @@ def create_jira_ticket_session(
     mock_mode = is_mock_mode()
     is_json = is_json_mode()
 
-    # Skip temp directory prompt in non-interactive modes
-    should_skip_temp_prompt = mock_mode or is_json
-
-    if should_skip_temp_prompt:
+    # Handle temp_clone parameter
+    if temp_clone is False:
+        # --no-temp-clone flag: explicitly skip temp cloning
+        console_print(f"[dim]Skipping temp directory clone (--no-temp-clone flag set)[/dim]")
+    elif temp_clone is True:
+        # --temp-clone flag: explicitly request temp cloning
+        from devflow.utils.temp_directory import should_clone_to_temp, clone_to_temp_directory
+        if should_clone_to_temp(Path(project_path)):
+            console_print(f"[dim]Cloning to temp directory (--temp-clone flag set)[/dim]")
+            temp_dir_result = clone_to_temp_directory(Path(project_path))
+            if temp_dir_result:
+                temp_directory, original_project_path = temp_dir_result
+                # Use temp directory as project_path for this session
+                project_path = temp_directory
+                # Use the original repository name for working_directory
+                # This ensures exports/imports show the actual repo name, not the temp directory name
+                working_directory = Path(original_project_path).name
+                console_print(f"[green]✓[/green] Using temporary clone: {temp_directory}")
+            else:
+                console_print(f"[red]✗[/red] Failed to clone to temp directory - using current directory[/dim]")
+        else:
+            console_print(f"[dim]Skipping temp clone (not a git repository)[/dim]")
+    elif mock_mode or is_json:
+        # Non-interactive mode: skip temp directory prompt
         console_print(f"[dim]Non-interactive mode - skipping temp directory clone prompt[/dim]")
     else:
+        # No flag provided: prompt user
         from devflow.utils.temp_directory import should_clone_to_temp, prompt_and_clone_to_temp
         if should_clone_to_temp(Path(project_path)):
             temp_dir_result = prompt_and_clone_to_temp(Path(project_path))

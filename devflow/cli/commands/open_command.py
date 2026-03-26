@@ -120,6 +120,13 @@ def open_session(
     new_conversation: bool = False,
     conversation_id: Optional[str] = None,
     model_profile: Optional[str] = None,
+    create_branch: Optional[bool] = None,
+    source_branch: Optional[str] = None,
+    on_branch_exists: Optional[str] = None,
+    allow_uncommitted: bool = False,
+    sync_upstream: Optional[bool] = None,
+    auto_workspace: bool = False,
+    sync_strategy: Optional[str] = None,
 ) -> None:
     """Open/resume an existing session.
 
@@ -133,6 +140,13 @@ def open_session(
         new_conversation: If True, create a new conversation (archive current and start fresh) - PROJ-63490
         conversation_id: Optional Claude session UUID to resume specific archived conversation - PROJ-63490
         model_profile: Optional model provider profile to use (overrides session default)
+        create_branch: Whether to create a new branch when adding projects (None = prompt)
+        source_branch: Source branch to create from when adding projects (None = prompt/default)
+        on_branch_exists: Action when branch exists (error/use-existing/add-suffix/skip)
+        allow_uncommitted: Allow uncommitted changes when switching branches
+        sync_upstream: Sync with upstream when opening session (None = prompt)
+        auto_workspace: Auto-select workspace without prompting
+        sync_strategy: Strategy for syncing with upstream (merge/rebase/skip)
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -265,7 +279,7 @@ def open_session(
                 detected_workspace_name,
                 all_workspaces,
                 detected_workspace_path=detected_workspace_path,
-                skip_prompt=output_json
+                skip_prompt=output_json or auto_workspace
             ):
                 # User cancelled - exit without opening session
                 return
@@ -493,7 +507,17 @@ def open_session(
         console.print(f"\n[yellow]⚠ Session is missing working directory information[/yellow]")
         console.print(f"[dim]This can happen when sessions are created via 'daf sync'[/dim]")
 
-        if not _prompt_for_working_directory(session, config_loader, session_manager, selected_workspace_name):
+        if not _prompt_for_working_directory(
+            session,
+            config_loader,
+            session_manager,
+            selected_workspace_name,
+            create_branch=create_branch,
+            source_branch=source_branch,
+            on_branch_exists=on_branch_exists,
+            allow_uncommitted=allow_uncommitted,
+            sync_upstream=sync_upstream,
+        ):
             # User cancelled or failed to set working directory
             # Error message already printed in _prompt_for_working_directory
             return
@@ -638,7 +662,9 @@ def open_session(
             active_conv.branch,
             base_branch,
             identifier,
-            config
+            config,
+            sync_upstream=sync_upstream,
+            sync_strategy=sync_strategy,
         )
 
         # Stop execution if sync failed (merge/rebase conflicts)
@@ -2123,6 +2149,11 @@ def _create_multi_project_conversation_for_open(
     config_loader,
     session_manager,
     selected_workspace_name=None,
+    create_branch: Optional[bool] = None,
+    source_branch: Optional[str] = None,
+    on_branch_exists: Optional[str] = None,
+    allow_uncommitted: bool = False,
+    sync_upstream: Optional[bool] = None,
 ) -> bool:
     """Create multi-project conversation for synced session (Issue #177).
 
@@ -2134,6 +2165,11 @@ def _create_multi_project_conversation_for_open(
         config_loader: ConfigLoader instance
         session_manager: SessionManager instance
         selected_workspace_name: Optional workspace name
+        create_branch: Whether to create a new branch (None = prompt)
+        source_branch: Source branch to create from (None = prompt/default)
+        on_branch_exists: Action when branch exists (error/use-existing/add-suffix/skip)
+        allow_uncommitted: Allow uncommitted changes when switching branches
+        sync_upstream: Sync with upstream before creating branch (None = prompt)
 
     Returns:
         True if multi-project conversation was created successfully, False otherwise
@@ -2163,13 +2199,22 @@ def _create_multi_project_conversation_for_open(
         backend=backend
     )
 
-    console.print(f"\n[bold]Branch name for all projects:[/bold] {suggested_branch}")
-    from rich.prompt import Prompt
-    shared_branch_name = Prompt.ask("Enter branch name", default=suggested_branch)
+    # Determine if non-interactive mode
+    non_interactive = create_branch is not None or source_branch is not None or on_branch_exists is not None
+
+    # Prompt for branch name (or use default in non-interactive mode)
+    if non_interactive:
+        shared_branch_name = suggested_branch
+        console.print(f"[dim]Using branch name: {shared_branch_name} (non-interactive mode)[/dim]")
+    else:
+        console.print(f"\n[bold]Branch name for all projects:[/bold] {suggested_branch}")
+        from rich.prompt import Prompt
+        shared_branch_name = Prompt.ask("Enter branch name", default=suggested_branch)
 
     # Collect base branch for each project
     project_base_branches = {}
-    console.print(f"\n[bold]Select base branch for each project:[/bold]")
+    if not non_interactive:
+        console.print(f"\n[bold]Select base branch for each project:[/bold]")
 
     for proj_name in project_names:
         proj_path = workspace_path_obj / proj_name
@@ -2177,19 +2222,27 @@ def _create_multi_project_conversation_for_open(
         # Get default base branch for this project
         default_base = _get_default_source_branch(proj_path)
 
-        console.print(f"\n[cyan]{proj_name}[/cyan] (default: {default_base})")
+        # Use source_branch parameter if provided, otherwise prompt or use default
+        if source_branch:
+            selected_base = source_branch
+        elif non_interactive:
+            selected_base = default_base
+        else:
+            console.print(f"\n[cyan]{proj_name}[/cyan] (default: {default_base})")
 
-        # Offer common base branch options
-        from devflow.cli.commands.new_command import _prompt_for_source_branch
-        selected_base = _prompt_for_source_branch(proj_path, default_base)
+            # Offer common base branch options
+            from devflow.cli.commands.new_command import _prompt_for_source_branch
+            selected_base = _prompt_for_source_branch(proj_path, default_base)
 
-        if not selected_base:
-            # User cancelled
-            console.print("[yellow]Multi-project session creation cancelled[/yellow]")
-            return False
+            if not selected_base:
+                # User cancelled
+                console.print("[yellow]Multi-project session creation cancelled[/yellow]")
+                return False
 
         project_base_branches[proj_name] = selected_base
-        console.print(f"  → Will create branch from: [bold]{selected_base}[/bold]")
+
+        if not non_interactive:
+            console.print(f"  → Will create branch from: [bold]{selected_base}[/bold]")
 
     # Create branches in all projects
     console.print(f"\n[bold]Creating branches...[/bold]")
@@ -2206,11 +2259,16 @@ def _create_multi_project_conversation_for_open(
             project_path=str(proj_path),
             issue_key=branch_identifier,
             goal=session.goal,
-            auto_from_default=False,
+            auto_from_default=non_interactive,
             config=config,
             source_branch=base_branch,
             branch_name=shared_branch_name,
             project_name=proj_name,
+            create_branch=create_branch,
+            on_branch_exists=on_branch_exists,
+            allow_uncommitted=allow_uncommitted,
+            sync_upstream=sync_upstream,
+            non_interactive=non_interactive,
         )
 
         # Check if user explicitly cancelled
@@ -2275,7 +2333,17 @@ def _create_multi_project_conversation_for_open(
     return True
 
 
-def _prompt_for_working_directory(session, config_loader, session_manager, selected_workspace_name=None) -> bool:
+def _prompt_for_working_directory(
+    session,
+    config_loader,
+    session_manager,
+    selected_workspace_name=None,
+    create_branch: Optional[bool] = None,
+    source_branch: Optional[str] = None,
+    on_branch_exists: Optional[str] = None,
+    allow_uncommitted: bool = False,
+    sync_upstream: Optional[bool] = None,
+) -> bool:
     """Prompt user to select a working directory for a session.
 
     This is used when opening sessions that were created via 'daf sync' without
@@ -2288,6 +2356,11 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
         config_loader: ConfigLoader instance
         session_manager: SessionManager instance
         selected_workspace_name: Optional workspace name selected via -w flag or session preference
+        create_branch: Whether to create a new branch (None = prompt)
+        source_branch: Source branch to create from (None = prompt/default)
+        on_branch_exists: Action when branch exists (error/use-existing/add-suffix/skip)
+        allow_uncommitted: Allow uncommitted changes when switching branches
+        sync_upstream: Sync with upstream before creating branch (None = prompt)
 
     Returns:
         True if working directory was set successfully, False if user cancelled
@@ -2403,6 +2476,11 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
                     config_loader=config_loader,
                     session_manager=session_manager,
                     selected_workspace_name=selected_workspace_name,
+                    create_branch=create_branch,
+                    source_branch=source_branch,
+                    on_branch_exists=on_branch_exists,
+                    allow_uncommitted=allow_uncommitted,
+                    sync_upstream=sync_upstream,
                 )
             elif len(selected_projects) == 1:
                 # Only one project selected - continue with single-project flow
@@ -2564,7 +2642,15 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
     return True
 
 
-def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch: str, identifier: str, config: Optional[any] = None) -> bool:
+def _check_and_sync_with_base_branch(
+    project_path: str,
+    branch: str,
+    base_branch: str,
+    identifier: str,
+    config: Optional[any] = None,
+    sync_upstream: Optional[bool] = None,
+    sync_strategy: Optional[str] = None,
+) -> bool:
     """Check if branch is behind base branch and prompt to sync.
 
     Args:
@@ -2573,6 +2659,8 @@ def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch
         base_branch: Base branch to check against (e.g., 'main')
         identifier: Session identifier (session name or JIRA key) for resume command
         config: Configuration object (optional)
+        sync_upstream: Whether to sync with upstream (None = prompt)
+        sync_strategy: Strategy for syncing (merge/rebase/skip)
 
     Returns:
         True if sync was successful or not needed, False if sync failed
@@ -2602,7 +2690,17 @@ def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch
     console.print(f"\n[yellow]⚠ Your branch '{branch}' is {commits_behind} commits behind '{base_branch}'[/yellow]")
 
     should_sync = True
-    if config and config.prompts and config.prompts.auto_sync_with_base:
+
+    # Check if sync_upstream parameter was provided (CLI override)
+    if sync_upstream is not None:
+        should_sync = sync_upstream
+        if should_sync:
+            console.print(f"[dim]Syncing with upstream (--sync-upstream flag set)[/dim]")
+        else:
+            console.print(f"[dim]Skipping sync (--no-sync-upstream flag set)[/dim]")
+            console.print(f"[dim]Continuing with current branch state[/dim]")
+            return True
+    elif config and config.prompts and config.prompts.auto_sync_with_base:
         auto_sync_setting = config.prompts.auto_sync_with_base
         if auto_sync_setting == "always":
             console.print(f"[dim]Automatically syncing (configured in prompts)[/dim]")
@@ -2620,13 +2718,21 @@ def _check_and_sync_with_base_branch(project_path: str, branch: str, base_branch
         console.print(f"[dim]Continuing with current branch state[/dim]")
         return True
 
-    # Prompt for sync strategy
-    console.print(f"\n[bold]Sync strategy:[/bold]")
-    console.print("  [cyan]m[/cyan] - Merge (preserves commit history)")
-    console.print("  [cyan]r[/cyan] - Rebase (linear history)")
-    console.print("  [cyan]s[/cyan] - Skip (continue without syncing)")
+    # Determine sync strategy
+    strategy = None
+    if sync_strategy:
+        # CLI parameter provided - convert to single character
+        strategy_map = {"merge": "m", "rebase": "r", "skip": "s"}
+        strategy = strategy_map.get(sync_strategy.lower(), "m")
+        console.print(f"[dim]Using sync strategy: {sync_strategy} (--sync-strategy flag set)[/dim]")
+    else:
+        # Prompt for sync strategy
+        console.print(f"\n[bold]Sync strategy:[/bold]")
+        console.print("  [cyan]m[/cyan] - Merge (preserves commit history)")
+        console.print("  [cyan]r[/cyan] - Rebase (linear history)")
+        console.print("  [cyan]s[/cyan] - Skip (continue without syncing)")
 
-    strategy = Prompt.ask("Choose strategy", choices=["m", "r", "s"], default="m")
+        strategy = Prompt.ask("Choose strategy", choices=["m", "r", "s"], default="m")
 
     if strategy == "s":
         console.print(f"[dim]Continuing with current branch state[/dim]")

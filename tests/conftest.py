@@ -1,12 +1,49 @@
 """Pytest configuration and fixtures."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+# List of all CI environment variables that trigger non-interactive mode
+CI_ENV_VARS = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'TRAVIS', 'CIRCLECI', 'DAF_NON_INTERACTIVE', 'DAF_MOCK_MODE']
+
+
+def clear_all_ci_env_vars():
+    """Clear all CI-related environment variables and return their original values."""
+    original_values = {}
+    for var in CI_ENV_VARS:
+        original_values[var] = os.environ.get(var)
+        os.environ.pop(var, None)
+    return original_values
+
+
+def restore_env_vars(original_values):
+    """Restore environment variables to their original values."""
+    for var, value in original_values.items():
+        if value is not None:
+            os.environ[var] = value
+        else:
+            os.environ.pop(var, None)
+
+
+@pytest.fixture
+def clean_ci_env(monkeypatch):
+    """Fixture to clear all CI environment variables for a test.
+
+    Automatically clears CI vars before test and restores them after.
+    Use this for tests that need to ensure prompts are shown.
+    """
+    # Clear all CI environment variables
+    for var in CI_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+    yield
+    # Cleanup is automatic with monkeypatch
 
 
 @pytest.fixture(autouse=True)
