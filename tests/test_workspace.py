@@ -235,7 +235,10 @@ def test_open_command_w_flag_persists_workspace(monkeypatch, tmp_path):
     from devflow.config.models import Config, JiraConfig, RepoConfig, WorkspaceDefinition
 
     # Setup config with multiple workspaces
-    config_loader = ConfigLoader()
+    # IMPORTANT: Use test-specific config directory to avoid writing to real user config
+    test_config_dir = tmp_path / ".daf-sessions"
+    test_config_dir.mkdir()
+    config_loader = ConfigLoader(config_dir=test_config_dir)
 
     # Create config object with workspaces
     config = Config(
@@ -307,7 +310,10 @@ def test_open_command_w_flag_no_update_when_same_workspace(monkeypatch, tmp_path
     from devflow.config.models import Config, JiraConfig, RepoConfig, WorkspaceDefinition
 
     # Setup config with multiple workspaces
-    config_loader = ConfigLoader()
+    # IMPORTANT: Use test-specific config directory to avoid writing to real user config
+    test_config_dir = tmp_path / ".daf-sessions"
+    test_config_dir.mkdir()
+    config_loader = ConfigLoader(config_dir=test_config_dir)
 
     # Create config object with workspaces
     config = Config(
@@ -402,7 +408,11 @@ def test_new_command_w_flag_uses_correct_workspace(monkeypatch, tmp_path):
     init_git_repo(ai_ws / "ml-models")
 
     # Setup config with multiple workspaces
-    config_loader = ConfigLoader()
+    # IMPORTANT: Use test-specific config directory to avoid writing to real user config
+    test_config_dir = tmp_path / ".daf-sessions"
+    test_config_dir.mkdir()
+    config_loader = ConfigLoader(config_dir=test_config_dir)
+
     config = Config(
         jira=JiraConfig(url="https://jira.example.com", transitions={}),
         repos=RepoConfig(
@@ -413,8 +423,9 @@ def test_new_command_w_flag_uses_correct_workspace(monkeypatch, tmp_path):
         )
     )
 
-    # Mock the config loader
+    # Mock the config loader methods to prevent any file I/O
     monkeypatch.setattr(config_loader, 'load_config', lambda: config)
+    monkeypatch.setattr(config_loader, 'save_config', lambda cfg: None)
 
     # Mock Prompt.ask to select first repository automatically
     from rich.prompt import Prompt
