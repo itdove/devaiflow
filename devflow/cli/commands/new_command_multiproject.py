@@ -37,6 +37,12 @@ def create_multi_project_session(
     force_new_session: bool,
     model_profile: Optional[str],
     output_json: bool,
+    create_branch: Optional[bool] = None,
+    source_branch: Optional[str] = None,
+    on_branch_exists: Optional[str] = None,
+    allow_uncommitted: bool = False,
+    sync_upstream: Optional[bool] = None,
+    non_interactive: bool = False,
 ) -> None:
     """Create a multi-project session with conversations for multiple repositories.
 
@@ -55,6 +61,12 @@ def create_multi_project_session(
         force_new_session: Whether to force creation of new session
         model_profile: Model provider profile (optional)
         output_json: Whether to output JSON
+        create_branch: Whether to create a new branch (None = prompt)
+        source_branch: Source branch to create from (None = prompt/default)
+        on_branch_exists: Action when branch exists (error/use-existing/add-suffix/skip)
+        allow_uncommitted: Allow uncommitted changes when switching branches
+        sync_upstream: Sync with upstream before creating branch (None = prompt)
+        non_interactive: Running in non-interactive mode
     """
     from devflow.cli.commands.new_command import (
         _generate_initial_prompt,
@@ -103,7 +115,7 @@ def create_multi_project_session(
     )
 
     # Prompt for branch name (shared across all projects)
-    if output_json:
+    if non_interactive or output_json:
         shared_branch_name = suggested_branch
     else:
         console.print(f"[bold]Branch name for all projects:[/bold] {suggested_branch}")
@@ -113,7 +125,7 @@ def create_multi_project_session(
     project_base_branches = {}
     workspace_path_obj = Path(workspace_path)
 
-    if not output_json:
+    if not non_interactive and not output_json:
         console.print(f"\n[bold]Select base branch for each project:[/bold]")
 
     for proj_name in project_names:
@@ -122,8 +134,11 @@ def create_multi_project_session(
         # Get default base branch for this project
         default_base = _get_default_source_branch(proj_path)
 
-        if output_json:
-            # Use default in JSON mode
+        if source_branch:
+            # Use explicit source branch from CLI parameter
+            selected_base = source_branch
+        elif non_interactive or output_json:
+            # Use default in non-interactive/JSON mode
             selected_base = default_base
         else:
             # Prompt for base branch
@@ -140,7 +155,7 @@ def create_multi_project_session(
 
         project_base_branches[proj_name] = selected_base
 
-        if not output_json:
+        if not non_interactive and not output_json:
             console.print(f"  → Will create branch from: [bold]{selected_base}[/bold]")
 
     # Create branches in all projects
@@ -165,6 +180,11 @@ def create_multi_project_session(
             source_branch=base_branch,
             branch_name=shared_branch_name,
             project_name=proj_name,
+            create_branch=create_branch,
+            on_branch_exists=on_branch_exists,
+            allow_uncommitted=allow_uncommitted,
+            sync_upstream=sync_upstream,
+            non_interactive=non_interactive,
         )
 
         # Check if user explicitly cancelled

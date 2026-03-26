@@ -30,6 +30,35 @@ from devflow.utils.daf_agents_validation import validate_daf_agents_md
 console = Console()
 
 
+def _is_non_interactive(output_json: bool = False) -> bool:
+    """Check if running in non-interactive mode.
+
+    Non-interactive mode is enabled when:
+    - --json flag is set
+    - --non-interactive global flag is set (sets DAF_NON_INTERACTIVE=1)
+    - Running in CI environment (CI, GITHUB_ACTIONS, GITLAB_CI, etc.)
+    - DAF_NON_INTERACTIVE=1 environment variable is explicitly set
+
+    Args:
+        output_json: Whether JSON output mode is enabled
+
+    Returns:
+        True if in non-interactive mode (no user prompts allowed)
+    """
+    # Check if in JSON mode
+    if output_json:
+        return True
+
+    # Check for CI environment variables
+    ci_vars = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'TRAVIS', 'CIRCLECI']
+    if any(os.getenv(var) for var in ci_vars):
+        return True
+
+    # Check for explicit non-interactive flag (set by --non-interactive or manually)
+    if os.getenv('DAF_NON_INTERACTIVE') == '1':
+        return True
+
+    return False
 
 
 
@@ -327,6 +356,13 @@ def create_new_session(
     force_new_session: bool = False,
     model_profile: Optional[str] = None,
     output_json: bool = False,
+    create_branch: Optional[bool] = None,
+    source_branch: Optional[str] = None,
+    on_branch_exists: Optional[str] = None,
+    allow_uncommitted: bool = False,
+    sync_upstream: Optional[bool] = None,
+    auto_workspace: bool = False,
+    session_index: Optional[int] = None,
 ) -> None:
     """Create a new session or add conversation to existing session.
 
@@ -343,10 +379,20 @@ def create_new_session(
         force_new_session: If True, always create new session instead of adding conversation
         model_profile: Optional model provider profile to use (e.g., "vertex", "llama-cpp")
         output_json: If True, output JSON instead of human-readable text
+        create_branch: Control branch creation (None=prompt, True=create, False=skip)
+        source_branch: Source branch to create new branch from
+        on_branch_exists: Action when branch exists (error|use-existing|add-suffix|skip)
+        allow_uncommitted: Allow uncommitted changes when switching branches
+        sync_upstream: Sync with upstream before creating branch (None=prompt, True=sync, False=skip)
+        auto_workspace: Auto-select workspace without prompting
+        session_index: Select existing session by index (for multi-session selection)
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
     config = config_loader.load_config()
+
+    # Determine if in non-interactive mode
+    non_interactive = _is_non_interactive(output_json)
 
     # Load or auto-detect template
     from devflow.templates.manager import TemplateManager
@@ -420,7 +466,7 @@ def create_new_session(
         config,
         workspace_flag=workspace_name,
         session=existing_session,
-        skip_prompt=output_json
+        skip_prompt=(output_json or auto_workspace or non_interactive)
     )
 
     # Get workspace path for multi-project detection
@@ -443,7 +489,7 @@ def create_new_session(
     if projects:
         # --projects flag provided - use those projects
         multi_project_names = [p.strip() for p in projects.split(',')]
-    elif workspace_path and not output_json and path is None:
+    elif workspace_path and not non_interactive and path is None:
         # No --projects flag, but we have a workspace - offer interactive multi-project selection
         workspace_path_obj = Path(workspace_path)
         available_repos = scan_workspace_repositories(workspace_path_obj)
@@ -532,6 +578,12 @@ def create_new_session(
             force_new_session=force_new_session,
             model_profile=model_profile,
             output_json=output_json,
+            create_branch=create_branch,
+            source_branch=source_branch,
+            on_branch_exists=on_branch_exists,
+            allow_uncommitted=allow_uncommitted,
+            sync_upstream=sync_upstream,
+            non_interactive=non_interactive,
         )
         return
 
@@ -541,35 +593,50 @@ def create_new_session(
         current_dir = Path.cwd()
         is_current_dir_a_project = GitUtils.is_git_repository(current_dir)
 
-        # Always offer intelligent repository suggestions (with or without JIRA)
-        # Pass selected workspace to ensure correct repository discovery
-        suggested_path = _suggest_and_select_repository(
-            config_loader,
-            issue_metadata_dict=issue_metadata_dict,
-            issue_key=issue_key,
-            workspace_name=selected_workspace_name,
-        )
-        if suggested_path:
-            path = suggested_path
-        elif is_current_dir_a_project:
-            # Current directory is a project - offer to use it
-            if Confirm.ask(f"Use current directory?\n  {current_dir}", default=True):
+        if non_interactive:
+            # Non-interactive mode: use current directory or error
+            if is_current_dir_a_project:
                 path = str(current_dir)
+                console_print(f"[dim]Non-interactive mode: using current directory: {path}[/dim]")
             else:
+                console.print("[red]✗[/red] No --path specified and current directory is not a git repository")
+                console.print("[dim]In non-interactive mode, you must either:")
+                console.print("  1. Run from a git repository directory, or")
+                console.print("  2. Specify --path explicitly[/dim]")
+                if output_json:
+                    json_output(success=False, error={"code": "NO_PATH", "message": "Path required in non-interactive mode"})
+                raise click.Abort()
+        else:
+            # Interactive mode: offer suggestions and prompts
+            # Always offer intelligent repository suggestions (with or without JIRA)
+            # Pass selected workspace to ensure correct repository discovery
+            suggested_path = _suggest_and_select_repository(
+                config_loader,
+                issue_metadata_dict=issue_metadata_dict,
+                issue_key=issue_key,
+                workspace_name=selected_workspace_name,
+            )
+            if suggested_path:
+                path = suggested_path
+            elif is_current_dir_a_project:
+                # Current directory is a project - offer to use it
+                if Confirm.ask(f"Use current directory?\n  {current_dir}", default=True):
+                    path = str(current_dir)
+                else:
+                    path = Prompt.ask("Enter project path")
+                    if not path or not path.strip():
+                        console.print("[red]✗[/red] Project path cannot be empty")
+                        raise click.Abort()
+                    path = path.strip()
+            else:
+                # Not in a project directory and no suggestions - must specify path
+                console.print(f"\n[yellow]Current directory is not a git repository[/yellow]")
+                console.print(f"[dim]You must select a project directory for the session[/dim]")
                 path = Prompt.ask("Enter project path")
                 if not path or not path.strip():
                     console.print("[red]✗[/red] Project path cannot be empty")
                     raise click.Abort()
                 path = path.strip()
-        else:
-            # Not in a project directory and no suggestions - must specify path
-            console.print(f"\n[yellow]Current directory is not a git repository[/yellow]")
-            console.print(f"[dim]You must select a project directory for the session[/dim]")
-            path = Prompt.ask("Enter project path")
-            if not path or not path.strip():
-                console.print("[red]✗[/red] Project path cannot be empty")
-                raise click.Abort()
-            path = path.strip()
 
     project_path = str(Path(path).absolute())
 
@@ -613,7 +680,18 @@ def create_new_session(
     if branch is None:
         # Use issue_key if available, otherwise use name for branch creation
         branch_identifier = issue_key if issue_key else name
-        branch_result = _handle_branch_creation(project_path, branch_identifier, goal)
+        branch_result = _handle_branch_creation(
+            project_path,
+            branch_identifier,
+            goal,
+            config=config,
+            source_branch=source_branch,
+            create_branch=create_branch,
+            on_branch_exists=on_branch_exists,
+            allow_uncommitted=allow_uncommitted,
+            sync_upstream=sync_upstream,
+            non_interactive=non_interactive,
+        )
 
         # Check if user explicitly cancelled due to uncommitted changes
         if branch_result is False:
@@ -682,35 +760,60 @@ def create_new_session(
 
             session_manager.update_session(session)
         else:
-            # Multiple sessions exist - prompt user to select one or create new
-            from rich.prompt import IntPrompt
+            # Multiple sessions exist - use session_index or prompt user to select one or create new
+            new_option = len(existing_sessions) + 1
 
-            console.print(f"\n[yellow]Found {len(existing_sessions)} existing sessions for '{name}':[/yellow]\n")
-            for i, sess in enumerate(existing_sessions, 1):
-                console.print(f"  {i}. Session #{sess.session_id}")
-                console.print(f"     Goal: {sess.goal}")
-                console.print(f"     Conversations: {len(sess.conversations)}")
-                if sess.conversations:
-                    for wd in sess.conversations.keys():
-                        console.print(f"       - {wd}")
+            if session_index is not None:
+                # Use provided session index
+                if session_index < 1 or session_index > new_option:
+                    console.print(f"[red]✗[/red] Invalid session index: {session_index}")
+                    console.print(f"[dim]Valid range: 1-{new_option} (1-{len(existing_sessions)} for existing sessions, {new_option} for new)[/dim]")
+                    if output_json:
+                        json_output(success=False, error={"code": "INVALID_SESSION_INDEX", "message": f"Session index must be between 1 and {new_option}"})
+                    raise click.Abort()
+
+                if session_index == new_option:
+                    session = None  # Create new session
+                    console_print(f"[dim]Using session index {session_index}: creating new conversation[/dim]")
+                else:
+                    session = existing_sessions[session_index - 1]
+                    console_print(f"[dim]Using session index {session_index}: adding to session #{session.session_id}[/dim]")
+            elif non_interactive:
+                # Non-interactive mode without session_index - error
+                console.print(f"[red]✗[/red] Multiple sessions found for '{name}' - must specify --session-index")
+                console.print(f"[dim]Found {len(existing_sessions)} sessions. Use --session-index 1-{len(existing_sessions)} to select, or {new_option} to create new[/dim]")
+                if output_json:
+                    json_output(success=False, error={"code": "AMBIGUOUS_SESSION", "message": "Multiple sessions found, --session-index required"})
+                raise click.Abort()
+            else:
+                # Interactive mode - prompt user
+                from rich.prompt import IntPrompt
+
+                console.print(f"\n[yellow]Found {len(existing_sessions)} existing sessions for '{name}':[/yellow]\n")
+                for i, sess in enumerate(existing_sessions, 1):
+                    console.print(f"  {i}. Session #{sess.session_id}")
+                    console.print(f"     Goal: {sess.goal}")
+                    console.print(f"     Conversations: {len(sess.conversations)}")
+                    if sess.conversations:
+                        for wd in sess.conversations.keys():
+                            console.print(f"       - {wd}")
+                    console.print()
+
+                console.print(f"  {new_option}. → Create new conversation (separate work stream)")
                 console.print()
 
-            new_option = len(existing_sessions) + 1
-            console.print(f"  {new_option}. → Create new conversation (separate work stream)")
-            console.print()
+                choice = IntPrompt.ask(
+                    "Add to which session? (or create new conversation)",
+                    choices=[str(i) for i in range(1, new_option + 1)],
+                    default="1"
+                )
 
-            choice = IntPrompt.ask(
-                "Add to which session? (or create new conversation)",
-                choices=[str(i) for i in range(1, new_option + 1)],
-                default="1"
-            )
-
-            if choice == new_option:
-                # User wants to create new session - set session to None to fall through
-                session = None
-            else:
-                # Add to selected session
-                session = existing_sessions[choice - 1]
+                if choice == new_option:
+                    # User wants to create new session - set session to None to fall through
+                    session = None
+                else:
+                    # Add to selected session
+                    session = existing_sessions[choice - 1]
 
                 # Check if conversation already exists
                 if session.get_conversation(working_directory):
@@ -1493,19 +1596,24 @@ def _handle_branch_creation(
     config: Optional[any] = None,
     source_branch: Optional[str] = None,
     branch_name: Optional[str] = None,
-    project_name: Optional[str] = None
+    project_name: Optional[str] = None,
+    create_branch: Optional[bool] = None,
+    on_branch_exists: Optional[str] = None,
+    allow_uncommitted: bool = False,
+    sync_upstream: Optional[bool] = None,
+    non_interactive: bool = False,
 ) -> Optional[str] | bool | tuple[str, str]:
     """Handle git branch creation with enhanced UX.
 
     Enhanced workflow:
     1. Check git repository
     2. Check uncommitted changes
-    3. Prompt to create branch (show suggested name)
-    4. Allow user to customize branch name
+    3. Prompt to create branch (show suggested name) OR use create_branch parameter
+    4. Allow user to customize branch name OR use branch_name parameter
     5. Check if branch exists
-       - If exists: offer merge/switch/rename options
-       - If new: prompt for source branch with validation (or use provided source_branch)
-    6. If user declines: offer to sync with upstream/main
+       - If exists: use on_branch_exists strategy or offer merge/switch/rename options
+       - If new: use source_branch parameter or prompt for source branch with validation
+    6. If user declines: offer to sync with upstream/main OR use sync_upstream parameter
 
     Args:
         project_path: Project directory path
@@ -1516,6 +1624,11 @@ def _handle_branch_creation(
         source_branch: Optional source branch to use (skips prompt if provided)
         branch_name: Optional branch name to use (skips prompt if provided)
         project_name: Optional project name for display in prompts (multi-project mode)
+        create_branch: Control branch creation (None=prompt, True=create, False=skip)
+        on_branch_exists: Action when branch exists (error|use-existing|add-suffix|skip)
+        allow_uncommitted: Allow uncommitted changes when switching branches
+        sync_upstream: Sync with upstream before creating branch (None=prompt, True=sync, False=skip)
+        non_interactive: If True, use defaults instead of prompting
 
     Returns:
         Tuple of (branch_name, source_branch) if newly created
@@ -1550,9 +1663,15 @@ def _handle_branch_creation(
             for line in status_summary.split('\n'):
                 console_print(f"  {line}")
 
-        # In JSON mode or auto mode, proceed with warning logged
-        if is_json_mode() or auto_from_default:
-            mode_str = "JSON mode" if is_json_mode() else "auto mode"
+        # Check if we should allow uncommitted changes
+        if allow_uncommitted:
+            msg = "Proceeding with uncommitted changes (--allow-uncommitted flag set)"
+            if project_name:
+                msg = f"[{project_name}] {msg}"
+            console_print(f"\n[yellow]{msg}[/yellow]")
+        elif is_json_mode() or auto_from_default or non_interactive:
+            # In JSON mode, auto mode, or non-interactive mode
+            mode_str = "JSON mode" if is_json_mode() else ("auto mode" if auto_from_default else "non-interactive mode")
             msg = f"Proceeding with branch creation despite uncommitted changes ({mode_str})"
             if project_name:
                 msg = f"[{project_name}] {msg}"
@@ -1599,23 +1718,59 @@ def _handle_branch_creation(
 
     # === STEP 1: Ask if user wants to create a branch ===
     if not auto_from_default and branch_name is None:
-        # Build prompt prefix with project name if provided
-        prompt_prefix = f"\n[{project_name}] " if project_name else "\n"
-
-        if is_json_mode():
+        # Determine if should create branch
+        if create_branch is not None:
+            # Explicit parameter provided
+            should_create = create_branch
+            if should_create:
+                mode_msg = "Creating branch (--create-branch flag set)"
+                if project_name:
+                    mode_msg = f"[{project_name}] {mode_msg}"
+                console_print(f"\n[dim]{mode_msg}[/dim]")
+            else:
+                mode_msg = "Skipping branch creation (--no-create-branch flag set)"
+                if project_name:
+                    mode_msg = f"[{project_name}] {mode_msg}"
+                console_print(f"\n[dim]{mode_msg}[/dim]")
+        elif is_json_mode() or non_interactive:
+            # Non-interactive mode - default to creating branch
             should_create = True
+            mode_str = "JSON mode" if is_json_mode() else "non-interactive mode"
+            mode_msg = f"Creating branch by default ({mode_str})"
+            if project_name:
+                mode_msg = f"[{project_name}] {mode_msg}"
+            console_print(f"\n[dim]{mode_msg}[/dim]")
         else:
+            # Interactive mode - prompt user
+            prompt_prefix = f"\n[{project_name}] " if project_name else "\n"
             should_create = Confirm.ask(f"{prompt_prefix}Would you like to create a new branch?", default=True)
 
         if not should_create:
             # User declined - offer to sync with upstream/main
             console_print("\n[dim]No new branch will be created.[/dim]")
 
-            sync_prompt = f"Would you like to sync current branch with {default_source}?"
-            if project_name:
-                sync_prompt = f"[{project_name}] {sync_prompt}"
+            # Determine if should sync
+            if sync_upstream is not None:
+                should_sync = sync_upstream
+                if should_sync:
+                    sync_msg = "Syncing with upstream (--sync-upstream flag set)"
+                    if project_name:
+                        sync_msg = f"[{project_name}] {sync_msg}"
+                    console_print(f"[dim]{sync_msg}[/dim]")
+                else:
+                    console_print("[dim]Skipping upstream sync (--no-sync-upstream flag set)[/dim]")
+            elif non_interactive:
+                # Non-interactive mode - default to syncing
+                should_sync = True
+                console_print("[dim]Syncing with upstream by default (non-interactive mode)[/dim]")
+            else:
+                # Interactive mode - prompt
+                sync_prompt = f"Would you like to sync current branch with {default_source}?"
+                if project_name:
+                    sync_prompt = f"[{project_name}] {sync_prompt}"
+                should_sync = Confirm.ask(sync_prompt, default=True)
 
-            if Confirm.ask(sync_prompt, default=True):
+            if should_sync:
                 console_print(f"\nPulling latest changes from {default_source}...")
 
                 # Fetch first
@@ -1635,40 +1790,98 @@ def _handle_branch_creation(
     if branch_name is None:
         console_print(f"\n[bold]Suggested branch name:[/bold] {suggested_branch}")
 
-        if is_json_mode() or auto_from_default:
+        if is_json_mode() or auto_from_default or non_interactive:
             branch_name = suggested_branch
+            mode_str = "JSON mode" if is_json_mode() else ("auto mode" if auto_from_default else "non-interactive mode")
+            console_print(f"[dim]Using suggested branch name ({mode_str})[/dim]")
         else:
             branch_name = Prompt.ask("Enter branch name", default=suggested_branch)
 
     # === STEP 3: Check if branch exists ===
     while True:
         if GitUtils.branch_exists(path, branch_name):
-            # Branch exists - handle with enhanced UX
-            result = _handle_existing_branch(path, branch_name, default_source, config)
-
-            if result is False:
-                # User chose "Choose different name" - prompt again
-                branch_prompt = "Enter branch name"
+            # Branch exists - handle based on on_branch_exists parameter
+            if on_branch_exists:
+                # Parameter provided - use it
+                if on_branch_exists == 'error':
+                    msg = f"Branch '{branch_name}' already exists"
+                    if project_name:
+                        msg = f"[{project_name}] {msg}"
+                    console.print(f"[red]✗[/red] {msg}")
+                    console.print(f"[dim]Use --on-branch-exists={'{use-existing|add-suffix|skip}'} to handle automatically[/dim]")
+                    if is_json_mode():
+                        from devflow.cli.utils import output_json
+                        output_json(success=False, error={"code": "BRANCH_EXISTS", "message": f"Branch {branch_name} already exists"})
+                    return None
+                elif on_branch_exists == 'use-existing':
+                    msg = f"Using existing branch '{branch_name}' (--on-branch-exists=use-existing)"
+                    if project_name:
+                        msg = f"[{project_name}] {msg}"
+                    console_print(f"[dim]{msg}[/dim]")
+                    # Checkout the existing branch
+                    if GitUtils.checkout_branch(path, branch_name):
+                        return branch_name
+                    else:
+                        console.print(f"[red]✗[/red] Failed to checkout branch '{branch_name}'")
+                        return None
+                elif on_branch_exists == 'add-suffix':
+                    # Add numeric suffix
+                    original_name = branch_name
+                    suffix = 2
+                    while GitUtils.branch_exists(path, f"{original_name}-v{suffix}"):
+                        suffix += 1
+                    branch_name = f"{original_name}-v{suffix}"
+                    msg = f"Branch '{original_name}' exists - using '{branch_name}' (--on-branch-exists=add-suffix)"
+                    if project_name:
+                        msg = f"[{project_name}] {msg}"
+                    console_print(f"[dim]{msg}[/dim]")
+                    # Continue to create the new branch
+                    break
+                elif on_branch_exists == 'skip':
+                    msg = f"Branch '{branch_name}' exists - skipping branch creation (--on-branch-exists=skip)"
+                    if project_name:
+                        msg = f"[{project_name}] {msg}"
+                    console_print(f"[dim]{msg}[/dim]")
+                    return None
+            elif non_interactive:
+                # Non-interactive mode without explicit strategy - error
+                msg = f"Branch '{branch_name}' already exists"
                 if project_name:
-                    branch_prompt = f"[{project_name}] {branch_prompt}"
-                branch_name = Prompt.ask(branch_prompt)
-                continue  # Loop to check new name
-            elif result is None:
-                # User cancelled
+                    msg = f"[{project_name}] {msg}"
+                console.print(f"[red]✗[/red] {msg}")
+                console.print(f"[dim]In non-interactive mode, use --on-branch-exists to specify behavior[/dim]")
+                if is_json_mode():
+                    from devflow.cli.utils import output_json
+                    output_json(success=False, error={"code": "BRANCH_EXISTS", "message": "Branch exists, --on-branch-exists required in non-interactive mode"})
                 return None
             else:
-                # User switched to branch (with or without merge)
-                return result
+                # Interactive mode - use existing UX
+                result = _handle_existing_branch(path, branch_name, default_source, config)
+
+                if result is False:
+                    # User chose "Choose different name" - prompt again
+                    branch_prompt = "Enter branch name"
+                    if project_name:
+                        branch_prompt = f"[{project_name}] {branch_prompt}"
+                    branch_name = Prompt.ask(branch_prompt)
+                    continue  # Loop to check new name
+                elif result is None:
+                    # User cancelled
+                    return None
+                else:
+                    # User switched to branch (with or without merge)
+                    return result
 
         # Branch doesn't exist - break loop and create it
         break
 
     # === STEP 4: Prompt for source branch ===
-    # Use provided source_branch if available (for multi-project sessions)
+    # Use provided source_branch if available (for multi-project sessions or --source-branch flag)
     if source_branch is None:
-        if is_json_mode() or auto_from_default:
+        if is_json_mode() or auto_from_default or non_interactive:
             source_branch = default_source
-            msg = f"Creating branch from: {source_branch}"
+            mode_str = "JSON mode" if is_json_mode() else ("auto mode" if auto_from_default else "non-interactive mode")
+            msg = f"Creating branch from: {source_branch} ({mode_str})"
             if project_name:
                 msg = f"[{project_name}] {msg}"
             console_print(f"[dim]{msg}[/dim]")
@@ -1683,7 +1896,7 @@ def _handle_branch_creation(
                 console_print(f"[yellow]{msg}[/yellow]")
                 return None
     else:
-        # Source branch provided (multi-project mode) - use it
+        # Source branch provided (multi-project mode or --source-branch flag) - use it
         msg = f"Creating branch from: {source_branch}"
         if project_name:
             msg = f"[{project_name}] {msg}"

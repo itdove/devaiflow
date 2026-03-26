@@ -264,12 +264,21 @@ def _version_callback(ctx: click.Context, param: click.Parameter, value: bool) -
 
 @click.group(context_settings={'ignore_unknown_options': True, 'allow_extra_args': True})
 @click.option('--version', is_flag=True, callback=_version_callback, expose_value=False, is_eager=True, help='Show version and exit')
+@click.option('--non-interactive', is_flag=True, help='Non-interactive mode: error if required parameters missing (no prompts)')
 @click.pass_context
-def cli(ctx: click.Context) -> None:
+def cli(ctx: click.Context, non_interactive: bool) -> None:
     """DevAIFlow - Manage Claude Code sessions with JIRA integration."""
     import sys
 
     ctx.ensure_object(dict)
+
+    # Store non-interactive flag in context for all commands to access
+    ctx.obj['non_interactive'] = non_interactive
+
+    # Also set environment variable for child processes and utility functions
+    if non_interactive:
+        import os
+        os.environ['DAF_NON_INTERACTIVE'] = '1'
 
     # Check and display mock mode warning if enabled
     _check_mock_mode()
@@ -305,8 +314,15 @@ def cli(ctx: click.Context) -> None:
 @click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
+@click.option("--create-branch/--no-create-branch", default=None, help="Control branch creation (default: prompt)")
+@click.option("--source-branch", help="Source branch to create new branch from (default: base branch)")
+@click.option("--on-branch-exists", type=click.Choice(['error', 'use-existing', 'add-suffix', 'skip'], case_sensitive=False), help="Action when branch already exists")
+@click.option("--allow-uncommitted", is_flag=True, help="Allow uncommitted changes when switching branches")
+@click.option("--sync-upstream/--no-sync-upstream", default=None, help="Sync with upstream before creating branch (default: prompt)")
+@click.option("--auto-workspace", is_flag=True, help="Auto-select workspace without prompting")
+@click.option("--session-index", type=int, help="Select existing session by index (for multi-session selection)")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str) -> None:
+def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, session_index: int) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -378,7 +394,27 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
     # Get output_json flag from context
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
 
-    create_new_session(name, goal, working_directory, path, branch, jira, template, workspace, projects, new_session, model_profile, output_json)
+    create_new_session(
+        name,
+        goal,
+        working_directory,
+        path,
+        branch,
+        jira,
+        template,
+        workspace,
+        projects,
+        new_session,
+        model_profile,
+        output_json,
+        create_branch=create_branch,
+        source_branch=source_branch,
+        on_branch_exists=on_branch_exists,
+        allow_uncommitted=allow_uncommitted,
+        sync_upstream=sync_upstream,
+        auto_workspace=auto_workspace,
+        session_index=session_index,
+    )
 
 
 @cli.command()
@@ -389,8 +425,15 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--new-conversation", is_flag=True, help="Create a new conversation (archive current and start fresh)")
 @click.option("--conversation-id", help="Resume a specific archived conversation by its UUID")
 @click.option("--model-profile", help="Model provider profile to use (overrides session default)")
+@click.option("--create-branch/--no-create-branch", default=None, help="Control branch creation when adding projects (default: prompt)")
+@click.option("--source-branch", help="Source branch for new branches when adding projects")
+@click.option("--on-branch-exists", type=click.Choice(['error', 'use-existing', 'add-suffix', 'skip'], case_sensitive=False), help="Action when branch exists when adding projects")
+@click.option("--allow-uncommitted", is_flag=True, help="Allow uncommitted changes when switching branches")
+@click.option("--sync-upstream/--no-sync-upstream", default=None, help="Sync with upstream when opening session (default: prompt)")
+@click.option("--auto-workspace", is_flag=True, help="Auto-select workspace without prompting")
+@click.option("--sync-strategy", type=click.Choice(['merge', 'rebase', 'skip'], case_sensitive=False), help="Strategy for syncing with upstream (merge/rebase/skip)")
 @json_option
-def open(ctx: click.Context, identifier: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str) -> None:
+def open(ctx: click.Context, identifier: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -443,6 +486,13 @@ def open(ctx: click.Context, identifier: str, path: str, workspace: str, project
         new_conversation=new_conversation,
         conversation_id=conversation_id,
         model_profile=model_profile,
+        create_branch=create_branch,
+        source_branch=source_branch,
+        on_branch_exists=on_branch_exists,
+        allow_uncommitted=allow_uncommitted,
+        sync_upstream=sync_upstream,
+        auto_workspace=auto_workspace,
+        sync_strategy=sync_strategy,
     )
 
 
@@ -1434,8 +1484,10 @@ jira.add_command(create_jira_update_command())
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
 @workspace_option()
+@click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
+@click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--affects-versions", help="Affected version for bugs (required for bug type)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, affects_versions: Optional[str]) -> None:
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str]) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1503,7 +1555,7 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
                 affects_versions = prompt_for_affected_version(field_mapper)
         # else: affects_versions stays None (field is optional for this issue type)
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions)
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone)
 
 
 @jira.command(name="open")
@@ -1687,8 +1739,10 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> N
 @click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
 @click.option("--parent", help="Parent issue key (owner/repo#123 or #123)")
 @workspace_option()
+@click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
+@click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, repository: Optional[str]) -> None:
+def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, projects: str, temp_clone: bool, repository: Optional[str]) -> None:
     """Create GitHub/GitLab issue with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1717,7 +1771,7 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository)
+    create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository, projects=projects, temp_clone=temp_clone)
 
 
 @git.command(name="check-auth")
@@ -1745,8 +1799,10 @@ def git_check_auth(ctx: click.Context, repository: Optional[str]) -> None:
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
 @workspace_option()
+@click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
+@click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
-def investigate(ctx: click.Context, goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, model_profile: str) -> None:
+def investigate(ctx: click.Context, goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1773,7 +1829,7 @@ def investigate(ctx: click.Context, goal: str, goal_file: str, parent: Optional[
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    create_investigation_session(goal, parent, name, path, workspace, model_profile)
+    create_investigation_session(goal, parent, name, path, workspace, model_profile, projects=projects, temp_clone=temp_clone)
 
 
 @cli.group()
