@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from devflow.archive.base import ArchiveManagerBase
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_home, get_claude_config_dir
 
 
 class BackupManager(ArchiveManagerBase):
@@ -175,7 +175,7 @@ class BackupManager(ArchiveManagerBase):
             conversations_dir = temp_dir / "conversations"
             if conversations_dir.exists():
                 # Find Claude's projects directory
-                claude_dir = Path.home() / ".claude" / "projects"
+                claude_dir = get_claude_config_dir() / "projects"
                 if not claude_dir.exists():
                     claude_dir.mkdir(parents=True)
 

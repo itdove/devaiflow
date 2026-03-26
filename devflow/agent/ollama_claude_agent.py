@@ -23,6 +23,7 @@ from typing import Optional, Set, List, Dict, Any
 
 from devflow.agent.interface import AgentInterface
 from devflow.utils.dependencies import require_tool
+from devflow.utils.paths import get_claude_config_dir
 
 
 class OllamaClaudeAgent(AgentInterface):
@@ -54,7 +55,7 @@ class OllamaClaudeAgent(AgentInterface):
         self.ollama_dir = ollama_dir
 
         # Claude Code sessions are stored in the same location regardless of launcher
-        self.claude_dir = Path.home() / ".claude"
+        self.claude_dir = get_claude_config_dir()
         self.projects_dir = self.claude_dir / "projects"
 
     def launch_session(

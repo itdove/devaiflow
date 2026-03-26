@@ -95,6 +95,44 @@ daf config show
 daf config show --json
 ```
 
+## Environment Variables
+
+DevAIFlow respects the following environment variables for customization:
+
+### DEVAIFLOW_HOME
+- **Purpose**: Customize where DevAIFlow stores session data and configuration
+- **Default**: `~/.daf-sessions`
+- **Usage**:
+  ```bash
+  export DEVAIFLOW_HOME="~/custom/devaiflow-data"
+  daf init
+  ```
+
+### CLAUDE_CONFIG_DIR
+- **Purpose**: Customize where Claude Code stores its configuration and data files
+- **Default**: `~/.claude`
+- **Official Variable**: This is an official Claude Code environment variable
+- **Use Cases**:
+  - Testing with multiple Claude Code configurations
+  - Custom storage locations for skills and session data
+  - Enterprise deployments with specific directory requirements
+- **Impact**: When set, DevAIFlow will:
+  - Install skills to `$CLAUDE_CONFIG_DIR/skills/` instead of `~/.claude/skills/`
+  - Look for Claude Code sessions in `$CLAUDE_CONFIG_DIR/projects/`
+  - Use `$CLAUDE_CONFIG_DIR` for all Claude Code-related operations
+- **Example**:
+  ```bash
+  export CLAUDE_CONFIG_DIR="~/.config/claude"
+  daf upgrade  # Skills install to $CLAUDE_CONFIG_DIR/skills/
+  daf open PROJ-123  # Session files in $CLAUDE_CONFIG_DIR/projects/
+  ```
+- **Documentation**: https://code.claude.com/docs/en/env-vars
+
+### JIRA_AUTH_TYPE, JIRA_API_TOKEN, JIRA_URL
+- **Purpose**: Authenticate with JIRA instance
+- **Required for**: JIRA integration
+- **See**: JIRA configuration section below
+
 ## Configuration File
 
 Location: `$DEVAIFLOW_HOME/config.json`

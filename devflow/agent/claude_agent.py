@@ -12,6 +12,7 @@ from typing import Optional, Set, Dict, List, Any
 
 from devflow.agent.interface import AgentInterface
 from devflow.utils.dependencies import require_tool
+from devflow.utils.paths import get_claude_config_dir
 
 
 class ClaudeAgent(AgentInterface):
@@ -28,10 +29,10 @@ class ClaudeAgent(AgentInterface):
         """Initialize Claude agent.
 
         Args:
-            claude_dir: Claude Code directory. Defaults to ~/.claude
+            claude_dir: Claude Code directory. Defaults to ~/.claude or $CLAUDE_CONFIG_DIR
         """
         if claude_dir is None:
-            claude_dir = Path.home() / ".claude"
+            claude_dir = get_claude_config_dir()
         self.claude_dir = claude_dir
         self.projects_dir = claude_dir / "projects"
 
@@ -430,8 +431,9 @@ class ClaudeAgent(AgentInterface):
         """
         skills_dirs = []
 
-        # 1. User-level skills: ~/.claude/skills/
-        user_skills = Path.home() / ".claude" / "skills"
+        # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/)
+        claude_config = get_claude_config_dir()
+        user_skills = claude_config / "skills"
         if user_skills.exists():
             skills_dirs.append(str(user_skills))
 
