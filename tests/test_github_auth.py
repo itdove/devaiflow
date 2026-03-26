@@ -235,7 +235,9 @@ class TestHandleAuthError:
 
     def test_not_authenticated_interactive(self, monkeypatch, capsys):
         """Test error message for not authenticated in interactive mode."""
-        monkeypatch.delenv('CI', raising=False)
+        # Clear all CI-related environment variables
+        for var in ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'CIRCLECI', 'TRAVIS']:
+            monkeypatch.delenv(var, raising=False)
         monkeypatch.delenv('DAF_NO_PROMPT', raising=False)
 
         with patch.object(sys.stdin, 'isatty', return_value=True):
@@ -262,7 +264,9 @@ class TestHandleAuthError:
 
     def test_fine_grained_required(self, monkeypatch, capsys):
         """Test error message for fine-grained token requirement."""
-        monkeypatch.delenv('CI', raising=False)
+        # Clear all CI-related environment variables
+        for var in ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'CIRCLECI', 'TRAVIS']:
+            monkeypatch.delenv(var, raising=False)
 
         with patch.object(sys.stdin, 'isatty', return_value=True):
             with pytest.raises(IssueTrackerAuthError):
@@ -275,7 +279,9 @@ class TestHandleAuthError:
 
     def test_not_found(self, monkeypatch, capsys):
         """Test error message for not found."""
-        monkeypatch.delenv('CI', raising=False)
+        # Clear all CI-related environment variables
+        for var in ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'CIRCLECI', 'TRAVIS']:
+            monkeypatch.delenv(var, raising=False)
 
         with patch.object(sys.stdin, 'isatty', return_value=True):
             with pytest.raises(IssueTrackerAuthError):
@@ -287,7 +293,9 @@ class TestHandleAuthError:
 
     def test_insufficient_permissions(self, monkeypatch, capsys):
         """Test error message for insufficient permissions."""
-        monkeypatch.delenv('CI', raising=False)
+        # Clear all CI-related environment variables
+        for var in ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'CIRCLECI', 'TRAVIS']:
+            monkeypatch.delenv(var, raising=False)
 
         with patch.object(sys.stdin, 'isatty', return_value=True):
             with pytest.raises(IssueTrackerAuthError):
@@ -299,7 +307,9 @@ class TestHandleAuthError:
 
     def test_unknown_error(self, monkeypatch, capsys):
         """Test error message for unknown error."""
-        monkeypatch.delenv('CI', raising=False)
+        # Clear all CI-related environment variables
+        for var in ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'CIRCLECI', 'TRAVIS']:
+            monkeypatch.delenv(var, raising=False)
 
         with patch.object(sys.stdin, 'isatty', return_value=True):
             with pytest.raises(IssueTrackerAuthError):
