@@ -72,8 +72,9 @@ class TestSplitConfigValidation:
         backends_dir = temp_config_dir / "backends"
         backends_dir.mkdir(parents=True, exist_ok=True)
 
+        # Use a REAL JIRA URL (not placeholder) to test actual configuration
         backend_data = {
-            "url": "https://jira.example.com",
+            "url": "https://issues.redhat.com",
             "user": "",
             "transitions": {}
         }

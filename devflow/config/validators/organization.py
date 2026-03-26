@@ -29,13 +29,23 @@ class OrganizationConfigValidator(BaseConfigValidator):
         """
         issues = []
 
-        # Check if JIRA backend is configured by looking for backends/jira.json
+        # Check if JIRA backend is ACTUALLY configured (not just placeholder)
         jira_backend_configured = False
         if self.config_dir:
             jira_backend_file = self.config_dir / "backends" / "jira.json"
-            jira_backend_configured = jira_backend_file.exists()
+            if jira_backend_file.exists():
+                try:
+                    import json
+                    with open(jira_backend_file, "r") as f:
+                        jira_data = json.load(f)
+                        jira_url = jira_data.get("url", "")
+                        # Only consider JIRA configured if URL is set and NOT a placeholder
+                        if jira_url and "example.com" not in jira_url:
+                            jira_backend_configured = True
+                except Exception:
+                    pass
 
-        # Check for null jira_project (only if JIRA backend is configured)
+        # Check for null jira_project (only if JIRA backend has a real URL configured)
         jira_project = data.get("jira_project")
         if jira_backend_configured and not jira_project:
             issues.append(
