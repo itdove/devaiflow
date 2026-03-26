@@ -49,6 +49,51 @@ class SessionSummary(BaseModel):
     tool_call_stats: Dict[str, int] = {}
     todo_history: Optional[TodoHistory] = None
 
+    # Token usage statistics (Claude Code only)
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_cache_creation_tokens: int = 0
+    total_cache_read_tokens: int = 0
+    total_messages_with_usage: int = 0
+
+    @property
+    def total_tokens(self) -> int:
+        """Calculate total tokens (input + output)."""
+        return self.total_input_tokens + self.total_output_tokens
+
+    def estimate_cost(
+        self,
+        input_cost_per_million: float,
+        output_cost_per_million: float,
+        cache_write_cost_multiplier: float = 1.25,
+        cache_read_cost_multiplier: float = 0.1,
+    ) -> float:
+        """Estimate API cost based on token usage.
+
+        Args:
+            input_cost_per_million: Cost per 1M input tokens (USD)
+            output_cost_per_million: Cost per 1M output tokens (USD)
+            cache_write_cost_multiplier: Multiplier for cache creation cost (default 1.25x input cost)
+            cache_read_cost_multiplier: Multiplier for cache read cost (default 0.1x input cost, 90% savings)
+
+        Returns:
+            Estimated cost in USD
+
+        Example:
+            >>> summary.estimate_cost(3.0, 15.0)  # Claude Sonnet pricing
+            12.45  # USD
+        """
+        # Regular input/output costs
+        input_cost = (self.total_input_tokens / 1_000_000) * input_cost_per_million
+        output_cost = (self.total_output_tokens / 1_000_000) * output_cost_per_million
+
+        # Cache costs (cache writes cost 1.25x, cache reads cost 0.1x)
+        cache_write_cost = (self.total_cache_creation_tokens / 1_000_000) * input_cost_per_million * cache_write_cost_multiplier
+        cache_read_cost = (self.total_cache_read_tokens / 1_000_000) * input_cost_per_million * cache_read_cost_multiplier
+
+        total_cost = input_cost + output_cost + cache_write_cost + cache_read_cost
+        return round(total_cost, 4)
+
 
 def parse_conversation_jsonl(jsonl_path: Path) -> List[Dict]:
     """Parse .jsonl conversation file.
@@ -626,11 +671,12 @@ Focus on what was built, fixed, or changed - not just statistics. Be specific an
         return None
 
 
-def generate_session_summary(session: Session) -> SessionSummary:
+def generate_session_summary(session: Session, agent_client = None) -> SessionSummary:
     """Parse .jsonl conversation file and extract summary information.
 
     Args:
         session: Session object
+        agent_client: Agent client instance for token extraction (optional)
 
     Returns:
         SessionSummary with extracted information
@@ -667,5 +713,20 @@ def generate_session_summary(session: Session) -> SessionSummary:
 
     # Calculate tool stats
     summary.tool_call_stats = calculate_tool_call_stats(tool_calls)
+
+    # Extract token usage if agent client is provided
+    if agent_client:
+        active_conv = session.active_conversation
+        if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
+            token_usage = agent_client.extract_token_usage(
+                active_conv.ai_agent_session_id,
+                active_conv.project_path
+            )
+            if token_usage:
+                summary.total_input_tokens = token_usage.get("input_tokens", 0)
+                summary.total_output_tokens = token_usage.get("output_tokens", 0)
+                summary.total_cache_creation_tokens = token_usage.get("cache_creation_input_tokens", 0)
+                summary.total_cache_read_tokens = token_usage.get("cache_read_input_tokens", 0)
+                summary.total_messages_with_usage = token_usage.get("message_count", 0)
 
     return summary

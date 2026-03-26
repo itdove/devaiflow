@@ -186,6 +186,12 @@ def test_format_statistics(sample_session, mock_config_loader):
         mock_summary_obj.files_created = ["file1.py", "file2.py"]
         mock_summary_obj.files_modified = ["file3.py"]
         mock_summary_obj.commands_run = [MagicMock(), MagicMock(), MagicMock()]
+        # Add token fields with default values
+        mock_summary_obj.total_tokens = 0
+        mock_summary_obj.total_input_tokens = 0
+        mock_summary_obj.total_output_tokens = 0
+        mock_summary_obj.total_cache_creation_tokens = 0
+        mock_summary_obj.total_cache_read_tokens = 0
         mock_summary.return_value = mock_summary_obj
 
         exporter = MarkdownExporter(mock_config_loader)
@@ -252,6 +258,11 @@ def test_export_session_to_markdown_basic(sample_session, mock_config_loader):
             commands_run=[],
             last_assistant_message=None,
             tool_call_stats={},
+            total_tokens=0,
+            total_input_tokens=0,
+            total_output_tokens=0,
+            total_cache_creation_tokens=0,
+            total_cache_read_tokens=0,
         )
 
         exporter = MarkdownExporter(mock_config_loader)
@@ -292,6 +303,11 @@ def test_export_session_to_markdown_with_notes(sample_session, mock_config_loade
             commands_run=[],
             last_assistant_message=None,
             tool_call_stats={},
+            total_tokens=0,
+            total_input_tokens=0,
+            total_output_tokens=0,
+            total_cache_creation_tokens=0,
+            total_cache_read_tokens=0,
         )
 
         exporter = MarkdownExporter(mock_config_loader)
@@ -315,6 +331,11 @@ def test_export_sessions_to_markdown_separate_files(sample_session, mock_config_
             commands_run=[],
             last_assistant_message=None,
             tool_call_stats={},
+            total_tokens=0,
+            total_input_tokens=0,
+            total_output_tokens=0,
+            total_cache_creation_tokens=0,
+            total_cache_read_tokens=0,
         )
 
         exporter = MarkdownExporter(mock_config_loader)
@@ -347,6 +368,11 @@ def test_export_sessions_to_markdown_combined(sample_session, mock_config_loader
             commands_run=[],
             last_assistant_message=None,
             tool_call_stats={},
+            total_tokens=0,
+            total_input_tokens=0,
+            total_output_tokens=0,
+            total_cache_creation_tokens=0,
+            total_cache_read_tokens=0,
         )
 
         exporter = MarkdownExporter(mock_config_loader)

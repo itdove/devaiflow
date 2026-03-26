@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Token usage tracking for AI agent sessions** (#259)
+  - Extract token statistics from Claude Code conversation files (.jsonl format)
+  - Display token counts in `daf info`, `daf active`, and `daf list` commands
+  - Show detailed token breakdown: input tokens, output tokens, cache creation, cache reads
+  - Calculate cache efficiency percentage (cache reads / total cacheable tokens)
+  - Estimate session cost based on model pricing (when configured in model provider profile)
+  - Include token usage in markdown exports via `daf export`
+  - Abstract `extract_token_usage()` method in `AgentInterface` for multi-agent support
+  - Full implementation for Claude Code agent (parses .jsonl conversation files)
+  - Stub implementations for other agents (GitHub Copilot, Cursor, Windsurf, Aider, Continue, Ollama, Crush)
+  - Token display automatically hidden when agent backend doesn't support tracking
+  - `daf list` shows tokens with K/M suffixes for readability (e.g., "1.2M", "850K")
+  - Comprehensive cost estimation: `SessionSummary.estimate_cost()` with cache multipliers
 - **Ollama integration for local model support** (#241)
   - Native `OllamaClaudeAgent` backend using `ollama launch claude` command
   - Zero configuration required - works out of the box with Ollama

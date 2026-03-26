@@ -1,14 +1,38 @@
 """Implementation of 'daf active' command."""
 
 from datetime import datetime
+from typing import Dict, Any, Optional
 from rich.console import Console
 from rich.panel import Panel
 
+from devflow.agent import create_agent_client
 from devflow.cli.utils import get_active_conversation, output_json as json_output, serialize_session
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 
 console = Console()
+
+
+def _get_token_usage(
+    session_id: str,
+    project_path: str,
+    agent_backend: str
+) -> Optional[Dict[str, Any]]:
+    """Get token usage statistics for a conversation.
+
+    Args:
+        session_id: AI agent session ID
+        project_path: Project path
+        agent_backend: Agent backend name
+
+    Returns:
+        Token usage dict or None if not available
+    """
+    try:
+        agent = create_agent_client(agent_backend)
+        return agent.extract_token_usage(session_id, project_path)
+    except Exception:
+        return None
 
 
 def show_active(output_json: bool = False) -> None:
@@ -82,6 +106,16 @@ def show_active(output_json: bool = False) -> None:
                         "ai_agent_session_id": active.ai_agent_session_id
                     })
 
+        # Get token usage if available
+        token_usage = None
+        if conversation.project_path and conversation.ai_agent_session_id:
+            agent_backend = config.agent_backend if config else "claude"
+            token_usage = _get_token_usage(
+                conversation.ai_agent_session_id,
+                conversation.project_path,
+                agent_backend
+            )
+
         # Build active conversation data
         active_data = {
             "session_name": session.name,
@@ -94,7 +128,8 @@ def show_active(output_json: bool = False) -> None:
             "current_work_time_hours": hours,
             "current_work_time_minutes": minutes,
             "time_tracking_state": session.time_tracking_state,
-            "other_conversations": other_conversations
+            "other_conversations": other_conversations,
+            "token_usage": token_usage
         }
 
         # Add multi-project or single-project specific fields
@@ -123,6 +158,16 @@ def show_active(output_json: bool = False) -> None:
         return
 
     # Rich formatted output
+    # Get token usage for display
+    token_usage_display = None
+    if conversation.project_path and conversation.ai_agent_session_id:
+        agent_backend = config.agent_backend if config else "claude"
+        token_usage_display = _get_token_usage(
+            conversation.ai_agent_session_id,
+            conversation.project_path,
+            agent_backend
+        )
+
     # Build the active conversation display
     lines = [
         f"[bold]DAF Session:[/bold] {session.name}",
@@ -139,6 +184,12 @@ def show_active(output_json: bool = False) -> None:
         lines.append(f"[bold]Goal:[/bold] {session.goal or 'N/A'}")
         lines.append(f"[bold]Time (this work session):[/bold] {current_work_time}")
         lines.append(f"[bold]Status:[/bold] {session.status}")
+
+        # Add token usage if available
+        if token_usage_display:
+            total_tokens = token_usage_display["total_tokens"]
+            lines.append(f"[bold]Tokens:[/bold] {total_tokens:,}")
+
         lines.append("")
         lines.append(f"[bold]Projects in this session:[/bold]")
         for proj_name, proj_info in conversation.projects.items():
@@ -152,6 +203,11 @@ def show_active(output_json: bool = False) -> None:
         lines.append(f"[bold]Branch:[/bold] {conversation.branch}")
         lines.append(f"[bold]Time (this work session):[/bold] {current_work_time}")
         lines.append(f"[bold]Status:[/bold] {session.status}")
+
+        # Add token usage if available
+        if token_usage_display:
+            total_tokens = token_usage_display["total_tokens"]
+            lines.append(f"[bold]Tokens:[/bold] {total_tokens:,}")
 
         # Show other conversations if this session has multiple conversations
         if len(session.conversations) > 1:

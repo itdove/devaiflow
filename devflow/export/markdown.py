@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from devflow.agent import create_agent_client
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
 from devflow.session.summary import find_conversation_file, generate_session_summary, generate_prose_summary
@@ -396,14 +397,56 @@ class MarkdownExporter:
             tags_str = ", ".join(session.tags)
             lines.append(f"- **Tags:** {tags_str}")
 
-        # Generate session summary to get file/command stats
-        summary = generate_session_summary(session)
+        # Generate session summary to get file/command stats and token usage
+        # Get agent client if conversation exists
+        agent_client = None
+        if active_conv:
+            try:
+                # Get agent backend from config
+                config = self.config_loader.load_config()
+                agent_backend = config.agent_backend or "claude"
+                agent_client = create_agent_client(agent_backend)
+            except Exception:
+                pass  # Ignore errors creating agent client
+
+        summary = generate_session_summary(session, agent_client=agent_client)
+
         if summary.files_created:
             lines.append(f"- **Files Created:** {len(summary.files_created)}")
         if summary.files_modified:
             lines.append(f"- **Files Modified:** {len(summary.files_modified)}")
         if summary.commands_run:
             lines.append(f"- **Commands Run:** {len(summary.commands_run)}")
+
+        # Token usage (if available)
+        if summary.total_tokens > 0:
+            lines.append(f"- **Total Tokens:** {summary.total_tokens:,}")
+            lines.append(f"  - Input: {summary.total_input_tokens:,}")
+            lines.append(f"  - Output: {summary.total_output_tokens:,}")
+
+            # Cache statistics (if cache was used)
+            if summary.total_cache_creation_tokens > 0 or summary.total_cache_read_tokens > 0:
+                lines.append(f"  - Cache Creation: {summary.total_cache_creation_tokens:,}")
+                lines.append(f"  - Cache Reads: {summary.total_cache_read_tokens:,}")
+
+                # Cache efficiency
+                total_cacheable = summary.total_cache_creation_tokens + summary.total_cache_read_tokens
+                if total_cacheable > 0:
+                    cache_efficiency = (summary.total_cache_read_tokens / total_cacheable) * 100
+                    lines.append(f"  - Cache Efficiency: {cache_efficiency:.1f}%")
+
+            # Estimated cost (if model provider profile configured)
+            if active_conv and active_conv.model_provider_profile:
+                profile = active_conv.model_provider_profile
+                input_cost = profile.get("cost_per_million_input_tokens")
+                output_cost = profile.get("cost_per_million_output_tokens")
+
+                if input_cost is not None and output_cost is not None:
+                    estimated_cost = summary.estimate_cost(
+                        input_cost_per_million=input_cost,
+                        output_cost_per_million=output_cost,
+                    )
+                    lines.append(f"  - Estimated Cost: ${estimated_cost:.4f}")
 
         return "\n".join(lines)
 
