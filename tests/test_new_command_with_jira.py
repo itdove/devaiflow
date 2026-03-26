@@ -206,14 +206,13 @@ def test_daf_new_goal_without_jira(temp_daf_home):
     assert session.issue_key is None
 
 
-def test_daf_new_sets_status_paused_after_claude_exits(temp_daf_home, monkeypatch):
+def test_daf_new_sets_status_paused_after_claude_exits(temp_daf_home, clean_ci_env, monkeypatch):
     """Test that session status is set to 'paused' after Claude Code exits (PROJ-60431)."""
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
 
-    # Ensure DAF_MOCK_MODE is not set (could be set in CI/CD)
+    # clean_ci_env fixture clears all CI environment variables
     # This ensures the "Launch Claude Code?" prompt is shown
-    monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
 
     # Mock subprocess.run to prevent actual Claude Code launch
     def mock_subprocess_run(cmd, *args, **kwargs):
