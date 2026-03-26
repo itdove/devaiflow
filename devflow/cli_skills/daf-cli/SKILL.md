@@ -111,7 +111,7 @@ daf git add-comment 123 "Work in progress"
 **Session lifecycle** (run from regular terminal):
 - `daf new`, `daf open`, `daf complete`, `daf delete`
 - `daf update`, `daf sync`, `daf link`, `daf unlink`
-- `daf jira new` (creates new sessions)
+- `daf jira new`, `daf git new` (creates new sessions)
 
 **Data operations** (run from regular terminal):
 - `daf export`, `daf import`, `daf backup`, `daf restore`
