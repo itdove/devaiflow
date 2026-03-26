@@ -851,13 +851,23 @@ def check_concurrent_session(
         active_conv = active_session.active_conversation
         if active_conv and active_conv.branch:
             console.print(f"[yellow]Branch:[/yellow] {active_conv.branch}")
-        console.print(f"\n[cyan]To resolve this:[/cyan]")
-        console.print(f"  1. Resume the active session: [bold]daf open {active_session.name}[/bold]")
-        console.print(f"  2. Complete it: [bold]daf complete {active_session.name}[/bold]")
-        console.print(f"  3. Or pause it manually (exit Claude Code if running)")
-        if not workspace_name:
-            console.print(f"  4. Or use a different workspace: [bold]daf {action} --workspace <other-workspace>[/bold]")
-        console.print(f"\n[dim]This prevents branch switching conflicts and mixed changes within a workspace.[/dim]")
+
+        console.print(f"\n[cyan]Why this restriction exists:[/cyan]")
+        console.print(f"  • Prevents branch switching conflicts")
+        console.print(f"  • Avoids losing uncommitted work")
+        console.print(f"  • Prevents git state corruption")
+        console.print(f"  • Reduces confusion about which session is active")
+        console.print(f"  • Avoids time tracking conflicts")
+
+        console.print(f"\n[cyan]To work on this project with a different approach:[/cyan]")
+        console.print(f"  1. Use a different workspace (recommended):")
+        console.print(f"     [bold]daf {action} --workspace <other-workspace> --path /path/to/repo[/bold]")
+        console.print(f"\n  2. Or complete the active session first:")
+        console.print(f"     [bold]daf complete {active_session.name}[/bold]")
+        console.print(f"\n  3. Or resume the existing session:")
+        console.print(f"     [bold]daf open {active_session.name}[/bold]")
+
+        console.print(f"\n[dim]Learn more: docs/guides/session-management.md#concurrent-sessions-faq[/dim]")
         return False
 
     return True

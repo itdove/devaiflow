@@ -269,6 +269,54 @@ EOF
 
 ## Session Issues
 
+### Error: Cannot create session - another session is already active
+
+**Problem:** You're trying to create a second session in the same repository within the same workspace.
+
+**Example Error:**
+```
+Error: Cannot create session - another session is already active in this project
+
+Active session: feature-work
+Workspace: primary
+Branch: feature/PROJ-123
+
+Why this restriction exists:
+  • Prevents branch switching conflicts
+  • Avoids losing uncommitted work
+  • Prevents git state corruption
+  • Reduces confusion about which session is active
+  • Avoids time tracking conflicts
+```
+
+**Cause:** DevAIFlow prevents concurrent sessions in the same repository to avoid:
+- Branch switching conflicts
+- Uncommitted work being lost
+- Git state corruption
+- User confusion about which session is active
+
+**Solutions:**
+
+**Option 1: Use a different workspace (recommended)**
+```bash
+daf workspace add experiments ~/experiments
+daf new PROJ-456 -w experiments --path ~/experiments/myproject
+```
+
+**Option 2: Complete the active session first**
+```bash
+daf list --active  # See which session is active
+daf complete session-name
+daf new PROJ-456 --path /path/to/repo
+```
+
+**Option 3: Resume the existing session**
+```bash
+daf open session-name
+```
+
+See [Concurrent Sessions FAQ](session-management.md#concurrent-sessions-faq) for more details.
+
 ### Session Won't Open - "No conversation found"
 
 **Problem:** Running `daf open` shows "No conversation found with session ID: ..."
