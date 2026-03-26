@@ -869,7 +869,8 @@ def open_session(
                         model_provider_profile=model_provider_profile,
                         skills_dirs=None,  # Will be auto-discovered
                         workspace_path=workspace_path_for_cmd,
-                        config=config
+                        config=config,
+                        env=env
                     )
                     process.wait()
             finally:

@@ -13,6 +13,7 @@ DevAIFlow supports multiple AI coding assistants through a pluggable agent archi
 | **Windsurf** | `windsurf` | ⚠️  Experimental | `windsurf` | Limited | ✅ Experimental |
 | **Aider** | `aider` | ⚠️  Experimental | `aider` | Limited | ✅ Experimental |
 | **Continue** | `continue` | ⚠️  Experimental | `continue` (VS Code ext) | Limited | ✅ Experimental |
+| **Crush** | `crush`, `opencode` | ⚠️  Experimental | `crush` | Limited | ✅ Experimental |
 
 ## Configuration
 
@@ -27,10 +28,11 @@ daf config set agent_backend cursor
 daf config set agent_backend windsurf
 daf config set agent_backend aider
 daf config set agent_backend continue
+daf config set agent_backend crush
 
 # Or manually edit $DEVAIFLOW_HOME/config.json
 {
-  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue"
+  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush"
   "ollama": {
     "default_model": "qwen3-coder"  // optional, only for ollama backend
   }
@@ -70,8 +72,9 @@ Each agent has its own skills directory where DevAIFlow installs bundled skills:
 | **Windsurf** | `~/.codeium/windsurf/skills/` | `<project>/.windsurf/skills/` | _(none)_ |
 | **Aider** | `~/.aider/skills/` | `<project>/.aider/skills/` | _(none)_ |
 | **Continue** | `~/.continue/skills/` | `<project>/.continue/skills/` | _(none)_ |
+| **Crush** | `~/.local/share/crush/skills/` | `<project>/.crush/skills/` | `$XDG_DATA_HOME` |
 
-**Note:** Claude Code and GitHub Copilot support environment variables to override the default config directory.
+**Note:** Claude Code, GitHub Copilot, and Crush support environment variables to override the default config/data directory.
 
 ### Installation Levels
 
@@ -455,15 +458,118 @@ windsurf <project-path>  # Launch/resume Windsurf
 
 ---
 
+### Crush (Experimental)
+
+**Backend:** `crush` or `opencode`
+
+**Features:**
+- ✅ Launch Crush TUI-based agent
+- ⚠️  SQLite-based session storage
+- ⚠️  UUID session IDs (stored in database)
+- ⚠️  Multi-model support (OpenAI, Anthropic, Gemini, Groq, AWS Bedrock, Azure)
+- ⚠️  LSP integration for code-aware context
+- ⚠️  MCP plugin extensibility
+- ❌ No CLI-based prompt passing
+- ❌ Limited conversation export (database format)
+
+**CLI Commands:**
+```bash
+crush                    # Launch new session
+crush --session <uuid>   # Resume specific session
+crush --continue         # Resume last session
+crush session list       # List all sessions
+```
+
+**Session Storage:**
+- Location: `~/.local/share/crush/crush.db` (SQLite database)
+- Format: SQLite database with sessions, messages, and metadata tables
+- Can be overridden with `--data-dir` flag
+
+**Environment Variables:**
+- `XDG_DATA_HOME` - Override data directory location (Linux/Unix)
+- `CRUSH_DISABLE_METRICS` or `DO_NOT_TRACK` - Disable metrics collection
+- `CRUSH_PROFILE` - Enable pprof profiling server
+- `CRUSH_` prefix - General environment variable convention
+
+**Configuration:**
+- Global: `~/.config/crush/crush.json`
+- Project: `.crush.json` in project root
+- Data directory contains: `crush.db`, `.gitignore`, `crush.json`
+
+**AI-Powered Summaries:**
+- ❌ Not supported (SQLite database format, not JSONL)
+- Auto-downgrades to "local" mode (git-based summaries)
+- Uses git diff and manual notes instead of AI analysis
+
+**Known Limitations:**
+- Crush stores all data in SQLite database, not individual conversation files
+- Session ID detection requires database polling (slower than file-based)
+- No native support for passing initial prompts via CLI (must enter interactively in TUI)
+- Conversation export would require custom SQLite query logic
+- Message counting requires database queries
+- Resume always opens TUI (no headless mode)
+
+**Advantages:**
+- ✅ Beautiful terminal UI built with Bubble Tea
+- ✅ Multi-model support (switch between providers)
+- ✅ LSP integration for code-aware AI assistance
+- ✅ MCP plugin system for extensibility
+- ✅ Session management with branching/merging support
+- ✅ Cross-platform (macOS, Linux, Windows, FreeBSD)
+
+**Installation:**
+```bash
+# Homebrew (macOS/Linux)
+brew install crush
+
+# NPM
+npm install -g @charmbracelet/crush
+
+# Arch Linux
+yay -S crush
+
+# Winget (Windows)
+winget install Charm.Crush
+
+# Or download from: https://github.com/charmbracelet/crush
+```
+
+**Recommended Use Cases:**
+- Teams wanting a beautiful TUI coding assistant
+- Multi-model workflows (switching between OpenAI/Anthropic/Gemini)
+- Developers who prefer terminal-based tools
+- Projects benefiting from LSP integration
+- Teams extending functionality with MCP plugins
+
+**Not Recommended For:**
+- Conversation history export requirements
+- AI-powered session summaries
+- Automated session ID capture workflows
+- Headless/scriptable AI workflows
+
+**History:**
+Crush (formerly OpenCode) was created by Kujtim and later acquired by Charmbracelet. It continues to be actively developed and maintained by the Charm team.
+
+**External Resources:**
+- [GitHub](https://github.com/charmbracelet/crush)
+- [Charm Blog Announcement](https://charm.land/blog/crush-comes-home/)
+- [The New Stack Review](https://thenewstack.io/terminal-user-interfaces-review-of-crush-ex-opencode-al/)
+
+---
+
 ## Testing Status
 
 ⚠️  **IMPORTANT**: Only Claude Code has been fully tested with comprehensive integration tests and real-world usage. Other agents are experimental implementations based on their documented CLI interfaces.
 
 **Testing Coverage:**
 - **Claude Code**: ✅ Unit tests, integration tests, production usage
+- **Ollama**: ✅ Unit tests, integration tests, production usage
 - **GitHub Copilot**: ⚠️  Unit tests only, no real-world testing
 - **Cursor**: ⚠️  Unit tests only, no real-world testing
 - **Windsurf**: ⚠️  Unit tests only, no real-world testing
+- **Aider**: ⚠️  Unit tests only, no real-world testing
+- **Continue**: ⚠️  Unit tests only, no real-world testing
+- **Crush**: ⚠️  Unit tests only, no real-world testing
 
 **Test Results:**
 - All 2039 unit tests pass (3 skipped)
@@ -507,6 +613,14 @@ windsurf <project-path>  # Launch/resume Windsurf
 - You leverage Cascade agentic workflows
 - Session management for JIRA integration
 - Conversation export not needed
+
+**Use Crush when:**
+- You want a beautiful TUI-based AI assistant
+- Multi-model flexibility is important (easy switching between providers)
+- You prefer terminal-based tools over IDE extensions
+- LSP integration and code-aware context are priorities
+- You want MCP plugin extensibility
+- Session tracking is more important than conversation export
 
 ## Migration Between Agents
 

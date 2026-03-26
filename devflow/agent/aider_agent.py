@@ -63,11 +63,12 @@ class AiderAgent(AgentInterface):
         self.aider_dir.mkdir(parents=True, exist_ok=True)
         self.chat_history_dir.mkdir(parents=True, exist_ok=True)
 
-    def launch_session(self, project_path: str) -> subprocess.Popen:
+    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Launch Aider in a project directory.
 
         Args:
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Aider process
@@ -82,6 +83,7 @@ class AiderAgent(AgentInterface):
         return subprocess.Popen(
             ["aider"],
             cwd=project_path,
+            env=env,
             # Aider needs terminal interaction
         )
 
@@ -94,6 +96,7 @@ class AiderAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch Aider with initial prompt.
 
@@ -109,6 +112,7 @@ class AiderAgent(AgentInterface):
             skills_dirs: Skills directories (ignored - Aider doesn't support)
             workspace_path: Workspace path (ignored)
             config: Configuration object (ignored)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Aider process
@@ -138,10 +142,11 @@ class AiderAgent(AgentInterface):
         return subprocess.Popen(
             cmd,
             cwd=project_path,
+            env=env,
             # Aider needs terminal interaction
         )
 
-    def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
+    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Resume an Aider session.
 
         Aider sessions are resumed by loading the chat history file.
@@ -149,6 +154,7 @@ class AiderAgent(AgentInterface):
         Args:
             session_id: Session identifier
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Aider process
@@ -168,6 +174,7 @@ class AiderAgent(AgentInterface):
         return subprocess.Popen(
             cmd,
             cwd=project_path,
+            env=env,
             # Aider needs terminal interaction
         )
 

@@ -51,11 +51,12 @@ class CursorAgent(AgentInterface):
         self.cursor_dir = cursor_dir
         self.workspace_storage = cursor_dir / "User" / "workspaceStorage"
 
-    def launch_session(self, project_path: str) -> subprocess.Popen:
+    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Launch Cursor in a project directory.
 
         Args:
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Cursor process
@@ -70,6 +71,7 @@ class CursorAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def launch_with_prompt(
@@ -81,6 +83,7 @@ class CursorAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch Cursor editor.
 
@@ -96,6 +99,7 @@ class CursorAgent(AgentInterface):
             skills_dirs: Skills directories (ignored)
             workspace_path: Workspace path (ignored)
             config: Configuration object (ignored)
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Cursor process
@@ -105,9 +109,9 @@ class CursorAgent(AgentInterface):
         """
         # Cursor doesn't support CLI-based prompts or session IDs
         # Just launch Cursor and let the user interact with AI Chat manually
-        return self.launch_session(project_path)
+        return self.launch_session(project_path, env=env)
 
-    def resume_session(self, session_id: str, project_path: str) -> subprocess.Popen:
+    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
         """Resume Cursor in a project directory.
 
         Cursor automatically restores the previous workspace state including
@@ -116,6 +120,7 @@ class CursorAgent(AgentInterface):
         Args:
             session_id: Session identifier (used for tracking, Cursor manages state)
             project_path: Absolute path to project
+            env: Environment variables dict (optional, defaults to os.environ)
 
         Returns:
             Subprocess handle for Cursor process
@@ -131,6 +136,7 @@ class CursorAgent(AgentInterface):
             cwd=project_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def capture_session_id(

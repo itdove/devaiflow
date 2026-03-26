@@ -605,7 +605,8 @@ def create_jira_ticket_session(
             model_provider_profile=model_profile,
             skills_dirs=None,  # Will be auto-discovered
             workspace_path=workspace_path_for_skills,
-            config=config
+            config=config,
+            env=env
         )
         # Wait for the agent process to complete
         process.wait()

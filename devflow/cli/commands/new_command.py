@@ -965,7 +965,8 @@ def create_new_session(
                 model_provider_profile=model_profile,
                 skills_dirs=None,  # Will be auto-discovered
                 workspace_path=workspace_path,
-                config=config
+                config=config,
+                env=env
             )
             # Wait for the agent process to complete
             process.wait()

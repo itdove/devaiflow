@@ -11,6 +11,7 @@ Supported Agents:
 - Windsurf (experimental)
 - Aider (experimental)
 - Continue (experimental)
+- Crush (experimental)
 
 Note: Only Claude Code and Ollama have been fully tested. Other agents are experimental implementations
 that may have limitations in session management, conversation export, and message counting.
@@ -24,6 +25,7 @@ from devflow.agent.cursor_agent import CursorAgent
 from devflow.agent.windsurf_agent import WindsurfAgent
 from devflow.agent.aider_agent import AiderAgent
 from devflow.agent.continue_agent import ContinueAgent
+from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.factory import create_agent_client
 
 __all__ = [
@@ -35,5 +37,6 @@ __all__ = [
     "WindsurfAgent",
     "AiderAgent",
     "ContinueAgent",
+    "CrushAgent",
     "create_agent_client",
 ]

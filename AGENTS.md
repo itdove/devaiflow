@@ -251,7 +251,7 @@ For complete documentation, refer to DAF_AGENTS.md.
 - Release: `daf release --dry-run`, `daf release --suggest`, `daf release <M.m.p> approve --dry-run` (read-only modes)
 
 **Implementation**:
-All blocked commands use the `@require_outside_claude` decorator from `devflow/cli/utils.py`. This decorator checks for the `DEVAIFLOW_IN_SESSION` environment variable and provides a clear error message if the command is run inside an AI agent session (Claude Code, Cursor, GitHub Copilot, Windsurf, etc.).
+All blocked commands use the `@require_outside_claude` decorator from `devflow/cli/utils.py`. This decorator checks for the `DEVAIFLOW_IN_SESSION` environment variable and provides a clear error message if the command is run inside an AI agent session (Claude Code, Cursor, GitHub Copilot, Windsurf, Crush, etc.).
 
 **Why this matters**:
 Running metadata-modifying commands inside Claude Code can cause:
@@ -278,7 +278,7 @@ This file provides additional project-specific guidance for working with the Dev
 
 ## Overview
 
-A Python CLI/TUI tool to manage AI coding assistant sessions with issue tracker integration. This tool helps developers manage one focused session per issue, avoiding context pollution and enabling easy session resumption. Supports Claude Code, GitHub Copilot, Cursor, and Windsurf.
+A Python CLI/TUI tool to manage AI coding assistant sessions with issue tracker integration. This tool helps developers manage one focused session per issue, avoiding context pollution and enabling easy session resumption. Supports Claude Code, GitHub Copilot, Cursor, Windsurf, Aider, Continue, and Crush.
 
 ## Architecture
 
