@@ -116,9 +116,12 @@ daf config edit                          # Interactive config editor
 ## Maintenance
 
 ```bash
-# Cleanup
-daf cleanup-conversation <session> --older-than 8h  # Remove old messages
-daf cleanup-sessions                                # Fix orphaned sessions
+# Repair & Cleanup (use 'daf maintenance' group)
+daf maintenance cleanup-conversation <session> --older-than 8h  # Remove old messages
+daf maintenance cleanup-sessions                                # Fix orphaned sessions
+daf maintenance repair-conversation <session>                   # Fix corrupted files
+daf maintenance discover                                        # Find unmanaged sessions
+daf maintenance rebuild-index                                   # Rebuild sessions index
 
 # Backup
 daf export <session> --output session.tar.gz        # Export session

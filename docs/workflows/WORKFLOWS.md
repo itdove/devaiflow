@@ -400,8 +400,8 @@ If you hit "413 Prompt too long" errors:
 # Step 1: Exit Claude Code
 
 # Step 2: Clean old messages
-daf cleanup-conversation PROJ-12345 --older-than 8h --dry-run
-daf cleanup-conversation PROJ-12345 --older-than 8h
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h --dry-run
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h
 
 # Step 3: Reopen
 daf open PROJ-12345

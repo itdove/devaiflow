@@ -286,10 +286,10 @@ EOF
 2. **Manual cleanup:**
    ```bash
    # Preview orphaned sessions
-   daf cleanup-sessions --dry-run
+   daf maintenance cleanup-sessions --dry-run
 
    # Clean them
-   daf cleanup-sessions
+   daf maintenance cleanup-sessions
 
    # Then open
    daf open PROJ-12345
@@ -941,35 +941,35 @@ Note: Running in non-interactive mode (CI/automation detected)
 1. **Automatic repair (recommended):**
    ```bash
    # Repair by JIRA key or session name
-   daf repair-conversation PROJ-12345
+   daf maintenance repair-conversation PROJ-12345
 
    # Preview what needs repair first
-   daf repair-conversation PROJ-12345 --dry-run
+   daf maintenance repair-conversation PROJ-12345 --dry-run
    ```
 
 2. **Scan all sessions for corruption:**
    ```bash
    # Check all sessions (doesn't modify anything)
-   daf repair-conversation --check-all
+   daf maintenance repair-conversation --check-all
 
    # Repair all corrupted sessions automatically
-   daf repair-conversation --all
+   daf maintenance repair-conversation --all
    ```
 
 3. **Repair specific conversation in multi-conversation session:**
    ```bash
-   daf repair-conversation PROJ-12345 --conversation-id 1
+   daf maintenance repair-conversation PROJ-12345 --conversation-id 1
    ```
 
 4. **Custom truncation size for very large tool outputs:**
    ```bash
    # Increase truncation limit if needed
-   daf repair-conversation PROJ-12345 --max-size 15000
+   daf maintenance repair-conversation PROJ-12345 --max-size 15000
    ```
 
 5. **Direct UUID repair (when session metadata is corrupted):**
    ```bash
-   daf repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
+   daf maintenance repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
    ```
 
 **What the repair tool fixes:**
@@ -993,7 +993,7 @@ daf open PROJ-12345
 
 **Prevention:**
 - Keep tool outputs reasonable (<10KB per message)
-- Clean up long sessions periodically with `daf cleanup-conversation`
+- Clean up long sessions periodically with `daf maintenance cleanup-conversation`
 - Monitor for very large file operations in tools
 
 ---
@@ -1018,10 +1018,10 @@ This is intentional - Claude Code caches the conversation and will overwrite cle
 **Solution:**
 ```bash
 # List available backups
-daf cleanup-conversation PROJ-12345 --list-backups
+daf maintenance cleanup-conversation PROJ-12345 --list-backups
 
 # Restore from backup
-daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
+daf maintenance cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
 ```
 
 Backups are automatic and kept for all cleanups.
@@ -1036,7 +1036,7 @@ Backups are automatic and kept for all cleanups.
 
 2. **Clean more aggressively:**
    ```bash
-   daf cleanup-conversation PROJ-12345 --keep-last 50
+   daf maintenance cleanup-conversation PROJ-12345 --keep-last 50
    ```
 
 3. **Check conversation file size:**
@@ -1523,7 +1523,7 @@ Private repositories require `gh` CLI installed and authenticated:
 
 **Solution:**
 ```bash
-daf cleanup-conversation PROJ-12345 --older-than 1d
+daf maintenance cleanup-conversation PROJ-12345 --older-than 1d
 ```
 
 ## Data Issues

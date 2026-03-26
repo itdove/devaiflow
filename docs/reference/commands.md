@@ -3239,7 +3239,7 @@ daf info PROJ-60039
 ```bash
 # Get UUID and use with repair tools
 UUID=$(daf info PROJ-60039 --uuid-only)
-daf repair-conversation $UUID
+daf maintenance repair-conversation $UUID
 
 # Open conversation file directly
 cat ~/.claude/projects/*/$(daf info PROJ-60039 --uuid-only).jsonl | jq
@@ -4035,12 +4035,33 @@ daf release 0.2.0 --force
 
 ---
 
-### daf repair-conversation - Repair Corrupted Conversations
+## Maintenance Commands
+
+The `daf maintenance` command group contains repair and cleanup utilities for advanced troubleshooting. These commands are hidden from the main help to reduce clutter but remain fully functional.
+
+```bash
+daf maintenance --help
+```
+
+**Available maintenance commands:**
+- `daf maintenance cleanup-conversation` - Clean conversation history to reduce context size
+- `daf maintenance cleanup-sessions` - Fix orphaned sessions with missing conversation files
+- `daf maintenance discover` - Discover existing Claude Code sessions not managed by daf
+- `daf maintenance rebuild-index` - Rebuild sessions.json index from session directories
+- `daf maintenance repair-conversation` - Repair corrupted conversation files
+
+**Backward compatibility:** All commands are still accessible via their original names (e.g., `daf maintenance repair-conversation`) but these are hidden from `daf --help`. Use `daf maintenance <command>` for consistency.
+
+---
+
+### daf maintenance repair-conversation - Repair Corrupted Conversations
+
+**Also available as:** `daf maintenance repair-conversation` (hidden)
 
 Repair corrupted Claude Code conversation files by fixing JSON errors, removing invalid surrogates, and truncating oversized content.
 
 ```bash
-daf repair-conversation [IDENTIFIER] [OPTIONS]
+daf maintenance repair-conversation [IDENTIFIER] [OPTIONS]
 ```
 
 **Identifier Types:**
@@ -4058,28 +4079,28 @@ daf repair-conversation [IDENTIFIER] [OPTIONS]
 **Examples:**
 ```bash
 # Repair by JIRA key
-daf repair-conversation PROJ-60039
+daf maintenance repair-conversation PROJ-60039
 
 # Repair by session name
-daf repair-conversation my-session
+daf maintenance repair-conversation my-session
 
 # Repair by UUID (useful when session metadata is missing)
-daf repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
+daf maintenance repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
 
 # Repair specific conversation in multi-conversation session
-daf repair-conversation PROJ-60039 --conversation-id 1
+daf maintenance repair-conversation PROJ-60039 --conversation-id 1
 
 # Check all sessions for corruption (dry run)
-daf repair-conversation --check-all
+daf maintenance repair-conversation --check-all
 
 # Repair all corrupted sessions automatically
-daf repair-conversation --all
+daf maintenance repair-conversation --all
 
 # Custom truncation size (increase if needed)
-daf repair-conversation PROJ-60039 --max-size 15000
+daf maintenance repair-conversation PROJ-60039 --max-size 15000
 
 # Preview changes without modifying file
-daf repair-conversation PROJ-60039 --dry-run
+daf maintenance repair-conversation PROJ-60039 --dry-run
 ```
 
 **What it repairs:**
@@ -4132,14 +4153,16 @@ All conversations processed
 
 ---
 
-### daf cleanup-conversation - Clean Conversation History
+### daf maintenance cleanup-conversation - Clean Conversation History
+
+**Also available as:** `daf maintenance cleanup-conversation` (hidden)
 
 Clean up Claude Code conversation history to reduce size and avoid 413 errors.
 
 **CRITICAL:** Must run OUTSIDE of Claude Code (after exiting).
 
 ```bash
-daf cleanup-conversation <NAME-or-JIRA> [OPTIONS]
+daf maintenance cleanup-conversation <NAME-or-JIRA> [OPTIONS]
 ```
 
 **Options:**
@@ -4153,22 +4176,22 @@ daf cleanup-conversation <NAME-or-JIRA> [OPTIONS]
 **Examples:**
 ```bash
 # Clean messages older than 8 hours
-daf cleanup-conversation PROJ-12345 --older-than 8h
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h
 
 # Keep only last 100 messages
-daf cleanup-conversation PROJ-12345 --keep-last 100
+daf maintenance cleanup-conversation PROJ-12345 --keep-last 100
 
 # Preview what would be cleaned
-daf cleanup-conversation PROJ-12345 --older-than 1d --dry-run
+daf maintenance cleanup-conversation PROJ-12345 --older-than 1d --dry-run
 
 # Clean without confirmation
-daf cleanup-conversation PROJ-12345 --older-than 8h --force
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h --force
 
 # List all backups
-daf cleanup-conversation PROJ-12345 --list-backups
+daf maintenance cleanup-conversation PROJ-12345 --list-backups
 
 # Restore from specific backup
-daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
+daf maintenance cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
 ```
 
 **Critical workflow:**
@@ -4189,12 +4212,14 @@ daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
 
 ---
 
-### daf cleanup-sessions - Fix Orphaned Sessions
+### daf maintenance cleanup-sessions - Fix Orphaned Sessions
+
+**Also available as:** `daf maintenance cleanup-sessions` (hidden)
 
 Find and fix sessions with missing conversation files.
 
 ```bash
-daf cleanup-sessions [OPTIONS]
+daf maintenance cleanup-sessions [OPTIONS]
 ```
 
 **Options:**
@@ -4204,13 +4229,13 @@ daf cleanup-sessions [OPTIONS]
 **Examples:**
 ```bash
 # Preview orphaned sessions
-daf cleanup-sessions --dry-run
+daf maintenance cleanup-sessions --dry-run
 
 # Clean with confirmation
-daf cleanup-sessions
+daf maintenance cleanup-sessions
 
 # Clean without confirmation
-daf cleanup-sessions --force
+daf maintenance cleanup-sessions --force
 ```
 
 **What it does:**
@@ -4376,12 +4401,14 @@ daf search "api" --working-directory backend-api
 
 ---
 
-### daf discover - Discover Existing Sessions
+### daf maintenance discover - Discover Existing Sessions
+
+**Also available as:** `daf maintenance discover` (hidden)
 
 Find existing Claude Code sessions not managed by daf tool.
 
 ```bash
-daf discover
+daf maintenance discover
 ```
 
 **Output:**
@@ -4431,7 +4458,7 @@ daf import-session 7a0bca58... --jira PROJ-12345 --goal-file "https://docs.examp
 ```
 
 **Workflow:**
-1. Run `daf discover` to find sessions
+1. Run `daf maintenance discover` to find sessions
 2. Copy UUID of session you want
 3. Run `daf import-session <UUID>`
 4. Follow prompts to set name, goal, JIRA link
@@ -4631,7 +4658,7 @@ daf edit broken-session
 **See Also:**
 - `daf update` - CLI-based metadata updates (simpler, scriptable)
 - `daf info` - View current session metadata
-- `daf repair-conversation` - Fix corrupted conversation files
+- `daf maintenance repair-conversation` - Fix corrupted conversation files
 
 ---
 
@@ -5356,8 +5383,8 @@ daf completion              # Setup auto-completion
 ### Maintenance (As Needed)
 
 ```bash
-daf cleanup-conversation    # Fix 413 errors
-daf cleanup-sessions        # Fix orphaned sessions
+daf maintenance cleanup-conversation    # Fix 413 errors
+daf maintenance cleanup-sessions        # Fix orphaned sessions
 daf backup                  # Backup everything
 ```
 
@@ -5395,9 +5422,12 @@ daf backup                  # Backup everything
 | `daf backup` | Full backup | No |
 | `daf restore` | Restore backup | No |
 | `daf export-md` | Export to Markdown | No |
-| **Maintenance** |
-| `daf cleanup-conversation` | Clean history | No |
-| `daf cleanup-sessions` | Fix orphaned | No |
+| **Maintenance** (Hidden Group) |
+| `daf maintenance cleanup-conversation` | Clean history | No |
+| `daf maintenance cleanup-sessions` | Fix orphaned | No |
+| `daf maintenance discover` | Find unmanaged sessions | No |
+| `daf maintenance rebuild-index` | Rebuild sessions index | No |
+| `daf maintenance repair-conversation` | Fix corrupted files | No |
 | `daf purge-mock-data` | Clear mock data (hidden) | No |
 | **Configuration** |
 | `daf init` | Initialize config | No |
@@ -5408,7 +5438,7 @@ daf backup                  # Backup everything
 | `daf config refresh-jira-fields` | Refresh field mappings | Yes |
 | **Utilities** |
 | `daf search` | Search sessions | No |
-| `daf discover` | Find sessions | No |
+| `daf maintenance discover` | Find sessions | No |
 | `daf template` | Manage templates | No |
 | `daf edit` | Interactive metadata editor | No |
 | `daf update` | CLI metadata updates | No |

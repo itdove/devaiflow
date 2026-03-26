@@ -608,6 +608,99 @@ def session_set_workspace(session_name: str, workspace_name: str) -> None:
     set_workspace_for_session(session_name, workspace_name)
 
 
+# ============================================================================
+# Maintenance Command Group (Hidden)
+# ============================================================================
+
+
+@cli.group(hidden=True)
+@json_option
+def maintenance(ctx: click.Context) -> None:
+    """Maintenance and repair commands (hidden utilities)."""
+    pass
+
+
+@maintenance.command(name="cleanup-sessions")
+@click.option("--dry-run", is_flag=True, help="Show what would be cleaned without actually cleaning")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@json_option
+def maintenance_cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
+    """Find and fix orphaned sessions (sessions with missing conversation files)."""
+    from devflow.cli.commands.cleanup_sessions_command import cleanup_sessions
+
+    cleanup_sessions(dry_run=dry_run, force=force)
+
+
+@maintenance.command(name="rebuild-index")
+@click.option("--dry-run", is_flag=True, help="Show what would be rebuilt without actually rebuilding")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@json_option
+def maintenance_rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
+    """Rebuild sessions.json index from session directories."""
+    from devflow.cli.commands.rebuild_index_command import rebuild_index
+
+    rebuild_index(dry_run=dry_run, force=force)
+
+
+@maintenance.command(name="repair-conversation")
+@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
+@click.option("--conversation-id", type=int, help="Repair specific conversation by number (1, 2, 3...)")
+@click.option("--max-size", type=int, default=10000, help="Maximum size for content truncation (default: 10000 chars)")
+@click.option("--check-all", is_flag=True, help="Check all sessions for corruption (dry run)")
+@click.option("--all", "repair_all", is_flag=True, help="Repair all corrupted sessions found")
+@click.option("--dry-run", is_flag=True, help="Report issues without making changes")
+@click.option("--latest", is_flag=True, help="Use the most recently active session")
+@json_option
+def maintenance_repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id: int, max_size: int, check_all: bool, repair_all: bool, dry_run: bool, latest: bool) -> None:
+    """Repair corrupted Claude Code conversation files."""
+    from devflow.cli.commands.repair_conversation_command import repair_conversation
+
+    repair_conversation(
+        identifier=identifier,
+        conversation_id=conversation_id,
+        max_size=max_size,
+        check_all=check_all,
+        repair_all=repair_all,
+        dry_run=dry_run,
+        latest=latest,
+    )
+
+
+@maintenance.command(name="cleanup-conversation")
+@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
+@click.option("--older-than", help="Remove messages older than duration (e.g., '2h', '1d', '30m')")
+@click.option("--keep-last", type=int, help="Keep only the last N messages")
+@click.option("--dry-run", is_flag=True, help="Show what would be removed without actually removing")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@click.option("--list-backups", is_flag=True, help="List available backups for this session")
+@click.option("--restore-backup", help="Restore from a specific backup (timestamp)")
+@click.option("--latest", is_flag=True, help="Use the most recently active session")
+@json_option
+def maintenance_cleanup_conversation_cmd(ctx: click.Context, identifier: str, older_than: str, keep_last: int, dry_run: bool, force: bool, list_backups: bool, restore_backup: str, latest: bool) -> None:
+    """Clean up Claude Code conversation history to reduce context size."""
+    from devflow.cli.commands.cleanup_conversation_command import cleanup_conversation
+
+    cleanup_conversation(
+        identifier=identifier,
+        older_than=older_than,
+        keep_last=keep_last,
+        dry_run=dry_run,
+        force=force,
+        list_backups=list_backups,
+        restore_backup=restore_backup,
+        latest=latest,
+    )
+
+
+@maintenance.command(name="discover")
+@json_option
+def maintenance_discover_cmd(ctx: click.Context) -> None:
+    """Discover existing Claude Code sessions not managed by daf tool."""
+    from devflow.cli.commands.discover_command import discover_sessions
+
+    discover_sessions()
+
+
 @cli.command()
 @click.option("--active", is_flag=True, help="Show only active sessions")
 @click.option("--status", help="Filter by session status: created, in_progress, paused, complete (comma-separated for multiple)")
@@ -1125,10 +1218,13 @@ def import_cmd(ctx: click.Context, export_file: str, merge: bool, force: bool) -
     import_sessions(export_file, merge=merge, force=force)
 
 
-@cli.command()
+@cli.command(hidden=True)
 @json_option
 def discover(ctx: click.Context) -> None:
-    """Discover existing Claude Code sessions not managed by daf tool."""
+    """[Hidden] Discover existing Claude Code sessions not managed by daf tool.
+
+    Use 'daf maintenance discover' instead.
+    """
     from devflow.cli.commands.discover_command import discover_sessions
 
     discover_sessions()
@@ -1190,12 +1286,14 @@ def unlink(ctx: click.Context, name: str, force: bool) -> None:
     unlink_jira(name, force)
 
 
-@cli.command(name="cleanup-sessions")
+@cli.command(name="cleanup-sessions", hidden=True)
 @click.option("--dry-run", is_flag=True, help="Show what would be cleaned without actually cleaning")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt")
 @json_option
 def cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
-    """Find and fix orphaned sessions (sessions with missing conversation files).
+    """[Hidden] Find and fix orphaned sessions (sessions with missing conversation files).
+
+    Use 'daf maintenance cleanup-sessions' instead.
 
     Scans all sessions and identifies ones where the conversation file no longer exists.
     This can happen when:
@@ -1220,12 +1318,14 @@ def cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None
     cleanup_sessions(dry_run=dry_run, force=force)
 
 
-@cli.command(name="rebuild-index")
+@cli.command(name="rebuild-index", hidden=True)
 @click.option("--dry-run", is_flag=True, help="Show what would be rebuilt without actually rebuilding")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt")
 @json_option
 def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
-    """Rebuild sessions.json index from session directories.
+    """[Hidden] Rebuild sessions.json index from session directories.
+
+    Use 'daf maintenance rebuild-index' instead.
 
     Scans all session directories and rebuilds the sessions.json index file
     from their metadata.json files. This is useful when:
@@ -1251,7 +1351,7 @@ def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
     rebuild_index(dry_run=dry_run, force=force)
 
 
-@cli.command(name="repair-conversation")
+@cli.command(name="repair-conversation", hidden=True)
 @click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
 @click.option("--conversation-id", type=int, help="Repair specific conversation by number (1, 2, 3...)")
 @click.option("--max-size", type=int, default=10000, help="Maximum size for content truncation (default: 10000 chars)")
@@ -1261,7 +1361,9 @@ def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
 @click.option("--latest", is_flag=True, help="Use the most recently active session")
 @json_option
 def repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id: int, max_size: int, check_all: bool, repair_all: bool, dry_run: bool, latest: bool) -> None:
-    """Repair corrupted Claude Code conversation files.
+    """[Hidden] Repair corrupted Claude Code conversation files.
+
+    Use 'daf maintenance repair-conversation' instead.
 
     IDENTIFIER can be a session name, issue key, or Claude Code UUID.
     If not provided or --latest is specified, uses the most recently active session.
@@ -1314,7 +1416,7 @@ def repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id
     )
 
 
-@cli.command(name="cleanup-conversation")
+@cli.command(name="cleanup-conversation", hidden=True)
 @click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
 @click.option("--older-than", help="Remove messages older than duration (e.g., '2h', '1d', '30m')")
 @click.option("--keep-last", type=int, help="Keep only the last N messages")
@@ -1325,7 +1427,9 @@ def repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id
 @click.option("--latest", is_flag=True, help="Use the most recently active session")
 @json_option
 def cleanup_conversation_cmd(ctx: click.Context, identifier: str, older_than: str, keep_last: int, dry_run: bool, force: bool, list_backups: bool, restore_backup: str, latest: bool) -> None:
-    """Clean up Claude Code conversation history to reduce context size.
+    """[Hidden] Clean up Claude Code conversation history to reduce context size.
+
+    Use 'daf maintenance cleanup-conversation' instead.
 
     IDENTIFIER can be either a session group name or issue tracker key.
     If not provided or --latest is specified, uses the most recently active session.

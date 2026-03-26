@@ -130,7 +130,7 @@ daf git add-comment "owner/repo#123" "..."
 
 ### Maintenance
 ```bash
-daf cleanup-conversation <session> --older-than 8h
+daf maintenance cleanup-conversation <session> --older-than 8h
 daf export <session> --output file.tar.gz
 daf import file.tar.gz
 daf template save <session> <name>
