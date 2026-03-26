@@ -3338,6 +3338,10 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
         console.print("  [cyan]daf upgrade[/cyan]")
         console.print()
         console.print("[dim]This installs /daf-* slash commands into Claude Code[/dim]")
+
+        # Offer to set up shell completion
+        _setup_shell_completion_if_desired()
+
         return
 
     # Config exists
@@ -3374,6 +3378,88 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
     console.print()
     console.print("[green]✓[/green] Configuration refreshed")
     console.print(f"Location: {config_loader.config_file}")
+
+
+def _setup_shell_completion_if_desired() -> None:
+    """Offer to set up shell completion automatically during init."""
+    import os
+    from pathlib import Path
+    from rich.prompt import Confirm
+
+    # Skip in test/CI environments
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI"):
+        return
+
+    # Auto-detect shell
+    shell_env = os.environ.get("SHELL", "")
+    if "bash" in shell_env:
+        shell = "bash"
+        shell_file = Path.home() / ".bashrc"
+        completion_line = 'eval "$(_DAF_COMPLETE=bash_source daf)"'
+    elif "zsh" in shell_env:
+        shell = "zsh"
+        shell_file = Path.home() / ".zshrc"
+        completion_line = 'eval "$(_DAF_COMPLETE=zsh_source daf)"'
+    elif "fish" in shell_env:
+        shell = "fish"
+        shell_file = Path.home() / ".config" / "fish" / "completions" / "daf.fish"
+        completion_line = None  # Fish uses a different approach
+    else:
+        # Can't detect shell, show manual instructions
+        console.print("\n[bold cyan]Optional: Set Up Shell Completion[/bold cyan]")
+        console.print("Run [cyan]daf completion[/cyan] to set up command auto-completion")
+        return
+
+    # Check if completion is already set up
+    if shell == "fish":
+        if shell_file.exists():
+            console.print("\n[dim]Fish shell completion already configured[/dim]")
+            return
+    else:
+        if shell_file.exists():
+            content = shell_file.read_text()
+            if completion_line in content:
+                console.print(f"\n[dim]{shell.capitalize()} shell completion already configured[/dim]")
+                return
+
+    # Ask if user wants to set up completion
+    console.print(f"\n[bold cyan]Optional: Set Up {shell.capitalize()} Shell Completion[/bold cyan]")
+    if not Confirm.ask(f"Add command auto-completion to {shell_file}?", default=True):
+        console.print(f"[dim]Skipped. Run [cyan]daf completion[/cyan] later to set up manually[/dim]")
+        return
+
+    try:
+        if shell == "fish":
+            # For fish, generate completion file
+            shell_file.parent.mkdir(parents=True, exist_ok=True)
+            import subprocess
+            result = subprocess.run(
+                ["daf", "--help"],  # Test if daf is in PATH
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                # Generate fish completion
+                subprocess.run(
+                    f'_DAF_COMPLETE=fish_source daf > "{shell_file}"',
+                    shell=True,
+                    check=True,
+                )
+                console.print(f"[green]✓[/green] Fish completion installed to {shell_file}")
+                console.print("[dim]Restart your fish shell or run: source ~/.config/fish/config.fish[/dim]")
+            else:
+                console.print(f"[yellow]Could not generate fish completion[/yellow]")
+                console.print(f"[dim]Run [cyan]daf completion fish[/cyan] for manual setup instructions[/dim]")
+        else:
+            # For bash/zsh, append to config file
+            with open(shell_file, "a") as f:
+                f.write(f"\n# daf command completion\n{completion_line}\n")
+            console.print(f"[green]✓[/green] Added completion to {shell_file}")
+            console.print(f"[dim]Restart your shell or run: source {shell_file}[/dim]")
+
+    except Exception as e:
+        console.print(f"[yellow]Could not set up completion automatically: {e}[/yellow]")
+        console.print(f"[dim]Run [cyan]daf completion[/cyan] for manual setup instructions[/dim]")
 
 
 def _validate_jira_url(url: str) -> bool:
@@ -3531,11 +3617,14 @@ def check(ctx: click.Context) -> None:
     raise SystemExit(exit_code)
 
 
-@cli.command()
+@cli.command(hidden=True)
 @json_option
 @click.argument("shell", type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False), required=False)
 def completion(ctx: click.Context, shell: str) -> None:
-    """Install shell completion for daf command.
+    """[Hidden] Install shell completion for daf command.
+
+    Shell completion is now automatically offered during 'daf init'.
+    This command remains available for manual setup if needed.
 
     SHELL can be bash, zsh, or fish. If not specified, auto-detects your shell.
 
