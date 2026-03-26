@@ -205,7 +205,7 @@ pip install devaiflow
 daf init
 
 # Configure
-daf config tui
+daf config edit
 ```
 
 ## Troubleshooting
@@ -309,7 +309,7 @@ echo "Uninstall reason: [your reason]" > /tmp/daf-uninstall-feedback.txt
 
 Common reasons and solutions:
 
-- **Too complex:** Try `daf config tui` for easier setup
+- **Too complex:** Try `daf config edit` for easier setup
 - **Not using Claude Code:** DevAIFlow works standalone with Claude API
 - **JIRA integration issues:** Check `docs/troubleshooting.md`
 - **Workspace conflicts:** Use per-workspace configs

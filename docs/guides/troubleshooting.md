@@ -13,7 +13,7 @@ Common issues and their solutions.
 **Solution:**
 1. **Check if git is installed:**
    ```bash
-   daf check
+   daf init --check
    ```
 
 2. **Install git:**
@@ -24,7 +24,7 @@ Common issues and their solutions.
 3. **Verify installation:**
    ```bash
    git --version
-   daf check
+   daf init --check
    ```
 
 ### Missing Required Tool - claude command not found
@@ -40,7 +40,7 @@ Common issues and their solutions.
 2. **Verify installation:**
    ```bash
    claude --version
-   daf check
+   daf init --check
    ```
 
 ### Missing Optional Tool - gh/glab not found
@@ -65,7 +65,7 @@ Common issues and their solutions.
 3. **Verify:**
    ```bash
    gh --version
-   daf check
+   daf init --check
    ```
 
 **For GitLab (glab):**
@@ -81,7 +81,7 @@ Common issues and their solutions.
 3. **Verify:**
    ```bash
    glab --version
-   daf check
+   daf init --check
    ```
 
 **Note:** These are optional - you can manually create PRs/MRs if these tools aren't installed.
@@ -92,7 +92,7 @@ Common issues and their solutions.
 
 After installing the daf tool, run:
 ```bash
-daf check
+daf init --check
 ```
 
 This verifies all dependencies are correctly installed and shows which optional features are available.
@@ -100,10 +100,10 @@ This verifies all dependencies are correctly installed and shows which optional 
 **In CI/CD pipelines:**
 ```bash
 # Check dependencies and fail if required tools missing
-daf check || exit 1
+daf init --check || exit 1
 
 # Or check with JSON output for parsing
-daf check --json | jq '.data.all_required_available'
+daf init --check --json | jq '.data.all_required_available'
 ```
 
 ## Claude Code Permission Issues
@@ -286,10 +286,10 @@ EOF
 2. **Manual cleanup:**
    ```bash
    # Preview orphaned sessions
-   daf cleanup-sessions --dry-run
+   daf maintenance cleanup-sessions --dry-run
 
    # Clean them
-   daf cleanup-sessions
+   daf maintenance cleanup-sessions
 
    # Then open
    daf open PROJ-12345
@@ -941,35 +941,35 @@ Note: Running in non-interactive mode (CI/automation detected)
 1. **Automatic repair (recommended):**
    ```bash
    # Repair by JIRA key or session name
-   daf repair-conversation PROJ-12345
+   daf maintenance repair-conversation PROJ-12345
 
    # Preview what needs repair first
-   daf repair-conversation PROJ-12345 --dry-run
+   daf maintenance repair-conversation PROJ-12345 --dry-run
    ```
 
 2. **Scan all sessions for corruption:**
    ```bash
    # Check all sessions (doesn't modify anything)
-   daf repair-conversation --check-all
+   daf maintenance repair-conversation --check-all
 
    # Repair all corrupted sessions automatically
-   daf repair-conversation --all
+   daf maintenance repair-conversation --all
    ```
 
 3. **Repair specific conversation in multi-conversation session:**
    ```bash
-   daf repair-conversation PROJ-12345 --conversation-id 1
+   daf maintenance repair-conversation PROJ-12345 --conversation-id 1
    ```
 
 4. **Custom truncation size for very large tool outputs:**
    ```bash
    # Increase truncation limit if needed
-   daf repair-conversation PROJ-12345 --max-size 15000
+   daf maintenance repair-conversation PROJ-12345 --max-size 15000
    ```
 
 5. **Direct UUID repair (when session metadata is corrupted):**
    ```bash
-   daf repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
+   daf maintenance repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
    ```
 
 **What the repair tool fixes:**
@@ -993,7 +993,7 @@ daf open PROJ-12345
 
 **Prevention:**
 - Keep tool outputs reasonable (<10KB per message)
-- Clean up long sessions periodically with `daf cleanup-conversation`
+- Clean up long sessions periodically with `daf maintenance cleanup-conversation`
 - Monitor for very large file operations in tools
 
 ---
@@ -1018,10 +1018,10 @@ This is intentional - Claude Code caches the conversation and will overwrite cle
 **Solution:**
 ```bash
 # List available backups
-daf cleanup-conversation PROJ-12345 --list-backups
+daf maintenance cleanup-conversation PROJ-12345 --list-backups
 
 # Restore from backup
-daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
+daf maintenance cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
 ```
 
 Backups are automatic and kept for all cleanups.
@@ -1036,7 +1036,7 @@ Backups are automatic and kept for all cleanups.
 
 2. **Clean more aggressively:**
    ```bash
-   daf cleanup-conversation PROJ-12345 --keep-last 50
+   daf maintenance cleanup-conversation PROJ-12345 --keep-last 50
    ```
 
 3. **Check conversation file size:**
@@ -1181,7 +1181,7 @@ Run 'daf config show --validate' for details and suggestions
 
 3. **Use interactive TUI editor:**
    ```bash
-   daf config tui
+   daf config edit
    ```
    The TUI provides input validation and helps you set required values correctly.
 
@@ -1219,7 +1219,7 @@ Run 'daf config show --validate' for details and suggestions
 2. **Update workspace path:**
    ```bash
    # Update to directory containing your repositories
-   daf config tui /Users/username/development/workspace
+   daf config edit /Users/username/development/workspace
    ```
 
 3. **Verify repositories found:**
@@ -1230,7 +1230,7 @@ Run 'daf config show --validate' for details and suggestions
 ```bash
 # Before: workspace was /Users/username/development (15 repos)
 # After: workspace is /Users/username/development/workspace (52 repos)
-daf config tui ~/development/workspace
+daf config edit ~/development/workspace
 # ✓ Workspace set to: /Users/username/development/workspace
 # Found 52 directories in workspace
 ```
@@ -1523,7 +1523,7 @@ Private repositories require `gh` CLI installed and authenticated:
 
 **Solution:**
 ```bash
-daf cleanup-conversation PROJ-12345 --older-than 1d
+daf maintenance cleanup-conversation PROJ-12345 --older-than 1d
 ```
 
 ## Data Issues
@@ -1880,8 +1880,8 @@ export DEVAIFLOW_HOME="$HOME/.daf-sessions-test"
 # Developer A
 export DEVAIFLOW_HOME="$HOME/.daf-sessions-dev-a"
 daf init
-daf config tui PROJ
-daf config tui ~/development/workspace
+daf config edit PROJ
+daf config edit ~/development/workspace
 daf jira new story --parent PROJ-XXXXX --goal "Test feature"
 # Work in Claude Code, then export:
 daf sync PROJ-12345
@@ -1890,8 +1890,8 @@ daf export PROJ-12345 --output /tmp/session-export.tar.gz
 # Developer B
 export DEVAIFLOW_HOME="$HOME/.daf-sessions-dev-b"
 daf init
-daf config tui PROJ
-daf config tui ~/development/workspace
+daf config edit PROJ
+daf config edit ~/development/workspace
 daf import /tmp/session-export.tar.gz
 daf open PROJ-12345  # Continue with full conversation history
 ```
@@ -2087,7 +2087,7 @@ export JIRA_AUTH_TYPE="Bearer"
 
 3. **Avoid spaces in workspace path:**
    ```powershell
-   daf config tui
+   daf config edit
    # Set workspace to: C:\development\workspace
    # Not: C:\Users\My Name\Documents\Development
    ```

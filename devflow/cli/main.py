@@ -419,6 +419,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 
 @cli.command()
 @click.argument("identifier", shell_complete=complete_session_identifiers)
+@click.option("--edit", is_flag=True, help="Edit session metadata via TUI instead of opening")
 @click.option("--path", help="Project path (auto-detects conversation in multi-conversation sessions)")
 @workspace_option("Workspace name to use (overrides session stored workspace)")
 @click.option("--projects", help="Add multiple projects to session (comma-separated, requires --workspace)")
@@ -433,7 +434,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--auto-workspace", is_flag=True, help="Auto-select workspace without prompting")
 @click.option("--sync-strategy", type=click.Choice(['merge', 'rebase', 'skip'], case_sensitive=False), help="Strategy for syncing with upstream (merge/rebase/skip)")
 @json_option
-def open(ctx: click.Context, identifier: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
+def open(ctx: click.Context, identifier: str, edit: bool, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -463,6 +464,12 @@ def open(ctx: click.Context, identifier: str, path: str, workspace: str, project
         # Add multiple projects to existing session
         daf open PROJ-123 -w primary --projects backend,frontend,shared
     """
+    # Handle --edit flag (edit session metadata via TUI)
+    if edit:
+        from devflow.ui.session_editor_tui import run_session_editor_tui
+        run_session_editor_tui(identifier)
+        return
+
     from devflow.cli.commands.open_command import open_session
 
     # Validate --projects and --path are mutually exclusive
@@ -608,35 +615,97 @@ def session_set_workspace(session_name: str, workspace_name: str) -> None:
     set_workspace_for_session(session_name, workspace_name)
 
 
-# Keep 'sessions' group for backward compatibility (deprecated)
-@cli.group()
+# ============================================================================
+# Maintenance Command Group (Hidden)
+# ============================================================================
+
+
+@cli.group(hidden=True)
 @json_option
-def sessions(ctx: click.Context) -> None:
-    """[Deprecated] Use 'daf session' instead."""
+def maintenance(ctx: click.Context) -> None:
+    """Maintenance and repair commands (hidden utilities)."""
     pass
 
 
-@sessions.command(name="list")
-@click.argument("identifier", shell_complete=complete_session_identifiers)
+@maintenance.command(name="cleanup-sessions")
+@click.option("--dry-run", is_flag=True, help="Show what would be cleaned without actually cleaning")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
 @json_option
-def sessions_list_cmd(ctx: click.Context, identifier: str) -> None:
-    """[Deprecated] Use 'daf session list-conversations' instead.
+def maintenance_cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
+    """Find and fix orphaned sessions (sessions with missing conversation files)."""
+    from devflow.cli.commands.cleanup_sessions_command import cleanup_sessions
 
-    Shows all Claude Code conversations (active and archived) across all repositories
-    in the session.
+    cleanup_sessions(dry_run=dry_run, force=force)
 
-    IDENTIFIER can be either a session name or issue tracker key.
 
-    Example:
-        daf sessions list PROJ-12345  (deprecated)
-        daf session list-conversations PROJ-12345  (use this)
-    """
-    from devflow.cli.commands.sessions_list_command import sessions_list
+@maintenance.command(name="rebuild-index")
+@click.option("--dry-run", is_flag=True, help="Show what would be rebuilt without actually rebuilding")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@json_option
+def maintenance_rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
+    """Rebuild sessions.json index from session directories."""
+    from devflow.cli.commands.rebuild_index_command import rebuild_index
 
-    console.print("[yellow]⚠ Command 'daf sessions list' is deprecated.[/yellow]")
-    console.print("[dim]Use 'daf session list-conversations' instead[/dim]\n")
+    rebuild_index(dry_run=dry_run, force=force)
 
-    sessions_list(identifier, output_json=ctx.obj.get('output_json', False))
+
+@maintenance.command(name="repair-conversation")
+@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
+@click.option("--conversation-id", type=int, help="Repair specific conversation by number (1, 2, 3...)")
+@click.option("--max-size", type=int, default=10000, help="Maximum size for content truncation (default: 10000 chars)")
+@click.option("--check-all", is_flag=True, help="Check all sessions for corruption (dry run)")
+@click.option("--all", "repair_all", is_flag=True, help="Repair all corrupted sessions found")
+@click.option("--dry-run", is_flag=True, help="Report issues without making changes")
+@click.option("--latest", is_flag=True, help="Use the most recently active session")
+@json_option
+def maintenance_repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id: int, max_size: int, check_all: bool, repair_all: bool, dry_run: bool, latest: bool) -> None:
+    """Repair corrupted Claude Code conversation files."""
+    from devflow.cli.commands.repair_conversation_command import repair_conversation
+
+    repair_conversation(
+        identifier=identifier,
+        conversation_id=conversation_id,
+        max_size=max_size,
+        check_all=check_all,
+        repair_all=repair_all,
+        dry_run=dry_run,
+        latest=latest,
+    )
+
+
+@maintenance.command(name="cleanup-conversation")
+@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
+@click.option("--older-than", help="Remove messages older than duration (e.g., '2h', '1d', '30m')")
+@click.option("--keep-last", type=int, help="Keep only the last N messages")
+@click.option("--dry-run", is_flag=True, help="Show what would be removed without actually removing")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@click.option("--list-backups", is_flag=True, help="List available backups for this session")
+@click.option("--restore-backup", help="Restore from a specific backup (timestamp)")
+@click.option("--latest", is_flag=True, help="Use the most recently active session")
+@json_option
+def maintenance_cleanup_conversation_cmd(ctx: click.Context, identifier: str, older_than: str, keep_last: int, dry_run: bool, force: bool, list_backups: bool, restore_backup: str, latest: bool) -> None:
+    """Clean up Claude Code conversation history to reduce context size."""
+    from devflow.cli.commands.cleanup_conversation_command import cleanup_conversation
+
+    cleanup_conversation(
+        identifier=identifier,
+        older_than=older_than,
+        keep_last=keep_last,
+        dry_run=dry_run,
+        force=force,
+        list_backups=list_backups,
+        restore_backup=restore_backup,
+        latest=latest,
+    )
+
+
+@maintenance.command(name="discover")
+@json_option
+def maintenance_discover_cmd(ctx: click.Context) -> None:
+    """Discover existing Claude Code sessions not managed by daf tool."""
+    from devflow.cli.commands.discover_command import discover_sessions
+
+    discover_sessions()
 
 
 @cli.command()
@@ -930,17 +999,21 @@ def info_cmd(ctx: click.Context, identifier: str, uuid_only: bool, conversation_
     session_info(identifier, uuid_only, conversation_id, latest=latest, output_json=ctx.obj.get('output_json', False))
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.argument("identifier", required=True, shell_complete=complete_session_identifiers)
 def edit(identifier: str) -> None:
-    """Edit session metadata interactively via TUI.
+    """[Hidden] Edit session metadata interactively via TUI.
+
+    Use 'daf open <identifier> --edit' instead.
 
     IDENTIFIER can be a session name or issue key.
 
     \b
     Examples:
-        daf edit PROJ-60989          # Edit by issue key
-        daf edit my-session         # Edit by session name
+        daf edit PROJ-60989          # Edit by issue key (old)
+        daf open PROJ-60989 --edit   # Edit by issue key (new)
+        daf edit my-session          # Edit by session name (old)
+        daf open my-session --edit   # Edit by session name (new)
     """
     from devflow.ui.session_editor_tui import run_session_editor_tui
 
@@ -1156,10 +1229,13 @@ def import_cmd(ctx: click.Context, export_file: str, merge: bool, force: bool) -
     import_sessions(export_file, merge=merge, force=force)
 
 
-@cli.command()
+@cli.command(hidden=True)
 @json_option
 def discover(ctx: click.Context) -> None:
-    """Discover existing Claude Code sessions not managed by daf tool."""
+    """[Hidden] Discover existing Claude Code sessions not managed by daf tool.
+
+    Use 'daf maintenance discover' instead.
+    """
     from devflow.cli.commands.discover_command import discover_sessions
 
     discover_sessions()
@@ -1221,12 +1297,14 @@ def unlink(ctx: click.Context, name: str, force: bool) -> None:
     unlink_jira(name, force)
 
 
-@cli.command(name="cleanup-sessions")
+@cli.command(name="cleanup-sessions", hidden=True)
 @click.option("--dry-run", is_flag=True, help="Show what would be cleaned without actually cleaning")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt")
 @json_option
 def cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
-    """Find and fix orphaned sessions (sessions with missing conversation files).
+    """[Hidden] Find and fix orphaned sessions (sessions with missing conversation files).
+
+    Use 'daf maintenance cleanup-sessions' instead.
 
     Scans all sessions and identifies ones where the conversation file no longer exists.
     This can happen when:
@@ -1251,12 +1329,14 @@ def cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None
     cleanup_sessions(dry_run=dry_run, force=force)
 
 
-@cli.command(name="rebuild-index")
+@cli.command(name="rebuild-index", hidden=True)
 @click.option("--dry-run", is_flag=True, help="Show what would be rebuilt without actually rebuilding")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt")
 @json_option
 def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
-    """Rebuild sessions.json index from session directories.
+    """[Hidden] Rebuild sessions.json index from session directories.
+
+    Use 'daf maintenance rebuild-index' instead.
 
     Scans all session directories and rebuilds the sessions.json index file
     from their metadata.json files. This is useful when:
@@ -1282,7 +1362,7 @@ def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
     rebuild_index(dry_run=dry_run, force=force)
 
 
-@cli.command(name="repair-conversation")
+@cli.command(name="repair-conversation", hidden=True)
 @click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
 @click.option("--conversation-id", type=int, help="Repair specific conversation by number (1, 2, 3...)")
 @click.option("--max-size", type=int, default=10000, help="Maximum size for content truncation (default: 10000 chars)")
@@ -1292,7 +1372,9 @@ def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
 @click.option("--latest", is_flag=True, help="Use the most recently active session")
 @json_option
 def repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id: int, max_size: int, check_all: bool, repair_all: bool, dry_run: bool, latest: bool) -> None:
-    """Repair corrupted Claude Code conversation files.
+    """[Hidden] Repair corrupted Claude Code conversation files.
+
+    Use 'daf maintenance repair-conversation' instead.
 
     IDENTIFIER can be a session name, issue key, or Claude Code UUID.
     If not provided or --latest is specified, uses the most recently active session.
@@ -1345,7 +1427,7 @@ def repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id
     )
 
 
-@cli.command(name="cleanup-conversation")
+@cli.command(name="cleanup-conversation", hidden=True)
 @click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
 @click.option("--older-than", help="Remove messages older than duration (e.g., '2h', '1d', '30m')")
 @click.option("--keep-last", type=int, help="Keep only the last N messages")
@@ -1356,7 +1438,9 @@ def repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id
 @click.option("--latest", is_flag=True, help="Use the most recently active session")
 @json_option
 def cleanup_conversation_cmd(ctx: click.Context, identifier: str, older_than: str, keep_last: int, dry_run: bool, force: bool, list_backups: bool, restore_backup: str, latest: bool) -> None:
-    """Clean up Claude Code conversation history to reduce context size.
+    """[Hidden] Clean up Claude Code conversation history to reduce context size.
+
+    Use 'daf maintenance cleanup-conversation' instead.
 
     IDENTIFIER can be either a session group name or issue tracker key.
     If not provided or --latest is specified, uses the most recently active session.
@@ -2319,27 +2403,6 @@ def config_edit(ctx: click.Context, advanced: bool) -> None:
         console.print("[dim]You can still edit configuration manually in config.json[/dim]")
 
 
-@config.command(name="tui")
-@json_option
-@click.option("--advanced", is_flag=True, help="Start in Advanced Mode (file-based tabs)")
-def config_tui(ctx: click.Context, advanced: bool) -> None:
-    """Alias for 'daf config edit' - launch interactive TUI.
-
-    This is an alias for the 'edit' command, provided for convenience.
-
-    Examples:
-        daf config tui                # Start in Simple Mode (default)
-        daf config tui --advanced     # Start in Advanced Mode
-    """
-    from devflow.ui.config_tui import run_config_tui
-
-    try:
-        run_config_tui(advanced_mode=advanced)
-    except Exception as e:
-        console.print(f"[red]✗[/red] Failed to launch configuration TUI: {e}")
-        console.print("[dim]You can still edit configuration manually in config.json[/dim]")
-
-
 @config.command(name="unset-prompts")
 @json_option
 @click.option("--auto-commit", is_flag=True, help="Unset auto-commit setting")
@@ -3127,11 +3190,12 @@ def provider_test(ctx: click.Context, name: str) -> None:
 
 
 @cli.command()
+@click.option("--check", is_flag=True, help="Check external tool dependencies instead of initializing")
 @click.option("--refresh", is_flag=True, help="Refresh automatically discovered data (custom field mappings)")
 @click.option("--reset", is_flag=True, help="Re-prompt for all configuration values")
 @click.option("--skip-jira-discovery", is_flag=True, help="Skip JIRA field discovery during init")
 @json_option
-def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bool) -> None:
+def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_discovery: bool) -> None:
     """Initialize, refresh, or review configuration.
 
     Use --refresh to update automatically discovered data (JIRA custom field mappings)
@@ -3139,6 +3203,13 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
 
     Use --reset to re-prompt for all configuration values using current values as defaults.
     """
+    # Handle --check flag (check external dependencies)
+    if check:
+        from devflow.cli.commands.check_command import check_dependencies
+        output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+        exit_code = check_dependencies(output_json=output_json)
+        raise SystemExit(exit_code)
+
     from devflow.config.loader import ConfigLoader
     from devflow.jira.client import JiraClient
     from devflow.jira.field_mapper import JiraFieldMapper
@@ -3259,7 +3330,7 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
                 elif not config.jira.project:
                     console.print("\n[yellow]⚠[/yellow] Project key not set - skipping field discovery")
                     console.print("[dim]  Limited functionality: Cannot create JIRA issues until project key is set[/dim]")
-                    console.print("[dim]  Set project key with: [cyan]daf config tui[/cyan] or [cyan]daf init --reset[/cyan][/dim]")
+                    console.print("[dim]  Set project key with: [cyan]daf config edit[/cyan] or [cyan]daf init --reset[/cyan][/dim]")
                     console.print("[dim]  Then run: [cyan]daf config refresh-jira-fields[/cyan][/dim]")
                 else:
                     # Ask if user wants to discover fields now
@@ -3279,13 +3350,17 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
         console.print("  - JIRA URL and project")
         console.print("  - Repository workspace path")
         console.print("  - Keyword mappings for smart repo detection")
-        console.print("  - Custom field defaults (if needed) via [cyan]daf config tui[/cyan]")
+        console.print("  - Custom field defaults (if needed) via [cyan]daf config edit[/cyan]")
 
         console.print("\n[bold cyan]Next Step: Install Claude Code Commands[/bold cyan]")
         console.print("To use DevAIFlow commands in Claude Code sessions:")
         console.print("  [cyan]daf upgrade[/cyan]")
         console.print()
         console.print("[dim]This installs /daf-* slash commands into Claude Code[/dim]")
+
+        # Offer to set up shell completion
+        _setup_shell_completion_if_desired()
+
         return
 
     # Config exists
@@ -3302,7 +3377,7 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
         console.print()
         console.print("To update specific configuration values:")
         console.print("  - Edit config.json manually")
-        console.print("  - Use: [cyan]daf config tui <WORKSTREAM>[/cyan]")
+        console.print("  - Use: [cyan]daf config edit <WORKSTREAM>[/cyan]")
         return
 
     # Refresh mode - only update automatically discovered data
@@ -3322,6 +3397,88 @@ def init(ctx: click.Context, refresh: bool, reset: bool, skip_jira_discovery: bo
     console.print()
     console.print("[green]✓[/green] Configuration refreshed")
     console.print(f"Location: {config_loader.config_file}")
+
+
+def _setup_shell_completion_if_desired() -> None:
+    """Offer to set up shell completion automatically during init."""
+    import os
+    from pathlib import Path
+    from rich.prompt import Confirm
+
+    # Skip in test/CI environments
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI"):
+        return
+
+    # Auto-detect shell
+    shell_env = os.environ.get("SHELL", "")
+    if "bash" in shell_env:
+        shell = "bash"
+        shell_file = Path.home() / ".bashrc"
+        completion_line = 'eval "$(_DAF_COMPLETE=bash_source daf)"'
+    elif "zsh" in shell_env:
+        shell = "zsh"
+        shell_file = Path.home() / ".zshrc"
+        completion_line = 'eval "$(_DAF_COMPLETE=zsh_source daf)"'
+    elif "fish" in shell_env:
+        shell = "fish"
+        shell_file = Path.home() / ".config" / "fish" / "completions" / "daf.fish"
+        completion_line = None  # Fish uses a different approach
+    else:
+        # Can't detect shell, show manual instructions
+        console.print("\n[bold cyan]Optional: Set Up Shell Completion[/bold cyan]")
+        console.print("Run [cyan]daf completion[/cyan] to set up command auto-completion")
+        return
+
+    # Check if completion is already set up
+    if shell == "fish":
+        if shell_file.exists():
+            console.print("\n[dim]Fish shell completion already configured[/dim]")
+            return
+    else:
+        if shell_file.exists():
+            content = shell_file.read_text()
+            if completion_line in content:
+                console.print(f"\n[dim]{shell.capitalize()} shell completion already configured[/dim]")
+                return
+
+    # Ask if user wants to set up completion
+    console.print(f"\n[bold cyan]Optional: Set Up {shell.capitalize()} Shell Completion[/bold cyan]")
+    if not Confirm.ask(f"Add command auto-completion to {shell_file}?", default=True):
+        console.print(f"[dim]Skipped. Run [cyan]daf completion[/cyan] later to set up manually[/dim]")
+        return
+
+    try:
+        if shell == "fish":
+            # For fish, generate completion file
+            shell_file.parent.mkdir(parents=True, exist_ok=True)
+            import subprocess
+            result = subprocess.run(
+                ["daf", "--help"],  # Test if daf is in PATH
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                # Generate fish completion
+                subprocess.run(
+                    f'_DAF_COMPLETE=fish_source daf > "{shell_file}"',
+                    shell=True,
+                    check=True,
+                )
+                console.print(f"[green]✓[/green] Fish completion installed to {shell_file}")
+                console.print("[dim]Restart your fish shell or run: source ~/.config/fish/config.fish[/dim]")
+            else:
+                console.print(f"[yellow]Could not generate fish completion[/yellow]")
+                console.print(f"[dim]Run [cyan]daf completion fish[/cyan] for manual setup instructions[/dim]")
+        else:
+            # For bash/zsh, append to config file
+            with open(shell_file, "a") as f:
+                f.write(f"\n# daf command completion\n{completion_line}\n")
+            console.print(f"[green]✓[/green] Added completion to {shell_file}")
+            console.print(f"[dim]Restart your shell or run: source {shell_file}[/dim]")
+
+    except Exception as e:
+        console.print(f"[yellow]Could not set up completion automatically: {e}[/yellow]")
+        console.print(f"[dim]Run [cyan]daf completion[/cyan] for manual setup instructions[/dim]")
 
 
 def _validate_jira_url(url: str) -> bool:
@@ -3442,10 +3599,12 @@ def _get_config_changes(old_config, new_config) -> list:
     return changes
 
 
-@cli.command()
+@cli.command(hidden=True)
 @json_option
 def check(ctx: click.Context) -> None:
-    """Check external tool dependencies.
+    """[Hidden] Check external tool dependencies.
+
+    Use 'daf init --check' instead.
 
     Verifies that all required and optional external tools are installed
     and available in PATH. Displays version information for available tools
@@ -3479,11 +3638,14 @@ def check(ctx: click.Context) -> None:
     raise SystemExit(exit_code)
 
 
-@cli.command()
+@cli.command(hidden=True)
 @json_option
 @click.argument("shell", type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False), required=False)
 def completion(ctx: click.Context, shell: str) -> None:
-    """Install shell completion for daf command.
+    """[Hidden] Install shell completion for daf command.
+
+    Shell completion is now automatically offered during 'daf init'.
+    This command remains available for manual setup if needed.
 
     SHELL can be bash, zsh, or fish. If not specified, auto-detects your shell.
 
@@ -3544,6 +3706,50 @@ def completion(ctx: click.Context, shell: str) -> None:
     console.print("[dim]See COMPLETION.md for more details and troubleshooting.[/dim]")
 
 
+@cli.command(name="purge-mock-data", hidden=True)
+@json_option
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
+    """Purge all mock data (hidden developer/testing utility).
+
+    This command is hidden from main help but available for developers
+    and automated testing. To clean mock data, you can also manually
+    delete the $DEVAIFLOW_HOME/mocks/ directory.
+    """
+    from devflow.mocks.persistence import MockDataStore
+    from rich.prompt import Confirm
+
+    store = MockDataStore()
+
+    console.print()
+    console.print("[bold yellow]⚠️  WARNING: This will purge ALL mock data[/bold yellow]")
+    console.print()
+    console.print("The following will be [bold red]permanently deleted[/bold red]:")
+    console.print("  • Mock sessions")
+    console.print("  • Mock issue tracker tickets and comments")
+    console.print("  • Mock GitHub pull requests")
+    console.print("  • Mock GitLab merge requests")
+    console.print("  • Mock Claude Code sessions")
+    console.print()
+    console.print(f"[dim]Location: {store.data_dir}[/dim]")
+    console.print()
+
+    if not force:
+        if not Confirm.ask("[yellow]Are you sure you want to purge all mock data?[/yellow]", default=False):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    try:
+        store.clear_all()
+        console.print()
+        console.print("[green]✓[/green] Mock data purged successfully")
+        console.print("[dim]You can now start fresh with mock testing.[/dim]")
+    except Exception as e:
+        console.print()
+        console.print(f"[red]✗[/red] Failed to purge mock data: {e}")
+        raise
+
+
 @cli.command()
 @click.option("--dry-run", is_flag=True, help="Show what would be upgraded without actually upgrading")
 @click.option("--commands-only", is_flag=True, help="Upgrade only bundled slash commands")
@@ -3584,70 +3790,6 @@ cli.add_command(import_cmd, name="import")
 
 if __name__ == "__main__":
     cli()
-
-
-@cli.command(name="purge-mock-data")
-@json_option
-@click.option("--force", is_flag=True, help="Skip confirmation prompt")
-def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
-    """Purge all mock data (sessions, JIRA, GitHub, GitLab, Claude).
-
-    This command completely clears all mock service data stored in
-    the DevAIFlow home/mocks/ directory, allowing you to start fresh with mock testing.
-
-    \b
-    What it clears:
-        - Mock sessions (sessions.json)
-        - Mock issue tracker tickets, comments, transitions (jira.json)
-        - Mock GitHub PRs (github.json)
-        - Mock GitLab MRs (gitlab.json)
-        - Mock Claude Code sessions (claude.json)
-
-    \b
-    Note: This only affects mock data. Your real sessions and data
-    are never touched.
-
-    \b
-    Examples:
-        daf purge-mock-data              # Purge with confirmation
-        daf purge-mock-data --force      # Purge without confirmation
-    """
-    from devflow.mocks.persistence import MockDataStore
-    from rich.prompt import Confirm
-
-    # Get mock data store
-    store = MockDataStore()
-
-    # Show what will be cleared
-    console.print()
-    console.print("[bold yellow]⚠️  WARNING: This will purge ALL mock data[/bold yellow]")
-    console.print()
-    console.print("The following will be [bold red]permanently deleted[/bold red]:")
-    console.print("  • Mock sessions")
-    console.print("  • Mock issue tracker tickets and comments")
-    console.print("  • Mock GitHub pull requests")
-    console.print("  • Mock GitLab merge requests")
-    console.print("  • Mock Claude Code sessions")
-    console.print()
-    console.print(f"[dim]Location: {store.data_dir}[/dim]")
-    console.print()
-
-    # Confirm unless --force
-    if not force:
-        if not Confirm.ask("[yellow]Are you sure you want to purge all mock data?[/yellow]", default=False):
-            console.print("[dim]Cancelled.[/dim]")
-            return
-
-    # Purge all mock data
-    try:
-        store.clear_all()
-        console.print()
-        console.print("[green]✓[/green] Mock data purged successfully")
-        console.print("[dim]You can now start fresh with mock testing.[/dim]")
-    except Exception as e:
-        console.print()
-        console.print(f"[red]✗[/red] Failed to purge mock data: {e}")
-        raise
 
 
 @cli.command()

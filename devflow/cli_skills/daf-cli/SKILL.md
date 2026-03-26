@@ -115,7 +115,9 @@ daf git add-comment 123 "Work in progress"
 
 **Data operations** (run from regular terminal):
 - `daf export`, `daf import`, `daf backup`, `daf restore`
-- `daf cleanup`, `daf cleanup-sessions`, `daf discover`, `daf repair`
+
+**Maintenance operations** (run from regular terminal):
+- `daf maintenance` group: `cleanup-conversation`, `cleanup-sessions`, `discover`, `rebuild-index`, `repair-conversation`
 
 **Configuration changes** (run from regular terminal):
 - `daf context add/remove/reset`

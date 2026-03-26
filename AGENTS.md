@@ -222,7 +222,7 @@ The DAF_AGENTS.md file is automatically loaded when you open sessions via `daf o
 - Create JIRA issues: `daf jira create {bug|story|task} --summary "..." --parent PROJ-12345`
 - Update JIRA issues: `daf jira update PROJ-12345 --description "..."`
 - Session management: `daf new`, `daf open`, `daf complete`
-- Configuration: `daf config tui
+- Configuration: `daf config edit`
 
 For complete documentation, refer to DAF_AGENTS.md.
 
@@ -235,7 +235,7 @@ For complete documentation, refer to DAF_AGENTS.md.
 - Session metadata: `daf update`, `daf sync`, `daf link`, `daf unlink`
 - Session creation: `daf jira new` (creates sessions)
 - Data operations: `daf export`, `daf import`, `daf backup`, `daf restore`
-- Maintenance: `daf cleanup`, `daf cleanup-sessions`, `daf discover`, `daf repair`
+- Maintenance: `daf maintenance` group (`cleanup-conversation`, `cleanup-sessions`, `discover`, `rebuild-index`, `repair-conversation`)
 - Configuration changes: `daf context add/remove/reset`, `daf template save/delete`, `daf workspace add/remove/rename/set-default`
 - Time tracking writes: `daf pause`, `daf resume`
 

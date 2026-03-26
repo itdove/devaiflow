@@ -235,7 +235,7 @@ daf --version
 
 # Test basic functionality
 daf --help
-daf check
+daf init --check
 
 # Cleanup
 deactivate

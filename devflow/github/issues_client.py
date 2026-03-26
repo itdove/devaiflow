@@ -221,7 +221,7 @@ class GitHubClient(IssueTrackerClient):
                 raise IssueTrackerConfigError(
                     "No GitHub repository specified and auto-detection failed. "
                     "Either:\n"
-                    "  1. Set repository in config (daf config tui)\n"
+                    "  1. Set repository in config (daf config edit)\n"
                     "  2. Ensure you're in a git repository with GitHub remote\n"
                     "  3. Pass repository explicitly (e.g., owner/repo#123)"
                 )

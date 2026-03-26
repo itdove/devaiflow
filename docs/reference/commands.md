@@ -219,7 +219,7 @@ Creating branch: aap-12345-fix-bug-retry...
 
 **Uncommitted Changes Check:**
 
-Before creating a new branch, daf checks if you have uncommitted changes in the current branch:
+Before creating a new branch, daf init --checks if you have uncommitted changes in the current branch:
 
 ```bash
 ✓ Detected git repository
@@ -422,7 +422,7 @@ Level 1: SESSION (issue_key: "PROJ-12345")
 
 - **Level 3 - Archived Conversations**: Previous Claude sessions for same repository
   - Preserved when starting fresh with `--new-conversation`
-  - Accessible via `daf sessions list` command
+  - Accessible via `daf list` command
 
 **What `daf list` shows:**
 ```bash
@@ -2940,7 +2940,7 @@ The default comment visibility is configured in `$DEVAIFLOW_HOME/config.json`:
 
 To change default visibility:
 ```bash
-daf config tui
+daf config edit
 # Navigate to "JIRA Integration" tab
 # Set "Comment Visibility Type" to "group"
 # Set "Comment Visibility Value" to "Developers"
@@ -3239,7 +3239,7 @@ daf info PROJ-60039
 ```bash
 # Get UUID and use with repair tools
 UUID=$(daf info PROJ-60039 --uuid-only)
-daf repair-conversation $UUID
+daf maintenance repair-conversation $UUID
 
 # Open conversation file directly
 cat ~/.claude/projects/*/$(daf info PROJ-60039 --uuid-only).jsonl | jq
@@ -3260,21 +3260,19 @@ daf info PROJ-60039 --conversation-id 2 --uuid-only
 
 ---
 
-### daf sessions list - View Conversation History
+### daf sessions list - View Conversation History (REMOVED)
 
-Show all conversations (active + archived) for a session, revealing the full history of Claude Code sessions in each repository.
+**This command has been removed.** Use `daf list` instead.
 
+The deprecated `daf sessions` command group has been removed to simplify the CLI. All functionality is available through `daf list`.
+
+**Migration:**
 ```bash
-daf sessions list <NAME-or-JIRA>
-```
-
-**Examples:**
-```bash
-# View all conversations for a JIRA ticket
+# Old (removed)
 daf sessions list PROJ-12345
 
-# View all conversations for a session name
-daf sessions list my-session
+# New (use this instead)
+daf list PROJ-12345
 ```
 
 **Output:**
@@ -4037,12 +4035,33 @@ daf release 0.2.0 --force
 
 ---
 
-### daf repair-conversation - Repair Corrupted Conversations
+## Maintenance Commands
+
+The `daf maintenance` command group contains repair and cleanup utilities for advanced troubleshooting. These commands are hidden from the main help to reduce clutter but remain fully functional.
+
+```bash
+daf maintenance --help
+```
+
+**Available maintenance commands:**
+- `daf maintenance cleanup-conversation` - Clean conversation history to reduce context size
+- `daf maintenance cleanup-sessions` - Fix orphaned sessions with missing conversation files
+- `daf maintenance discover` - Discover existing Claude Code sessions not managed by daf
+- `daf maintenance rebuild-index` - Rebuild sessions.json index from session directories
+- `daf maintenance repair-conversation` - Repair corrupted conversation files
+
+**Backward compatibility:** All commands are still accessible via their original names (e.g., `daf maintenance repair-conversation`) but these are hidden from `daf --help`. Use `daf maintenance <command>` for consistency.
+
+---
+
+### daf maintenance repair-conversation - Repair Corrupted Conversations
+
+**Also available as:** `daf maintenance repair-conversation` (hidden)
 
 Repair corrupted Claude Code conversation files by fixing JSON errors, removing invalid surrogates, and truncating oversized content.
 
 ```bash
-daf repair-conversation [IDENTIFIER] [OPTIONS]
+daf maintenance repair-conversation [IDENTIFIER] [OPTIONS]
 ```
 
 **Identifier Types:**
@@ -4060,28 +4079,28 @@ daf repair-conversation [IDENTIFIER] [OPTIONS]
 **Examples:**
 ```bash
 # Repair by JIRA key
-daf repair-conversation PROJ-60039
+daf maintenance repair-conversation PROJ-60039
 
 # Repair by session name
-daf repair-conversation my-session
+daf maintenance repair-conversation my-session
 
 # Repair by UUID (useful when session metadata is missing)
-daf repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
+daf maintenance repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d
 
 # Repair specific conversation in multi-conversation session
-daf repair-conversation PROJ-60039 --conversation-id 1
+daf maintenance repair-conversation PROJ-60039 --conversation-id 1
 
 # Check all sessions for corruption (dry run)
-daf repair-conversation --check-all
+daf maintenance repair-conversation --check-all
 
 # Repair all corrupted sessions automatically
-daf repair-conversation --all
+daf maintenance repair-conversation --all
 
 # Custom truncation size (increase if needed)
-daf repair-conversation PROJ-60039 --max-size 15000
+daf maintenance repair-conversation PROJ-60039 --max-size 15000
 
 # Preview changes without modifying file
-daf repair-conversation PROJ-60039 --dry-run
+daf maintenance repair-conversation PROJ-60039 --dry-run
 ```
 
 **What it repairs:**
@@ -4134,14 +4153,16 @@ All conversations processed
 
 ---
 
-### daf cleanup-conversation - Clean Conversation History
+### daf maintenance cleanup-conversation - Clean Conversation History
+
+**Also available as:** `daf maintenance cleanup-conversation` (hidden)
 
 Clean up Claude Code conversation history to reduce size and avoid 413 errors.
 
 **CRITICAL:** Must run OUTSIDE of Claude Code (after exiting).
 
 ```bash
-daf cleanup-conversation <NAME-or-JIRA> [OPTIONS]
+daf maintenance cleanup-conversation <NAME-or-JIRA> [OPTIONS]
 ```
 
 **Options:**
@@ -4155,22 +4176,22 @@ daf cleanup-conversation <NAME-or-JIRA> [OPTIONS]
 **Examples:**
 ```bash
 # Clean messages older than 8 hours
-daf cleanup-conversation PROJ-12345 --older-than 8h
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h
 
 # Keep only last 100 messages
-daf cleanup-conversation PROJ-12345 --keep-last 100
+daf maintenance cleanup-conversation PROJ-12345 --keep-last 100
 
 # Preview what would be cleaned
-daf cleanup-conversation PROJ-12345 --older-than 1d --dry-run
+daf maintenance cleanup-conversation PROJ-12345 --older-than 1d --dry-run
 
 # Clean without confirmation
-daf cleanup-conversation PROJ-12345 --older-than 8h --force
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h --force
 
 # List all backups
-daf cleanup-conversation PROJ-12345 --list-backups
+daf maintenance cleanup-conversation PROJ-12345 --list-backups
 
 # Restore from specific backup
-daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
+daf maintenance cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
 ```
 
 **Critical workflow:**
@@ -4191,12 +4212,14 @@ daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147
 
 ---
 
-### daf cleanup-sessions - Fix Orphaned Sessions
+### daf maintenance cleanup-sessions - Fix Orphaned Sessions
+
+**Also available as:** `daf maintenance cleanup-sessions` (hidden)
 
 Find and fix sessions with missing conversation files.
 
 ```bash
-daf cleanup-sessions [OPTIONS]
+daf maintenance cleanup-sessions [OPTIONS]
 ```
 
 **Options:**
@@ -4206,13 +4229,13 @@ daf cleanup-sessions [OPTIONS]
 **Examples:**
 ```bash
 # Preview orphaned sessions
-daf cleanup-sessions --dry-run
+daf maintenance cleanup-sessions --dry-run
 
 # Clean with confirmation
-daf cleanup-sessions
+daf maintenance cleanup-sessions
 
 # Clean without confirmation
-daf cleanup-sessions --force
+daf maintenance cleanup-sessions --force
 ```
 
 **What it does:**
@@ -4228,9 +4251,9 @@ daf cleanup-sessions --force
 
 ---
 
-### daf purge-mock-data - Clear Mock Data
+### daf purge-mock-data - Clear Mock Data (Hidden)
 
-Purge all mock data used for integration testing.
+**Hidden developer utility** - This command is hidden from `daf --help` but still available for developers and automated testing.
 
 ```bash
 daf purge-mock-data [OPTIONS]
@@ -4246,6 +4269,9 @@ daf purge-mock-data
 
 # Purge without confirmation
 daf purge-mock-data --force
+
+# Alternative: manually delete mock data directory
+rm -rf $DEVAIFLOW_HOME/mocks/
 ```
 
 **What it clears:**
@@ -4266,18 +4292,18 @@ daf purge-mock-data --force
 - Reset mock environment for demos
 - Clean up after development work
 
-**Note:** This command is specifically for development and testing. It has no effect on production sessions or data.
+**Note:** This command is hidden from the main command list to reduce CLI complexity. It's specifically for development and testing, and has no effect on production sessions or data. You can also manually delete the `$DEVAIFLOW_HOME/mocks/` directory to achieve the same result.
 
 ---
 
 ## Utility Commands
 
-### daf check - Check Dependencies
+### daf init --check - Check Dependencies
 
 Verify that all required and optional external tools are installed and available.
 
 ```bash
-daf check [OPTIONS]
+daf init --check [OPTIONS]
 ```
 
 **Options:**
@@ -4286,10 +4312,10 @@ daf check [OPTIONS]
 **Examples:**
 ```bash
 # Check all dependencies
-daf check
+daf init --check
 
 # JSON output for scripting
-daf check --json
+daf init --check --json
 ```
 
 **What it checks:**
@@ -4375,12 +4401,14 @@ daf search "api" --working-directory backend-api
 
 ---
 
-### daf discover - Discover Existing Sessions
+### daf maintenance discover - Discover Existing Sessions
+
+**Also available as:** `daf maintenance discover` (hidden)
 
 Find existing Claude Code sessions not managed by daf tool.
 
 ```bash
-daf discover
+daf maintenance discover
 ```
 
 **Output:**
@@ -4430,7 +4458,7 @@ daf import-session 7a0bca58... --jira PROJ-12345 --goal-file "https://docs.examp
 ```
 
 **Workflow:**
-1. Run `daf discover` to find sessions
+1. Run `daf maintenance discover` to find sessions
 2. Copy UUID of session you want
 3. Run `daf import-session <UUID>`
 4. Follow prompts to set name, goal, JIRA link
@@ -4496,12 +4524,12 @@ daf update PROJ-12345 --goal "Updated goal description"
 
 ---
 
-### daf edit - Edit Session Metadata Interactively
+### daf open --edit - Edit Session Metadata Interactively
 
 Launch an interactive TUI (Text User Interface) to edit session metadata, manage conversations, and update JIRA integration settings.
 
 ```bash
-daf edit <NAME-or-JIRA>
+daf open --edit <NAME-or-JIRA>
 ```
 
 **What it does:**
@@ -4538,14 +4566,14 @@ daf edit <NAME-or-JIRA>
 **Examples:**
 ```bash
 # Edit by JIRA key
-daf edit PROJ-60989
+daf open --edit PROJ-60989
 
 # Edit by session name
-daf edit my-feature-session
+daf open --edit my-feature-session
 
 # Edit most recent session
 daf list  # Get session name
-daf edit <session-name>
+daf open --edit <session-name>
 ```
 
 **Keyboard Shortcuts:**
@@ -4558,7 +4586,7 @@ daf edit <session-name>
 - `Q` / `Ctrl+C` - Quit
 
 **Workflow:**
-1. Launch editor with `daf edit <identifier>`
+1. Launch editor with `daf open --edit <identifier>`
 2. Navigate tabs to find fields to edit
 3. Make changes to metadata
 4. Press `Ctrl+S` or click "Save Changes" button
@@ -4577,7 +4605,7 @@ daf edit <session-name>
 **Fix Incorrect JIRA Association:**
 ```bash
 # Session was linked to wrong ticket
-daf edit my-session
+daf open --edit my-session
 # → Navigate to JIRA Integration tab
 # → Update JIRA key field
 # → Save
@@ -4586,7 +4614,7 @@ daf edit my-session
 **Update Session Goal:**
 ```bash
 # Goal needs clarification
-daf edit PROJ-12345
+daf open --edit PROJ-12345
 # → Navigate to Core Metadata tab
 # → Edit goal field
 # → Save
@@ -4595,7 +4623,7 @@ daf edit PROJ-12345
 **Manage Multi-Repository Conversations:**
 ```bash
 # Working on feature across multiple repos
-daf edit cross-repo-feature
+daf open --edit cross-repo-feature
 # → Navigate to Conversations tab
 # → Click "Add Conversation"
 # → Enter Claude session UUID, path, and branch
@@ -4605,7 +4633,7 @@ daf edit cross-repo-feature
 **Change Session Type:**
 ```bash
 # Converting ticket_creation session to development
-daf edit PROJ-60989
+daf open --edit PROJ-60989
 # → Navigate to Core Metadata tab
 # → Change "Session Type" dropdown
 # → Save
@@ -4614,7 +4642,7 @@ daf edit PROJ-60989
 **Fix Corrupted Metadata:**
 ```bash
 # Session has invalid or missing fields
-daf edit broken-session
+daf open --edit broken-session
 # → Review and correct fields
 # → Validation will show errors
 # → Fix errors and save
@@ -4630,7 +4658,7 @@ daf edit broken-session
 **See Also:**
 - `daf update` - CLI-based metadata updates (simpler, scriptable)
 - `daf info` - View current session metadata
-- `daf repair-conversation` - Fix corrupted conversation files
+- `daf maintenance repair-conversation` - Fix corrupted conversation files
 
 ---
 
@@ -4731,7 +4759,7 @@ $ daf init --reset
 
 DevAIFlow Configuration Wizard
 
-All settings can be changed later using 'daf config tui'
+All settings can be changed later using 'daf config edit'
 
 === JIRA Configuration ===
 
@@ -4745,7 +4773,7 @@ JIRA Project Key (optional, press Enter to skip) (PROJ):
 === JIRA Comment Visibility ===
 
 Control who can see comments that DevAIFlow adds to JIRA tickets.
-Can be set later via 'daf config tui'.
+Can be set later via 'daf config edit'.
 
 Choose visibility type:
   1. group - Restrict by JIRA group membership (most common)
@@ -4764,7 +4792,7 @@ Workspace path (~/development/myproject):
 
 Optional: Keywords help suggest repositories when working across multiple repos.
 DevAIFlow learns from your usage patterns, so keywords are only needed if you want
-explicit routing rules. You can skip this and configure later via 'daf config tui'.
+explicit routing rules. You can skip this and configure later via 'daf config edit'.
 
 Configure keyword mappings now? [y/n] (n): n
 
@@ -4772,7 +4800,7 @@ Configure keyword mappings now? [y/n] (n): n
 
 Optional: Configure how AI generates PR/MR descriptions.
 Templates are auto-discovered from organization and repository locations.
-Manual configuration can be added later via 'daf config tui' or by editing config.json.
+Manual configuration can be added later via 'daf config edit' or by editing config.json.
 
 You have three options for generating PR/MR descriptions:
   1. Provide a template URL - AI will fill your organization's template
@@ -5021,7 +5049,7 @@ You can configure Claude to automatically be prompted to read related conversati
 
 **Via TUI:**
 ```bash
-daf config tui
+daf config edit
 ```
 
 Navigate to **Prompts** tab → **Multi-Conversation Sessions** → Set "Auto-load related conversations prompt" to **Enable**.
@@ -5181,16 +5209,16 @@ daf config edit
 - Visual review of all settings
 - When you prefer GUI over command line
 
-**Alternative:** Use `daf config tui` (alias for this command)
+**Alternative:** Use `daf config edit` (alias for this command)
 
 ---
 
-### daf config tui - Interactive Configuration Editor (Alias)
+### daf config edit - Interactive Configuration Editor (Alias)
 
 Alias for `daf config edit`. See [daf config edit](#daf-config-edit---interactive-configuration-editor) for details.
 
 ```bash
-daf config tui
+daf config edit
 ```
 
 ---
@@ -5325,7 +5353,7 @@ daf upgrade
 **Typical onboarding workflow:**
 1. Team member exports: `daf config export --output team-config.tar.gz`
 2. New user imports: `daf config import team-config.tar.gz`
-3. New user adjusts workspace paths: `daf config tui`
+3. New user adjusts workspace paths: `daf config edit`
 4. New user installs skills: `daf upgrade`
 
 **When to use:**
@@ -5355,8 +5383,8 @@ daf completion              # Setup auto-completion
 ### Maintenance (As Needed)
 
 ```bash
-daf cleanup-conversation    # Fix 413 errors
-daf cleanup-sessions        # Fix orphaned sessions
+daf maintenance cleanup-conversation    # Fix 413 errors
+daf maintenance cleanup-sessions        # Fix orphaned sessions
 daf backup                  # Backup everything
 ```
 
@@ -5394,24 +5422,29 @@ daf backup                  # Backup everything
 | `daf backup` | Full backup | No |
 | `daf restore` | Restore backup | No |
 | `daf export-md` | Export to Markdown | No |
-| **Maintenance** |
-| `daf cleanup-conversation` | Clean history | No |
-| `daf cleanup-sessions` | Fix orphaned | No |
-| `daf purge-mock-data` | Clear mock data | No |
+| **Maintenance** (Hidden Group) |
+| `daf maintenance cleanup-conversation` | Clean history | No |
+| `daf maintenance cleanup-sessions` | Fix orphaned | No |
+| `daf maintenance discover` | Find unmanaged sessions | No |
+| `daf maintenance rebuild-index` | Rebuild sessions index | No |
+| `daf maintenance repair-conversation` | Fix corrupted files | No |
+| `daf purge-mock-data` | Clear mock data (hidden) | No |
 | **Configuration** |
 | `daf init` | Initialize config | No |
 | `daf init --refresh` | Refresh field mappings | Yes |
 | `daf init --reset` | Review/update config | No |
 | `daf upgrade` | Upgrade slash commands | No |
-| `daf config tui` | Interactive configuration | No |
+| `daf config edit` | Interactive configuration | No |
 | `daf config refresh-jira-fields` | Refresh field mappings | Yes |
 | **Utilities** |
 | `daf search` | Search sessions | No |
-| `daf discover` | Find sessions | No |
+| `daf maintenance discover` | Find sessions | No |
 | `daf template` | Manage templates | No |
-| `daf edit` | Interactive metadata editor | No |
+| `daf open --edit` | Interactive metadata editor | No |
 | `daf update` | CLI metadata updates | No |
-| `daf completion` | Auto-completion | No |
+| `daf completion` | Auto-completion (hidden) | No |
+| `daf check` | Check dependencies (hidden) | No |
+| `daf edit` | Metadata editor (hidden, use daf open --edit) | No |
 
 ## Next Steps
 
@@ -5433,7 +5466,7 @@ The `daf config set-*` commands have been removed as of version 2.0. Use the alt
 
 
 ```bash
-daf config tui
+daf config edit
 ```
 
 Features:
@@ -5559,7 +5592,7 @@ daf upgrade
 1. Team member exports their config: `daf config export --output team-config.tar.gz`
 2. New user receives the archive
 3. New user imports: `daf config import team-config.tar.gz`
-4. New user adjusts workspace paths if needed: `daf config tui`
+4. New user adjusts workspace paths if needed: `daf config edit`
 5. New user installs skills: `daf upgrade`
 
 ### Configuration Examples
@@ -5568,7 +5601,7 @@ daf upgrade
 
 **Using TUI:**
 ```bash
-daf config tui
+daf config edit
 # Navigate to "JIRA Integration" tab
 # Set "Project Key" field to "PROJ"
 # Press Save
@@ -5584,7 +5617,7 @@ mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 
 **Using TUI:**
 ```bash
-daf config tui
+daf config edit
 # Navigate to "Repository" tab
 # Set "Workspace" field to "~/development"
 # TUI shows repo count after save
@@ -5601,7 +5634,7 @@ mv /tmp/cfg.json $DEVAIFLOW_HOME/config.json
 
 **Using TUI:**
 ```bash
-daf config tui
+daf config edit
 # Navigate to "JIRA Transitions" tab
 # Configure "On Start" section
 # Press Save

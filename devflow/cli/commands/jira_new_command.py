@@ -116,7 +116,7 @@ def _create_mock_jira_ticket(
 
     # Simulate assistant response that creates the ticket
     if not config.jira.project:
-        console.print("[yellow]Warning: No JIRA project configured. Run 'daf config tui' to set it.[/yellow]")
+        console.print("[yellow]Warning: No JIRA project configured. Run 'daf config edit' to set it.[/yellow]")
         project = "PROJ"  # Fallback for mock mode
     else:
         project = config.jira.project

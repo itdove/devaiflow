@@ -36,7 +36,7 @@ The schema is auto-generated from Pydantic models, ensuring it's always in sync 
 **Interactive TUI** (Recommended):
 ```bash
 daf config edit    # Launch full-screen configuration editor
-daf config tui     # Alias for the above
+daf config edit     # Alias for the above
 ```
 
 The TUI provides:
@@ -108,7 +108,7 @@ DevAIFlow is fully generic and works with any JIRA instance. You have two option
 **Option 1: User Configuration (Quick Start)**
 - Edit `$DEVAIFLOW_HOME/*.json` files directly with your settings
 - Use `daf init` for interactive setup wizard
-- Use `daf config tui` for the interactive TUI editor
+- Use `daf config edit` for the interactive TUI editor
 - Settings stored locally in `$DEVAIFLOW_HOME/` directory
 
 **Option 2: Workspace Configuration (Team Collaboration - Recommended)**
@@ -396,7 +396,7 @@ When `prompt: false`, the tool will:
 
 **CLI Command:**
 ```bash
-daf config tui
+daf config edit
 # Navigate to "JIRA Integration" tab
 # Set "Custom Field Defaults" field
 ```
@@ -422,10 +422,10 @@ When creating bugs with `daf jira create bug`, this value is used automatically 
 **CLI Command:**
 ```bash
 # Set affected version (one-time configuration)
-daf config tui <version>
+daf config edit <version>
 
 # Example for specific version
-daf config tui myorg-ga
+daf config edit myorg-ga
 ```
 
 **Behavior:**
@@ -622,7 +622,7 @@ Role-based visibility:
 
 **CLI Command:**
 ```bash
-daf config tui --type <group|role> --value <name>
+daf config edit --type <group|role> --value <name>
 ```
 
 ### jira.comment_visibility_value
@@ -672,10 +672,10 @@ Role-based restriction:
 **CLI Command:**
 ```bash
 # Set both type and value with flags
-daf config tui --type group --value "Engineering Team"
+daf config edit --type group --value "Engineering Team"
 
 # Or use interactive prompts
-daf config tui
+daf config edit
 ```
 
 **When to Change:**
@@ -1190,7 +1190,7 @@ The update checker runs automatically before each command to notify you of new v
 - **VPN/corporate networks:** Adjust based on your network latency to PyPI
 
 **Configuration via TUI:**
-1. Run `daf config tui`
+1. Run `daf config edit`
 2. Navigate to the **Advanced** tab
 3. Set "Update Checker Timeout (seconds)" field
 4. Save changes (Ctrl+S)
@@ -1565,10 +1565,10 @@ All prompt settings support three states:
 **Configuration:**
 ```bash
 # Set via CLI
-daf config tui --auto-create-pr-status draft
+daf config edit --auto-create-pr-status draft
 
 # Or via interactive wizard
-daf config tui
+daf config edit
 ```
 
 **Notes:**
@@ -1860,10 +1860,10 @@ When enabled, Claude will be instructed to:
 **CLI Commands:**
 ```bash
 # Enable testing prompt (default)
-daf config tui --show-prompt-unit-tests yes
+daf config edit --show-prompt-unit-tests yes
 
 # Disable testing prompt
-daf config tui --show-prompt-unit-tests no
+daf config edit --show-prompt-unit-tests no
 
 # Reset to default (true)
 daf config unset-prompts --show-prompt-unit-tests

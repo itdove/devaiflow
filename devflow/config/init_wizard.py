@@ -30,7 +30,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     )
 
     console.print("\n[bold]DevAIFlow Configuration Wizard[/bold]\n")
-    console.print("[dim]All settings can be changed later using 'daf config tui'[/dim]\n")
+    console.print("[dim]All settings can be changed later using 'daf config edit'[/dim]\n")
 
     console.print("[bold]=== JIRA Configuration ===[/bold]\n")
 
@@ -62,7 +62,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
 
     console.print("\n[bold]=== JIRA Comment Visibility ===[/bold]\n")
     console.print("[dim]Control who can see comments that DevAIFlow adds to JIRA tickets.[/dim]")
-    console.print("[dim]Can be set later via 'daf config tui'.[/dim]\n")
+    console.print("[dim]Can be set later via 'daf config edit'.[/dim]\n")
 
     # Comment visibility type
     default_visibility_type = current_config.jira.comment_visibility_type if current_config and current_config.jira.comment_visibility_type else "group"
@@ -90,7 +90,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("[dim]  - Using GitHub Enterprise (custom API URL)[/dim]")
     console.print("[dim]  - Want default labels on all created issues[/dim]")
     console.print("[dim]  - Want to auto-close issues when sessions complete[/dim]")
-    console.print("[dim]Can be set later via 'daf config tui'.[/dim]\n")
+    console.print("[dim]Can be set later via 'daf config edit'.[/dim]\n")
 
     # GitHub configuration (optional)
     github_api_url = None
@@ -162,7 +162,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("\n[bold]=== Keyword Mappings ===[/bold]\n")
     console.print("[dim]Optional: Keywords help suggest repositories when working across multiple repos.[/dim]")
     console.print("[dim]DevAIFlow learns from your usage patterns, so keywords are only needed if you want[/dim]")
-    console.print("[dim]explicit routing rules. You can skip this and configure later via 'daf config tui'.[/dim]\n")
+    console.print("[dim]explicit routing rules. You can skip this and configure later via 'daf config edit'.[/dim]\n")
 
     # Keywords
     keywords = {}
@@ -190,7 +190,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("[dim]Optional: URL to organization-wide config files (ENTERPRISE.md, ORGANIZATION.md, etc.)[/dim]")
     console.print("[dim]This enables automatic distribution of organization policies and AI agent skills.[/dim]")
     console.print("[dim]After setting this, run 'daf upgrade' to download config files and skills.[/dim]")
-    console.print("[dim]Can be set later via 'daf config tui --advanced' in the Organization tab.[/dim]\n")
+    console.print("[dim]Can be set later via 'daf config edit --advanced' in the Organization tab.[/dim]\n")
     console.print("Examples:")
     console.print("  - file:///company/shared/devaiflow/configs")
     console.print("  - https://github.com/company/devaiflow-config/configs")
@@ -285,7 +285,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("\n[bold]=== PR/MR Template Configuration ===[/bold]\n")
     console.print("[dim]Optional: Configure how AI generates PR/MR descriptions.[/dim]")
     console.print("[dim]Templates are auto-discovered from organization and repository locations.[/dim]")
-    console.print("[dim]Manual configuration can be added later via 'daf config tui' or by editing config.json.[/dim]\n")
+    console.print("[dim]Manual configuration can be added later via 'daf config edit' or by editing config.json.[/dim]\n")
     console.print("You have three options for generating PR/MR descriptions:")
     console.print("  [white]1.[/white] Provide a template URL - AI will fill your organization's template")
     console.print("  [white]2.[/white] Leave empty - AI will generate descriptions automatically")

@@ -1897,7 +1897,7 @@ def _create_conversation_from_workspace_selection(
                 return False
     else:
         console.print(f"[yellow]No workspace configured[/yellow]")
-        console.print(f"[dim]Configure workspace with: daf config tui[/dim]")
+        console.print(f"[dim]Configure workspace with: daf config edit[/dim]")
         return False
 
     if not repo_options:

@@ -245,16 +245,16 @@ fi
 
 # Test 6: List conversations
 print_section "Test 6: List All Conversations"
-print_test "Use daf sessions list to view all conversations"
+print_test "Use daf list to view all conversations"
 
-LIST_SESSIONS_OUTPUT=$(daf sessions list "$SESSION_NAME" 2>&1)
+LIST_SESSIONS_OUTPUT=$(daf list "$SESSION_NAME" 2>&1)
 LIST_EXIT=$?
 
 if [ $LIST_EXIT -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} daf sessions list executed successfully"
+    echo -e "  ${GREEN}✓${NC} daf list executed successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    echo -e "  ${RED}✗${NC} daf sessions list FAILED"
+    echo -e "  ${RED}✗${NC} daf list FAILED"
     exit 1
 fi
 
@@ -387,7 +387,7 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo "  ✓ Created JIRA ticket for cross-repo work"
     echo "  ✓ Opened session in 3 different repositories"
     echo "  ✓ Session maintains 3 separate conversations"
-    echo "  ✓ daf sessions list - Shows all conversations"
+    echo "  ✓ daf list - Shows all conversations"
     echo "  ✓ Conversation isolation - Unique working directories"
     echo "  ✓ Work in each repository independently"
     echo "  ✓ Session info shows all working directories"

@@ -130,7 +130,7 @@ daf git add-comment "owner/repo#123" "..."
 
 ### Maintenance
 ```bash
-daf cleanup-conversation <session> --older-than 8h
+daf maintenance cleanup-conversation <session> --older-than 8h
 daf export <session> --output file.tar.gz
 daf import file.tar.gz
 daf template save <session> <name>
@@ -248,7 +248,7 @@ DevAIFlow supports running Claude Code with alternative AI models for cost savin
 - Vertex AI - Google Cloud AI models
 - Minimax - Chinese market AI provider
 
-**Configuration:** Use `daf config tui` to configure model provider profiles. See [docs/alternative-model-providers.md](reference/alternative-model-providers.md) for setup instructions.
+**Configuration:** Use `daf config edit` to configure model provider profiles. See [docs/alternative-model-providers.md](reference/alternative-model-providers.md) for setup instructions.
 
 **⚠️ Note:** Ollama is NOT compatible with Claude Code. Use llama.cpp instead.
 

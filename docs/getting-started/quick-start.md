@@ -334,7 +334,7 @@ If you hit "413 Prompt too long" errors:
 ```bash
 # 1. Exit Claude Code first!
 # 2. Clean up old messages
-daf cleanup-conversation PROJ-12345 --older-than 8h
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h
 
 # 3. Reopen
 daf open PROJ-12345
@@ -398,8 +398,8 @@ daf git add-comment "owner/repo#123" "..."           # Add comment (quotes requi
 ### Utilities
 
 ```bash
-daf cleanup-conversation <name> --older-than 8h    # Clean old messages
-daf cleanup-sessions                               # Fix orphaned sessions
+daf maintenance cleanup-conversation <name> --older-than 8h    # Clean old messages
+daf maintenance cleanup-sessions                               # Fix orphaned sessions
 daf export <name> --output session.tar.gz          # Export session
 daf template save <name> my-template               # Save as template
 ```
@@ -475,8 +475,8 @@ daf delete --all
 Many commands support `--dry-run`:
 ```bash
 daf sync --dry-run
-daf cleanup-conversation PROJ-12345 --older-than 8h --dry-run
-daf cleanup-sessions --dry-run
+daf maintenance cleanup-conversation PROJ-12345 --older-than 8h --dry-run
+daf maintenance cleanup-sessions --dry-run
 ```
 
 ## Troubleshooting Quick Issues
@@ -484,10 +484,10 @@ daf cleanup-sessions --dry-run
 **Session won't open:**
 ```bash
 # Check if conversation file exists
-daf cleanup-sessions --dry-run
+daf maintenance cleanup-sessions --dry-run
 
 # Fix orphaned sessions
-daf cleanup-sessions
+daf maintenance cleanup-sessions
 ```
 
 **JIRA sync not working:**
