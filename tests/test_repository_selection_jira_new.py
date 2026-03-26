@@ -46,33 +46,24 @@ def mock_config(mock_workspace, temp_daf_home):
     return config
 
 
-def test_empty_input_returns_none_with_error(mock_workspace, mock_config, monkeypatch):
-    """Test that pressing Enter without input shows error and returns None (PROJ-61069)."""
+def test_empty_input_uses_default(mock_workspace, mock_config, monkeypatch):
+    """Test that pressing Enter without input uses the default selection (first repository)."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate empty input (pressing Enter)
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "")
+    # Mock Prompt.ask to simulate empty input (pressing Enter) - returns default
+    def mock_ask(prompt, **kwargs):
+        # When user presses Enter, Prompt.ask returns the default value
+        return kwargs.get('default', '')
 
-    # Mock console to capture output
-    console_output = []
-    original_print = Console.print
-
-    def mock_print(self, *args, **kwargs):
-        if args:
-            console_output.append(str(args[0]))
-        return original_print(self, *args, **kwargs)
-
-    monkeypatch.setattr(Console, "print", mock_print)
+    monkeypatch.setattr(Prompt, "ask", mock_ask)
 
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
 
-    # Verify: Returns (None, None)
-    assert result == (None, None)
-
-    # Verify: Error message was shown
-    error_messages = [msg for msg in console_output if "Empty selection not allowed" in msg]
-    assert len(error_messages) > 0, f"Expected error message about empty selection, got: {console_output}"
+    # Verify: Returns tuple with path to first repository (default is "1")
+    assert result is not None
+    assert result[0] is not None
+    assert "repo1" in result[0] or "repo2" in result[0] or "repo3" in result[0]
 
 
 def test_whitespace_input_returns_none_with_error(mock_workspace, mock_config, monkeypatch):
@@ -80,7 +71,7 @@ def test_whitespace_input_returns_none_with_error(mock_workspace, mock_config, m
     from rich.prompt import Prompt
 
     # Mock Prompt.ask to simulate whitespace input
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "   ")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "   ")
 
     # Mock console to capture output
     console_output = []
@@ -109,7 +100,7 @@ def test_valid_number_selection_succeeds(mock_workspace, mock_config, monkeypatc
     from rich.prompt import Prompt
 
     # Mock Prompt.ask to simulate selecting first repository
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "1")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "1")
 
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
@@ -125,7 +116,7 @@ def test_cancel_returns_none(mock_workspace, mock_config, monkeypatch):
     from rich.prompt import Prompt
 
     # Mock Prompt.ask to simulate cancel
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "cancel")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "cancel")
 
     # Call the function
     result = _prompt_for_repository_selection(config=mock_config)
@@ -139,7 +130,7 @@ def test_valid_repo_name_succeeds(mock_workspace, mock_config, monkeypatch):
     from rich.prompt import Prompt, Confirm
 
     # Mock Prompt.ask to simulate entering repository name
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "repo2")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "repo2")
 
     # Mock Confirm.ask to always return True (use the path)
     monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: True)
@@ -158,7 +149,7 @@ def test_invalid_number_returns_none(mock_workspace, mock_config, monkeypatch):
     from rich.prompt import Prompt
 
     # Mock Prompt.ask to simulate invalid number (out of range)
-    monkeypatch.setattr(Prompt, "ask", lambda prompt: "999")
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "999")
 
     # Mock console to capture output
     console_output = []

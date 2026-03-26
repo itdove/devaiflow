@@ -1184,7 +1184,8 @@ def scan_workspace_repositories(workspace_path: str) -> list[str]:
 def prompt_repository_selection(
     repo_options: list[str],
     workspace_path: str,
-    allow_cancel: bool = True
+    allow_cancel: bool = True,
+    default_repo: Optional[str] = None
 ) -> Optional[str]:
     """Prompt user to select a repository from a list.
 
@@ -1194,6 +1195,7 @@ def prompt_repository_selection(
         repo_options: List of repository names to choose from
         workspace_path: Workspace path (for constructing full paths)
         allow_cancel: If True, allow user to cancel selection
+        default_repo: Optional default repository name (will be shown as [default])
 
     Returns:
         Full path to selected repository, or None if user cancelled
@@ -1202,6 +1204,8 @@ def prompt_repository_selection(
         >>> repos = ['backend-api', 'frontend-app']
         >>> prompt_repository_selection(repos, "/Users/john/repos")
         '/Users/john/repos/backend-api'  # If user selected option 1
+        >>> prompt_repository_selection(repos, "/Users/john/repos", default_repo="backend-api")
+        '/Users/john/repos/backend-api'  # If user pressed Enter (uses default)
     """
     from rich.prompt import Prompt
 
@@ -1223,7 +1227,13 @@ def prompt_repository_selection(
     if allow_cancel:
         console.print(f"  • Enter 'cancel' or 'q' to exit")
 
-    selection = Prompt.ask("Selection")
+    # Calculate default selection
+    default_selection = "1"  # Default to first repository
+    if default_repo and default_repo in repo_options:
+        default_index = repo_options.index(default_repo) + 1
+        default_selection = str(default_index)
+
+    selection = Prompt.ask("Selection", default=default_selection)
 
     # Validate input is not empty
     if not selection or selection.strip() == "":
@@ -1303,7 +1313,13 @@ def prompt_multi_project_selection(
         else:
             console.print(f"{i}. {repo}")
 
-    selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)")
+    # Calculate default selection based on suggested repo
+    default_selection = "1"  # Default to first repository
+    if suggested_repo and suggested_repo in repo_options:
+        default_index = repo_options.index(suggested_repo) + 1
+        default_selection = str(default_index)
+
+    selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)", default=default_selection)
 
     # Parse selection (could be numbers or names)
     selected_projects = []
@@ -1423,7 +1439,7 @@ def prompt_repository_selection_with_multiproject(
             return project_paths, selected_workspace_name
 
     # Single-project selection (fallback or default)
-    project_path = prompt_repository_selection(repo_options, workspace_path, allow_cancel=True)
+    project_path = prompt_repository_selection(repo_options, workspace_path, allow_cancel=True, default_repo=suggested_repo)
     if not project_path:
         return None, None
 

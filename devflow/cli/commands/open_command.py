@@ -2364,7 +2364,13 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
                 else:
                     console.print(f"{i}. {repo}")
 
-            selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)")
+            # Calculate default based on suggested repo
+            default_selection = "1"  # Default to first repository
+            if suggested_repo and suggested_repo in repo_options:
+                default_index = repo_options.index(suggested_repo) + 1
+                default_selection = str(default_index)
+
+            selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)", default=default_selection)
 
             # Parse selection (could be numbers or names)
             selected_projects = []
@@ -2420,13 +2426,12 @@ def _prompt_for_working_directory(session, config_loader, session_manager, selec
         console.print(f"  • Enter an absolute path (starting with / or ~)")
         console.print(f"  • Enter 'cancel' or 'q' to exit")
 
-    # Set default to suggested repository if found
-    default_value = None
+    # Set default to suggested repository if found, otherwise default to first repo
+    default_value = "1"  # Default to first repository
     if suggested_repo_index is not None:
         default_value = str(suggested_repo_index + 1)  # 1-indexed for display
-        selection = Prompt.ask("Selection", default=default_value)
-    else:
-        selection = Prompt.ask("Selection")
+
+    selection = Prompt.ask("Selection", default=default_value)
 
     # Validate input is not empty
     if not selection or selection.strip() == "":
