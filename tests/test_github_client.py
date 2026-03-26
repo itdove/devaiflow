@@ -29,6 +29,15 @@ def mock_subprocess_run():
         yield mock_run
 
 
+@pytest.fixture
+def mock_gh_auth_check():
+    """Mock GitHub auth check to always return success."""
+    with patch('devflow.github.issues_client.check_gh_auth_for_repo') as mock_check:
+        # Default: auth check passes
+        mock_check.return_value = (True, 'ok', '')
+        yield mock_check
+
+
 class TestInitialization:
     """Tests for GitHubClient initialization."""
 
@@ -220,7 +229,7 @@ class TestGetTicket:
         assert issue['assignee'] == 'user1'
         assert issue['milestone'] == 'v1.0'
 
-    def test_get_ticket_not_found(self, github_client, mock_subprocess_run):
+    def test_get_ticket_not_found(self, github_client, mock_subprocess_run, mock_gh_auth_check):
         """Test getting a non-existent ticket."""
         mock_subprocess_run.return_value = Mock(
             returncode=1,

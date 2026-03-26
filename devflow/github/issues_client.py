@@ -25,6 +25,7 @@ from devflow.issue_tracker.exceptions import (
     IssueTrackerConfigError,
 )
 from devflow.github.field_mapper import GitHubFieldMapper
+from devflow.github.auth import check_gh_auth_for_repo, handle_auth_error
 from devflow.utils.git_remote import GitRemoteDetector
 
 
@@ -66,6 +67,27 @@ class GitHubClient(IssueTrackerClient):
             self.repository = repository
             self.field_mapper = GitHubFieldMapper()
 
+    def _extract_repo_from_api_path(self, api_path: str) -> Optional[str]:
+        """Extract repository from GitHub API path.
+
+        Args:
+            api_path: API path (e.g., '/repos/owner/repo/issues/123')
+
+        Returns:
+            Repository in owner/repo format, or None if not found
+
+        Examples:
+            >>> self._extract_repo_from_api_path('/repos/owner/repo/issues/123')
+            'owner/repo'
+            >>> self._extract_repo_from_api_path('/user')
+            None
+        """
+        # Match /repos/owner/repo/...
+        match = re.match(r'^/repos/([\w.-]+/[\w.-]+)', api_path)
+        if match:
+            return match.group(1)
+        return None
+
     def _run_gh_command(self, args: List[str]) -> str:
         """Run a gh CLI command and return output.
 
@@ -80,6 +102,19 @@ class GitHubClient(IssueTrackerClient):
             IssueTrackerConnectionError: If connection fails
             IssueTrackerApiError: If command fails
         """
+        # Pre-flight auth check for API calls (not for 'gh auth status' itself)
+        if args and args[0] == 'api' and len(args) > 1:
+            # Don't check auth for /user endpoints (used by 'gh auth status')
+            api_path = args[1]
+            if not api_path.startswith('/user'):
+                # Extract repository from API path
+                repo = self._extract_repo_from_api_path(api_path)
+                if repo:
+                    # Check authentication before making the API call
+                    authenticated, error_type, error_msg = check_gh_auth_for_repo(repo)
+                    if not authenticated:
+                        handle_auth_error(repo, error_type, error_msg)
+
         cmd = ['gh'] + args
 
         try:
