@@ -211,6 +211,10 @@ def test_daf_new_sets_status_paused_after_claude_exits(temp_daf_home, monkeypatc
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
 
+    # Ensure DAF_MOCK_MODE is not set (could be set in CI/CD)
+    # This ensures the "Launch Claude Code?" prompt is shown
+    monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+
     # Mock subprocess.run to prevent actual Claude Code launch
     def mock_subprocess_run(cmd, *args, **kwargs):
         # Simulate Claude Code exiting successfully
