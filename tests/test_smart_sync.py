@@ -16,9 +16,10 @@ def test_sync_with_workspace_filter_skips_jira(temp_daf_home):
     """Test: daf sync -w workspace → sync workspace only (skip JIRA)."""
     runner = CliRunner()
 
-    # Initialize config
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Initialize config - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock JIRA client to verify it's NOT called
     with patch("devflow.cli.commands.sync_command.JiraClient") as mock_jira:
@@ -34,9 +35,10 @@ def test_sync_with_repository_filter_skips_jira(temp_daf_home):
     """Test: daf sync --repository → sync repository only (skip JIRA)."""
     runner = CliRunner()
 
-    # Initialize config
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Initialize config - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock JIRA client to verify it's NOT called
     with patch("devflow.cli.commands.sync_command.JiraClient") as mock_jira:
@@ -51,9 +53,10 @@ def test_sync_workspace_filter_shows_no_jira_message_when_jira_configured(temp_d
     """Test: daf sync -w workspace with JIRA configured shows no JIRA skip message (silent)."""
     runner = CliRunner()
 
-    # Initialize config with JIRA configured
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Initialize config with JIRA configured - select Local preset (option 4) then configure JIRA manually
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Configure JIRA (add jira_project to organization.json)
     import json
@@ -79,9 +82,10 @@ def test_sync_repository_filter_shows_no_jira_message_when_jira_configured(temp_
     """Test: daf sync --repository with JIRA configured shows no JIRA skip message (silent)."""
     runner = CliRunner()
 
-    # Initialize config with JIRA configured
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Initialize config with JIRA configured - select Local preset (option 4) then configure JIRA manually
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Configure JIRA
     import json
@@ -107,9 +111,10 @@ def test_sync_without_jira_configured_shows_jira_not_configured_message(temp_daf
     """Test: daf sync without JIRA configured shows 'JIRA not configured' message."""
     runner = CliRunner()
 
-    # Initialize config without JIRA
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Initialize config without JIRA - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Run sync without workspace filter (should check JIRA)
     with patch("devflow.cli.commands.sync_command.scan_workspace_for_repositories", return_value=[]):
