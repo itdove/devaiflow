@@ -886,7 +886,7 @@ When listing with default settings (fewer than 25 sessions):
 ```
 Your Sessions
 ┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
-┃ Status   ┃ Name            ┃ JIRA       ┃ Summary                  ┃ Working Dir ┃  Time ┃ Tokens ┃
+┃ Status   ┃ Name            ┃ Issue      ┃ Summary                  ┃ Working Dir ┃  Time ┃ Tokens ┃
 ┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
 │ Active   │ session1 (#1)   │ PROJ-12345  │ Implement backup feature │ backend-api │ 5h 45m│  1.2M  │
 │ Complete │ session2 (#2)   │ PROJ-12346  │ Fix login bug            │ frontend    │ 1h 20m│ 450.5K │
@@ -901,7 +901,7 @@ When interactive pagination is active (more than limit sessions):
 ```
 Your Sessions
 ┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
-┃ Status   ┃ Name            ┃ JIRA       ┃ Summary                  ┃ Working Dir ┃  Time ┃ Tokens ┃
+┃ Status   ┃ Name            ┃ Issue      ┃ Summary                  ┃ Working Dir ┃  Time ┃ Tokens ┃
 ┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
 │ Active   │ session1 (#1)   │ PROJ-12345  │ Implement backup feature │ backend-api │ 5h 45m│  1.2M  │
 │ Complete │ session2 (#2)   │ PROJ-12346  │ Fix login bug            │ frontend    │ 1h 20m│ 450.5K │

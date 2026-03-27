@@ -80,7 +80,7 @@ def cleanup_sessions(dry_run: bool = False, force: bool = False) -> None:
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("Session", style="cyan")
-    table.add_column("JIRA", style="yellow")
+    table.add_column("Issue", style="yellow")
     table.add_column("Missing UUID", style="red")
     table.add_column("Status", style="dim")
 
