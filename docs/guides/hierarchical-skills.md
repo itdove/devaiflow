@@ -102,12 +102,74 @@ When Claude Code starts, skills are loaded in this order:
 
 ## How It Works
 
+### Repository Layouts
+
+DevAIFlow supports two repository layouts for hierarchical configuration:
+
+#### Standard Layout (v3.0+, Recommended)
+
+The standard layout uses organized subdirectories:
+
+```
+my-org-devaiflow/
+├── configs/               # JSON configuration files
+│   ├── enterprise.json
+│   ├── organization.json
+│   └── team.json
+├── context/               # Context/policy markdown files
+│   ├── ENTERPRISE.md
+│   ├── ORGANIZATION.md
+│   ├── TEAM.md
+│   └── USER.md
+└── daf-skills/           # Skill directories
+    ├── enterprise/
+    │   └── SKILL.md
+    ├── organization/
+    │   └── SKILL.md
+    ├── team/
+    │   └── SKILL.md
+    └── user/
+        └── SKILL.md
+```
+
+**Features:**
+- Automatic skill discovery (all subdirectories in `daf-skills/`)
+- JSON config sync with automatic backups
+- Clean separation of concerns
+- No frontmatter required in context files (optional)
+
+#### Legacy Layout (v2.x, Deprecated)
+
+The legacy layout stores files at the repository root:
+
+```
+my-org-devaiflow/
+├── ENTERPRISE.md         # Has skill_url in frontmatter
+├── ORGANIZATION.md       # Has skill_url in frontmatter
+├── TEAM.md              # Has skill_url in frontmatter
+└── USER.md              # Has skill_url in frontmatter
+```
+
+**Detection:** DevAIFlow automatically detects the layout by checking for `configs/`, `context/`, or `daf-skills/` directories.
+
 ### Installation Workflow
 
-When you run `daf skills`, DevAIFlow:
+When you run `daf skills` or `daf assets --upgrade`, DevAIFlow:
 
-1. **Reads** `config.json` (user config) to find `repos.hierarchical_config_source`
-2. **Downloads** config files (.md) from the source location
+#### For Standard Layout:
+
+1. **Reads** `config.json` to find `repos.hierarchical_config_source`
+2. **Detects** repository layout (standard vs legacy)
+3. **Syncs JSON configs** from `configs/` directory (with automatic backups)
+4. **Downloads** context files (.md) from `context/` directory
+5. **Discovers** all skills in `daf-skills/` directory (dynamic discovery)
+6. **Downloads** and installs each skill to `$DEVAIFLOW_HOME/.claude/skills/`
+7. **Compares** content and only updates changed files
+
+#### For Legacy Layout:
+
+1. **Reads** `config.json` to find `repos.hierarchical_config_source`
+2. **Downloads** config files (.md) from root directory
 3. **Extracts** `skill_url` from each config file's frontmatter
 4. **Downloads** skill content from the `skill_url`
 5. **Installs** skills to `$DEVAIFLOW_HOME/.claude/skills/XX-level/`
@@ -132,9 +194,9 @@ config.json (user config)
   Saves ENTERPRISE.md to ~/.daf-sessions/ENTERPRISE.md
 ```
 
-### Complete Flow Diagram
+### Complete Flow Diagram (Standard Layout)
 
-Here's the complete flow from remote configuration to local skill installation:
+Here's the complete flow for the standard repository layout:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -318,25 +380,55 @@ skill_url: ../daf-skills/enterprise
 
 ### For Organization Administrators
 
-#### 1. Create Directory Structure
+#### 1. Create Directory Structure (Standard Layout)
 
 ```bash
-# Create organization repository
-mkdir -p my-org-devaiflow/{configs,daf-skills/{enterprise,organization,team,user}}
+# Create organization repository with standard layout
+mkdir -p my-org-devaiflow/{configs,context,daf-skills/{enterprise,organization,team,user}}
 
 cd my-org-devaiflow
 ```
 
-#### 2. Create Config Files
+#### 2. Create JSON Config Files (Optional but Recommended)
 
-Create each config file with frontmatter pointing to its skill:
+JSON config files store field mappings, defaults, and other configuration data:
 
-**`configs/ENTERPRISE.md`:**
-```yaml
----
-skill_url: ../daf-skills/enterprise
----
+**`configs/enterprise.json`:**
+```json
+{
+  "field_mappings": {
+    "acceptance_criteria": "customfield_12345",
+    "story_points": "customfield_67890"
+  },
+  "custom_field_defaults": {
+    "workstream": "Platform"
+  }
+}
+```
 
+**`configs/organization.json`:**
+```json
+{
+  "jira_project": "PROJ",
+  "default_issue_type": "Story"
+}
+```
+
+**`configs/team.json`:**
+```json
+{
+  "custom_field_defaults": {
+    "components": ["Backend", "API"]
+  }
+}
+```
+
+#### 3. Create Context Files
+
+Context files contain policies and documentation:
+
+**`context/ENTERPRISE.md`:**
+```markdown
 # Enterprise Guidelines
 
 This document contains enterprise-wide policies...
@@ -344,14 +436,14 @@ This document contains enterprise-wide policies...
 ## AI Agent Backend
 
 All employees must use Claude for AI assistance...
+
+## Custom Fields
+
+See `enterprise.json` for field mappings. Use `daf config show-fields` to view.
 ```
 
-**`configs/ORGANIZATION.md`:**
-```yaml
----
-skill_url: ../daf-skills/organization
----
-
+**`context/ORGANIZATION.md`:**
+```markdown
 # Organization Guidelines
 
 This document contains organization-specific policies...
@@ -361,24 +453,16 @@ This document contains organization-specific policies...
 All JIRA tickets must follow these templates...
 ```
 
-**`configs/TEAM.md`:**
-```yaml
----
-skill_url: ../daf-skills/team
----
-
+**`context/TEAM.md`:**
+```markdown
 # Team Conventions
 
 ## Code Review Standards
 ...
 ```
 
-**`configs/USER.md`:**
-```yaml
----
-skill_url: ../daf-skills/user
----
-
+**`context/USER.md`:**
+```markdown
 # User Preferences
 
 ## Workspace Configuration
@@ -502,28 +586,33 @@ daf init
 
 === Hierarchical Configuration ===
 
-Optional: URL to organization-wide config files (ENTERPRISE.md, ORGANIZATION.md, etc.)
+Optional: URL to organization-wide config repository
 This enables automatic distribution of organization policies and AI agent skills.
-After setting this, run 'daf skills' to download config files and skills.
+After setting this, run 'daf assets --upgrade' to sync config files and skills.
 
 Examples:
-  - file:///company/shared/devaiflow/configs
-  - https://github.com/company/devaiflow-config/configs
+  - file:///company/shared/devaiflow
+  - https://github.com/company/devaiflow-config
 
 Configure hierarchical config source now? (y/N): y
-Hierarchical config source URL: file:///company/shared/my-org-devaiflow/configs
+Hierarchical config source URL: file:///company/shared/my-org-devaiflow
 ```
+
+**Note:** For standard layout (v3.0+), point to the repository root, not the `configs/` subdirectory. DevAIFlow will automatically detect subdirectories.
 
 **Option B: Manual Configuration**
 
-Edit `~/.daf-sessions/organization.json`:
+Edit `~/.daf-sessions/config.json`:
 
 ```json
 {
-  "jira_project": "AAP",
-  "hierarchical_config_source": "file:///company/shared/my-org-devaiflow/configs"
+  "repos": {
+    "hierarchical_config_source": "file:///company/shared/my-org-devaiflow"
+  }
 }
 ```
+
+**Migration from v2.x:** If you have `hierarchical_config_source` in `organization.json`, it will be automatically migrated to `config.json` (`repos.hierarchical_config_source`) on first use.
 
 **Option C: Using the TUI**
 
@@ -533,15 +622,25 @@ daf config edit --advanced
 # Set "Hierarchical Config Source" field
 ```
 
-#### 2. Install Skills
+#### 2. Install/Sync Assets
 
 ```bash
-# Install all hierarchical skills
-daf skills
+# Install all assets (bundled skills + hierarchical config/skills)
+daf assets --upgrade
+
+# Or install only hierarchical assets
+daf assets --type hierarchical
 
 # Verify installation
+ls ~/.daf-sessions/
+# Should see: enterprise.json, organization.json, team.json,
+#             ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
+
 ls ~/.daf-sessions/.claude/skills/
-# Should see: 01-enterprise/ 02-organization/ 03-team/ 04-user/
+# Should see: enterprise/ organization/ team/ user/
+
+# Check backups if any files were updated
+daf assets --list-backups
 ```
 
 #### 3. Verify Skills Are Loaded
@@ -661,9 +760,69 @@ See ENTERPRISE.md for field requirement policies.
 
 ---
 
+## CLI Commands
+
+### Basic Commands
+
+```bash
+# Install/upgrade all assets (bundled + hierarchical)
+daf assets --upgrade
+
+# Install only hierarchical assets
+daf assets --type hierarchical
+
+# Skip JSON config sync (context files and skills only)
+daf assets --type hierarchical --no-sync-json
+
+# Preview changes without applying
+daf assets --dry-run
+```
+
+### Backup Management
+
+Since v3.0+, JSON config files are automatically backed up before being overwritten:
+
+```bash
+# List all available backups
+daf assets --list-backups
+
+# Restore from a specific backup
+daf assets --restore-backup enterprise.json.2026-03-26T21:53:54.backup
+```
+
+**Backup Location:** `~/.daf-sessions/backups/`
+
+**Backup Format:** `{filename}.{timestamp}.backup`
+- Example: `enterprise.json.2026-03-26T21:53:54.backup`
+
 ## Directory Structure
 
-### Organization Repository Layout
+### Organization Repository Layout (Standard, v3.0+)
+
+```
+my-org-devaiflow/
+├── configs/                  # JSON configuration files
+│   ├── enterprise.json       # Field mappings, defaults
+│   ├── organization.json     # Organization settings
+│   └── team.json             # Team defaults
+├── context/                  # Context/policy markdown files
+│   ├── ENTERPRISE.md         # Enterprise policies
+│   ├── ORGANIZATION.md       # Organization guidelines
+│   ├── TEAM.md               # Team conventions
+│   └── USER.md               # User preferences template
+├── daf-skills/              # Skill directories (auto-discovered)
+│   ├── enterprise/
+│   │   └── SKILL.md         # Enterprise skill instructions
+│   ├── organization/
+│   │   └── SKILL.md         # Organization skill instructions
+│   ├── team/
+│   │   └── SKILL.md         # Team skill instructions
+│   └── user/
+│       └── SKILL.md         # User skill instructions
+└── README.md                # Setup documentation
+```
+
+### Organization Repository Layout (Legacy, v2.x)
 
 ```
 my-org-devaiflow/
