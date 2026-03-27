@@ -225,7 +225,8 @@ def assets(
             level=install_level,
             project_path=project_path_obj,
             dry_run=dry_run,
-            asset_type=asset_type
+            asset_type=asset_type,
+            no_sync_json=no_sync_json
         )
 
 
@@ -235,7 +236,8 @@ def _install_skills(
     level: str,
     project_path: Optional[Path],
     dry_run: bool,
-    asset_type: str = 'all'
+    asset_type: str = 'all',
+    no_sync_json: bool = False
 ) -> None:
     """Install or upgrade skills.
 
@@ -246,13 +248,14 @@ def _install_skills(
         project_path: Project directory path (required for 'project' or 'both' level)
         dry_run: If True, only show what would be installed
         asset_type: Type of assets to install ('all', 'bundled', 'hierarchical')
+        no_sync_json: If True, skip JSON config sync for hierarchical assets
     """
     if skill_name:
         # Install specific skill (only bundled skills have names, so install bundled + hierarchical)
         _install_specific_skill(skill_name, agents, level, project_path, dry_run, asset_type)
     else:
         # Install all skills
-        _install_all_skills(agents, level, project_path, dry_run, asset_type)
+        _install_all_skills(agents, level, project_path, dry_run, asset_type, no_sync_json)
 
 
 def _install_all_skills(
@@ -260,7 +263,8 @@ def _install_all_skills(
     level: str,
     project_path: Optional[Path],
     dry_run: bool,
-    asset_type: str = 'all'
+    asset_type: str = 'all',
+    no_sync_json: bool = False
 ) -> None:
     """Install all bundled skills and/or hierarchical skills.
 
@@ -270,6 +274,7 @@ def _install_all_skills(
         project_path: Project directory path
         dry_run: If True, only show what would be installed
         asset_type: Type of assets to install ('all', 'bundled', 'hierarchical')
+        no_sync_json: If True, skip JSON config sync for hierarchical assets
     """
     install_bundled = asset_type in ('all', 'bundled')
     install_hierarchical = asset_type in ('all', 'hierarchical')
