@@ -654,7 +654,14 @@ def open_session(
         _sync_branch_for_import(active_conv.project_path, active_conv.branch, remote_url)
 
         # Now handle branch checkout (will find branch if synced above)
-        _handle_branch_checkout(active_conv.project_path, active_conv.branch, config)
+        checkout_successful = _handle_branch_checkout(active_conv.project_path, active_conv.branch, config)
+
+        # Only proceed to sync check if checkout succeeded
+        if not checkout_successful:
+            console.print(f"[yellow]⚠ Cannot proceed: not on session branch '{active_conv.branch}'[/yellow]")
+            console.print(f"[dim]Branch sync check requires being on the correct branch[/dim]")
+            _log_error(f"Branch checkout failed or declined - cannot sync with base branch")
+            return
 
         # Check if branch is behind base branch and offer to sync
         base_branch = active_conv.base_branch if active_conv and active_conv.base_branch else "main"
@@ -1315,26 +1322,29 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
     return True
 
 
-def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[any] = None) -> None:
+def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[any] = None) -> bool:
     """Handle git branch checkout.
 
     Args:
         project_path: Project directory path
         branch_name: Branch name to checkout
         config: Configuration object (optional)
+
+    Returns:
+        True if on correct branch after checkout, False otherwise
     """
     path = Path(project_path)
 
     # Check if this is a git repository
     if not GitUtils.is_git_repository(path):
         console.print(f"[yellow]Warning: Not a git repository, cannot checkout branch {branch_name}[/yellow]")
-        return
+        return False
 
     # Get current branch
     current_branch = GitUtils.get_current_branch(path)
     if current_branch == branch_name:
         console.print(f"[dim]Already on branch: {branch_name}[/dim]")
-        return
+        return True
 
     # Check if branch exists
     if not GitUtils.branch_exists(path, branch_name):
@@ -1343,12 +1353,14 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
             success, error_msg = GitUtils.create_branch(path, branch_name)
             if success:
                 console.print(f"[green]✓[/green] Created and switched to branch: {branch_name}")
+                return True
             else:
                 console.print(f"[red]✗[/red] Failed to create branch")
                 if error_msg:
                     console.print(f"\n[red]Create branch error:[/red]")
                     console.print(f"{error_msg}")
-        return
+                return False
+        return False
 
     # Branch exists, ask to switch (or use configured default)
     should_checkout = True
@@ -1363,11 +1375,16 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
         success, error_msg = GitUtils.checkout_branch(path, branch_name)
         if success:
             console.print(f"[green]✓[/green] Switched to branch: {branch_name}")
+            return True
         else:
             console.print(f"[red]✗[/red] Failed to switch branch")
             if error_msg:
                 console.print(f"\n[red]Checkout error:[/red]")
                 console.print(f"{error_msg}")
+            return False
+    else:
+        # User declined to checkout
+        return False
 
 
 def _detect_working_directory_from_path(path: Path, config_loader) -> Optional[str]:
@@ -2690,6 +2707,14 @@ def _check_and_sync_with_base_branch(
     # Check if this is a git repository
     if not GitUtils.is_git_repository(path):
         return True
+
+    # Safety check: Verify we're on the expected branch
+    current_branch = GitUtils.get_current_branch(path)
+    if current_branch != branch:
+        console.print(f"[red]✗ Safety check failed: not on expected branch[/red]")
+        console.print(f"[dim]Expected: {branch}, Current: {current_branch}[/dim]")
+        console.print(f"[yellow]Cannot sync - please checkout the correct branch first[/yellow]")
+        return False
 
     # Fetch latest from remote to get up-to-date comparison
     console.print(f"[dim]Fetching latest changes from remote...[/dim]")

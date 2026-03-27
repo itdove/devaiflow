@@ -774,8 +774,9 @@ class GitUtils:
         """
         try:
             # Use origin/{base_branch} to check against remote
+            # IMPORTANT: Use branch parameter instead of HEAD to get accurate count
             result = subprocess.run(
-                ["git", "rev-list", "--count", f"HEAD..origin/{base_branch}"],
+                ["git", "rev-list", "--count", f"{branch}..origin/{base_branch}"],
                 cwd=path,
                 capture_output=True,
                 text=True,
