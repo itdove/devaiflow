@@ -10,16 +10,21 @@ from devflow.config.loader import ConfigLoader
 
 
 def test_init_first_time_no_jira_token(temp_daf_home, monkeypatch):
-    """Test first-time init without JIRA token."""
+    """Test first-time init without JIRA token using Local preset."""
     # Unset JIRA_API_TOKEN
     monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
 
     runner = CliRunner()
 
-    # Mock prompts to skip interactive parts
-    # First call: Enable JIRA integration (answer No to skip wizard)
-    # Second call: PR template (answer No to skip)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
+    # Mock prompts for Local-only preset
+    with patch("rich.prompt.Prompt.ask") as mock_prompt:
+        # Preset selection: 4 (Local-only)
+        # Workspace path
+        mock_prompt.side_effect = [
+            "4",  # Choose Local-only preset
+            str(Path.home() / "development")  # Workspace path
+        ]
+
         result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Should succeed and create config
@@ -242,7 +247,7 @@ def test_init_refresh_updates_timestamp(temp_daf_home, mock_jira_cli, monkeypatc
 
 
 def test_init_first_time_with_jira_discovery(temp_daf_home, mock_jira_cli, monkeypatch):
-    """Test first-time init with JIRA field discovery."""
+    """Test first-time init with JIRA preset and field discovery."""
     # Set JIRA_API_TOKEN
     monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
 
@@ -260,42 +265,37 @@ def test_init_first_time_with_jira_discovery(temp_daf_home, mock_jira_cli, monke
 
     runner = CliRunner()
 
-    # Mock all prompts and wizard inputs
+    # Mock all prompts and wizard inputs for JIRA preset
     with patch("rich.prompt.Confirm.ask") as mock_confirm, \
          patch("rich.prompt.Prompt.ask") as mock_prompt, \
          patch("devflow.jira.client.JiraClient"), \
          patch("devflow.jira.field_mapper.JiraFieldMapper.discover_fields", return_value=mock_field_mappings), \
          patch("devflow.cli.main._validate_jira_url", return_value=True):
-        # Confirm prompts:
-        # 1. Enable JIRA integration: Yes
-        # 2. Configure GitHub/GitLab integration now?: No
-        # 3. Configure keywords (in wizard): No
-        # 4. Configure PR/MR template URL (in wizard): No
-        # 5. Discover JIRA fields: Yes
-        # 6. Configure workstream: No
-        mock_confirm.side_effect = [True, False, False, False, True, False]
-
-        # Wizard prompts for JIRA config:
-        # 1. JIRA URL
-        # 2. JIRA Project
-        # 3. Comment visibility type
-        # 4. Comment visibility value (group/role name)
-        # 5. Workstream
-        # 6. Workspace path
+        # Prompt.ask calls:
+        # 1. Preset selection: 3 (JIRA)
+        # 2. JIRA URL
+        # 3. JIRA Project
+        # 4. Workspace path
+        # 5. Visibility type (group/role)
+        # 6. Visibility value (group/role name)
         mock_prompt.side_effect = [
+            "3",  # Choose JIRA preset
             "https://test-jira.example.com",
             "TEST",
+            str(Path.home() / "development"),
             "group",
             "Engineering Team",
-            "TestWorkstream",
-            str(Path.home() / "development")
         ]
+
+        # Confirm.ask calls:
+        # 1. Discover JIRA fields: Yes
+        mock_confirm.side_effect = [True]
 
         result = runner.invoke(cli, ["init"])
 
     # Should succeed
     assert result.exit_code == 0
-    assert "Configuration saved" in result.output
+    assert "Configuration saved" in result.output or "Next Steps:" in result.output
 
     # Verify config was saved
     loader = ConfigLoader()
@@ -314,34 +314,31 @@ def test_init_first_time_with_invalid_jira_url(temp_daf_home, monkeypatch):
 
     runner = CliRunner()
 
-    # Mock prompts and wizard inputs with example URL
-    with patch("rich.prompt.Confirm.ask") as mock_confirm, \
-         patch("rich.prompt.Prompt.ask") as mock_prompt, \
+    # Mock prompts and wizard inputs with example URL using JIRA preset
+    with patch("rich.prompt.Prompt.ask") as mock_prompt, \
          patch("devflow.jira.field_mapper.JiraFieldMapper.discover_fields") as mock_discover, \
          patch("devflow.cli.main._validate_jira_url", return_value=False):
-        # Confirm prompts:
-        # 1. Enable JIRA integration: Yes
-        # 2. Configure GitHub/GitLab integration now?: No
-        # 3. Configure keywords (in wizard): No
-        # 4. Configure hierarchical config source now?: No
-        # 5. Configure PR/MR template URL (in wizard): No
-        mock_confirm.side_effect = [True, False, False, False, False]
-
-        # Wizard prompts - user provides example.com URL (should be detected as invalid)
+        # Prompt.ask calls:
+        # 1. Preset selection: 3 (JIRA)
+        # 2. JIRA URL (invalid example.com)
+        # 3. JIRA Project
+        # 4. Workspace path
+        # 5. Visibility type
+        # 6. Visibility value
         mock_prompt.side_effect = [
+            "3",  # Choose JIRA preset
             "https://jira.example.com",  # Invalid example URL
             "PROJ",
-            "group",                      # Comment visibility type
-            "Engineering Team",           # Comment visibility value
-            "TestWorkstream",
-            str(Path.home() / "development")
+            str(Path.home() / "development"),
+            "group",
+            "Engineering Team",
         ]
 
         result = runner.invoke(cli, ["init"])
 
     # Should succeed but warn about invalid URL
     assert result.exit_code == 0
-    assert "Configuration saved" in result.output
+    assert "Next Steps:" in result.output  # Post-init guidance shown
     assert "JIRA URL appears to be invalid or unreachable" in result.output
 
     # Verify field discovery was NOT called (due to invalid URL)
@@ -354,29 +351,34 @@ def test_init_first_time_with_invalid_jira_url(temp_daf_home, monkeypatch):
 
 
 def test_init_first_time_without_jira_integration(temp_daf_home):
-    """Test first-time init when user chooses not to integrate with JIRA."""
+    """Test first-time init when user chooses Local-only (no JIRA)."""
     runner = CliRunner()
 
-    # Mock prompts - user says No to JIRA integration
-    with patch("rich.prompt.Confirm.ask") as mock_confirm:
-        # 1. Enable JIRA integration: No
-        # 2. PR template config: No
-        mock_confirm.side_effect = [False, False]
+    # Mock prompts - user selects Local-only preset (option 4)
+    with patch("rich.prompt.Prompt.ask") as mock_prompt:
+        # 1. Preset selection: 4 (Local-only)
+        # 2. Workspace path
+        mock_prompt.side_effect = [
+            "4",  # Choose Local-only preset
+            str(Path.home() / "development")
+        ]
 
         result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Should succeed
     assert result.exit_code == 0
-    assert "Created default configuration" in result.output
-    assert "JIRA integration skipped" in result.output
+    assert "Local Sessions Only Setup" in result.output
+    assert "Next Steps:" in result.output
 
     # Verify config was created with defaults
     loader = ConfigLoader()
     config = loader.load_config()
     assert config is not None
     assert config.jira is not None
-    # Should have default example URL
+    # Should have default example URL (minimal JIRA config)
     assert config.jira.url == "https://jira.example.com"
+    # Should NOT have GitHub config
+    assert config.github is None
 
 
 def test_init_reset_no_config_exists(temp_daf_home):
@@ -637,3 +639,188 @@ def test_init_reset_skip_jira_discovery(temp_daf_home, monkeypatch):
     updated_config = loader.load_config()
     assert "old_field" in updated_config.jira.field_mappings
     assert updated_config.jira.field_cache_timestamp == "2020-01-01T00:00:00"
+
+
+def test_init_local_preset(temp_daf_home, monkeypatch):
+    """Test daf init with Local-only preset (option 4)."""
+    # Unset JIRA_API_TOKEN
+    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+
+    runner = CliRunner()
+
+    # Mock prompts
+    with patch("rich.prompt.Prompt.ask") as mock_prompt:
+        # Preset selection: 4 (Local-only)
+        # Workspace path
+        mock_prompt.side_effect = [
+            "4",  # Choose Local-only preset
+            "/test/workspace"  # Workspace path
+        ]
+
+        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Should succeed
+    assert result.exit_code == 0
+    assert "Local Sessions Only Setup" in result.output
+    assert "Next Steps:" in result.output
+    assert "daf new" in result.output
+
+    # Verify config was created
+    loader = ConfigLoader()
+    config = loader.load_config()
+    assert config is not None
+    assert len(config.repos.workspaces) == 1
+    assert config.repos.workspaces[0].path == "/test/workspace"
+    assert config.github is None  # No GitHub config
+
+
+def test_init_github_preset(temp_daf_home, monkeypatch):
+    """Test daf init with GitHub-only preset (option 1)."""
+    # Unset JIRA_API_TOKEN
+    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+
+    runner = CliRunner()
+
+    # Mock prompts
+    with patch("rich.prompt.Prompt.ask") as mock_prompt, \
+         patch("rich.prompt.Confirm.ask") as mock_confirm, \
+         patch("devflow.git.utils.GitUtils.is_git_repository", return_value=True), \
+         patch("devflow.git.utils.GitUtils.detect_repo_type", return_value="github"), \
+         patch("devflow.git.utils.GitUtils.get_remote_url", return_value="https://github.com/user/repo.git"):
+        # Preset selection: 1 (GitHub)
+        # Workspace path
+        # Default labels
+        mock_prompt.side_effect = [
+            "1",  # Choose GitHub preset
+            "/test/workspace",  # Workspace path
+            "backend,devaiflow",  # Default labels
+        ]
+        # Auto-close on complete
+        mock_confirm.side_effect = [True]
+
+        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Should succeed
+    assert result.exit_code == 0
+    assert "GitHub Issues Setup" in result.output
+    assert "Detected GitHub remote" in result.output
+    assert "Next Steps:" in result.output
+    assert "daf git new" in result.output
+
+    # Verify config was created
+    loader = ConfigLoader()
+    config = loader.load_config()
+    assert config is not None
+    assert config.github is not None
+    assert config.github.default_labels == ["backend", "devaiflow"]
+    assert config.github.auto_close_on_complete is True
+
+
+def test_init_gitlab_preset(temp_daf_home, monkeypatch):
+    """Test daf init with GitLab-only preset (option 2)."""
+    # Unset JIRA_API_TOKEN
+    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+
+    runner = CliRunner()
+
+    # Mock prompts
+    with patch("rich.prompt.Prompt.ask") as mock_prompt, \
+         patch("rich.prompt.Confirm.ask") as mock_confirm, \
+         patch("devflow.git.utils.GitUtils.is_git_repository", return_value=True), \
+         patch("devflow.git.utils.GitUtils.detect_repo_type", return_value="gitlab"), \
+         patch("devflow.git.utils.GitUtils.get_remote_url", return_value="https://gitlab.com/user/repo.git"):
+        # Preset selection: 2 (GitLab)
+        # Workspace path
+        # Default labels (empty)
+        mock_prompt.side_effect = [
+            "2",  # Choose GitLab preset
+            "/test/workspace",  # Workspace path
+            "",  # Default labels (empty)
+        ]
+        # Auto-close on complete
+        mock_confirm.side_effect = [False]
+
+        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Should succeed
+    assert result.exit_code == 0
+    assert "GitLab Issues Setup" in result.output
+    assert "Detected GitLab remote" in result.output
+    assert "Next Steps:" in result.output
+    assert "daf git new" in result.output
+
+    # Verify config was created
+    loader = ConfigLoader()
+    config = loader.load_config()
+    assert config is not None
+    assert config.github is not None
+    assert config.github.default_labels == []
+    assert config.github.auto_close_on_complete is False
+
+
+def test_init_jira_preset(temp_daf_home, monkeypatch):
+    """Test daf init with JIRA-only preset (option 3)."""
+    # Set JIRA_API_TOKEN
+    monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+    runner = CliRunner()
+
+    # Mock prompts
+    with patch("rich.prompt.Prompt.ask") as mock_prompt:
+        # Preset selection: 3 (JIRA)
+        # JIRA URL
+        # JIRA Project
+        # Workspace path
+        # Comment visibility type
+        # Comment visibility value
+        mock_prompt.side_effect = [
+            "3",  # Choose JIRA preset
+            "https://test-jira.example.com",  # JIRA URL
+            "TEST",  # JIRA Project
+            "/test/workspace",  # Workspace path
+            "group",  # Visibility type
+            "Engineering Team",  # Visibility value
+        ]
+
+        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Should succeed
+    assert result.exit_code == 0
+    assert "JIRA Setup" in result.output
+    assert "JIRA_API_TOKEN environment variable is set" in result.output
+    assert "Next Steps:" in result.output
+    assert "daf jira new" in result.output
+
+    # Verify config was created
+    loader = ConfigLoader()
+    config = loader.load_config()
+    assert config is not None
+    assert config.jira.url == "https://test-jira.example.com"
+    assert config.jira.project == "TEST"
+    assert config.jira.comment_visibility_type == "group"
+    assert config.jira.comment_visibility_value == "Engineering Team"
+
+
+def test_init_preset_auto_detection(temp_daf_home, monkeypatch):
+    """Test that init wizard auto-detects issue tracker and suggests default."""
+    # Set JIRA_API_TOKEN
+    monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+
+    runner = CliRunner()
+
+    # Mock prompts and auto-detection
+    with patch("rich.prompt.Prompt.ask") as mock_prompt, \
+         patch("devflow.git.utils.GitUtils.is_git_repository", return_value=True), \
+         patch("devflow.git.utils.GitUtils.detect_repo_type", return_value="github"):
+        # Should default to option 1 (GitHub) since detected from git
+        # But JIRA token is also set, so JIRA should show as detected
+        mock_prompt.side_effect = [
+            "4",  # Choose Local-only to skip complex setup
+            "/test/workspace"  # Workspace path
+        ]
+
+        result = runner.invoke(cli, ["init", "--skip-jira-discovery"])
+
+    # Should show detection hints
+    assert result.exit_code == 0
+    assert "detected from git remote" in result.output or "JIRA_API_TOKEN detected" in result.output

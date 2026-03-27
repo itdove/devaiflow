@@ -24,9 +24,10 @@ def test_sync_creates_new_session_with_updated_timestamp(temp_daf_home, mock_jir
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Set up mock issue tracker ticket with updated timestamp
     mock_jira_cli.set_ticket("PROJ-12345", {
@@ -62,9 +63,10 @@ def test_sync_updates_existing_session_when_ticket_changed(temp_daf_home, mock_j
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -118,9 +120,10 @@ def test_sync_skips_existing_session_when_ticket_unchanged(temp_daf_home, mock_j
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -172,9 +175,10 @@ def test_sync_updates_existing_session_without_jira_updated(temp_daf_home, mock_
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -227,9 +231,10 @@ def test_sync_handles_missing_updated_field_gracefully(temp_daf_home, mock_jira_
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Set up mock issue tracker ticket WITHOUT updated timestamp
     mock_jira_cli.set_ticket("PROJ-12345", {
@@ -265,9 +270,10 @@ def test_sync_multiple_sessions_mixed_updates(temp_daf_home, mock_jira_cli):
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
 
@@ -364,9 +370,10 @@ def test_sync_ignores_ticket_creation_sessions_and_creates_development_session(t
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -441,9 +448,10 @@ def test_sync_inherits_workspace_from_creation_session(temp_daf_home, mock_jira_
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -497,9 +505,10 @@ def test_sync_no_workspace_inheritance_when_creation_session_missing(temp_daf_ho
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -542,9 +551,10 @@ def test_sync_no_workspace_inheritance_when_workspace_not_set(temp_daf_home, moc
     # Initialize config
     from unittest.mock import patch
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -617,9 +627,10 @@ def test_sync_no_sync_filters(temp_daf_home, mock_jira_cli, capsys):
     from click.testing import CliRunner
 
     runner = CliRunner()
-    # Initialize but without sync filters
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Initialize but without sync filters - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Remove sync filters from config
     config_loader = ConfigLoader()
@@ -641,8 +652,10 @@ def test_sync_jira_auth_error(temp_daf_home, mock_jira_cli, capsys):
     from devflow.jira.exceptions import JiraAuthError
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock JIRA client to raise auth error
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -662,8 +675,10 @@ def test_sync_jira_api_error(temp_daf_home, mock_jira_cli, capsys):
     from devflow.jira.exceptions import JiraApiError
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock JIRA client to raise API error
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -683,8 +698,10 @@ def test_sync_jira_connection_error(temp_daf_home, mock_jira_cli, capsys):
     from devflow.jira.exceptions import JiraConnectionError
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock JIRA client to raise connection error
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -703,8 +720,10 @@ def test_sync_no_tickets_found(temp_daf_home, mock_jira_cli, capsys):
     from click.testing import CliRunner
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock client to return empty list
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -724,8 +743,10 @@ def test_sync_ticket_missing_issue_type(temp_daf_home, mock_jira_cli, capsys):
     from click.testing import CliRunner
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Set up ticket without type field
     mock_jira_cli.set_ticket("PROJ-999", {
@@ -757,8 +778,10 @@ def test_sync_multi_backend_with_workspace_filter(temp_daf_home, capsys):
     from devflow.config.models import WorkspaceDefinition
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock config with multiple workspaces
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -801,8 +824,10 @@ def test_sync_multi_backend_with_invalid_workspace_filter(temp_daf_home, capsys)
     from devflow.config.models import WorkspaceDefinition
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock config with workspaces
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -840,8 +865,10 @@ def test_sync_multi_backend_with_repository_filter(temp_daf_home, capsys):
     from devflow.config.models import WorkspaceDefinition
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock config with workspace
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -891,8 +918,10 @@ def test_sync_multi_backend_with_invalid_repository_filter(temp_daf_home, capsys
     from devflow.config.models import WorkspaceDefinition
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock config with workspace
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -937,9 +966,10 @@ def test_sync_github_inherits_workspace_from_creation_session(temp_daf_home, moc
     from devflow.cli.commands.sync_command import sync_github_repository
 
     runner = CliRunner()
-    # Mock prompts to skip JIRA integration (use defaults)
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Mock prompts to skip JIRA integration - select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -1007,8 +1037,10 @@ def test_sync_multi_backend_with_workspace_and_repository_filters(temp_daf_home,
     from devflow.config.models import WorkspaceDefinition
 
     runner = CliRunner()
-    with patch("rich.prompt.Confirm.ask", side_effect=[False, False]):
-        runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    # Select Local preset (option 4)
+    with patch("rich.prompt.Prompt.ask", return_value="4"):
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            runner.invoke(cli, ["init", "--skip-jira-discovery"])
 
     # Mock config with multiple workspaces
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
