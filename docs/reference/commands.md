@@ -716,12 +716,15 @@ Which project? [1-3]: 2
    - Starts time tracking
 
 2. **Resuming existing:**
-   - **Checks workspace context (AAP-64497)**
+   - **Checks workspace context (AAP-64497, #320)**
      - If current directory is in a different workspace than session's saved workspace:
-       - Prompts with three options:
-         1. Use session workspace (continue with workspace where session was created)
-         2. Switch to current workspace (update session to use current workspace)
-         3. Cancel (exit without opening session)
+       - Prompts to select workspace with session's previous workspace as default:
+         1. Session's previous workspace [DEFAULT] (continue with workspace where session was created)
+         2. Detected workspace (update session to use current workspace)
+         3. Other configured workspaces
+         4. Cancel (exit without opening session)
+       - **Default selection:** Session's previous workspace (pressing Enter accepts this)
+       - **Rationale:** Sessions remember their workspace for consistency across reopens
      - Workspace mismatch check is skipped when:
        - `--workspace` flag is explicitly provided (intentional override)
        - `--json` flag is used (non-interactive mode defaults to session workspace)

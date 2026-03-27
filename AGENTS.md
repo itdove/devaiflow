@@ -1644,6 +1644,17 @@ class Session(BaseModel):
   - All 2062 tests pass (3 skipped)
   - Documentation updated in docs/07-commands.md (export + import sections)
   - Enables flexible team collaboration with machine-specific workspace preferences
+- ✓ Workspace selection defaults to session's previous workspace on reopen (#320)
+  - Fixed workspace mismatch prompt to show session's previous workspace as option 1 (DEFAULT)
+  - Detected workspace (from current directory) is now option 2 instead of option 1
+  - Pressing Enter accepts the session's previous workspace (maintains session consistency)
+  - Respects workspace selection priority: flag > session > last_used > prompt
+  - Updated _handle_workspace_mismatch() in open_command.py
+  - Updated docstring to reflect new default selection behavior
+  - Comprehensive test coverage (3 new tests + updated existing tests in test_workspace_mismatch.py)
+  - All 3523 tests pass
+  - Documentation updated in docs/reference/commands.md
+  - Ensures session persistence and consistent workspace selection across reopens
 - ✓ Pre-flight JIRA field validation before API calls
   - Created centralized validation module (devflow/jira/validation.py)
   - JiraFieldValidator class validates fields against config.jira.field_mappings

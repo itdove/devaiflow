@@ -140,7 +140,7 @@ def test_handle_workspace_mismatch_user_chooses_session_workspace(
     """Test workspace mismatch when user chooses to use session workspace."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
 
-    with patch("rich.prompt.IntPrompt.ask", return_value=2):  # Changed: session workspace is now choice 2
+    with patch("rich.prompt.IntPrompt.ask", return_value=1):  # Session workspace is choice 1 (DEFAULT)
         result = _handle_workspace_mismatch(
             mock_session,
             mock_session_manager,
@@ -164,7 +164,7 @@ def test_handle_workspace_mismatch_user_chooses_current_workspace(
     """Test workspace mismatch when user chooses to switch to current workspace."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
 
-    with patch("rich.prompt.IntPrompt.ask", return_value=1):  # Changed: detected workspace is now choice 1 (default)
+    with patch("rich.prompt.IntPrompt.ask", return_value=2):  # Detected workspace is choice 2
         result = _handle_workspace_mismatch(
             mock_session,
             mock_session_manager,
@@ -188,7 +188,7 @@ def test_handle_workspace_mismatch_user_cancels(
     """Test workspace mismatch when user cancels."""
     from devflow.cli.commands.open_command import _handle_workspace_mismatch
 
-    with patch("rich.prompt.IntPrompt.ask", return_value=4):  # Changed: cancel is now choice 4 (1=detected, 2=session, 3=workspace-c, 4=cancel)
+    with patch("rich.prompt.IntPrompt.ask", return_value=4):  # Cancel is choice 4 (1=session, 2=detected, 3=workspace-c, 4=cancel)
         result = _handle_workspace_mismatch(
             mock_session,
             mock_session_manager,
@@ -406,3 +406,96 @@ def test_set_workspace_for_session(temp_daf_home, mock_config):
     assert session.workspace_name == "workspace-b"
     # Verify session was saved
     mock_session_manager.update_session.assert_called_once_with(session)
+
+
+def test_handle_workspace_mismatch_default_is_session_workspace(
+    mock_session, mock_session_manager, mock_config
+):
+    """Test that default selection is session's previous workspace when reopening (#320)."""
+    from devflow.cli.commands.open_command import _handle_workspace_mismatch
+
+    # Simulate user pressing Enter to accept default (which should be option 1)
+    with patch("rich.prompt.IntPrompt.ask", return_value=1) as mock_prompt:
+        result = _handle_workspace_mismatch(
+            mock_session,
+            mock_session_manager,
+            "workspace-a",  # session workspace
+            "workspace-b",  # detected workspace
+            mock_config.repos.workspaces,
+            detected_workspace_path="/tmp/workspace-b",
+            skip_prompt=False
+        )
+
+    assert result is True
+    # Verify the prompt was called with default=1
+    mock_prompt.assert_called_once()
+    call_kwargs = mock_prompt.call_args[1]
+    assert call_kwargs.get("default") == 1
+    # Session workspace should not change (default is session workspace)
+    assert mock_session.workspace_name == "workspace-a"
+    mock_session_manager.update_session.assert_not_called()
+
+
+def test_handle_workspace_mismatch_option_order(
+    mock_session, mock_session_manager, mock_config
+):
+    """Test that workspace options are in correct order: session first, detected second (#320)."""
+    from devflow.cli.commands.open_command import _handle_workspace_mismatch
+    from io import StringIO
+    from unittest.mock import patch
+
+    # Capture console output to verify option order
+    captured_output = StringIO()
+
+    with patch("rich.prompt.IntPrompt.ask", return_value=1):
+        with patch("devflow.cli.commands.open_command.console") as mock_console:
+            # Track all print calls
+            print_calls = []
+            mock_console.print.side_effect = lambda *args, **kwargs: print_calls.append(str(args[0]) if args else "")
+
+            result = _handle_workspace_mismatch(
+                mock_session,
+                mock_session_manager,
+                "workspace-a",  # session workspace
+                "workspace-b",  # detected workspace
+                mock_config.repos.workspaces,
+                detected_workspace_path="/tmp/workspace-b",
+                skip_prompt=False
+            )
+
+    # Verify workspace options are displayed in correct order
+    output_text = "\n".join(print_calls)
+
+    # Option 1 should be session workspace with [DEFAULT]
+    assert "1" in output_text
+    assert "workspace-a" in output_text
+    assert "session's previous workspace" in output_text or "DEFAULT" in output_text
+
+    # Option 2 should be detected workspace
+    assert "2" in output_text
+    assert "workspace-b" in output_text
+
+
+def test_handle_workspace_mismatch_accepts_default_with_enter(
+    mock_session, mock_session_manager, mock_config
+):
+    """Test that pressing Enter accepts default (session workspace) (#320)."""
+    from devflow.cli.commands.open_command import _handle_workspace_mismatch
+
+    # User presses Enter without typing anything (accepts default=1)
+    with patch("rich.prompt.IntPrompt.ask", return_value=1):
+        result = _handle_workspace_mismatch(
+            mock_session,
+            mock_session_manager,
+            "workspace-a",  # session workspace
+            "workspace-b",  # detected workspace
+            mock_config.repos.workspaces,
+            detected_workspace_path="/tmp/workspace-b",
+            skip_prompt=False
+        )
+
+    assert result is True
+    # Session workspace should stay as workspace-a (the default)
+    assert mock_session.workspace_name == "workspace-a"
+    # No update needed since workspace didn't change
+    mock_session_manager.update_session.assert_not_called()
