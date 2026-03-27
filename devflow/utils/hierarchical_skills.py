@@ -859,27 +859,33 @@ def download_hierarchical_config_file(
 
 def install_hierarchical_skills(
     dry_run: bool = False,
-    quiet: bool = False
+    quiet: bool = False,
+    sync_json: bool = True
 ) -> Tuple[List[str], List[str], List[str]]:
     """Install organization-specific skills from hierarchical config files.
 
-    First checks if hierarchical_config_source is configured in config.json
-    (repos.hierarchical_config_source). Falls back to organization.json for backward compatibility.
-    If yes, downloads the .md config files from that source to $DEVAIFLOW_HOME.
-    Then reads ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md from $DEVAIFLOW_HOME
-    and installs skills referenced in their frontmatter to
-    $DEVAIFLOW_HOME/.claude/skills/ with numbered prefixes.
+    Supports two repository layouts:
+    1. Standard (v3.0+): configs/, context/, daf-skills/ subdirectories
+       - Downloads JSON configs from configs/ with automatic backups
+       - Downloads context files from context/
+       - Dynamically discovers and installs ALL skills from daf-skills/
+
+    2. Legacy: Files at root with skill_url in frontmatter
+       - Downloads context files from root
+       - Installs skills referenced in frontmatter
 
     Args:
         dry_run: If True, only report what would be installed without installing
         quiet: If True, suppress console output (errors still shown)
+        sync_json: If True, download and update JSON config files (standard layout only)
 
     Returns:
-        Tuple of (changed, up_to_date, failed) skill names
-        - changed: Skills that were installed or updated
-        - up_to_date: Skills that were already up-to-date (not applicable for now)
-        - failed: Skills that failed to install
+        Tuple of (changed, up_to_date, failed) skill/config names
+        - changed: Items that were installed or updated
+        - up_to_date: Items that were already up-to-date
+        - failed: Items that failed to install
     """
+    import json
     from devflow.utils.paths import get_cs_home
     from devflow.config.loader import ConfigLoader
 
@@ -894,6 +900,9 @@ def install_hierarchical_skills(
         (4, "USER.md", "user"),
     ]
 
+    # JSON config files to sync (standard layout only)
+    json_configs = ["enterprise.json", "organization.json", "team.json"]
+
     changed = []
     up_to_date = []
     failed = []
@@ -902,17 +911,12 @@ def install_hierarchical_skills(
     # NEW LOCATION (since v3.0): config.json (user config) - repos.hierarchical_config_source
     # OLD LOCATION (deprecated): organization.json - hierarchical_config_source
     # Try new location first, fall back to old location for backward compatibility
-    config_loader = ConfigLoader()
-
-    # Try reading from config.json (new location)
-    from devflow.utils.paths import get_cs_home
-    user_config_path = get_cs_home() / "config.json"
-    org_config_path = get_cs_home() / "organization.json"
+    user_config_path = cs_home / "config.json"
+    org_config_path = cs_home / "organization.json"
     config_source = None
 
     # Try new location first (config.repos.hierarchical_config_source)
     if user_config_path.exists():
-        import json
         try:
             with open(user_config_path, 'r') as f:
                 user_config = json.load(f)
@@ -924,7 +928,6 @@ def install_hierarchical_skills(
 
     # Fall back to old location for backward compatibility (organization.json)
     if not config_source and org_config_path.exists():
-        import json
         try:
             with open(org_config_path, 'r') as f:
                 org_config = json.load(f)
@@ -939,84 +942,167 @@ def install_hierarchical_skills(
                 console.print(f"[yellow]⚠[/yellow] Could not read organization.json: {e}")
 
     if config_source:
-
         if not quiet:
-            console.print(f"[cyan]Downloading hierarchical config files from:[/cyan] {config_source}")
+            console.print(f"[cyan]Syncing from:[/cyan] {config_source}")
 
-        # For each config file: download, extract skill_url, install skill, then save config
+        # Detect repository layout
+        layout = detect_repository_layout(config_source)
+        if not quiet:
+            layout_name = "standard" if layout == RepositoryLayout.STANDARD else "legacy"
+            console.print(f"[dim]Detected {layout_name} repository layout[/dim]")
+
+        # ============================================================
+        # STEP 1: Download JSON config files (STANDARD LAYOUT ONLY)
+        # ============================================================
+        if layout == RepositoryLayout.STANDARD and sync_json:
+            if not quiet:
+                console.print("\n[bold cyan]Syncing JSON configuration files...[/bold cyan]")
+
+            for json_file in json_configs:
+                try:
+                    # Download JSON config
+                    json_data = download_json_config(config_source, json_file, layout)
+
+                    if json_data is None:
+                        # File doesn't exist in repo - that's OK
+                        if not quiet:
+                            console.print(f"[dim]No {json_file} in repository, skipping[/dim]")
+                        continue
+
+                    target_path = cs_home / json_file
+
+                    # Check if file would change
+                    json_str = json.dumps(json_data, indent=2)
+                    if has_file_changed(target_path, json_str):
+                        if dry_run:
+                            if not quiet:
+                                console.print(f"[yellow]Would update:[/yellow] {json_file}")
+                            changed.append(json_file)
+                        else:
+                            # Create backup before overwriting
+                            if target_path.exists():
+                                backup_path = create_backup(target_path)
+                                if not quiet and backup_path:
+                                    console.print(f"[dim]Backed up to: {backup_path.name}[/dim]")
+
+                            # Write updated JSON
+                            target_path.write_text(json_str + '\n', encoding='utf-8')
+
+                            if not quiet:
+                                console.print(f"[green]✓[/green] Updated {json_file}")
+                            changed.append(json_file)
+                    else:
+                        if not quiet:
+                            console.print(f"[dim]{json_file} is up-to-date[/dim]")
+                        up_to_date.append(json_file)
+
+                except Exception as e:
+                    if not quiet:
+                        console.print(f"[red]✗[/red] Failed to sync {json_file}: {e}")
+                    failed.append(json_file)
+
+        # ============================================================
+        # STEP 2: Download context files (.md)
+        # ============================================================
+        if not quiet:
+            console.print("\n[bold cyan]Syncing context files...[/bold cyan]")
+
         for order_num, config_file, level_name in hierarchy:
             try:
-                if dry_run:
-                    if not quiet:
-                        console.print(f"[yellow]Would download:[/yellow] {config_file}")
-                    # In dry-run, check if skill_url would be found
-                    config_path = cs_home / config_file
-                    if config_path.exists():
-                        skill_url = extract_skill_url(config_path)
-                        if skill_url:
-                            if not quiet:
-                                console.print(f"[cyan]Installing {level_name} skill from:[/cyan] {skill_url}")
-                            skill_dir_name = f"{order_num:02d}-{level_name}"
-                            skill_install_path = skills_install_dir / skill_dir_name
-                            if not quiet:
-                                console.print(f"[yellow]Would install to:[/yellow] {skill_install_path}")
-                            changed.append(skill_dir_name)
-                else:
-                    # Download config content
-                    config_content = download_hierarchical_config_file(config_source, config_file)
+                # Download context file
+                config_content = download_hierarchical_config_file(config_source, config_file, layout)
 
-                    # Create a temporary Path object to represent the source location
-                    # This is used for resolving relative paths in skill_url
-                    if config_source.startswith('file://'):
-                        source_base = Path(config_source.replace('file://', ''))
-                    elif not config_source.startswith(('http://', 'https://')):
-                        # Plain local path - use it directly (expand ~ and resolve)
-                        source_base = Path(config_source).expanduser().resolve()
+                target_path = cs_home / config_file
+
+                # Check if file would change
+                if has_file_changed(target_path, config_content):
+                    if dry_run:
+                        if not quiet:
+                            console.print(f"[yellow]Would update:[/yellow] {config_file}")
+                        changed.append(config_file)
                     else:
-                        # For remote sources (http/https), we can't resolve relative paths
-                        # relative paths only work with local file sources
-                        source_base = cs_home
+                        # Write context file
+                        target_path.write_text(config_content, encoding='utf-8')
+                        if not quiet:
+                            console.print(f"[green]✓[/green] Updated {config_file}")
+                        changed.append(config_file)
+                else:
+                    if not quiet:
+                        console.print(f"[dim]{config_file} is up-to-date[/dim]")
+                    up_to_date.append(config_file)
 
-                    temp_config_path = source_base / config_file
+            except FileNotFoundError:
+                # File doesn't exist in repo - that's OK
+                if not quiet:
+                    console.print(f"[dim]No {config_file} in repository, skipping[/dim]")
+            except Exception as e:
+                if not quiet:
+                    console.print(f"[yellow]⚠[/yellow] Could not download {config_file}: {e}")
+                # Continue with next file even if this one fails
 
-                    # Extract skill_url from the downloaded content
-                    # We need to parse it directly from content since the file isn't written yet
-                    skill_url = None
-                    if config_content.startswith('---\n'):
-                        parts = config_content.split('---\n', 2)
-                        if len(parts) >= 3:
-                            frontmatter = parts[1]
-                            for line in frontmatter.split('\n'):
-                                line = line.strip()
-                                if line.startswith('skill_url:'):
-                                    url = line.split('skill_url:', 1)[1].strip()
-                                    skill_url = url.strip('"').strip("'")
-                                    break
+        # ============================================================
+        # STEP 3: Install skills
+        # ============================================================
+        if not quiet:
+            console.print("\n[bold cyan]Installing skills...[/bold cyan]")
 
-                    # If skill_url found, download and install skill BEFORE writing config
-                    if skill_url:
-                        skill_dir_name = f"{order_num:02d}-{level_name}"
-                        skill_install_path = skills_install_dir / skill_dir_name
+        if layout == RepositoryLayout.STANDARD:
+            # STANDARD LAYOUT: Dynamically discover and install ALL skills from daf-skills/
+            skill_dirs = list_remote_skills(config_source, layout)
 
-                        try:
-                            # Download skill content (pass temp_config_path for relative URL resolution)
-                            skill_content = download_skill(skill_url, config_file_path=temp_config_path)
+            if not skill_dirs:
+                if not quiet:
+                    console.print("[dim]No skills found in daf-skills/ directory[/dim]")
+            else:
+                if not quiet:
+                    console.print(f"[dim]Discovered {len(skill_dirs)} skill(s)[/dim]")
 
-                            # Check if skill already exists and is up-to-date
+                for skill_dir_name in skill_dirs:
+                    try:
+                        # Construct skill URL
+                        if config_source.startswith('http://') or config_source.startswith('https://'):
+                            # For remote, construct URL to skill directory
+                            if 'github.com' in config_source:
+                                # GitHub raw URL
+                                raw_url = config_source.replace('github.com', 'raw.githubusercontent.com')
+                                parts = raw_url.replace('https://raw.githubusercontent.com/', '').split('/')
+                                if len(parts) >= 2:
+                                    if len(parts) == 2 or not re.match(r'^(main|master|develop|v\d+).*', parts[2]):
+                                        raw_url = f"https://raw.githubusercontent.com/{parts[0]}/{parts[1]}/main"
+                                        if len(parts) > 2:
+                                            raw_url += "/" + "/".join(parts[2:])
+                                skill_url = raw_url.rstrip('/') + f'/daf-skills/{skill_dir_name}'
+                            elif 'gitlab.com' in config_source:
+                                # GitLab raw URL
+                                if '/-/raw/' not in config_source:
+                                    base_url = config_source.split('/tree/', 1)[0] if '/tree/' in config_source else config_source
+                                    skill_url = base_url.rstrip('/') + f'/-/raw/main/daf-skills/{skill_dir_name}'
+                                else:
+                                    skill_url = config_source.rstrip('/') + f'/daf-skills/{skill_dir_name}'
+                            else:
+                                skill_url = config_source.rstrip('/') + f'/daf-skills/{skill_dir_name}'
+                        else:
+                            # For local paths
+                            if config_source.startswith('file://'):
+                                local_base = Path(config_source.replace('file://', ''))
+                            else:
+                                local_base = Path(config_source).expanduser().resolve()
+                            skill_url = str(local_base / 'daf-skills' / skill_dir_name)
+
+                        # Download skill content
+                        if dry_run:
+                            if not quiet:
+                                console.print(f"[yellow]Would install:[/yellow] {skill_dir_name}")
+                            changed.append(skill_dir_name)
+                        else:
+                            skill_content = download_skill(skill_url)
+
+                            # Install to ~/.claude/skills/{skill_dir_name}/
+                            skill_install_path = skills_install_dir / skill_dir_name
                             skill_file = skill_install_path / "SKILL.md"
-                            needs_update = True
 
-                            if skill_file.exists():
-                                # Compare content
-                                existing_content = skill_file.read_text(encoding='utf-8')
-                                if existing_content == skill_content:
-                                    needs_update = False
-                                    up_to_date.append(skill_dir_name)
-
-                            if needs_update:
-                                # Only print "Installing..." if we're actually installing
-                                if not quiet:
-                                    console.print(f"[cyan]Installing {level_name} skill from:[/cyan] {skill_url}")
+                            # Check if skill has changed
+                            if has_file_changed(skill_file, skill_content):
                                 # Create skill directory
                                 skill_install_path.mkdir(parents=True, exist_ok=True)
 
@@ -1024,31 +1110,81 @@ def install_hierarchical_skills(
                                 skill_file.write_text(skill_content, encoding='utf-8')
 
                                 if not quiet:
-                                    console.print(f"[green]✓[/green] Installed {level_name} skill to: {skill_install_path}")
-
+                                    console.print(f"[green]✓[/green] Installed skill: {skill_dir_name}")
                                 changed.append(skill_dir_name)
+                            else:
+                                if not quiet:
+                                    console.print(f"[dim]{skill_dir_name} is up-to-date[/dim]")
+                                up_to_date.append(skill_dir_name)
 
-                        except Exception as e:
+                    except Exception as e:
+                        if not quiet:
+                            console.print(f"[red]✗[/red] Failed to install skill {skill_dir_name}: {e}")
+                        failed.append(skill_dir_name)
+
+        else:
+            # LEGACY LAYOUT: Install skills from frontmatter references
+            # Create a temporary Path object for relative URL resolution
+            if config_source.startswith('file://'):
+                source_base = Path(config_source.replace('file://', ''))
+            elif not config_source.startswith(('http://', 'https://')):
+                source_base = Path(config_source).expanduser().resolve()
+            else:
+                source_base = cs_home
+
+            for order_num, config_file, level_name in hierarchy:
+                config_path = cs_home / config_file
+
+                if not config_path.exists():
+                    continue
+
+                # Extract skill_url from frontmatter
+                skill_url = extract_skill_url(config_path)
+
+                if not skill_url:
+                    continue
+
+                skill_dir_name = f"{order_num:02d}-{level_name}"
+                skill_install_path = skills_install_dir / skill_dir_name
+
+                try:
+                    temp_config_path = source_base / config_file
+
+                    if dry_run:
+                        if not quiet:
+                            console.print(f"[yellow]Would install:[/yellow] {skill_dir_name} from {skill_url}")
+                        changed.append(skill_dir_name)
+                    else:
+                        # Download skill content
+                        skill_content = download_skill(skill_url, config_file_path=temp_config_path)
+
+                        # Check if skill has changed
+                        skill_file = skill_install_path / "SKILL.md"
+
+                        if has_file_changed(skill_file, skill_content):
+                            # Create skill directory
+                            skill_install_path.mkdir(parents=True, exist_ok=True)
+
+                            # Write SKILL.md
+                            skill_file.write_text(skill_content, encoding='utf-8')
+
                             if not quiet:
-                                console.print(f"[red]✗[/red] Failed to install {level_name} skill: {e}")
-                            failed.append(skill_dir_name)
+                                console.print(f"[green]✓[/green] Installed skill: {skill_dir_name}")
+                            changed.append(skill_dir_name)
+                        else:
+                            if not quiet:
+                                console.print(f"[dim]{skill_dir_name} is up-to-date[/dim]")
+                            up_to_date.append(skill_dir_name)
 
-                    # Write config to $DEVAIFLOW_HOME
-                    config_path = cs_home / config_file
-                    config_path.write_text(config_content, encoding='utf-8')
-
+                except Exception as e:
                     if not quiet:
-                        console.print(f"[green]✓[/green] Downloaded {config_file} to: {config_path}")
-
-            except Exception as e:
-                if not quiet:
-                    console.print(f"[yellow]⚠[/yellow] Could not download {config_file}: {e}")
-                # Continue with next file even if this one fails
+                        console.print(f"[red]✗[/red] Failed to install skill {skill_dir_name}: {e}")
+                    failed.append(skill_dir_name)
 
     # Also install skills from config files that are already in $DEVAIFLOW_HOME
     # (but weren't downloaded from hierarchical_config_source)
-    # Skip this if we already processed files from hierarchical_config_source
-    if not config_source:
+    # This handles the case where user has local config files without config_source
+    elif not config_source:
         for order_num, config_file, level_name in hierarchy:
             config_path = cs_home / config_file
 
