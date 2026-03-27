@@ -97,6 +97,12 @@ TESTS=(
     "test_session_lifecycle.sh"
     "test_investigation.sh"
     "test_error_handling.sh"
+    "test_cursor_agent.sh"
+    "test_github_copilot_agent.sh"
+    "test_windsurf_agent.sh"
+    "test_upgrade_project_path.sh"
+    "test_devaiflow_home.sh"
+    "test_config.sh"
 )
 
 TEST_DESCRIPTIONS=(
@@ -113,6 +119,12 @@ TEST_DESCRIPTIONS=(
     "Session lifecycle (link, unlink, delete operations)"
     "Investigation-only sessions (read-only mode)"
     "Error handling and validation (edge cases)"
+    "Cursor AI agent integration"
+    "GitHub Copilot agent integration"
+    "Windsurf AI agent integration"
+    "Skills installation with --project-path flag"
+    "DEVAIFLOW_HOME initialization and config creation"
+    "Config prompts configuration validation"
 )
 
 # Counters
