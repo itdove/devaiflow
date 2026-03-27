@@ -9,12 +9,517 @@ to guarantee load order.
 """
 
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Literal
 from rich.console import Console
+from enum import Enum
 import re
 import requests
 
 console = Console()
+
+
+class RepositoryLayout(Enum):
+    """Repository layout types for hierarchical config source."""
+    STANDARD = "standard"  # Has configs/, context/, daf-skills/ subdirectories
+    LEGACY = "legacy"      # Files at root with skill_url in frontmatter
+
+
+def detect_repository_layout(config_source: str) -> RepositoryLayout:
+    """Detect whether hierarchical config source uses standard or legacy layout.
+
+    Standard layout:
+        devflow-config/
+        ├── configs/           # JSON config files
+        ├── context/           # .md context files
+        └── daf-skills/        # Skills directories
+
+    Legacy layout:
+        devflow-config/
+        ├── ENTERPRISE.md      # Context files at root
+        ├── ORGANIZATION.md
+        └── ...
+
+    Args:
+        config_source: Base URL or path to config repository
+                      Examples:
+                      - https://github.com/org/devflow-config
+                      - file:///path/to/configs
+                      - /path/to/configs
+
+    Returns:
+        RepositoryLayout.STANDARD if configs/ directory exists,
+        RepositoryLayout.LEGACY otherwise
+    """
+    # Handle plain local paths
+    if not config_source.startswith(('file://', 'http://', 'https://')):
+        local_path = Path(config_source).expanduser().resolve()
+        # Check if standard layout subdirectories exist
+        if (local_path / "configs").exists() or (local_path / "context").exists() or (local_path / "daf-skills").exists():
+            return RepositoryLayout.STANDARD
+        return RepositoryLayout.LEGACY
+
+    if config_source.startswith('file://'):
+        local_path = Path(config_source.replace('file://', ''))
+        # Check if standard layout subdirectories exist
+        if (local_path / "configs").exists() or (local_path / "context").exists() or (local_path / "daf-skills").exists():
+            return RepositoryLayout.STANDARD
+        return RepositoryLayout.LEGACY
+
+    elif config_source.startswith('http://') or config_source.startswith('https://'):
+        # For remote sources, try to detect by checking if configs/ exists
+        # We'll do a simple HEAD request to configs/ subdirectory
+        from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
+        ssl_verify = get_ssl_verify_setting()
+        timeout = get_request_timeout()
+
+        try:
+            # Construct URL to configs directory
+            if 'github.com' in config_source:
+                # For GitHub, convert to API check
+                # We'll try to access configs/ directory via raw content
+                raw_url = config_source.replace('github.com', 'raw.githubusercontent.com')
+                parts = raw_url.replace('https://raw.githubusercontent.com/', '').split('/')
+
+                if len(parts) >= 2:
+                    # Check if third part looks like a branch
+                    if len(parts) == 2 or not re.match(r'^(main|master|develop|v\d+).*', parts[2]):
+                        # Try to access configs/enterprise.json as a test
+                        test_url = f"https://raw.githubusercontent.com/{parts[0]}/{parts[1]}/main"
+                        if len(parts) > 2:
+                            test_url += "/" + "/".join(parts[2:])
+                        test_url = test_url.rstrip('/') + '/configs/enterprise.json'
+                    else:
+                        test_url = raw_url.rstrip('/') + '/configs/enterprise.json'
+
+                    # Try to fetch - if it exists, it's standard layout
+                    response = requests.head(test_url, timeout=timeout, verify=ssl_verify, allow_redirects=True)
+                    if response.status_code == 200:
+                        return RepositoryLayout.STANDARD
+
+            elif 'gitlab.com' in config_source:
+                # For GitLab, try similar approach
+                if '/-/raw/' not in config_source:
+                    base_url = config_source.split('/tree/', 1)[0] if '/tree/' in config_source else config_source
+                    test_url = base_url.rstrip('/') + '/-/raw/main/configs/enterprise.json'
+                else:
+                    test_url = config_source.rstrip('/') + '/configs/enterprise.json'
+
+                response = requests.head(test_url, timeout=timeout, verify=ssl_verify, allow_redirects=True)
+                if response.status_code == 200:
+                    return RepositoryLayout.STANDARD
+
+        except Exception:
+            # If check fails, assume legacy layout (safer default)
+            pass
+
+        # Default to legacy if we can't detect or check fails
+        return RepositoryLayout.LEGACY
+
+    # Fallback
+    return RepositoryLayout.LEGACY
+
+
+def download_json_config(
+    config_source: str,
+    config_filename: str,
+    layout: RepositoryLayout = RepositoryLayout.STANDARD
+) -> Optional[dict]:
+    """Download JSON config file from hierarchical config source.
+
+    Args:
+        config_source: Base URL or path to config repository
+        config_filename: Name of JSON file (e.g., "enterprise.json")
+        layout: Repository layout type (standard or legacy)
+
+    Returns:
+        Parsed JSON data as dict, or None if file doesn't exist
+
+    Raises:
+        ValueError: If JSON is malformed or download fails for other reasons
+    """
+    import json
+
+    # Construct path based on layout
+    if layout == RepositoryLayout.STANDARD:
+        # Standard layout: files in configs/ subdirectory
+        file_path = f"configs/{config_filename}"
+    else:
+        # Legacy layout: files at root
+        file_path = config_filename
+
+    # Handle plain local paths
+    if not config_source.startswith(('file://', 'http://', 'https://')):
+        local_path = Path(config_source).expanduser().resolve()
+        json_file = local_path / file_path
+
+        if not json_file.exists():
+            return None
+
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Malformed JSON in {json_file}: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to read {json_file}: {e}")
+
+    if config_source.startswith('file://'):
+        local_path = Path(config_source.replace('file://', ''))
+        json_file = local_path / file_path
+
+        if not json_file.exists():
+            return None
+
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Malformed JSON in {json_file}: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to read {json_file}: {e}")
+
+    elif config_source.startswith('http://') or config_source.startswith('https://'):
+        # HTTP(S) URL - download from remote
+        from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
+        ssl_verify = get_ssl_verify_setting()
+        timeout = get_request_timeout()
+
+        # Construct URL to JSON file
+        if 'github.com' in config_source:
+            # Convert to raw content URL
+            raw_url = config_source.replace('github.com', 'raw.githubusercontent.com')
+            parts = raw_url.replace('https://raw.githubusercontent.com/', '').split('/')
+
+            if len(parts) >= 2:
+                if len(parts) == 2 or not re.match(r'^(main|master|develop|v\d+).*', parts[2]):
+                    raw_url = f"https://raw.githubusercontent.com/{parts[0]}/{parts[1]}/main"
+                    if len(parts) > 2:
+                        raw_url += "/" + "/".join(parts[2:])
+
+            raw_url = raw_url.rstrip('/') + '/' + file_path
+
+        elif 'gitlab.com' in config_source:
+            # Convert to raw content URL
+            if '/-/raw/' not in config_source:
+                base_url = config_source.split('/tree/', 1)[0] if '/tree/' in config_source else config_source
+                path = config_source.split('/tree/', 1)[1] if '/tree/' in config_source else ''
+
+                raw_url = base_url.rstrip('/') + '/-/raw/main'
+                if path:
+                    raw_url += '/' + path
+            else:
+                raw_url = config_source
+
+            raw_url = raw_url.rstrip('/') + '/' + file_path
+
+        else:
+            # Generic URL
+            raw_url = config_source.rstrip('/') + '/' + file_path
+
+        # Download content
+        try:
+            response = requests.get(raw_url, timeout=timeout, verify=ssl_verify)
+
+            # 404 means file doesn't exist - return None
+            if response.status_code == 404:
+                return None
+
+            response.raise_for_status()
+
+            # Parse JSON
+            try:
+                return response.json()
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Malformed JSON from {raw_url}: {e}")
+
+        except requests.exceptions.SSLError as e:
+            error_msg = (
+                f"SSL certificate verification failed for {raw_url}\n"
+                f"Error: {e}\n\n"
+                f"See download_skill() error messages for SSL configuration guidance."
+            )
+            raise ValueError(error_msg)
+        except requests.RequestException as e:
+            if "404" not in str(e):  # Don't error on 404, just return None
+                raise ValueError(f"Failed to download JSON config from {raw_url}: {e}")
+            return None
+
+    return None
+
+
+def create_backup(file_path: Path, backup_dir: Optional[Path] = None) -> Optional[Path]:
+    """Create a timestamped backup of a file before overwriting.
+
+    Args:
+        file_path: Path to file to backup
+        backup_dir: Directory to store backups (default: ~/.daf-sessions/backups/)
+
+    Returns:
+        Path to backup file, or None if source file doesn't exist
+
+    Example:
+        /path/to/enterprise.json → backups/enterprise.json.2026-03-26T19:45:00.backup
+    """
+    from datetime import datetime
+
+    if not file_path.exists():
+        return None
+
+    # Default backup directory
+    if backup_dir is None:
+        from devflow.utils.paths import get_cs_home
+        backup_dir = get_cs_home() / "backups"
+
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create timestamped backup filename
+    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    backup_name = f"{file_path.name}.{timestamp}.backup"
+    backup_path = backup_dir / backup_name
+
+    # Copy file to backup location
+    import shutil
+    shutil.copy2(file_path, backup_path)
+
+    return backup_path
+
+
+def list_backups(filename: Optional[str] = None, backup_dir: Optional[Path] = None) -> List[Path]:
+    """List available backups.
+
+    Args:
+        filename: Filter backups for specific file (e.g., "enterprise.json")
+                 If None, list all backups
+        backup_dir: Directory to search (default: ~/.daf-sessions/backups/)
+
+    Returns:
+        List of backup file paths, sorted by timestamp (newest first)
+    """
+    # Default backup directory
+    if backup_dir is None:
+        from devflow.utils.paths import get_cs_home
+        backup_dir = get_cs_home() / "backups"
+
+    if not backup_dir.exists():
+        return []
+
+    # Find backup files
+    if filename:
+        # Filter for specific file
+        pattern = f"{filename}.*.backup"
+        backups = list(backup_dir.glob(pattern))
+    else:
+        # All backup files
+        backups = list(backup_dir.glob("*.backup"))
+
+    # Sort by modification time (newest first)
+    backups.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    return backups
+
+
+def restore_backup(backup_path: Path, target_path: Optional[Path] = None) -> Path:
+    """Restore a file from backup.
+
+    Args:
+        backup_path: Path to backup file
+        target_path: Where to restore the file (if None, extracts from backup filename)
+
+    Returns:
+        Path to restored file
+
+    Raises:
+        FileNotFoundError: If backup doesn't exist
+        ValueError: If backup filename format is invalid
+
+    Example:
+        backups/enterprise.json.2026-03-26T19:45:00.backup → enterprise.json
+    """
+    import shutil
+
+    if not backup_path.exists():
+        raise FileNotFoundError(f"Backup not found: {backup_path}")
+
+    # Extract original filename from backup
+    if target_path is None:
+        # Remove timestamp and .backup extension
+        # Format: filename.YYYY-MM-DDTHH:MM:SS.backup
+        backup_name = backup_path.name
+
+        if not backup_name.endswith('.backup'):
+            raise ValueError(f"Invalid backup filename: {backup_name}")
+
+        # Remove .backup extension
+        without_backup_ext = backup_name[:-7]  # Remove '.backup'
+
+        # Find last dot before timestamp (YYYY-MM-DD...)
+        # Split on dots and rejoin all but the last part (timestamp)
+        parts = without_backup_ext.rsplit('.', 1)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid backup filename format: {backup_name}")
+
+        original_filename = parts[0]
+
+        # Restore to config directory
+        from devflow.utils.paths import get_cs_home
+        target_path = get_cs_home() / original_filename
+
+    # Copy backup to target location
+    shutil.copy2(backup_path, target_path)
+
+    return target_path
+
+
+def list_remote_skills(
+    config_source: str,
+    layout: RepositoryLayout = RepositoryLayout.STANDARD
+) -> List[str]:
+    """Dynamically discover all skills in daf-skills/ directory.
+
+    Args:
+        config_source: Base URL or path to config repository
+        layout: Repository layout type (only STANDARD supports this)
+
+    Returns:
+        List of skill directory names (e.g., ["enterprise", "organization", "custom-workflow"])
+
+    Note:
+        For legacy layout, returns empty list (skills are referenced in frontmatter)
+    """
+    if layout == RepositoryLayout.LEGACY:
+        # Legacy layout doesn't have daf-skills/ directory
+        return []
+
+    skills_path = "daf-skills"
+
+    # Handle plain local paths
+    if not config_source.startswith(('file://', 'http://', 'https://')):
+        local_path = Path(config_source).expanduser().resolve()
+        skills_dir = local_path / skills_path
+
+        if not skills_dir.exists():
+            return []
+
+        # List subdirectories that contain SKILL.md
+        skill_dirs = []
+        for item in skills_dir.iterdir():
+            if item.is_dir() and (item / "SKILL.md").exists():
+                skill_dirs.append(item.name)
+
+        return sorted(skill_dirs)
+
+    if config_source.startswith('file://'):
+        local_path = Path(config_source.replace('file://', ''))
+        skills_dir = local_path / skills_path
+
+        if not skills_dir.exists():
+            return []
+
+        # List subdirectories that contain SKILL.md
+        skill_dirs = []
+        for item in skills_dir.iterdir():
+            if item.is_dir() and (item / "SKILL.md").exists():
+                skill_dirs.append(item.name)
+
+        return sorted(skill_dirs)
+
+    elif config_source.startswith('http://') or config_source.startswith('https://'):
+        # HTTP(S) URL - use API to list directories
+        from devflow.utils.ssl_helper import get_ssl_verify_setting, get_request_timeout
+        ssl_verify = get_ssl_verify_setting()
+        timeout = get_request_timeout()
+
+        try:
+            if 'github.com' in config_source:
+                # Use GitHub API to list directory contents
+                # Convert repo URL to API URL
+                # https://github.com/user/repo → https://api.github.com/repos/user/repo/contents/daf-skills
+
+                # Extract owner/repo from URL
+                parts = config_source.replace('https://github.com/', '').split('/')
+                if len(parts) < 2:
+                    return []
+
+                owner = parts[0]
+                repo = parts[1]
+
+                # Build API URL
+                api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{skills_path}"
+
+                # If there's a path after repo name, include it
+                if len(parts) > 2:
+                    # Check if it's a branch or path
+                    if not re.match(r'^(main|master|develop|v\d+).*', parts[2]):
+                        # It's a path
+                        api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{'/'.join(parts[2:])}/{skills_path}"
+
+                response = requests.get(api_url, timeout=timeout, verify=ssl_verify)
+
+                if response.status_code == 404:
+                    return []
+
+                response.raise_for_status()
+                items = response.json()
+
+                # Filter for directories only
+                skill_dirs = [item['name'] for item in items if item.get('type') == 'dir']
+                return sorted(skill_dirs)
+
+            elif 'gitlab.com' in config_source:
+                # Use GitLab API to list directory contents
+                # https://gitlab.com/user/repo → https://gitlab.com/api/v4/projects/user%2Frepo/repository/tree?path=daf-skills
+
+                # Extract project path from URL
+                parts = config_source.replace('https://gitlab.com/', '').replace('/-/raw/', '/').split('/')
+                if len(parts) < 2:
+                    return []
+
+                # Build project path (URL-encoded)
+                from urllib.parse import quote_plus
+                project_path = quote_plus('/'.join(parts[:2]))
+
+                # Build API URL
+                api_url = f"https://gitlab.com/api/v4/projects/{project_path}/repository/tree"
+                params = {'path': skills_path, 'per_page': 100}
+
+                response = requests.get(api_url, params=params, timeout=timeout, verify=ssl_verify)
+
+                if response.status_code == 404:
+                    return []
+
+                response.raise_for_status()
+                items = response.json()
+
+                # Filter for directories only
+                skill_dirs = [item['name'] for item in items if item.get('type') == 'tree']
+                return sorted(skill_dirs)
+
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] Could not list skills from {config_source}: {e}")
+            return []
+
+    return []
+
+
+def has_file_changed(file_path: Path, new_content: str) -> bool:
+    """Check if file content has changed by comparing checksums.
+
+    Args:
+        file_path: Path to existing file
+        new_content: New content to compare against
+
+    Returns:
+        True if content differs or file doesn't exist, False if identical
+    """
+    if not file_path.exists():
+        return True  # File doesn't exist, so it's "changed"
+
+    try:
+        existing_content = file_path.read_text(encoding='utf-8')
+        return existing_content != new_content
+    except Exception:
+        # If we can't read the file, assume it's changed
+        return True
 
 
 def extract_skill_url(config_path: Path) -> Optional[str]:
@@ -206,7 +711,11 @@ def download_skill(skill_url: str, config_file_path: Optional[Path] = None) -> s
         )
 
 
-def download_hierarchical_config_file(config_url: str, config_filename: str) -> str:
+def download_hierarchical_config_file(
+    config_url: str,
+    config_filename: str,
+    layout: RepositoryLayout = RepositoryLayout.LEGACY
+) -> str:
     """Download hierarchical config file (.md) from URL or read from local path.
 
     Supports:
@@ -222,6 +731,7 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
                     - ~/path/to/configs (home directory expansion)
                     - https://github.com/ansible-saas/devflow-for-red-hatters/configs
         config_filename: Name of config file to download (e.g., "ENTERPRISE.md")
+        layout: Repository layout type (standard uses context/ subdirectory)
 
     Returns:
         Content of config file as string
@@ -231,11 +741,19 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
         FileNotFoundError: If local path doesn't exist
         requests.HTTPError: If HTTP request fails
     """
+    # Determine file path based on layout
+    if layout == RepositoryLayout.STANDARD:
+        # Standard layout: context files in context/ subdirectory
+        file_path = f"context/{config_filename}"
+    else:
+        # Legacy layout: files at root
+        file_path = config_filename
+
     # Handle plain local paths (without file:// scheme)
     if not config_url.startswith(('file://', 'http://', 'https://')):
         # Plain local path - expand user directory and resolve
         local_path = Path(config_url).expanduser().resolve()
-        config_file = local_path / config_filename
+        config_file = local_path / file_path
 
         if not config_file.exists():
             raise FileNotFoundError(f"Config file not found: {config_file}")
@@ -245,7 +763,7 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
     if config_url.startswith('file://'):
         # Local file path
         local_path = Path(config_url.replace('file://', ''))
-        config_file = local_path / config_filename
+        config_file = local_path / file_path
 
         if not config_file.exists():
             raise FileNotFoundError(f"Config file not found: {config_file}")
@@ -258,7 +776,7 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
         # Construct URL to config file
         if 'github.com' in config_url:
             # Convert GitHub repo URL to raw content URL
-            # https://github.com/user/repo/path → https://raw.githubusercontent.com/user/repo/main/path/ENTERPRISE.md
+            # https://github.com/user/repo/path → https://raw.githubusercontent.com/user/repo/main/path/context/ENTERPRISE.md
             raw_url = config_url.replace('github.com', 'raw.githubusercontent.com')
 
             # If URL doesn't contain a branch, assume 'main'
@@ -271,9 +789,8 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
                     if len(parts) > 2:
                         raw_url += "/" + "/".join(parts[2:])
 
-            # Add config filename
-            if not raw_url.endswith(config_filename):
-                raw_url = raw_url.rstrip('/') + '/' + config_filename
+            # Add file path (includes context/ for standard layout)
+            raw_url = raw_url.rstrip('/') + '/' + file_path
 
         elif 'gitlab.com' in config_url:
             # Convert GitLab repo URL to raw content URL
@@ -287,12 +804,12 @@ def download_hierarchical_config_file(config_url: str, config_filename: str) -> 
             else:
                 raw_url = config_url
 
-            if not raw_url.endswith(config_filename):
-                raw_url = raw_url.rstrip('/') + '/' + config_filename
+            # Add file path (includes context/ for standard layout)
+            raw_url = raw_url.rstrip('/') + '/' + file_path
 
         else:
             # Generic URL - assume it points to directory
-            raw_url = config_url.rstrip('/') + '/' + config_filename
+            raw_url = config_url.rstrip('/') + '/' + file_path
 
         # Download content
         try:
