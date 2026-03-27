@@ -439,7 +439,7 @@ def test_multi_project_complete_workflow_integration(temp_daf_home, tmp_path):
         mock_git_complete.is_git_repository.return_value = True
         mock_git_complete.has_uncommitted_changes.return_value = True
         mock_git_complete.get_status_summary.return_value = "M api.py\nM app.js"
-        mock_git_complete.commit_all.return_value = True
+        mock_git_complete.commit_all.return_value = (True, None)
         mock_git_complete.push_branch.return_value = True
         mock_git_complete.is_branch_pushed.return_value = True
         mock_git_complete.has_unpushed_commits.return_value = True

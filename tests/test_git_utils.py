@@ -572,9 +572,10 @@ def test_get_status_summary_with_changes(tmp_path):
 
 def test_commit_all_not_git(tmp_path):
     """Test commit_all with non-git directory."""
-    result = GitUtils.commit_all(tmp_path, "Test commit")
+    success, error_msg = GitUtils.commit_all(tmp_path, "Test commit")
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None  # Should have an error message
 
 
 @pytest.mark.skipif(
@@ -596,10 +597,53 @@ def test_commit_all_success(tmp_path):
     # Make uncommitted change
     (tmp_path / "test.txt").write_text("modified")
 
-    result = GitUtils.commit_all(tmp_path, "Test commit message")
+    success, error_msg = GitUtils.commit_all(tmp_path, "Test commit message")
 
-    assert result is True
+    assert success is True
+    assert error_msg is None  # No error message on success
     assert not GitUtils.has_uncommitted_changes(tmp_path)
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_commit_all_with_pre_commit_hook_failure(tmp_path):
+    """Test commit_all returns error message when pre-commit hook fails."""
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    # Create .git/hooks directory
+    hooks_dir = tmp_path / ".git" / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+
+    # Create a pre-commit hook that always fails with an error message
+    hook_file = hooks_dir / "pre-commit"
+    hook_file.write_text("""#!/bin/sh
+echo "[ERROR] Pre-commit hook blocked the commit" >&2
+echo "[ERROR] Trailing whitespace found in file.py:42" >&2
+echo "[ERROR] Missing import sorting in utils.py" >&2
+exit 1
+""")
+    hook_file.chmod(0o755)
+
+    # Create initial commit
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial", "--no-verify"], cwd=tmp_path, capture_output=True)
+
+    # Make uncommitted change
+    (tmp_path / "test.txt").write_text("modified")
+
+    # Attempt to commit (pre-commit hook will block it)
+    success, error_msg = GitUtils.commit_all(tmp_path, "Test commit message")
+
+    # Should fail with error message
+    assert success is False
+    assert error_msg is not None
+    assert "Pre-commit hook blocked the commit" in error_msg or "pre-commit" in error_msg.lower()
 
 
 def test_detect_repo_type_not_git(tmp_path):

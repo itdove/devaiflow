@@ -224,10 +224,12 @@ def _sync_single_conversation_branch(
 Co-Authored-By: Claude <noreply@anthropic.com>"""
 
         # Commit all changes (REQUIRED)
-        if not GitUtils.commit_all(working_dir, commit_message):
+        success, error_msg = GitUtils.commit_all(working_dir, commit_message)
+        if not success:
+            error_detail = f"\n{error_msg}" if error_msg else ""
             raise ValueError(
                 f"Failed to commit changes in {working_dir_name or branch}\n"
-                f"Cannot export without committing all changes."
+                f"Cannot export without committing all changes.{error_detail}"
             )
         console.print(f"[green]✓[/green] Committed all changes")
 
