@@ -1554,7 +1554,7 @@ def _handle_workspace_mismatch(
     This function prompts the user to confirm what to do when the detected workspace
     (from current directory) differs from the session's stored workspace.
 
-    Shows ALL configured workspaces with detected workspace as default selection.
+    Shows ALL configured workspaces with session's previous workspace as default selection.
 
     Args:
         session: Session object
@@ -1590,20 +1590,20 @@ def _handle_workspace_mismatch(
     # Build workspace options menu showing ALL configured workspaces
     console.print("[bold]Select workspace for this session:[/bold]")
 
-    # Build choices list with detected workspace first, then session workspace, then others
+    # Build choices list with session workspace first (as default), then detected, then others
     workspace_choices = []
     choice_to_workspace = {}
     choice_num = 1
 
-    # Option 1: Detected workspace (from current directory) - marked as DEFAULT
-    workspace_choices.append((choice_num, detected_workspace_name, "[DEFAULT]", True))
-    choice_to_workspace[choice_num] = detected_workspace_name
+    # Option 1: Session's previous workspace - marked as DEFAULT for reopens
+    workspace_choices.append((choice_num, selected_workspace_name, "(session's previous workspace) [DEFAULT]", True))
+    choice_to_workspace[choice_num] = selected_workspace_name
     choice_num += 1
 
-    # Option 2: Session's previous workspace (if different from detected)
-    if selected_workspace_name != detected_workspace_name:
-        workspace_choices.append((choice_num, selected_workspace_name, "(session's previous workspace)", False))
-        choice_to_workspace[choice_num] = selected_workspace_name
+    # Option 2: Detected workspace (from current directory) - if different from session workspace
+    if detected_workspace_name != selected_workspace_name:
+        workspace_choices.append((choice_num, detected_workspace_name, "(detected from current directory)", False))
+        choice_to_workspace[choice_num] = detected_workspace_name
         choice_num += 1
 
     # Options 3+: All other configured workspaces
