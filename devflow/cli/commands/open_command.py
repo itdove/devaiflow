@@ -1350,6 +1350,29 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
     if not GitUtils.branch_exists(path, branch_name):
         console.print(f"[yellow]Branch '{branch_name}' does not exist[/yellow]")
         if Confirm.ask("Create it now?", default=True):
+            # Get default branch to create from
+            default_branch = GitUtils.get_default_branch(path)
+            if not default_branch:
+                default_branch = "main"
+
+            # Ensure we're on the default branch and it's up-to-date
+            current = GitUtils.get_current_branch(path)
+            if current != default_branch:
+                console.print(f"[cyan]Checking out {default_branch}...[/cyan]")
+                checkout_success, _ = GitUtils.checkout_branch(path, default_branch)
+                if not checkout_success:
+                    console.print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}, creating from current branch")
+
+            # Pull latest changes before creating branch
+            console.print(f"[cyan]Pulling latest changes from {default_branch}...[/cyan]")
+            pull_success, pull_error = GitUtils.pull_current_branch(path)
+            if not pull_success:
+                console.print(f"[yellow]⚠[/yellow] Could not pull latest changes: {pull_error}")
+                console.print(f"[yellow]Branch may be created from outdated commit[/yellow]")
+                if not Confirm.ask("Continue anyway?", default=False):
+                    return False
+
+            # Create the branch
             success, error_msg = GitUtils.create_branch(path, branch_name)
             if success:
                 console.print(f"[green]✓[/green] Created and switched to branch: {branch_name}")

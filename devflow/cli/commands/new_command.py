@@ -1759,8 +1759,75 @@ def _handle_branch_creation(
             should_create = Confirm.ask(f"{prompt_prefix}Would you like to create a new branch?", default=True)
 
         if not should_create:
-            # User declined - offer to sync with upstream/main
+            # User declined - offer to select an existing branch
             console_print("\n[dim]No new branch will be created.[/dim]")
+
+            # Get list of local branches and current branch
+            local_branches = GitUtils.list_local_branches(path)
+            current_branch = GitUtils.get_current_branch(path)
+
+            # Only prompt for branch selection if:
+            # 1. In interactive mode
+            # 2. Multiple branches exist
+            # 3. Not in non-interactive mode
+            if local_branches and len(local_branches) > 1 and not (is_json_mode() or non_interactive):
+                console_print("\n[bold]Available local branches:[/bold]")
+                for i, branch in enumerate(local_branches, 1):
+                    if branch == current_branch:
+                        console_print(f"  {i}. {branch} [dim](current)[/dim]")
+                    else:
+                        console_print(f"  {i}. {branch}")
+
+                # Prompt for branch selection
+                branch_prompt = f"\nWhich branch would you like to work on? (1-{len(local_branches)})"
+                if project_name:
+                    branch_prompt = f"\n[{project_name}] Which branch would you like to work on? (1-{len(local_branches)})"
+
+                console_print(f"[dim]Press Enter to keep current branch ({current_branch})[/dim]")
+
+                try:
+                    selection = Prompt.ask(branch_prompt, default="")
+
+                    if selection.strip():
+                        # User entered a value
+                        try:
+                            # Try to parse as number first
+                            branch_index = int(selection) - 1
+                            if 0 <= branch_index < len(local_branches):
+                                selected_branch = local_branches[branch_index]
+                            else:
+                                console_print(f"[yellow]Invalid selection. Using current branch ({current_branch})[/yellow]")
+                                selected_branch = current_branch
+                        except ValueError:
+                            # Not a number - treat as branch name
+                            if selection in local_branches:
+                                selected_branch = selection
+                            else:
+                                console_print(f"[yellow]Branch '{selection}' not found. Using current branch ({current_branch})[/yellow]")
+                                selected_branch = current_branch
+                    else:
+                        # User pressed Enter - keep current
+                        selected_branch = current_branch
+
+                    # Checkout selected branch if different from current
+                    if selected_branch != current_branch:
+                        msg = f"Switching to branch: {selected_branch}"
+                        if project_name:
+                            msg = f"[{project_name}] {msg}"
+                        console_print(f"\n[cyan]{msg}[/cyan]")
+
+                        success, error_msg = GitUtils.checkout_branch(path, selected_branch)
+                        if success:
+                            console_print(f"[green]✓[/green] Switched to branch: [bold]{selected_branch}[/bold]")
+                            current_branch = selected_branch  # Update current_branch for sync prompt
+                        else:
+                            console_print(f"[red]✗[/red] Failed to switch to branch '{selected_branch}'")
+                            if error_msg:
+                                console_print(f"[red]Checkout error:[/red] {error_msg}")
+                            console_print(f"[yellow]Continuing with current branch ({current_branch})[/yellow]")
+
+                except Exception as e:
+                    console_print(f"[yellow]Branch selection error: {e}. Using current branch ({current_branch})[/yellow]")
 
             # Determine if should sync
             if sync_upstream is not None:
@@ -1937,7 +2004,7 @@ def _handle_branch_creation(
         console_print(f"[cyan]{msg}[/cyan]")
         GitUtils.fetch_origin(path)
 
-        # Checkout source branch first
+        # Checkout source branch first (if not already on it)
         current_branch = GitUtils.get_current_branch(path)
         if current_branch != source_branch:
             msg = f"Checking out {source_branch}..."
@@ -1955,13 +2022,33 @@ def _handle_branch_creation(
                     console_print(f"{error_msg}")
                 return None
 
-            # Pull latest if it's a tracking branch
-            if '/' not in source_branch:  # Local branch
-                msg = f"Pulling latest {source_branch}..."
-                if project_name:
-                    msg = f"[{project_name}] {msg}"
-                console_print(f"[cyan]{msg}[/cyan]")
-                GitUtils.pull_current_branch(path)  # Non-critical if fails - ignore return value
+        # Always pull latest if it's a local branch (even if already on it)
+        # This ensures new branch is created from latest commits
+        if '/' not in source_branch:  # Local branch
+            msg = f"Pulling latest {source_branch}..."
+            if project_name:
+                msg = f"[{project_name}] {msg}"
+            console_print(f"[cyan]{msg}[/cyan]")
+            success, error_msg = GitUtils.pull_current_branch(path)
+
+            if not success:
+                # Don't ignore pull failures - warn user
+                console_print(f"[yellow]⚠[/yellow] Could not pull latest {source_branch}")
+                if error_msg:
+                    console_print(f"[yellow]Pull error:[/yellow] {error_msg}")
+                console_print(f"[yellow]Your new branch may be based on an outdated commit[/yellow]")
+
+                if not (is_json_mode() or auto_from_default or non_interactive):
+                    # In interactive mode, ask if they want to continue
+                    continue_prompt = "Continue anyway?"
+                    if project_name:
+                        continue_prompt = f"[{project_name}] {continue_prompt}"
+                    if not Confirm.ask(continue_prompt, default=False):
+                        msg = "Branch creation cancelled"
+                        if project_name:
+                            msg = f"[{project_name}] {msg}"
+                        console_print(f"[yellow]{msg}[/yellow]")
+                        return None
 
         # Create new branch
         success, error_msg = GitUtils.create_branch(path, branch_name)
