@@ -129,7 +129,7 @@ def test_sync_commits_uncommitted_changes_required(mock_git_utils, tmp_path):
     mock_git_utils.is_branch_pushed.return_value = False
     mock_git_utils.has_uncommitted_changes.return_value = True
     mock_git_utils.get_status_summary.return_value = "M file1.py\nA file2.py"
-    mock_git_utils.commit_all.return_value = True
+    mock_git_utils.commit_all.return_value = (True, None)
     mock_git_utils.push_branch.return_value = True
 
     _sync_single_conversation_branch(
@@ -155,7 +155,7 @@ def test_sync_raises_error_on_commit_failure(mock_git_utils, tmp_path):
     mock_git_utils.is_branch_pushed.return_value = False
     mock_git_utils.has_uncommitted_changes.return_value = True
     mock_git_utils.get_status_summary.return_value = "M file1.py"
-    mock_git_utils.commit_all.return_value = False
+    mock_git_utils.commit_all.return_value = (False, "Mock commit error")
 
     with pytest.raises(ValueError, match=r"Failed to commit changes[\s\S]*Cannot export without committing"):
         _sync_single_conversation_branch(
@@ -271,7 +271,7 @@ def test_sync_complete_workflow_with_checkout_pull_commit_push(mock_git_utils, t
     mock_git_utils.pull_current_branch.return_value = True
     mock_git_utils.has_uncommitted_changes.return_value = True
     mock_git_utils.get_status_summary.return_value = "M file1.py"
-    mock_git_utils.commit_all.return_value = True
+    mock_git_utils.commit_all.return_value = (True, None)
     mock_git_utils.push_branch.return_value = True
     mock_git_utils.get_branch_remote_url.return_value = "git@github.com:user/repo.git"
 
@@ -319,7 +319,7 @@ def test_sync_uses_session_name_when_no_issue_key(mock_git_utils, tmp_path):
     mock_git_utils.is_branch_pushed.return_value = False
     mock_git_utils.has_uncommitted_changes.return_value = True
     mock_git_utils.get_status_summary.return_value = "M file1.py"
-    mock_git_utils.commit_all.return_value = True
+    mock_git_utils.commit_all.return_value = (True, None)
     mock_git_utils.push_branch.return_value = True
 
     _sync_single_conversation_branch(

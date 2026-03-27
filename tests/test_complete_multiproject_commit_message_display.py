@@ -71,7 +71,7 @@ def test_multiproject_workflow_displays_commit_message_before_committing(temp_da
          patch('devflow.git.utils.GitUtils.get_current_branch', return_value="feature-caching"), \
          patch('devflow.git.utils.GitUtils.has_uncommitted_changes', return_value=True), \
          patch('devflow.git.utils.GitUtils.get_status_summary', return_value="M  api.py\nM  cache.py"), \
-         patch('devflow.git.utils.GitUtils.commit_all', return_value=True), \
+         patch('devflow.git.utils.GitUtils.commit_all', return_value=(True, None)), \
          patch('devflow.git.utils.GitUtils.has_unpushed_commits', return_value=False), \
          patch('devflow.cli.commands.complete_command.Confirm.ask', side_effect=mock_confirm), \
          patch('devflow.cli.commands.complete_command.Prompt.ask', side_effect=mock_prompt), \
@@ -155,7 +155,7 @@ def test_multiproject_with_multiple_repos_displays_commit_messages(temp_daf_home
          patch('devflow.git.utils.GitUtils.get_current_branch', return_value="sync-changes"), \
          patch('devflow.git.utils.GitUtils.has_uncommitted_changes', return_value=True), \
          patch('devflow.git.utils.GitUtils.get_status_summary', return_value="M  api.py\nM  routes.py"), \
-         patch('devflow.git.utils.GitUtils.commit_all', return_value=True), \
+         patch('devflow.git.utils.GitUtils.commit_all', return_value=(True, None)), \
          patch('devflow.git.utils.GitUtils.has_unpushed_commits', return_value=False), \
          patch('devflow.cli.commands.complete_command.Confirm.ask', side_effect=mock_confirm), \
          patch('devflow.cli.commands.complete_command.Prompt.ask', side_effect=mock_prompt), \
@@ -232,7 +232,7 @@ def test_multiproject_user_can_decline_and_edit_message(temp_daf_home, monkeypat
 
     def mock_commit_all(working_dir, message):
         commit_messages_used.append(message)
-        return True
+        return (True, None)
 
     # Mock git operations
     with patch('devflow.git.utils.GitUtils.is_git_repository', return_value=True), \
@@ -313,7 +313,7 @@ def test_multiproject_allows_user_to_edit_commit_message(temp_daf_home, monkeypa
 
     def mock_commit_all(working_dir, message):
         commit_messages_used.append(message)
-        return True
+        return (True, None)
 
     with patch('devflow.git.utils.GitUtils.is_git_repository', return_value=True), \
          patch('devflow.git.utils.GitUtils.get_current_branch', return_value="add-redis"), \
@@ -371,7 +371,7 @@ def test_single_project_session_still_works_correctly(temp_daf_home, monkeypatch
          patch('devflow.git.utils.GitUtils.has_uncommitted_changes', return_value=True), \
          patch('devflow.git.utils.GitUtils.get_status_summary', return_value="M  login.py"), \
          patch('devflow.git.utils.GitUtils.get_uncommitted_diff', return_value="diff --git a/login.py"), \
-         patch('devflow.git.utils.GitUtils.commit_all', return_value=True), \
+         patch('devflow.git.utils.GitUtils.commit_all', return_value=(True, None)), \
          patch('devflow.git.utils.GitUtils.has_unpushed_commits', return_value=False), \
          patch('devflow.cli.commands.complete_command.Confirm.ask', side_effect=mock_confirm), \
          patch('devflow.cli.commands.complete_command.Prompt.ask', side_effect=mock_prompt), \

@@ -278,7 +278,7 @@ def test_sync_single_conversation_commit_failure(temp_daf_home):
             with patch('devflow.git.utils.GitUtils.fetch_origin'):
                 with patch('devflow.git.utils.GitUtils.has_uncommitted_changes', return_value=True):
                     with patch('devflow.git.utils.GitUtils.get_status_summary', return_value="M file.py"):
-                        with patch('devflow.git.utils.GitUtils.commit_all', return_value=False):
+                        with patch('devflow.git.utils.GitUtils.commit_all', return_value=(False, "Mock commit error")):
                             with pytest.raises(ValueError, match="Failed to commit changes"):
                                 _sync_single_conversation_branch(
                                     project_path=Path("/path/to/project"),

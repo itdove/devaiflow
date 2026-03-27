@@ -269,9 +269,15 @@ def complete_session(
 
 Co-Authored-By: Claude <noreply@anthropic.com>"""
 
-                        if GitUtils.commit_all(working_dir, full_message):
+                        success, error_msg = GitUtils.commit_all(working_dir, full_message)
+                        if success:
                             console.print(f"  [green]✓[/green] Changes committed")
                             commit_made_this_cycle = True
+                        else:
+                            console.print(f"  [red]✗[/red] Failed to commit changes")
+                            if error_msg:
+                                console.print(f"\n[yellow]Commit error:[/yellow]")
+                                console.print(error_msg)
 
                         # Push to remote
                         if GitUtils.has_unpushed_commits(working_dir, proj_info.branch):
@@ -411,9 +417,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
 Co-Authored-By: Claude <noreply@anthropic.com>"""
 
-                        if GitUtils.commit_all(working_dir, full_message):
+                        success, error_msg = GitUtils.commit_all(working_dir, full_message)
+                        if success:
                             console.print(f"  [green]✓[/green] Changes committed")
                             commit_made_this_cycle = True
+                        else:
+                            console.print(f"  [red]✗[/red] Failed to commit changes")
+                            if error_msg:
+                                console.print(f"\n[yellow]Commit error:[/yellow]")
+                                console.print(error_msg)
 
                         # Push to remote
                         if GitUtils.has_unpushed_commits(working_dir, conv.branch):
@@ -531,13 +543,20 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                     # User cancelled the commit
                     should_commit = False
 
-                if should_commit and GitUtils.commit_all(working_dir, full_message):
-                    console.print("[green]✓[/green] Changes committed")
-                    commit_made_this_cycle = True  # Track that we made a commit
+                if should_commit:
+                    success, error_msg = GitUtils.commit_all(working_dir, full_message)
+                    if success:
+                        console.print("[green]✓[/green] Changes committed")
+                        commit_made_this_cycle = True  # Track that we made a commit
+                    else:
+                        console.print("[red]✗[/red] Failed to commit changes")
+                        if error_msg:
+                            console.print(f"\n[yellow]Commit error:[/yellow]")
+                            console.print(error_msg)
 
                     # Push commits to remote immediately after committing
                     # This ensures commits are backed up even if user declines PR creation
-                    if GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
+                    if success and GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
                         # Check if auto_push_to_remote is configured
                         should_push = True
                         if config and config.prompts and config.prompts.auto_push_to_remote is not None:
@@ -986,10 +1005,14 @@ def _sync_branch_for_export(session, issue_key: str, config_loader) -> None:
 
 Co-Authored-By: Claude <noreply@anthropic.com>"""
 
-            if GitUtils.commit_all(working_dir, commit_message):
+            success, error_msg = GitUtils.commit_all(working_dir, commit_message)
+            if success:
                 console.print(f"[green]✓[/green] Created WIP commit for export")
             else:
-                console.print(f"[yellow]⚠[/yellow] Failed to commit changes")
+                console.print(f"[red]✗[/red] Failed to commit changes")
+                if error_msg:
+                    console.print(f"\n[yellow]Commit error:[/yellow]")
+                    console.print(error_msg)
                 return
 
     # Push branch to remote

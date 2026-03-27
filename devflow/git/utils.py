@@ -437,7 +437,7 @@ class GitUtils:
             return None
 
     @staticmethod
-    def commit_all(path: Path, message: str) -> bool:
+    def commit_all(path: Path, message: str) -> tuple[bool, Optional[str]]:
         """Stage all changes and create a commit.
 
         Args:
@@ -445,7 +445,9 @@ class GitUtils:
             message: Commit message
 
         Returns:
-            True if successful, False otherwise
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if failed
 
         Raises:
             ToolNotFoundError: If git is not installed
@@ -461,7 +463,8 @@ class GitUtils:
                 timeout=10,
             )
             if add_result.returncode != 0:
-                return False
+                error_msg = add_result.stderr.decode("utf-8").strip() if add_result.stderr else "Failed to stage changes"
+                return (False, error_msg)
 
             # Create commit
             commit_result = subprocess.run(
@@ -470,9 +473,15 @@ class GitUtils:
                 capture_output=True,
                 timeout=10,
             )
-            return commit_result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+            if commit_result.returncode == 0:
+                return (True, None)
+            else:
+                error_msg = commit_result.stderr.decode("utf-8").strip() if commit_result.stderr else "Commit failed"
+                return (False, error_msg)
+        except subprocess.TimeoutExpired:
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
     def detect_repo_type(path: Path) -> Optional[str]:
