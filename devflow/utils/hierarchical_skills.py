@@ -972,7 +972,7 @@ def install_hierarchical_skills(
                     target_path = cs_home / json_file
 
                     # Check if file would change
-                    json_str = json.dumps(json_data, indent=2)
+                    json_str = json.dumps(json_data, indent=2) + '\n'
                     if has_file_changed(target_path, json_str):
                         if dry_run:
                             if not quiet:
@@ -986,7 +986,7 @@ def install_hierarchical_skills(
                                     console.print(f"[dim]Backed up to: {backup_path.name}[/dim]")
 
                             # Write updated JSON
-                            target_path.write_text(json_str + '\n', encoding='utf-8')
+                            target_path.write_text(json_str, encoding='utf-8')
 
                             if not quiet:
                                 console.print(f"[green]✓[/green] Updated {json_file}")
