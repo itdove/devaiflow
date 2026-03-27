@@ -1255,14 +1255,14 @@ def install_hierarchical_skills(
 
 
 def get_hierarchical_skill_statuses() -> dict:
-    """Get installation status of hierarchical skills.
+    """Get installation status of hierarchical assets (JSON configs, context files, skills).
 
     Returns:
-        Dict mapping skill names to status:
-        - "installed": Skill is installed
-        - "not_installed": Skill directory doesn't exist
-        - "no_url": Config file exists but has no skill_url
-        - "no_config": Config file doesn't exist
+        Dict mapping asset names to status:
+        - "installed": Asset is installed/exists
+        - "not_installed": Asset doesn't exist
+        - "no_url": Config file exists but has no skill_url (for skills only)
+        - "no_config": Config file doesn't exist (for skills only)
     """
     from devflow.utils.paths import get_cs_home
 
@@ -1278,18 +1278,46 @@ def get_hierarchical_skill_statuses() -> dict:
 
     statuses = {}
 
+    # Check JSON config files
+    for json_file in ["enterprise.json", "organization.json", "team.json"]:
+        json_path = cs_home / json_file
+        if json_path.exists():
+            statuses[json_file] = "installed"
+        else:
+            statuses[json_file] = "not_installed"
+
+    # Check context files and skills
     for order_num, config_file, level_name in hierarchy:
-        skill_dir_name = f"{order_num:02d}-{level_name}"
+        # Check context file (.md)
         config_path = cs_home / config_file
+        if config_path.exists():
+            statuses[config_file] = "installed"
+        else:
+            statuses[config_file] = "not_installed"
+
+        # Check skill (both numbered and non-numbered for compatibility)
+        skill_dir_name = f"{order_num:02d}-{level_name}"  # e.g., "01-enterprise"
         skill_path = skills_dir / skill_dir_name
 
-        if not config_path.exists():
+        # Also check non-numbered version for standard layout
+        skill_dir_name_simple = level_name  # e.g., "enterprise"
+        skill_path_simple = skills_dir / skill_dir_name_simple
+
+        # Check numbered version first (legacy/current)
+        if skill_path.exists() and (skill_path / "SKILL.md").exists():
+            statuses[skill_dir_name] = "installed"
+            statuses[level_name] = "installed"
+        elif skill_path_simple.exists() and (skill_path_simple / "SKILL.md").exists():
+            statuses[skill_dir_name] = "installed"
+            statuses[level_name] = "installed"
+        elif not config_path.exists():
             statuses[skill_dir_name] = "no_config"
+            statuses[level_name] = "no_config"
         elif not extract_skill_url(config_path):
             statuses[skill_dir_name] = "no_url"
-        elif skill_path.exists() and (skill_path / "SKILL.md").exists():
-            statuses[skill_dir_name] = "installed"
+            statuses[level_name] = "no_url"
         else:
             statuses[skill_dir_name] = "not_installed"
+            statuses[level_name] = "not_installed"
 
     return statuses

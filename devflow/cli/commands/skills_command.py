@@ -558,10 +558,24 @@ def _print_skills_table(
 
     console.print(f"\n[bold]{title}:[/bold]\n")
 
+    # Determine if this is hierarchical skills (need Type column)
+    is_hierarchical = "Hierarchical" in title
+
     table = Table(show_header=True, header_style="bold cyan")
     table.add_column("Skill", style="cyan")
+    if is_hierarchical:
+        table.add_column("Type")
     table.add_column("Status Before")
     table.add_column("Status After")
+
+    def get_item_type(name: str) -> str:
+        """Determine the type of hierarchical item based on name."""
+        if name.endswith('.json'):
+            return "[blue]JSON Config[/blue]"
+        elif name.endswith('.md'):
+            return "[magenta]Context[/magenta]"
+        else:
+            return "[cyan]Skill[/cyan]"
 
     # Show changed items
     for skill_name in sorted(changed):
@@ -574,16 +588,25 @@ def _print_skills_table(
             status_before_display = "[yellow]outdated[/yellow]"
             status_after_display = "[green]upgraded[/green]" if not dry_run else "[yellow]would upgrade[/yellow]"
 
-        table.add_row(skill_name, status_before_display, status_after_display)
+        if is_hierarchical:
+            table.add_row(skill_name, get_item_type(skill_name), status_before_display, status_after_display)
+        else:
+            table.add_row(skill_name, status_before_display, status_after_display)
 
     # Show up-to-date items
     for skill_name in sorted(up_to_date):
-        table.add_row(skill_name, "[green]up-to-date[/green]", "[dim]no change[/dim]")
+        if is_hierarchical:
+            table.add_row(skill_name, get_item_type(skill_name), "[green]up-to-date[/green]", "[dim]no change[/dim]")
+        else:
+            table.add_row(skill_name, "[green]up-to-date[/green]", "[dim]no change[/dim]")
 
     # Show failed items
     for skill_name in sorted(failed):
         status_before = statuses_before.get(skill_name, "unknown")
-        table.add_row(skill_name, f"[dim]{status_before}[/dim]", "[red]failed[/red]")
+        if is_hierarchical:
+            table.add_row(skill_name, get_item_type(skill_name), f"[dim]{status_before}[/dim]", "[red]failed[/red]")
+        else:
+            table.add_row(skill_name, f"[dim]{status_before}[/dim]", "[red]failed[/red]")
 
     console.print(table)
     console.print()
