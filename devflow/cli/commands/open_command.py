@@ -2971,6 +2971,13 @@ def _prompt_for_complete_on_exit(session, config: Optional[any] = None) -> None:
 
     # Run daf complete for this session
     console.print()
+
+    # Temporarily unset AI session environment variables
+    # The agent has already exited, so we're not actually in an AI session anymore
+    # We need to unset these to bypass the @require_outside_claude safety check
+    original_in_session = os.environ.pop("DEVAIFLOW_IN_SESSION", None)
+    original_agent_session_id = os.environ.pop("AI_AGENT_SESSION_ID", None)
+
     try:
         # Call complete_session directly with the session name
         # Use the session name as the identifier
@@ -2978,6 +2985,12 @@ def _prompt_for_complete_on_exit(session, config: Optional[any] = None) -> None:
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to complete session: {e}")
         console.print(f"[dim]You can complete manually with: daf complete {session.name}[/dim]")
+    finally:
+        # Restore environment variables if they were set
+        if original_in_session:
+            os.environ["DEVAIFLOW_IN_SESSION"] = original_in_session
+        if original_agent_session_id:
+            os.environ["AI_AGENT_SESSION_ID"] = original_agent_session_id
 
 
 def _log_error(message: str) -> None:
