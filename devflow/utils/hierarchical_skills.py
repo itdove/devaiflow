@@ -1087,7 +1087,7 @@ def install_hierarchical_skills(
                                 local_base = Path(config_source.replace('file://', ''))
                             else:
                                 local_base = Path(config_source).expanduser().resolve()
-                            skill_url = str(local_base / 'daf-skills' / skill_dir_name)
+                            skill_url = 'file://' + str(local_base / 'daf-skills' / skill_dir_name)
 
                         # Download skill content
                         if dry_run:
