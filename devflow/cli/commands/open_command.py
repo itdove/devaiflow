@@ -1282,17 +1282,25 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
                 # Checkout the branch first
                 current_branch = GitUtils.get_current_branch(path)
                 if current_branch != branch_name:
-                    if not GitUtils.checkout_branch(path, branch_name):
+                    success, error_msg = GitUtils.checkout_branch(path, branch_name)
+                    if not success:
                         console.print(f"[red]✗[/red] Failed to checkout branch")
+                        if error_msg:
+                            console.print(f"\n[red]Checkout error:[/red]")
+                            console.print(f"{error_msg}")
                         return False
 
                 # Merge remote changes
                 console.print(f"[dim]Merging {remote_name}/{branch_name} into {branch_name}...[/dim]")
-                if GitUtils.merge_branch(path, f"{remote_name}/{branch_name}"):
+                success, error_msg = GitUtils.merge_branch(path, f"{remote_name}/{branch_name}")
+                if success:
                     console.print(f"[green]✓[/green] Successfully merged remote changes")
                     return True
                 else:
                     console.print(f"[red]✗[/red] Merge conflicts detected")
+                    if error_msg:
+                        console.print(f"\n[red]Merge error:[/red]")
+                        console.print(f"{error_msg}")
                     console.print(f"[yellow]Please resolve conflicts manually:[/yellow]")
                     console.print(f"  1. Resolve conflicts in your editor")
                     console.print(f"  2. Run: git add <resolved-files>")
@@ -1332,10 +1340,14 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
     if not GitUtils.branch_exists(path, branch_name):
         console.print(f"[yellow]Branch '{branch_name}' does not exist[/yellow]")
         if Confirm.ask("Create it now?", default=True):
-            if GitUtils.create_branch(path, branch_name):
+            success, error_msg = GitUtils.create_branch(path, branch_name)
+            if success:
                 console.print(f"[green]✓[/green] Created and switched to branch: {branch_name}")
             else:
                 console.print(f"[red]✗[/red] Failed to create branch")
+                if error_msg:
+                    console.print(f"\n[red]Create branch error:[/red]")
+                    console.print(f"{error_msg}")
         return
 
     # Branch exists, ask to switch (or use configured default)
@@ -1348,10 +1360,14 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
         should_checkout = Confirm.ask(f"Switch to branch '{branch_name}'?", default=True)
 
     if should_checkout:
-        if GitUtils.checkout_branch(path, branch_name):
+        success, error_msg = GitUtils.checkout_branch(path, branch_name)
+        if success:
             console.print(f"[green]✓[/green] Switched to branch: {branch_name}")
         else:
             console.print(f"[red]✗[/red] Failed to switch branch")
+            if error_msg:
+                console.print(f"\n[red]Checkout error:[/red]")
+                console.print(f"{error_msg}")
 
 
 def _detect_working_directory_from_path(path: Path, config_loader) -> Optional[str]:
@@ -2677,8 +2693,11 @@ def _check_and_sync_with_base_branch(
 
     # Fetch latest from remote to get up-to-date comparison
     console.print(f"[dim]Fetching latest changes from remote...[/dim]")
-    if not GitUtils.fetch_origin(path):
+    success, error_msg = GitUtils.fetch_origin(path)
+    if not success:
         console.print(f"[yellow]Warning: Could not fetch from remote - skipping branch sync check[/yellow]")
+        if error_msg:
+            console.print(f"[dim]Fetch error: {error_msg}[/dim]")
         return True
 
     # Check how many commits behind
@@ -2741,12 +2760,15 @@ def _check_and_sync_with_base_branch(
         return True
     elif strategy == "m":
         console.print(f"\n[cyan]Merging {base_branch} into {branch}...[/cyan]")
-        success = GitUtils.merge_branch(path, f"origin/{base_branch}")
+        success, error_msg = GitUtils.merge_branch(path, f"origin/{base_branch}")
         if success:
             console.print(f"[green]✓[/green] Successfully merged {base_branch} into {branch}")
             return True
         else:
             console.print(f"[red]✗[/red] Merge conflicts detected")
+            if error_msg:
+                console.print(f"\n[red]Merge error:[/red]")
+                console.print(f"{error_msg}")
             console.print(f"\n[yellow]Cannot continue - please resolve conflicts first:[/yellow]")
             console.print(f"  1. Resolve conflicts in your editor")
             console.print(f"  2. Run: git add <resolved-files>")
@@ -2755,12 +2777,15 @@ def _check_and_sync_with_base_branch(
             return False
     else:
         console.print(f"\n[cyan]Rebasing {branch} onto {base_branch}...[/cyan]")
-        success = GitUtils.rebase_branch(path, f"origin/{base_branch}")
+        success, error_msg = GitUtils.rebase_branch(path, f"origin/{base_branch}")
         if success:
             console.print(f"[green]✓[/green] Successfully rebased {branch} onto {base_branch}")
             return True
         else:
             console.print(f"[red]✗[/red] Rebase conflicts detected")
+            if error_msg:
+                console.print(f"\n[red]Rebase error:[/red]")
+                console.print(f"{error_msg}")
             console.print(f"\n[yellow]Cannot continue - please resolve conflicts first:[/yellow]")
             console.print(f"  1. Resolve conflicts in your editor")
             console.print(f"  2. Run: git add <resolved-files>")
@@ -3238,9 +3263,11 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
             # Try common default branches
             for branch in ["main", "master", "develop"]:
                 if GitUtils.branch_exists(Path(new_temp_dir), branch):
-                    if GitUtils.checkout_branch(Path(new_temp_dir), branch):
+                    success, error_msg = GitUtils.checkout_branch(Path(new_temp_dir), branch)
+                    if success:
                         console.print(f"[dim]Checked out branch: {branch}[/dim]")
                         break
+                    # Silently continue to next branch if checkout fails
 
         # Update session with new temp directory
         # IMPORTANT: Store the resolved path (handles macOS /var -> /private/var)
@@ -3329,9 +3356,11 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
             # Try common default branches
             for branch in ["main", "master", "develop"]:
                 if GitUtils.branch_exists(Path(temp_dir), branch):
-                    if GitUtils.checkout_branch(Path(temp_dir), branch):
+                    success, error_msg = GitUtils.checkout_branch(Path(temp_dir), branch)
+                    if success:
                         console.print(f"[dim]Checked out branch: {branch}[/dim]")
                         break
+                    # Silently continue to next branch if checkout fails
 
         # Update session with temp directory
         # IMPORTANT: Store the resolved path (handles macOS /var -> /private/var)

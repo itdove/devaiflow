@@ -103,7 +103,7 @@ def test_reopen_ticket_creation_session_without_conversation_file(temp_daf_home,
              patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
              patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
              patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
-             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
              patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
@@ -204,7 +204,7 @@ def test_reopen_ticket_creation_session_with_conversation_file(temp_daf_home, mo
              patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
              patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
              patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
-             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
              patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
@@ -291,7 +291,7 @@ def test_reopen_normal_session_without_conversation_file(temp_daf_home, mock_git
     with patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
          patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
          patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
-         patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+         patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
          patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
          patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
@@ -367,7 +367,7 @@ def test_mock_mode_skips_temp_directory_prompt(temp_daf_home, mock_git_repo, mon
     with patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
          patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
          patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
-         patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+         patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
          patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
          patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
@@ -456,7 +456,7 @@ def test_reopen_ticket_creation_session_never_prompts_for_branch(temp_daf_home, 
              patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
              patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
              patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
-             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
              patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
@@ -543,7 +543,7 @@ def test_reopen_ticket_creation_session_skips_jira_transition(temp_daf_home, moc
     with patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
          patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
          patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
-         patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+         patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
          patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
          patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
@@ -661,7 +661,7 @@ def test_daf_jira_open_resumes_existing_conversation(temp_daf_home, mock_git_rep
              patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
              patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
              patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
-             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
              patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \

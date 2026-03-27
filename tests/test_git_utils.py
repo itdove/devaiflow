@@ -332,30 +332,34 @@ def test_branch_exists_not_git(tmp_path):
 
 def test_create_branch_not_git(tmp_path):
     """Test create_branch with non-git directory."""
-    result = GitUtils.create_branch(tmp_path, "new-branch")
+    success, error_msg = GitUtils.create_branch(tmp_path, "new-branch")
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None
 
 
 def test_checkout_branch_not_git(tmp_path):
     """Test checkout_branch with non-git directory."""
-    result = GitUtils.checkout_branch(tmp_path, "main")
+    success, error_msg = GitUtils.checkout_branch(tmp_path, "main")
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None
 
 
 def test_fetch_origin_not_git(tmp_path):
     """Test fetch_origin with non-git directory."""
-    result = GitUtils.fetch_origin(tmp_path)
+    success, error_msg = GitUtils.fetch_origin(tmp_path)
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None
 
 
 def test_pull_current_branch_not_git(tmp_path):
     """Test pull_current_branch with non-git directory."""
-    result = GitUtils.pull_current_branch(tmp_path)
+    success, error_msg = GitUtils.pull_current_branch(tmp_path)
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None
 
 
 @pytest.mark.skipif(
@@ -466,8 +470,9 @@ def test_create_and_checkout_branch(tmp_path):
     subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
 
     # Create new branch
-    result = GitUtils.create_branch(tmp_path, "feature-branch")
-    assert result is True
+    success, error_msg = GitUtils.create_branch(tmp_path, "feature-branch")
+    assert success is True
+    assert error_msg is None
 
     # Verify we're on the new branch
     current = GitUtils.get_current_branch(tmp_path)
@@ -476,15 +481,17 @@ def test_create_and_checkout_branch(tmp_path):
     # Switch back to default branch
     default_branch = GitUtils.get_current_branch(tmp_path)
     if default_branch != "feature-branch":
-        result = GitUtils.checkout_branch(tmp_path, default_branch)
+        success, error_msg = GitUtils.checkout_branch(tmp_path, default_branch)
     else:
         # We're on feature-branch, checkout main/master
         for branch in ["main", "master"]:
             if GitUtils.branch_exists(tmp_path, branch):
-                result = GitUtils.checkout_branch(tmp_path, branch)
+                success, error_msg = GitUtils.checkout_branch(tmp_path, branch)
                 break
 
-    assert result is True or default_branch == "feature-branch"
+    assert success is True or default_branch == "feature-branch"
+    if success:
+        assert error_msg is None
 
 
 def test_has_uncommitted_changes_not_git(tmp_path):
@@ -700,9 +707,10 @@ def test_is_branch_pushed_not_git(tmp_path):
 
 def test_push_branch_not_git(tmp_path):
     """Test push_branch with non-git directory."""
-    result = GitUtils.push_branch(tmp_path, "main")
+    success, error_msg = GitUtils.push_branch(tmp_path, "main")
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None
 
 
 def test_commits_behind_not_git(tmp_path):
@@ -739,9 +747,10 @@ def test_commits_behind_up_to_date(tmp_path):
 
 def test_merge_branch_not_git(tmp_path):
     """Test merge_branch with non-git directory."""
-    result = GitUtils.merge_branch(tmp_path, "main")
+    success, error_msg = GitUtils.merge_branch(tmp_path, "main")
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None
 
 
 @pytest.mark.skipif(
@@ -764,7 +773,8 @@ def test_merge_branch_success(tmp_path):
     default_branch = GitUtils.get_current_branch(tmp_path)
 
     # Create and switch to feature branch
-    GitUtils.create_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.create_branch(tmp_path, "feature")
+    assert success is True
 
     # Add commit to feature branch
     (tmp_path / "feature.txt").write_text("feature")
@@ -772,12 +782,14 @@ def test_merge_branch_success(tmp_path):
     subprocess.run(["git", "commit", "-m", "Feature"], cwd=tmp_path, capture_output=True)
 
     # Switch back to default branch
-    GitUtils.checkout_branch(tmp_path, default_branch)
+    success, error_msg = GitUtils.checkout_branch(tmp_path, default_branch)
+    assert success is True
 
     # Merge feature branch into default
-    result = GitUtils.merge_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.merge_branch(tmp_path, "feature")
 
-    assert result is True
+    assert success is True
+    assert error_msg is None
 
 
 @pytest.mark.skipif(
@@ -800,7 +812,8 @@ def test_merge_branch_conflict(tmp_path):
     default_branch = GitUtils.get_current_branch(tmp_path)
 
     # Create and switch to feature branch
-    GitUtils.create_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.create_branch(tmp_path, "feature")
+    assert success is True
 
     # Modify file on feature branch
     (tmp_path / "conflict.txt").write_text("feature change")
@@ -808,7 +821,8 @@ def test_merge_branch_conflict(tmp_path):
     subprocess.run(["git", "commit", "-m", "Feature change"], cwd=tmp_path, capture_output=True)
 
     # Switch back to default branch
-    GitUtils.checkout_branch(tmp_path, default_branch)
+    success, error_msg = GitUtils.checkout_branch(tmp_path, default_branch)
+    assert success is True
 
     # Modify same file on default branch
     (tmp_path / "conflict.txt").write_text("main change")
@@ -816,18 +830,20 @@ def test_merge_branch_conflict(tmp_path):
     subprocess.run(["git", "commit", "-m", "Main change"], cwd=tmp_path, capture_output=True)
 
     # Attempt merge - should conflict and be aborted
-    result = GitUtils.merge_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.merge_branch(tmp_path, "feature")
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None  # Should have an error message
     # Verify merge was aborted (no MERGE_HEAD file)
     assert not (tmp_path / ".git" / "MERGE_HEAD").exists()
 
 
 def test_rebase_branch_not_git(tmp_path):
     """Test rebase_branch with non-git directory."""
-    result = GitUtils.rebase_branch(tmp_path, "main")
+    success, error_msg = GitUtils.rebase_branch(tmp_path, "main")
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None
 
 
 @pytest.mark.skipif(
@@ -850,7 +866,8 @@ def test_rebase_branch_success(tmp_path):
     default_branch = GitUtils.get_current_branch(tmp_path)
 
     # Create and switch to feature branch
-    GitUtils.create_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.create_branch(tmp_path, "feature")
+    assert success is True
 
     # Add commit to feature branch
     (tmp_path / "feature.txt").write_text("feature")
@@ -858,18 +875,21 @@ def test_rebase_branch_success(tmp_path):
     subprocess.run(["git", "commit", "-m", "Feature"], cwd=tmp_path, capture_output=True)
 
     # Switch back to default branch and add another commit
-    GitUtils.checkout_branch(tmp_path, default_branch)
+    success, error_msg = GitUtils.checkout_branch(tmp_path, default_branch)
+    assert success is True
     (tmp_path / "main.txt").write_text("main")
     subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
     subprocess.run(["git", "commit", "-m", "Main commit"], cwd=tmp_path, capture_output=True)
 
     # Switch back to feature branch
-    GitUtils.checkout_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.checkout_branch(tmp_path, "feature")
+    assert success is True
 
     # Rebase feature branch onto default
-    result = GitUtils.rebase_branch(tmp_path, default_branch)
+    success, error_msg = GitUtils.rebase_branch(tmp_path, default_branch)
 
-    assert result is True
+    assert success is True
+    assert error_msg is None
 
 
 @pytest.mark.skipif(
@@ -892,7 +912,8 @@ def test_rebase_branch_conflict(tmp_path):
     default_branch = GitUtils.get_current_branch(tmp_path)
 
     # Create and switch to feature branch
-    GitUtils.create_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.create_branch(tmp_path, "feature")
+    assert success is True
 
     # Modify file on feature branch
     (tmp_path / "conflict.txt").write_text("feature change")
@@ -900,7 +921,8 @@ def test_rebase_branch_conflict(tmp_path):
     subprocess.run(["git", "commit", "-m", "Feature change"], cwd=tmp_path, capture_output=True)
 
     # Switch back to default branch
-    GitUtils.checkout_branch(tmp_path, default_branch)
+    success, error_msg = GitUtils.checkout_branch(tmp_path, default_branch)
+    assert success is True
 
     # Modify same file on default branch
     (tmp_path / "conflict.txt").write_text("main change")
@@ -908,12 +930,14 @@ def test_rebase_branch_conflict(tmp_path):
     subprocess.run(["git", "commit", "-m", "Main change"], cwd=tmp_path, capture_output=True)
 
     # Switch back to feature branch
-    GitUtils.checkout_branch(tmp_path, "feature")
+    success, error_msg = GitUtils.checkout_branch(tmp_path, "feature")
+    assert success is True
 
     # Attempt rebase - should conflict and be aborted
-    result = GitUtils.rebase_branch(tmp_path, default_branch)
+    success, error_msg = GitUtils.rebase_branch(tmp_path, default_branch)
 
-    assert result is False
+    assert success is False
+    assert error_msg is not None  # Should have an error message
     # Verify rebase was aborted (check we're not in rebase state)
     assert not (tmp_path / ".git" / "rebase-merge").exists()
     assert not (tmp_path / ".git" / "rebase-apply").exists()

@@ -1442,8 +1442,12 @@ def _handle_existing_branch(
 
     if choice == 1:
         # Switch and merge
-        if not GitUtils.checkout_branch(path, branch_name):
+        success, error_msg = GitUtils.checkout_branch(path, branch_name)
+        if not success:
             console.print(f"[red]✗[/red] Failed to switch to branch '{branch_name}'")
+            if error_msg:
+                console.print(f"\n[red]Checkout error:[/red]")
+                console.print(f"{error_msg}")
             return None
 
         console.print(f"[green]✓[/green] Switched to '{branch_name}'")
@@ -1457,11 +1461,15 @@ def _handle_existing_branch(
 
         # Attempt merge
         console.print(f"\nMerging '{source}' into '{branch_name}'...")
-        if GitUtils.merge_branch(path, source):
+        success, error_msg = GitUtils.merge_branch(path, source)
+        if success:
             console.print(f"[green]✓[/green] Successfully merged")
             return branch_name
         else:
             console.print(f"[red]✗[/red] Merge conflicts detected")
+            if error_msg:
+                console.print(f"\n[red]Merge error:[/red]")
+                console.print(f"{error_msg}")
             console.print("\n[yellow]Conflicting files:[/yellow]")
 
             # Show conflicting files
@@ -1488,11 +1496,15 @@ def _handle_existing_branch(
 
     elif choice == 2:
         # Just switch, no merge
-        if GitUtils.checkout_branch(path, branch_name):
+        success, error_msg = GitUtils.checkout_branch(path, branch_name)
+        if success:
             console.print(f"[green]✓[/green] Switched to '{branch_name}' (no merge)")
             return branch_name
         else:
             console.print(f"[red]✗[/red] Failed to switch to branch")
+            if error_msg:
+                console.print(f"\n[red]Checkout error:[/red]")
+                console.print(f"{error_msg}")
             return None
 
     elif choice == 3:
@@ -1776,13 +1788,17 @@ def _handle_branch_creation(
 
                 # Fetch first
                 console_print("[cyan]Fetching latest from remote...[/cyan]")
-                GitUtils.fetch_origin(path)
+                GitUtils.fetch_origin(path)  # Non-critical if fails - ignore return value
 
                 # Try to merge
-                if GitUtils.merge_branch(path, default_source):
+                success, error_msg = GitUtils.merge_branch(path, default_source)
+                if success:
                     console_print(f"[green]✓[/green] Successfully synced with {default_source}")
                 else:
                     console_print(f"[yellow]⚠[/yellow] Could not merge {default_source} automatically")
+                    if error_msg:
+                        console_print(f"\n[yellow]Merge error:[/yellow]")
+                        console_print(f"{error_msg}")
 
             return None  # No branch created, but that's OK
 
@@ -1820,10 +1836,14 @@ def _handle_branch_creation(
                         msg = f"[{project_name}] {msg}"
                     console_print(f"[dim]{msg}[/dim]")
                     # Checkout the existing branch
-                    if GitUtils.checkout_branch(path, branch_name):
+                    success, error_msg = GitUtils.checkout_branch(path, branch_name)
+                    if success:
                         return branch_name
                     else:
                         console.print(f"[red]✗[/red] Failed to checkout branch '{branch_name}'")
+                        if error_msg:
+                            console.print(f"\n[red]Checkout error:[/red]")
+                            console.print(f"{error_msg}")
                         return None
                 elif on_branch_exists == 'add-suffix':
                     # Add numeric suffix
@@ -1924,11 +1944,15 @@ def _handle_branch_creation(
             if project_name:
                 msg = f"[{project_name}] {msg}"
             console_print(f"[cyan]{msg}[/cyan]")
-            if not GitUtils.checkout_branch(path, source_branch):
+            success, error_msg = GitUtils.checkout_branch(path, source_branch)
+            if not success:
                 msg = f"Failed to checkout {source_branch}"
                 if project_name:
                     msg = f"[{project_name}] {msg}"
                 console_print(f"[red]✗[/red] {msg}")
+                if error_msg:
+                    console_print(f"\n[red]Checkout error:[/red]")
+                    console_print(f"{error_msg}")
                 return None
 
             # Pull latest if it's a tracking branch
@@ -1937,10 +1961,11 @@ def _handle_branch_creation(
                 if project_name:
                     msg = f"[{project_name}] {msg}"
                 console_print(f"[cyan]{msg}[/cyan]")
-                GitUtils.pull_current_branch(path)
+                GitUtils.pull_current_branch(path)  # Non-critical if fails - ignore return value
 
         # Create new branch
-        if GitUtils.create_branch(path, branch_name):
+        success, error_msg = GitUtils.create_branch(path, branch_name)
+        if success:
             msg = f"Created and switched to branch: [bold]{branch_name}[/bold]"
             if project_name:
                 msg = f"[{project_name}] {msg}"
@@ -1952,6 +1977,9 @@ def _handle_branch_creation(
             if project_name:
                 msg = f"[{project_name}] {msg}"
             console_print(f"[red]✗[/red] {msg}")
+            if error_msg:
+                console_print(f"\n[red]Create branch error:[/red]")
+                console_print(f"{error_msg}")
             return None
 
     except Exception as e:

@@ -178,17 +178,20 @@ def _sync_single_conversation_branch(
     current_branch = GitUtils.get_current_branch(working_dir)
     if current_branch != branch:
         console.print(f"[cyan]Checking out branch {branch}...[/cyan]")
-        if not GitUtils.checkout_branch(working_dir, branch):
-            raise ValueError(f"Cannot checkout branch '{branch}' in {working_dir_name or project_path.name}")
+        success, error_msg = GitUtils.checkout_branch(working_dir, branch)
+        if not success:
+            error_detail = f": {error_msg}" if error_msg else ""
+            raise ValueError(f"Cannot checkout branch '{branch}' in {working_dir_name or project_path.name}{error_detail}")
         console.print(f"[green]✓[/green] Checked out {branch}")
 
     # Step 2: Fetch + pull latest changes
     console.print(f"[cyan]Fetching latest from origin...[/cyan]")
-    GitUtils.fetch_origin(working_dir)  # Non-critical if fails
+    GitUtils.fetch_origin(working_dir)  # Non-critical if fails - ignore return value
 
     if GitUtils.is_branch_pushed(working_dir, branch):
         console.print(f"[cyan]Pulling latest changes...[/cyan]")
-        if not GitUtils.pull_current_branch(working_dir):
+        success, error_msg = GitUtils.pull_current_branch(working_dir)
+        if not success:
             if GitUtils.has_merge_conflicts(working_dir):
                 conflicted = GitUtils.get_conflicted_files(working_dir)
                 raise ValueError(
@@ -237,19 +240,23 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
     if not GitUtils.is_branch_pushed(working_dir, branch):
         console.print(f"[cyan]Branch '{branch}' is not on remote[/cyan]")
         console.print(f"[cyan]Pushing {branch} to origin...[/cyan]")
-        if not GitUtils.push_branch(working_dir, branch):
+        success, error_msg = GitUtils.push_branch(working_dir, branch)
+        if not success:
+            error_detail = f"\nError: {error_msg}" if error_msg else ""
             raise ValueError(
                 f"Failed to push branch '{branch}' to remote\n"
                 f"Teammate needs branch on remote to import session.\n"
-                f"Common causes: No remote configured, no push permissions, network issues"
+                f"Common causes: No remote configured, no push permissions, network issues{error_detail}"
             )
         console.print(f"[green]✓[/green] Pushed branch to origin")
     else:
         console.print(f"[cyan]Pushing latest commits to remote...[/cyan]")
-        if not GitUtils.push_branch(working_dir, branch):
+        success, error_msg = GitUtils.push_branch(working_dir, branch)
+        if not success:
+            error_detail = f"\nError: {error_msg}" if error_msg else ""
             raise ValueError(
                 f"Failed to push to remote '{branch}'\n"
-                f"Teammate may not have latest changes.\n"
+                f"Teammate may not have latest changes.{error_detail}\n"
                 f"Check network and remote permissions."
             )
         console.print(f"[green]✓[/green] Branch synced with remote")

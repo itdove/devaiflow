@@ -44,8 +44,8 @@ def test_branch_creation_returns_tuple_with_source_branch(tmp_path):
     with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
          patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
          patch.object(GitUtils, 'generate_branch_name', return_value='139-test-feature'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)):
 
         # User says yes to create branch, accepts suggested name, selects develop as source
         mock_confirm.return_value = True
@@ -97,8 +97,8 @@ def test_branch_creation_from_main_returns_tuple(tmp_path):
     with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
          patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
          patch.object(GitUtils, 'generate_branch_name', return_value='139-from-main'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)):
 
         # User says yes to create branch, accepts suggested name, selects main as source
         mock_confirm.return_value = True
@@ -147,8 +147,8 @@ def test_existing_branch_returns_string_not_tuple(tmp_path):
          patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
          patch.object(IntPrompt, 'ask') as mock_int_prompt, \
          patch.object(GitUtils, 'generate_branch_name', return_value='existing-branch'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)):
 
         # User says yes to create branch
         mock_confirm.return_value = True
@@ -234,8 +234,8 @@ def test_auto_mode_returns_tuple_with_default_source(tmp_path):
 
     # Test auto mode (uses default source branch)
     with patch.object(GitUtils, 'generate_branch_name', return_value='139-auto-test'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)):
 
         # Use auto_from_default=True to skip prompts
         result = _handle_branch_creation(

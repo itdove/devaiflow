@@ -653,7 +653,7 @@ def test_jira_open_new_session_sets_branch_none(temp_daf_home, mock_git_repo):
              patch('devflow.cli.commands.open_command.GitUtils.get_current_branch', return_value="main"), \
              patch('devflow.cli.commands.open_command.GitUtils.is_git_repository', return_value=True), \
              patch('devflow.cli.commands.open_command.GitUtils.branch_exists', return_value=True), \
-             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=True), \
+             patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
              patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \

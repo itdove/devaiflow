@@ -77,9 +77,9 @@ def test_branch_name_not_asked_twice(temp_daf_home, tmp_path):
         mock_git.has_uncommitted_changes.return_value = False
         mock_git.branch_exists.return_value = False
         mock_git.get_current_branch.return_value = 'main'
-        mock_git.create_branch.return_value = True
-        mock_git.fetch_origin.return_value = True
-        mock_git.checkout_branch.return_value = True
+        mock_git.create_branch.return_value = (True, None)
+        mock_git.fetch_origin.return_value = (True, None)
+        mock_git.checkout_branch.return_value = (True, None)
 
         # Mock Prompt to track if it's called
         with patch('devflow.cli.commands.new_command.Prompt') as mock_prompt:
@@ -122,9 +122,9 @@ def test_project_context_in_prompts(temp_daf_home, tmp_path):
         mock_git.has_uncommitted_changes.return_value = False
         mock_git.branch_exists.return_value = False
         mock_git.get_current_branch.return_value = 'main'
-        mock_git.create_branch.return_value = True
-        mock_git.fetch_origin.return_value = True
-        mock_git.checkout_branch.return_value = True
+        mock_git.create_branch.return_value = (True, None)
+        mock_git.fetch_origin.return_value = (True, None)
+        mock_git.checkout_branch.return_value = (True, None)
 
         # Mock console_print to capture output
         printed_messages = []
@@ -175,9 +175,9 @@ def test_handle_branch_creation_preserves_backward_compatibility(temp_daf_home, 
         mock_git.branch_exists.return_value = False
         mock_git.generate_branch_name.return_value = 'test-branch'
         mock_git.get_current_branch.return_value = 'main'
-        mock_git.create_branch.return_value = True
-        mock_git.fetch_origin.return_value = True
-        mock_git.checkout_branch.return_value = True
+        mock_git.create_branch.return_value = (True, None)
+        mock_git.fetch_origin.return_value = (True, None)
+        mock_git.checkout_branch.return_value = (True, None)
 
         # Call without new parameters (backward compatibility)
         result = _handle_branch_creation(
@@ -216,9 +216,9 @@ def test_multi_project_session_creation_end_to_end(temp_daf_home, tmp_path):
         mock_git.branch_exists.return_value = False
         mock_git.generate_branch_name.return_value = 'feature-123'
         mock_git.get_current_branch.return_value = 'main'
-        mock_git.create_branch.return_value = True
-        mock_git.fetch_origin.return_value = True
-        mock_git.checkout_branch.return_value = True
+        mock_git.create_branch.return_value = (True, None)
+        mock_git.fetch_origin.return_value = (True, None)
+        mock_git.checkout_branch.return_value = (True, None)
 
         with patch('devflow.cli.commands.new_command._get_default_source_branch') as mock_default:
             mock_default.return_value = 'origin/main'
@@ -390,9 +390,9 @@ def test_multi_project_complete_workflow_integration(temp_daf_home, tmp_path):
         mock_git_new.branch_exists.return_value = False
         mock_git_new.generate_branch_name.return_value = 'feature-123'
         mock_git_new.get_current_branch.return_value = 'main'
-        mock_git_new.create_branch.return_value = True
-        mock_git_new.fetch_origin.return_value = True
-        mock_git_new.checkout_branch.return_value = True
+        mock_git_new.create_branch.return_value = (True, None)
+        mock_git_new.fetch_origin.return_value = (True, None)
+        mock_git_new.checkout_branch.return_value = (True, None)
 
         with patch('devflow.cli.commands.new_command._get_default_source_branch') as mock_default:
             mock_default.return_value = 'origin/main'
@@ -440,7 +440,7 @@ def test_multi_project_complete_workflow_integration(temp_daf_home, tmp_path):
         mock_git_complete.has_uncommitted_changes.return_value = True
         mock_git_complete.get_status_summary.return_value = "M api.py\nM app.js"
         mock_git_complete.commit_all.return_value = (True, None)
-        mock_git_complete.push_branch.return_value = True
+        mock_git_complete.push_branch.return_value = (True, None)
         mock_git_complete.is_branch_pushed.return_value = True
         mock_git_complete.has_unpushed_commits.return_value = True
         mock_git_complete.get_current_branch.return_value = "test-123"  # Match the branch name
