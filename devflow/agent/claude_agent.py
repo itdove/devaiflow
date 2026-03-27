@@ -321,15 +321,39 @@ class ClaudeAgent(AgentInterface):
         Claude Code replaces / with - in paths (keeps the leading -)
         and also replaces _ with -.
 
+        Resolves known symlinks (e.g., /var -> /private/var on macOS) to match
+        how Claude Code encodes paths when it launches.
+
         Args:
             project_path: Absolute path to project
 
         Returns:
             Encoded path string
         """
+        # Resolve known symlinks to match Claude Code's behavior
+        # On macOS, /var is a symlink to private/var
+        # We need to handle this even for non-existent paths (temp directories)
+        resolved_path = project_path
+
+        # Handle /var -> /private/var symlink on macOS
+        if project_path.startswith("/var/"):
+            # Check if /var is actually a symlink
+            var_path = Path("/var")
+            if var_path.is_symlink():
+                # Replace /var/ with the resolved target
+                target = var_path.resolve()
+                resolved_path = str(target / project_path[5:])  # Skip "/var/"
+
+        # Handle /tmp -> /private/tmp symlink on macOS
+        elif project_path.startswith("/tmp/"):
+            tmp_path = Path("/tmp")
+            if tmp_path.is_symlink():
+                target = tmp_path.resolve()
+                resolved_path = str(target / project_path[5:])  # Skip "/tmp/"
+
         # Claude Code replaces / with - in paths (keeps the leading -)
         # AND also replaces _ with -
-        encoded = project_path.replace("/", "-").replace("_", "-")
+        encoded = resolved_path.replace("/", "-").replace("_", "-")
         return encoded
 
     def get_agent_home_dir(self) -> Path:

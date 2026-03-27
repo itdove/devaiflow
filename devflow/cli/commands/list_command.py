@@ -144,29 +144,33 @@ def _display_page(
                     minutes_ago = int((time_diff.total_seconds() % 3600) // 60)
                     last_session_display = f"{minutes_ago}m ago" if minutes_ago > 0 else "just now"
 
-        # Get token usage for active conversation
+        # Get token usage for all conversations (sum across all repos)
         token_display = "-"
-        if session.active_conversation:
-            conv = session.active_conversation
-            if conv.project_path and conv.ai_agent_session_id:
-                try:
-                    agent = create_agent_client(agent_backend)
-                    token_usage = agent.extract_token_usage(
-                        conv.ai_agent_session_id,
-                        conv.project_path
-                    )
-                    if token_usage:
-                        total_tokens = token_usage.get("total_tokens", 0)
-                        if total_tokens > 0:
-                            # Format tokens with K/M suffix for readability
-                            if total_tokens >= 1_000_000:
-                                token_display = f"{total_tokens / 1_000_000:.1f}M"
-                            elif total_tokens >= 1_000:
-                                token_display = f"{total_tokens / 1_000:.1f}K"
-                            else:
-                                token_display = str(total_tokens)
-                except Exception:
-                    pass  # Silently ignore errors
+        total_tokens = 0
+        if session.conversations:
+            agent = create_agent_client(agent_backend)
+            for working_dir, conversation in session.conversations.items():
+                # Handle both Conversation (new format) and ConversationContext (old format)
+                conv = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+                if conv and conv.project_path and conv.ai_agent_session_id:
+                    try:
+                        token_usage = agent.extract_token_usage(
+                            conv.ai_agent_session_id,
+                            conv.project_path
+                        )
+                        if token_usage:
+                            total_tokens += token_usage.get("total_tokens", 0)
+                    except Exception:
+                        pass  # Silently ignore errors for this conversation
+
+            # Format total tokens
+            if total_tokens > 0:
+                if total_tokens >= 1_000_000:
+                    token_display = f"{total_tokens / 1_000_000:.1f}M"
+                elif total_tokens >= 1_000:
+                    token_display = f"{total_tokens / 1_000:.1f}K"
+                else:
+                    token_display = str(total_tokens)
 
         # Add row
         table.add_row(
