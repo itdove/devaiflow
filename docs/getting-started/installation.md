@@ -424,19 +424,27 @@ daf sync --dry-run
 daf init
 ```
 
-This launches an interactive wizard that:
+This launches an interactive preset-based wizard that:
+- **Auto-detects** your issue tracker from git remotes and environment variables
+- **Preset selection** - Choose your primary use case:
+  - **GitHub Issues** - Auto-detected from GitHub remotes, ≤3 questions
+  - **GitLab Issues** - Auto-detected from GitLab remotes, ≤3 questions
+  - **JIRA** - Auto-detected from JIRA_API_TOKEN, ≤5 questions
+  - **Local sessions only** - No issue tracker, 1 question (workspace path)
+  - **Custom configuration** - Full wizard for advanced users
 - Creates **configuration files** (automatically, no manual file creation needed):
   - `config.json` - Personal preferences (workspace, prompts, GitHub/GitLab settings)
   - `backends/jira.json` - JIRA URL and field mappings (if using JIRA)
   - `organization.json` - JIRA project key and transitions (if using JIRA)
   - `team.json` - Team defaults (workstream, component, comment visibility)
   - `enterprise.json` - Enterprise-wide settings (optional)
-- Prompts for initial settings:
-  - **Issue tracker selection** - GitHub, GitLab, JIRA, or none
-  - **Workspace path** - Your main development directory
-  - **GitHub/GitLab settings** - API URL, default labels (if using GitHub/GitLab)
-  - **JIRA settings** - URL, project key, comment visibility (if using JIRA)
-  - **Optional settings** - Keyword mappings for multi-repo suggestions, PR template URL
+- Shows **next steps** with preset-specific commands to get started immediately
+
+**Preset examples:**
+- **GitHub** (≤3 questions): Workspace path + optional labels + auto-close setting
+- **GitLab** (≤3 questions): Workspace path + optional labels + auto-close setting
+- **JIRA** (≤5 questions): JIRA URL + project + workspace + comment visibility
+- **Local** (1 question): Workspace path only
 
 All settings can be changed later using `daf config edit`.
 

@@ -10,6 +10,478 @@ from devflow.config.models import Config
 console = Console()
 
 
+def _detect_issue_tracker_from_git() -> Optional[str]:
+    """Auto-detect issue tracker type from git remote URLs.
+
+    Returns:
+        "github", "gitlab", or None if not detected
+    """
+    try:
+        from devflow.git.utils import GitUtils
+        current_dir = Path.cwd()
+
+        # Check if current directory is a git repository
+        if GitUtils.is_git_repository(current_dir):
+            return GitUtils.detect_repo_type(current_dir)
+
+        return None
+    except Exception:
+        return None
+
+
+def _suggest_workspace_path() -> str:
+    """Suggest workspace path based on current directory.
+
+    Returns:
+        Suggested workspace path
+    """
+    from devflow.git.utils import GitUtils
+    current_dir = Path.cwd()
+
+    # If current directory is a git repo, suggest parent directory
+    if GitUtils.is_git_repository(current_dir):
+        return str(current_dir.parent)
+
+    # Otherwise suggest current directory
+    return str(current_dir)
+
+
+def _check_tool_availability() -> dict:
+    """Check availability of external tools.
+
+    Returns:
+        Dict with keys: gh_available, glab_available, jira_token_set
+    """
+    import os
+    import shutil
+
+    return {
+        "gh_available": shutil.which("gh") is not None,
+        "glab_available": shutil.which("glab") is not None,
+        "jira_token_set": bool(os.getenv("JIRA_API_TOKEN")),
+    }
+
+
+def _show_next_steps(preset_type: str, config: "Config") -> None:
+    """Display next steps after init completes.
+
+    Args:
+        preset_type: Type of preset used ("github", "gitlab", "jira", "local", "full")
+        config: The created configuration
+    """
+    console.print("\n[green]✓[/green] [bold]Configuration saved![/bold]\n")
+
+    console.print("[bold]Next Steps:[/bold]\n")
+
+    # Step 1: Install Claude Code skills (common to all)
+    console.print("  1. Install Claude Code skills:")
+    console.print("     [cyan]daf skills[/cyan]\n")
+
+    # Preset-specific next steps
+    if preset_type == "github":
+        console.print("  2. Ensure GitHub CLI is authenticated:")
+        console.print("     [cyan]gh auth login[/cyan]\n")
+        console.print("  3. Create your first issue:")
+        console.print("     [cyan]daf git new enhancement --goal \"Your feature description\"[/cyan]\n")
+        console.print("  4. Or sync assigned issues:")
+        console.print("     [cyan]daf sync[/cyan]\n")
+        console.print("[dim]Quick start: https://github.com/itdove/devaiflow#github-issues[/dim]")
+
+    elif preset_type == "gitlab":
+        console.print("  2. Ensure GitLab CLI is authenticated:")
+        console.print("     [cyan]glab auth login[/cyan]\n")
+        console.print("  3. Create your first issue:")
+        console.print("     [cyan]daf git new enhancement --goal \"Your feature description\"[/cyan]\n")
+        console.print("  4. Or sync assigned issues:")
+        console.print("     [cyan]daf sync[/cyan]\n")
+        console.print("[dim]Quick start: https://github.com/itdove/devaiflow#gitlab-issues[/dim]")
+
+    elif preset_type == "jira":
+        console.print("  2. Set JIRA_API_TOKEN environment variable:")
+        console.print("     [cyan]export JIRA_API_TOKEN=\"your-token\"[/cyan]\n")
+        console.print("  3. Refresh JIRA fields:")
+        console.print("     [cyan]daf config refresh-jira-fields[/cyan]\n")
+        console.print("  4. Create your first ticket:")
+        console.print("     [cyan]daf jira new story --parent PROJ-123 --goal \"Your feature\"[/cyan]\n")
+        console.print("  5. Or sync current sprint:")
+        console.print("     [cyan]daf sync --sprint current[/cyan]\n")
+        console.print("[dim]JIRA setup guide: https://github.com/itdove/devaiflow/docs/jira-integration.md[/dim]")
+
+    elif preset_type == "local":
+        console.print("  2. Create your first session:")
+        console.print("     [cyan]daf new --name \"my-feature\" --goal \"Your feature\"[/cyan]\n")
+        console.print("  3. List sessions:")
+        console.print("     [cyan]daf list[/cyan]\n")
+        console.print("  4. Complete session:")
+        console.print("     [cyan]daf complete <session-name>[/cyan]\n")
+        console.print("[dim]Documentation: https://github.com/itdove/devaiflow#local-sessions[/dim]")
+
+    console.print("\nFor help: [cyan]daf --help[/cyan]")
+
+
+def _run_github_preset(current_config: Optional["Config"] = None) -> "Config":
+    """Run GitHub-only preset.
+
+    Args:
+        current_config: Optional existing config to use as defaults
+
+    Returns:
+        New Config object
+    """
+    from devflow.config.models import (
+        JiraConfig,
+        JiraFiltersConfig,
+        GitHubConfig,
+        RepoConfig,
+        WorkspaceDefinition,
+        TimeTrackingConfig,
+        SessionSummaryConfig,
+        TemplateConfig,
+    )
+    from devflow.git.utils import GitUtils
+
+    console.print("\n[bold]GitHub Issues Setup[/bold]\n")
+
+    # Auto-detection feedback
+    current_dir = Path.cwd()
+    if GitUtils.is_git_repository(current_dir):
+        remote_url = GitUtils.get_remote_url(current_dir)
+        if remote_url and "github.com" in remote_url:
+            console.print(f"[green]✓[/green] Detected GitHub remote: {remote_url}")
+        else:
+            console.print("[yellow]⚠[/yellow] Current directory is not a GitHub repository")
+            console.print("[dim]  DevAIFlow can still work with GitHub Issues in other repositories[/dim]")
+
+    # Check GitHub CLI
+    tools = _check_tool_availability()
+    if tools["gh_available"]:
+        console.print("[green]✓[/green] GitHub CLI (gh) is installed")
+    else:
+        console.print("[yellow]⚠[/yellow] GitHub CLI (gh) is not installed")
+        console.print("[dim]  Install it from: https://cli.github.com/[/dim]")
+
+    console.print()
+    console.print("[bold]=== Required Configuration ===[/bold]\n")
+
+    # Workspace path (required)
+    suggested_workspace = _suggest_workspace_path()
+    default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
+    workspace_path = Prompt.ask("Workspace path", default=default_workspace)
+
+    console.print("\n[bold]=== Optional Configuration ===[/bold]")
+    console.print("[dim]Press Enter to skip these settings[/dim]\n")
+
+    # Default labels (optional)
+    default_labels_str = ""
+    if current_config and current_config.github and current_config.github.default_labels:
+        default_labels_str = ",".join(current_config.github.default_labels)
+
+    console.print("[dim]Default labels to add to all created issues (optional)[/dim]")
+    console.print("[dim]Example: backend,devaiflow[/dim]")
+    labels_input = Prompt.ask("Default labels (comma-separated, or Enter to skip)", default=default_labels_str or "")
+    github_default_labels = [label.strip() for label in labels_input.split(",") if label.strip()] if labels_input else []
+
+    # Auto-close on complete (optional)
+    default_auto_close = current_config.github.auto_close_on_complete if current_config and current_config.github else False
+    console.print("\n[dim]Auto-close issues when session completes?[/dim]")
+    console.print("[dim]If disabled, DevAIFlow uses status labels (status: completed) instead[/dim]")
+    github_auto_close = Confirm.ask("Auto-close issues on complete", default=default_auto_close)
+
+    # Build config
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            project=None,
+            transitions={},
+            filters={"sync": JiraFiltersConfig(status=[], required_fields=[], assignee="currentUser()")},
+            time_tracking=True,
+        ),
+        github=GitHubConfig(
+            api_url="https://api.github.com",
+            repository=None,  # Auto-detected from git remote
+            default_labels=github_default_labels,
+            auto_close_on_complete=github_auto_close,
+        ),
+        repos=RepoConfig(
+            workspaces=[WorkspaceDefinition(name="default", path=workspace_path)],
+            last_used_workspace="default",
+            keywords={},
+        ),
+        time_tracking=TimeTrackingConfig(),
+        session_summary=SessionSummaryConfig(),
+        templates=TemplateConfig(),
+    )
+
+    _show_next_steps("github", config)
+    return config
+
+
+def _run_gitlab_preset(current_config: Optional["Config"] = None) -> "Config":
+    """Run GitLab-only preset.
+
+    Args:
+        current_config: Optional existing config to use as defaults
+
+    Returns:
+        New Config object
+    """
+    from devflow.config.models import (
+        JiraConfig,
+        JiraFiltersConfig,
+        GitHubConfig,
+        RepoConfig,
+        WorkspaceDefinition,
+        TimeTrackingConfig,
+        SessionSummaryConfig,
+        TemplateConfig,
+    )
+    from devflow.git.utils import GitUtils
+
+    console.print("\n[bold]GitLab Issues Setup[/bold]\n")
+
+    # Auto-detection feedback
+    current_dir = Path.cwd()
+    if GitUtils.is_git_repository(current_dir):
+        remote_url = GitUtils.get_remote_url(current_dir)
+        if remote_url and "gitlab" in remote_url.lower():
+            console.print(f"[green]✓[/green] Detected GitLab remote: {remote_url}")
+        else:
+            console.print("[yellow]⚠[/yellow] Current directory is not a GitLab repository")
+            console.print("[dim]  DevAIFlow can still work with GitLab Issues in other repositories[/dim]")
+
+    # Check GitLab CLI
+    tools = _check_tool_availability()
+    if tools["glab_available"]:
+        console.print("[green]✓[/green] GitLab CLI (glab) is installed")
+    else:
+        console.print("[yellow]⚠[/yellow] GitLab CLI (glab) is not installed")
+        console.print("[dim]  Install it from: https://gitlab.com/gitlab-org/cli[/dim]")
+
+    console.print()
+    console.print("[bold]=== Required Configuration ===[/bold]\n")
+
+    # Workspace path (required)
+    suggested_workspace = _suggest_workspace_path()
+    default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
+    workspace_path = Prompt.ask("Workspace path", default=default_workspace)
+
+    console.print("\n[bold]=== Optional Configuration ===[/bold]")
+    console.print("[dim]Press Enter to skip these settings[/dim]\n")
+
+    # Default labels (optional)
+    default_labels_str = ""
+    if current_config and current_config.github and current_config.github.default_labels:
+        default_labels_str = ",".join(current_config.github.default_labels)
+
+    console.print("[dim]Default labels to add to all created issues (optional)[/dim]")
+    console.print("[dim]Example: backend,devaiflow[/dim]")
+    labels_input = Prompt.ask("Default labels (comma-separated, or Enter to skip)", default=default_labels_str or "")
+    gitlab_default_labels = [label.strip() for label in labels_input.split(",") if label.strip()] if labels_input else []
+
+    # Auto-close on complete (optional)
+    default_auto_close = current_config.github.auto_close_on_complete if current_config and current_config.github else False
+    console.print("\n[dim]Auto-close issues when session completes?[/dim]")
+    console.print("[dim]If disabled, DevAIFlow uses status labels (status: completed) instead[/dim]")
+    gitlab_auto_close = Confirm.ask("Auto-close issues on complete", default=default_auto_close)
+
+    # Build config (GitLab uses GitHubConfig model for compatibility)
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            project=None,
+            transitions={},
+            filters={"sync": JiraFiltersConfig(status=[], required_fields=[], assignee="currentUser()")},
+            time_tracking=True,
+        ),
+        github=GitHubConfig(
+            api_url="https://api.github.com",  # Not used for GitLab
+            repository=None,  # Auto-detected from git remote
+            default_labels=gitlab_default_labels,
+            auto_close_on_complete=gitlab_auto_close,
+        ),
+        repos=RepoConfig(
+            workspaces=[WorkspaceDefinition(name="default", path=workspace_path)],
+            last_used_workspace="default",
+            keywords={},
+        ),
+        time_tracking=TimeTrackingConfig(),
+        session_summary=SessionSummaryConfig(),
+        templates=TemplateConfig(),
+    )
+
+    _show_next_steps("gitlab", config)
+    return config
+
+
+def _run_jira_preset(current_config: Optional["Config"] = None) -> "Config":
+    """Run JIRA-only preset.
+
+    Args:
+        current_config: Optional existing config to use as defaults
+
+    Returns:
+        New Config object
+    """
+    from devflow.config.models import (
+        JiraConfig,
+        JiraFiltersConfig,
+        RepoConfig,
+        WorkspaceDefinition,
+        TimeTrackingConfig,
+        SessionSummaryConfig,
+        TemplateConfig,
+    )
+
+    console.print("\n[bold]JIRA Setup[/bold]\n")
+
+    # Check JIRA token
+    tools = _check_tool_availability()
+    if tools["jira_token_set"]:
+        console.print("[green]✓[/green] JIRA_API_TOKEN environment variable is set")
+    else:
+        console.print("[yellow]⚠[/yellow] JIRA_API_TOKEN environment variable is not set")
+        console.print("[dim]  You'll need to set it after init completes[/dim]")
+
+    console.print()
+    console.print("[bold]=== Required Configuration ===[/bold]\n")
+
+    # JIRA URL (required)
+    default_url = current_config.jira.url if current_config else "https://jira.example.com"
+    jira_url = Prompt.ask("JIRA URL", default=default_url)
+
+    # JIRA Project (required for creating issues)
+    console.print("\n[dim]The project key is the short identifier for your JIRA project (e.g., 'PROJ', 'ENG')[/dim]")
+    console.print("[dim]You can find it in your JIRA URL: https://jira.company.com/browse/PROJ-123 → 'PROJ'[/dim]")
+
+    default_project = None
+    if current_config:
+        from devflow.config.loader import ConfigLoader
+        config_loader = ConfigLoader()
+        org_config = config_loader._load_organization_config()
+        if org_config and org_config.jira_project:
+            default_project = org_config.jira_project
+        elif current_config.jira.project:
+            default_project = current_config.jira.project
+
+    if default_project:
+        jira_project = Prompt.ask("JIRA Project Key", default=default_project)
+    else:
+        jira_project = Prompt.ask("JIRA Project Key")
+
+    # Workspace path (required)
+    suggested_workspace = _suggest_workspace_path()
+    default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
+    workspace_path = Prompt.ask("\nWorkspace path", default=default_workspace)
+
+    console.print("\n[bold]=== Optional Configuration ===[/bold]")
+    console.print("[dim]Press Enter to use defaults[/dim]\n")
+
+    # Comment visibility (optional)
+    console.print("[dim]Control who can see comments that DevAIFlow adds to JIRA tickets[/dim]")
+    default_visibility_type = current_config.jira.comment_visibility_type if current_config and current_config.jira.comment_visibility_type else "group"
+    console.print("\nVisibility type:")
+    console.print("  1. group - Restrict by JIRA group membership (most common)")
+    console.print("  2. role - Restrict by JIRA role")
+    visibility_type = Prompt.ask("Choice", choices=["group", "role"], default=default_visibility_type)
+
+    default_visibility_value = current_config.jira.comment_visibility_value if current_config and current_config.jira.comment_visibility_value else None
+    if visibility_type == "group":
+        console.print("\n[dim]Enter the JIRA group name (e.g., 'Engineering Team', 'Developers')[/dim]")
+        default_value = default_visibility_value or "Engineering Team"
+    else:
+        console.print("\n[dim]Enter the JIRA role name (e.g., 'Administrators', 'Developers')[/dim]")
+        default_value = default_visibility_value or "Developers"
+
+    visibility_value = Prompt.ask(f"{visibility_type.capitalize()} name", default=default_value)
+
+    # Build config
+    config = Config(
+        jira=JiraConfig(
+            url=jira_url,
+            project=jira_project,
+            transitions={},
+            filters={
+                "sync": JiraFiltersConfig(
+                    status=["New", "To Do", "In Progress"],
+                    required_fields=[],
+                    assignee="currentUser()",
+                )
+            },
+            time_tracking=True,
+            comment_visibility_type=visibility_type,
+            comment_visibility_value=visibility_value,
+        ),
+        github=None,
+        repos=RepoConfig(
+            workspaces=[WorkspaceDefinition(name="default", path=workspace_path)],
+            last_used_workspace="default",
+            keywords={},
+        ),
+        time_tracking=TimeTrackingConfig(),
+        session_summary=SessionSummaryConfig(),
+        templates=TemplateConfig(),
+    )
+
+    # Save JIRA project to organization.json
+    _save_organization_config(jira_project, None)
+
+    _show_next_steps("jira", config)
+    return config
+
+
+def _run_local_preset(current_config: Optional["Config"] = None) -> "Config":
+    """Run Local-only preset (no issue tracker).
+
+    Args:
+        current_config: Optional existing config to use as defaults
+
+    Returns:
+        New Config object
+    """
+    from devflow.config.models import (
+        JiraConfig,
+        JiraFiltersConfig,
+        RepoConfig,
+        WorkspaceDefinition,
+        TimeTrackingConfig,
+        SessionSummaryConfig,
+        TemplateConfig,
+    )
+
+    console.print("\n[bold]Local Sessions Only Setup[/bold]\n")
+    console.print("[dim]No issue tracker needed! DevAIFlow will manage local sessions only.[/dim]\n")
+
+    console.print("[bold]=== Required Configuration ===[/bold]\n")
+
+    # Workspace path (required)
+    suggested_workspace = _suggest_workspace_path()
+    default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
+    workspace_path = Prompt.ask("Workspace path", default=default_workspace)
+
+    # Build minimal config
+    config = Config(
+        jira=JiraConfig(
+            url="https://jira.example.com",
+            project=None,
+            transitions={},
+            filters={"sync": JiraFiltersConfig(status=[], required_fields=[], assignee="currentUser()")},
+            time_tracking=True,
+        ),
+        github=None,
+        repos=RepoConfig(
+            workspaces=[WorkspaceDefinition(name="default", path=workspace_path)],
+            last_used_workspace="default",
+            keywords={},
+        ),
+        time_tracking=TimeTrackingConfig(),
+        session_summary=SessionSummaryConfig(),
+        templates=TemplateConfig(),
+    )
+
+    _show_next_steps("local", config)
+    return config
+
+
 def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     """Run interactive configuration wizard.
 
@@ -32,7 +504,70 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("\n[bold]DevAIFlow Configuration Wizard[/bold]\n")
     console.print("[dim]All settings can be changed later using 'daf config edit'[/dim]\n")
 
-    console.print("[bold]=== JIRA Configuration ===[/bold]\n")
+    # If current_config exists, skip preset selection and use full wizard
+    # This happens when user runs `daf init --reset`
+    if current_config is None:
+        # Step 1: Preset selection (only for new configs)
+        console.print("[bold]What would you like to use DevAIFlow for?[/bold]\n")
+
+        # Auto-detect current setup
+        detected_tracker = _detect_issue_tracker_from_git()
+        tools = _check_tool_availability()
+
+        # Build preset options with auto-detection hints
+        preset_options = []
+        if detected_tracker == "github" and tools["gh_available"]:
+            preset_options.append("1. [green]GitHub Issues[/green] (detected from git remote)")
+        else:
+            preset_options.append("1. GitHub Issues")
+
+        if detected_tracker == "gitlab" and tools["glab_available"]:
+            preset_options.append("2. [green]GitLab Issues[/green] (detected from git remote)")
+        else:
+            preset_options.append("2. GitLab Issues")
+
+        if tools["jira_token_set"]:
+            preset_options.append("3. [green]JIRA[/green] (JIRA_API_TOKEN detected)")
+        else:
+            preset_options.append("3. JIRA")
+
+        preset_options.append("4. Local sessions only (no issue tracker)")
+        preset_options.append("5. Custom configuration (full wizard)")
+
+        for option in preset_options:
+            console.print(f"  {option}")
+
+        console.print()
+
+        # Determine default choice based on auto-detection
+        default_choice = "1"
+        if detected_tracker == "github" and tools["gh_available"]:
+            default_choice = "1"
+        elif detected_tracker == "gitlab" and tools["glab_available"]:
+            default_choice = "2"
+        elif tools["jira_token_set"]:
+            default_choice = "3"
+
+        preset = Prompt.ask(
+            "Choice",
+            choices=["1", "2", "3", "4", "5"],
+            default=default_choice
+        )
+
+        # Route to appropriate preset handler
+        if preset == "1":
+            return _run_github_preset(current_config)
+        elif preset == "2":
+            return _run_gitlab_preset(current_config)
+        elif preset == "3":
+            return _run_jira_preset(current_config)
+        elif preset == "4":
+            return _run_local_preset(current_config)
+        else:  # preset == "5"
+            # Fall through to original full wizard
+            pass
+
+    console.print("\n[bold]=== JIRA Configuration ===[/bold]\n")
 
     # JIRA URL
     default_url = current_config.jira.url if current_config else "https://jira.example.com"

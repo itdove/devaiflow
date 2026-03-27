@@ -3286,38 +3286,23 @@ def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_
             console.print("  Run [cyan]daf init[/cyan] (without --refresh) to create initial configuration.")
             return
 
-        # Ask if user wants JIRA integration
-        console.print("\n[bold]=== Initial Setup ===[/bold]\n")
-        enable_jira = Confirm.ask("Do you want to integrate with JIRA?", default=True)
+        # Run preset-based interactive wizard
+        from devflow.config.init_wizard import run_init_wizard
+        config = run_init_wizard(current_config=None)
+        config_loader.save_config(config)
+
+        # Check if we need JIRA field discovery (only for JIRA preset)
+        enable_jira = config.jira.project is not None
 
         if enable_jira:
-            # Run interactive wizard to collect JIRA URL and other settings
-            from devflow.config.init_wizard import run_init_wizard
-            console.print("\nCollecting configuration values...")
+            # Save JIRA config to config file (already done above via save_config)
+            # Now continue with JIRA authentication and field discovery checks
+            console.print(f"\nConfiguration saved to: {config_loader.config_file}")
             console.print()
-            config = run_init_wizard(current_config=None)
-            config_loader.save_config(config)
-            console.print(f"\n[green]✓[/green] Configuration saved")
-            console.print(f"Location: {config_loader.config_file}")
-
-            # Check JIRA authentication environment variables
-            console.print("\n[bold]JIRA Authentication Check[/bold]")
-            jira_token = os.getenv("JIRA_API_TOKEN")
-            jira_auth_type = os.getenv("JIRA_AUTH_TYPE", "bearer")
-
-            if not jira_token:
-                console.print("[yellow]⚠[/yellow] JIRA_API_TOKEN environment variable is not set")
-                console.print("  You need to set this to authenticate with JIRA:")
-                console.print("  [cyan]export JIRA_API_TOKEN='your-jira-api-token'[/cyan]")
-                console.print("  Generate a token at: [dim]https://id.atlassian.com/manage-profile/security/api-tokens[/dim]")
-            else:
-                console.print(f"[green]✓[/green] JIRA_API_TOKEN is set")
-                console.print(f"[dim]  Authentication type: {jira_auth_type}[/dim]")
-                if jira_auth_type != "bearer" and jira_auth_type != "basic":
-                    console.print(f"[yellow]⚠[/yellow] Unknown JIRA_AUTH_TYPE: {jira_auth_type}")
-                    console.print("  Supported types: 'bearer' (default), 'basic'")
 
             # Validate JIRA URL before attempting field discovery
+            jira_token = os.getenv("JIRA_API_TOKEN")
+            jira_auth_type = os.getenv("JIRA_AUTH_TYPE", "bearer")
             if not _validate_jira_url(config.jira.url):
                 console.print(f"[yellow]⚠[/yellow] JIRA URL appears to be invalid or unreachable: {config.jira.url}")
                 console.print("  You can update it later with: [cyan]daf init --reset[/cyan]")
@@ -3338,25 +3323,8 @@ def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_
                     if Confirm.ask("Discover JIRA custom fields now?", default=True):
                         _discover_and_cache_jira_fields(config, config_loader)
         else:
-            # Create default config without JIRA prompts
-            config = config_loader.create_default_config()
-            config_loader.save_config(config)
-            console.print(f"\n[green]✓[/green] Created default configuration")
-            console.print(f"Location: {config_loader.config_file}")
-            console.print("\n[dim]JIRA integration skipped. You can configure it later with:[/dim]")
-            console.print("  [cyan]daf init --reset[/cyan]")
-
-        console.print("\n[yellow]Please review and edit the configuration file:[/yellow]")
-        console.print("  - JIRA URL and project")
-        console.print("  - Repository workspace path")
-        console.print("  - Keyword mappings for smart repo detection")
-        console.print("  - Custom field defaults (if needed) via [cyan]daf config edit[/cyan]")
-
-        console.print("\n[bold cyan]Next Step: Install Claude Code Commands[/bold cyan]")
-        console.print("To use DevAIFlow commands in Claude Code sessions:")
-        console.print("  [cyan]daf upgrade[/cyan]")
-        console.print()
-        console.print("[dim]This installs /daf-* slash commands into Claude Code[/dim]")
+            # Non-JIRA preset - next steps already shown by wizard
+            pass
 
         # Offer to set up shell completion
         _setup_shell_completion_if_desired()
