@@ -55,7 +55,7 @@ def _display_page(
     table.add_column("Status")
     table.add_column("Name", style="bold")
     table.add_column("Workspace", style="cyan")
-    table.add_column("JIRA")
+    table.add_column("Issue")
     table.add_column("Summary")
     table.add_column("Conversations", style="dim")
     table.add_column("Last Activity", style="dim", justify="right")

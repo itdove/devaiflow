@@ -6,7 +6,7 @@ user-invocable: true
 
 List all daf sessions with their status and time tracking.
 
-This helps you see all available sessions, their JIRA associations, working directories, and time spent.
+This helps you see all available sessions, their issue tracker associations, working directories, and time spent.
 
 ```bash
 daf list --active
@@ -24,12 +24,12 @@ daf list --active
 **Example output:**
 ```
 Your Sessions
-┏━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━┓
-┃ Status ┃ Name        ┃ JIRA    ┃ Summary          ┃ Working Dir┃ Time ┃
-┡━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━┩
-│ Active │ PROJ-12345   │ PROJ... │ Backup feature   │ backend    │ 5h   │
-│ Paused │ PROJ-12346   │ PROJ... │ Login bug        │ frontend   │ 1h   │
-└────────┴─────────────┴─────────┴──────────────────┴────────────┴──────┘
+┏━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━┓
+┃ Status ┃ Name        ┃ Issue  ┃ Summary          ┃ Working Dir┃ Time ┃
+┡━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━┩
+│ Active │ PROJ-12345   │ PROJ...│ Backup feature   │ backend    │ 5h   │
+│ Paused │ PROJ-12346   │ PROJ...│ Login bug        │ frontend   │ 1h   │
+└────────┴─────────────┴────────┴──────────────────┴────────────┴──────┘
 
 Total: 2 sessions | 6h tracked
 ```

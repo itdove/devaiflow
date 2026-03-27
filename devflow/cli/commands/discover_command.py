@@ -80,7 +80,7 @@ def discover_sessions() -> None:
 
         table = Table(show_header=True, header_style="bold green")
         table.add_column("UUID", style="green", width=36)
-        table.add_column("JIRA Key", style="yellow", width=15)
+        table.add_column("Issue", style="yellow", width=15)
         table.add_column("Working Dir", style="white", width=30)
         table.add_column("Messages", justify="right", style="white")
         table.add_column("Last Active", style="dim white", width=20)

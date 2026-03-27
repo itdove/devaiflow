@@ -74,7 +74,7 @@ def search_sessions(
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("Session", style="cyan")
-    table.add_column("JIRA", style="yellow")
+    table.add_column("Issue", style="yellow")
     table.add_column("Goal", style="white")
     table.add_column("Status", style="green")
     table.add_column("Working Dir", style="dim")

@@ -107,7 +107,7 @@ def list_templates() -> None:
     table = Table(title="Available Templates")
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Description", style="white")
-    table.add_column("JIRA", style="dim")
+    table.add_column("Issue", style="dim")
     table.add_column("Created", style="dim")
 
     for template in templates:
