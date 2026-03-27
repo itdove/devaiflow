@@ -652,3 +652,102 @@ def test_save_new_format_preserves_transitions_in_organization_config(temp_daf_h
     assert "transitions" in org_data
     assert org_data["transitions"]["on_start"]["to"] == "Working"
     assert org_data["transitions"]["on_complete"]["to"] == "Review"
+
+
+def test_hierarchical_config_source_auto_migration(temp_daf_home):
+    """Test auto-migration of hierarchical_config_source from organization.json to config.json.
+
+    This verifies the migration added in v3.0 (#314) which moved hierarchical_config_source
+    from organization.json to config.json (repos.hierarchical_config_source) to enable
+    better bootstrap workflow.
+    """
+    loader = ConfigLoader()
+
+    # Create organization config with OLD location (hierarchical_config_source)
+    org_data = {
+        "jira_project": "TEST",
+        "hierarchical_config_source": "file:///Users/test/configs",
+        "transitions": {
+            "on_start": {
+                "from": ["To Do"],
+                "to": "In Progress",
+                "prompt": False
+            }
+        }
+    }
+    org_file = loader.config_dir / "organization.json"
+    with open(org_file, "w") as f:
+        json.dump(org_data, f, indent=2)
+
+    # Create user config WITHOUT hierarchical_config_source
+    user_data = {
+        "repos": {
+            "workspaces": [
+                {"name": "default", "path": str(Path.home() / "development")}
+            ]
+        }
+    }
+    with open(loader.config_file, "w") as f:
+        json.dump(user_data, f, indent=2)
+
+    # Load config - should trigger auto-migration
+    config = loader.load_config()
+
+    # Verify hierarchical_config_source was migrated to config.repos.hierarchical_config_source
+    assert config is not None
+    assert config.repos.hierarchical_config_source == "file:///Users/test/configs"
+
+    # Verify it was saved to config.json
+    with open(loader.config_file, "r") as f:
+        user_config_data = json.load(f)
+    assert "repos" in user_config_data
+    assert "hierarchical_config_source" in user_config_data["repos"]
+    assert user_config_data["repos"]["hierarchical_config_source"] == "file:///Users/test/configs"
+
+    # Verify it was removed from organization.json
+    with open(org_file, "r") as f:
+        org_config_data = json.load(f)
+    assert "hierarchical_config_source" not in org_config_data
+
+    # Verify other organization.json fields are preserved
+    assert org_config_data["jira_project"] == "TEST"
+    assert "transitions" in org_config_data
+
+
+def test_hierarchical_config_source_no_migration_if_already_in_new_location(temp_daf_home):
+    """Test that migration is skipped if hierarchical_config_source is already in config.json."""
+    loader = ConfigLoader()
+
+    # Create organization config with OLD location
+    org_data = {
+        "jira_project": "TEST",
+        "hierarchical_config_source": "file:///Users/test/old-configs"
+    }
+    org_file = loader.config_dir / "organization.json"
+    with open(org_file, "w") as f:
+        json.dump(org_data, f, indent=2)
+
+    # Create user config WITH hierarchical_config_source (new location)
+    user_data = {
+        "repos": {
+            "workspaces": [
+                {"name": "default", "path": str(Path.home() / "development")}
+            ],
+            "hierarchical_config_source": "file:///Users/test/new-configs"
+        }
+    }
+    with open(loader.config_file, "w") as f:
+        json.dump(user_data, f, indent=2)
+
+    # Load config
+    config = loader.load_config()
+
+    # Verify the NEW location is used (not migrated from old location)
+    assert config is not None
+    assert config.repos.hierarchical_config_source == "file:///Users/test/new-configs"
+
+    # Verify organization.json is NOT modified (old value still there)
+    with open(org_file, "r") as f:
+        org_config_data = json.load(f)
+    assert "hierarchical_config_source" in org_config_data
+    assert org_config_data["hierarchical_config_source"] == "file:///Users/test/old-configs"

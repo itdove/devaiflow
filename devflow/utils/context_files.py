@@ -10,6 +10,15 @@ if TYPE_CHECKING:
 def load_hierarchical_context_files(config: Optional['Config'] = None) -> list[tuple[str, str]]:
     """Load context files from hierarchical configuration.
 
+    DEPRECATED: Hierarchical context should use skills in ~/.claude/skills/ instead.
+    This function is kept for backward compatibility but may be removed in future versions.
+
+    Use ~/.claude/skills/01-enterprise/, 02-organization/, etc. for hierarchical context.
+    Skills are auto-loaded by Claude Code and provide better organization than context files.
+
+    Context files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md) are now primarily
+    for documentation purposes and are not automatically loaded into Claude sessions.
+
     Returns list of (path, description) tuples for context files that EXIST.
 
     Checks for context files from:
@@ -30,6 +39,14 @@ def load_hierarchical_context_files(config: Optional['Config'] = None) -> list[t
     Returns:
         List of (absolute_path, description) tuples for existing files only
     """
+    import warnings
+    warnings.warn(
+        "load_hierarchical_context_files() is deprecated. "
+        "Use skills in ~/.claude/skills/ instead. "
+        "Context files are no longer auto-loaded into Claude sessions.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     from devflow.utils.paths import get_cs_home
 
     context_files = []

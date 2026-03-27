@@ -26,6 +26,9 @@ console = Console()
 @click.option("--all-agents", is_flag=True, help="Target all supported agents")
 @click.option("--level", type=click.Choice(['global', 'project', 'both']), help="Installation level (default: global)")
 @click.option("--project-path", type=click.Path(), help="Project directory for project-level operations")
+@click.option("--no-sync-json", is_flag=True, help="Skip JSON config sync (hierarchical assets only)")
+@click.option("--list-backups", is_flag=True, help="List available config backups")
+@click.option("--restore-backup", type=str, help="Restore config file from backup (e.g., enterprise.json.2026-03-26T19:45:00.backup)")
 def assets(
     skill_name: Optional[str],
     install: bool,
@@ -39,7 +42,10 @@ def assets(
     agent: Optional[str],
     all_agents: bool,
     level: Optional[str],
-    project_path: Optional[str]
+    project_path: Optional[str],
+    no_sync_json: bool,
+    list_backups: bool,
+    restore_backup: Optional[str]
 ) -> None:
     """Manage DevAIFlow assets (skills and config) for AI agents.
 
@@ -95,8 +101,23 @@ def assets(
 
         # List installed skills for specific agent
         daf assets --list --installed --agent cursor
+
+        # List available config backups
+        daf assets --list-backups
+
+        # Restore config from backup
+        daf assets --restore-backup enterprise.json.2026-03-26T19:45:00.backup
     """
-    # Handle list action first (doesn't need config validation)
+    # Handle backup operations first (standalone actions)
+    if list_backups:
+        _list_config_backups()
+        return
+
+    if restore_backup:
+        _restore_config_backup(restore_backup)
+        return
+
+    # Handle list action (doesn't need config validation)
     if list_skills:
         # Determine which agents to list for
         agents_list = None
@@ -204,7 +225,8 @@ def assets(
             level=install_level,
             project_path=project_path_obj,
             dry_run=dry_run,
-            asset_type=asset_type
+            asset_type=asset_type,
+            no_sync_json=no_sync_json
         )
 
 
@@ -214,7 +236,8 @@ def _install_skills(
     level: str,
     project_path: Optional[Path],
     dry_run: bool,
-    asset_type: str = 'all'
+    asset_type: str = 'all',
+    no_sync_json: bool = False
 ) -> None:
     """Install or upgrade skills.
 
@@ -225,13 +248,14 @@ def _install_skills(
         project_path: Project directory path (required for 'project' or 'both' level)
         dry_run: If True, only show what would be installed
         asset_type: Type of assets to install ('all', 'bundled', 'hierarchical')
+        no_sync_json: If True, skip JSON config sync for hierarchical assets
     """
     if skill_name:
         # Install specific skill (only bundled skills have names, so install bundled + hierarchical)
         _install_specific_skill(skill_name, agents, level, project_path, dry_run, asset_type)
     else:
         # Install all skills
-        _install_all_skills(agents, level, project_path, dry_run, asset_type)
+        _install_all_skills(agents, level, project_path, dry_run, asset_type, no_sync_json)
 
 
 def _install_all_skills(
@@ -239,7 +263,8 @@ def _install_all_skills(
     level: str,
     project_path: Optional[Path],
     dry_run: bool,
-    asset_type: str = 'all'
+    asset_type: str = 'all',
+    no_sync_json: bool = False
 ) -> None:
     """Install all bundled skills and/or hierarchical skills.
 
@@ -249,6 +274,7 @@ def _install_all_skills(
         project_path: Project directory path
         dry_run: If True, only show what would be installed
         asset_type: Type of assets to install ('all', 'bundled', 'hierarchical')
+        no_sync_json: If True, skip JSON config sync for hierarchical assets
     """
     install_bundled = asset_type in ('all', 'bundled')
     install_hierarchical = asset_type in ('all', 'hierarchical')
@@ -337,7 +363,7 @@ def _install_all_skills(
 
         # Install hierarchical skills if requested
         if install_hierarchical:
-            _install_hierarchical_skills(dry_run)
+            _install_hierarchical_skills(dry_run, sync_json=not no_sync_json)
 
     except Exception as e:
         console.print(f"[red]✗[/red] Installation failed: {e}")
@@ -432,7 +458,7 @@ def _install_specific_skill(
 
     # Install hierarchical skills if requested (from config files)
     if install_hierarchical:
-        _install_hierarchical_skills(dry_run)
+        _install_hierarchical_skills(dry_run, sync_json=True)
 
 
 def _uninstall_skills(
@@ -532,10 +558,24 @@ def _print_skills_table(
 
     console.print(f"\n[bold]{title}:[/bold]\n")
 
+    # Determine if this is hierarchical skills (need Type column)
+    is_hierarchical = "Hierarchical" in title
+
     table = Table(show_header=True, header_style="bold cyan")
     table.add_column("Skill", style="cyan")
+    if is_hierarchical:
+        table.add_column("Type")
     table.add_column("Status Before")
     table.add_column("Status After")
+
+    def get_item_type(name: str) -> str:
+        """Determine the type of hierarchical item based on name."""
+        if name.endswith('.json'):
+            return "[blue]JSON Config[/blue]"
+        elif name.endswith('.md'):
+            return "[magenta]Context[/magenta]"
+        else:
+            return "[cyan]Skill[/cyan]"
 
     # Show changed items
     for skill_name in sorted(changed):
@@ -548,22 +588,31 @@ def _print_skills_table(
             status_before_display = "[yellow]outdated[/yellow]"
             status_after_display = "[green]upgraded[/green]" if not dry_run else "[yellow]would upgrade[/yellow]"
 
-        table.add_row(skill_name, status_before_display, status_after_display)
+        if is_hierarchical:
+            table.add_row(skill_name, get_item_type(skill_name), status_before_display, status_after_display)
+        else:
+            table.add_row(skill_name, status_before_display, status_after_display)
 
     # Show up-to-date items
     for skill_name in sorted(up_to_date):
-        table.add_row(skill_name, "[green]up-to-date[/green]", "[dim]no change[/dim]")
+        if is_hierarchical:
+            table.add_row(skill_name, get_item_type(skill_name), "[green]up-to-date[/green]", "[dim]no change[/dim]")
+        else:
+            table.add_row(skill_name, "[green]up-to-date[/green]", "[dim]no change[/dim]")
 
     # Show failed items
     for skill_name in sorted(failed):
         status_before = statuses_before.get(skill_name, "unknown")
-        table.add_row(skill_name, f"[dim]{status_before}[/dim]", "[red]failed[/red]")
+        if is_hierarchical:
+            table.add_row(skill_name, get_item_type(skill_name), f"[dim]{status_before}[/dim]", "[red]failed[/red]")
+        else:
+            table.add_row(skill_name, f"[dim]{status_before}[/dim]", "[red]failed[/red]")
 
     console.print(table)
     console.print()
 
 
-def _install_hierarchical_skills(dry_run: bool) -> None:
+def _install_hierarchical_skills(dry_run: bool, sync_json: bool = True) -> None:
     """Install hierarchical skills from configuration files."""
     from devflow.utils.hierarchical_skills import (
         install_hierarchical_skills,
@@ -576,7 +625,8 @@ def _install_hierarchical_skills(dry_run: bool) -> None:
     try:
         changed, up_to_date, failed = install_hierarchical_skills(
             dry_run=dry_run,
-            quiet=False
+            quiet=False,
+            sync_json=sync_json
         )
 
         # Display detailed table using shared function
@@ -682,3 +732,89 @@ def _list_skills(
 
         if not any_skills_found:
             console.print("[yellow]⚠[/yellow] No skills installed for the specified agents and level")
+
+
+def _list_config_backups() -> None:
+    """List available config backups."""
+    from devflow.utils.hierarchical_skills import list_backups
+    from rich.table import Table
+
+    console.print("[bold cyan]Available Config Backups:[/bold cyan]\n")
+
+    backups = list_backups()  # List all backups
+
+    if not backups:
+        console.print("[dim]No backups found[/dim]")
+        return
+
+    # Group backups by original filename
+    from collections import defaultdict
+    backups_by_file = defaultdict(list)
+
+    for backup_path in backups:
+        # Extract original filename from backup
+        # Format: filename.YYYY-MM-DDTHH:MM:SS.backup
+        backup_name = backup_path.name
+        if backup_name.endswith('.backup'):
+            # Remove .backup extension and timestamp
+            without_backup_ext = backup_name[:-7]
+            parts = without_backup_ext.rsplit('.', 1)
+            if len(parts) == 2:
+                original_filename = parts[0]
+                backups_by_file[original_filename].append(backup_path)
+
+    # Display backups in a table
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Original File", style="cyan")
+    table.add_column("Backup Filename", style="yellow")
+    table.add_column("Created", style="dim")
+
+    for original_filename in sorted(backups_by_file.keys()):
+        file_backups = sorted(backups_by_file[original_filename], key=lambda p: p.stat().st_mtime, reverse=True)
+
+        for i, backup_path in enumerate(file_backups):
+            import datetime
+            mtime = datetime.datetime.fromtimestamp(backup_path.stat().st_mtime)
+            created_str = mtime.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Only show original filename for first entry in group
+            if i == 0:
+                table.add_row(original_filename, backup_path.name, created_str)
+            else:
+                table.add_row("", backup_path.name, created_str)
+
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(backups)} backup(s)[/dim]")
+    console.print(f"[dim]To restore: daf assets --restore-backup <backup-filename>[/dim]")
+
+
+def _restore_config_backup(backup_filename: str) -> None:
+    """Restore a config file from backup."""
+    from devflow.utils.hierarchical_skills import restore_backup, list_backups
+    from devflow.utils.paths import get_cs_home
+
+    cs_home = get_cs_home()
+    backup_dir = cs_home / "backups"
+    backup_path = backup_dir / backup_filename
+
+    if not backup_path.exists():
+        console.print(f"[red]✗[/red] Backup not found: {backup_filename}")
+        console.print("\n[dim]Available backups:[/dim]")
+        backups = list_backups()
+        if backups:
+            for backup in backups[:5]:  # Show first 5
+                console.print(f"  [dim]{backup.name}[/dim]")
+            if len(backups) > 5:
+                console.print(f"  [dim]... and {len(backups) - 5} more[/dim]")
+            console.print("\n[dim]Run 'daf assets --list-backups' to see all backups[/dim]")
+        else:
+            console.print("  [dim]No backups found[/dim]")
+        return
+
+    try:
+        # Restore the backup
+        restored_path = restore_backup(backup_path)
+        console.print(f"[green]✓[/green] Restored {restored_path.name} from {backup_filename}")
+        console.print(f"[dim]Location: {restored_path}[/dim]")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to restore backup: {e}")

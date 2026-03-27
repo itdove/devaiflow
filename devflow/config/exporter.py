@@ -38,7 +38,9 @@ class ConfigExporter:
         """Scan configuration files for local paths that won't work on other machines.
 
         Checks for:
-        - file:// URLs in context_files, pr_template_url, hierarchical_config_source
+        - file:// URLs in context_files, pr_template_url
+        - file:// URLs in repos.hierarchical_config_source (config.json)
+        - file:// URLs in hierarchical_config_source (organization.json, deprecated)
         - Absolute workspace paths in repos.workspaces[].path
 
         Returns:
@@ -100,7 +102,22 @@ class ConfigExporter:
                         )
                     )
 
-        # Check organization.json for hierarchical_config_source
+            # Check hierarchical_config_source in config.json (new location since v3.0)
+            if "repos" in config_data:
+                repos = config_data["repos"]
+                if "hierarchical_config_source" in repos:
+                    source = repos["hierarchical_config_source"]
+                    if self._is_local_file_url(source):
+                        warnings.append(
+                            LocalPathWarning(
+                                file="config.json",
+                                field="repos.hierarchical_config_source",
+                                path=source,
+                                suggestion="Replace with GitHub/GitLab repository URL (e.g., https://github.com/org/configs)",
+                            )
+                        )
+
+        # Check organization.json for hierarchical_config_source (deprecated location, kept for backward compatibility)
         org_file = self.config_dir / "organization.json"
         if org_file.exists():
             with open(org_file, "r") as f:

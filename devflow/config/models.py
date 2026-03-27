@@ -157,7 +157,9 @@ class OrganizationConfig(BaseModel):
     sync_filters: Dict[str, JiraFiltersConfig] = Field(default_factory=dict)  # Renamed from 'filters'
     status_grouping_field: Optional[str] = None  # Field to group by in status dashboard (e.g., "sprint", "iteration", "release") - None means no grouping
     status_totals_field: Optional[str] = None  # Field to sum for totals in status dashboard (e.g., "points", "story_points", "effort") - None means no totals
-    hierarchical_config_source: Optional[str] = None  # URL or path to hierarchical config files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md). Supports file://, http://, https://. Example: "https://github.com/ansible-saas/devflow-for-red-hatters/configs" or "file:///path/to/configs"
+    # DEPRECATED: hierarchical_config_source moved to RepoConfig (user config) for better bootstrap workflow
+    # This field is kept for backward compatibility and auto-migration
+    hierarchical_config_source: Optional[str] = None  # DEPRECATED - use config.repos.hierarchical_config_source instead
     jira_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
 
     # GitHub-specific fields
@@ -279,6 +281,7 @@ class RepoConfig(BaseModel):
     last_used_workspace: Optional[str] = None  # Name of last used workspace
     detection: RepoDetectionConfig = Field(default_factory=RepoDetectionConfig)
     keywords: Dict[str, List[str]] = Field(default_factory=dict)
+    hierarchical_config_source: Optional[str] = None  # URL or path to hierarchical config files repository root (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md). Supports file://, http://, https://. Example: "https://github.com/ansible-saas/devflow-for-red-hatters" or "file:///path/to/configs" or "/path/to/configs" (plain path)
 
     def get_workspace_by_name(self, name: str) -> Optional[WorkspaceDefinition]:
         """Get a workspace by name.

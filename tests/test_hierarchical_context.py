@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Optional
+import warnings
 
 import pytest
 
@@ -39,8 +40,9 @@ def test_load_hierarchical_context_files_with_all_files(temp_daf_home, monkeypat
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: All files are included in correct order
     assert len(result) == 5
@@ -74,8 +76,9 @@ def test_load_hierarchical_context_files_with_some_files(temp_daf_home):
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: Only existing files are included
     assert len(result) == 2
@@ -91,8 +94,9 @@ def test_load_hierarchical_context_files_with_no_files(temp_daf_home):
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: Empty list returned
     assert len(result) == 0
@@ -107,8 +111,9 @@ def test_load_hierarchical_context_files_with_none_config(temp_daf_home):
     (backends_dir / "JIRA.md").write_text("# JIRA Rules")
     (temp_daf_home / "ORGANIZATION.md").write_text("# Org Standards")
 
-    # Execute: Load with None config (function doesn't require config)
-    result = _load_hierarchical_context_files(None)
+    # Execute: Load with None config and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(None)
 
     # Verify: Files are still loaded (config parameter is not used)
     assert len(result) == 2
@@ -129,8 +134,9 @@ def test_load_hierarchical_context_files_skips_directories(temp_daf_home):
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: Only the actual file is included
     assert len(result) == 1
@@ -153,8 +159,9 @@ def test_load_hierarchical_context_files_order(temp_daf_home):
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: Files are in correct order regardless of creation order
     assert len(result) == 5
@@ -178,8 +185,9 @@ def test_load_hierarchical_context_files_backend_directory_missing(temp_daf_home
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: Only organization file is included
     assert len(result) == 1
@@ -198,8 +206,9 @@ def test_load_hierarchical_context_files_returns_absolute_paths(temp_daf_home):
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: All paths are absolute
     for path, description in result:
@@ -219,8 +228,9 @@ def test_load_hierarchical_context_files_empty_files_are_loaded(temp_daf_home):
     # Create a minimal config
     config = _create_minimal_config()
 
-    # Execute: Load hierarchical context files
-    result = _load_hierarchical_context_files(config)
+    # Execute: Load hierarchical context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        result = _load_hierarchical_context_files(config)
 
     # Verify: Empty files are still loaded
     assert len(result) == 2
@@ -242,11 +252,13 @@ def test_load_hierarchical_context_files_integration_with_generate_prompt(temp_d
     (temp_daf_home / "TEAM.md").write_text("# Team Conventions")
     (temp_daf_home / "USER.md").write_text("# My Notes")
 
-    # Execute: Generate initial prompt
-    prompt = _generate_initial_prompt(
-        name="test-session",
-        goal="Test hierarchical context loading"
-    )
+    # Execute: Generate initial prompt (suppress deprecation warning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        prompt = _generate_initial_prompt(
+            name="test-session",
+            goal="Test hierarchical context loading"
+        )
 
     # Verify: Hierarchical files appear in prompt
     assert "backends/JIRA.md" in prompt
@@ -275,11 +287,13 @@ def test_load_hierarchical_context_files_integration_partial_files(temp_daf_home
     # Note: ORGANIZATION.md and TEAM.md are NOT created
     (temp_daf_home / "USER.md").write_text("# My Notes")
 
-    # Execute: Generate initial prompt
-    prompt = _generate_initial_prompt(
-        name="test-session",
-        goal="Test partial hierarchical context loading"
-    )
+    # Execute: Generate initial prompt (suppress deprecation warning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        prompt = _generate_initial_prompt(
+            name="test-session",
+            goal="Test partial hierarchical context loading"
+        )
 
     # Verify: Only existing files appear in prompt
     assert "backends/JIRA.md" in prompt

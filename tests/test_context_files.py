@@ -1,6 +1,7 @@
 """Tests for hierarchical context files loading."""
 
 import pytest
+import warnings
 from pathlib import Path
 from devflow.utils.context_files import load_hierarchical_context_files
 from devflow.utils.paths import get_cs_home
@@ -9,7 +10,9 @@ from devflow.utils.paths import get_cs_home
 def test_load_hierarchical_context_files_empty(temp_daf_home):
     """Test loading context files when none exist."""
     # With temp_daf_home fixture, DEVAIFLOW_HOME is empty
-    context_files = load_hierarchical_context_files()
+    # Verify deprecation warning is raised
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        context_files = load_hierarchical_context_files()
 
     # Should return empty list when no files exist
     assert context_files == []
@@ -94,8 +97,9 @@ def test_load_hierarchical_context_files_skip_directories(temp_daf_home):
     (cs_home / "DAF_AGENTS.md").mkdir()
     (cs_home / "ENTERPRISE.md").write_text("# Enterprise")
 
-    # Load context files
-    context_files = load_hierarchical_context_files()
+    # Load context files and verify deprecation warning
+    with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+        context_files = load_hierarchical_context_files()
 
     # Should only find ENTERPRISE.md (DAF_AGENTS.md is a directory, not a file)
     assert len(context_files) == 1

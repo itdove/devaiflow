@@ -5,6 +5,7 @@ which is loaded via the hierarchical context system, not hardcoded in the prompt
 """
 
 import pytest
+import warnings
 from devflow.cli.commands.jira_new_command import _build_ticket_creation_prompt
 from devflow.utils.context_files import load_hierarchical_context_files as _load_hierarchical_context_files
 from devflow.config.loader import ConfigLoader
@@ -21,7 +22,8 @@ class TestLoadHierarchicalContextFiles:
         enterprise_file = cs_home / "ENTERPRISE.md"
         enterprise_file.write_text("# Enterprise Policy")
 
-        result = _load_hierarchical_context_files(None)
+        with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+            result = _load_hierarchical_context_files(None)
 
         # Should find ENTERPRISE.md
         enterprise_entries = [r for r in result if "ENTERPRISE.md" in r[0]]
@@ -36,7 +38,8 @@ class TestLoadHierarchicalContextFiles:
         org_file = cs_home / "ORGANIZATION.md"
         org_file.write_text("# Organization Policy\n\nAcceptance criteria are required.")
 
-        result = _load_hierarchical_context_files(None)
+        with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+            result = _load_hierarchical_context_files(None)
 
         # Should find ORGANIZATION.md
         org_entries = [r for r in result if "ORGANIZATION.md" in r[0]]
@@ -51,7 +54,8 @@ class TestLoadHierarchicalContextFiles:
         team_file = cs_home / "TEAM.md"
         team_file.write_text("# Team Conventions")
 
-        result = _load_hierarchical_context_files(None)
+        with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+            result = _load_hierarchical_context_files(None)
 
         # Should find TEAM.md
         team_entries = [r for r in result if "TEAM.md" in r[0]]
@@ -66,7 +70,8 @@ class TestLoadHierarchicalContextFiles:
         user_file = cs_home / "USER.md"
         user_file.write_text("# Personal Notes")
 
-        result = _load_hierarchical_context_files(None)
+        with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+            result = _load_hierarchical_context_files(None)
 
         # Should find USER.md
         user_entries = [r for r in result if "USER.md" in r[0]]
@@ -83,7 +88,8 @@ class TestLoadHierarchicalContextFiles:
         jira_file = backends_dir / "JIRA.md"
         jira_file.write_text("# JIRA Integration Rules")
 
-        result = _load_hierarchical_context_files(None)
+        with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+            result = _load_hierarchical_context_files(None)
 
         # Should find JIRA.md
         jira_entries = [r for r in result if "JIRA.md" in r[0]]
@@ -92,7 +98,8 @@ class TestLoadHierarchicalContextFiles:
 
     def test_returns_empty_when_no_files_exist(self, temp_daf_home):
         """Test that empty list is returned when no hierarchical files exist."""
-        result = _load_hierarchical_context_files(None)
+        with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+            result = _load_hierarchical_context_files(None)
         assert result == []
 
     def test_loads_multiple_files_when_they_exist(self, temp_daf_home):
@@ -105,7 +112,8 @@ class TestLoadHierarchicalContextFiles:
         (cs_home / "TEAM.md").write_text("# Team")
         (cs_home / "USER.md").write_text("# User")
 
-        result = _load_hierarchical_context_files(None)
+        with pytest.warns(DeprecationWarning, match="load_hierarchical_context_files\\(\\) is deprecated"):
+            result = _load_hierarchical_context_files(None)
 
         assert len(result) == 4
         paths = [r[0] for r in result]
