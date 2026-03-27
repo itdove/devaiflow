@@ -470,14 +470,21 @@ class ClaudeAgent(AgentInterface):
             if project_skills.exists():
                 skills_dirs.append(str(project_skills))
 
-        # Add DEVAIFLOW_HOME for hierarchical context files (if they exist)
-        if config:
-            from devflow.utils.context_files import load_hierarchical_context_files
-            hierarchical_files = load_hierarchical_context_files(config)
-            if hierarchical_files and cs_home.exists():
-                # Only add if not already added (avoid duplication)
-                if str(cs_home) not in skills_dirs:
-                    skills_dirs.append(str(cs_home))
+        # DEPRECATED: Auto-loading hierarchical context files is deprecated.
+        # Context files (ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md) are no longer
+        # automatically loaded into Claude sessions. Instead, use skills which are auto-loaded
+        # from ~/.claude/skills/01-enterprise/, 02-organization/, etc.
+        #
+        # This provides better organization and avoids duplicating the same content in both
+        # context files and skills. Skills are the single source of truth.
+        #
+        # The old behavior below is kept but commented out for backward compatibility reference:
+        # if config:
+        #     from devflow.utils.context_files import load_hierarchical_context_files
+        #     hierarchical_files = load_hierarchical_context_files(config)
+        #     if hierarchical_files and cs_home.exists():
+        #         if str(cs_home) not in skills_dirs:
+        #             skills_dirs.append(str(cs_home))
 
         return skills_dirs
 

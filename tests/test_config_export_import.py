@@ -24,7 +24,8 @@ def config_dir(tmp_path):
                 {"name": "default", "path": "/Users/alice/development"},
                 {"name": "secondary", "path": "~/projects"}
             ],
-            "last_used_workspace": "default"
+            "last_used_workspace": "default",
+            "hierarchical_config_source": "file:///Users/alice/configs"
         },
         "context_files": [
             {"path": "file:///Users/alice/notes/TEAM.md", "description": "Team notes"},
@@ -40,7 +41,6 @@ def config_dir(tmp_path):
     # Create organization.json
     org_data = {
         "jira_project": "PROJ",
-        "hierarchical_config_source": "file:///Users/alice/configs",
         "transitions": {
             "on_start": {
                 "from": ["To Do"],
@@ -121,9 +121,9 @@ class TestConfigExporter:
         assert pr_warnings[0].path.startswith("file://")
 
         # Should detect hierarchical_config_source
-        org_warnings = [w for w in warnings if "hierarchical_config_source" in w.field]
-        assert len(org_warnings) == 1
-        assert org_warnings[0].file == "organization.json"
+        config_source_warnings = [w for w in warnings if "hierarchical_config_source" in w.field]
+        assert len(config_source_warnings) == 1
+        assert config_source_warnings[0].file == "config.json"
 
     def test_scan_ignores_http_urls(self, config_dir):
         """Test that scanner ignores http/https URLs."""

@@ -346,7 +346,8 @@ def install_hierarchical_skills(
 ) -> Tuple[List[str], List[str], List[str]]:
     """Install organization-specific skills from hierarchical config files.
 
-    First checks if hierarchical_config_source is configured in organization.json.
+    First checks if hierarchical_config_source is configured in config.json
+    (repos.hierarchical_config_source). Falls back to organization.json for backward compatibility.
     If yes, downloads the .md config files from that source to $DEVAIFLOW_HOME.
     Then reads ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md from $DEVAIFLOW_HOME
     and installs skills referenced in their frontmatter to
@@ -380,21 +381,42 @@ def install_hierarchical_skills(
     up_to_date = []
     failed = []
 
-    # Check if hierarchical_config_source is configured in organization.json
-    # We need to read organization.json directly, not the merged config
+    # Check if hierarchical_config_source is configured
+    # NEW LOCATION (since v3.0): config.json (user config) - repos.hierarchical_config_source
+    # OLD LOCATION (deprecated): organization.json - hierarchical_config_source
+    # Try new location first, fall back to old location for backward compatibility
     config_loader = ConfigLoader()
 
-    # Read organization.json directly
+    # Try reading from config.json (new location)
     from devflow.utils.paths import get_cs_home
+    user_config_path = get_cs_home() / "config.json"
     org_config_path = get_cs_home() / "organization.json"
     config_source = None
 
-    if org_config_path.exists():
+    # Try new location first (config.repos.hierarchical_config_source)
+    if user_config_path.exists():
+        import json
+        try:
+            with open(user_config_path, 'r') as f:
+                user_config = json.load(f)
+                repos = user_config.get('repos', {})
+                config_source = repos.get('hierarchical_config_source')
+        except Exception as e:
+            if not quiet:
+                console.print(f"[yellow]⚠[/yellow] Could not read config.json: {e}")
+
+    # Fall back to old location for backward compatibility (organization.json)
+    if not config_source and org_config_path.exists():
         import json
         try:
             with open(org_config_path, 'r') as f:
                 org_config = json.load(f)
-                config_source = org_config.get('hierarchical_config_source')
+                old_source = org_config.get('hierarchical_config_source')
+                if old_source:
+                    if not quiet:
+                        console.print("[yellow]⚠ hierarchical_config_source in organization.json is deprecated[/yellow]")
+                        console.print("[yellow]  Please move it to config.json under repos.hierarchical_config_source[/yellow]")
+                    config_source = old_source
         except Exception as e:
             if not quiet:
                 console.print(f"[yellow]⚠[/yellow] Could not read organization.json: {e}")

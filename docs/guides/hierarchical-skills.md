@@ -106,16 +106,18 @@ When Claude Code starts, skills are loaded in this order:
 
 When you run `daf skills`, DevAIFlow:
 
-1. **Reads** `organization.json` to find `hierarchical_config_source`
+1. **Reads** `config.json` (user config) to find `repos.hierarchical_config_source`
 2. **Downloads** config files (.md) from the source location
 3. **Extracts** `skill_url` from each config file's frontmatter
 4. **Downloads** skill content from the `skill_url`
 5. **Installs** skills to `$DEVAIFLOW_HOME/.claude/skills/XX-level/`
 6. **Saves** config files to `$DEVAIFLOW_HOME/`
 
+**Note:** In v3.0+, `hierarchical_config_source` moved from `organization.json` to `config.json` (`repos.hierarchical_config_source`) for better bootstrap workflow. Old configurations are automatically migrated.
+
 ```
-organization.json
-  └─ hierarchical_config_source: "file:///path/to/configs"
+config.json (user config)
+  └─ repos.hierarchical_config_source: "file:///path/to/configs"
        ↓
   Downloads ENTERPRISE.md from source
        ↓
@@ -139,12 +141,13 @@ Here's the complete flow from remote configuration to local skill installation:
 │ STEP 1: Configuration (User sets this up)                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-~/.daf-sessions/organization.json
+~/.daf-sessions/config.json (user config)
 ┌─────────────────────────────────────────────────────────────────┐
 │ {                                                               │
-│   "jira_project": "PROJ",                                       │
-│   "hierarchical_config_source":                                 │
-│     "/path/to/org-devaiflow/configs"  ◄────────────────────── Points to config directory
+│   "repos": {                                                    │
+│     "hierarchical_config_source":                               │
+│       "/path/to/org-devaiflow/configs"  ◄──────────────────── Points to config directory
+│   }                                                             │
 │ }                                                               │
 └─────────────────────────────────────────────────────────────────┘
                             │
@@ -262,7 +265,7 @@ Similarly for:
 **Example with actual paths:**
 
 ```
-organization.json → "hierarchical_config_source":
+config.json (user config) → "repos.hierarchical_config_source":
     "/Users/alice/company/org-devaiflow/configs"
     │
     ├─→ configs/ENTERPRISE.md (skill_url: https://github.com/company/skills/enterprise)
@@ -691,7 +694,7 @@ After running `daf skills`, users will have:
 ├── ORGANIZATION.md            # Downloaded from source
 ├── TEAM.md                    # Downloaded from source
 ├── USER.md                    # Downloaded from source
-├── organization.json          # User's config with hierarchical_config_source
+├── config.json                # User's config with repos.hierarchical_config_source
 └── .claude/
     └── skills/
         ├── 01-enterprise/
@@ -963,7 +966,10 @@ sed -i 's/ansible/my-project/g' docs/example.md
 
 **Solution**:
 ```bash
-# Check hierarchical_config_source is set
+# Check hierarchical_config_source is set (v3.0+)
+cat ~/.daf-sessions/config.json | jq '.repos.hierarchical_config_source'
+
+# For older versions (deprecated, auto-migrated):
 cat ~/.daf-sessions/organization.json | grep hierarchical_config_source
 
 # Verify source is accessible
@@ -997,7 +1003,8 @@ daf open
 **Cause**: Relative paths are being resolved from `~/.daf-sessions/` instead of source location
 
 **Solution**:
-- Ensure `hierarchical_config_source` is set in organization.json
+- Ensure `hierarchical_config_source` is set in config.json (`repos.hierarchical_config_source`)
+- For v2.x and earlier: `hierarchical_config_source` in organization.json (auto-migrated to config.json in v3.0+)
 - Relative paths only work when downloading from a source
 - If no source is configured, skills must use absolute paths
 

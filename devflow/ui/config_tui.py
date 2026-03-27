@@ -3334,12 +3334,8 @@ class ConfigTUI(App):
                 except NoMatches:
                     pass  # Field not found, skip
 
-                # Collect organization.hierarchical_config_source
-                try:
-                    hierarchical_config_val = self.query_one(key_to_id("input", "organization.hierarchical_config_source"), Input).value.strip()
-                    org_data['hierarchical_config_source'] = hierarchical_config_val if hierarchical_config_val else None
-                except NoMatches:
-                    pass  # Field not found, skip
+                # DEPRECATED: hierarchical_config_source moved to User tab (repos.hierarchical_config_source)
+                # Old field removed from Organization tab - no longer saved here
 
                 # Collect organization.github_issue_types
                 try:
@@ -3360,6 +3356,27 @@ class ConfigTUI(App):
 
             except Exception as e:
                 self.notify(f"Error collecting organization values: {e}", severity="error")
+
+        # User-level fields (Advanced Mode only)
+        # These are saved to config.json
+        if self.advanced_mode:
+            try:
+                # Collect repos.hierarchical_config_source (moved from organization.json in v3.0)
+                try:
+                    hierarchical_source_val = self.query_one(key_to_id("input", "repos.hierarchical_config_source"), Input).value.strip()
+                    self.config.repos.hierarchical_config_source = hierarchical_source_val if hierarchical_source_val else None
+                except NoMatches:
+                    pass  # Field not found, skip
+
+                # Collect repos.last_used_workspace (read-only, auto-updated)
+                try:
+                    last_used_val = self.query_one(key_to_id("input", "repos.last_used_workspace"), Input).value.strip()
+                    self.config.repos.last_used_workspace = last_used_val if last_used_val else None
+                except NoMatches:
+                    pass  # Field not found, skip
+
+            except Exception as e:
+                self.notify(f"Error collecting user values: {e}", severity="error")
 
         # Mark as modified
         if self.config != self.original_config:
@@ -3491,12 +3508,14 @@ class ConfigTUI(App):
                 help_text="Default JIRA project for this organization (e.g., AAP, PROJ)",
             )
 
-            yield ConfigInput(
-                "Hierarchical Config Source",
-                "organization.hierarchical_config_source",
-                value=org_config.hierarchical_config_source if org_config and org_config.hierarchical_config_source else "",
-                help_text="URL or path to hierarchical config files (e.g., file:///company/shared/devaiflow/configs or https://github.com/company/devaiflow-config/configs)",
-            )
+            # Hierarchical Config Source moved to User tab (config.repos.hierarchical_config_source)
+            hierarchical_source = self.config.repos.hierarchical_config_source if self.config.repos else ""
+            if hierarchical_source:
+                yield Static(f"[dim]Hierarchical Config Source: {hierarchical_source}[/dim]")
+                yield Static("[dim]→ Configure in User Settings tab (repos.hierarchical_config_source)[/dim]")
+            else:
+                yield Static("[dim]Hierarchical Config Source: Not configured[/dim]")
+                yield Static("[dim]→ Configure in User Settings tab (repos.hierarchical_config_source)[/dim]")
 
             # GitHub Issue Types configuration
             github_issue_types_value = ""
@@ -3599,6 +3618,13 @@ class ConfigTUI(App):
                 "repos.last_used_workspace",
                 value=self.config.repos.last_used_workspace or "",
                 help_text="Last workspace used (automatically updated)",
+            )
+
+            yield ConfigInput(
+                "Hierarchical Config Source",
+                "repos.hierarchical_config_source",
+                value=self.config.repos.hierarchical_config_source or "",
+                help_text="Repository root URL for hierarchical configs (e.g., https://github.com/org/devflow-config or /path/to/configs)",
             )
 
             yield Static("\n[bold]AI Settings[/bold]", classes="subsection-title")

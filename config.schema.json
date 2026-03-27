@@ -904,6 +904,18 @@
           },
           "title": "Keywords",
           "type": "object"
+        },
+        "hierarchical_config_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hierarchical Config Source"
         }
       },
       "title": "RepoConfig",

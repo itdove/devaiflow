@@ -785,6 +785,36 @@ class ConfigLoader:
             update_checker_timeout=user_config.update_checker_timeout,
         )
 
+        # Auto-migrate hierarchical_config_source from organization.json to config.json
+        # This was moved in v3.0 to enable better bootstrap workflow (#314)
+        if org_config.hierarchical_config_source and not user_config.repos.hierarchical_config_source:
+            # Migrate from old location to new location
+            config.repos.hierarchical_config_source = org_config.hierarchical_config_source
+            user_config.repos.hierarchical_config_source = org_config.hierarchical_config_source
+
+            # Save updated user config
+            with open(self.config_file, 'r') as f:
+                user_config_data = json.load(f)
+
+            # Update the repos.hierarchical_config_source field
+            if 'repos' not in user_config_data:
+                user_config_data['repos'] = {}
+            user_config_data['repos']['hierarchical_config_source'] = org_config.hierarchical_config_source
+
+            with open(self.config_file, 'w') as f:
+                json.dump(user_config_data, f, indent=2)
+
+            # Clear from organization config
+            org_config_path = self.config_dir / "organization.json"
+            if org_config_path.exists():
+                with open(org_config_path, 'r') as f:
+                    org_data = json.load(f)
+                org_data.pop('hierarchical_config_source', None)
+                with open(org_config_path, 'w') as f:
+                    json.dump(org_data, f, indent=2)
+
+            console.print("[cyan]ℹ Migrated hierarchical_config_source from organization.json to config.json[/cyan]")
+
         # Validate configuration and show warnings (only once per command execution)
         from .validator import ConfigValidator
         validator = ConfigValidator(self.config_dir)
