@@ -242,7 +242,7 @@ def test_handle_branch_creation_detects_conflict(tmp_path):
     # Mock user choosing to use existing branch (option 2: switch without merging)
     with patch("rich.prompt.IntPrompt.ask") as mock_int_prompt, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True):
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)):
         mock_int_prompt.return_value = 2  # Use existing branch
 
         result = _handle_branch_creation(
@@ -276,10 +276,10 @@ def test_handle_branch_creation_creates_new_with_suffix(tmp_path):
     with patch("rich.prompt.IntPrompt.ask") as mock_int_prompt, \
          patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
-         patch.object(GitUtils, 'create_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)):
         mock_int_prompt.return_value = 3  # Choose different name
         mock_prompt.side_effect = ["aap-12345-test-feature-retry", "main"]  # New branch name, then source branch
 

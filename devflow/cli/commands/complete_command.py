@@ -175,10 +175,14 @@ def complete_session(
                 else:
                     # No uncommitted changes - we can auto-checkout the session branch
                     console.print(f"\n[cyan]Switching to session branch '{active_conv.branch}'...[/cyan]")
-                    if GitUtils.checkout_branch(working_dir, active_conv.branch):
+                    success, error_msg = GitUtils.checkout_branch(working_dir, active_conv.branch)
+                    if success:
                         console.print(f"[green]✓[/green] Checked out branch '{active_conv.branch}'")
                     else:
                         console.print(f"[red]✗[/red] Failed to checkout branch '{active_conv.branch}'")
+                        if error_msg:
+                            console.print(f"\n[red]Checkout error:[/red]")
+                            console.print(f"{error_msg}")
                         console.print(f"\n[yellow]To resolve this issue:[/yellow]")
                         console.print(f"  1. Manually checkout the session branch: git checkout {active_conv.branch}")
                         console.print(f"  2. Run 'daf complete {identifier}' again")
@@ -230,10 +234,13 @@ def complete_session(
 
                 # Try to checkout the session branch
                 if not GitUtils.has_uncommitted_changes(working_dir):
-                    if GitUtils.checkout_branch(working_dir, proj_info.branch):
+                    success, error_msg = GitUtils.checkout_branch(working_dir, proj_info.branch)
+                    if success:
                         console.print(f"  [green]✓[/green] Checked out '{proj_info.branch}'")
                     else:
                         console.print(f"  [red]✗[/red] Failed to checkout '{proj_info.branch}' - skipping")
+                        if error_msg:
+                            console.print(f"  [dim]{error_msg}[/dim]")
                         continue
                 else:
                     console.print(f"  [red]✗[/red] Uncommitted changes prevent branch switch - skipping")
@@ -288,10 +295,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                                 should_push = Confirm.ask(f"  Push to remote?", default=True)
 
                             if should_push:
-                                if GitUtils.push_branch(working_dir, proj_info.branch):
+                                success, error_msg = GitUtils.push_branch(working_dir, proj_info.branch)
+                                if success:
                                     console.print(f"  [green]✓[/green] Pushed to remote")
                                 else:
                                     console.print(f"  [yellow]⚠[/yellow] Failed to push")
+                                    if error_msg:
+                                        console.print(f"\n  [yellow]Push error:[/yellow]")
+                                        console.print(f"  {error_msg}")
 
             # Check for PR/MR
             pr_status = _get_pr_for_branch(working_dir, proj_info.branch)
@@ -308,8 +319,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                         should_push = Confirm.ask(f"  Push latest commits to update PR/MR?", default=True)
 
                     if should_push:
-                        if GitUtils.push_branch(working_dir, proj_info.branch):
+                        success, error_msg = GitUtils.push_branch(working_dir, proj_info.branch)
+                        if success:
                             console.print(f"  [green]✓[/green] PR/MR updated")
+                        else:
+                            console.print(f"  [yellow]⚠[/yellow] Failed to push")
+                            if error_msg:
+                                console.print(f"\n  [yellow]Push error:[/yellow]")
+                                console.print(f"  {error_msg}")
 
                 # Store PR URL in conversation
                 if pr_status['url'] and pr_status['url'] not in active_conv.prs:
@@ -378,10 +395,13 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
                 # Try to checkout the session branch
                 if not GitUtils.has_uncommitted_changes(working_dir):
-                    if GitUtils.checkout_branch(working_dir, conv.branch):
+                    success, error_msg = GitUtils.checkout_branch(working_dir, conv.branch)
+                    if success:
                         console.print(f"  [green]✓[/green] Checked out '{conv.branch}'")
                     else:
                         console.print(f"  [red]✗[/red] Failed to checkout '{conv.branch}' - skipping")
+                        if error_msg:
+                            console.print(f"  [dim]{error_msg}[/dim]")
                         continue
                 else:
                     console.print(f"  [red]✗[/red] Uncommitted changes prevent branch switch - skipping")
@@ -436,10 +456,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                                 should_push = Confirm.ask(f"  Push to remote?", default=True)
 
                             if should_push:
-                                if GitUtils.push_branch(working_dir, conv.branch):
+                                success, error_msg = GitUtils.push_branch(working_dir, conv.branch)
+                                if success:
                                     console.print(f"  [green]✓[/green] Pushed to remote")
                                 else:
                                     console.print(f"  [yellow]⚠[/yellow] Failed to push")
+                                    if error_msg:
+                                        console.print(f"\n  [yellow]Push error:[/yellow]")
+                                        console.print(f"  {error_msg}")
 
             # Check for PR/MR
             pr_status = _get_pr_for_branch(working_dir, conv.branch)
@@ -456,8 +480,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                         should_push = Confirm.ask(f"  Push latest commits to update PR/MR?", default=True)
 
                     if should_push:
-                        if GitUtils.push_branch(working_dir, conv.branch):
+                        success, error_msg = GitUtils.push_branch(working_dir, conv.branch)
+                        if success:
                             console.print(f"  [green]✓[/green] PR/MR updated")
+                        else:
+                            console.print(f"  [yellow]⚠[/yellow] Failed to push")
+                            if error_msg:
+                                console.print(f"\n  [yellow]Push error:[/yellow]")
+                                console.print(f"  {error_msg}")
 
                 # Store PR URL in conversation
                 if pr_status['url'] and pr_status['url'] not in conv.prs:
@@ -568,10 +598,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
                         if should_push:
                             console.print(f"[dim]Pushing {active_conv.branch} to origin...[/dim]")
-                            if GitUtils.push_branch(working_dir, active_conv.branch):
+                            success, error_msg = GitUtils.push_branch(working_dir, active_conv.branch)
+                            if success:
                                 console.print(f"[green]✓[/green] Commits pushed to remote")
                             else:
                                 console.print(f"[yellow]⚠[/yellow] Failed to push commits to remote")
+                                if error_msg:
+                                    console.print(f"\n[yellow]Push error:[/yellow]")
+                                    console.print(f"{error_msg}")
                                 console.print(f"[dim]You can push manually later with: git push origin {active_conv.branch}[/dim]")
                         else:
                             console.print(f"[dim]Skipping push - commits remain local[/dim]")
@@ -624,10 +658,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
                         if should_push:
                             console.print(f"[dim]Pushing {active_conv.branch} to origin...[/dim]")
-                            if GitUtils.push_branch(working_dir, active_conv.branch):
+                            success, error_msg = GitUtils.push_branch(working_dir, active_conv.branch)
+                            if success:
                                 console.print(f"[green]✓[/green] PR/MR updated with latest commits")
                             else:
                                 console.print(f"[yellow]⚠[/yellow] Failed to push commits")
+                                if error_msg:
+                                    console.print(f"\n[yellow]Push error:[/yellow]")
+                                    console.print(f"{error_msg}")
                     else:
                         console.print(f"[dim]Branch is up to date with remote - no push needed[/dim]")
                     # Update issue tracker ticket with MR URL if not already present
@@ -1031,18 +1069,26 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
         if should_push:
             console.print(f"[dim]Pushing {branch} to origin...[/dim]")
-            if GitUtils.push_branch(working_dir, branch):
+            success, error_msg = GitUtils.push_branch(working_dir, branch)
+            if success:
                 console.print(f"[green]✓[/green] Pushed branch to origin")
             else:
                 console.print(f"[yellow]⚠[/yellow] Failed to push branch")
+                if error_msg:
+                    console.print(f"\n[yellow]Push error:[/yellow]")
+                    console.print(f"{error_msg}")
                 console.print(f"[yellow]Your teammate will need to get the branch another way[/yellow]")
     else:
         # Branch exists on remote - push any new commits
         console.print(f"\n[dim]Pushing latest commits to remote...[/dim]")
-        if GitUtils.push_branch(working_dir, branch):
+        success, error_msg = GitUtils.push_branch(working_dir, branch)
+        if success:
             console.print(f"[green]✓[/green] Branch '{branch}' synced with remote")
         else:
             console.print(f"[yellow]⚠[/yellow] Failed to push to remote")
+            if error_msg:
+                console.print(f"\n[yellow]Push error:[/yellow]")
+                console.print(f"{error_msg}")
             console.print(f"[yellow]Your teammate may not have the latest changes[/yellow]")
 
 
@@ -1501,9 +1547,14 @@ def _create_pr_mr_for_project(session, proj_info, working_dir: Path, session_man
     # Push branch to remote if there are unpushed commits
     current_branch = proj_info.branch
     if GitUtils.has_unpushed_commits(working_dir, current_branch):
-        if GitUtils.push_branch(working_dir, current_branch):
+        success, error_msg = GitUtils.push_branch(working_dir, current_branch)
+        if success:
             console.print(f"    [dim]Pushed {current_branch} to remote[/dim]")
         else:
+            console.print(f"    [yellow]⚠[/yellow] Failed to push {current_branch}")
+            if error_msg:
+                console.print(f"\n    [yellow]Push error:[/yellow]")
+                console.print(f"    {error_msg}")
             return None
 
     # Generate PR/MR description
@@ -1555,9 +1606,14 @@ def _create_pr_mr_for_conversation(session, conversation, working_dir: Path, ses
     # Push branch to remote if there are unpushed commits
     current_branch = conversation.branch
     if GitUtils.has_unpushed_commits(working_dir, current_branch):
-        if GitUtils.push_branch(working_dir, current_branch):
+        success, error_msg = GitUtils.push_branch(working_dir, current_branch)
+        if success:
             console.print(f"    [dim]Pushed {current_branch} to remote[/dim]")
         else:
+            console.print(f"    [yellow]⚠[/yellow] Failed to push {current_branch}")
+            if error_msg:
+                console.print(f"\n    [yellow]Push error:[/yellow]")
+                console.print(f"    {error_msg}")
             return None
 
     # Generate PR/MR description
@@ -1625,10 +1681,14 @@ def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
 
         if should_push:
             console.print(f"[dim]Pushing {current_branch} to origin...[/dim]")
-            if GitUtils.push_branch(working_dir, current_branch):
+            success, error_msg = GitUtils.push_branch(working_dir, current_branch)
+            if success:
                 console.print("[green]✓[/green] Pushed branch to origin")
             else:
                 console.print("[yellow]⚠[/yellow] Failed to push branch")
+                if error_msg:
+                    console.print(f"\n[yellow]Push error:[/yellow]")
+                    console.print(f"{error_msg}")
                 return None
     else:
         console.print(f"[dim]Branch '{current_branch}' is up to date with remote[/dim]")

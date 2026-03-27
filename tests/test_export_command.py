@@ -245,7 +245,7 @@ def test_sync_single_conversation_checkout_failure(temp_daf_home):
     """Test sync raises ValueError when checkout fails."""
     with patch('devflow.git.utils.GitUtils.is_git_repository', return_value=True):
         with patch('devflow.git.utils.GitUtils.get_current_branch', return_value="main"):
-            with patch('devflow.git.utils.GitUtils.checkout_branch', return_value=False):
+            with patch('devflow.git.utils.GitUtils.checkout_branch', return_value=(False, "checkout error")):
                 with pytest.raises(ValueError, match="Cannot checkout branch"):
                     _sync_single_conversation_branch(
                         project_path=Path("/path/to/project"),
@@ -260,7 +260,7 @@ def test_sync_single_conversation_merge_conflict(temp_daf_home):
         with patch('devflow.git.utils.GitUtils.get_current_branch', return_value="feature"):
             with patch('devflow.git.utils.GitUtils.fetch_origin'):
                 with patch('devflow.git.utils.GitUtils.is_branch_pushed', return_value=True):
-                    with patch('devflow.git.utils.GitUtils.pull_current_branch', return_value=False):
+                    with patch('devflow.git.utils.GitUtils.pull_current_branch', return_value=(False, "pull error")):
                         with patch('devflow.git.utils.GitUtils.has_merge_conflicts', return_value=True):
                             with patch('devflow.git.utils.GitUtils.get_conflicted_files', return_value=["file1.py", "file2.py"]):
                                 with pytest.raises(ValueError, match="Merge conflicts"):
@@ -294,7 +294,7 @@ def test_sync_single_conversation_push_failure_new_branch(temp_daf_home):
             with patch('devflow.git.utils.GitUtils.fetch_origin'):
                 with patch('devflow.git.utils.GitUtils.has_uncommitted_changes', return_value=False):
                     with patch('devflow.git.utils.GitUtils.is_branch_pushed', return_value=False):
-                        with patch('devflow.git.utils.GitUtils.push_branch', return_value=False):
+                        with patch('devflow.git.utils.GitUtils.push_branch', return_value=(False, "push error")):
                             with pytest.raises(ValueError, match="Failed to push branch"):
                                 _sync_single_conversation_branch(
                                     project_path=Path("/path/to/project"),
@@ -310,8 +310,8 @@ def test_sync_single_conversation_push_failure_existing_branch(temp_daf_home):
             with patch('devflow.git.utils.GitUtils.fetch_origin'):
                 with patch('devflow.git.utils.GitUtils.has_uncommitted_changes', return_value=False):
                     with patch('devflow.git.utils.GitUtils.is_branch_pushed', return_value=True):
-                        with patch('devflow.git.utils.GitUtils.pull_current_branch', return_value=True):
-                            with patch('devflow.git.utils.GitUtils.push_branch', return_value=False):
+                        with patch('devflow.git.utils.GitUtils.pull_current_branch', return_value=(True, None)):
+                            with patch('devflow.git.utils.GitUtils.push_branch', return_value=(False, "push error")):
                                 with pytest.raises(ValueError, match="Failed to push to remote"):
                                     _sync_single_conversation_branch(
                                         project_path=Path("/path/to/project"),
@@ -329,8 +329,8 @@ def test_sync_single_conversation_captures_remote_url(temp_daf_home):
             with patch('devflow.git.utils.GitUtils.fetch_origin'):
                 with patch('devflow.git.utils.GitUtils.has_uncommitted_changes', return_value=False):
                     with patch('devflow.git.utils.GitUtils.is_branch_pushed', return_value=True):
-                        with patch('devflow.git.utils.GitUtils.pull_current_branch', return_value=True):
-                            with patch('devflow.git.utils.GitUtils.push_branch', return_value=True):
+                        with patch('devflow.git.utils.GitUtils.pull_current_branch', return_value=(True, None)):
+                            with patch('devflow.git.utils.GitUtils.push_branch', return_value=(True, None)):
                                 with patch('devflow.git.utils.GitUtils.get_branch_remote_url', return_value="https://github.com/user/repo.git"):
                                     _sync_single_conversation_branch(
                                         project_path=Path("/path/to/project"),

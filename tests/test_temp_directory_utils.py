@@ -159,7 +159,7 @@ class TestPromptAndCloneToTemp:
              patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
              patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
              patch("devflow.utils.temp_directory.GitUtils.get_current_branch", return_value="develop"), \
-             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=True) as mock_checkout, \
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=(True, None)) as mock_checkout, \
              patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True):
 
             result = prompt_and_clone_to_temp(mock_git_repo)
@@ -178,7 +178,7 @@ class TestPromptAndCloneToTemp:
              patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
              patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
              patch("devflow.utils.temp_directory.GitUtils.get_current_branch", return_value="develop"), \
-             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=False) as mock_checkout, \
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=(False, "checkout error")) as mock_checkout, \
              patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True):
 
             # Should still succeed even if checkout fails
@@ -200,7 +200,7 @@ class TestPromptAndCloneToTemp:
              patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
              patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value=None), \
              patch("devflow.utils.temp_directory.GitUtils.branch_exists", side_effect=[False, True, False]), \
-             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=True) as mock_checkout, \
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=(True, None)) as mock_checkout, \
              patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True):
 
             result = prompt_and_clone_to_temp(mock_git_repo)
@@ -240,7 +240,7 @@ class TestPromptAndCloneToTemp:
              patch("tempfile.mkdtemp", return_value=temp_dir), \
              patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
              patch("devflow.utils.temp_directory._prompt_for_branch_selection", return_value="develop") as mock_prompt, \
-             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=True) as mock_checkout:
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=(True, None)) as mock_checkout:
 
             result = prompt_and_clone_to_temp(mock_git_repo)
 
@@ -277,7 +277,7 @@ class TestPromptAndCloneToTemp:
              patch("tempfile.mkdtemp", return_value=temp_dir), \
              patch("devflow.utils.temp_directory.GitUtils.clone_repository", return_value=True), \
              patch("devflow.utils.temp_directory._prompt_for_branch_selection", return_value="feature/test"), \
-             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.checkout_branch", return_value=(False, "checkout error")), \
              patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
              patch("devflow.utils.temp_directory.GitUtils.get_current_branch", return_value="main"):
 

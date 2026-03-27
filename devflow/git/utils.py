@@ -159,7 +159,7 @@ class GitUtils:
             return False
 
     @staticmethod
-    def create_branch(path: Path, branch_name: str, from_branch: Optional[str] = None) -> bool:
+    def create_branch(path: Path, branch_name: str, from_branch: Optional[str] = None) -> tuple[bool, Optional[str]]:
         """Create a new branch.
 
         Args:
@@ -168,7 +168,9 @@ class GitUtils:
             from_branch: Branch to create from (None = current HEAD)
 
         Returns:
-            True if successful, False otherwise
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if failed
 
         Raises:
             ToolNotFoundError: If git is not installed
@@ -187,12 +189,18 @@ class GitUtils:
                 text=True,
                 timeout=10,
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+            if result.returncode == 0:
+                return (True, None)
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Failed to create branch"
+                return (False, error_msg)
+        except subprocess.TimeoutExpired:
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
-    def checkout_branch(path: Path, branch_name: str) -> bool:
+    def checkout_branch(path: Path, branch_name: str) -> tuple[bool, Optional[str]]:
         """Switch to an existing branch.
 
         Args:
@@ -200,7 +208,9 @@ class GitUtils:
             branch_name: Branch name to checkout
 
         Returns:
-            True if successful, False otherwise
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if failed
         """
         try:
             result = subprocess.run(
@@ -210,51 +220,75 @@ class GitUtils:
                 text=True,
                 timeout=10,
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+            if result.returncode == 0:
+                return (True, None)
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Failed to checkout branch"
+                return (False, error_msg)
+        except subprocess.TimeoutExpired:
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
-    def fetch_origin(path: Path) -> bool:
+    def fetch_origin(path: Path) -> tuple[bool, Optional[str]]:
         """Fetch latest from origin.
 
         Args:
             path: Repository path
 
         Returns:
-            True if successful, False otherwise
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if failed
         """
         try:
             result = subprocess.run(
                 ["git", "fetch", "origin"],
                 cwd=path,
                 capture_output=True,
+                text=True,
                 timeout=30,
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+            if result.returncode == 0:
+                return (True, None)
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Failed to fetch from origin"
+                return (False, error_msg)
+        except subprocess.TimeoutExpired:
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
-    def pull_current_branch(path: Path) -> bool:
+    def pull_current_branch(path: Path) -> tuple[bool, Optional[str]]:
         """Pull latest for current branch.
 
         Args:
             path: Repository path
 
         Returns:
-            True if successful, False otherwise
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if failed
         """
         try:
             result = subprocess.run(
                 ["git", "pull"],
                 cwd=path,
                 capture_output=True,
+                text=True,
                 timeout=30,
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+            if result.returncode == 0:
+                return (True, None)
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Failed to pull"
+                return (False, error_msg)
+        except subprocess.TimeoutExpired:
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
     def slugify(text: str) -> str:
@@ -578,7 +612,7 @@ class GitUtils:
             return False
 
     @staticmethod
-    def push_branch(path: Path, branch_name: str, set_upstream: bool = True) -> bool:
+    def push_branch(path: Path, branch_name: str, set_upstream: bool = True) -> tuple[bool, Optional[str]]:
         """Push a branch to remote.
 
         Args:
@@ -587,7 +621,9 @@ class GitUtils:
             set_upstream: Set upstream tracking (default: True)
 
         Returns:
-            True if successful, False otherwise
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if failed
 
         Raises:
             ToolNotFoundError: If git is not installed
@@ -605,11 +641,18 @@ class GitUtils:
                 cmd,
                 cwd=path,
                 capture_output=True,
+                text=True,
                 timeout=30,
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+            if result.returncode == 0:
+                return (True, None)
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Failed to push branch"
+                return (False, error_msg)
+        except subprocess.TimeoutExpired:
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
     def get_commit_log(path: Path, base_branch: Optional[str] = None, current_branch: Optional[str] = None) -> Optional[str]:
@@ -746,7 +789,7 @@ class GitUtils:
             return 0
 
     @staticmethod
-    def merge_branch(path: Path, branch: str) -> bool:
+    def merge_branch(path: Path, branch: str) -> tuple[bool, Optional[str]]:
         """Merge a branch into the current branch.
 
         Args:
@@ -754,7 +797,9 @@ class GitUtils:
             branch: Branch name to merge (e.g., 'main')
 
         Returns:
-            True if successful, False if conflicts or error occurred
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if conflicts or error occurred
         """
         try:
             result = subprocess.run(
@@ -767,7 +812,10 @@ class GitUtils:
 
             # Check if merge was successful
             if result.returncode == 0:
-                return True
+                return (True, None)
+
+            # Capture error message before aborting
+            error_msg = result.stderr.strip() if result.stderr else "Merge failed"
 
             # If merge failed (likely conflicts), abort it
             subprocess.run(
@@ -776,8 +824,8 @@ class GitUtils:
                 capture_output=True,
                 timeout=10,
             )
-            return False
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return (False, error_msg)
+        except subprocess.TimeoutExpired:
             # Try to abort merge in case of error
             try:
                 subprocess.run(
@@ -788,10 +836,12 @@ class GitUtils:
                 )
             except:
                 pass
-            return False
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
-    def rebase_branch(path: Path, base_branch: str) -> bool:
+    def rebase_branch(path: Path, base_branch: str) -> tuple[bool, Optional[str]]:
         """Rebase current branch onto base branch.
 
         Args:
@@ -799,7 +849,9 @@ class GitUtils:
             base_branch: Base branch to rebase onto (e.g., 'main')
 
         Returns:
-            True if successful, False if conflicts or error occurred
+            Tuple of (success: bool, error_message: Optional[str])
+            - (True, None) if successful
+            - (False, error_message) if conflicts or error occurred
         """
         try:
             result = subprocess.run(
@@ -812,7 +864,10 @@ class GitUtils:
 
             # Check if rebase was successful
             if result.returncode == 0:
-                return True
+                return (True, None)
+
+            # Capture error message before aborting
+            error_msg = result.stderr.strip() if result.stderr else "Rebase failed"
 
             # If rebase failed (likely conflicts), abort it
             subprocess.run(
@@ -821,8 +876,8 @@ class GitUtils:
                 capture_output=True,
                 timeout=10,
             )
-            return False
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return (False, error_msg)
+        except subprocess.TimeoutExpired:
             # Try to abort rebase in case of error
             try:
                 subprocess.run(
@@ -833,7 +888,9 @@ class GitUtils:
                 )
             except:
                 pass
-            return False
+            return (False, "Git command timed out")
+        except FileNotFoundError:
+            return (False, "Git command not found")
 
     @staticmethod
     def fetch_and_checkout_branch(path: Path, branch_name: str) -> bool:

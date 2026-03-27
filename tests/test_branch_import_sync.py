@@ -192,7 +192,7 @@ def test_sync_branch_merge_conflicts(mock_git_repo, monkeypatch):
     with patch("subprocess.run", side_effect=mock_run):
         # Branch exists locally
         with patch.object(GitUtils, "branch_exists", return_value=True):
-            with patch.object(GitUtils, "merge_branch", return_value=False):
+            with patch.object(GitUtils, "merge_branch", return_value=(False, "merge error")):
                 result = _sync_branch_for_import(str(mock_git_repo), "test-branch")
 
                 # Should return False (merge failed)

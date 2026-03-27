@@ -113,8 +113,8 @@ def test_handle_branch_creation_from_specific_branch_success(tmp_path):
     with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
          patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test-feature'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)):
 
         # User says yes to create branch, accepts suggested name, selects develop as source
         mock_confirm.return_value = True
@@ -163,9 +163,9 @@ def test_handle_branch_creation_from_current_branch(tmp_path):
 
     # Test auto mode (uses default source branch)
     with patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
-         patch.object(GitUtils, 'create_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)):
 
         # Use auto_from_default=True to skip prompts
         result = _handle_branch_creation(
@@ -211,10 +211,10 @@ def test_handle_branch_creation_works_for_daf_open(tmp_path):
     with patch("devflow.cli.commands.new_command.Prompt.ask") as mock_prompt, \
          patch("devflow.cli.commands.new_command.Confirm.ask") as mock_confirm, \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-from-open'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
-         patch.object(GitUtils, 'create_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)):
 
         # Simulate user choosing: yes to create branch, accept suggested name, select develop as source
         mock_confirm.return_value = True

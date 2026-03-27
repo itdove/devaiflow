@@ -188,10 +188,13 @@ def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
     if selected_branch:
         # Checkout the selected branch
         console_print(f"[dim]Checking out branch: {selected_branch}...[/dim]")
-        if GitUtils.checkout_branch(Path(temp_dir), selected_branch):
+        success, error_msg = GitUtils.checkout_branch(Path(temp_dir), selected_branch)
+        if success:
             console_print(f"[green]✓[/green] Checked out branch: {selected_branch}")
         else:
             console_print(f"[yellow]⚠[/yellow] Could not checkout {selected_branch}")
+            if error_msg:
+                console_print(f"[dim]Checkout error: {error_msg}[/dim]")
             console_print("[dim]Falling back to auto-detection[/dim]")
             selected_branch = None
 
@@ -203,16 +206,21 @@ def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
             # Branch was already checked out during clone, but let's verify
             current_branch = GitUtils.get_current_branch(Path(temp_dir))
             if current_branch != default_branch:
-                if not GitUtils.checkout_branch(Path(temp_dir), default_branch):
+                success, error_msg = GitUtils.checkout_branch(Path(temp_dir), default_branch)
+                if not success:
                     console_print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}")
+                    if error_msg:
+                        console_print(f"[dim]Checkout error: {error_msg}[/dim]")
         else:
             console_print(f"[yellow]⚠[/yellow] Could not determine default branch (trying main, master, develop)")
             # Try common default branches
             for branch in ["main", "master", "develop"]:
                 if GitUtils.branch_exists(Path(temp_dir), branch):
-                    if GitUtils.checkout_branch(Path(temp_dir), branch):
+                    success, error_msg = GitUtils.checkout_branch(Path(temp_dir), branch)
+                    if success:
                         console_print(f"[dim]Checked out branch: {branch}[/dim]")
                         break
+                    # Silently continue to next branch if checkout fails
 
     # Return temp directory and original path
     original_path = str(current_path.absolute())

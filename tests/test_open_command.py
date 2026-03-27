@@ -168,10 +168,10 @@ def test_handle_branch_creation_auto_from_default(tmp_path):
     subprocess.run(["git", "checkout", "-b", "old-feature"], cwd=tmp_path, capture_output=True)
 
     # Mock the git operations to verify they're called in the right order
-    with patch.object(GitUtils, 'fetch_origin', return_value=True) as mock_fetch, \
-         patch.object(GitUtils, 'checkout_branch', return_value=True) as mock_checkout, \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True) as mock_pull, \
-         patch.object(GitUtils, 'create_branch', return_value=True) as mock_create:
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)) as mock_fetch, \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)) as mock_checkout, \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)) as mock_pull, \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)) as mock_create:
 
         # Call with auto_from_default=True
         branch = _handle_branch_creation(
@@ -197,11 +197,11 @@ def test_handle_branch_creation_auto_mode_skips_confirmation(tmp_path):
     # Mock all git operations
     with patch.object(GitUtils, 'is_git_repository', return_value=True), \
          patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test'), \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'get_default_branch', return_value='main'), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
-         patch.object(GitUtils, 'create_branch', return_value=True), \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)), \
          patch('devflow.cli.commands.new_command.Confirm.ask') as mock_confirm:
 
         # Call with auto_from_default=True
@@ -547,7 +547,7 @@ def test_check_and_sync_with_base_branch_up_to_date(tmp_path):
     current_branch = GitUtils.get_current_branch(tmp_path)
 
     # Mock fetch to succeed, commits_behind to return 0
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'commits_behind', return_value=0):
 
         # Should complete without prompting
@@ -575,7 +575,7 @@ def test_check_and_sync_with_base_branch_user_declines(tmp_path):
     current_branch = GitUtils.get_current_branch(tmp_path)
 
     # Mock: fetch succeeds, branch is 5 commits behind, user declines
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'commits_behind', return_value=5), \
          patch('devflow.cli.commands.open_command.Confirm.ask', return_value=False), \
          patch.object(GitUtils, 'merge_branch') as mock_merge, \
@@ -609,11 +609,11 @@ def test_check_and_sync_with_base_branch_merge_success(tmp_path):
     current_branch = GitUtils.get_current_branch(tmp_path)
 
     # Mock: fetch succeeds, branch is 3 commits behind, user accepts and chooses merge
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'commits_behind', return_value=3), \
          patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
          patch('rich.prompt.Prompt.ask', return_value='m'), \
-         patch.object(GitUtils, 'merge_branch', return_value=True) as mock_merge:
+         patch.object(GitUtils, 'merge_branch', return_value=(True, None)) as mock_merge:
 
         _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
 
@@ -642,11 +642,11 @@ def test_check_and_sync_with_base_branch_rebase_success(tmp_path):
     current_branch = GitUtils.get_current_branch(tmp_path)
 
     # Mock: fetch succeeds, branch is 2 commits behind, user accepts and chooses rebase
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'commits_behind', return_value=2), \
          patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
          patch('rich.prompt.Prompt.ask', return_value='r'), \
-         patch.object(GitUtils, 'rebase_branch', return_value=True) as mock_rebase:
+         patch.object(GitUtils, 'rebase_branch', return_value=(True, None)) as mock_rebase:
 
         _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
 
@@ -675,7 +675,7 @@ def test_check_and_sync_with_base_branch_skip_strategy(tmp_path):
     current_branch = GitUtils.get_current_branch(tmp_path)
 
     # Mock: fetch succeeds, branch is 3 commits behind, user accepts and chooses skip
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'commits_behind', return_value=3), \
          patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
          patch('rich.prompt.Prompt.ask', return_value='s'), \
@@ -713,11 +713,11 @@ def test_check_and_sync_with_base_branch_merge_conflict(tmp_path):
     current_branch = GitUtils.get_current_branch(tmp_path)
 
     # Mock: fetch succeeds, branch is behind, merge fails with conflict
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'commits_behind', return_value=1), \
          patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
          patch('rich.prompt.Prompt.ask', return_value='m'), \
-         patch.object(GitUtils, 'merge_branch', return_value=False) as mock_merge:
+         patch.object(GitUtils, 'merge_branch', return_value=(False, "merge error")) as mock_merge:
 
         # PROJ-60408: Should return False on merge conflict
         result = _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
@@ -747,11 +747,11 @@ def test_check_and_sync_with_base_branch_rebase_conflict(tmp_path):
     current_branch = GitUtils.get_current_branch(tmp_path)
 
     # Mock: fetch succeeds, branch is behind, rebase fails with conflict
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'commits_behind', return_value=2), \
          patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
          patch('rich.prompt.Prompt.ask', return_value='r'), \
-         patch.object(GitUtils, 'rebase_branch', return_value=False) as mock_rebase:
+         patch.object(GitUtils, 'rebase_branch', return_value=(False, "rebase error")) as mock_rebase:
 
         # PROJ-60408: Should return False on rebase conflict
         result = _check_and_sync_with_base_branch(str(tmp_path), current_branch, "main", "test-session")
@@ -772,7 +772,7 @@ def test_check_and_sync_with_base_branch_fetch_fails(tmp_path):
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
 
     # Mock: fetch fails
-    with patch.object(GitUtils, 'fetch_origin', return_value=False), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(False, "fetch error")), \
          patch.object(GitUtils, 'commits_behind') as mock_commits:
 
         _check_and_sync_with_base_branch(str(tmp_path), "feature", "main", "test-session")
@@ -1851,10 +1851,10 @@ def test_handle_branch_creation_with_uncommitted_changes_continue(tmp_path):
     #   2. "Enter source branch" -> main
     with patch('devflow.cli.commands.new_command.Confirm.ask', side_effect=[True, True]) as mock_confirm, \
          patch('devflow.cli.commands.new_command.Prompt.ask', side_effect=['proj-12345-test-feature', 'main']) as mock_prompt, \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
-         patch.object(GitUtils, 'create_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)):
 
         # Call function with mock config
         branch = _handle_branch_creation(
@@ -1903,10 +1903,10 @@ def test_handle_branch_creation_no_uncommitted_changes(tmp_path):
     # Prompt.ask: branch name, source branch
     with patch('devflow.cli.commands.new_command.Confirm.ask', return_value=True) as mock_confirm, \
          patch('devflow.cli.commands.new_command.Prompt.ask', side_effect=['proj-12345-test-feature', 'main']) as mock_prompt, \
-         patch.object(GitUtils, 'fetch_origin', return_value=True), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
-         patch.object(GitUtils, 'create_branch', return_value=True):
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)):
 
         # Call function with mock config
         branch = _handle_branch_creation(
@@ -1946,11 +1946,11 @@ def test_handle_branch_creation_uncommitted_changes_auto_mode(tmp_path):
     (tmp_path / "test.txt").write_text("modified")
 
     # Mock git operations for auto mode
-    with patch.object(GitUtils, 'fetch_origin', return_value=True), \
+    with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
          patch.object(GitUtils, 'get_default_branch', return_value='main'), \
-         patch.object(GitUtils, 'checkout_branch', return_value=True), \
-         patch.object(GitUtils, 'pull_current_branch', return_value=True), \
-         patch.object(GitUtils, 'create_branch', return_value=True):
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)):
 
         # Call with auto_from_default=True (should NOT ask to continue)
         branch = _handle_branch_creation(
