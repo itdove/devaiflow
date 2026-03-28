@@ -128,6 +128,7 @@ def open_session(
     sync_upstream: Optional[bool] = None,
     auto_workspace: bool = False,
     sync_strategy: Optional[str] = None,
+    skip_feature_warning: bool = False,
 ) -> None:
     """Open/resume an existing session.
 
@@ -142,6 +143,7 @@ def open_session(
         conversation_id: Optional Claude session UUID to resume specific archived conversation - PROJ-63490
         model_profile: Optional model provider profile to use (overrides session default)
         create_branch: Whether to create a new branch when adding projects (None = prompt)
+        skip_feature_warning: If True, skip feature orchestration warning (used by daf feature run/resume)
         source_branch: Source branch to create from when adding projects (None = prompt/default)
         on_branch_exists: Action when branch exists (error/use-existing/add-suffix/skip)
         allow_uncommitted: Allow uncommitted changes when switching branches
@@ -291,6 +293,13 @@ def open_session(
             if selected_workspace_name:
                 from devflow.cli.utils import get_workspace_path
                 workspace_path = get_workspace_path(config, selected_workspace_name)
+
+    # Check if session is part of a feature orchestration
+    # Warn user and confirm before continuing (unless called from feature run/resume)
+    if not skip_feature_warning:
+        if not _check_and_warn_feature_orchestration(session, session_manager):
+            # User cancelled - exit without opening
+            return
 
     # Handle --projects flag (add multiple projects to session)
     if projects:
@@ -1089,6 +1098,71 @@ def open_session(
             console.print(f"\n[yellow]You can manually resume with:[/yellow]")
             console.print(f"  cd {active_conv.project_path}")
             console.print(f"  claude --resume {active_conv.ai_agent_session_id}")
+
+
+def _check_and_warn_feature_orchestration(session, session_manager) -> bool:
+    """Check if session is part of a feature and warn user.
+
+    Args:
+        session: Session object
+        session_manager: SessionManager instance
+
+    Returns:
+        True to continue opening, False to cancel
+    """
+    from devflow.orchestration.feature import FeatureManager
+    from rich.prompt import Confirm
+
+    try:
+        manager = FeatureManager()
+        context = manager.get_session_context(session.name)
+
+        if not context:
+            # Not part of a feature - continue normally
+            return True
+
+        # Session is part of a feature - show warning
+        feature_name = context['feature_name']
+        is_current = context['is_current']
+        is_completed = context['is_completed']
+        current_pos = context['current_index'] + 1
+        total = context['total_sessions']
+
+        console.print(f"\n[yellow]⚠️  Warning: Feature Orchestration Detected[/yellow]")
+        console.print(f"[bold]Feature:[/bold] {feature_name}")
+        console.print(f"[bold]Session:[/bold] {session.name} (Session {current_pos} of {total})")
+
+        if is_current:
+            console.print(f"[bold]Status:[/bold] [green]Current session in workflow[/green]")
+            console.print(f"\n[yellow]Recommendation:[/yellow] Use [cyan]daf -e feature resume {feature_name}[/cyan] instead")
+            console.print(f"[dim]This ensures proper workflow continuation and verification.[/dim]")
+        elif is_completed:
+            console.print(f"[bold]Status:[/bold] [green]✓ Already completed[/green]")
+            console.print(f"\n[yellow]Info:[/yellow] This session was already completed in the feature workflow.")
+            console.print(f"[dim]Opening it manually is fine for fixes or additional work.[/dim]")
+        else:
+            console.print(f"[bold]Status:[/bold] [yellow]○ Pending (not current)[/yellow]")
+            console.print(f"\n[yellow]Warning:[/yellow] Opening this session may break execution order!")
+            console.print(f"[dim]Feature orchestration requires sequential execution.[/dim]")
+            console.print(f"\n[yellow]Recommendation:[/yellow] Use [cyan]daf -e feature run {feature_name}[/cyan] instead")
+
+        console.print(f"\n[bold]Reasons to continue anyway:[/bold]")
+        console.print(f"  • Making fixes to already-completed work")
+        console.print(f"  • Investigating code in this session")
+        console.print(f"  • You know what you're doing")
+
+        # Ask for confirmation
+        if not Confirm.ask("\nContinue opening this session manually?", default=False):
+            console.print("[yellow]Cancelled[/yellow]")
+            console.print(f"[dim]Use [cyan]daf -e feature resume {feature_name}[/cyan] to follow the workflow[/dim]")
+            return False
+
+        console.print("[dim]Continuing with manual open...[/dim]\n")
+        return True
+
+    except Exception:
+        # If feature lookup fails, just continue normally
+        return True
 
 
 def _display_feature_context(session) -> None:

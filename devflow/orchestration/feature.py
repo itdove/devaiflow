@@ -47,6 +47,9 @@ class FeatureManager:
         base_branch: str = "main",
         verification_mode: str = "auto",
         workspace_name: Optional[str] = None,
+        parent_issue_key: Optional[str] = None,
+        external_sessions: Optional[List[Dict]] = None,
+        metadata: Optional[Dict] = None,
     ) -> FeatureOrchestration:
         """Create a new feature orchestration.
 
@@ -57,6 +60,9 @@ class FeatureManager:
             base_branch: Base branch (default: "main")
             verification_mode: "auto", "manual", or "skip"
             workspace_name: Workspace for all sessions
+            parent_issue_key: Parent issue key for sync operations (optional)
+            external_sessions: List of sessions not assigned to current user (optional)
+            metadata: Additional metadata (blocking_relationships, etc.) (optional)
 
         Returns:
             Created FeatureOrchestration object
@@ -98,6 +104,9 @@ class FeatureManager:
             issue_tracker=issue_tracker,
             linked_issues=linked_issues,
             session_statuses={s: "pending" for s in sessions},
+            parent_issue_key=parent_issue_key,
+            external_sessions=external_sessions or [],
+            metadata=metadata or {},
         )
 
         # Save to storage

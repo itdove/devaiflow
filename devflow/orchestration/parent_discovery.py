@@ -274,8 +274,25 @@ class ParentTicketDiscovery:
 
             # Check required fields (sprint, points, etc.)
             issue_type = child.get("type")
-            if sync_filters.get("required_fields") and issue_type:
-                required_fields = sync_filters["required_fields"].get(issue_type, [])
+            if sync_filters.get("required_fields"):
+                # Handle both dict (JIRA) and list (GitHub/GitLab) formats
+                required_fields_config = sync_filters["required_fields"]
+
+                try:
+                    # Check type by name to avoid isinstance issues
+                    type_name = type(required_fields_config).__name__
+                    if type_name == 'dict':
+                        # JIRA format: {Story: [sprint, points], Task: [assignee]}
+                        required_fields = required_fields_config.get(issue_type, []) if issue_type else []
+                    elif type_name in ('list', 'tuple'):
+                        # GitHub/GitLab format: [assignee]
+                        required_fields = required_fields_config
+                    else:
+                        required_fields = []
+                except (TypeError, AttributeError):
+                    # Handle unexpected type
+                    required_fields = []
+
                 for field in required_fields:
                     if not child.get(field):
                         child['meets_criteria'] = False

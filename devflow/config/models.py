@@ -1547,6 +1547,11 @@ class FeatureOrchestration(BaseModel):
     # Issue tracker integration
     issue_tracker: Optional[str] = None  # "jira", "github", "gitlab"
     linked_issues: List[str] = Field(default_factory=list)  # All issue keys included in this feature
+    parent_issue_key: Optional[str] = None  # Parent issue key for sync operations
+
+    # Team collaboration: External sessions (not assigned to current user)
+    # Format: [{"key": "PROJ-103", "assignee": "bob", "status": "In Progress", "blocks": [...], "blocked_by": [...]}]
+    external_sessions: List[Dict[str, Any]] = Field(default_factory=list)
 
     # PR/MR tracking
     pr_url: Optional[str] = None  # PR/MR created for completed feature
@@ -1556,6 +1561,7 @@ class FeatureOrchestration(BaseModel):
     total_commits: int = 0  # Total commits across all sessions
     total_tests_added: int = 0  # Total tests added across all sessions
     pause_reason: Optional[str] = None  # Reason for paused status
+    metadata: Dict[str, Any] = Field(default_factory=dict)  # Additional metadata (auto_advance, etc.)
 
     def get_current_session(self) -> Optional[str]:
         """Get the name of the currently executing session.
@@ -1601,6 +1607,81 @@ class FeatureOrchestration(BaseModel):
             self.current_session_index += 1
             return True
         return False
+
+    def get_blocking_issues(self, session_key: str) -> List[str]:
+        """Get list of issues that block this session.
+
+        Checks both sessions and external_sessions for blocking relationships.
+
+        Args:
+            session_key: Issue key of the session
+
+        Returns:
+            List of issue keys that block this session
+        """
+        # Check in external sessions first
+        for ext_session in self.external_sessions:
+            if ext_session.get("key") == session_key:
+                return ext_session.get("blocked_by", [])
+
+        # If not found, session might have been created with blocking metadata
+        # Check in metadata
+        if hasattr(self, 'metadata') and self.metadata:
+            blocking_data = self.metadata.get('blocking_relationships', {})
+            return blocking_data.get(session_key, {}).get('blocked_by', [])
+
+        return []
+
+    def is_session_blocked(self, session_key: str) -> bool:
+        """Check if a session is blocked by incomplete stories.
+
+        Args:
+            session_key: Issue key of the session
+
+        Returns:
+            True if session is blocked by incomplete stories
+        """
+        blocking_issues = self.get_blocking_issues(session_key)
+
+        for blocker in blocking_issues:
+            # Check if blocker is in our sessions
+            if blocker in self.sessions:
+                status = self.session_statuses.get(blocker, "pending")
+                if status != "completed":
+                    return True
+
+            # Check if blocker is in external sessions
+            for ext_session in self.external_sessions:
+                if ext_session.get("key") == blocker:
+                    ext_status = ext_session.get("status", "")
+                    # Consider done/closed as completed
+                    if ext_status.lower() not in ["done", "closed", "resolved"]:
+                        return True
+
+        return False
+
+    def get_first_unblocked_session(self, current_user_assignee: Optional[str] = None) -> Optional[str]:
+        """Get the first unblocked session assigned to current user.
+
+        All sessions in feature.sessions are already assigned to current user
+        (external sessions are stored separately in external_sessions).
+
+        Args:
+            current_user_assignee: Current user's assignee identifier (unused, kept for compatibility)
+
+        Returns:
+            Session key or None if no unblocked sessions
+        """
+        for session_key in self.sessions:
+            # Skip if already completed
+            if self.session_statuses.get(session_key) == "completed":
+                continue
+
+            # Check if blocked by incomplete stories (own or external)
+            if not self.is_session_blocked(session_key):
+                return session_key
+
+        return None
 
     def is_complete(self) -> bool:
         """Check if all sessions in the feature are completed.

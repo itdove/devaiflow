@@ -5117,10 +5117,11 @@ daf -e feature sync my-feature --parent "PROJ-100"
 daf -e feature sync my-feature --parent "PROJ-100" --auto-order
 daf -e feature sync my-feature --parent "PROJ-100" --dry-run
 
-# Run feature workflow
-daf -e feature run my-feature
+# Run feature workflow (automatically opens first session)
+daf -e feature run my-feature                 # Prompts between sessions
+daf -e feature run my-feature --auto-advance  # Auto-advance (no prompts)
 
-# Resume paused feature
+# Resume feature (smart resume based on session status)
 daf -e feature resume my-feature
 
 # Reorder sessions (multiple modes)

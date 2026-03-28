@@ -251,6 +251,168 @@ Created comprehensive test suite: `tests/test_feature_orchestration.py`
 3. **GitHub/GitLab discovery**: Relies on issue references in text (no native API)
 4. **No automatic rollback**: If verification fails, manual intervention required
 
+## Automation Levels
+
+Feature orchestration supports multiple levels of automation, from semi-automated workflow to fully autonomous execution.
+
+### Level 1: Auto-Advance (✅ Implemented)
+
+**Command:**
+```bash
+# Default mode: Prompts between sessions
+daf -e feature run web-ui
+
+# Auto-advance mode: No prompts between sessions
+daf -e feature run web-ui --auto-advance
+```
+
+**Behavior (both modes):**
+- **Automatically launches first session** (enforces execution order)
+- User works with Claude interactively on each session
+- Stops at verification failures
+- Maintains human oversight on coding decisions
+
+**Difference:**
+- **Default mode**: Prompts "Open next session?" after each `daf complete`
+- **Auto-advance mode**: Automatically opens next session (no prompt)
+
+**Smart Resume:**
+```bash
+daf -e feature resume web-ui
+```
+- **If paused/failed**: Re-runs verification, then opens session (or next if passed)
+- **If running/pending**: Opens current session
+- **If completed**: Advances to next session and opens it
+- **If all complete**: Shows "Feature complete!" message
+
+**Use Case:** Reduces manual workflow overhead while keeping full control over implementation.
+
+**Implementation:**
+- `daf feature run` always opens first session (with or without `--auto-advance`)
+- Stores `--auto-advance` preference in `feature.metadata['auto_advance']`
+- `daf complete` checks flag and skips confirmation prompt if enabled
+- `daf feature resume` intelligently handles different session statuses
+- Enforces execution order (can't skip sessions)
+
+### Level 2: Autonomous Agent Loop (⏳ Future)
+
+**Command:**
+```bash
+daf -e feature run web-ui --autonomous
+```
+
+**Proposed Behavior:**
+```python
+for session in feature.sessions:
+    # Auto-open session with goal from ticket
+    goal = f"{session.issue_key}: {session.summary}"
+
+    # Launch Claude Code in autonomous mode
+    subprocess.run([
+        "claude",
+        "--autonomous",  # Hypothetical flag - not yet implemented
+        "--goal", goal,
+        "--acceptance-criteria", session.acceptance_criteria,
+        "--max-turns", "50",  # Limit iterations
+        "--auto-complete",  # Auto-run daf complete when done
+    ])
+
+    # Auto-complete when Claude finishes
+    result = verify_session(session)
+
+    if result.status != "passed":
+        # Retry once, then pause
+        if retry_count < 1:
+            retry_session(session)
+        else:
+            pause_feature(reason="Verification failed after retry")
+            break
+```
+
+**Challenges:**
+1. **Claude Code lacks autonomous mode**: No `--autonomous` or `--auto-complete` flag exists
+2. **Completion detection**: How does Claude know when it's "done"?
+   - Could check acceptance criteria after each change
+   - Could have turn limit (e.g., 50 iterations max)
+   - Could detect "no more changes needed" signal
+3. **Verification failures**: Auto-retry logic needed
+   - How many retries before pausing?
+   - Should Claude see previous verification results?
+4. **Architecture decisions**: Claude needs to make design choices autonomously
+   - May need human input for ambiguous requirements
+   - Risk of suboptimal architectural decisions
+5. **Testing/debugging loops**: Claude needs to fix failing tests without human help
+   - May get stuck in infinite retry loops
+   - Need circuit breakers and fallback strategies
+
+**Implementation Requirements:**
+- Claude Code `--autonomous` mode with:
+  - Goal-driven completion detection
+  - Turn/time limits
+  - Auto-verification after changes
+  - Acceptance criteria-based progress tracking
+- Retry logic with limits (max 1-2 retries per session)
+- Pause mechanism with reason tracking
+- Notification system for human intervention
+
+**Risk Mitigation:**
+- Start with "supervised autonomous" mode (Level 3)
+- Require explicit opt-in per feature
+- Add kill switch for runaway sessions
+- Log all autonomous decisions for review
+
+### Level 3: Supervised Automation (⏳ Future)
+
+**Command:**
+```bash
+daf -e feature run web-ui --watch
+```
+
+**Proposed Behavior:**
+- Launches live dashboard showing all sessions
+- Auto-executes each session in sequence (like Level 2)
+- **Pauses and alerts user** when:
+  - Verification fails
+  - Tests fail after 3 retries
+  - Session exceeds time/turn limit (e.g., 1 hour or 100 turns)
+  - Architecture decision needed (detected via uncertainty signals)
+- User can:
+  - Skip session and move to next
+  - Retry with different approach
+  - Take over manually
+  - Abort entire feature
+
+**Dashboard Display:**
+```
+Feature: web-ui (8 sessions)
+Progress: █████████░░░░░░░░ 3/8 (37%)
+
+✓ itdove/devaiflow#306: Infrastructure    [15 min] [8 commits] [12/12 criteria]
+✓ itdove/devaiflow#307: Flask backend     [22 min] [6 commits] [10/10 criteria]
+⧗ itdove/devaiflow#308: JIRA tab          [running] [Turn 23/50]
+  └─ Current: Implementing JIRA field validation...
+○ itdove/devaiflow#309: Repository tab    [pending]
+○ itdove/devaiflow#310: Model Provider    [pending]
+○ itdove/devaiflow#311: Prompts tab       [pending]
+○ itdove/devaiflow#312: UI detection      [pending]
+○ itdove/devaiflow#313: Documentation     [pending]
+
+[Skip] [Retry] [Manual] [Abort]
+```
+
+**Implementation Requirements:**
+- Real-time dashboard with rich/textual TUI
+- Session monitoring with live progress
+- Pause/resume controls
+- Turn and time tracking
+- Notification system (desktop, Slack, etc.)
+
+**Benefits:**
+- Best of both worlds: automation + oversight
+- Early error detection
+- Human intervention only when needed
+- Audit trail of autonomous decisions
+
 ## Future Enhancements (Potential)
 
 1. **Multi-user support**: Coordinate multiple developers on same feature

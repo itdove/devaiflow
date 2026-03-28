@@ -905,11 +905,20 @@ def _handle_feature_completion(
                 console.print(f"\n[bold cyan]Next session: {next_session}[/bold cyan]")
                 console.print(f"[dim]Progress: Session {feature_context['current_index'] + 2} of {feature_context['total_sessions']}[/dim]")
 
-                # Prompt to open next session
-                if Confirm.ask(f"\nOpen next session '{next_session}'?", default=True):
+                # Check if auto-advance is enabled
+                auto_advance = feature.metadata.get('auto_advance', False) if hasattr(feature, 'metadata') else False
+
+                # Prompt to open next session (or auto-open if auto-advance enabled)
+                should_open_next = auto_advance
+                if not auto_advance:
+                    should_open_next = Confirm.ask(f"\nOpen next session '{next_session}'?", default=True)
+                else:
+                    console.print(f"\n[cyan]Auto-advance enabled: Opening next session...[/cyan]")
+
+                if should_open_next:
                     console.print(f"\n[cyan]Opening {next_session}...[/cyan]")
                     from devflow.cli.commands.open_command import open_session
-                    open_session(identifier=next_session)
+                    open_session(identifier=next_session, skip_feature_warning=True)
                 else:
                     console.print(f"[dim]Resume later with: daf open {next_session}[/dim]")
             else:

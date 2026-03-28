@@ -22,6 +22,75 @@ from devflow.session.manager import SessionManager
 console = Console()
 
 
+def _display_children_with_ownership(children, parent_key, current_user):
+    """Display children with ownership (yours vs external) information.
+
+    Args:
+        children: List of child dicts with _ownership and _will_create_session added
+        parent_key: Parent issue key
+        current_user: Current user's assignee identifier
+    """
+    # Count by ownership
+    yours_count = sum(1 for c in children if c.get('_ownership') == 'yours')
+    external_count = len(children) - yours_count
+    will_create_count = sum(1 for c in children if c.get('_will_create_session', False))
+
+    console.print(f"\n[bold]Found {len(children)} children for {parent_key}:[/bold]")
+    console.print(f"  • Yours: {yours_count} ({will_create_count} will create sessions)")
+    console.print(f"  • External (teammates): {external_count} (tracked for dependencies)\n")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Key", style="cyan", no_wrap=True)
+    table.add_column("Title", style="white")
+    table.add_column("Assignee", style="blue", no_wrap=True)
+    table.add_column("Ownership", style="magenta", no_wrap=True)
+    table.add_column("Will Create", style="green", no_wrap=True)
+
+    for i, child in enumerate(children, 1):
+        key = child.get("key", "")
+        title = child.get("summary") or ""
+        assignee = child.get("assignee") or "unassigned"
+        ownership = child.get('_ownership', 'unknown')
+        will_create = child.get('_will_create_session', False)
+        exclusion_reason = child.get('exclusion_reason')
+
+        # Truncate long titles
+        if title and len(title) > 40:
+            title = title[:37] + "..."
+
+        # Truncate long assignee
+        if assignee and len(assignee) > 15:
+            assignee = assignee[:12] + "..."
+
+        # Ownership display
+        if ownership == 'yours':
+            ownership_display = "[green]Yours[/green]"
+        else:
+            ownership_display = "[dim]External[/dim]"
+
+        # Will create display
+        if will_create:
+            will_create_display = "[green]✓ Session[/green]"
+        elif ownership == 'yours' and not will_create:
+            will_create_display = f"[red]✗ {exclusion_reason or 'No'}[/red]"
+        else:
+            will_create_display = "[dim]Track only[/dim]"
+
+        table.add_row(str(i), key, title, assignee, ownership_display, will_create_display)
+
+    console.print(table)
+    console.print()
+
+    # Show excluded reasons if any
+    excluded = [c for c in children if c.get('_ownership') == 'yours' and not c.get('_will_create_session')]
+    if excluded:
+        console.print(f"[yellow]Your children that won't create sessions ({len(excluded)}):[/yellow]")
+        for child in excluded:
+            console.print(f"  • {child['key']}: {child.get('exclusion_reason', 'unknown reason')}")
+        console.print()
+
+
 def require_experimental(f):
     """Decorator to check if experimental mode is enabled."""
     import functools
@@ -299,14 +368,42 @@ def create(
 
             discovery = ParentTicketDiscovery(issue_tracker_client)
 
+            # Discover ALL children (no assignee filter for team collaboration)
+            # Remove assignee from sync_filters to get everyone's stories
+            sync_filters_no_assignee = sync_filters.copy() if sync_filters else {}
+            current_user_assignee = sync_filters_no_assignee.pop('assignee', None) if sync_filters_no_assignee else None
+
+            # Also remove assignee from required_fields since we're using it for separation, not validation
+            if 'required_fields' in sync_filters_no_assignee:
+                required_fields = sync_filters_no_assignee['required_fields']
+                try:
+                    # Check type by name to avoid isinstance issues with typing module
+                    type_name = type(required_fields).__name__
+                    if type_name in ('list', 'tuple'):
+                        # GitHub/GitLab format: ['assignee'] → []
+                        sync_filters_no_assignee['required_fields'] = [f for f in required_fields if f != 'assignee']
+                    elif type_name == 'dict':
+                        # JIRA format: {Story: [sprint, assignee]} → {Story: [sprint]}
+                        sync_filters_no_assignee['required_fields'] = {
+                            issue_type: [f for f in fields if f != 'assignee']
+                            for issue_type, fields in required_fields.items()
+                        }
+                except Exception as e:
+                    console.print(f"[yellow]Warning:[/yellow] Could not process required_fields: {e}")
+                    console.print(f"[dim]Type: {type(required_fields)}, Value: {required_fields}[/dim]")
+                    # Keep original value if we can't process it
+                    pass
+
+            console.print(f"[dim]Discovering all children (team collaboration mode)...[/dim]")
+
             try:
-                children = discovery.discover_children(parent, sync_filters)
+                children = discovery.discover_children(parent, sync_filters_no_assignee)
             except ValueError as e:
                 console.print(f"[red]Error:[/red] {e}")
                 sys.exit(1)
 
             if not children:
-                console.print("[yellow]No children found matching filters[/yellow]")
+                console.print("[yellow]No children found[/yellow]")
                 sys.exit(1)
 
             # Order by dependencies if requested
@@ -318,35 +415,104 @@ def create(
                     for warning in warnings:
                         console.print(f"[yellow]Warning:[/yellow] {warning}")
 
-            # Display children for confirmation
-            discovery.display_children(children, parent)
+            # Separate children into "mine" (assigned to me) and "external" (assigned to others) FIRST
+            # This allows us to display ownership in the table
+            my_children = []
+            external_children = []
+
+            for child in children:
+                child_assignee = child.get('assignee', '')
+
+                # Check if meets criteria (other than assignee)
+                meets_criteria = child.get('meets_criteria', True)
+
+                # Check if assigned to current user
+                is_mine = False
+                if current_user_assignee:
+                    # Normalize assignee comparison
+                    if child_assignee and current_user_assignee.lower() in child_assignee.lower():
+                        is_mine = True
+
+                # Store ownership in child for display
+                child['_ownership'] = 'yours' if is_mine else 'external'
+                child['_will_create_session'] = is_mine and meets_criteria
+
+                if is_mine and meets_criteria:
+                    my_children.append(child)
+                else:
+                    external_children.append(child)
+
+            # Display children with ownership information
+            _display_children_with_ownership(children, parent, current_user_assignee)
 
             # DRY RUN MODE: Exit early if dry-run
             if dry_run:
                 console.print("\n[bold cyan]DRY RUN:[/bold cyan] Feature preview\n")
                 console.print(f"[dim]Feature name:[/dim] {name}")
                 console.print(f"[dim]Branch:[/dim] {branch or f'feature/{name}'}")
-                console.print(f"[dim]Sessions:[/dim] {len(children)}\n")
-
-                console.print("[bold]Session order:[/bold]")
-                for i, child in enumerate(children, 1):
-                    console.print(f"  {i}. {child['key']} - {child.get('summary', 'N/A')}")
+                console.print(f"[dim]Your sessions:[/dim] {len(my_children)}")
+                console.print(f"[dim]External sessions (tracked):[/dim] {len(external_children)}\n")
 
                 console.print("\n[dim]No changes made (dry-run mode)[/dim]")
                 console.print("[dim]Remove --dry-run to create the feature[/dim]")
                 sys.exit(0)
 
-            # Filter to only children that meet sync criteria
-            valid_children = [c for c in children if c.get('meets_criteria', True)]
-            excluded_children = [c for c in children if not c.get('meets_criteria', True)]
+            # Display summary
+            console.print(f"\n[bold]Team Collaboration:[/bold]")
+            console.print(f"  • Your sessions: {len(my_children)}")
+            console.print(f"  • External sessions (tracked for dependencies): {len(external_children)}")
 
-            if excluded_children:
-                console.print(f"\n[yellow]Note:[/yellow] {len(excluded_children)} children excluded by sync criteria")
-                console.print("[dim](See table above for details)[/dim]\n")
+            if not my_children and not external_children:
+                console.print(f"\n[red]Error:[/red] No children found after filtering")
+                sys.exit(1)
 
-            # Check which valid children are missing sessions
+            if not my_children:
+                console.print(f"\n[yellow]⚠ Warning:[/yellow] No children assigned to you ({current_user_assignee})")
+                console.print(f"[dim]All {len(children)} children are assigned to others or unassigned[/dim]\n")
+
+                # Offer to assign unassigned children to yourself
+                unassigned_children = [c for c in external_children if not c.get('assignee')]
+                if unassigned_children:
+                    console.print(f"[bold]Found {len(unassigned_children)} unassigned children:[/bold]")
+                    for child in unassigned_children[:5]:  # Show first 5
+                        console.print(f"  • {child['key']}: {child.get('summary', 'N/A')}")
+                    if len(unassigned_children) > 5:
+                        console.print(f"  ... and {len(unassigned_children) - 5} more")
+
+                    console.print("\n[bold]Options:[/bold]")
+                    console.print("  1. Assign all unassigned children to yourself (creates sessions)")
+                    console.print("  2. Continue with external-only feature (just track them)")
+                    console.print("  3. Cancel\n")
+
+                    choice = click.prompt("Select option", type=int, default=1)
+
+                    if choice == 1:
+                        # Move unassigned children to my_children
+                        my_children = unassigned_children
+                        external_children = [c for c in external_children if c.get('assignee')]
+                        console.print(f"\n[green]✓[/green] Assigned {len(my_children)} children to yourself")
+                    elif choice == 2:
+                        # Continue with empty my_children - feature will have no internal sessions
+                        console.print(f"\n[cyan]Creating external-only feature (for tracking)[/cyan]")
+                        session_list = []  # No internal sessions
+                    elif choice == 3:
+                        console.print("Cancelled")
+                        sys.exit(0)
+                else:
+                    # All external children have other assignees
+                    console.print("\n[bold]Options:[/bold]")
+                    console.print("  1. Continue with external-only feature (just track them)")
+                    console.print("  2. Cancel\n")
+
+                    if not click.confirm("Continue with external-only feature?", default=False):
+                        console.print("Cancelled")
+                        sys.exit(0)
+
+                    session_list = []  # No internal sessions
+
+            # Check which of my children are missing sessions
             missing_sessions = []
-            for child in valid_children:
+            for child in my_children:
                 child_key = child["key"]
                 existing_session = session_manager.get_session(child_key)
                 if not existing_session:
@@ -398,10 +564,27 @@ def create(
                 console.print("Cancelled")
                 sys.exit(0)
 
-            # Create sessions for valid children only (that meet sync criteria)
+            # Initialize session_list (may already be [] for external-only features)
+            if 'session_list' not in locals():
+                session_list = []
+
+            # Create sessions for my children only (assigned to current user)
+            # Also collect blocking relationships for my sessions
+            blocking_relationships = {}
             created_sessions = []
-            for child in valid_children:
+
+            # Skip session creation if external-only feature (no my_children)
+            if not my_children:
+                console.print(f"[dim]Creating external-only feature (no sessions to create)[/dim]\n")
+
+            for child in my_children:
                 child_key = child["key"]
+
+                # Store blocking relationships
+                blocking_relationships[child_key] = {
+                    'blocks': child.get('blocks', []),
+                    'blocked_by': child.get('blocked_by', []),
+                }
 
                 # Check if session exists
                 existing_session = session_manager.get_session(child_key)
@@ -420,7 +603,7 @@ def create(
                     # Set session status
                     session.status = "created"
 
-                    # Populate issue metadata
+                    # Populate issue metadata (including assignee and blocking relationships)
                     session.issue_tracker = config.issue_tracker_backend
                     session.issue_metadata = {
                         k: v for k, v in child.items() if k not in ("key", "updated", "meets_criteria", "exclusion_reason") and v is not None
@@ -437,8 +620,13 @@ def create(
             if created_sessions:
                 console.print(f"\n[green]Created {len(created_sessions)} sessions[/green]\n")
 
-        if len(session_list) < 2:
-            console.print("[red]Error:[/red] Feature requires at least 2 sessions")
+        # Check minimum sessions (allow 0 for external-only features)
+        if len(session_list) == 0 and len(external_children) == 0:
+            console.print("[red]Error:[/red] Feature must have at least 1 session or external dependency")
+            sys.exit(1)
+        elif len(session_list) == 1 and len(external_children) == 0:
+            console.print("[red]Error:[/red] Feature with 1 session should use regular workflow, not feature orchestration")
+            console.print("[dim]Feature orchestration is for multi-session workflows[/dim]")
             sys.exit(1)
 
         # Default branch name
@@ -482,6 +670,11 @@ def create(
         console.print(f"[dim]Sessions:[/dim] {len(session_list)}")
         console.print(f"[dim]Verification:[/dim] {verify}\n")
 
+        # Prepare metadata with blocking relationships
+        metadata = {}
+        if parent:
+            metadata['blocking_relationships'] = blocking_relationships
+
         feature = feature_manager.create_feature(
             name=name,
             sessions=session_list,
@@ -489,6 +682,9 @@ def create(
             base_branch=base_branch,
             verification_mode=verify,
             workspace_name=workspace,
+            parent_issue_key=parent if parent else None,
+            external_sessions=external_children if parent else [],
+            metadata=metadata,
         )
 
         console.print("[green]✓[/green] Feature created successfully\n")
@@ -812,10 +1008,15 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
             console.print(f"[red]Error:[/red] Feature '{name}' not found")
             sys.exit(1)
 
+        # Use parent from feature metadata if not provided
         if not parent:
-            console.print(f"[red]Error:[/red] --parent is required for sync")
-            console.print(f"[dim]Usage: daf -e feature sync {name} --parent <parent-key>[/dim]")
-            sys.exit(1)
+            if hasattr(feature, 'parent_issue_key') and feature.parent_issue_key:
+                parent = feature.parent_issue_key
+                console.print(f"[dim]Using parent from feature: {parent}[/dim]\n")
+            else:
+                console.print(f"[red]Error:[/red] --parent is required (feature has no stored parent)")
+                console.print(f"[dim]Usage: daf -e feature sync {name} --parent <parent-key>[/dim]")
+                sys.exit(1)
 
         console.print(f"[bold]Syncing feature '{name}' with parent {parent}[/bold]\n")
         console.print(f"[dim]Current sessions:[/dim] {len(feature.sessions)}")
@@ -829,37 +1030,107 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
         backend = detect_backend_from_key(parent, config)
         issue_tracker_client = create_issue_tracker_client(backend=backend)
 
-        # Get sync filters (JIRA-only)
+        # Get sync filters (without assignee for team collaboration)
         sync_filters = None
+        current_user_assignee = None
+
         if backend == "jira" and config.jira and config.jira.filters:
             sync_filters_config = config.jira.filters.get("sync")
             if sync_filters_config:
                 sync_filters = {
                     "status": sync_filters_config.status,
-                    "assignee": sync_filters_config.assignee,
                     "required_fields": sync_filters_config.required_fields,
                 }
+                current_user_assignee = sync_filters_config.assignee
+        elif backend == "github" and config.github and config.github.filters:
+            sync_filters_config = config.github.filters.get("sync")
+            if sync_filters_config:
+                sync_filters = {
+                    "status": sync_filters_config.status,
+                    "required_fields": sync_filters_config.required_fields,
+                }
+                current_user_assignee = sync_filters_config.assignee
+        elif backend == "gitlab" and config.gitlab and config.gitlab.filters:
+            sync_filters_config = config.gitlab.filters.get("sync")
+            if sync_filters_config:
+                sync_filters = {
+                    "status": sync_filters_config.status,
+                    "required_fields": sync_filters_config.required_fields,
+                }
+                current_user_assignee = sync_filters_config.assignee
 
-        # Discover children
+        console.print(f"[dim]Team collaboration mode: Discovering all children...[/dim]")
+
+        # Remove assignee from sync_filters for team collaboration
+        # Also remove assignee from required_fields since we're using it for separation
+        sync_filters_no_assignee = sync_filters.copy() if sync_filters else {}
+        if 'required_fields' in sync_filters_no_assignee:
+            required_fields = sync_filters_no_assignee['required_fields']
+            try:
+                # Check type by name to avoid isinstance issues with typing module
+                type_name = type(required_fields).__name__
+                if type_name in ('list', 'tuple'):
+                    # GitHub/GitLab format: ['assignee'] → []
+                    sync_filters_no_assignee['required_fields'] = [f for f in required_fields if f != 'assignee']
+                elif type_name == 'dict':
+                    # JIRA format: {Story: [sprint, assignee]} → {Story: [sprint]}
+                    sync_filters_no_assignee['required_fields'] = {
+                        issue_type: [f for f in fields if f != 'assignee']
+                        for issue_type, fields in required_fields.items()
+                    }
+            except Exception as e:
+                console.print(f"[yellow]Warning:[/yellow] Could not process required_fields: {e}")
+                console.print(f"[dim]Type: {type(required_fields)}, Value: {required_fields}[/dim]")
+                # Keep original value if we can't process it
+                pass
+
+        # Discover children (all, not filtered by assignee)
         from devflow.orchestration.parent_discovery import ParentTicketDiscovery
         discovery = ParentTicketDiscovery(issue_tracker_client)
 
         try:
-            all_children = discovery.discover_children(parent, sync_filters)
+            all_children = discovery.discover_children(parent, sync_filters_no_assignee)
         except ValueError as e:
             console.print(f"[red]Error:[/red] {e}")
             sys.exit(1)
 
-        # Filter to valid children (that meet criteria)
-        valid_children = [c for c in all_children if c.get('meets_criteria', True)]
-
-        # Find new children (not already in feature)
+        # Separate into my_children and external_children
+        my_children = []
+        external_children = []
         current_session_keys = set(feature.sessions)
-        new_children = [c for c in valid_children if c['key'] not in current_session_keys]
+        current_external_keys = set(ext['key'] for ext in feature.external_sessions)
+
+        for child in all_children:
+            child_key = child['key']
+            child_assignee = child.get('assignee', '')
+            meets_criteria = child.get('meets_criteria', True)
+
+            # Check if assigned to current user
+            is_mine = False
+            if current_user_assignee:
+                if child_assignee and current_user_assignee.lower() in child_assignee.lower():
+                    is_mine = True
+
+            if is_mine and meets_criteria:
+                # Mine and not already in feature.sessions
+                if child_key not in current_session_keys:
+                    my_children.append(child)
+            else:
+                # External - update existing or add new
+                external_children.append(child)
+
+        # Find new children (assigned to me, not already in feature.sessions)
+        new_children = my_children
 
         if not new_children:
-            console.print("[green]✓[/green] No new children found")
-            console.print("[dim]All children that meet criteria are already in the feature[/dim]")
+            console.print("[green]✓[/green] No new children to add")
+            console.print("[dim]All children assigned to you are already in the feature[/dim]")
+
+            # Still update external sessions even if no new children
+            console.print(f"\n[dim]Updating external session statuses...[/dim]")
+            feature.external_sessions = external_children
+            feature_manager.update_feature(feature)
+            console.print(f"[green]✓[/green] Updated {len(external_children)} external sessions")
             return
 
         # Show new children
@@ -898,10 +1169,22 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
             console.print("Cancelled")
             return
 
+        # Get or create blocking_relationships in metadata
+        if not hasattr(feature, 'metadata') or not feature.metadata:
+            feature.metadata = {}
+        if 'blocking_relationships' not in feature.metadata:
+            feature.metadata['blocking_relationships'] = {}
+
         # Create sessions for new children
         created_count = 0
         for child in new_children:
             child_key = child["key"]
+
+            # Store blocking relationships for new child
+            feature.metadata['blocking_relationships'][child_key] = {
+                'blocks': child.get('blocks', []),
+                'blocked_by': child.get('blocked_by', []),
+            }
 
             # Check if session exists
             existing_session = session_manager.get_session(child_key)
@@ -961,6 +1244,11 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
             except Exception as e:
                 console.print(f"[yellow]Warning:[/yellow] Could not reorder: {e}")
 
+        # Update external_sessions with latest status
+        console.print(f"\n[dim]Updating external session statuses...[/dim]")
+        feature.external_sessions = external_children
+        console.print(f"[green]✓[/green] Updated {len(external_children)} external sessions")
+
         # Save feature
         feature_manager.update_feature(feature)
 
@@ -969,6 +1257,7 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
         if created_count:
             console.print(f"[green]✓[/green] Created {created_count} new sessions")
         console.print(f"[dim]Total sessions:[/dim] {len(feature.sessions)}")
+        console.print(f"[dim]External sessions (tracked):[/dim] {len(feature.external_sessions)}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -1036,19 +1325,18 @@ def status(name: str):
 
 @feature.command()
 @click.argument("name")
+@click.option("--auto-advance", is_flag=True, help="Automatically open next session after each completion (no prompts)")
 @require_experimental
 @require_outside_claude
-def run(name: str):
+def run(name: str, auto_advance: bool):
     """Execute feature sessions sequentially.
 
-    Runs sessions in order with automated verification between each session.
-    Pauses automatically if verification fails.
+    Automatically opens the first pending session and starts the workflow.
+    After each session completion, either prompts or auto-advances to the next session.
 
-    This is a long-running command that orchestrates the entire feature workflow.
+    With --auto-advance: Skips prompts between sessions for continuous workflow.
+    Without --auto-advance: Prompts "Open next session?" after each completion.
     """
-    console.print(f"[yellow]Note:[/yellow] This is Phase 1 MVP - manual session execution")
-    console.print(f"[dim]Automated execution loop will be implemented in Phase 2[/dim]\n")
-
     try:
         config_loader = ConfigLoader()
         feature_manager = FeatureManager(config_loader=config_loader)
@@ -1059,18 +1347,19 @@ def run(name: str):
             sys.exit(1)
 
         console.print(f"[bold]Feature:[/bold] {feature.name}")
-        console.print(f"[dim]Sessions:[/dim] {len(feature.sessions)}\n")
+        console.print(f"[dim]Sessions:[/dim] {len(feature.sessions)}")
 
-        # Update status to running
+        if auto_advance:
+            console.print(f"[cyan]Mode:[/cyan] Auto-advance enabled (continuous workflow)\n")
+        else:
+            console.print(f"[cyan]Mode:[/cyan] Manual (prompts between sessions)\n")
+
+        # Update status to running and store auto-advance preference
         feature.status = "running"
+        if not hasattr(feature, 'metadata'):
+            feature.metadata = {}
+        feature.metadata['auto_advance'] = auto_advance
         feature_manager.update_feature(feature)
-
-        console.print("[bold]Manual execution workflow:[/bold]")
-        console.print(f"1. Open each session: [cyan]daf open <session-name>[/cyan]")
-        console.print(f"2. Complete the session: [cyan]daf complete <session-name>[/cyan]")
-        console.print(f"3. Verification runs automatically")
-        console.print(f"4. If verification passes, proceed to next session")
-        console.print(f"5. If verification fails, feature pauses for fixes\n")
 
         # Show session execution order
         console.print("[bold]Execution order:[/bold]")
@@ -1086,14 +1375,27 @@ def run(name: str):
 
             console.print(f"  {i}. {symbol} {session_name} ({status})")
 
-        console.print(f"\n[bold]Current session:[/bold]")
-        current = feature.get_current_session()
+        # Get first unblocked session (respects team dependencies)
+        current = feature.get_first_unblocked_session()
         if current:
-            console.print(f"  → {current}")
-            console.print(f"\n[cyan]Next:[/cyan] daf open {current}")
+            console.print(f"\n[bold]Starting with:[/bold] {current}")
+            console.print(f"\n[cyan]Opening first session...[/cyan]")
+            from devflow.cli.commands.open_command import open_session
+            open_session(identifier=current, skip_feature_warning=True)
         else:
-            console.print(f"  [green]All sessions complete![/green]")
-            console.print(f"\n[cyan]Next:[/cyan] daf -e feature complete {name}")
+            # Check if blocked by external sessions
+            pending_sessions = [s for s in feature.sessions if feature.session_statuses.get(s) != "completed"]
+            if pending_sessions:
+                console.print(f"\n[yellow]⚠ All remaining sessions are blocked by external dependencies[/yellow]")
+                console.print(f"\n[dim]Blocked sessions:[/dim]")
+                for session_key in pending_sessions:
+                    blocking_issues = feature.get_blocking_issues(session_key)
+                    console.print(f"  • {session_key}")
+                    console.print(f"    [dim]Blocked by:[/dim] {', '.join(blocking_issues)}")
+                console.print(f"\n[cyan]Tip:[/cyan] Run 'daf -e feature sync {name}' to update external session statuses")
+            else:
+                console.print(f"\n[green]All sessions complete![/green]")
+                console.print(f"\n[cyan]Next:[/cyan] daf -e feature complete {name}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -1105,9 +1407,13 @@ def run(name: str):
 @require_experimental
 @require_outside_claude
 def resume(name: str):
-    """Resume a paused feature.
+    """Resume feature workflow from where you left off.
 
-    Re-runs verification for the current session and continues if it passes.
+    Smart resume that handles different scenarios:
+    - Paused/failed session: Re-runs verification, then opens session
+    - Running session: Opens the session to continue working
+    - Completed session: Advances to next session and opens it
+    - All complete: Shows feature complete message
     """
     try:
         config_loader = ConfigLoader()
@@ -1122,74 +1428,131 @@ def resume(name: str):
             console.print(f"[red]Error:[/red] Feature '{name}' not found")
             sys.exit(1)
 
-        if feature.status != "paused":
-            console.print(f"[yellow]Warning:[/yellow] Feature is not paused (status: {feature.status})")
-            if feature.status == "complete":
-                console.print(f"Feature is already complete")
-                return
+        # Check if feature is complete
+        if feature.status == "complete":
+            console.print(f"[green]Feature '{name}' is already complete[/green]")
+            if feature.pr_url:
+                console.print(f"[dim]PR:[/dim] {feature.pr_url}")
+            return
 
         console.print(f"[bold]Resuming feature:[/bold] {feature.name}\n")
 
-        # Get current session
-        current_session = feature.get_current_session()
+        # Get first unblocked session (respects team dependencies)
+        current_session = feature.get_first_unblocked_session()
         if not current_session:
-            console.print("[red]Error:[/red] No current session to resume")
-            sys.exit(1)
+            # Check if blocked by external sessions
+            pending_sessions = [s for s in feature.sessions if feature.session_statuses.get(s) != "completed"]
+            if pending_sessions:
+                console.print(f"[yellow]⚠ All remaining sessions are blocked by external dependencies[/yellow]")
+                console.print(f"\n[dim]Blocked sessions:[/dim]")
+                for session_key in pending_sessions:
+                    blocking_issues = feature.get_blocking_issues(session_key)
+                    console.print(f"  • {session_key}")
+                    console.print(f"    [dim]Blocked by:[/dim] {', '.join(blocking_issues)}")
+                console.print(f"\n[cyan]Tip:[/cyan] Run 'daf -e feature sync {name}' to update external session statuses")
+                sys.exit(1)
+            else:
+                console.print("[green]All sessions complete![/green]")
+                console.print(f"\n[cyan]Next:[/cyan] daf -e feature complete {name}")
+                sys.exit(0)
 
-        console.print(f"Re-running verification for: {current_session}\n")
+        # Get current session status
+        session_status = feature.session_statuses.get(current_session, "pending")
+        console.print(f"[dim]Current session:[/dim] {current_session}")
+        console.print(f"[dim]Session status:[/dim] {session_status}\n")
 
-        # Run verification
-        result = feature_manager.verify_session(feature, current_session)
+        # Handle based on session status
+        if session_status in ["paused", "failed"]:
+            # Session paused due to verification failure - re-run verification
+            console.print(f"[yellow]Session paused/failed[/yellow] - Re-running verification...\n")
 
-        # Display result
-        console.print(f"[bold]Verification result:[/bold] {result.status.upper()}")
+            result = feature_manager.verify_session(feature, current_session)
 
-        if result.total_criteria > 0:
-            console.print(f"Acceptance criteria: {result.verified_criteria}/{result.total_criteria} verified")
+            # Display result
+            console.print(f"[bold]Verification result:[/bold] {result.status.upper()}")
 
-        if result.test_command:
-            test_status = "✓ PASSED" if result.tests_passed else "✗ FAILED"
-            console.print(f"Tests: {test_status}")
+            if result.total_criteria > 0:
+                console.print(f"Acceptance criteria: {result.verified_criteria}/{result.total_criteria} verified")
 
-        if result.report_path:
-            console.print(f"\n[dim]Report:[/dim] {result.report_path}")
+            if result.test_command:
+                test_status = "✓ PASSED" if result.tests_passed else "✗ FAILED"
+                console.print(f"Tests: {test_status}")
 
-        # Update feature status
-        if result.status == "passed":
-            console.print(f"\n[green]✓ Verification passed![/green]")
+            if result.report_path:
+                console.print(f"\n[dim]Report:[/dim] {result.report_path}")
 
-            # Update session status
-            feature.session_statuses[current_session] = "completed"
+            # If verification passed, advance and open next session
+            if result.status == "passed":
+                console.print(f"\n[green]✓ Verification passed![/green]")
 
-            # Move to next session or mark complete
+                # Update session status
+                feature.session_statuses[current_session] = "completed"
+
+                # Move to next session or mark complete
+                if not feature.advance_to_next_session():
+                    console.print(f"\n[green]All sessions complete![/green]")
+                    feature.status = "complete"
+                    feature_manager.update_feature(feature)
+                    console.print(f"\n[cyan]Next:[/cyan] daf -e feature complete {name}")
+                else:
+                    feature.status = "running"
+                    feature_manager.update_feature(feature)
+                    next_session = feature.get_first_unblocked_session()
+                    if next_session:
+                        console.print(f"\n[bold]Opening next session:[/bold] {next_session}")
+                        from devflow.cli.commands.open_command import open_session
+                        open_session(identifier=next_session, skip_feature_warning=True)
+                    else:
+                        console.print(f"\n[yellow]⚠ Next session is blocked by external dependencies[/yellow]")
+                        console.print(f"\n[cyan]Tip:[/cyan] Run 'daf -e feature sync {name}' to update external session statuses")
+            else:
+                # Verification still has gaps - open session to fix
+                console.print(f"\n[yellow]⚠ Verification still has gaps[/yellow]")
+
+                if result.unverified_criteria:
+                    console.print(f"\nUnverified criteria ({len(result.unverified_criteria)}):")
+                    for criterion in result.unverified_criteria[:3]:
+                        console.print(f"  • {criterion}")
+                    if len(result.unverified_criteria) > 3:
+                        console.print(f"  ... and {len(result.unverified_criteria) - 3} more")
+
+                if result.suggestions:
+                    console.print(f"\n[bold]Suggestions:[/bold]")
+                    for suggestion in result.suggestions:
+                        console.print(f"  • {suggestion}")
+
+                console.print(f"\n[cyan]Opening session to fix issues:[/cyan] {current_session}")
+                from devflow.cli.commands.open_command import open_session
+                open_session(identifier=current_session, skip_feature_warning=True)
+
+        elif session_status == "completed":
+            # Session already completed - advance to next
+            console.print(f"[green]Session already completed[/green] - Advancing to next...\n")
+
             if not feature.advance_to_next_session():
-                console.print(f"\n[green]All sessions complete![/green]")
+                console.print(f"[green]All sessions complete![/green]")
                 feature.status = "complete"
+                feature_manager.update_feature(feature)
                 console.print(f"\n[cyan]Next:[/cyan] daf -e feature complete {name}")
             else:
                 feature.status = "running"
-                next_session = feature.get_current_session()
-                console.print(f"\n[bold]Next session:[/bold] {next_session}")
-                console.print(f"[cyan]Command:[/cyan] daf open {next_session}")
-
-            feature_manager.update_feature(feature)
+                feature_manager.update_feature(feature)
+                next_session = feature.get_first_unblocked_session()
+                if next_session:
+                    console.print(f"[bold]Opening next session:[/bold] {next_session}")
+                    from devflow.cli.commands.open_command import open_session
+                    open_session(identifier=next_session, skip_feature_warning=True)
+                else:
+                    console.print(f"\n[yellow]⚠ Next session is blocked by external dependencies[/yellow]")
+                    console.print(f"\n[cyan]Tip:[/cyan] Run 'daf -e feature sync {name}' to update external session statuses")
 
         else:
-            console.print(f"\n[yellow]⚠ Verification still has gaps[/yellow]")
-
-            if result.unverified_criteria:
-                console.print(f"\nUnverified criteria ({len(result.unverified_criteria)}):")
-                for criterion in result.unverified_criteria[:3]:  # Show first 3
-                    console.print(f"  • {criterion}")
-                if len(result.unverified_criteria) > 3:
-                    console.print(f"  ... and {len(result.unverified_criteria) - 3} more")
-
-            if result.suggestions:
-                console.print(f"\n[bold]Suggestions:[/bold]")
-                for suggestion in result.suggestions:
-                    console.print(f"  • {suggestion}")
-
-            console.print(f"\n[dim]Fix issues and run:[/dim] daf -e feature resume {name}")
+            # Session is pending or running - just open it
+            console.print(f"[cyan]Opening session:[/bold] {current_session}")
+            feature.status = "running"
+            feature_manager.update_feature(feature)
+            from devflow.cli.commands.open_command import open_session
+            open_session(identifier=current_session, skip_feature_warning=True)
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
