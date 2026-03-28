@@ -364,6 +364,9 @@ daf open PROJ-123 --model-profile openrouter-deepseek
 - **[AI Agent Support](docs/reference/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
 - **[Uninstall Guide](docs/getting-started/uninstall.md)** - Complete uninstallation instructions
 
+**Experimental Features:**
+- **[Feature Orchestration](docs/experimental/feature-orchestration.md)** - 🧪 Multi-session workflows with automated verification (EXPERIMENTAL)
+
 **Validation:**
 - **[config.schema.json](config.schema.json)** - JSON Schema for validating config.json (use `daf config validate`)
 

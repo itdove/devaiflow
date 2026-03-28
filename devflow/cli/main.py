@@ -1,6 +1,7 @@
 """Main CLI entry point for DevAIFlow."""
 
 import functools
+import os
 import sys
 from typing import Optional
 import click
@@ -265,8 +266,9 @@ def _version_callback(ctx: click.Context, param: click.Parameter, value: bool) -
 @click.group(context_settings={'ignore_unknown_options': True, 'allow_extra_args': True})
 @click.option('--version', is_flag=True, callback=_version_callback, expose_value=False, is_eager=True, help='Show version and exit')
 @click.option('--non-interactive', is_flag=True, help='Non-interactive mode: error if required parameters missing (no prompts)')
+@click.option('-e', '--experimental', is_flag=True, help='Enable experimental features (feature orchestration)')
 @click.pass_context
-def cli(ctx: click.Context, non_interactive: bool) -> None:
+def cli(ctx: click.Context, non_interactive: bool, experimental: bool) -> None:
     """DevAIFlow - Manage Claude Code sessions with JIRA integration."""
     import sys
 
@@ -275,10 +277,18 @@ def cli(ctx: click.Context, non_interactive: bool) -> None:
     # Store non-interactive flag in context for all commands to access
     ctx.obj['non_interactive'] = non_interactive
 
+    # Store experimental flag in context
+    ctx.obj['experimental'] = experimental
+
     # Also set environment variable for child processes and utility functions
     if non_interactive:
         import os
         os.environ['DAF_NON_INTERACTIVE'] = '1'
+
+    # Set experimental mode environment variable
+    if experimental:
+        import os
+        os.environ['DEVAIFLOW_EXPERIMENTAL'] = '1'
 
     # Check and display mock mode warning if enabled
     _check_mock_mode()
@@ -3830,6 +3840,14 @@ def upgrade(
 # and use @cli.command(name="import") would be better, but Click doesn't allow
 # reserving Python keywords. Users will use 'daf import' which maps to import_cmd.
 cli.add_command(import_cmd, name="import")
+
+# Feature orchestration command group (EXPERIMENTAL)
+# Only register if experimental mode is enabled
+# Check both command-line flag and environment variable
+import sys
+if '--experimental' in sys.argv or '-e' in sys.argv or os.environ.get('DEVAIFLOW_EXPERIMENTAL') == '1':
+    from devflow.cli.commands.feature_command import feature
+    cli.add_command(feature)
 
 
 if __name__ == "__main__":

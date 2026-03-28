@@ -26,7 +26,6 @@ Detailed technical documentation:
 - **[Configuration](reference/configuration.md)** - Customize DevAIFlow for your workflow
 - **[Alternative Model Providers](reference/alternative-model-providers.md)** - Run Claude Code with local models or alternative providers
 - **[AI Agent Support Matrix](reference/ai-agent-support-matrix.md)** - Compatibility matrix for different AI assistants
-- **[Issue Tracker Architecture](reference/issue-tracker-architecture.md)** - Technical architecture details
 
 ### 📘 Guides
 In-depth guides for specific topics:
@@ -44,11 +43,19 @@ Step-by-step tutorials for common tasks:
 - **[Tutorials Index](tutorials/)** - All available tutorials
 - **[Run Claude Code with Local Models](tutorials/local-llama-cpp-setup.md)** - Save 100% on costs with llama.cpp (FREE, offline)
 
+### 🧪 Experimental Features
+Early-access features under active development:
+
+- **[Experimental Features](experimental/)** - Overview of experimental features
+- **[Feature Orchestration](experimental/feature-orchestration.md)** - Multi-session workflow management with verification (EXPERIMENTAL)
+
 ### 👨‍💻 Developer
 Documentation for contributors and maintainers:
 
 - **[Release Management](developer/release-management.md)** - Release process and automation
 - **[Publishing to PyPI](developer/publishing-to-pypi.md)** - PyPI package publishing guide
+- **[Issue Tracker Architecture](developer/issue-tracker-architecture.md)** - Technical architecture and implementation details
+- **[Feature Orchestration Architecture](developer/feature-orchestration-architecture.md)** - Implementation details for feature orchestration
 
 ### 🤖 AI-Optimized Summary
 - **[NOTEBOOKLM.md](NOTEBOOKLM.md)** - Comprehensive overview designed for AI tools (NotebookLM, Claude, etc.)

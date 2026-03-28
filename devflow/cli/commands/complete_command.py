@@ -3,7 +3,7 @@
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 import urllib.request
 
 from rich.console import Console
@@ -206,6 +206,24 @@ def complete_session(
     hours = int(total_seconds // 3600)
     minutes = int((total_seconds % 3600) // 60)
     console.print(f"[green]✓[/green] Total time tracked: {hours}h {minutes}m")
+
+    # Feature orchestration awareness - check if session is part of a feature
+    from devflow.orchestration.feature import FeatureManager
+    feature_manager = FeatureManager()
+    feature_context = feature_manager.get_session_context(session.name)
+
+    # If part of a feature, skip individual PR creation (will create final PR after all sessions)
+    if feature_context:
+        console.print(f"\n[bold cyan]🎯 Feature Orchestration:[/bold cyan]")
+        console.print(f"   Feature: {feature_context['feature_name']}")
+        current_pos = feature_context['current_index'] + 1
+        total = feature_context['total_sessions']
+        console.print(f"   Session {current_pos} of {total} completed")
+
+        if not no_pr:
+            console.print(f"\n[dim]Skipping individual PR creation (part of feature orchestration)[/dim]")
+            console.print(f"[dim]Final PR will be created after all sessions complete[/dim]")
+            no_pr = True  # Override to skip PR creation for this session
 
     # Track whether commits were made during this completion cycle
     # This is used later to determine if we should prompt for PR/MR creation
@@ -811,6 +829,141 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
         # Save updated session (status may have changed)
         session_manager.update_session(session)
+
+    # Feature orchestration: run verification and auto-advance
+    if feature_context:
+        _handle_feature_completion(
+            session=session,
+            feature_context=feature_context,
+            feature_manager=feature_manager,
+            config=config,
+            config_loader=config_loader,
+        )
+
+
+def _handle_feature_completion(
+    session,
+    feature_context: Dict,
+    feature_manager,
+    config,
+    config_loader,
+) -> None:
+    """Handle feature orchestration completion workflow.
+
+    Runs verification and auto-advances to next session or creates final PR.
+
+    Args:
+        session: Completed session
+        feature_context: Feature context from get_session_context()
+        feature_manager: FeatureManager instance
+        config: Config object
+        config_loader: ConfigLoader instance
+    """
+    from rich.prompt import Confirm
+
+    feature_name = feature_context['feature_name']
+    feature = feature_manager.get_feature(feature_name)
+
+    if not feature:
+        console.print(f"[yellow]⚠[/yellow] Feature '{feature_name}' not found")
+        return
+
+    console.print(f"\n[bold cyan]Running feature verification...[/bold cyan]")
+
+    # Run verification for this session
+    try:
+        result = feature_manager.verify_session(feature, session.name)
+
+        # Update feature session status
+        feature.session_statuses[session.name] = "complete"
+
+        # Display verification result
+        console.print(f"\n[bold]Verification Result:[/bold]")
+        console.print(f"  Status: {result.status.upper()}")
+        console.print(f"  Acceptance Criteria: {result.verified_criteria}/{result.total_criteria} verified")
+
+        if result.test_command:
+            test_status = "[green]✓ Passed[/green]" if result.tests_passed else "[red]✗ Failed[/red]"
+            console.print(f"  Tests: {test_status}")
+
+        if result.report_path:
+            console.print(f"  Report: {result.report_path}")
+
+        # Handle verification outcome
+        if result.status == "passed":
+            console.print(f"\n[green]✓[/green] Verification passed!")
+
+            # Check if there are more sessions
+            next_session = feature_context.get('next_session')
+
+            if next_session:
+                # More sessions to go - auto-advance
+                feature.current_session_index += 1
+                feature.status = "running"
+                feature_manager.update_feature(feature)
+
+                console.print(f"\n[bold cyan]Next session: {next_session}[/bold cyan]")
+                console.print(f"[dim]Progress: Session {feature_context['current_index'] + 2} of {feature_context['total_sessions']}[/dim]")
+
+                # Prompt to open next session
+                if Confirm.ask(f"\nOpen next session '{next_session}'?", default=True):
+                    console.print(f"\n[cyan]Opening {next_session}...[/cyan]")
+                    from devflow.cli.commands.open_command import open_session
+                    open_session(identifier=next_session)
+                else:
+                    console.print(f"[dim]Resume later with: daf open {next_session}[/dim]")
+            else:
+                # Last session completed - feature complete!
+                feature.status = "complete"
+                feature_manager.update_feature(feature)
+
+                console.print(f"\n[green]🎉 Feature '{feature_name}' complete![/green]")
+                console.print(f"[green]All {feature_context['total_sessions']} sessions verified and completed![/green]")
+
+                # Create final PR for the feature
+                if session.active_conversation and session.active_conversation.project_path:
+                    working_dir = Path(session.active_conversation.project_path)
+
+                    if GitUtils.is_git_repository(working_dir):
+                        if Confirm.ask("\nCreate final PR/MR for feature?", default=True):
+                            console.print(f"\n[cyan]Creating PR/MR for feature '{feature_name}'...[/cyan]")
+                            pr_url = _create_pr_mr(session, working_dir, SessionManager(config_loader))
+
+                            if pr_url:
+                                feature.pr_url = pr_url
+                                feature_manager.update_feature(feature)
+                                console.print(f"[green]✓[/green] Feature PR created: {pr_url}")
+
+                                # Update issue tracker with PR URL
+                                if session.issue_key:
+                                    _update_issue_pr_field(session, config, pr_url, no_issue_update=False)
+
+        elif result.status in ["gaps_found", "failed"]:
+            # Verification failed - pause feature
+            console.print(f"\n[yellow]⚠[/yellow] Verification incomplete!")
+
+            if result.unverified_criteria:
+                console.print(f"\n[yellow]Unverified acceptance criteria:[/yellow]")
+                for criterion in result.unverified_criteria[:5]:  # Show first 5
+                    console.print(f"  - {criterion}")
+
+            if result.suggestions:
+                console.print(f"\n[yellow]Suggestions:[/yellow]")
+                for suggestion in result.suggestions:
+                    console.print(f"  - {suggestion}")
+
+            feature.status = "paused"
+            feature.session_statuses[session.name] = "paused"
+            feature_manager.update_feature(feature)
+
+            console.print(f"\n[yellow]Feature paused - fix verification issues and resume with:[/yellow]")
+            console.print(f"  daf feature resume {feature_name}")
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Verification failed: {e}")
+        console.print(f"[yellow]Feature may need manual review[/yellow]")
+        feature.status = "paused"
+        feature_manager.update_feature(feature)
 
 
 def _add_session_summary_to_issue(session, config, session_name: str, hours: int, minutes: int, config_loader) -> None:

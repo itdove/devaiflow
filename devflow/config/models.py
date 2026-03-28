@@ -1428,3 +1428,216 @@ class SessionIndex(BaseModel):
         # Sort by last_active (most recent first)
         all_sessions.sort(key=lambda s: s.last_active, reverse=True)
         return all_sessions
+
+
+# ============================================================================
+# Feature Orchestration Models
+# ============================================================================
+
+
+class VerificationResult(BaseModel):
+    """Result of verification for a single session in a feature.
+
+    Contains acceptance criteria status, test results, and artifact validation.
+    """
+
+    session_name: str  # Session that was verified
+    status: str  # "passed", "gaps_found", "failed", "skipped"
+    timestamp: datetime = Field(default_factory=datetime.now)
+    duration_seconds: float = 0.0  # Time taken for verification
+
+    # Acceptance criteria results
+    total_criteria: int = 0
+    verified_criteria: int = 0
+    unverified_criteria: List[str] = Field(default_factory=list)  # Criteria that couldn't be verified
+    criteria_notes: List[str] = Field(default_factory=list)  # Notes about criteria verification
+
+    # Test suite results
+    test_command: Optional[str] = None
+    tests_passed: bool = False
+    test_output: Optional[str] = None
+
+    # Artifact validation
+    required_artifacts: List[str] = Field(default_factory=list)
+    missing_artifacts: List[str] = Field(default_factory=list)
+
+    # Overall result
+    report_path: Optional[str] = None  # Path to VERIFICATION.md report
+    suggestions: List[str] = Field(default_factory=list)  # Actionable suggestions for fixing gaps
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class FeatureOrchestration(BaseModel):
+    """Multi-session feature orchestration.
+
+    Orchestrates multiple sessions into a cohesive feature implementation.
+    Tracks session execution, verification between sessions, and feature completion.
+    """
+
+    name: str  # Feature name (unique identifier)
+    branch: str  # Shared git branch for all sessions
+    base_branch: str = "main"  # Base branch
+    sessions: List[str] = Field(default_factory=list)  # Session names in execution order
+    current_session_index: int = 0  # Index of currently executing session
+    status: str = "created"  # "created", "running", "paused", "complete", "failed"
+    verification_mode: str = "auto"  # "auto", "manual", "skip"
+    workspace_name: Optional[str] = None  # Workspace for all sessions
+
+    # Timestamps
+    created: datetime = Field(default_factory=datetime.now)
+    last_active: datetime = Field(default_factory=datetime.now)
+    completed: Optional[datetime] = None
+
+    # Session status tracking
+    session_statuses: Dict[str, str] = Field(default_factory=dict)  # session_name → "pending", "running", "completed", "failed"
+    verification_results: Dict[str, VerificationResult] = Field(default_factory=dict)  # session_name → VerificationResult
+
+    # Issue tracker integration
+    issue_tracker: Optional[str] = None  # "jira", "github", "gitlab"
+    linked_issues: List[str] = Field(default_factory=list)  # All issue keys included in this feature
+
+    # PR/MR tracking
+    pr_url: Optional[str] = None  # PR/MR created for completed feature
+    pr_number: Optional[str] = None  # PR/MR number
+
+    # Execution metadata
+    total_commits: int = 0  # Total commits across all sessions
+    total_tests_added: int = 0  # Total tests added across all sessions
+    pause_reason: Optional[str] = None  # Reason for paused status
+
+    def get_current_session(self) -> Optional[str]:
+        """Get the name of the currently executing session.
+
+        Returns:
+            Session name or None if all sessions complete
+        """
+        if 0 <= self.current_session_index < len(self.sessions):
+            return self.sessions[self.current_session_index]
+        return None
+
+    def get_completed_sessions(self) -> List[str]:
+        """Get list of completed session names.
+
+        Returns:
+            List of session names with "completed" status
+        """
+        return [
+            session_name
+            for session_name, status in self.session_statuses.items()
+            if status == "completed"
+        ]
+
+    def get_pending_sessions(self) -> List[str]:
+        """Get list of pending session names.
+
+        Returns:
+            List of session names that haven't started yet
+        """
+        return [
+            session_name
+            for session_name in self.sessions
+            if self.session_statuses.get(session_name, "pending") == "pending"
+        ]
+
+    def advance_to_next_session(self) -> bool:
+        """Move to the next session in the feature.
+
+        Returns:
+            True if advanced successfully, False if no more sessions
+        """
+        if self.current_session_index < len(self.sessions) - 1:
+            self.current_session_index += 1
+            return True
+        return False
+
+    def is_complete(self) -> bool:
+        """Check if all sessions in the feature are completed.
+
+        Returns:
+            True if all sessions have "completed" status
+        """
+        return all(
+            self.session_statuses.get(session_name) == "completed"
+            for session_name in self.sessions
+        )
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class FeatureIndex(BaseModel):
+    """Index of all feature orchestrations.
+
+    Similar to SessionIndex, maintains a registry of all features
+    and their current state.
+    """
+
+    features: Dict[str, FeatureOrchestration] = Field(default_factory=dict)  # name → FeatureOrchestration
+
+    def add_feature(self, feature: FeatureOrchestration) -> None:
+        """Add a feature to the index.
+
+        Args:
+            feature: FeatureOrchestration object to add
+
+        Raises:
+            ValueError: If feature with same name already exists
+        """
+        if feature.name in self.features:
+            raise ValueError(f"Feature '{feature.name}' already exists")
+        self.features[feature.name] = feature
+
+    def get_feature(self, name: str) -> Optional[FeatureOrchestration]:
+        """Get a feature by name.
+
+        Args:
+            name: Feature name
+
+        Returns:
+            FeatureOrchestration or None if not found
+        """
+        return self.features.get(name)
+
+    def remove_feature(self, name: str) -> None:
+        """Remove a feature from the index.
+
+        Args:
+            name: Feature name
+
+        Raises:
+            KeyError: If feature not found
+        """
+        if name not in self.features:
+            raise KeyError(f"Feature '{name}' not found")
+        del self.features[name]
+
+    def list_features(
+        self,
+        status: Optional[str] = None,
+        workspace_name: Optional[str] = None,
+    ) -> List[FeatureOrchestration]:
+        """List features with optional filters.
+
+        Args:
+            status: Filter by feature status
+            workspace_name: Filter by workspace
+
+        Returns:
+            List of FeatureOrchestration objects matching filters
+        """
+        features = list(self.features.values())
+
+        if status:
+            features = [f for f in features if f.status == status]
+
+        if workspace_name:
+            features = [f for f in features if f.workspace_name == workspace_name]
+
+        # Sort by last_active (most recent first)
+        features.sort(key=lambda f: f.last_active, reverse=True)
+        return features
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}

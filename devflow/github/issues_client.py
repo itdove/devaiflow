@@ -631,6 +631,49 @@ class GitHubClient(IssueTrackerClient):
                 )
             raise
 
+    def get_issue_comments(self, issue_key: str) -> List[Dict]:
+        """Get all comments for a GitHub issue.
+
+        Args:
+            issue_key: Issue key
+
+        Returns:
+            List of comment dictionaries with 'body' and 'created_at' fields
+        """
+        repo, number = self._parse_issue_number(issue_key)
+        repo = self._get_repository(repo)
+
+        try:
+            output = self._run_gh_command([
+                'api',
+                f'/repos/{repo}/issues/{number}/comments',
+                '--jq', '.'
+            ])
+
+            comments = json.loads(output)
+
+            # Return in simplified format expected by parent_discovery
+            return [
+                {
+                    'body': comment.get('body', ''),
+                    'created_at': comment.get('created_at', ''),
+                    'author': comment.get('user', {}).get('login', ''),
+                }
+                for comment in comments
+            ]
+
+        except IssueTrackerApiError as e:
+            if 'Not Found' in str(e):
+                raise IssueTrackerNotFoundError(
+                    f"GitHub issue {repo}#{number} not found",
+                    resource_type="issue",
+                    resource_id=issue_key
+                )
+            raise
+        except Exception:
+            # Return empty list on any error
+            return []
+
     def transition_ticket(self, issue_key: str, status: str) -> None:
         """Transition a GitHub issue state.
 

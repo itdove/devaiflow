@@ -626,6 +626,9 @@ def open_session(
     if active_conv and active_conv.ai_agent_session_id:
         console.print(f"🆔 Claude Session ID: {active_conv.ai_agent_session_id}")
 
+    # Feature orchestration awareness
+    _display_feature_context(session)
+
     # Generate and display session summary
     _display_session_summary(session)
 
@@ -1061,6 +1064,55 @@ def open_session(
             console.print(f"\n[yellow]You can manually resume with:[/yellow]")
             console.print(f"  cd {active_conv.project_path}")
             console.print(f"  claude --resume {active_conv.ai_agent_session_id}")
+
+
+def _display_feature_context(session) -> None:
+    """Display feature orchestration context if session is part of a feature.
+
+    Args:
+        session: Session object
+    """
+    from devflow.orchestration.feature import FeatureManager
+
+    try:
+        manager = FeatureManager()
+        context = manager.get_session_context(session.name)
+
+        if context:
+            # Display feature context
+            console.print(f"\n[bold cyan]🎯 Feature Orchestration:[/bold cyan]")
+            console.print(f"   Feature: {context['feature_name']}")
+
+            # Progress indicator
+            current_pos = context['current_index'] + 1
+            total = context['total_sessions']
+            progress_pct = int((current_pos / total) * 100)
+            console.print(f"   Progress: Session {current_pos} of {total} ({progress_pct}%)")
+
+            # Status indicator
+            if context['is_current']:
+                console.print(f"   Status: [green]⧗ Current session[/green]")
+            elif context['is_completed']:
+                console.print(f"   Status: [green]✓ Completed[/green]")
+            else:
+                console.print(f"   Status: [yellow]○ Pending[/yellow]")
+
+            # Next session
+            if context['next_session']:
+                console.print(f"   Next: {context['next_session']}")
+
+            # Feature status
+            status_emoji = {
+                'created': '○',
+                'running': '⧗',
+                'paused': '⏸',
+                'complete': '✓',
+                'failed': '✗',
+            }.get(context['feature_status'], '?')
+            console.print(f"   Feature Status: {status_emoji} {context['feature_status']}")
+    except Exception:
+        # Silently skip if feature lookup fails
+        pass
 
 
 def _display_session_summary(session) -> None:

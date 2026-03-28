@@ -5,7 +5,7 @@ All JIRA operations are performed via the REST API.
 """
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import requests
 import yaml
@@ -1161,10 +1161,97 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to list tickets: {e}")
 
+    def _parse_issue_links(self, issuelinks: List[Dict]) -> Tuple[List[str], List[str]]:
+        """Parse issue links to extract blocking relationships.
+
+        Args:
+            issuelinks: List of issue link dictionaries from JIRA API
+
+        Returns:
+            Tuple of (blocks, blocked_by) where each is a list of issue keys
+        """
+        blocks = []
+        blocked_by = []
+
+        for link in issuelinks:
+            link_type = link.get("type", {})
+            link_name = link_type.get("name", "").lower()
+
+            # Check if this is a blocking relationship
+            # Common link types: "Blocks", "is blocked by", "Dependency"
+            if "block" in link_name:
+                # Determine direction
+                if "outwardIssue" in link:
+                    # This issue blocks the outward issue
+                    outward_key = link["outwardIssue"].get("key")
+                    if outward_key:
+                        blocks.append(outward_key)
+                elif "inwardIssue" in link:
+                    # The inward issue blocks this issue
+                    inward_key = link["inwardIssue"].get("key")
+                    if inward_key:
+                        blocked_by.append(inward_key)
+
+        return blocks, blocked_by
+
+    def get_blocking_relationships(self, issue_keys: List[str]) -> Dict[str, Dict[str, List[str]]]:
+        """Fetch blocking relationships for multiple issues.
+
+        Args:
+            issue_keys: List of JIRA issue keys
+
+        Returns:
+            Dictionary mapping issue_key to {"blocks": [...], "blocked_by": [...]}
+            Only includes relationships between issues in the input list
+
+        Raises:
+            JiraApiError: If API request fails
+            JiraAuthError: If authentication fails
+            JiraConnectionError: If connection fails
+        """
+        relationships = {}
+        issue_keys_set = set(issue_keys)
+
+        for issue_key in issue_keys:
+            try:
+                # Fetch issue with issuelinks field
+                response = self._api_request(
+                    "GET",
+                    f"/rest/api/2/issue/{issue_key}?fields=issuelinks"
+                )
+
+                if response.status_code != 200:
+                    # Skip issues we can't fetch
+                    relationships[issue_key] = {"blocks": [], "blocked_by": []}
+                    continue
+
+                data = response.json()
+                fields = data.get("fields", {})
+                issuelinks = fields.get("issuelinks", [])
+
+                # Parse links
+                blocks, blocked_by = self._parse_issue_links(issuelinks)
+
+                # Filter to only include relationships within the feature
+                blocks = [k for k in blocks if k in issue_keys_set]
+                blocked_by = [k for k in blocked_by if k in issue_keys_set]
+
+                relationships[issue_key] = {
+                    "blocks": blocks,
+                    "blocked_by": blocked_by,
+                }
+
+            except Exception:
+                # On error, assume no blocking relationships
+                relationships[issue_key] = {"blocks": [], "blocked_by": []}
+
+        return relationships
+
     def get_child_issues(
         self,
         parent_key: str,
         field_mappings: Optional[Dict] = None,
+        include_links: bool = False,
     ) -> List[Dict]:
         """Get all child issues for a parent issue.
 
@@ -1176,9 +1263,11 @@ class JiraClient(IssueTrackerClient):
         Args:
             parent_key: issue key of the parent issue (e.g., PROJ-12345)
             field_mappings: Optional field mappings dict from config to resolve field display names
+            include_links: If True, include blocking relationships (blocks/blocked_by)
 
         Returns:
             List of child issue dictionaries with keys: key, type, status, summary, assignee
+            If include_links=True, also includes: blocks, blocked_by
             Sorted by key in ascending order
 
         Raises:
@@ -1224,8 +1313,10 @@ class JiraClient(IssueTrackerClient):
             # Add ordering by key
             jql += " ORDER BY key ASC"
 
-            # Build fields list - we need just the basic info
+            # Build fields list - we need basic info plus issuelinks if requested
             fields_list_parts = ["issuetype", "status", "summary", "assignee"]
+            if include_links:
+                fields_list_parts.append("issuelinks")
 
             # Make API request with automatic v2/v3 detection
             # (Cloud JIRA requires v3, self-hosted uses v2)
@@ -1262,6 +1353,12 @@ class JiraClient(IssueTrackerClient):
                     "summary": fields.get("summary"),
                     "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
                 }
+
+                # Parse issue links if requested
+                if include_links:
+                    blocks, blocked_by = self._parse_issue_links(fields.get("issuelinks", []))
+                    child_data["blocks"] = blocks
+                    child_data["blocked_by"] = blocked_by
 
                 children.append(child_data)
 
