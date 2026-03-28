@@ -238,55 +238,51 @@ class ParentTicketDiscovery:
         children: List[Dict],
         sync_filters: Dict,
     ) -> List[Dict]:
-        """Filter children using sync criteria.
+        """Annotate children with sync criteria validation.
+
+        Checks each child against sync filters and adds 'meets_criteria' field
+        and 'exclusion_reason' if criteria are not met.
 
         Args:
             children: List of child ticket dictionaries
             sync_filters: Sync filters configuration
 
         Returns:
-            Filtered list of children
+            List of all children with 'meets_criteria' and 'exclusion_reason' annotations
         """
-        filtered = []
-
         for child in children:
-            # Filter by status (only "New" or "To Do")
+            # Assume meets criteria until proven otherwise
+            child['meets_criteria'] = True
+            child['exclusion_reason'] = None
+
+            # Check status
             status = child.get("status", "")
             if sync_filters.get("status"):
                 if status not in sync_filters["status"]:
-                    console.print(f"[dim]Skipping {child['key']}: status={status}[/dim]")
+                    child['meets_criteria'] = False
+                    child['exclusion_reason'] = f"status '{status}' not in {sync_filters['status']}"
                     continue
 
-            # Filter by assignee (must match or be unassigned)
+            # Check assignee (must match exactly)
             assignee = child.get("assignee")
             if sync_filters.get("assignee"):
                 expected_assignee = sync_filters["assignee"]
-                # currentUser() is resolved by JIRA API, we check for current user
-                # For now, we include all assigned to current user or unassigned
-                if assignee and assignee != expected_assignee:
-                    console.print(f"[dim]Skipping {child['key']}: assignee={assignee}[/dim]")
+                if assignee != expected_assignee:
+                    child['meets_criteria'] = False
+                    child['exclusion_reason'] = f"assignee '{assignee or 'unassigned'}' != '{expected_assignee}'"
                     continue
 
-            # Filter by required fields (sprint, points, etc.)
+            # Check required fields (sprint, points, etc.)
             issue_type = child.get("type")
             if sync_filters.get("required_fields") and issue_type:
                 required_fields = sync_filters["required_fields"].get(issue_type, [])
-                skip = False
-
                 for field in required_fields:
                     if not child.get(field):
-                        console.print(
-                            f"[dim]Skipping {child['key']}: missing required field '{field}'[/dim]"
-                        )
-                        skip = True
+                        child['meets_criteria'] = False
+                        child['exclusion_reason'] = f"missing required field '{field}'"
                         break
 
-                if skip:
-                    continue
-
-            filtered.append(child)
-
-        return filtered
+        return children
 
     def order_by_dependencies(
         self,
@@ -363,15 +359,23 @@ class ParentTicketDiscovery:
         children: List[Dict],
         parent_key: str,
     ) -> None:
-        """Display children for user confirmation.
+        """Display children with sync criteria status.
 
         Args:
-            children: List of child ticket dictionaries
+            children: List of child ticket dictionaries (with meets_criteria annotations)
             parent_key: Parent issue key
         """
         from rich.table import Table
 
-        console.print(f"\n[bold]Found {len(children)} children for {parent_key}:[/bold]\n")
+        # Count how many will be created
+        valid_count = sum(1 for c in children if c.get('meets_criteria', True))
+        excluded_count = len(children) - valid_count
+
+        console.print(f"\n[bold]Found {len(children)} children for {parent_key}:[/bold]")
+        if excluded_count > 0:
+            console.print(f"[yellow]{excluded_count} will be excluded due to sync criteria[/yellow]\n")
+        else:
+            console.print()
 
         table = Table(show_header=True, header_style="bold cyan")
         table.add_column("#", style="dim", width=4)
@@ -379,18 +383,32 @@ class ParentTicketDiscovery:
         table.add_column("Title", style="white")
         table.add_column("Status", style="magenta")
         table.add_column("Type", style="blue")
+        table.add_column("Will Create", style="green")
 
         for i, child in enumerate(children, 1):
             key = child.get("key", "")
             title = child.get("summary", "")
             status = child.get("status", "")
             issue_type = child.get("type", "")
+            meets_criteria = child.get('meets_criteria', True)
 
             # Truncate long titles
             if len(title) > 50:
                 title = title[:47] + "..."
 
-            table.add_row(str(i), key, title, status, issue_type)
+            # Status indicator
+            will_create = "[green]✓[/green]" if meets_criteria else "[red]✗[/red]"
+
+            table.add_row(str(i), key, title, status, issue_type, will_create)
 
         console.print(table)
+
+        # Show exclusion reasons
+        excluded = [c for c in children if not c.get('meets_criteria', True)]
+        if excluded:
+            console.print("\n[yellow]Excluded (will not create sessions):[/yellow]")
+            for child in excluded:
+                reason = child.get('exclusion_reason', 'unknown reason')
+                console.print(f"  • {child['key']}: {reason}")
+
         console.print()

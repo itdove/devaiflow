@@ -44,6 +44,31 @@ class JiraFiltersConfig(BaseModel):
             return self.required_fields.get(issue_type, [])
 
 
+class GitHubFiltersConfig(BaseModel):
+    """Configuration for GitHub/GitLab issue filters.
+
+    Used for sync and feature orchestration to filter issues.
+    """
+
+    status: List[str] = ["open"]
+    assignee: str = "@me"  # GitHub username or "@me" for current user
+    required_fields: List[str] = Field(default_factory=lambda: ["assignee"])  # Fields that must be present (e.g., ["assignee", "milestone"])
+
+    def get_required_fields_for_type(self, issue_type: str) -> List[str]:
+        """Get required fields for a specific issue type.
+
+        GitHub/GitLab don't have type-specific required fields like JIRA,
+        so this returns the same list for all types.
+
+        Args:
+            issue_type: Issue type (ignored for GitHub/GitLab)
+
+        Returns:
+            List of required field names
+        """
+        return self.required_fields
+
+
 class JiraBackendConfig(BaseModel):
     """JIRA backend-specific configuration (backends/jira.json).
 
@@ -247,6 +272,30 @@ class GitHubConfig(BaseModel):
     label_conventions: Optional[Dict[str, str]] = None  # Custom label conventions (e.g., {"bug": "type:bug", "priority_high": "priority:high"})
     issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
     issue_types: List[str] = Field(default_factory=lambda: ["bug", "enhancement", "task", "spike", "epic"])  # Allowed issue types from configuration hierarchy
+    filters: Dict[str, GitHubFiltersConfig] = Field(default_factory=dict)  # Issue filters (e.g., {"sync": GitHubFiltersConfig(...)})
+
+
+class GitLabConfig(BaseModel):
+    """GitLab integration configuration (merged view from backend/org/team configs).
+
+    This is the unified configuration model that combines data from:
+    - GitLabBackendConfig (backends/gitlab.json)
+    - OrganizationConfig (organization.json)
+    - TeamConfig (team.json)
+
+    Like GitHub, GitLab uses convention-based labels instead of custom fields.
+    """
+
+    api_url: str = "https://gitlab.com/api/v4"  # GitLab API URL
+    repository: Optional[str] = None  # GitLab repository in group/project format (e.g., "my-group/my-project")
+    default_labels: List[str] = Field(default_factory=list)  # Merged default labels from all config levels
+    auto_close_on_complete: bool = False  # Auto-close issues when session completes
+    add_status_labels: bool = False  # Add status labels (status: in-progress, status: in-review) when starting/completing sessions
+    completion_label: str = "status: in-review"  # Label to add when completing a session (only if add_status_labels=true)
+    label_conventions: Optional[Dict[str, str]] = None  # Custom label conventions (e.g., {"bug": "type:bug", "priority_high": "priority:high"})
+    issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
+    issue_types: List[str] = Field(default_factory=lambda: ["bug", "enhancement", "task", "spike", "epic"])  # Allowed issue types from configuration hierarchy
+    filters: Dict[str, GitHubFiltersConfig] = Field(default_factory=dict)  # Issue filters (e.g., {"sync": GitHubFiltersConfig(...)})
 
 
 class RepoDetectionConfig(BaseModel):
@@ -512,6 +561,7 @@ class Config(BaseModel):
 
     jira: JiraConfig
     github: Optional[GitHubConfig] = None  # GitHub configuration (optional, only if using GitHub backend)
+    gitlab: Optional[GitLabConfig] = None  # GitLab configuration (optional, only if using GitLab backend)
     repos: RepoConfig
     time_tracking: TimeTrackingConfig = Field(default_factory=TimeTrackingConfig)
     session_summary: SessionSummaryConfig = Field(default_factory=SessionSummaryConfig)

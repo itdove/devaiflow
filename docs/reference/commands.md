@@ -5112,6 +5112,11 @@ daf -e feature list
 # Show feature status
 daf -e feature status my-feature
 
+# Sync feature with parent (add new children that now meet criteria)
+daf -e feature sync my-feature --parent "PROJ-100"
+daf -e feature sync my-feature --parent "PROJ-100" --auto-order
+daf -e feature sync my-feature --parent "PROJ-100" --dry-run
+
 # Run feature workflow
 daf -e feature run my-feature
 
@@ -5121,11 +5126,12 @@ daf -e feature resume my-feature
 # Reorder sessions (multiple modes)
 daf -e feature reorder my-feature                    # Interactive
 daf -e feature reorder my-feature PROJ-102 1         # Move session to position
-daf -e feature reorder my-feature --sync-jira        # Sync from JIRA blocking relationships
 daf -e feature reorder my-feature --order "s2,s1,s3" # Direct order
 
 # Delete feature
-daf -e feature delete my-feature
+daf -e feature delete my-feature                          # Feature only
+daf -e feature delete my-feature --delete-sessions        # Feature + sessions
+daf -e feature delete my-feature --delete-sessions --delete-branch  # Everything
 ```
 
 **Key Features:**

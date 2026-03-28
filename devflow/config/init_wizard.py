@@ -5,7 +5,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.config.models import Config
+from devflow.config.models import Config, GitHubFiltersConfig, GitLabConfig
 
 console = Console()
 
@@ -85,6 +85,7 @@ def _show_next_steps(preset_type: str, config: "Config") -> None:
         console.print("     [cyan]daf git new enhancement --goal \"Your feature description\"[/cyan]\n")
         console.print("  4. Or sync assigned issues:")
         console.print("     [cyan]daf sync[/cyan]\n")
+        console.print("\n  [dim]Tip: Sync filters can be customized in ~/.devaiflow/config.json under github.filters.sync[/dim]")
         console.print("[dim]Quick start: https://github.com/itdove/devaiflow#github-issues[/dim]")
 
     elif preset_type == "gitlab":
@@ -94,6 +95,7 @@ def _show_next_steps(preset_type: str, config: "Config") -> None:
         console.print("     [cyan]daf git new enhancement --goal \"Your feature description\"[/cyan]\n")
         console.print("  4. Or sync assigned issues:")
         console.print("     [cyan]daf sync[/cyan]\n")
+        console.print("\n  [dim]Tip: Sync filters can be customized in ~/.devaiflow/config.json under gitlab.filters.sync[/dim]")
         console.print("[dim]Quick start: https://github.com/itdove/devaiflow#gitlab-issues[/dim]")
 
     elif preset_type == "jira":
@@ -101,9 +103,24 @@ def _show_next_steps(preset_type: str, config: "Config") -> None:
         console.print("     [cyan]export JIRA_API_TOKEN=\"your-token\"[/cyan]\n")
         console.print("  3. Refresh JIRA fields:")
         console.print("     [cyan]daf config refresh-jira-fields[/cyan]\n")
-        console.print("  4. Create your first ticket:")
+        console.print("  4. Configure sync filters (optional but recommended):")
+        console.print("     Edit [cyan]~/.devaiflow/organization.json[/cyan] to add required fields:")
+        console.print("     [dim]{")
+        console.print("       \"jira\": {")
+        console.print("         \"filters\": {")
+        console.print("           \"sync\": {")
+        console.print("             \"required_fields\": {")
+        console.print("               \"Story\": [\"sprint\", \"points\"],")
+        console.print("               \"Bug\": [\"severity\"],")
+        console.print("               \"Task\": [\"sprint\"]")
+        console.print("             }")
+        console.print("           }")
+        console.print("         }")
+        console.print("       }")
+        console.print("     }[/dim]\n")
+        console.print("  5. Create your first ticket:")
         console.print("     [cyan]daf jira new story --parent PROJ-123 --goal \"Your feature\"[/cyan]\n")
-        console.print("  5. Or sync current sprint:")
+        console.print("  6. Or sync current sprint:")
         console.print("     [cyan]daf sync --sprint current[/cyan]\n")
         console.print("[dim]JIRA setup guide: https://github.com/itdove/devaiflow/docs/jira-integration.md[/dim]")
 
@@ -187,6 +204,30 @@ def _run_github_preset(current_config: Optional["Config"] = None) -> "Config":
     console.print("[dim]If disabled, DevAIFlow uses status labels (status: completed) instead[/dim]")
     github_auto_close = Confirm.ask("Auto-close issues on complete", default=default_auto_close)
 
+    # Sync filters configuration
+    console.print("\n[bold]Sync Filters Configuration[/bold]")
+    console.print("[dim]Configure filters for daf sync and feature orchestration[/dim]\n")
+
+    # Assignee filter
+    console.print("[dim]Filter by assignee (@me for current user, or specific username)[/dim]")
+    default_assignee = "@me"
+    if current_config and current_config.github and current_config.github.filters:
+        sync_filters = current_config.github.filters.get("sync")
+        if sync_filters:
+            default_assignee = sync_filters.assignee
+    assignee = Prompt.ask("Assignee filter", default=default_assignee)
+
+    # Required fields
+    console.print("\n[dim]Required fields that issues must have (comma-separated)[/dim]")
+    console.print("[dim]Example: assignee,milestone[/dim]")
+    default_req_fields = "assignee"
+    if current_config and current_config.github and current_config.github.filters:
+        sync_filters = current_config.github.filters.get("sync")
+        if sync_filters and sync_filters.required_fields:
+            default_req_fields = ",".join(sync_filters.required_fields)
+    req_fields_input = Prompt.ask("Required fields", default=default_req_fields)
+    required_fields = [field.strip() for field in req_fields_input.split(",") if field.strip()]
+
     # Build config
     config = Config(
         jira=JiraConfig(
@@ -201,6 +242,13 @@ def _run_github_preset(current_config: Optional["Config"] = None) -> "Config":
             repository=None,  # Auto-detected from git remote
             default_labels=github_default_labels,
             auto_close_on_complete=github_auto_close,
+            filters={
+                "sync": GitHubFiltersConfig(
+                    status=["open"],
+                    assignee=assignee,
+                    required_fields=required_fields,
+                )
+            },
         ),
         repos=RepoConfig(
             workspaces=[WorkspaceDefinition(name="default", path=workspace_path)],
@@ -279,12 +327,36 @@ def _run_gitlab_preset(current_config: Optional["Config"] = None) -> "Config":
     gitlab_default_labels = [label.strip() for label in labels_input.split(",") if label.strip()] if labels_input else []
 
     # Auto-close on complete (optional)
-    default_auto_close = current_config.github.auto_close_on_complete if current_config and current_config.github else False
+    default_auto_close = current_config.gitlab.auto_close_on_complete if current_config and current_config.gitlab else False
     console.print("\n[dim]Auto-close issues when session completes?[/dim]")
     console.print("[dim]If disabled, DevAIFlow uses status labels (status: completed) instead[/dim]")
     gitlab_auto_close = Confirm.ask("Auto-close issues on complete", default=default_auto_close)
 
-    # Build config (GitLab uses GitHubConfig model for compatibility)
+    # Sync filters configuration
+    console.print("\n[bold]Sync Filters Configuration[/bold]")
+    console.print("[dim]Configure filters for daf sync and feature orchestration[/dim]\n")
+
+    # Assignee filter
+    console.print("[dim]Filter by assignee (@me for current user, or specific username)[/dim]")
+    default_assignee = "@me"
+    if current_config and current_config.gitlab and current_config.gitlab.filters:
+        sync_filters = current_config.gitlab.filters.get("sync")
+        if sync_filters:
+            default_assignee = sync_filters.assignee
+    assignee = Prompt.ask("Assignee filter", default=default_assignee)
+
+    # Required fields
+    console.print("\n[dim]Required fields that issues must have (comma-separated)[/dim]")
+    console.print("[dim]Example: assignee,milestone[/dim]")
+    default_req_fields = "assignee"
+    if current_config and current_config.gitlab and current_config.gitlab.filters:
+        sync_filters = current_config.gitlab.filters.get("sync")
+        if sync_filters and sync_filters.required_fields:
+            default_req_fields = ",".join(sync_filters.required_fields)
+    req_fields_input = Prompt.ask("Required fields", default=default_req_fields)
+    required_fields = [field.strip() for field in req_fields_input.split(",") if field.strip()]
+
+    # Build config
     config = Config(
         jira=JiraConfig(
             url="https://jira.example.com",
@@ -293,11 +365,19 @@ def _run_gitlab_preset(current_config: Optional["Config"] = None) -> "Config":
             filters={"sync": JiraFiltersConfig(status=[], required_fields=[], assignee="currentUser()")},
             time_tracking=True,
         ),
-        github=GitHubConfig(
-            api_url="https://api.github.com",  # Not used for GitLab
+        github=None,
+        gitlab=GitLabConfig(
+            api_url="https://gitlab.com/api/v4",
             repository=None,  # Auto-detected from git remote
             default_labels=gitlab_default_labels,
             auto_close_on_complete=gitlab_auto_close,
+            filters={
+                "sync": GitHubFiltersConfig(
+                    status=["open"],
+                    assignee=assignee,
+                    required_fields=required_fields,
+                )
+            },
         ),
         repos=RepoConfig(
             workspaces=[WorkspaceDefinition(name="default", path=workspace_path)],

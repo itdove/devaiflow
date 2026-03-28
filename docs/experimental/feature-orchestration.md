@@ -120,6 +120,39 @@ Show detailed status of a feature.
 daf --experimental feature status my-feature
 ```
 
+### `daf feature sync`
+
+Sync a feature with its parent ticket to add new children.
+
+Re-discovers children from the parent and adds any that now meet sync criteria.
+
+**Use Case:**
+- You created a feature but some children were excluded (missing assignee, required fields, etc.)
+- Later you updated those tickets to meet criteria
+- You want to add them to the existing feature without recreating it
+
+**Examples:**
+
+```bash
+# Re-discover and add new children
+daf --experimental feature sync my-feature --parent "PROJ-100"
+
+# Preview what would be added (dry-run)
+daf --experimental feature sync my-feature --parent "PROJ-100" --dry-run
+
+# Add new children and reorder by dependencies
+daf --experimental feature sync my-feature --parent "PROJ-100" --auto-order
+```
+
+**What it does:**
+1. Re-discovers all children from the parent ticket
+2. Applies sync criteria filtering
+3. Identifies children not already in the feature
+4. Shows which new children will be added
+5. Creates sessions for new children (if needed)
+6. Adds them to the feature
+7. Optionally reorders by dependencies (`--auto-order`)
+
 ### `daf feature run`
 
 Start executing a feature's sessions.
@@ -144,7 +177,8 @@ Reorder sessions in a feature.
 - **Interactive mode**: Shows current order and prompts for changes
 - **Move mode**: Move a specific session to a position
 - **Direct mode** (`--order`): Specify complete new order
-- **Sync mode** (`--sync-jira`): Fetch current JIRA blocking relationships and reorder automatically
+
+**Note:** To reorder based on JIRA blocking relationships, use `daf feature sync --parent <parent> --auto-order` instead.
 
 **Examples:**
 
@@ -162,36 +196,43 @@ daf --experimental feature reorder my-feature 3 1
 daf --experimental feature reorder my-feature \
   --order "session2,session1,session3"
 
-# Sync mode - reorder based on current JIRA blocking relationships
-daf --experimental feature reorder my-feature --sync-jira
-
 # Dry-run preview
 daf --experimental feature reorder my-feature \
   --order "session2,session1,session3" \
   --dry-run
 ```
 
-**JIRA Sync Mode:**
-
-The `--sync-jira` flag fetches the current blocking relationships ("Blocks" / "is blocked by" links) from JIRA and reorders sessions using topological sort. This is useful when:
-- You've updated JIRA blocking relationships and want to reflect those changes in your feature
-- You want to ensure your feature execution order matches the current JIRA dependencies
-- You need to reorder sessions after JIRA relationships have changed
-
-The sync will:
-1. Fetch issuelinks for all sessions in the feature
-2. Extract blocking relationships (only between sessions in the feature)
-3. Apply topological sort to determine optimal execution order
-4. Detect and warn about dependency cycles
-5. Update the feature order (or preview with `--dry-run`)
-
 ### `daf feature delete`
 
 Delete a feature orchestration.
 
+By default, only removes the feature metadata. Sessions and branches are preserved.
+
+**Options:**
+- `--delete-sessions` - Also delete all sessions in the feature
+- `--delete-branch` - Also delete the git branch
+
+**Examples:**
+
 ```bash
+# Delete feature only (sessions and branch preserved)
 daf --experimental feature delete my-feature
+
+# Delete feature and all sessions
+daf --experimental feature delete my-feature --delete-sessions
+
+# Delete everything (useful for testing)
+daf --experimental feature delete my-feature --delete-sessions --delete-branch
 ```
+
+**What gets deleted:**
+
+| Command | Feature Metadata | Sessions | Git Branch |
+|---------|-----------------|----------|------------|
+| `delete` | ✓ | ✗ | ✗ |
+| `delete --delete-sessions` | ✓ | ✓ | ✗ |
+| `delete --delete-branch` | ✓ | ✗ | ✓ |
+| `delete --delete-sessions --delete-branch` | ✓ | ✓ | ✓ |
 
 ## Parent Ticket Discovery
 

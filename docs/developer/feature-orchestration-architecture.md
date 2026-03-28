@@ -21,11 +21,11 @@ Implemented multi-session feature orchestration with integrated verification. Al
 - Detects and warns about circular dependencies
 - Falls back gracefully when cycles detected
 
-### 3. JIRA Blocking Relationship Sync
-- `daf feature reorder --sync-jira` fetches current blocking relationships
-- Parses "Blocks"/"is blocked by" issue links
-- Reorders sessions based on current JIRA state
-- Only considers relationships within the feature
+### 3. Feature Sync and Dependency Ordering
+- `daf feature sync --parent <parent> --auto-order` re-discovers children and reorders by dependencies
+- Parses "Blocks"/"is blocked by" issue links for JIRA
+- Adds new children that now meet sync criteria
+- Reorders sessions based on current dependency state
 
 ### 4. Session Auto-Creation
 - Detects missing sessions when creating feature
@@ -124,7 +124,7 @@ $DEVAIFLOW_HOME/
    - `artifact_validator.py`: Validate required files
 
 5. **Feature CLI** (`devflow/cli/commands/feature_command.py`)
-   - 8 commands: create, list, delete, status, run, resume, complete, reorder
+   - 9 commands: create, list, delete, status, sync, run, resume, complete, reorder
    - Experimental feature gating
    - Rich terminal output
 
@@ -153,10 +153,12 @@ daf -e feature resume <name>
 daf -e feature reorder <name>                    # Interactive
 daf -e feature reorder <name> <session> <pos>    # Move mode
 daf -e feature reorder <name> --order "s2,s1,s3" # Direct mode
-daf -e feature reorder <name> --sync-jira        # Sync from JIRA
+
+# Sync feature (add new children, reorder by dependencies)
+daf -e feature sync <name> --parent <parent> [--auto-order]
 
 # Delete feature
-daf -e feature delete <name>
+daf -e feature delete <name> [--delete-sessions] [--delete-branch]
 ```
 
 ## JIRA Integration Enhancements
@@ -248,7 +250,6 @@ Created comprehensive test suite: `tests/test_feature_orchestration.py`
 2. **Best-effort verification**: May have false positives/negatives
 3. **GitHub/GitLab discovery**: Relies on issue references in text (no native API)
 4. **No automatic rollback**: If verification fails, manual intervention required
-5. **JIRA-only sync**: `--sync-jira` only works with JIRA issue keys
 
 ## Future Enhancements (Potential)
 

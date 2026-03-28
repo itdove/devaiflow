@@ -567,6 +567,29 @@ def open_session(
         if not check_concurrent_session(session_manager, active_conv.project_path, session.name, selected_workspace_name, action="open"):
             return
 
+    # Feature orchestration: Use shared branch if session is part of a feature
+    # This ensures all sessions in a feature work on the same branch
+    if active_conv and active_conv.project_path:
+        from devflow.orchestration.feature import FeatureManager
+
+        try:
+            feature_manager = FeatureManager()
+            feature_context = feature_manager.get_session_context(session.name)
+
+            if feature_context:
+                feature_branch = feature_context['feature'].branch
+                feature_base_branch = feature_context['feature'].base_branch
+
+                # Set or update session's branch to use feature's shared branch
+                if active_conv.branch != feature_branch:
+                    console.print(f"[dim]🎯 Feature orchestration: using shared branch '{feature_branch}'[/dim]")
+                    active_conv.branch = feature_branch
+                    active_conv.base_branch = feature_base_branch
+                    session_manager.update_session(session)
+        except Exception:
+            # Silently skip if feature lookup fails
+            pass
+
     # Handle missing branch (can happen with synced sessions on first launch)
     # Skip branch creation for ticket_creation sessions (analysis-only) - PROJ-62990
     # Check session type BEFORE is_first_launch to prevent prompt for ticket_creation sessions
@@ -657,7 +680,9 @@ def open_session(
         _sync_branch_for_import(active_conv.project_path, active_conv.branch, remote_url)
 
         # Now handle branch checkout (will find branch if synced above)
-        checkout_successful = _handle_branch_checkout(active_conv.project_path, active_conv.branch, config)
+        # Pass base_branch for feature orchestration (creates from correct base)
+        base_branch_for_checkout = active_conv.base_branch if active_conv and active_conv.base_branch else None
+        checkout_successful = _handle_branch_checkout(active_conv.project_path, active_conv.branch, config, base_branch=base_branch_for_checkout)
 
         # Only proceed to sync check if checkout succeeded
         if not checkout_successful:
@@ -1374,13 +1399,14 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
     return True
 
 
-def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[any] = None) -> bool:
+def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[any] = None, base_branch: Optional[str] = None) -> bool:
     """Handle git branch checkout.
 
     Args:
         project_path: Project directory path
         branch_name: Branch name to checkout
         config: Configuration object (optional)
+        base_branch: Base branch to create from if branch doesn't exist (optional, defaults to repository default)
 
     Returns:
         True if on correct branch after checkout, False otherwise
@@ -1402,21 +1428,26 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
     if not GitUtils.branch_exists(path, branch_name):
         console.print(f"[yellow]Branch '{branch_name}' does not exist[/yellow]")
         if Confirm.ask("Create it now?", default=True):
-            # Get default branch to create from
-            default_branch = GitUtils.get_default_branch(path)
-            if not default_branch:
-                default_branch = "main"
+            # Get base branch to create from (use provided base_branch or default)
+            source_branch = base_branch
+            if not source_branch:
+                source_branch = GitUtils.get_default_branch(path)
+                if not source_branch:
+                    source_branch = "main"
 
-            # Ensure we're on the default branch and it's up-to-date
+            if base_branch:
+                console.print(f"[dim]Creating from base branch: {source_branch}[/dim]")
+
+            # Ensure we're on the source branch and it's up-to-date
             current = GitUtils.get_current_branch(path)
-            if current != default_branch:
-                console.print(f"[cyan]Checking out {default_branch}...[/cyan]")
-                checkout_success, _ = GitUtils.checkout_branch(path, default_branch)
+            if current != source_branch:
+                console.print(f"[cyan]Checking out {source_branch}...[/cyan]")
+                checkout_success, _ = GitUtils.checkout_branch(path, source_branch)
                 if not checkout_success:
-                    console.print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}, creating from current branch")
+                    console.print(f"[yellow]⚠[/yellow] Could not checkout {source_branch}, creating from current branch")
 
             # Pull latest changes before creating branch
-            console.print(f"[cyan]Pulling latest changes from {default_branch}...[/cyan]")
+            console.print(f"[cyan]Pulling latest changes from {source_branch}...[/cyan]")
             pull_success, pull_error = GitUtils.pull_current_branch(path)
             if not pull_success:
                 console.print(f"[yellow]⚠[/yellow] Could not pull latest changes: {pull_error}")

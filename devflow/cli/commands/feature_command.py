@@ -5,7 +5,6 @@ integrated verification.
 """
 
 import os
-import re
 import sys
 from typing import Optional
 
@@ -134,13 +133,13 @@ def create(
     Examples:
 
         # Manual session list
-        daf feature create oauth-integration \\
+        daf -e feature create oauth-integration \\
           --sessions "PROJ-101,PROJ-102,PROJ-103" \\
           --branch "feature/oauth" \\
           --verify auto
 
         # Auto-discover from parent epic
-        daf feature create oauth-integration \\
+        daf -e feature create oauth-integration \\
           --parent "PROJ-100" \\
           --auto-order \\
           --verify auto
@@ -173,25 +172,126 @@ def create(
             config_loader = ConfigLoader()
             session_manager = SessionManager(config_loader=config_loader)
 
-            # Get issue tracker client
+            # Detect backend from parent key format
             from devflow.issue_tracker.factory import create_issue_tracker_client
+            from devflow.utils.backend_detection import detect_backend_from_key
 
+            # Create appropriate client
             config = config_loader.load_config()
-            issue_tracker_client = create_issue_tracker_client(config)
+            backend = detect_backend_from_key(parent, config)
+            issue_tracker_client = create_issue_tracker_client(backend=backend)
 
             # Get sync filters from config
-            sync_filters_config = config.jira.filters.get("sync")
-            if not sync_filters_config:
-                console.print("[yellow]Warning:[/yellow] No sync filters configured")
-                sync_filters = {"status": ["To Do", "New"]}
-            else:
+            sync_filters = None
+            if backend == "jira":
+                # JIRA: Use configured sync filters, or default to currentUser()
+                sync_filters_config = None
+                if config.jira and config.jira.filters:
+                    sync_filters_config = config.jira.filters.get("sync")
+
+                if sync_filters_config:
+                    # Use configured filters
+                    assignee = sync_filters_config.assignee
+                    required_fields = sync_filters_config.required_fields
+                    status = sync_filters_config.status
+                else:
+                    # No filters configured - use safe defaults
+                    console.print(f"[dim]No JIRA filters configured, using defaults (assignee: currentUser(), status: ['New', 'To Do', 'In Progress'])[/dim]")
+                    assignee = "currentUser()"
+                    required_fields = {}  # Empty dict for type-specific fields
+                    status = ["New", "To Do", "In Progress"]
+
+                console.print(f"[dim]Filtering by assignee: {assignee}[/dim]")
                 sync_filters = {
-                    "status": filter_status.split(",") if filter_status else sync_filters_config.status,
-                    "assignee": sync_filters_config.assignee,
-                    "required_fields": {
-                        issue_type: sync_filters_config.get_required_fields_for_type(issue_type)
-                        for issue_type in ["Story", "Task", "Bug"]  # Common types
-                    },
+                    "status": filter_status.split(",") if filter_status else status,
+                    "assignee": assignee,
+                    "required_fields": required_fields,
+                }
+            elif backend == "github":
+                # GitHub: Use configured sync filters, or default to current user
+                sync_filters_config = None
+                if config.github and config.github.filters:
+                    sync_filters_config = config.github.filters.get("sync")
+
+                if sync_filters_config:
+                    # Use configured filters
+                    assignee = sync_filters_config.assignee
+                    required_fields = sync_filters_config.required_fields
+                    status = sync_filters_config.status
+                else:
+                    # No filters configured - use defaults (like daf sync does)
+                    console.print(f"[dim]No GitHub filters configured, using defaults (assignee: current user, required_fields: ['assignee'])[/dim]")
+                    assignee = "@me"
+                    required_fields = ["assignee"]
+                    status = ["open"]
+
+                # Resolve @me to actual username
+                if assignee == "@me":
+                    import subprocess
+                    try:
+                        result = subprocess.run(
+                            ['gh', 'api', 'user', '--jq', '.login'],
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                        )
+                        assignee = result.stdout.strip()
+                        if not assignee:
+                            console.print(f"[yellow]Warning:[/yellow] Could not detect GitHub username")
+                            assignee = "@me"
+                    except Exception as e:
+                        console.print(f"[yellow]Warning:[/yellow] Could not detect GitHub username: {e}")
+                        assignee = "@me"
+
+                console.print(f"[dim]Filtering by assignee: {assignee}[/dim]")
+                sync_filters = {
+                    "status": filter_status.split(",") if filter_status else status,
+                    "assignee": assignee,
+                    "required_fields": required_fields,
+                }
+            elif backend == "gitlab":
+                # GitLab: Use configured sync filters, or default to current user
+                sync_filters_config = None
+                if config.gitlab and config.gitlab.filters:
+                    sync_filters_config = config.gitlab.filters.get("sync")
+
+                if sync_filters_config:
+                    # Use configured filters
+                    assignee = sync_filters_config.assignee
+                    required_fields = sync_filters_config.required_fields
+                    status = sync_filters_config.status
+                else:
+                    # No filters configured - use defaults
+                    console.print(f"[dim]No GitLab filters configured, using defaults (assignee: current user, required_fields: ['assignee'])[/dim]")
+                    assignee = "@me"
+                    required_fields = ["assignee"]
+                    status = ["open"]
+
+                # Resolve @me to actual username
+                if assignee == "@me":
+                    import subprocess
+                    try:
+                        result = subprocess.run(
+                            ['glab', 'api', 'user'],
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                        )
+                        import json
+                        user_data = json.loads(result.stdout.strip())
+                        assignee = user_data.get('username', '')
+                        if not assignee:
+                            console.print(f"[yellow]Warning:[/yellow] Could not detect GitLab username")
+                            assignee = "@me"
+                    except Exception as e:
+                        console.print(f"[yellow]Warning:[/yellow] Could not detect GitLab username: {e}")
+                        assignee = "@me"
+
+                console.print(f"[dim]Filtering by assignee: {assignee}[/dim]")
+                sync_filters = {
+                    "status": filter_status.split(",") if filter_status else status,
+                    "assignee": assignee,
+                    "required_fields": required_fields,
                 }
 
             # Discover children using parent discovery
@@ -236,9 +336,17 @@ def create(
                 console.print("[dim]Remove --dry-run to create the feature[/dim]")
                 sys.exit(0)
 
-            # Check which children are missing sessions
+            # Filter to only children that meet sync criteria
+            valid_children = [c for c in children if c.get('meets_criteria', True)]
+            excluded_children = [c for c in children if not c.get('meets_criteria', True)]
+
+            if excluded_children:
+                console.print(f"\n[yellow]Note:[/yellow] {len(excluded_children)} children excluded by sync criteria")
+                console.print("[dim](See table above for details)[/dim]\n")
+
+            # Check which valid children are missing sessions
             missing_sessions = []
-            for child in children:
+            for child in valid_children:
                 child_key = child["key"]
                 existing_session = session_manager.get_session(child_key)
                 if not existing_session:
@@ -290,9 +398,9 @@ def create(
                 console.print("Cancelled")
                 sys.exit(0)
 
-            # Create sessions for children that don't exist
+            # Create sessions for valid children only (that meet sync criteria)
             created_sessions = []
-            for child in children:
+            for child in valid_children:
                 child_key = child["key"]
 
                 # Check if session exists
@@ -315,7 +423,7 @@ def create(
                     # Populate issue metadata
                     session.issue_tracker = config.issue_tracker_backend
                     session.issue_metadata = {
-                        k: v for k, v in child.items() if k not in ("key", "updated") and v is not None
+                        k: v for k, v in child.items() if k not in ("key", "updated", "meets_criteria", "exclusion_reason") and v is not None
                     }
 
                     session_manager.update_session(session)
@@ -399,8 +507,8 @@ def create(
                 console.print(f"  • {issue_key}")
 
         console.print(f"\n[bold]Next steps:[/bold]")
-        console.print(f"  1. Review feature state: [cyan]daf feature status {name}[/cyan]")
-        console.print(f"  2. Start execution: [cyan]daf feature run {name}[/cyan]")
+        console.print(f"  1. Review feature state: [cyan]daf -e feature status {name}[/cyan]")
+        console.print(f"  2. Start execution: [cyan]daf -e feature run {name}[/cyan]")
 
     except ValueError as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -549,11 +657,25 @@ def _display_feature_details(feature):
 
 @feature.command()
 @click.argument("name")
+@click.option("--delete-sessions", is_flag=True, help="Also delete all sessions in this feature")
+@click.option("--delete-branch", is_flag=True, help="Also delete the git branch")
 @require_experimental
-def delete(name: str):
+def delete(name: str, delete_sessions: bool, delete_branch: bool):
     """Delete a feature orchestration.
 
-    This removes the feature but does NOT delete the sessions or branches.
+    By default, only removes the feature metadata. Sessions and branches are preserved.
+    Use --delete-sessions and/or --delete-branch to clean up completely.
+
+    Examples:
+
+        # Delete feature only (sessions and branch preserved)
+        daf -e feature delete my-feature
+
+        # Delete feature and all sessions
+        daf -e feature delete my-feature --delete-sessions
+
+        # Delete everything (feature, sessions, and branch)
+        daf -e feature delete my-feature --delete-sessions --delete-branch
     """
     try:
         config_loader = ConfigLoader()
@@ -568,20 +690,285 @@ def delete(name: str):
             console.print(f"[red]Error:[/red] Feature '{name}' not found")
             sys.exit(1)
 
-        # Confirm deletion
-        console.print(f"\n[yellow]Warning:[/yellow] This will delete feature '{name}'")
-        console.print("[dim]Sessions and branches will NOT be deleted[/dim]\n")
+        # Show what will be deleted
+        console.print(f"\n[yellow]Warning:[/yellow] This will delete:")
+        console.print(f"  • Feature orchestration: {name}")
+
+        if delete_sessions:
+            console.print(f"  • All {len(feature.sessions)} sessions: {', '.join(feature.sessions)}")
+        else:
+            console.print(f"[dim]  • Sessions will be preserved ({len(feature.sessions)} sessions)[/dim]")
+
+        if delete_branch:
+            console.print(f"  • Git branch: {feature.branch}")
+        else:
+            console.print(f"[dim]  • Branch will be preserved ({feature.branch})[/dim]")
+
+        console.print()
 
         if not click.confirm("Continue?"):
             console.print("Cancelled")
             return
 
-        # Delete feature
+        # Delete sessions if requested
+        deleted_sessions = []
+        if delete_sessions:
+            from devflow.session.manager import SessionManager
+            session_manager = SessionManager(config_loader)
+
+            for session_name in feature.sessions:
+                session = session_manager.get_session(session_name)
+                if session:
+                    session_manager.delete_session(session_name)  # Pass session_name, not session object
+                    deleted_sessions.append(session_name)
+                    console.print(f"  [dim]Deleted session: {session_name}[/dim]")
+
+        # Delete branch if requested
+        if delete_branch:
+            from pathlib import Path
+            try:
+                # Check if branch exists
+                result = GitUtils.run_git_command(
+                    ["git", "rev-parse", "--verify", feature.branch],
+                    cwd=Path.cwd(),
+                    check=False
+                )
+
+                if result.returncode == 0:
+                    # Check if we're on the branch
+                    current_branch_result = GitUtils.run_git_command(
+                        ["git", "branch", "--show-current"],
+                        cwd=Path.cwd()
+                    )
+                    current_branch = current_branch_result.stdout.strip()
+
+                    if current_branch == feature.branch:
+                        console.print(f"\n[yellow]Warning:[/yellow] Cannot delete current branch '{feature.branch}'")
+                        console.print(f"[dim]Please checkout a different branch first[/dim]")
+                    else:
+                        # Delete branch
+                        GitUtils.run_git_command(
+                            ["git", "branch", "-D", feature.branch],
+                            cwd=Path.cwd()
+                        )
+                        console.print(f"  [dim]Deleted branch: {feature.branch}[/dim]")
+                else:
+                    console.print(f"  [dim]Branch {feature.branch} does not exist[/dim]")
+            except Exception as e:
+                console.print(f"  [yellow]Warning:[/yellow] Could not delete branch: {e}")
+
+        # Delete feature metadata
         index.remove_feature(name)
         storage.save_index(index)
         storage.delete_feature_data(name)
 
-        console.print(f"[green]✓[/green] Feature '{name}' deleted")
+        # Summary
+        console.print(f"\n[green]✓[/green] Feature '{name}' deleted")
+        if deleted_sessions:
+            console.print(f"[green]✓[/green] Deleted {len(deleted_sessions)} sessions")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        sys.exit(1)
+
+
+@feature.command()
+@click.argument("name")
+@click.option("--parent", help="Parent ticket key to re-discover children from")
+@click.option("--auto-order", is_flag=True, help="Auto-order new sessions by dependencies")
+@click.option("--dry-run", is_flag=True, help="Preview changes without updating the feature")
+@require_experimental
+@require_outside_claude
+def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
+    """Sync a feature with its parent ticket to add new children.
+
+    Re-discovers children from the parent ticket and adds any that now meet
+    sync criteria (previously excluded due to missing assignee, required fields, etc.).
+
+    This is useful when you:
+    - Created a feature but some children didn't meet criteria
+    - Later updated those tickets to meet criteria
+    - Want to add them to the existing feature
+
+    Examples:
+
+        # Re-discover and add new children
+        daf -e feature sync my-feature --parent "PROJ-100"
+
+        # Preview what would be added
+        daf -e feature sync my-feature --parent "PROJ-100" --dry-run
+
+        # Add and reorder by dependencies
+        daf -e feature sync my-feature --parent "PROJ-100" --auto-order
+    """
+    try:
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader=config_loader)
+        feature_manager = FeatureManager(config_loader=config_loader, session_manager=session_manager)
+
+        # Load feature
+        feature = feature_manager.get_feature(name)
+        if not feature:
+            console.print(f"[red]Error:[/red] Feature '{name}' not found")
+            sys.exit(1)
+
+        if not parent:
+            console.print(f"[red]Error:[/red] --parent is required for sync")
+            console.print(f"[dim]Usage: daf -e feature sync {name} --parent <parent-key>[/dim]")
+            sys.exit(1)
+
+        console.print(f"[bold]Syncing feature '{name}' with parent {parent}[/bold]\n")
+        console.print(f"[dim]Current sessions:[/dim] {len(feature.sessions)}")
+        console.print(f"[dim]Current: {', '.join(feature.sessions)}[/dim]\n")
+
+        # Detect backend and create client
+        from devflow.issue_tracker.factory import create_issue_tracker_client
+        from devflow.utils.backend_detection import detect_backend_from_key
+
+        config = config_loader.load_config()
+        backend = detect_backend_from_key(parent, config)
+        issue_tracker_client = create_issue_tracker_client(backend=backend)
+
+        # Get sync filters (JIRA-only)
+        sync_filters = None
+        if backend == "jira" and config.jira and config.jira.filters:
+            sync_filters_config = config.jira.filters.get("sync")
+            if sync_filters_config:
+                sync_filters = {
+                    "status": sync_filters_config.status,
+                    "assignee": sync_filters_config.assignee,
+                    "required_fields": sync_filters_config.required_fields,
+                }
+
+        # Discover children
+        from devflow.orchestration.parent_discovery import ParentTicketDiscovery
+        discovery = ParentTicketDiscovery(issue_tracker_client)
+
+        try:
+            all_children = discovery.discover_children(parent, sync_filters)
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            sys.exit(1)
+
+        # Filter to valid children (that meet criteria)
+        valid_children = [c for c in all_children if c.get('meets_criteria', True)]
+
+        # Find new children (not already in feature)
+        current_session_keys = set(feature.sessions)
+        new_children = [c for c in valid_children if c['key'] not in current_session_keys]
+
+        if not new_children:
+            console.print("[green]✓[/green] No new children found")
+            console.print("[dim]All children that meet criteria are already in the feature[/dim]")
+            return
+
+        # Show new children
+        console.print(f"[bold]Found {len(new_children)} new children:[/bold]\n")
+
+        from rich.table import Table
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Key", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white")
+        table.add_column("Status", style="magenta")
+        table.add_column("Type", style="blue")
+
+        for i, child in enumerate(new_children, 1):
+            key = child.get("key", "")
+            title = child.get("summary", "")
+            status = child.get("status", "")
+            issue_type = child.get("type", "")
+
+            if len(title) > 50:
+                title = title[:47] + "..."
+
+            table.add_row(str(i), key, title, status, issue_type)
+
+        console.print(table)
+        console.print()
+
+        if dry_run:
+            console.print("[bold cyan]DRY RUN:[/bold cyan] Would add these children to the feature\n")
+            console.print(f"[dim]New session count:[/dim] {len(feature.sessions)} → {len(feature.sessions) + len(new_children)}")
+            console.print(f"[dim]Remove --dry-run to apply changes[/dim]")
+            return
+
+        # Confirm
+        if not click.confirm(f"Add {len(new_children)} new children to feature '{name}'?", default=True):
+            console.print("Cancelled")
+            return
+
+        # Create sessions for new children
+        created_count = 0
+        for child in new_children:
+            child_key = child["key"]
+
+            # Check if session exists
+            existing_session = session_manager.get_session(child_key)
+
+            if not existing_session:
+                # Create session
+                child_summary = child.get("summary", "")
+                goal = f"{child_key}: {child_summary}" if child_summary else child_key
+
+                session = session_manager.create_session(
+                    name=child_key,
+                    issue_key=child_key,
+                    goal=goal,
+                )
+
+                session.status = "created"
+                session.issue_tracker = config.issue_tracker_backend
+                session.issue_metadata = {
+                    k: v for k, v in child.items()
+                    if k not in ("key", "updated", "meets_criteria", "exclusion_reason") and v is not None
+                }
+
+                session_manager.update_session(session)
+                created_count += 1
+                console.print(f"[green]✓[/green] Created session: {child_key}")
+            else:
+                console.print(f"[dim]Session already exists: {child_key}[/dim]")
+
+            # Add to feature
+            feature.sessions.append(child_key)
+            feature.session_statuses[child_key] = "pending"
+
+        # Reorder if requested
+        if auto_order and backend == "jira":
+            console.print("\n[dim]Reordering by dependencies...[/dim]")
+            # Get all children with blocking relationships
+            all_session_children = []
+            for session_name in feature.sessions:
+                all_session_children.append({"key": session_name})
+
+            # Fetch blocking relationships for all
+            try:
+                relationships = issue_tracker_client.get_blocking_relationships(feature.sessions)
+                for child in all_session_children:
+                    rel = relationships.get(child["key"], {"blocks": [], "blocked_by": []})
+                    child["blocks"] = rel["blocks"]
+                    child["blocked_by"] = rel["blocked_by"]
+
+                ordered_children, warnings = discovery.order_by_dependencies(all_session_children)
+                feature.sessions = [c["key"] for c in ordered_children]
+
+                if warnings:
+                    for warning in warnings:
+                        console.print(f"[yellow]Warning:[/yellow] {warning}")
+
+                console.print("[green]✓[/green] Reordered by dependencies")
+            except Exception as e:
+                console.print(f"[yellow]Warning:[/yellow] Could not reorder: {e}")
+
+        # Save feature
+        feature_manager.update_feature(feature)
+
+        # Summary
+        console.print(f"\n[green]✓[/green] Feature '{name}' updated")
+        if created_count:
+            console.print(f"[green]✓[/green] Created {created_count} new sessions")
+        console.print(f"[dim]Total sessions:[/dim] {len(feature.sessions)}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -611,7 +998,7 @@ def status(name: str):
         console.print("[bold]Next steps:[/bold]")
 
         if feature.status == "created":
-            console.print(f"  • Start execution: [cyan]daf feature run {name}[/cyan]")
+            console.print(f"  • Start execution: [cyan]daf -e feature run {name}[/cyan]")
 
         elif feature.status == "running":
             current = feature.get_current_session()
@@ -627,18 +1014,18 @@ def status(name: str):
                 if result.report_path:
                     console.print(f"  • View report: [cyan]{result.report_path}[/cyan]")
 
-            console.print(f"  • Resume: [cyan]daf feature resume {name}[/cyan]")
+            console.print(f"  • Resume: [cyan]daf -e feature resume {name}[/cyan]")
 
         elif feature.status == "complete":
             console.print(f"  • Feature complete!")
             if feature.pr_url:
                 console.print(f"  • Review PR: {feature.pr_url}")
             else:
-                console.print(f"  • Create PR: [cyan]daf feature complete {name}[/cyan]")
+                console.print(f"  • Create PR: [cyan]daf -e feature complete {name}[/cyan]")
 
         elif feature.status == "failed":
             console.print(f"  • Review failure reason")
-            console.print(f"  • Fix issues and retry: [cyan]daf feature resume {name}[/cyan]")
+            console.print(f"  • Fix issues and retry: [cyan]daf -e feature resume {name}[/cyan]")
 
         console.print()
 
@@ -706,7 +1093,7 @@ def run(name: str):
             console.print(f"\n[cyan]Next:[/cyan] daf open {current}")
         else:
             console.print(f"  [green]All sessions complete![/green]")
-            console.print(f"\n[cyan]Next:[/cyan] daf feature complete {name}")
+            console.print(f"\n[cyan]Next:[/cyan] daf -e feature complete {name}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -778,7 +1165,7 @@ def resume(name: str):
             if not feature.advance_to_next_session():
                 console.print(f"\n[green]All sessions complete![/green]")
                 feature.status = "complete"
-                console.print(f"\n[cyan]Next:[/cyan] daf feature complete {name}")
+                console.print(f"\n[cyan]Next:[/cyan] daf -e feature complete {name}")
             else:
                 feature.status = "running"
                 next_session = feature.get_current_session()
@@ -802,7 +1189,7 @@ def resume(name: str):
                 for suggestion in result.suggestions:
                     console.print(f"  • {suggestion}")
 
-            console.print(f"\n[dim]Fix issues and run:[/dim] daf feature resume {name}")
+            console.print(f"\n[dim]Fix issues and run:[/dim] daf -e feature resume {name}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -898,24 +1285,21 @@ def complete(name: str):
     help="Comma-separated list of session names in new order",
 )
 @click.option(
-    "--sync-jira",
-    is_flag=True,
-    help="Fetch current JIRA blocking relationships and reorder based on dependencies",
-)
-@click.option(
     "--dry-run",
     is_flag=True,
     help="Preview new order without updating the feature",
 )
 @require_experimental
 @require_outside_claude
-def reorder(name: str, session: Optional[str], position: Optional[int], order: Optional[str], sync_jira: bool, dry_run: bool):
+def reorder(name: str, session: Optional[str], position: Optional[int], order: Optional[str], dry_run: bool):
     """Reorder sessions in a feature.
 
     Interactive mode (default): Shows current order and prompts for changes
     Direct mode (--order): Specify new order directly
     Move mode: Move a specific session to a position
-    Sync mode (--sync-jira): Fetch current JIRA blocking relationships and reorder
+
+    Note: To reorder based on JIRA blocking relationships, use:
+          daf -e feature sync <name> --parent <parent> --auto-order
 
     Examples:
 
@@ -924,9 +1308,6 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
 
         # Move mode - by session name
         daf -e feature reorder oauth-integration PROJ-102 1
-
-        # Sync mode - reorder based on current JIRA blocking relationships
-        daf -e feature reorder oauth-integration --sync-jira
 
         # Move mode - by session number
         daf -e feature reorder oauth-integration 3 1
@@ -966,104 +1347,15 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
         console.print()
 
         # Validate argument combinations
-        conflicting_flags = sum([
-            sync_jira,
-            bool(order),
-            (session is not None and position is not None),
-        ])
-
-        if conflicting_flags > 1:
-            console.print("[red]Error:[/red] Cannot use multiple reordering modes together")
-            console.print("[dim]Use one of: --sync-jira, --order, or <session> <position>[/dim]")
+        if order and (session is not None or position is not None):
+            console.print("[red]Error:[/red] Cannot use both --order and move arguments")
+            console.print("[dim]Use either: --order \"s1,s2,s3\" OR <session> <position>[/dim]")
             sys.exit(1)
 
         if (session is not None) != (position is not None):
             console.print("[red]Error:[/red] Both session and position are required for move mode")
             console.print("[dim]Usage: daf -e feature reorder <name> <session> <position>[/dim]")
             sys.exit(1)
-
-        # Sync mode: fetch JIRA blocking relationships and reorder
-        if sync_jira:
-            # Verify all sessions are JIRA tickets (not GitHub/GitLab)
-            jira_pattern = re.compile(r'^[A-Z]+-\d+$')
-            non_jira_sessions = [s for s in feature.sessions if not jira_pattern.match(s)]
-
-            if non_jira_sessions:
-                console.print(f"[red]Error:[/red] --sync-jira only works with JIRA tickets")
-                console.print(f"[dim]Non-JIRA sessions found: {', '.join(non_jira_sessions)}[/dim]")
-                sys.exit(1)
-
-            console.print("[cyan]Fetching current JIRA blocking relationships...[/cyan]")
-
-            # Get issue tracker client
-            from devflow.clients import get_issue_tracker_client
-            client = get_issue_tracker_client(config_loader)
-
-            try:
-                # Fetch blocking relationships
-                relationships = client.get_blocking_relationships(feature.sessions)
-
-                # Build child data structures for topological sort
-                children = []
-                for session_name in feature.sessions:
-                    rel = relationships.get(session_name, {"blocks": [], "blocked_by": []})
-                    children.append({
-                        "key": session_name,
-                        "blocks": rel["blocks"],
-                        "blocked_by": rel["blocked_by"],
-                    })
-
-                # Apply topological sort
-                from devflow.orchestration.parent_discovery import ParentTicketDiscovery
-                discovery = ParentTicketDiscovery(client)
-                ordered_children, warnings = discovery.order_by_dependencies(children)
-
-                # Extract new order
-                new_sessions = [child["key"] for child in ordered_children]
-
-                # Show warnings
-                if warnings:
-                    console.print()
-                    for warning in warnings:
-                        console.print(f"[yellow]Warning:[/yellow] {warning}")
-
-                # Show new order
-                console.print("\n[bold]New order (based on JIRA blocking relationships):[/bold]\n")
-                for i, session_name in enumerate(new_sessions, 1):
-                    status = feature.session_statuses.get(session_name, "pending")
-                    symbol = {
-                        "pending": "○",
-                        "running": "⧗",
-                        "completed": "✓",
-                        "paused": "⏸",
-                        "failed": "✗",
-                    }.get(status, "?")
-
-                    # Highlight sessions that moved
-                    if i != feature.sessions.index(session_name) + 1:
-                        old_pos = feature.sessions.index(session_name) + 1
-                        console.print(f"  {i}. {symbol} [bold cyan]{session_name}[/bold cyan] ({status}) [cyan]← was #{old_pos}[/cyan]")
-                    else:
-                        console.print(f"  {i}. {symbol} {session_name} ({status})")
-
-                console.print()
-
-                # DRY RUN MODE: Exit early
-                if dry_run:
-                    console.print("[dim]No changes made (dry-run mode)[/dim]")
-                    console.print("[dim]Remove --dry-run to update the feature[/dim]")
-                    sys.exit(0)
-
-                # Update order
-                feature.sessions = new_sessions
-                feature_manager.update_feature(feature)
-
-                console.print("[green]✓[/green] Feature order updated based on JIRA blocking relationships\n")
-                return
-
-            except Exception as e:
-                console.print(f"[red]Error fetching JIRA blocking relationships:[/red] {str(e)}")
-                sys.exit(1)
 
         # Move mode: move specific session to position
         if session is not None and position is not None:

@@ -72,6 +72,7 @@ Multi-session workflow orchestration with automated verification.
 - `daf feature create` - Create feature orchestration
 - `daf feature list` - List features
 - `daf feature status` - Show feature details
+- `daf feature sync` - Add new children from parent (for tickets updated after creation)
 - `daf feature run` - Execute feature workflow
 - `daf feature resume` - Resume paused feature
 - `daf feature reorder` - Change session order
