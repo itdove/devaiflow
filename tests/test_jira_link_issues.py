@@ -116,8 +116,9 @@ def test_link_issues_blocks_outward(mock_jira_cli, monkeypatch):
 
     assert link_created
     assert link_payload["type"]["name"] == "Blocks"
-    assert link_payload["outwardIssue"]["key"] == "PROJ-12345"
-    assert link_payload["inwardIssue"]["key"] == "PROJ-5678"
+    # For outward relationship "blocks": inwardIssue=issue_key, outwardIssue=link_to_issue_key
+    assert link_payload["inwardIssue"]["key"] == "PROJ-12345"
+    assert link_payload["outwardIssue"]["key"] == "PROJ-5678"
 
 
 def test_link_issues_is_blocked_by_inward(mock_jira_cli, monkeypatch):
@@ -160,8 +161,9 @@ def test_link_issues_is_blocked_by_inward(mock_jira_cli, monkeypatch):
 
     assert link_created
     assert link_payload["type"]["name"] == "Blocks"
-    assert link_payload["inwardIssue"]["key"] == "PROJ-12345"
-    assert link_payload["outwardIssue"]["key"] == "PROJ-5678"
+    # For inward relationship "is blocked by": outwardIssue=issue_key, inwardIssue=link_to_issue_key
+    assert link_payload["outwardIssue"]["key"] == "PROJ-12345"
+    assert link_payload["inwardIssue"]["key"] == "PROJ-5678"
 
 
 def test_link_issues_case_insensitive(mock_jira_cli, monkeypatch):

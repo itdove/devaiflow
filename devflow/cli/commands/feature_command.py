@@ -6,6 +6,7 @@ integrated verification.
 
 import os
 import sys
+from datetime import datetime
 from typing import Optional
 
 import click
@@ -91,6 +92,159 @@ def _display_children_with_ownership(children, parent_key, current_user):
         console.print()
 
 
+def _ensure_feature_branch(project_path: str, feature_branch: str, base_branch: str) -> bool:
+    """Ensure feature branch exists in the project.
+
+    Creates the feature branch from base_branch if it doesn't exist.
+
+    Args:
+        project_path: Path to git repository
+        feature_branch: Feature branch name (e.g., "feature/demo1")
+        base_branch: Base branch to create from (e.g., "main")
+
+    Returns:
+        True if branch exists or was created successfully, False otherwise
+    """
+    from pathlib import Path
+
+    project_path = Path(project_path)
+
+    if not GitUtils.is_git_repository(project_path):
+        return False
+
+    # Check if feature branch already exists
+    existing_branches = GitUtils.list_local_branches(project_path)
+    if feature_branch in existing_branches:
+        return True
+
+    # Create feature branch from base_branch
+    console.print(f"[dim]Creating feature branch '{feature_branch}' from '{base_branch}' in {project_path.name}[/dim]")
+    success, error = GitUtils.create_branch(project_path, feature_branch, base_branch)
+
+    if not success:
+        console.print(f"[yellow]⚠[/yellow] Failed to create feature branch: {error}")
+        return False
+
+    console.print(f"[green]✓[/green] Created feature branch: {feature_branch}")
+    return True
+
+
+def _create_story_branch(project_path: str, story_branch: str, feature_branch: str) -> tuple[bool, str]:
+    """Create story-specific branch from feature branch with user choice.
+
+    Args:
+        project_path: Path to git repository
+        story_branch: Story branch name (e.g., "feature/demo1-aap-70184")
+        feature_branch: Feature branch to create from
+
+    Returns:
+        Tuple of (success: bool, branch_name: str)
+        - (True, branch_name) if branch was selected/created successfully
+        - (False, feature_branch) if failed, falls back to feature branch
+    """
+    from pathlib import Path
+    from rich.prompt import Prompt, Confirm
+
+    project_path = Path(project_path)
+
+    if not GitUtils.is_git_repository(project_path):
+        return (False, feature_branch)
+
+    # Get current branch and list of existing branches
+    current_branch = GitUtils.get_current_branch(project_path)
+    existing_branches = GitUtils.list_local_branches(project_path)
+    story_branch_exists = story_branch in existing_branches
+
+    # Prompt user for branch choice
+    console.print(f"\n[cyan]Story branch strategy for this session:[/cyan]")
+    console.print(f"  Current branch: [yellow]{current_branch}[/yellow]")
+    console.print(f"  Suggested story branch: [green]{story_branch}[/green] {'(exists)' if story_branch_exists else '(new)'}")
+    console.print(f"  Feature branch: [blue]{feature_branch}[/blue]")
+
+    choices = []
+    if story_branch_exists:
+        choices.append("1. Use existing story branch")
+        default_choice = "1"
+    else:
+        choices.append("1. Create new story branch")
+        default_choice = "1"
+
+    choices.append("2. Use current branch")
+    choices.append("3. Use feature branch (no story branch)")
+    choices.append("4. Select different existing branch")
+
+    console.print("\nOptions:")
+    for choice in choices:
+        console.print(f"  {choice}")
+
+    choice = Prompt.ask(
+        "\nSelect option",
+        choices=["1", "2", "3", "4"],
+        default=default_choice
+    )
+
+    # Handle user choice
+    if choice == "1":
+        # Use or create story branch
+        if story_branch_exists:
+            # Checkout existing story branch
+            success, error = GitUtils.checkout_branch(project_path, story_branch)
+            if success:
+                console.print(f"[green]✓[/green] Checked out existing story branch: {story_branch}")
+                return (True, story_branch)
+            else:
+                console.print(f"[yellow]⚠[/yellow] Failed to checkout story branch: {error}")
+                return (False, feature_branch)
+        else:
+            # Create new story branch from feature branch
+            console.print(f"[dim]Creating story branch '{story_branch}' from '{feature_branch}'[/dim]")
+            success, error = GitUtils.create_branch(project_path, story_branch, feature_branch)
+            if not success:
+                console.print(f"[yellow]⚠[/yellow] Failed to create story branch: {error}")
+                return (False, feature_branch)
+
+            console.print(f"[green]✓[/green] Created and checked out story branch: {story_branch}")
+            return (True, story_branch)
+
+    elif choice == "2":
+        # Use current branch
+        console.print(f"[green]✓[/green] Using current branch: {current_branch}")
+        return (True, current_branch)
+
+    elif choice == "3":
+        # Use feature branch
+        success, error = GitUtils.checkout_branch(project_path, feature_branch)
+        if success:
+            console.print(f"[green]✓[/green] Using feature branch: {feature_branch}")
+            return (True, feature_branch)
+        else:
+            console.print(f"[yellow]⚠[/yellow] Failed to checkout feature branch: {error}")
+            return (False, feature_branch)
+
+    elif choice == "4":
+        # Select different existing branch
+        console.print("\nAvailable branches:")
+        for i, branch in enumerate(existing_branches, 1):
+            marker = " (current)" if branch == current_branch else ""
+            console.print(f"  {i}. {branch}{marker}")
+
+        branch_choice = Prompt.ask(
+            "\nSelect branch number",
+            choices=[str(i) for i in range(1, len(existing_branches) + 1)]
+        )
+        selected_branch = existing_branches[int(branch_choice) - 1]
+
+        success, error = GitUtils.checkout_branch(project_path, selected_branch)
+        if success:
+            console.print(f"[green]✓[/green] Checked out branch: {selected_branch}")
+            return (True, selected_branch)
+        else:
+            console.print(f"[yellow]⚠[/yellow] Failed to checkout branch: {error}")
+            return (False, feature_branch)
+
+    return (False, feature_branch)
+
+
 def require_experimental(f):
     """Decorator to check if experimental mode is enabled."""
     import functools
@@ -158,9 +312,9 @@ def feature():
 )
 @click.option(
     "--verify",
-    type=click.Choice(["auto", "manual", "skip"]),
-    default="auto",
-    help="Verification mode: auto (run checks), manual (user approval), skip (no verification)",
+    type=click.Choice(["auto", "auto-ai", "manual", "skip"]),
+    default="auto-ai",
+    help="Verification mode: auto (evidence-based), auto-ai (AI agent), manual (user approval), skip (no verification)",
 )
 @click.option(
     "--workspace",
@@ -415,6 +569,16 @@ def create(
                     for warning in warnings:
                         console.print(f"[yellow]Warning:[/yellow] {warning}")
 
+            # Resolve currentUser() for display purposes
+            resolved_assignee = None
+            if current_user_assignee:
+                if hasattr(issue_tracker_client, 'resolve_assignee_for_comparison'):
+                    resolved_assignee = issue_tracker_client.resolve_assignee_for_comparison(current_user_assignee)
+                    if resolved_assignee and resolved_assignee != current_user_assignee:
+                        console.print(f"[dim]Filtering by assignee: {resolved_assignee}[/dim]")
+                else:
+                    resolved_assignee = current_user_assignee
+
             # Separate children into "mine" (assigned to me) and "external" (assigned to others) FIRST
             # This allows us to display ownership in the table
             my_children = []
@@ -429,9 +593,12 @@ def create(
                 # Check if assigned to current user
                 is_mine = False
                 if current_user_assignee:
-                    # Normalize assignee comparison
-                    if child_assignee and current_user_assignee.lower() in child_assignee.lower():
-                        is_mine = True
+                    if hasattr(issue_tracker_client, 'is_assigned_to'):
+                        # Use JIRA client method for proper currentUser() handling
+                        is_mine = issue_tracker_client.is_assigned_to(child_assignee, current_user_assignee)
+                    elif child_assignee and resolved_assignee:
+                        # Fallback for non-JIRA backends
+                        is_mine = (resolved_assignee.lower() in child_assignee.lower())
 
                 # Store ownership in child for display
                 child['_ownership'] = 'yours' if is_mine else 'external'
@@ -756,9 +923,9 @@ def list(name: Optional[str], status: Optional[str], workspace: Optional[str]):
             table.add_column("Sessions", style="yellow")
 
             for feat in features:
-                completed = len(feat.get_completed_sessions())
+                complete = len(feat.get_complete_sessions())
                 total = len(feat.sessions)
-                progress = f"{completed}/{total}"
+                progress = f"{complete}/{total}"
 
                 # Status with color
                 status_color = {
@@ -798,15 +965,15 @@ def _display_feature_details(feature):
         console.print(f"[dim]Workspace:[/dim] {feature.workspace_name}")
 
     # Progress
-    completed = len(feature.get_completed_sessions())
+    complete = len(feature.get_complete_sessions())
     total = len(feature.sessions)
-    console.print(f"\n[bold]Progress:[/bold] {completed}/{total} sessions\n")
+    console.print(f"\n[bold]Progress:[/bold] {complete}/{total} sessions\n")
 
     # Completed sessions
-    completed_sessions = feature.get_completed_sessions()
-    if completed_sessions:
+    complete_sessions = feature.get_complete_sessions()
+    if complete_sessions:
         console.print("[green]Completed:[/green]")
-        for session_name in completed_sessions:
+        for session_name in complete_sessions:
             console.print(f"  ✓ {session_name}")
             if session_name in feature.verification_results:
                 result = feature.verification_results[session_name]
@@ -820,7 +987,7 @@ def _display_feature_details(feature):
             "pending": "○",
             "running": "⧗",
             "paused": "⏸",
-            "completed": "✓",
+            "complete": "✓",
             "failed": "✗",
         }.get(status, "?")
 
@@ -1108,8 +1275,12 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
             # Check if assigned to current user
             is_mine = False
             if current_user_assignee:
-                if child_assignee and current_user_assignee.lower() in child_assignee.lower():
-                    is_mine = True
+                if hasattr(issue_tracker_client, 'is_assigned_to'):
+                    # Use JIRA client method for proper currentUser() handling
+                    is_mine = issue_tracker_client.is_assigned_to(child_assignee, current_user_assignee)
+                elif child_assignee:
+                    # Fallback for non-JIRA backends
+                    is_mine = (current_user_assignee.lower() in child_assignee.lower())
 
             if is_mine and meets_criteria:
                 # Mine and not already in feature.sessions
@@ -1368,7 +1539,7 @@ def run(name: str, auto_advance: bool):
             symbol = {
                 "pending": "○",
                 "running": "⧗",
-                "completed": "✓",
+                "complete": "✓",
                 "paused": "⏸",
                 "failed": "✗",
             }.get(status, "?")
@@ -1384,7 +1555,7 @@ def run(name: str, auto_advance: bool):
             open_session(identifier=current, skip_feature_warning=True)
         else:
             # Check if blocked by external sessions
-            pending_sessions = [s for s in feature.sessions if feature.session_statuses.get(s) != "completed"]
+            pending_sessions = [s for s in feature.sessions if feature.session_statuses.get(s) != "complete"]
             if pending_sessions:
                 console.print(f"\n[yellow]⚠ All remaining sessions are blocked by external dependencies[/yellow]")
                 console.print(f"\n[dim]Blocked sessions:[/dim]")
@@ -1441,7 +1612,7 @@ def resume(name: str):
         current_session = feature.get_first_unblocked_session()
         if not current_session:
             # Check if blocked by external sessions
-            pending_sessions = [s for s in feature.sessions if feature.session_statuses.get(s) != "completed"]
+            pending_sessions = [s for s in feature.sessions if feature.session_statuses.get(s) != "complete"]
             if pending_sessions:
                 console.print(f"[yellow]⚠ All remaining sessions are blocked by external dependencies[/yellow]")
                 console.print(f"\n[dim]Blocked sessions:[/dim]")
@@ -1486,7 +1657,7 @@ def resume(name: str):
                 console.print(f"\n[green]✓ Verification passed![/green]")
 
                 # Update session status
-                feature.session_statuses[current_session] = "completed"
+                feature.session_statuses[current_session] = "complete"
 
                 # Move to next session or mark complete
                 if not feature.advance_to_next_session():
@@ -1525,9 +1696,9 @@ def resume(name: str):
                 from devflow.cli.commands.open_command import open_session
                 open_session(identifier=current_session, skip_feature_warning=True)
 
-        elif session_status == "completed":
-            # Session already completed - advance to next
-            console.print(f"[green]Session already completed[/green] - Advancing to next...\n")
+        elif session_status == "complete":
+            # Session already complete - advance to next
+            console.print(f"[green]Session already complete[/green] - Advancing to next...\n")
 
             if not feature.advance_to_next_session():
                 console.print(f"[green]All sessions complete![/green]")
@@ -1548,14 +1719,16 @@ def resume(name: str):
 
         else:
             # Session is pending or running - just open it
-            console.print(f"[cyan]Opening session:[/bold] {current_session}")
+            console.print(f"[cyan]Opening session:[/cyan] {current_session}")
             feature.status = "running"
             feature_manager.update_feature(feature)
             from devflow.cli.commands.open_command import open_session
             open_session(identifier=current_session, skip_feature_warning=True)
 
     except Exception as e:
-        console.print(f"[red]Error:[/red] {str(e)}")
+        # Escape markup in error message to prevent Rich rendering issues
+        from rich.markup import escape
+        console.print(f"[red]Error:[/red] {escape(str(e))}")
         sys.exit(1)
 
 
@@ -1619,7 +1792,7 @@ def complete(name: str):
         console.print(f"1. Create PR manually:")
         console.print(f"   [cyan]gh pr create --base {feature.base_branch} --head {feature.branch}[/cyan]")
         console.print(f"\n2. Include in PR description:")
-        console.print(f"   • All {len(feature.sessions)} sessions completed")
+        console.print(f"   • All {len(feature.sessions)} sessions complete")
         console.print(f"   • {verified_criteria}/{total_criteria} acceptance criteria verified")
 
         if feature.linked_issues:
@@ -1633,6 +1806,21 @@ def complete(name: str):
         feature_manager.update_feature(feature)
 
         console.print(f"   [green]✓ Feature marked as complete[/green]")
+
+        # Transition parent epic if exists
+        if feature.parent_issue_key:
+            config = config_loader.load_config()
+
+            # Only transition if JIRA is configured
+            if config and config.jira:
+                console.print(f"\n4. Transition parent epic:")
+                console.print(f"   Parent: {feature.parent_issue_key}")
+
+                from devflow.jira.transitions import transition_issue_interactive
+                transition_issue_interactive(
+                    issue_key=feature.parent_issue_key,
+                    config=config
+                )
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -1700,7 +1888,7 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
             symbol = {
                 "pending": "○",
                 "running": "⧗",
-                "completed": "✓",
+                "complete": "✓",
                 "paused": "⏸",
                 "failed": "✗",
             }.get(status, "?")
@@ -1766,7 +1954,7 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
                 symbol = {
                     "pending": "○",
                     "running": "⧗",
-                    "completed": "✓",
+                    "complete": "✓",
                     "paused": "⏸",
                     "failed": "✗",
                 }.get(status, "?")
@@ -1817,7 +2005,7 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
                 symbol = {
                     "pending": "○",
                     "running": "⧗",
-                    "completed": "✓",
+                    "complete": "✓",
                     "paused": "⏸",
                     "failed": "✗",
                 }.get(status, "?")
@@ -1890,7 +2078,7 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
                     symbol = {
                         "pending": "○",
                         "running": "⧗",
-                        "completed": "✓",
+                        "complete": "✓",
                         "paused": "⏸",
                         "failed": "✗",
                     }.get(status, "?")
@@ -1936,7 +2124,7 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
                     symbol = {
                         "pending": "○",
                         "running": "⧗",
-                        "completed": "✓",
+                        "complete": "✓",
                         "paused": "⏸",
                         "failed": "✗",
                     }.get(status, "?")

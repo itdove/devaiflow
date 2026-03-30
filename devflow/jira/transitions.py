@@ -232,6 +232,98 @@ def transition_on_complete(
         return True  # Don't block completion on JIRA failure
 
 
+def transition_issue_interactive(
+    issue_key: str,
+    config: Config,
+    jira_client: Optional[JiraClient] = None,
+    current_status: Optional[str] = None
+) -> bool:
+    """Interactively transition a JIRA issue to a new status.
+
+    Fetches available transitions from JIRA API and prompts user to select.
+    This is a generic version that works with any issue key, not just sessions.
+
+    Args:
+        issue_key: JIRA issue key to transition
+        config: Configuration object
+        jira_client: Optional JiraClient instance (creates new if not provided)
+        current_status: Optional current status (for display only)
+
+    Returns:
+        True if transition succeeded (or was skipped), False if failed
+    """
+    # Create JIRA client if needed
+    if jira_client is None:
+        jira_client = JiraClient()
+
+    # Fetch available transitions from JIRA API
+    try:
+        response = jira_client._api_request(
+            "GET",
+            f"/rest/api/2/issue/{issue_key}/transitions"
+        )
+
+        if response.status_code != 200:
+            console.print(
+                f"[yellow]⚠[/yellow] Could not fetch transitions from JIRA (HTTP {response.status_code})"
+            )
+            console.print("[dim]JIRA transition skipped[/dim]")
+            return True  # Don't block on API error
+
+        transitions = response.json().get("transitions", [])
+
+        if not transitions:
+            console.print("[yellow]⚠[/yellow] No transitions available for this issue")
+            console.print("[dim]JIRA transition skipped[/dim]")
+            return True
+
+        # Extract transition names
+        options = [t.get("to", {}).get("name", "") for t in transitions if t.get("to", {}).get("name")]
+
+    except Exception as e:
+        console.print(f"[yellow]⚠[/yellow] Failed to fetch transitions from JIRA: {e}")
+        console.print("[dim]JIRA transition skipped[/dim]")
+        return True  # Don't block on API error
+
+    # Show options
+    console.print(f"\n[bold]Transition JIRA issue {issue_key}?[/bold]")
+    if current_status:
+        console.print(f"Current status: {current_status}")
+    console.print()
+
+    # Add "Keep current status" option
+    options_with_skip = ["Skip (keep current status)"] + options
+
+    for i, option in enumerate(options_with_skip):
+        console.print(f"  {i + 1}. {option}")
+
+    console.print()
+    choice = Prompt.ask(
+        "Select target status",
+        choices=[str(i + 1) for i in range(len(options_with_skip))],
+        default="1",
+    )
+
+    choice_idx = int(choice) - 1
+
+    # If user chose "Skip", return success
+    if choice_idx == 0:
+        console.print("[dim]JIRA transition skipped[/dim]")
+        return True
+
+    target_status = options[choice_idx - 1]  # -1 because we added "Skip" at index 0
+
+    # Perform transition
+    try:
+        jira_client.transition_ticket(issue_key, target_status)
+        console.print(f"[green]✓[/green] JIRA issue {issue_key} → {target_status}")
+        return True
+
+    except (JiraValidationError, JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError) as e:
+        console.print(f"[yellow]⚠[/yellow] Failed to transition JIRA issue: {e}")
+        return True  # Don't block on JIRA failure
+
+
 def _handle_transition_failure(issue_key: str, target_status: str, on_fail: str) -> None:
     """Handle JIRA transition failure according to config.
 

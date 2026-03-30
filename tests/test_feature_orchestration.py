@@ -173,7 +173,7 @@ class TestParentTicketDiscovery:
         assert "cycle" in warnings[0].lower()
 
     def test_filter_children_by_status(self):
-        """Test filtering children by status."""
+        """Test annotating children with sync criteria validation."""
         mock_client = Mock()
         discovery = ParentTicketDiscovery(mock_client)
 
@@ -187,12 +187,24 @@ class TestParentTicketDiscovery:
             "status": ["To Do", "New"],
         }
 
-        filtered = discovery._filter_children(children, sync_filters)
+        annotated = discovery._filter_children(children, sync_filters)
 
-        assert len(filtered) == 2
-        assert any(c["key"] == "TASK-1" for c in filtered)
-        assert any(c["key"] == "TASK-3" for c in filtered)
-        assert not any(c["key"] == "TASK-2" for c in filtered)
+        # All children are returned with annotations
+        assert len(annotated) == 3
+
+        # TASK-1 and TASK-3 meet criteria
+        task1 = next(c for c in annotated if c["key"] == "TASK-1")
+        assert task1["meets_criteria"] is True
+        assert task1["exclusion_reason"] is None
+
+        task3 = next(c for c in annotated if c["key"] == "TASK-3")
+        assert task3["meets_criteria"] is True
+        assert task3["exclusion_reason"] is None
+
+        # TASK-2 doesn't meet criteria
+        task2 = next(c for c in annotated if c["key"] == "TASK-2")
+        assert task2["meets_criteria"] is False
+        assert "status 'In Progress' not in" in task2["exclusion_reason"]
 
 
 class TestJiraIssueLinkParsing:
@@ -278,19 +290,19 @@ class TestFeatureOrchestrationModel:
 
         assert feature.get_current_session() == "s2"
 
-    def test_feature_get_completed_sessions(self):
-        """Test getting completed sessions."""
+    def test_feature_get_complete_sessions(self):
+        """Test getting complete sessions."""
         feature = FeatureOrchestration(
             name="test",
             branch="feature/test",
             sessions=["s1", "s2", "s3"],
-            session_statuses={"s1": "completed", "s2": "running", "s3": "pending"},
+            session_statuses={"s1": "complete", "s2": "running", "s3": "pending"},
         )
 
-        completed = feature.get_completed_sessions()
-        assert "s1" in completed
-        assert "s2" not in completed
-        assert "s3" not in completed
+        complete = feature.get_complete_sessions()
+        assert "s1" in complete
+        assert "s2" not in complete
+        assert "s3" not in complete
 
 
 class TestVerificationResult:

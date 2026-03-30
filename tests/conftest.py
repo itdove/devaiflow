@@ -123,6 +123,78 @@ def mock_jira_cli(monkeypatch):
 
 
 @pytest.fixture
+def jira_field_mappings():
+    """Provide minimal field_mappings for JIRA tests.
+
+    Returns field_mappings dict with essential system fields and common custom fields.
+    This matches the structure created by JiraFieldMapper and stored in jira.json.
+    """
+    return {
+        "status": {
+            "id": "status",
+            "name": "Status",
+            "type": "status",
+            "schema": "status",
+            "required_for": [],
+            "available_for": [],
+            "allowed_values": []
+        },
+        "assignee": {
+            "id": "assignee",
+            "name": "Assignee",
+            "type": "user",
+            "schema": "user",
+            "required_for": [],
+            "available_for": [],
+            "allowed_values": []
+        },
+        "issuetype": {
+            "id": "issuetype",
+            "name": "Issue Type",
+            "type": "issuetype",
+            "schema": "issuetype",
+            "required_for": [],
+            "available_for": [],
+            "allowed_values": []
+        },
+        "priority": {
+            "id": "priority",
+            "name": "Priority",
+            "type": "priority",
+            "schema": "priority",
+            "required_for": [],
+            "available_for": [],
+            "allowed_values": []
+        },
+        "summary": {
+            "id": "summary",
+            "name": "Summary",
+            "type": "string",
+            "schema": "string",
+            "required_for": [],
+            "available_for": [],
+            "allowed_values": []
+        },
+        "story_points": {
+            "id": "customfield_12310243",
+            "name": "Story Points",
+            "type": "number"
+        },
+        "sprint": {
+            "id": "customfield_12310940",
+            "name": "Sprint",
+            "type": "string",
+            "schema": "com.atlassian.greenhopper.service.sprint.Sprint"
+        },
+        "epic_link": {
+            "id": "customfield_12311140",
+            "name": "Epic Link",
+            "type": "string"
+        }
+    }
+
+
+@pytest.fixture
 def temp_daf_home(tmp_path, monkeypatch):
     """Create a temporary .daf-sessions directory for testing.
 
@@ -147,6 +219,51 @@ def temp_daf_home(tmp_path, monkeypatch):
         "url": "https://jira.test.com",
         "user": "test-user",
         "field_mappings": {
+            "status": {
+                "id": "status",
+                "name": "Status",
+                "type": "status",
+                "schema": "status",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "assignee": {
+                "id": "assignee",
+                "name": "Assignee",
+                "type": "user",
+                "schema": "user",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "issuetype": {
+                "id": "issuetype",
+                "name": "Issue Type",
+                "type": "issuetype",
+                "schema": "issuetype",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "priority": {
+                "id": "priority",
+                "name": "Priority",
+                "type": "priority",
+                "schema": "priority",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "summary": {
+                "id": "summary",
+                "name": "Summary",
+                "type": "string",
+                "schema": "string",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
             "story_points": {
                 "id": "customfield_12310243",
                 "name": "Story Points",
@@ -214,6 +331,51 @@ def temp_daf_home_no_patches(tmp_path, monkeypatch):
         "url": "https://jira.test.com",
         "user": "test-user",
         "field_mappings": {
+            "status": {
+                "id": "status",
+                "name": "Status",
+                "type": "status",
+                "schema": "status",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "assignee": {
+                "id": "assignee",
+                "name": "Assignee",
+                "type": "user",
+                "schema": "user",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "issuetype": {
+                "id": "issuetype",
+                "name": "Issue Type",
+                "type": "issuetype",
+                "schema": "issuetype",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "priority": {
+                "id": "priority",
+                "name": "Priority",
+                "type": "priority",
+                "schema": "priority",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "summary": {
+                "id": "summary",
+                "name": "Summary",
+                "type": "string",
+                "schema": "string",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
             "story_points": {
                 "id": "customfield_12310243",
                 "name": "Story Points",

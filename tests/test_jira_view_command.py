@@ -695,7 +695,7 @@ def test_get_child_issues_no_children(mock_jira_cli, temp_daf_home, monkeypatch)
     assert len(children) == 0
 
 
-def test_get_child_issues_without_epic_link_mapping(mock_jira_cli, temp_daf_home, monkeypatch):
+def test_get_child_issues_without_epic_link_mapping(mock_jira_cli, temp_daf_home, jira_field_mappings, monkeypatch):
     """Test fetching child issues when epic_link field mapping is not configured."""
     # Use DEVAIFLOW_HOME to point to temp directory
     monkeypatch.setenv("DEVAIFLOW_HOME", str(temp_daf_home))
@@ -717,7 +717,7 @@ def test_get_child_issues_without_epic_link_mapping(mock_jira_cli, temp_daf_home
     })
 
     client = JiraClient()
-    children = client.get_child_issues("PROJ-12345", field_mappings=None)
+    children = client.get_child_issues("PROJ-12345", field_mappings=jira_field_mappings)
 
     assert len(children) == 1
     assert children[0]["key"] == "PROJ-12346"

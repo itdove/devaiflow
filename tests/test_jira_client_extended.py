@@ -281,7 +281,7 @@ def test_attach_file_failure(mock_jira_cli):
         client.attach_file("PROJ-99999", "/tmp/test.tar.gz")
 
 
-def test_list_tickets_no_filters(mock_jira_cli):
+def test_list_tickets_no_filters(mock_jira_cli, jira_field_mappings):
     """Test listing issue tracker tickets without filters."""
     # Setup multiple tickets
     mock_jira_cli.set_ticket("PROJ-100", {
@@ -302,14 +302,14 @@ def test_list_tickets_no_filters(mock_jira_cli):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets()
+    tickets = client.list_tickets(field_mappings=jira_field_mappings)
 
     assert len(tickets) == 2
     assert any(t["key"] == "PROJ-100" for t in tickets)
     assert any(t["key"] == "PROJ-101" for t in tickets)
 
 
-def test_list_tickets_with_assignee_filter(mock_jira_cli):
+def test_list_tickets_with_assignee_filter(mock_jira_cli, jira_field_mappings):
     """Test listing issue tracker tickets filtered by assignee."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -322,13 +322,13 @@ def test_list_tickets_with_assignee_filter(mock_jira_cli):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets(assignee="currentUser()")
+    tickets = client.list_tickets(assignee="currentUser(, field_mappings=jira_field_mappings)")
 
     # List command should have been called with assignee filter
     assert len(tickets) >= 0  # May be empty depending on mock behavior
 
 
-def test_list_tickets_with_status_filter(mock_jira_cli):
+def test_list_tickets_with_status_filter(mock_jira_cli, jira_field_mappings):
     """Test listing issue tracker tickets filtered by status."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -340,13 +340,13 @@ def test_list_tickets_with_status_filter(mock_jira_cli):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets(status="In Progress")
+    tickets = client.list_tickets(status="In Progress", field_mappings=jira_field_mappings)
 
     # Verify list was called with status filter
     assert isinstance(tickets, list)
 
 
-def test_list_tickets_with_status_list_filter(mock_jira_cli):
+def test_list_tickets_with_status_list_filter(mock_jira_cli, jira_field_mappings):
     """Test listing issue tracker tickets filtered by multiple statuses."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -374,7 +374,7 @@ def test_list_tickets_with_status_list_filter(mock_jira_cli):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets(status_list=["New", "To Do", "In Progress"])
+    tickets = client.list_tickets(status_list=["New", "To Do", "In Progress"], field_mappings=jira_field_mappings)
 
     # Verify list was called with multiple status filters
     assert isinstance(tickets, list)
@@ -382,7 +382,7 @@ def test_list_tickets_with_status_list_filter(mock_jira_cli):
     assert len(tickets) == 3
 
 
-def test_list_tickets_status_list_takes_precedence(mock_jira_cli):
+def test_list_tickets_status_list_takes_precedence(mock_jira_cli, jira_field_mappings):
     """Test that status_list takes precedence over single status parameter."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -403,7 +403,7 @@ def test_list_tickets_status_list_takes_precedence(mock_jira_cli):
 
     client = JiraClient()
     # Pass both status and status_list - status_list should win
-    tickets = client.list_tickets(status="Done", status_list=["New", "In Progress"])
+    tickets = client.list_tickets(status="Done", status_list=["New", "In Progress"], field_mappings=jira_field_mappings)
 
     # Verify list was called and status_list took precedence
     assert isinstance(tickets, list)
@@ -411,7 +411,7 @@ def test_list_tickets_status_list_takes_precedence(mock_jira_cli):
     assert len(tickets) == 2
 
 
-def test_list_tickets_with_sprint_filter(mock_jira_cli):
+def test_list_tickets_with_sprint_filter(mock_jira_cli, jira_field_mappings):
     """Test listing issue tracker tickets filtered by sprint."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -424,13 +424,13 @@ def test_list_tickets_with_sprint_filter(mock_jira_cli):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets(sprint="Sprint 42")
+    tickets = client.list_tickets(sprint="Sprint 42", field_mappings=jira_field_mappings)
 
     # Verify list was called with sprint filter
     assert isinstance(tickets, list)
 
 
-def test_list_tickets_with_type_filter(mock_jira_cli):
+def test_list_tickets_with_type_filter(mock_jira_cli, jira_field_mappings):
     """Test listing issue tracker tickets filtered by type."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -442,13 +442,13 @@ def test_list_tickets_with_type_filter(mock_jira_cli):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets(ticket_type="Bug")
+    tickets = client.list_tickets(ticket_type="Bug", field_mappings=jira_field_mappings)
 
     # Verify list was called with type filter
     assert isinstance(tickets, list)
 
 
-def test_list_tickets_empty_sprint_filter(mock_jira_cli):
+def test_list_tickets_empty_sprint_filter(mock_jira_cli, jira_field_mappings):
     """Test that empty sprint filter is handled correctly."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -461,18 +461,18 @@ def test_list_tickets_empty_sprint_filter(mock_jira_cli):
 
     client = JiraClient()
     # Empty sprint filter should be ignored
-    tickets = client.list_tickets(sprint="")
+    tickets = client.list_tickets(sprint="", field_mappings=jira_field_mappings)
 
     assert isinstance(tickets, list)
 
 
-def test_list_tickets_command_failure(mock_jira_cli):
+def test_list_tickets_command_failure(mock_jira_cli, jira_field_mappings):
     """Test that list_tickets returns empty list on command failure."""
     # Force the next list command to fail
     mock_jira_cli.fail_next_command("issue list")
 
     client = JiraClient()
-    tickets = client.list_tickets()
+    tickets = client.list_tickets(field_mappings=jira_field_mappings)
 
     assert tickets == []
 
@@ -602,7 +602,7 @@ def test_transition_ticket_to_invalid_status(mock_jira_cli, capsys):
     assert "Invalid Status" in str(exc_info.value)
 
 
-def test_list_tickets_with_sprint_data(mock_jira_cli):
+def test_list_tickets_with_sprint_data(mock_jira_cli, jira_field_mappings):
     """Test that list_tickets correctly extracts sprint names from sprint strings."""
     # Create tickets with sprint data in JIRA's sprint string format
     mock_jira_cli.set_ticket("PROJ-100", {
@@ -833,7 +833,7 @@ def test_attach_file_upload_fails(mock_jira_cli, monkeypatch, capsys, tmp_path):
     assert "File too large" in exc_info.value.response_text
 
 
-def test_list_tickets_with_specific_assignee(mock_jira_cli):
+def test_list_tickets_with_specific_assignee(mock_jira_cli, jira_field_mappings):
     """Test listing tickets with a specific assignee name (not currentUser)."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -847,13 +847,13 @@ def test_list_tickets_with_specific_assignee(mock_jira_cli):
 
     client = JiraClient()
     # Use a specific assignee name instead of currentUser()
-    tickets = client.list_tickets(assignee="John Doe")
+    tickets = client.list_tickets(assignee="John Doe", field_mappings=jira_field_mappings)
 
     # Should return tickets
     assert isinstance(tickets, list)
 
 
-def test_list_tickets_with_empty_sprint_filter(mock_jira_cli):
+def test_list_tickets_with_empty_sprint_filter(mock_jira_cli, jira_field_mappings):
     """Test listing tickets with 'IS NOT EMPTY' sprint filter."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -869,7 +869,7 @@ def test_list_tickets_with_empty_sprint_filter(mock_jira_cli):
 
     client = JiraClient()
     # Use "IS NOT EMPTY" to match tickets with any sprint
-    tickets = client.list_tickets(sprint="IS NOT EMPTY")
+    tickets = client.list_tickets(sprint="IS NOT EMPTY", field_mappings=jira_field_mappings)
 
     # Should return tickets
     assert isinstance(tickets, list)
@@ -895,7 +895,7 @@ def test_get_ticket_with_invalid_story_points(mock_jira_cli):
     assert "points" not in ticket
 
 
-def test_list_tickets_with_invalid_story_points(mock_jira_cli):
+def test_list_tickets_with_invalid_story_points(mock_jira_cli, jira_field_mappings):
     """Test that list_tickets handles invalid story points gracefully."""
     mock_jira_cli.set_ticket("PROJ-100", {
         "key": "PROJ-100",
@@ -908,7 +908,7 @@ def test_list_tickets_with_invalid_story_points(mock_jira_cli):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets()
+    tickets = client.list_tickets(field_mappings=jira_field_mappings)
 
     assert len(tickets) >= 1
     ticket = next((t for t in tickets if t["key"] == "PROJ-100"), None)
@@ -940,7 +940,7 @@ def test_list_tickets_api_failure(monkeypatch, capsys):
 
     # Should raise JiraApiError on failure
     with pytest.raises(JiraApiError) as exc_info:
-        tickets = client.list_tickets()
+        tickets = client.list_tickets(field_mappings=jira_field_mappings)
 
     assert exc_info.value.status_code == 500
 
