@@ -20,24 +20,24 @@ from devflow.session.manager import SessionManager
 import json
 
 def restore_field_mappings(temp_daf_home):
-    """Restore field_mappings to jira.json after init command runs."""
+    """Restore field_mappings to jira.json after init command runs and enable JIRA backend."""
     import json
 
     # Use temp_daf_home directly to ensure correct path
     backends_dir = temp_daf_home / "backends"
     backends_dir.mkdir(exist_ok=True)
-    jira_config = backends_dir / "jira.json"
+    jira_config_path = backends_dir / "jira.json"
 
-    # Read current config
-    if jira_config.exists():
-        with open(jira_config, 'r') as f:
-            config = json.load(f)
+    # Read current jira config
+    if jira_config_path.exists():
+        with open(jira_config_path, 'r') as f:
+            jira_config = json.load(f)
     else:
-        config = {"url": "https://jira.test.com", "user": "test-user"}
+        jira_config = {"url": "https://jira.test.com", "user": "test-user", "project": "PROJ"}
 
     # Add field_mappings if not present
-    if "field_mappings" not in config or not config["field_mappings"]:
-        config["field_mappings"] = {
+    if "field_mappings" not in jira_config or not jira_config["field_mappings"]:
+        jira_config["field_mappings"] = {
             "status": {
                 "id": "status",
                 "name": "Status",
@@ -100,10 +100,22 @@ def restore_field_mappings(temp_daf_home):
                 "type": "string"
             }
         }
-        
-        # Write back
-        with open(jira_config, 'w') as f:
-            json.dump(config, f, indent=2)
+
+    # Write back jira config (always write, even if field_mappings existed)
+    with open(jira_config_path, 'w') as f:
+        json.dump(jira_config, f, indent=2)
+
+    # Also update main config.json to enable JIRA backend
+    main_config_path = temp_daf_home / "config.json"
+    if main_config_path.exists():
+        with open(main_config_path, 'r') as f:
+            main_config = json.load(f)
+
+        # Set issue tracker backend to jira
+        main_config["issue_tracker_backend"] = "jira"
+
+        with open(main_config_path, 'w') as f:
+            json.dump(main_config, f, indent=2)
 
 
 
