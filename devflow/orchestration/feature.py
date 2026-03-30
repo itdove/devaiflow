@@ -163,7 +163,7 @@ class FeatureManager:
                 'current_index': int,  # 0-based index of session in feature
                 'total_sessions': int,
                 'is_current': bool,  # True if this is the active session in the feature
-                'is_completed': bool,  # True if session already completed in feature
+                'is_complete': bool,  # True if session already completed in feature
                 'next_session': Optional[str],
                 'previous_session': Optional[str],
             }
@@ -181,9 +181,9 @@ class FeatureManager:
         current_session = feature.get_current_session()
         is_current = (current_session == session_name)
 
-        # Determine if session is completed
-        completed_sessions = feature.get_completed_sessions()
-        is_completed = (session_name in completed_sessions)
+        # Determine if session is complete
+        complete_sessions = feature.get_complete_sessions()
+        is_complete = (session_name in complete_sessions)
 
         # Get next/previous sessions
         next_session = None
@@ -195,12 +195,13 @@ class FeatureManager:
             previous_session = feature.sessions[session_index - 1]
 
         return {
+            'feature': feature,  # Add the feature object itself
             'feature_name': feature.name,
             'feature_status': feature.status,
             'current_index': session_index,
             'total_sessions': len(feature.sessions),
             'is_current': is_current,
-            'is_completed': is_completed,
+            'is_complete': is_complete,
             'next_session': next_session,
             'previous_session': previous_session,
         }
@@ -284,7 +285,16 @@ class FeatureManager:
             )
             return result
 
-        # Auto verification mode
+        # Auto-AI mode: Use configured AI agent to verify acceptance criteria
+        if feature.verification_mode == "auto-ai":
+            result = self._run_ai_verification(
+                feature=feature,
+                session_name=session_name,
+                project_path=project_path,
+            )
+            return result
+
+        # Auto verification mode (evidence-based)
         result = self._run_auto_verification(
             feature=feature,
             session_name=session_name,
@@ -314,6 +324,38 @@ class FeatureManager:
 
         return result
 
+    def _get_ticket_description(self, session) -> str:
+        """Get ticket description with proper formatting.
+
+        Re-fetches from JIRA to get original formatting (not ADF-converted).
+        Falls back to cached description if JIRA fetch fails.
+
+        Args:
+            session: Session object
+
+        Returns:
+            Ticket description with formatting preserved
+        """
+        # Try to fetch fresh description from JIRA with original formatting
+        if session and session.issue_key and session.issue_tracker == "jira":
+            try:
+                from devflow.jira.client import JiraClient
+
+                client = JiraClient()
+                # Use raw API to get description with JIRA Wiki markup preserved
+                response = client._api_request("GET", f"/rest/api/2/issue/{session.issue_key}?fields=description")
+                if response.status_code == 200:
+                    data = response.json()
+                    description = data.get('fields', {}).get('description')
+                    if description:
+                        return description
+            except Exception:
+                # Fall back to cached description if JIRA fetch fails
+                pass
+
+        # Fallback: use cached description from issue_metadata
+        return session.issue_metadata.get("description", "") if session else ""
+
     def _run_auto_verification(
         self,
         feature: FeatureOrchestration,
@@ -334,9 +376,9 @@ class FeatureManager:
 
         start_time = time.time()
 
-        # Get ticket description for acceptance criteria
+        # Get ticket description for acceptance criteria (re-fetch from JIRA for proper formatting)
         session = self.session_manager.get_session(session_name)
-        ticket_description = session.issue_metadata.get("description", "") if session else ""
+        ticket_description = self._get_ticket_description(session)
 
         # Initialize verification components
         criteria_checker = AcceptanceCriteriaChecker(project_path)
@@ -400,6 +442,154 @@ class FeatureManager:
 
         return result
 
+    def _run_ai_verification(
+        self,
+        feature: FeatureOrchestration,
+        session_name: str,
+        project_path: str,
+    ) -> VerificationResult:
+        """Run AI-powered verification using configured agent backend.
+
+        Spawns an AI agent (Claude, Copilot, etc.) to verify acceptance criteria.
+        The agent reads files, checks conditions, and reports results.
+
+        Args:
+            feature: Feature orchestration
+            session_name: Session name
+            project_path: Project directory path
+
+        Returns:
+            VerificationResult
+        """
+        import time
+        import uuid
+        from devflow.agent.factory import create_agent_client
+
+        start_time = time.time()
+
+        # Get ticket description for acceptance criteria (re-fetch from JIRA for proper formatting)
+        session = self.session_manager.get_session(session_name)
+        ticket_description = self._get_ticket_description(session)
+
+        # Parse acceptance criteria
+        criteria_checker = AcceptanceCriteriaChecker(project_path)
+        criteria = criteria_checker.parse_criteria_from_ticket(ticket_description)
+
+        if not criteria:
+            # No criteria to verify
+            return VerificationResult(
+                session_name=session_name,
+                status="passed",
+                duration_seconds=time.time() - start_time,
+                total_criteria=0,
+                verified_criteria=0,
+            )
+
+        # Build verification prompt for AI agent
+        prompt_parts = [
+            f"# Verification Task for {session.issue_key if session else session_name}",
+            "",
+            "Please verify the following acceptance criteria by executing the necessary checks:",
+            ""
+        ]
+
+        for i, criterion in enumerate(criteria, 1):
+            prompt_parts.append(f"{i}. [ ] {criterion}")
+
+        prompt_parts.extend([
+            "",
+            "Instructions:",
+            "- For each criterion, perform the actual verification (read files, check values, run commands, etc.)",
+            "- Mark each criterion as [x] when verified",
+            "- If a criterion cannot be verified, explain why",
+            "- Provide a summary of verification results at the end",
+            "",
+            f"Working directory: {project_path}",
+        ])
+
+        verification_prompt = "\n".join(prompt_parts)
+
+        # Get configured agent backend
+        config_loader = ConfigLoader()
+        config = config_loader.load_config()
+        agent_backend = "claude"  # Default
+        if config and hasattr(config, 'agent_backend'):
+            agent_backend = config.agent_backend
+
+        # Create agent client
+        agent = create_agent_client(agent_backend)
+
+        # Generate unique session ID for verification
+        verification_session_id = str(uuid.uuid4())
+
+        # Launch AI agent with verification prompt
+        try:
+            process = agent.launch_with_prompt(
+                project_path=project_path,
+                initial_prompt=verification_prompt,
+                session_id=verification_session_id,
+                config=config,
+            )
+
+            # Wait for agent to complete
+            # Note: This blocks until user exits the agent
+            process.wait()
+
+            # Parse agent's session to check verification results
+            # Look for checked boxes [x] in the conversation
+            session_file = agent.get_session_file_path(verification_session_id, project_path)
+
+            if session_file.exists():
+                # Count how many criteria were checked
+                content = session_file.read_text()
+                raw_count = content.count("[x]") + content.count("[X]")
+
+                # Cap verified count at total criteria (AI might write [x] multiple times)
+                verified_count = min(raw_count, len(criteria))
+
+                # Determine status
+                if verified_count >= len(criteria):
+                    status = "passed"
+                elif verified_count > 0:
+                    status = "gaps_found"
+                else:
+                    status = "failed"
+
+                duration = time.time() - start_time
+
+                return VerificationResult(
+                    session_name=session_name,
+                    status=status,
+                    duration_seconds=duration,
+                    total_criteria=len(criteria),
+                    verified_criteria=verified_count,
+                    unverified_criteria=[c for i, c in enumerate(criteria) if i >= verified_count],
+                )
+
+        except Exception as e:
+            # Agent launch failed
+            duration = time.time() - start_time
+            return VerificationResult(
+                session_name=session_name,
+                status="failed",
+                duration_seconds=duration,
+                total_criteria=len(criteria),
+                verified_criteria=0,
+                unverified_criteria=criteria,
+                suggestions=[f"AI verification failed: {str(e)}"],
+            )
+
+        # Fallback if session file not found
+        duration = time.time() - start_time
+        return VerificationResult(
+            session_name=session_name,
+            status="failed",
+            duration_seconds=duration,
+            total_criteria=len(criteria),
+            verified_criteria=0,
+            unverified_criteria=criteria,
+        )
+
     def _get_next_session(self, feature: FeatureOrchestration, current_session: str) -> Optional[str]:
         """Get the next session name after current_session.
 
@@ -429,15 +619,15 @@ class FeatureManager:
         sections.append(f"# Feature: {feature.name}\n")
         sections.append(f"**Status**: {feature.status}")
         sections.append(f"**Branch**: {feature.branch}")
-        completed_count = len(feature.get_completed_sessions())
+        completed_count = len(feature.get_complete_sessions())
         sections.append(f"**Progress**: {completed_count}/{len(feature.sessions)} sessions completed")
         sections.append(f"**Last Updated**: {feature.last_active.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
         # Completed sessions
-        completed_sessions = feature.get_completed_sessions()
-        if completed_sessions:
+        complete_sessions = feature.get_complete_sessions()
+        if complete_sessions:
             sections.append("## Completed Sessions\n")
-            for session_name in completed_sessions:
+            for session_name in complete_sessions:
                 sections.append(f"### ✓ {session_name}")
                 sections.append(f"- **Status**: complete")
 

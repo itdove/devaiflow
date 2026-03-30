@@ -576,27 +576,97 @@ def open_session(
         if not check_concurrent_session(session_manager, active_conv.project_path, session.name, selected_workspace_name, action="open"):
             return
 
-    # Feature orchestration: Use shared branch if session is part of a feature
-    # This ensures all sessions in a feature work on the same branch
-    if active_conv and active_conv.project_path:
+    # Feature orchestration: Create story-specific branch from feature branch
+    # Each story gets its own branch, all merge back to the feature branch
+    # MULTI-PROJECT: Ensure feature branch exists in ALL repos that are part of this session
+    if session.conversations:
         from devflow.orchestration.feature import FeatureManager
+        from devflow.cli.commands.feature_command import _ensure_feature_branch, _create_story_branch
 
         try:
             feature_manager = FeatureManager()
             feature_context = feature_manager.get_session_context(session.name)
 
             if feature_context:
-                feature_branch = feature_context['feature'].branch
-                feature_base_branch = feature_context['feature'].base_branch
+                feature = feature_context['feature']
+                feature_branch = feature.branch
+                feature_base_branch = feature.base_branch
 
-                # Set or update session's branch to use feature's shared branch
-                if active_conv.branch != feature_branch:
-                    console.print(f"[dim]🎯 Feature orchestration: using shared branch '{feature_branch}'[/dim]")
-                    active_conv.branch = feature_branch
-                    active_conv.base_branch = feature_base_branch
-                    session_manager.update_session(session)
-        except Exception:
+                # Generate story branch name: feature/demo1-aap-70185
+                story_branch = f"{feature_branch}-{session.issue_key.lower()}" if session.issue_key else f"{feature_branch}-{session.name}"
+
+                console.print(f"[dim]🎯 Feature orchestration: {feature.name}[/dim]")
+
+                # Multi-project support: Handle both patterns
+                # Pattern 1: Multi-conversation (separate conversations per repo)
+                # Pattern 2: Single multi-project conversation (one conversation, multiple projects)
+                for working_dir, conversation in session.conversations.items():
+                    conv_context = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+
+                    if not conv_context:
+                        continue
+
+                    # Pattern 2: Multi-project conversation (one conversation with multiple projects)
+                    if conv_context.is_multi_project and conv_context.projects:
+                        for repo_name, project_info in conv_context.projects.items():
+                            # Step 1: Ensure feature branch exists in this repo
+                            if not _ensure_feature_branch(project_info.project_path, feature_branch, feature_base_branch):
+                                console.print(f"[yellow]⚠[/yellow] Failed to ensure feature branch exists in {repo_name}")
+                                continue
+
+                            # Step 2: Create story branch from feature branch (with user choice)
+                            success, selected_branch = _create_story_branch(project_info.project_path, story_branch, feature_branch)
+                            if success:
+                                # Update project's branch to selected branch
+                                if project_info.branch != selected_branch:
+                                    project_info.branch = selected_branch
+                                    # Set base_branch based on selected branch
+                                    if selected_branch == feature_branch:
+                                        project_info.base_branch = feature_base_branch
+                                    else:
+                                        project_info.base_branch = feature_branch
+                                    session_manager.update_session(session)
+                                    console.print(f"[dim]Branch: {selected_branch} → {project_info.base_branch} ({repo_name})[/dim]")
+                            else:
+                                console.print(f"[yellow]⚠[/yellow] Failed to set up branch in {repo_name}, using feature branch")
+                                if project_info.branch != feature_branch:
+                                    project_info.branch = feature_branch
+                                    project_info.base_branch = feature_base_branch
+                                    session_manager.update_session(session)
+
+                    # Pattern 1: Single-project conversation
+                    elif conv_context.project_path:
+                        repo_name = working_dir or "main"
+
+                        # Step 1: Ensure feature branch exists in this repo
+                        if not _ensure_feature_branch(conv_context.project_path, feature_branch, feature_base_branch):
+                            console.print(f"[yellow]⚠[/yellow] Failed to ensure feature branch exists in {repo_name}")
+                            continue
+
+                        # Step 2: Create story branch from feature branch (only for active conversation, with user choice)
+                        if active_conv and conv_context.project_path == active_conv.project_path:
+                            success, selected_branch = _create_story_branch(conv_context.project_path, story_branch, feature_branch)
+                            if success:
+                                # Set session's branch to selected branch
+                                if conv_context.branch != selected_branch:
+                                    conv_context.branch = selected_branch
+                                    # Set base_branch based on selected branch
+                                    if selected_branch == feature_branch:
+                                        conv_context.base_branch = feature_base_branch
+                                    else:
+                                        conv_context.base_branch = feature_branch
+                                    session_manager.update_session(session)
+                                    console.print(f"[dim]Branch: {selected_branch} → {conv_context.base_branch} ({repo_name})[/dim]")
+                            else:
+                                console.print(f"[yellow]⚠[/yellow] Failed to set up branch in {repo_name}, using feature branch")
+                                if conv_context.branch != feature_branch:
+                                    conv_context.branch = feature_branch
+                                    conv_context.base_branch = feature_base_branch
+                                    session_manager.update_session(session)
+
+        except Exception as e:
             # Silently skip if feature lookup fails
+            console.print(f"[yellow]⚠[/yellow] Feature orchestration error: {e}")
             pass
 
     # Handle missing branch (can happen with synced sessions on first launch)

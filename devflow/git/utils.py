@@ -612,6 +612,46 @@ class GitUtils:
             return False
 
     @staticmethod
+    def has_commits_ahead(path: Path, source_branch: str, target_branch: str) -> bool:
+        """Check if source branch has commits not in target branch.
+
+        This is used to determine if a PR would have content (commits to merge).
+        For example, to check if a story branch has commits to merge into feature branch.
+
+        Args:
+            path: Repository path
+            source_branch: Branch to check for new commits (e.g., story branch)
+            target_branch: Branch to compare against (e.g., feature branch)
+
+        Returns:
+            True if source_branch has commits not in target_branch, False otherwise
+
+        Examples:
+            # Check if story branch has commits to merge into feature branch
+            has_commits = GitUtils.has_commits_ahead(
+                path,
+                "feature/demo1-aap-70184",  # source
+                "feature/demo1"              # target
+            )
+        """
+        try:
+            # Use git log to check commits in source_branch not in target_branch
+            # Format: git log target_branch..source_branch
+            result = subprocess.run(
+                ["git", "log", f"{target_branch}..{source_branch}", "--oneline"],
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                # Output is non-empty if there are commits in source not in target
+                return bool(result.stdout.strip())
+            return False
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    @staticmethod
     def push_branch(path: Path, branch_name: str, set_upstream: bool = True) -> tuple[bool, Optional[str]]:
         """Push a branch to remote.
 

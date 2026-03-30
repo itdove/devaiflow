@@ -1541,7 +1541,7 @@ class FeatureOrchestration(BaseModel):
     completed: Optional[datetime] = None
 
     # Session status tracking
-    session_statuses: Dict[str, str] = Field(default_factory=dict)  # session_name → "pending", "running", "completed", "failed"
+    session_statuses: Dict[str, str] = Field(default_factory=dict)  # session_name → "pending", "running", "complete", "failed"
     verification_results: Dict[str, VerificationResult] = Field(default_factory=dict)  # session_name → VerificationResult
 
     # Issue tracker integration
@@ -1573,16 +1573,16 @@ class FeatureOrchestration(BaseModel):
             return self.sessions[self.current_session_index]
         return None
 
-    def get_completed_sessions(self) -> List[str]:
-        """Get list of completed session names.
+    def get_complete_sessions(self) -> List[str]:
+        """Get list of complete session names.
 
         Returns:
-            List of session names with "completed" status
+            List of session names with "complete" status
         """
         return [
             session_name
             for session_name, status in self.session_statuses.items()
-            if status == "completed"
+            if status == "complete"
         ]
 
     def get_pending_sessions(self) -> List[str]:
@@ -1647,14 +1647,14 @@ class FeatureOrchestration(BaseModel):
             # Check if blocker is in our sessions
             if blocker in self.sessions:
                 status = self.session_statuses.get(blocker, "pending")
-                if status != "completed":
+                if status != "complete":
                     return True
 
             # Check if blocker is in external sessions
             for ext_session in self.external_sessions:
                 if ext_session.get("key") == blocker:
                     ext_status = ext_session.get("status", "")
-                    # Consider done/closed as completed
+                    # Consider done/closed as complete
                     if ext_status.lower() not in ["done", "closed", "resolved"]:
                         return True
 
@@ -1673,8 +1673,8 @@ class FeatureOrchestration(BaseModel):
             Session key or None if no unblocked sessions
         """
         for session_key in self.sessions:
-            # Skip if already completed
-            if self.session_statuses.get(session_key) == "completed":
+            # Skip if already complete
+            if self.session_statuses.get(session_key) == "complete":
                 continue
 
             # Check if blocked by incomplete stories (own or external)
@@ -1684,13 +1684,13 @@ class FeatureOrchestration(BaseModel):
         return None
 
     def is_complete(self) -> bool:
-        """Check if all sessions in the feature are completed.
+        """Check if all sessions in the feature are complete.
 
         Returns:
-            True if all sessions have "completed" status
+            True if all sessions have "complete" status
         """
         return all(
-            self.session_statuses.get(session_name) == "completed"
+            self.session_statuses.get(session_name) == "complete"
             for session_name in self.sessions
         )
 

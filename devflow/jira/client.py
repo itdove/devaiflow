@@ -255,6 +255,100 @@ class JiraClient(IssueTrackerClient):
 
         return field_id
 
+    def _transform_field_value(self, field_value, field_info: Dict):
+        """Apply type-based transformations to a JIRA field value.
+
+        Converts JIRA API field values to simple Python types suitable for display and comparison.
+
+        Args:
+            field_value: Raw field value from JIRA API
+            field_info: Field metadata from field_mappings (type, schema, etc)
+
+        Returns:
+            Transformed field value (string, int, or original value)
+
+        Transformations:
+            - User fields: Extract displayName from dict
+            - Object fields (status, issuetype, priority): Extract name from dict
+            - Number fields: Convert to int
+            - Sprint fields: Parse Greenhopper format to extract sprint name
+            - ADF fields: Convert Atlassian Document Format to plain text
+        """
+        if field_value is None:
+            return None
+
+        field_type = field_info.get("type", "string")
+        field_schema = field_info.get("schema", "")
+
+        # ADF (Atlassian Document Format) - JIRA Cloud rich text format
+        # Detect by type=string but value is dict with "type" and "content" keys
+        if field_type == "string" and isinstance(field_value, dict) and "type" in field_value:
+            return self._convert_adf_to_text(field_value)
+
+        # User fields (assignee, reporter, etc.) - extract displayName
+        if field_type == "user" and isinstance(field_value, dict):
+            return field_value.get("displayName")
+
+        # Object fields (status, issuetype, priority, etc.) - extract name
+        elif field_type in ("status", "issuetype", "priority", "securitylevel") and isinstance(field_value, dict):
+            return field_value.get("name")
+
+        # Number fields - convert to int
+        elif field_type == "number":
+            try:
+                return int(field_value)
+            except (ValueError, TypeError):
+                return field_value
+
+        # Sprint fields - parse Greenhopper format
+        # Detect by schema containing "sprint" keyword
+        elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
+            sprint_str = field_value[0]
+            if isinstance(sprint_str, str) and "name=" in sprint_str:
+                # Extract name from Greenhopper sprint string format
+                # Format: "com.atlassian.greenhopper.service.sprint.Sprint@...[id=123,name=Sprint 1,...]"
+                name_start = sprint_str.find("name=") + 5
+                name_end = sprint_str.find(",", name_start)
+                if name_end == -1:
+                    name_end = sprint_str.find("]", name_start)
+                return sprint_str[name_start:name_end]
+
+        return field_value
+
+    def _convert_adf_to_text(self, adf_content: dict) -> str:
+        """Convert Atlassian Document Format (ADF) to plain text.
+
+        JIRA Cloud uses ADF (JSON structure) for rich text fields like description.
+        This method recursively extracts all text content from the ADF structure.
+
+        Args:
+            adf_content: ADF dictionary structure from JIRA API
+
+        Returns:
+            Plain text extracted from ADF, empty string if no text found
+        """
+        if not isinstance(adf_content, dict):
+            return str(adf_content) if adf_content else ""
+
+        text_parts = []
+
+        def extract_text(node):
+            """Recursively extract text from ADF nodes."""
+            if isinstance(node, dict):
+                # Text node - contains actual text content
+                if node.get("type") == "text":
+                    text_parts.append(node.get("text", ""))
+                # Nodes with nested content
+                elif "content" in node:
+                    for child in node["content"]:
+                        extract_text(child)
+            elif isinstance(node, list):
+                for item in node:
+                    extract_text(item)
+
+        extract_text(adf_content)
+        return " ".join(text_parts)
+
     def _search_api_request(self, jql: str, max_results: int, fields_list: list) -> requests.Response:
         """Make a JQL search API request with automatic v2/v3 detection.
 
@@ -485,28 +579,8 @@ class JiraClient(IssueTrackerClient):
                     if field_value is None:
                         continue
 
-                    # Apply type-based transformations
-                    field_type = field_info.get("type", "string")
-                    field_schema = field_info.get("schema", "")
-
-                    # Number fields - convert to int
-                    if field_type == "number":
-                        try:
-                            field_value = int(field_value)
-                        except (ValueError, TypeError):
-                            pass
-
-                    # Sprint fields - parse Greenhopper format
-                    # Detect by schema containing "sprint" keyword
-                    elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
-                        sprint_str = field_value[0]
-                        if isinstance(sprint_str, str) and "name=" in sprint_str:
-                            # Extract name from Greenhopper sprint string format
-                            name_start = sprint_str.find("name=") + 5
-                            name_end = sprint_str.find(",", name_start)
-                            if name_end == -1:
-                                name_end = sprint_str.find("]", name_start)
-                            field_value = sprint_str[name_start:name_end]
+                    # Apply type-based transformations using helper method
+                    field_value = self._transform_field_value(field_value, field_info)
 
                     # Store field value under its normalized name
                     ticket_data[field_name] = field_value
@@ -650,6 +724,122 @@ class JiraClient(IssueTrackerClient):
         except Exception as e:
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to fetch comments for {issue_key}: {e}")
+
+    def get_current_user(self) -> Dict:
+        """Get the currently authenticated user's information from JIRA.
+
+        Returns:
+            Dictionary with current user info containing:
+            - accountId: User's account ID
+            - displayName: User's display name
+            - emailAddress: User's email
+            - accountType: Type of account (e.g., "atlassian")
+
+        Raises:
+            JiraAuthError: If authentication fails
+            JiraApiError: If API request fails
+            JiraConnectionError: If connection fails
+        """
+        try:
+            response = self._api_request(
+                "GET",
+                "/rest/api/2/myself"
+            )
+
+            if response.status_code == 401 or response.status_code == 403:
+                self._raise_auth_error(
+                    "Authentication failed when getting current user info",
+                    response
+                )
+            elif response.status_code != 200:
+                raise JiraApiError(
+                    "Failed to get current user info",
+                    status_code=response.status_code,
+                    response_text=response.text
+                )
+
+            data = response.json()
+            return {
+                "accountId": data.get("accountId"),
+                "displayName": data.get("displayName"),
+                "emailAddress": data.get("emailAddress"),
+                "accountType": data.get("accountType"),
+            }
+
+        except (JiraAuthError, JiraApiError, JiraConnectionError):
+            # Re-raise JIRA-specific exceptions
+            raise
+        except Exception as e:
+            # Wrap unexpected errors
+            raise JiraApiError(f"Failed to get current user info: {e}")
+
+    def resolve_assignee_for_comparison(self, assignee_filter: Optional[str]) -> Optional[str]:
+        """Resolve assignee filter value to a comparable string.
+
+        For JIRA, 'currentUser()' needs to be resolved to the actual user's displayName
+        so we can compare against child issue assignee fields.
+
+        Args:
+            assignee_filter: Assignee filter value from sync_filters (e.g., "currentUser()", "username", None)
+
+        Returns:
+            Resolved displayName for comparison, or original value if not "currentUser()"
+            Returns None if assignee_filter is None
+
+        Example:
+            >>> client.resolve_assignee_for_comparison("currentUser()")
+            "Dominique Vernier"  # Actual user's displayName
+            >>> client.resolve_assignee_for_comparison("jdoe")
+            "jdoe"  # Pass through non-currentUser values
+        """
+        if not assignee_filter:
+            return None
+
+        if assignee_filter == "currentUser()":
+            try:
+                user_info = self.get_current_user()
+                return user_info.get("displayName")
+            except Exception:
+                # On error, return the original value
+                # Caller can decide whether to warn or fall back
+                return assignee_filter
+        else:
+            # Return as-is for explicit usernames
+            return assignee_filter
+
+    def is_assigned_to(self, child_assignee: Optional[str], assignee_filter: Optional[str]) -> bool:
+        """Check if a child issue is assigned to the filtered user.
+
+        Handles JIRA's 'currentUser()' resolution and provides consistent
+        comparison logic for assignee matching.
+
+        Args:
+            child_assignee: Assignee displayName from child issue (e.g., "Dominique Vernier" or None)
+            assignee_filter: Assignee filter from sync_filters (e.g., "currentUser()", "username", None)
+
+        Returns:
+            True if child is assigned to the filtered user, False otherwise
+            If assignee_filter is None, returns False (no filter = no match)
+
+        Example:
+            >>> client.is_assigned_to("Dominique Vernier", "currentUser()")
+            True  # If current user is Dominique Vernier
+            >>> client.is_assigned_to("John Doe", "currentUser()")
+            False  # If current user is Dominique Vernier
+        """
+        if not assignee_filter or not child_assignee:
+            return False
+
+        resolved_assignee = self.resolve_assignee_for_comparison(assignee_filter)
+        if not resolved_assignee:
+            return False
+
+        # For currentUser(), do exact match on displayName
+        if assignee_filter == "currentUser()":
+            return child_assignee == resolved_assignee
+        else:
+            # For explicit usernames, do substring match (backward compatible)
+            return resolved_assignee.lower() in child_assignee.lower()
 
     def transition_ticket(self, issue_key: str, status: str) -> None:
         """Transition a issue tracker ticket to a new status using REST API.
@@ -904,12 +1094,17 @@ class JiraClient(IssueTrackerClient):
             data = response.json()
             fields = data.get("fields", {})
 
+            # Convert ADF description to text if needed
+            description = fields.get("description")
+            if isinstance(description, dict):
+                description = self._convert_adf_to_text(description)
+
             ticket_data = {
                 "key": issue_key,
                 "type": fields.get("issuetype", {}).get("name"),
                 "status": fields.get("status", {}).get("name"),
                 "summary": fields.get("summary"),
-                "description": fields.get("description"),
+                "description": description,
                 "priority": fields.get("priority", {}).get("name") if fields.get("priority") else None,
                 "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
                 "reporter": fields.get("reporter", {}).get("displayName") if fields.get("reporter") else None,
@@ -926,28 +1121,8 @@ class JiraClient(IssueTrackerClient):
                     if field_value is None:
                         continue
 
-                    # Apply type-based transformations
-                    field_type = field_info.get("type", "string")
-                    field_schema = field_info.get("schema", "")
-
-                    # Number fields - convert to int
-                    if field_type == "number":
-                        try:
-                            field_value = int(field_value)
-                        except (ValueError, TypeError):
-                            pass
-
-                    # Sprint fields - parse Greenhopper format
-                    # Detect by schema containing "sprint" keyword
-                    elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
-                        sprint_str = field_value[0]
-                        if isinstance(sprint_str, str) and "name=" in sprint_str:
-                            # Extract name from Greenhopper sprint string format
-                            name_start = sprint_str.find("name=") + 5
-                            name_end = sprint_str.find(",", name_start)
-                            if name_end == -1:
-                                name_end = sprint_str.find("]", name_start)
-                            field_value = sprint_str[name_start:name_end]
+                    # Apply type-based transformations using helper method
+                    field_value = self._transform_field_value(field_value, field_info)
 
                     # Store field value under its normalized name
                     ticket_data[field_name] = field_value
@@ -1057,17 +1232,18 @@ class JiraClient(IssueTrackerClient):
             # Add ordering
             jql += " ORDER BY updated DESC"
 
-            # Build fields list dynamically - include ALL custom fields from field_mappings
+            # Build fields list from field_mappings config (includes both standard and custom fields)
             # Note: 'created' and 'updated' are returned at the root level of the issue object
             # (alongside 'key' and 'fields'), not inside the 'fields' object
-            fields_list_parts = ["created", "updated", "issuetype", "status", "summary", "assignee"]
+            if not field_mappings:
+                raise JiraApiError(
+                    "field_mappings required for list_tickets. "
+                    "Run 'daf config refresh-jira-fields' to populate field mappings cache."
+                )
 
-            # Add all custom field IDs from field_mappings
-            if field_mappings:
-                for field_info in field_mappings.values():
-                    field_id = field_info.get("id")
-                    if field_id:
-                        fields_list_parts.append(field_id)
+            # Use all fields from config - covers standard fields (status, issuetype, etc) and custom fields
+            fields_list_parts = ["created", "updated"]
+            fields_list_parts.extend([field_info.get("id") for field_info in field_mappings.values() if field_info.get("id")])
 
             # Make API request with automatic v2/v3 detection
             # (Cloud JIRA requires v3, self-hosted uses v2)
@@ -1117,28 +1293,8 @@ class JiraClient(IssueTrackerClient):
                         if field_value is None:
                             continue
 
-                        # Apply type-based transformations
-                        field_type = field_info.get("type", "string")
-                        field_schema = field_info.get("schema", "")
-
-                        # Number fields - convert to int
-                        if field_type == "number":
-                            try:
-                                field_value = int(field_value)
-                            except (ValueError, TypeError):
-                                pass
-
-                        # Sprint fields - parse Greenhopper format
-                        # Detect by schema containing "sprint" keyword
-                        elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
-                            sprint_str = field_value[0]
-                            if isinstance(sprint_str, str) and "name=" in sprint_str:
-                                # Extract name from Greenhopper sprint string format
-                                name_start = sprint_str.find("name=") + 5
-                                name_end = sprint_str.find(",", name_start)
-                                if name_end == -1:
-                                    name_end = sprint_str.find("]", name_start)
-                                field_value = sprint_str[name_start:name_end]
+                        # Apply type-based transformations using helper method
+                        field_value = self._transform_field_value(field_value, field_info)
 
                         # Store field value under its normalized name
                         ticket_data[field_name] = field_value
@@ -1313,10 +1469,15 @@ class JiraClient(IssueTrackerClient):
             # Add ordering by key
             jql += " ORDER BY key ASC"
 
-            # Build fields list - we need basic info plus issuelinks if requested
-            fields_list_parts = ["issuetype", "status", "summary", "assignee"]
-            if include_links:
-                fields_list_parts.append("issuelinks")
+            # Build fields list from field_mappings config (includes both standard and custom fields)
+            if not field_mappings:
+                raise JiraApiError(
+                    "field_mappings required for get_child_issues. "
+                    "Run 'daf config refresh-jira-fields' to populate field mappings cache."
+                )
+
+            # Use all fields from config - covers standard fields (status, issuetype, etc) and custom fields
+            fields_list_parts = [field_info.get("id") for field_info in field_mappings.values() if field_info.get("id")]
 
             # Make API request with automatic v2/v3 detection
             # (Cloud JIRA requires v3, self-hosted uses v2)
@@ -1353,6 +1514,24 @@ class JiraClient(IssueTrackerClient):
                     "summary": fields.get("summary"),
                     "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
                 }
+
+                # Extract custom fields from field_mappings (e.g., sprint, story_points)
+                # Uses same logic as get_ticket_detailed for consistency
+                if field_mappings:
+                    for field_name, field_info in field_mappings.items():
+                        field_id = field_info.get("id")
+                        if not field_id or field_id not in fields:
+                            continue
+
+                        field_value = fields[field_id]
+                        if field_value is None:
+                            continue
+
+                        # Apply type-based transformations using helper method
+                        field_value = self._transform_field_value(field_value, field_info)
+
+                        # Store field value under its normalized name from field_mappings
+                        child_data[field_name] = field_value
 
                 # Parse issue links if requested
                 if include_links:
@@ -1830,7 +2009,8 @@ class JiraClient(IssueTrackerClient):
             # Check if this field is available for the given issue type
             # Some fields like "versions" are only available for Bug, not Story/Task/Epic
             available_for = field_info.get("available_for", [])
-            if available_for and jira_issue_type not in available_for:
+            # '*' wildcard means available for all issue types
+            if available_for and "*" not in available_for and jira_issue_type not in available_for:
                 continue
 
             # Get field ID
@@ -1968,16 +2148,23 @@ class JiraClient(IssueTrackerClient):
             )
 
         # 3. Build payload with correct inward/outward placement
+        # NOTE: JIRA's API is counterintuitive:
+        # - For "A blocks B" (outward relationship): inwardIssue=A, outwardIssue=B
+        # - For "A is blocked by B" (inward relationship): outwardIssue=A, inwardIssue=B
         payload = {
             "type": {"name": link_type_name}
         }
 
         if is_outward:
-            payload["outwardIssue"] = {"key": issue_key}
-            payload["inwardIssue"] = {"key": link_to_issue_key}
-        else:
+            # Outward relationship (e.g., "blocks")
+            # issue_key performs the outward action on link_to_issue_key
             payload["inwardIssue"] = {"key": issue_key}
             payload["outwardIssue"] = {"key": link_to_issue_key}
+        else:
+            # Inward relationship (e.g., "is blocked by")
+            # issue_key receives the inward action from link_to_issue_key
+            payload["outwardIssue"] = {"key": issue_key}
+            payload["inwardIssue"] = {"key": link_to_issue_key}
 
         if comment:
             payload["comment"] = {"body": comment}

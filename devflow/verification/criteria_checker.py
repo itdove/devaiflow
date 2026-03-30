@@ -39,10 +39,12 @@ class AcceptanceCriteriaChecker:
         criteria = []
 
         # Common patterns for acceptance criteria sections
+        # Supports both Markdown (##) and JIRA Wiki markup (h3.)
         section_patterns = [
-            r"(?:^|\n)##?\s*Acceptance Criteria\s*\n(.*?)(?=\n##|\Z)",
-            r"(?:^|\n)##?\s*Success Criteria\s*\n(.*?)(?=\n##|\Z)",
-            r"(?:^|\n)##?\s*Definition of Done\s*\n(.*?)(?=\n##|\Z)",
+            r"(?:^|\n)(?:##?|h[1-3]\.)\s*\*?\s*Acceptance Criteria\s*\*?\s*\n(.*?)(?=\n(?:##?|h[1-3]\.|\Z))",
+            r"(?:^|\n)(?:##?|h[1-3]\.)\s*\*?\s*Success Criteria\s*\*?\s*\n(.*?)(?=\n(?:##?|h[1-3]\.|\Z))",
+            r"(?:^|\n)(?:##?|h[1-3]\.)\s*\*?\s*Definition of Done\s*\*?\s*\n(.*?)(?=\n(?:##?|h[1-3]\.|\Z))",
+            r"(?:^|\n)(?:##?|h[1-3]\.)\s*\*?\s*Requirements\s*\*?\s*\n(.*?)(?=\n(?:##?|h[1-3]\.|\Z))",
             r"<!--\s*ACCEPTANCE_CRITERIA_START\s*-->(.*?)<!--\s*ACCEPTANCE_CRITERIA_END\s*-->",
         ]
 

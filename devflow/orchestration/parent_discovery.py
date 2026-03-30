@@ -96,12 +96,28 @@ class ParentTicketDiscovery:
             parent: Parent ticket data
 
         Returns:
-            List of child ticket dictionaries
+            List of child ticket dictionaries (topologically sorted by dependencies)
         """
         try:
+            # Get field_mappings from config if available
+            field_mappings = None
+            try:
+                from devflow.config.loader import ConfigLoader
+                config_loader = ConfigLoader()
+                config = config_loader.load_config()
+                if config and hasattr(config, 'jira') and config.jira:
+                    field_mappings = config.jira.field_mappings
+            except Exception:
+                # If config loading fails, proceed without field_mappings
+                pass
+
             # Use JIRA-specific method
             if hasattr(self.client, 'get_child_issues'):
-                children = self.client.get_child_issues(parent_key)
+                children = self.client.get_child_issues(
+                    parent_key,
+                    field_mappings=field_mappings,
+                    include_links=True  # Include blocking relationships
+                )
             else:
                 # Fallback: try generic get_children
                 children = self.client.get_children(parent_key)
@@ -111,6 +127,10 @@ class ParentTicketDiscovery:
                 f"[dim]Please use --sessions flag to specify children manually[/dim]"
             )
             return []
+
+        # Topologically sort children by blocking relationships
+        if children:
+            children = self._topological_sort(children)
 
         return children
 
@@ -232,6 +252,72 @@ class ParentTicketDiscovery:
                 refs.append(f"#{number}")
 
         return refs
+
+    def _topological_sort(self, children: List[Dict]) -> List[Dict]:
+        """Sort children by dependency order using topological sort.
+
+        Uses Kahn's algorithm to order children based on "blocks"/"blocked_by" relationships.
+        Issues with no dependencies come first, followed by issues that depend on them.
+
+        Args:
+            children: List of child dictionaries with 'key', 'blocks', and 'blocked_by' fields
+
+        Returns:
+            List of children sorted in execution order (dependencies first)
+        """
+        # Build dependency graph
+        # in_degree: count of unresolved dependencies (how many issues block this one)
+        # graph: maps issue_key -> list of issues it blocks
+        in_degree = {}
+        graph = {}
+        key_to_child = {}
+
+        # Initialize structures
+        for child in children:
+            child_key = child.get('key')
+            key_to_child[child_key] = child
+            in_degree[child_key] = 0
+            graph[child_key] = []
+
+        # Build graph from blocking relationships
+        for child in children:
+            child_key = child.get('key')
+            blocked_by = child.get('blocked_by', [])
+
+            # Only count blockers that are in our children list (ignore external dependencies)
+            internal_blockers = [b for b in blocked_by if b in key_to_child]
+
+            in_degree[child_key] = len(internal_blockers)
+
+            # Add edges: blocker -> this issue
+            for blocker in internal_blockers:
+                graph[blocker].append(child_key)
+
+        # Kahn's algorithm: start with issues that have no dependencies
+        queue = [key for key in in_degree if in_degree[key] == 0]
+        sorted_keys = []
+
+        while queue:
+            # Sort queue to ensure deterministic ordering when multiple issues have no dependencies
+            queue.sort()
+
+            current = queue.pop(0)
+            sorted_keys.append(current)
+
+            # Decrease in-degree for all issues blocked by current
+            for blocked_issue in graph[current]:
+                in_degree[blocked_issue] -= 1
+                if in_degree[blocked_issue] == 0:
+                    queue.append(blocked_issue)
+
+        # Check for cycles
+        if len(sorted_keys) != len(children):
+            # Cycle detected - fall back to original order
+            console.print("[yellow]Warning:[/yellow] Circular dependency detected in issue links, using key order")
+            return children
+
+        # Return children in sorted order
+        return [key_to_child[key] for key in sorted_keys]
 
     def _filter_children(
         self,

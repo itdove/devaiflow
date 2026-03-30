@@ -144,9 +144,135 @@
           },
           "title": "Issue Types",
           "type": "array"
+        },
+        "filters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GitHubFiltersConfig"
+          },
+          "title": "Filters",
+          "type": "object"
         }
       },
       "title": "GitHubConfig",
+      "type": "object"
+    },
+    "GitHubFiltersConfig": {
+      "description": "Configuration for GitHub/GitLab issue filters.\n\nUsed for sync and feature orchestration to filter issues.",
+      "properties": {
+        "status": {
+          "default": [
+            "open"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Status",
+          "type": "array"
+        },
+        "assignee": {
+          "default": "@me",
+          "title": "Assignee",
+          "type": "string"
+        },
+        "required_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Fields",
+          "type": "array"
+        }
+      },
+      "title": "GitHubFiltersConfig",
+      "type": "object"
+    },
+    "GitLabConfig": {
+      "description": "GitLab integration configuration (merged view from backend/org/team configs).\n\nThis is the unified configuration model that combines data from:\n- GitLabBackendConfig (backends/gitlab.json)\n- OrganizationConfig (organization.json)\n- TeamConfig (team.json)\n\nLike GitHub, GitLab uses convention-based labels instead of custom fields.",
+      "properties": {
+        "api_url": {
+          "default": "https://gitlab.com/api/v4",
+          "title": "Api Url",
+          "type": "string"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository"
+        },
+        "default_labels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Default Labels",
+          "type": "array"
+        },
+        "auto_close_on_complete": {
+          "default": false,
+          "title": "Auto Close On Complete",
+          "type": "boolean"
+        },
+        "add_status_labels": {
+          "default": false,
+          "title": "Add Status Labels",
+          "type": "boolean"
+        },
+        "completion_label": {
+          "default": "status: in-review",
+          "title": "Completion Label",
+          "type": "string"
+        },
+        "label_conventions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label Conventions"
+        },
+        "issue_templates": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issue Templates"
+        },
+        "issue_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issue Types",
+          "type": "array"
+        },
+        "filters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GitHubFiltersConfig"
+          },
+          "title": "Filters",
+          "type": "object"
+        }
+      },
+      "title": "GitLabConfig",
       "type": "object"
     },
     "HttpClientConfig": {
@@ -1053,6 +1179,17 @@
       "anyOf": [
         {
           "$ref": "#/$defs/GitHubConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "gitlab": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GitLabConfig"
         },
         {
           "type": "null"
