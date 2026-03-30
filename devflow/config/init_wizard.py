@@ -105,19 +105,20 @@ def _show_next_steps(preset_type: str, config: "Config") -> None:
         console.print("     [cyan]daf config refresh-jira-fields[/cyan]\n")
         console.print("  4. Configure sync filters (optional but recommended):")
         console.print("     Edit [cyan]~/.devaiflow/organization.json[/cyan] to add required fields:")
-        console.print("     [dim]{")
-        console.print("       \"jira\": {")
-        console.print("         \"filters\": {")
-        console.print("           \"sync\": {")
-        console.print("             \"required_fields\": {")
-        console.print("               \"Story\": [\"sprint\", \"points\"],")
-        console.print("               \"Bug\": [\"severity\"],")
-        console.print("               \"Task\": [\"sprint\"]")
-        console.print("             }")
-        console.print("           }")
-        console.print("         }")
-        console.print("       }")
-        console.print("     }[/dim]\n")
+        console.print("""     [dim]{
+       "jira": {
+         "filters": {
+           "sync": {
+             "required_fields": {
+               "Story": ["sprint", "points"],
+               "Bug": ["severity"],
+               "Task": ["sprint"]
+             }
+           }
+         }
+       }
+     }[/dim]
+""")
         console.print("  5. Create your first ticket:")
         console.print("     [cyan]daf jira new story --parent PROJ-123 --goal \"Your feature\"[/cyan]\n")
         console.print("  6. Or sync current sprint:")

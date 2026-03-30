@@ -322,7 +322,7 @@ def test_list_tickets_with_assignee_filter(mock_jira_cli, jira_field_mappings):
     })
 
     client = JiraClient()
-    tickets = client.list_tickets(assignee="currentUser(, field_mappings=jira_field_mappings)")
+    tickets = client.list_tickets(assignee="currentUser()", field_mappings=jira_field_mappings)
 
     # List command should have been called with assignee filter
     assert len(tickets) >= 0  # May be empty depending on mock behavior
@@ -917,7 +917,7 @@ def test_list_tickets_with_invalid_story_points(mock_jira_cli, jira_field_mappin
     assert "points" not in ticket
 
 
-def test_list_tickets_api_failure(monkeypatch, capsys):
+def test_list_tickets_api_failure(monkeypatch, capsys, jira_field_mappings):
     """Test that list_tickets raises exception on API failure."""
     from unittest.mock import Mock
 

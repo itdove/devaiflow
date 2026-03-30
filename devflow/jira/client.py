@@ -590,7 +590,9 @@ class JiraClient(IssueTrackerClient):
                     if "epic" in field_name and "link" in field_name:
                         ticket_data["epic"] = field_value
                     elif "story" in field_name and "point" in field_name:
-                        ticket_data["points"] = field_value
+                        # Only set points alias if value is a valid number
+                        if isinstance(field_value, (int, float)):
+                            ticket_data["points"] = field_value
 
             return ticket_data
 
@@ -1132,7 +1134,9 @@ class JiraClient(IssueTrackerClient):
                     if "epic" in field_name and "link" in field_name:
                         ticket_data["epic"] = field_value
                     elif "story" in field_name and "point" in field_name:
-                        ticket_data["points"] = field_value
+                        # Only set points alias if value is a valid number
+                        if isinstance(field_value, (int, float)):
+                            ticket_data["points"] = field_value
 
             # Changelog (if requested)
             if include_changelog:
@@ -1304,7 +1308,9 @@ class JiraClient(IssueTrackerClient):
                         if "epic" in field_name and "link" in field_name:
                             ticket_data["epic"] = field_value
                         elif "story" in field_name and "point" in field_name:
-                            ticket_data["points"] = field_value
+                            # Only set points alias if value is a valid number
+                            if isinstance(field_value, (int, float)):
+                                ticket_data["points"] = field_value
 
                 tickets.append(ticket_data)
 

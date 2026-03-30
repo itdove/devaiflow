@@ -690,10 +690,14 @@ def test_init_github_preset(temp_daf_home, monkeypatch):
         # Preset selection: 1 (GitHub)
         # Workspace path
         # Default labels
+        # Assignee filter
+        # Required fields
         mock_prompt.side_effect = [
             "1",  # Choose GitHub preset
             "/test/workspace",  # Workspace path
             "backend,devaiflow",  # Default labels
+            "@me",  # Assignee filter
+            "assignee",  # Required fields
         ]
         # Auto-close on complete
         mock_confirm.side_effect = [True]
@@ -732,10 +736,14 @@ def test_init_gitlab_preset(temp_daf_home, monkeypatch):
         # Preset selection: 2 (GitLab)
         # Workspace path
         # Default labels (empty)
+        # Assignee filter
+        # Required fields
         mock_prompt.side_effect = [
             "2",  # Choose GitLab preset
             "/test/workspace",  # Workspace path
             "",  # Default labels (empty)
+            "@me",  # Assignee filter
+            "assignee",  # Required fields
         ]
         # Auto-close on complete
         mock_confirm.side_effect = [False]
@@ -753,9 +761,9 @@ def test_init_gitlab_preset(temp_daf_home, monkeypatch):
     loader = ConfigLoader()
     config = loader.load_config()
     assert config is not None
-    assert config.github is not None
-    assert config.github.default_labels == []
-    assert config.github.auto_close_on_complete is False
+    assert config.gitlab is not None
+    assert config.gitlab.default_labels == []
+    assert config.gitlab.auto_close_on_complete is False
 
 
 def test_init_jira_preset(temp_daf_home, monkeypatch):
