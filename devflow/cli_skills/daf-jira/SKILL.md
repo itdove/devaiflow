@@ -1,6 +1,6 @@
 ---
 name: daf-jira
-description: View JIRA ticket details for current session
+description: JIRA operations (view, create, update, comment) with Wiki markup syntax reference
 user-invocable: true
 argument-hint: "[TICKET-ID]"
 ---

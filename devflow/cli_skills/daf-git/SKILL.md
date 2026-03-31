@@ -1,6 +1,6 @@
 ---
 name: daf-git
-description: Manage GitHub/GitLab issues and sessions
+description: GitHub/GitLab issue operations (view, create, update, comment) with Markdown syntax reference
 user-invocable: true
 argument-hint: "[ISSUE-NUMBER|owner/repo#number]"
 ---
