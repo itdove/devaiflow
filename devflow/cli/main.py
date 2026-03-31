@@ -3732,6 +3732,10 @@ def purge_mock_data_cmd(ctx: click.Context, force: bool) -> None:
 from devflow.cli.commands.skills_command import assets
 cli.add_command(assets)
 
+# Add skills command (discovery and inspection of available skills)
+from devflow.cli.commands.skills_discovery_command import skills
+cli.add_command(skills)
+
 
 @cli.command()
 @click.option("--dry-run", is_flag=True, help="Show what would be upgraded without actually upgrading")

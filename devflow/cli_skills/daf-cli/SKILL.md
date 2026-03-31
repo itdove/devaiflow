@@ -43,6 +43,11 @@ user-invocable: false
 - View JIRA fields: `daf config show --fields`
 - Refresh fields: `daf config refresh-jira-fields`
 
+### Skills Discovery
+- List all available skills: `daf skills`
+- Inspect specific skill: `daf skills <skill-name>`
+- JSON output: `daf skills --json`
+
 ### Field Intelligence
 **See `daf-jira-fields` skill** for JIRA field mapping and validation rules.
 
