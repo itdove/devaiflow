@@ -774,8 +774,9 @@ class TestJiraNewMockMode:
         # Verify initial prompt contains ticket creation instructions
         initial_prompt = claude_session["messages"][0]["content"]
         assert "ANALYSIS-ONLY" in initial_prompt
-        # Issue type is now capitalized (Story instead of story)
-        assert "daf jira create Story" in initial_prompt
+        # Verify the prompt instructs to read skill files instead of providing template
+        assert "Read the daf-jira skill" in initial_prompt
+        assert "`daf jira create`" in initial_prompt
 
         # Verify assistant response mentions ticket creation
         assistant_response = claude_session["messages"][1]["content"]
