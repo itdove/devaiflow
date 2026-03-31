@@ -8,6 +8,8 @@
 
 **Skills Documentation**: The skills (CLI command documentation) are located in the **`devflow/cli_skills/`** directory in the repository.
 
+For comprehensive skills management documentation (discovery order, precedence rules, best practices), see **[docs/guides/skills-management.md](docs/guides/skills-management.md)**.
+
 **⚠️ CRITICAL - Common Mistake to Avoid:**
 - ✅ **CORRECT**: Update files in `devflow/cli_skills/daf-*/SKILL.md` (repository files that get committed)
 - ❌ **WRONG**: Do NOT update files in `~/.claude/skills/daf-*/SKILL.md` (user's local cache, will be overwritten)

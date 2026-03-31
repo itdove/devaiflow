@@ -161,8 +161,14 @@ class ClaudeAgent(AgentInterface):
         if skills_dirs is None:
             skills_dirs = self._discover_skills_dirs(project_path, workspace_path, config)
 
-        # Add all skills directories
-        for skills_dir in skills_dirs:
+        # Filter out skills that will be auto-loaded by Claude from cwd
+        # Claude Code auto-loads <cwd>/.claude/skills/ where cwd=project_path
+        # We don't want to add this via --add-dir as it would duplicate the loading
+        cwd_skills = Path(project_path).resolve() / ".claude" / "skills"
+        filtered_skills = [s for s in skills_dirs if Path(s).resolve() != cwd_skills]
+
+        # Add filtered skills directories
+        for skills_dir in filtered_skills:
             cmd.extend(["--add-dir", skills_dir])
 
         return subprocess.Popen(
@@ -452,11 +458,24 @@ class ClaudeAgent(AgentInterface):
     ) -> List[str]:
         """Discover skills directories in priority order.
 
-        Skills discovery order:
-        1. User-level: ~/.claude/skills/
-        2. Workspace-level: <workspace>/.claude/skills/
-        3. Hierarchical: $DEVAIFLOW_HOME/.claude/skills/
-        4. Project-level: <project>/.claude/skills/
+        Skills discovery order (load order):
+        1. User-level: ~/.claude/skills/ (generic skills)
+        2. Workspace-level: <workspace>/.claude/skills/ (workspace-specific tools)
+        3. Hierarchical: $DEVAIFLOW_HOME/.claude/skills/ (org-specific extensions)
+        4. Project-level: <project>/.claude/skills/ (project-specific skills)
+
+        Precedence rules (when same skill exists at multiple levels):
+        - Later-loaded skills can override/extend earlier ones
+        - Project > Hierarchical > Workspace > User
+        - Organization-specific skills (hierarchical) extend generic skills
+        - This is why generic skills are loaded first
+
+        Duplicate prevention:
+        - When cwd == project_path (single-project sessions), Claude Code
+          auto-loads <project>/.claude/skills/ from the current directory
+        - In this case, launch_with_prompt() filters out project-level skills
+          to prevent duplicate loading via --add-dir
+        - Multi-project sessions work correctly since cwd != project_path
 
         Args:
             project_path: Absolute path to project
@@ -464,7 +483,8 @@ class ClaudeAgent(AgentInterface):
             config: Configuration object (optional)
 
         Returns:
-            List of skill directory paths that exist
+            List of skill directory paths that exist (may include duplicates
+            that will be filtered by caller based on cwd)
         """
         skills_dirs = []
 
