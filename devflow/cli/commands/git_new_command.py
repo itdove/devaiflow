@@ -876,7 +876,7 @@ def _build_issue_creation_prompt(
         "Your task:",
         f"1. Analyze the codebase to understand how to implement: {goal}",
         "2. Read relevant files, search for patterns, understand the architecture",
-        f"3. Create a detailed GitHub/GitLab issue{' (' + issue_type + ')' if issue_type else ''} using the 'daf git create' command",
+        f"3. Create the GitHub/GitLab issue{' (' + issue_type + ')' if issue_type else ''} using 'daf git create' (this session uses GitHub/GitLab backend)",
         "4. Include detailed description and acceptance criteria based on your analysis",
         "",
     ])
