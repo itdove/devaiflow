@@ -265,11 +265,41 @@ def sync_jira(
 
     for ticket in tickets:
         issue_key = ticket["key"]
+        session_name = issue_key  # For JIRA, session name == issue key
+
+        # Check if session already exists with this name (regardless of type)
+        existing_by_name = session_manager.get_session(session_name)
 
         # Check if development session already exists (ignore ticket_creation sessions)
         # ticket_creation sessions are for creating issue tracker tickets, not for working on them
         all_sessions = session_manager.index.get_sessions(issue_key)
         existing = [s for s in all_sessions if s.session_type == "development"] if all_sessions else []
+
+        if existing_by_name and existing_by_name.session_type != "development":
+            # Session exists with non-development type
+            if existing_by_name.session_type == "ticket_creation":
+                # Convert ticket_creation session to development session
+                console_print(f"[cyan]↻[/cyan] Converting ticket_creation session to development: {issue_key}")
+                existing_by_name.session_type = "development"
+                existing_by_name.issue_tracker = "jira"
+                existing_by_name.issue_key = issue_key
+                existing_by_name.issue_updated = ticket.get("updated")
+                existing_by_name.issue_metadata = {k: v for k, v in ticket.items() if k not in ('key', 'updated') and v is not None}
+                session_manager.update_session(existing_by_name)
+                updated_count += 1
+
+                # Track for recap table
+                issue_summary = ticket.get("summary", issue_key)
+                synced_tickets.append({
+                    "session_name": issue_key,
+                    "title": issue_summary,
+                    "action": "UPDATED",
+                    "backend": "JIRA"
+                })
+            else:
+                # Other session types (investigation, etc.) - skip with message
+                console_print(f"[yellow]⚠[/yellow] Session '{session_name}' already exists with type '{existing_by_name.session_type}' (skipping)")
+            continue
 
         if not existing:
             # Create new session with concatenated goal format
@@ -547,9 +577,42 @@ def sync_github_repository(
             # Example: "github.enterprise.com/owner/repo#60" → "github-enterprise-com-itdove-devaiflow-60"
             session_name = issue_key_to_session_name(issue_key, hostname=hostname)
 
-            # Check if session already exists
+            # Check if session already exists with this name (regardless of type)
+            existing_by_name = session_manager.get_session(session_name)
+
+            # Check if development session already exists (for backward compatibility)
             all_sessions = session_manager.index.get_sessions(issue_key)
             existing = [s for s in all_sessions if s.session_type == "development"] if all_sessions else []
+
+            if existing_by_name and existing_by_name.session_type != "development":
+                # Session exists with non-development type
+                if existing_by_name.session_type == "ticket_creation":
+                    # Convert ticket_creation session to development session
+                    console_print(f"[cyan]  ↻[/cyan] Converting ticket_creation session to development: {session_name} ({issue_key})")
+                    existing_by_name.session_type = "development"
+                    existing_by_name.issue_tracker = "github"
+                    existing_by_name.issue_key = issue_key
+                    existing_by_name.issue_updated = ticket.get("updated")
+                    existing_by_name.issue_metadata = {
+                        k: v for k, v in ticket.items()
+                        if k not in ('key', 'updated') and v is not None
+                    }
+                    session_manager.update_session(existing_by_name)
+                    updated_count += 1
+
+                    # Track for recap table
+                    if synced_tickets is not None:
+                        issue_summary = ticket.get('summary', issue_key)
+                        synced_tickets.append({
+                            "session_name": session_name,
+                            "title": issue_summary,
+                            "action": "UPDATED",
+                            "backend": "GitHub"
+                        })
+                else:
+                    # Other session types (investigation, etc.) - skip with message
+                    console_print(f"[yellow]  ⚠[/yellow] Session '{session_name}' already exists with type '{existing_by_name.session_type}' (skipping)")
+                continue
 
             if not existing:
                 # Create new session
@@ -739,9 +802,42 @@ def sync_gitlab_repository(
             # Example: "gitlab.example.com/group/project#60" → "gitlab-example-com-group-project-60"
             session_name = issue_key_to_session_name(issue_key, hostname=hostname)
 
-            # Check if session already exists
+            # Check if session already exists with this name (regardless of type)
+            existing_by_name = session_manager.get_session(session_name)
+
+            # Check if development session already exists (for backward compatibility)
             all_sessions = session_manager.index.get_sessions(issue_key)
             existing = [s for s in all_sessions if s.session_type == "development"] if all_sessions else []
+
+            if existing_by_name and existing_by_name.session_type != "development":
+                # Session exists with non-development type
+                if existing_by_name.session_type == "ticket_creation":
+                    # Convert ticket_creation session to development session
+                    console_print(f"[cyan]  ↻[/cyan] Converting ticket_creation session to development: {session_name} ({issue_key})")
+                    existing_by_name.session_type = "development"
+                    existing_by_name.issue_tracker = "gitlab"
+                    existing_by_name.issue_key = issue_key
+                    existing_by_name.issue_updated = ticket.get("updated")
+                    existing_by_name.issue_metadata = {
+                        k: v for k, v in ticket.items()
+                        if k not in ('key', 'updated') and v is not None
+                    }
+                    session_manager.update_session(existing_by_name)
+                    updated_count += 1
+
+                    # Track for recap table
+                    if synced_tickets is not None:
+                        issue_summary = ticket.get('summary', issue_key)
+                        synced_tickets.append({
+                            "session_name": session_name,
+                            "title": issue_summary,
+                            "action": "UPDATED",
+                            "backend": "GitLab"
+                        })
+                else:
+                    # Other session types (investigation, etc.) - skip with message
+                    console_print(f"[yellow]  ⚠[/yellow] Session '{session_name}' already exists with type '{existing_by_name.session_type}' (skipping)")
+                continue
 
             if not existing:
                 # Create new session
@@ -910,8 +1006,43 @@ def sync_multi_backend(
                 jira_updated = 0
                 for ticket in filtered_tickets:
                     issue_key = ticket["key"]
+                    session_name = issue_key  # For JIRA, session name == issue key
+
+                    # Check if session already exists with this name (regardless of type)
+                    existing_by_name = session_manager.get_session(session_name)
+
+                    # Check if development session already exists (for backward compatibility)
                     all_sessions = session_manager.index.get_sessions(issue_key)
                     existing = [s for s in all_sessions if s.session_type == "development"] if all_sessions else []
+
+                    if existing_by_name and existing_by_name.session_type != "development":
+                        # Session exists with non-development type
+                        if existing_by_name.session_type == "ticket_creation":
+                            # Convert ticket_creation session to development session
+                            console_print(f"[cyan]↻[/cyan] Converting ticket_creation session to development: {issue_key}")
+                            existing_by_name.session_type = "development"
+                            existing_by_name.issue_tracker = "jira"
+                            existing_by_name.issue_key = issue_key
+                            existing_by_name.issue_updated = ticket.get("updated")
+                            existing_by_name.issue_metadata = {
+                                k: v for k, v in ticket.items()
+                                if k not in ('key', 'updated') and v is not None
+                            }
+                            session_manager.update_session(existing_by_name)
+                            jira_updated += 1
+
+                            # Track for recap table
+                            issue_summary = ticket.get("summary", issue_key)
+                            synced_tickets.append({
+                                "session_name": issue_key,
+                                "title": issue_summary,
+                                "action": "UPDATED",
+                                "backend": "JIRA"
+                            })
+                        else:
+                            # Other session types (investigation, etc.) - skip with message
+                            console_print(f"[yellow]⚠[/yellow] Session '{session_name}' already exists with type '{existing_by_name.session_type}' (skipping)")
+                        continue
 
                     if not existing:
                         issue_summary = ticket.get("summary", "")
