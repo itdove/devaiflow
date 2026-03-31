@@ -234,8 +234,44 @@ Missing required field 'team_field' for 'Story'
 4. **Never use customfield IDs:** Always use mapped names
 5. **Comma-separated arrays:** `--components a,b,c` not `--components a --components b`
 
+## MCP Integration
+
+If using MCP JIRA tools instead of daf commands, you'll need the field mapping data:
+
+**Get field mappings:**
+```bash
+daf config show --json | jq '.jira.field_mappings'
+```
+
+**Key data for MCP:**
+- **Field IDs**: Map friendly names to `customfield_*` IDs
+- **Field types**: Format values correctly (option, array, user, string, etc.)
+- **Required fields**: `required_for` indicates which fields are required per issue type
+- **Allowed values**: `allowed_values` lists valid options for select fields
+- **Availability**: `available_for` shows which issue types support each field
+
+**Example mapping:**
+```json
+{
+  "workstream": {
+    "id": "customfield_12345",
+    "type": "option",
+    "required_for": ["Story", "Task"],
+    "available_for": ["Story", "Task", "Epic"],
+    "allowed_values": ["Platform", "SaaS", "Services"]
+  }
+}
+```
+
+**For complete MCP integration guide**, see **daf-jira-mcp skill** which explains:
+- How to apply validation logic from field_mappings
+- How to map friendly names to JIRA field IDs
+- How to format values based on field type
+- How to apply defaults from configuration
+
 ## See Also
 
-- **daf-cli skill** - CLI command syntax
-- **Atlassian MCP** - Reading JIRA issues
+- **daf-jira skill** - daf commands for validated JIRA operations
+- **daf-jira-mcp skill** - Using MCP tools with daf intelligence
+- **daf-config skill** - View configuration and field mappings
 - **DAF_AGENTS.md** - JIRA templates and workflows
