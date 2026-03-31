@@ -5,6 +5,26 @@ user-invocable: true
 argument-hint: "[TICKET-ID]"
 ---
 
+## MCP Alternative Available
+
+**If you have a JIRA MCP server configured** (e.g., `mcp-atlassian`), you can use MCP tools directly for JIRA operations.
+
+**Quick comparison:**
+- **MCP Tools**: Direct API access, advanced operations, full JIRA capabilities
+- **daf Commands**: Validated operations, friendly field names, session integration, team defaults
+
+**For complete MCP integration guide**, see **daf-jira-mcp skill** which shows how to:
+- Apply DevAIFlow's validation logic with MCP tools
+- Use field mappings and defaults from `daf config show --json`
+- Map friendly field names to JIRA field IDs
+- Apply issue type templates
+
+**When to use each:**
+- ✅ **Use MCP** for: reading tickets, searching, exploring JIRA data
+- ✅ **Use daf** for: creating/updating with validation, session integration, applying team defaults
+
+---
+
 View the JIRA ticket associated with the current session in Claude-friendly format.
 
 ```bash
@@ -64,9 +84,16 @@ Acceptance Criteria:
 
 **Related commands:**
 ```bash
-daf jira create bug --summary "..."    # Create new JIRA bug
-daf jira create story --summary "..."  # Create new JIRA story
+daf jira create bug --summary "..."    # Create new JIRA bug (validated)
+daf jira create story --summary "..."  # Create new JIRA story (validated)
 daf jira update PROJ-12345 --priority Major  # Update ticket fields
+```
+
+**Alternative: Use MCP JIRA tools** (see **daf-jira-mcp skill** for validation logic):
+```python
+mcp__mcp-atlassian__jira_get_issue(issue_key="PROJ-12345")
+mcp__mcp-atlassian__jira_create_issue(...)
+mcp__mcp-atlassian__jira_update_issue(...)
 ```
 
 ## JIRA Wiki Markup
