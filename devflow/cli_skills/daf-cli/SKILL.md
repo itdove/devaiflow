@@ -1,108 +1,56 @@
 ---
 name: daf-cli
-description: Commands that work inside Claude Code sessions for JIRA integration, notes, and session management
+description: Quick reference and safety guide for daf commands in Claude Code sessions
 user-invocable: false
 ---
 
-# DAF CLI - Commands for Claude Code Sessions
+# DAF Quick Reference
 
-**IMPORTANT**: You are currently inside an active Claude Code session. This skill documents commands that are ALLOWED to run inside sessions.
+**IMPORTANT**: You are currently inside an active Claude Code session. This guide helps you navigate to the right skill documentation.
 
-Commands that work **inside Claude Code sessions**. For field intelligence, see **daf-jira-fields skill**.
+## Command Reference by Category
 
-## JIRA Commands
+### JIRA Operations
+**See `daf-jira` skill** for complete JIRA documentation:
+- View tickets: `daf jira view`
+- Create tickets: `daf jira create`
+- Update tickets: `daf jira update`
+- Add comments: `daf jira add-comment`
+- **CRITICAL**: JIRA uses Wiki markup syntax (see daf-jira skill)
 
-**Read JIRA:** Use Atlassian MCP `mcp__atlassian__getJiraIssue`
+### GitHub/GitLab Operations
+**See `daf-git` skill** for complete GitHub/GitLab documentation:
+- View issues: `daf git view`
+- Create issues: `daf git create`
+- Update issues: `daf git update`
+- Add comments: `daf git add-comment`
+- **CRITICAL**: GitHub/GitLab use Markdown syntax (see daf-git skill)
 
-**Create/Update:** Use daf CLI commands (see **daf-jira-fields skill** for field syntax)
+### Session Notes
+**See `daf-notes` skill** for viewing session notes:
+- Add note: `daf note "Progress update"`
+- View notes: `daf notes`
 
-```bash
-# View
-daf jira view PROJ-12345 [--history] [--comments] [--children]
+### Session Information
+- **`daf-active` skill**: Show currently active conversation
+- **`daf-info` skill**: Detailed session information
+- **`daf-status` skill**: Progress dashboard
+- **`daf-list` skill**: List all sessions
 
-# Create (see daf-jira-fields skill for field rules)
-daf jira create {bug|story|task|epic|spike} \
-  --summary "..." \
-  --parent PROJ-1234 \
-  --components backend \
-  --field custom_field=value
+### Configuration
+**See `daf-config` skill** for configuration commands:
+- View config: `daf config show`
+- View JIRA fields: `daf config show --fields`
+- Refresh fields: `daf config refresh-jira-fields`
 
-# Update
-daf jira update PROJ-12345 \
-  --priority Major \
-  --field custom_field=value
+### Field Intelligence
+**See `daf-jira-fields` skill** for JIRA field mapping and validation rules.
 
-# Comment
-daf jira add-comment PROJ-12345 "Comment text"
-```
+### Workflows
+**See `daf-workflow` skill** for development workflows and best practices.
 
-## Session Notes
-
-```bash
-daf note "Progress update"      # Add note (auto-detects session)
-daf notes                        # View notes
-```
-
-## Session Info
-
-```bash
-daf active                       # Show currently active conversation
-daf info [PROJ-12345|--latest]  # Session details
-daf list [--active]              # List sessions
-daf status                       # Status dashboard
-daf summary [PROJ-12345|--latest] # Session summary
-daf summary --detail             # Detailed summary with all files
-daf summary --ai-summary         # AI-powered summary
-daf time [PROJ-12345|--latest]  # Time tracking details
-```
-
-## Configuration
-
-```bash
-daf config show                  # Merged configuration
-daf config show --fields         # YOUR JIRA's custom fields
-daf config refresh-jira-fields   # Refresh from JIRA API
-daf config context list          # List context files
-```
-
-## Templates
-
-```bash
-daf template list                # List all templates
-daf template show <name>         # Show template details
-```
-
-## Workspaces
-
-```bash
-daf workspace list               # List all workspaces
-```
-
-## Git Integration (GitHub/GitLab Issues)
-
-DevAIFlow auto-detects GitHub vs GitLab from your git remote URLs.
-
-```bash
-# View issue details
-daf git view                     # Current session's issue
-daf git view 123                 # Specific issue
-daf git view owner/repo#123 --comments
-
-# Create new issue (standalone, without session)
-daf git create bug --summary "Fix timeout bug"
-daf git create enhancement --summary "Add caching" --parent "#123"
-
-# Update issue fields
-daf git update 123 --labels "priority: high,backend"
-daf git update 123 --assignee username
-
-# Add comment
-daf git add-comment 123 "Work in progress"
-```
-
-**Important:** Use `--summary` flag (NOT `--title`) when creating issues.
-
-**See also:** **daf-git skill** for complete GitHub/GitLab documentation and Markdown syntax.
+### Workspaces
+**See `daf-workspace` skill** for workspace management.
 
 ## Safety Warnings: Commands Blocked Inside Sessions
 
@@ -133,12 +81,6 @@ Running these commands inside Claude Code can cause:
 - Lost work from conflicting updates
 
 **If you need these commands:** Exit Claude Code and run them from a regular terminal.
-
-## Key Principles
-
-1. **Fields:** See **daf-jira-fields skill** for system vs custom field syntax
-2. **Discover:** Run `daf config show --fields` to see YOUR custom fields
-3. **Read JIRA:** Use Atlassian MCP for fast reads
 
 ## Skills Management
 
@@ -183,9 +125,10 @@ DevAIFlow automatically prevents duplicate loading:
 
 **For detailed information**, see the comprehensive Skills Management Guide in `docs/guides/skills-management.md`.
 
-## See Also
+## Critical Reminder
 
-- **daf-jira-fields skill** - Field mapping and validation rules
-- **Atlassian MCP** - Fast JIRA reads
-- **DAF_AGENTS.md** - Workflows and templates
-- **docs/guides/skills-management.md** - Comprehensive skills management guide
+**⚠️ Format Awareness**: When working with issue trackers, remember:
+- **JIRA** uses **Wiki markup** (`h3. Header`, `*bold*`, `{code}...{code}`)
+- **GitHub/GitLab** use **Markdown** (`### Header`, `**bold**`, ` ```code``` `)
+
+Using the wrong format will cause rendering issues. See the appropriate skill for syntax details.

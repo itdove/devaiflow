@@ -1,6 +1,6 @@
 ---
 name: daf-notes
-description: View all progress notes for the current session
+description: Add and view progress notes for sessions
 user-invocable: true
 argument-hint: "[SESSION-NAME|TICKET-ID]"
 ---
