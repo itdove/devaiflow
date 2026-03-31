@@ -83,7 +83,18 @@ daf sync --jira --repository owner/repo
 4. **Syncs GitHub/GitLab issues** from discovered repositories
 5. **Creates sessions** for new issues/tickets
 6. **Updates existing sessions** with latest data
-7. **Shows summary** of synced sessions
+7. **Converts ticket_creation sessions** to development type when syncing matching issues
+8. **Shows summary** of synced sessions
+
+**Session Type Conversion (itdove/devaiflow#343):**
+
+When sync finds a `ticket_creation` session with the same name as the target development session, it automatically converts it to `development` type. This handles the common workflow:
+
+1. User creates an issue via `daf jira new` or `daf git new` → creates `ticket_creation` session
+2. Issue is created in issue tracker and assigned to user
+3. User runs `daf sync` → converts the `ticket_creation` session to `development` type
+
+Sessions with other types (e.g., `investigation`) are skipped with a clear warning message.
 
 **Output example:**
 ```
