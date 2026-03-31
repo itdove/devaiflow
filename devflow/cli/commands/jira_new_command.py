@@ -883,12 +883,9 @@ def _build_ticket_creation_prompt(
     ])
 
     prompt_parts.extend([
-        "⚠️  CRITICAL: Use EXACTLY this command format (do not modify syntax):",
+        "⚠️  CRITICAL: Read the daf-jira skill to understand the correct command syntax for creating JIRA issues.",
         "",
-        example_command,
-        "",
-        "⚠️  The command above is the EXACT format you MUST use. Do not attempt alternative formats.",
-        "   Use this template precisely, filling in your analysis and findings.",
+        "Use the `daf jira create` command to create your ticket based on your analysis.",
         "",
         parent_note,
     ])
@@ -987,12 +984,9 @@ def _build_multiproject_ticket_creation_prompt(
         f"5. Use project: {project}; configured defaults: {defaults_str}",
         "6. Include detailed description and acceptance criteria based on cross-project analysis",
         "",
-        "⚠️  CRITICAL: Use EXACTLY this command format (do not modify syntax):",
+        "⚠️  CRITICAL: Read the daf-jira skill to understand the correct command syntax for creating JIRA issues.",
         "",
-        example_command,
-        "",
-        "⚠️  The command above is the EXACT format you MUST use. Do not attempt alternative formats.",
-        "   Use this template precisely, filling in your cross-project analysis and findings.",
+        "Use the `daf jira create` command to create your ticket based on your cross-project analysis.",
         "",
         parent_note,
     ]
