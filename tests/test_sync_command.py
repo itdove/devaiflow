@@ -105,7 +105,7 @@ def restore_field_mappings(temp_daf_home):
     with open(jira_config_path, 'w') as f:
         json.dump(jira_config, f, indent=2)
 
-    # Also update main config.json to enable JIRA backend
+    # Also update main config.json to enable JIRA backend and force new format
     main_config_path = temp_daf_home / "config.json"
     if main_config_path.exists():
         with open(main_config_path, 'r') as f:
@@ -113,6 +113,11 @@ def restore_field_mappings(temp_daf_home):
 
         # Set issue tracker backend to jira
         main_config["issue_tracker_backend"] = "jira"
+
+        # Remove entire jira section from config.json to force new format
+        # This makes ConfigLoader load field_mappings from backends/jira.json instead
+        if "jira" in main_config:
+            del main_config["jira"]
 
         with open(main_config_path, 'w') as f:
             json.dump(main_config, f, indent=2)
