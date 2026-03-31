@@ -884,8 +884,6 @@ def _build_issue_creation_prompt(
     prompt_parts.extend([
         "⚠️  CRITICAL: Read the daf-git skill to understand the correct command syntax for creating GitHub/GitLab issues.",
         "",
-        "Use the `daf git create` command to create your issue based on your analysis.",
-        "",
         "After you create the issue, the session will be automatically renamed to 'creation-<issue_number>'",
         "for easy identification. Users can reopen with: daf open creation-<issue_number>",
         "",
@@ -1008,8 +1006,6 @@ def _build_multiproject_issue_creation_prompt(
         f"4. Create the GitHub/GitLab issue in {target_repo_name} with your cross-project analysis",
         "",
         "⚠️  CRITICAL: Read the daf-git skill to understand the correct command syntax for creating GitHub/GitLab issues.",
-        "",
-        "Use the `daf git create` command to create your issue based on your cross-project analysis.",
         "",
         "After you create the issue, the session will be automatically renamed to 'creation-<issue_number>'",
         "for easy identification. Users can reopen with: daf open creation-<issue_number>",
