@@ -237,6 +237,49 @@ class GitLabClient(IssueTrackerClient):
         """
         return repository.replace('/', '%2F')
 
+    def get_project_info(self, repository: Optional[str] = None) -> Dict:
+        """Fetch project metadata from GitLab API.
+
+        Args:
+            repository: Repository in group/project format (auto-detects if not provided)
+
+        Returns:
+            Dictionary with project metadata:
+            - default_branch: Default branch name
+            - full_name: Full project path (group/project)
+            - description: Project description
+            - url: Project URL
+
+        Raises:
+            IssueTrackerNotFoundError: If project not found
+            IssueTrackerApiError: If API request fails
+        """
+        repo = self._get_repository(repository)
+        encoded_repo = self._url_encode_repository(repo)
+
+        try:
+            output = self._run_glab_command([
+                'api',
+                f'projects/{encoded_repo}'
+            ])
+
+            project_data = json.loads(output)
+            return {
+                'default_branch': project_data.get('default_branch', 'main'),
+                'full_name': project_data.get('path_with_namespace', repo),
+                'description': project_data.get('description', ''),
+                'url': project_data.get('web_url', f'https://{self.hostname}/{repo}'),
+            }
+
+        except IssueTrackerApiError as e:
+            if 'Not Found' in str(e) or '404' in str(e):
+                raise IssueTrackerNotFoundError(
+                    f"GitLab project {repo} not found",
+                    resource_type="project",
+                    resource_id=repo
+                )
+            raise
+
     def get_ticket(self, issue_key: str, field_mappings: Optional[Dict] = None) -> Dict:
         """Fetch a GitLab issue by number.
 
@@ -634,6 +677,51 @@ class GitLabClient(IssueTrackerClient):
                 )
             raise
 
+    def get_issue_comments(self, issue_key: str) -> List[Dict]:
+        """Get all comments (notes) for a GitLab issue.
+
+        Args:
+            issue_key: Issue key
+
+        Returns:
+            List of comment dictionaries with 'body' and 'created_at' fields
+        """
+        repo, number = self._parse_issue_number(issue_key)
+        repo = self._get_repository(repo)
+        encoded_repo = self._url_encode_repository(repo)
+
+        try:
+            output = self._run_glab_command([
+                'api',
+                f'projects/{encoded_repo}/issues/{number}/notes'
+            ])
+
+            notes = json.loads(output)
+
+            # Return in simplified format expected by parent_discovery
+            # Filter out system notes (like label changes, status changes)
+            return [
+                {
+                    'body': note.get('body', ''),
+                    'created_at': note.get('created_at', ''),
+                    'author': note.get('author', {}).get('username', ''),
+                }
+                for note in notes
+                if not note.get('system', False)  # Exclude system notes
+            ]
+
+        except IssueTrackerApiError as e:
+            if 'Not Found' in str(e):
+                raise IssueTrackerNotFoundError(
+                    f"GitLab issue {repo}#{number} not found",
+                    resource_type="issue",
+                    resource_id=issue_key
+                )
+            raise
+        except Exception:
+            # Return empty list on any error
+            return []
+
     def transition_ticket(self, issue_key: str, status: str) -> None:
         """Transition a GitLab issue state.
 
@@ -747,9 +835,9 @@ class GitLabClient(IssueTrackerClient):
         # Search for issues referencing this one by searching description/comments
         # This is a simplified implementation
         try:
+            # Get all issues in the project
             all_issues = self.list_tickets(
                 project=repo,
-                issue_type=issue_type,
                 max_results=100
             )
 
@@ -760,6 +848,11 @@ class GitLabClient(IssueTrackerClient):
             for issue in all_issues:
                 description = issue.get('description', '')
                 if parent_ref in description or parent_key in description:
+                    # Apply issue_types filter if provided
+                    if issue_types:
+                        issue_labels = [label.lower() for label in issue.get('labels', [])]
+                        if not any(itype.lower() in issue_labels for itype in issue_types):
+                            continue
                     child_issues.append(issue)
 
             return child_issues

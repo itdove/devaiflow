@@ -225,7 +225,8 @@ class JiraFieldValidator:
         available_for = field_info.get("available_for", [])
         # Guard against Mock objects in tests
         if available_for and isinstance(available_for, (list, tuple)):
-            if issue_type not in available_for:
+            # '*' wildcard means available for all issue types
+            if "*" not in available_for and issue_type not in available_for:
                 errors.append(
                     f"Field '{field_name}' is not available for issue type '{issue_type}'. "
                     f"Available for: {', '.join(available_for)}. "
@@ -280,7 +281,8 @@ class JiraFieldValidator:
         available_for = field_info.get("available_for", [])
         # Guard against Mock objects in tests
         if available_for and isinstance(available_for, (list, tuple)):
-            if issue_type not in available_for:
+            # '*' wildcard means available for all issue types
+            if "*" not in available_for and issue_type not in available_for:
                 errors.append(
                     f"Field '{field_name}' ({field_id}) is not available for issue type '{issue_type}'. "
                     f"Available for: {', '.join(available_for)}. "

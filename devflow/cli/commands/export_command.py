@@ -49,6 +49,10 @@ def export_sessions(
 
     console.print("[dim]Including ALL conversations and conversation history[/dim]")
 
+    # Check if sessions belong to features and handle handoff (experimental)
+    if not all_sessions and issue_keys:
+        _check_and_handle_feature_handoff(issue_keys, config_loader, session_manager)
+
     # Sync git branches before export
     # Now syncs ALL conversations in multi-conversation sessions
     # Captures remote URLs for fork support
@@ -267,3 +271,183 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
         if remote_url:
             conversation.remote_url = remote_url
             console.print(f"[dim]Captured remote URL: {remote_url}[/dim]")
+
+
+def _check_and_handle_feature_handoff(
+    issue_keys: List[str],
+    config_loader: ConfigLoader,
+    session_manager: SessionManager,
+) -> None:
+    """Check if exported sessions belong to features and handle work handoff.
+
+    For team collaboration: When you export an incomplete session that's part
+    of your feature, this offers to mark it as external (handing off to teammate).
+
+    Args:
+        issue_keys: List of session identifiers being exported
+        config_loader: ConfigLoader instance
+        session_manager: SessionManager instance
+    """
+    try:
+        from rich.prompt import Confirm
+        from devflow.orchestration.feature import FeatureManager
+
+        feature_manager = FeatureManager(
+            config_loader=config_loader,
+            session_manager=session_manager,
+        )
+
+        # Get all features
+        features = feature_manager.list_features()
+        if not features:
+            return
+
+        # Check each exported session against features
+        for identifier in issue_keys:
+            # Get session(s) for this identifier
+            sessions = session_manager.index.get_sessions(identifier)
+            if not sessions:
+                continue
+
+            session = sessions[0]  # Use first matching session
+            issue_key = session.issue_key
+
+            for feature in features:
+                # Check if this issue_key is in feature.sessions (not external)
+                if issue_key not in feature.sessions:
+                    continue
+
+                # Found a match!
+                # Determine actual session status
+                feature_status = feature.session_statuses.get(issue_key, "pending")
+                actual_status = session.status  # Get from session object
+
+                console.print(f"\n[dim]Session {issue_key} is part of feature '{feature.name}'[/dim]")
+                console.print(f"[dim]Session status: {actual_status}, Feature status: {feature_status}[/dim]")
+
+                # Check issue tracker for real status
+                is_completed = False
+                try:
+                    from devflow.utils.backend_detection import detect_backend_from_key
+                    from devflow.issue_tracker.factory import create_issue_tracker_client
+
+                    config = config_loader.load_config()
+                    backend = detect_backend_from_key(issue_key, config)
+                    issue_tracker_client = create_issue_tracker_client(backend=backend)
+
+                    ticket = issue_tracker_client.get_ticket(issue_key)
+                    if ticket:
+                        issue_status = ticket.get('status', '').lower()
+                        console.print(f"[dim]Issue tracker status: {issue_status}[/dim]")
+
+                        # Check if done/closed
+                        if issue_status in ['done', 'closed', 'resolved', 'merged']:
+                            is_completed = True
+                        elif actual_status in ["completed", "merged"]:
+                            is_completed = True
+                except Exception:
+                    # Issue tracker check is optional
+                    if actual_status in ["completed", "merged"] or feature_status == "completed":
+                        is_completed = True
+
+                # Only offer handoff for incomplete sessions
+                if is_completed:
+                    console.print(f"[dim]Exporting completed work (no handoff needed)[/dim]")
+                    continue
+
+                # Incomplete session - offer to hand off
+                console.print(f"\n[bold yellow]⚠ Feature Handoff Detected[/bold yellow]")
+                console.print(f"Feature: [cyan]{feature.name}[/cyan]")
+                console.print(f"Session: [cyan]{issue_key}[/cyan]")
+                console.print(f"Status: [yellow]{actual_status}[/yellow] (incomplete)\n")
+
+                console.print("[dim]You're exporting incomplete work. Options:[/dim]")
+                console.print("  1. Mark as external (handing off to teammate)")
+                console.print("     → Removes from your sessions")
+                console.print("     → Tracks as external dependency")
+                console.print("     → Dependent sessions may be blocked")
+                console.print("  2. Keep in your sessions (you'll continue working on it)")
+                console.print("     → Share for review/collaboration only")
+                console.print()
+
+                if not Confirm.ask(f"Hand off {issue_key} to teammate (mark as external)?", default=False):
+                    console.print("[dim]Keeping in your sessions[/dim]")
+                    continue
+
+                # Get assignee for external session (prompt user)
+                from rich.prompt import Prompt
+                assignee = Prompt.ask("Teammate's name/username", default="teammate")
+
+                # Get blocking relationships from metadata
+                blocking_relationships = {}
+                if hasattr(feature, 'metadata') and feature.metadata:
+                    blocking_relationships = feature.metadata.get('blocking_relationships', {})
+
+                blocks = blocking_relationships.get(issue_key, {}).get('blocks', [])
+                blocked_by = blocking_relationships.get(issue_key, {}).get('blocked_by', [])
+
+                # Get actual status from issue tracker
+                external_status = "In Progress"  # Default
+                try:
+                    from devflow.utils.backend_detection import detect_backend_from_key
+                    from devflow.issue_tracker.factory import create_issue_tracker_client
+
+                    config = config_loader.load_config()
+                    backend = detect_backend_from_key(issue_key, config)
+                    issue_tracker_client = create_issue_tracker_client(backend=backend)
+
+                    ticket = issue_tracker_client.get_ticket(issue_key)
+                    if ticket:
+                        external_status = ticket.get('status', 'In Progress')
+                        console.print(f"[dim]Using issue tracker status: {external_status}[/dim]")
+                except Exception:
+                    # Use default if issue tracker check fails
+                    console.print(f"[dim]Using default status: {external_status}[/dim]")
+
+                # Create external session entry
+                external_session = {
+                    'key': issue_key,
+                    'assignee': assignee,
+                    'status': external_status,
+                    'summary': session.goal,
+                    'blocks': blocks,
+                    'blocked_by': blocked_by,
+                }
+
+                # Add to external_sessions
+                feature.external_sessions.append(external_session)
+
+                # Remove from sessions
+                feature.sessions.remove(issue_key)
+                del feature.session_statuses[issue_key]
+
+                # Remove from blocking_relationships metadata
+                if hasattr(feature, 'metadata') and feature.metadata:
+                    if 'blocking_relationships' in feature.metadata:
+                        feature.metadata['blocking_relationships'].pop(issue_key, None)
+
+                # Update feature
+                feature_manager.update_feature(feature)
+
+                console.print(f"[green]✓[/green] Moved {issue_key} to external sessions")
+                console.print(f"[green]✓[/green] Assigned to: {assignee}")
+                console.print(f"[green]✓[/green] Updated feature '{feature.name}'")
+
+                # Check if this blocks any of your sessions
+                blocking_sessions = []
+                for session_key in feature.sessions:
+                    blocking_rels = blocking_relationships.get(session_key, {})
+                    if issue_key in blocking_rels.get('blocked_by', []):
+                        blocking_sessions.append(session_key)
+
+                if blocking_sessions:
+                    console.print(f"\n[yellow]Note:[/yellow] These sessions are now blocked until {assignee} completes {issue_key}:")
+                    for session_key in blocking_sessions:
+                        console.print(f"  • {session_key}")
+
+    except ImportError:
+        # Feature orchestration not available (experimental)
+        pass
+    except Exception as e:
+        # Don't fail export if feature handoff fails
+        console.print(f"[yellow]Warning:[/yellow] Could not handle feature handoff: {e}")

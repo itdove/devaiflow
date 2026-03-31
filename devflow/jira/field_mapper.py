@@ -462,6 +462,36 @@ class JiraFieldMapper:
                                     allowed_vals.append(str(v))
                             mappings[normalized_name]["allowed_values"] = allowed_vals
 
+        # Add essential system fields that aren't in createmeta
+        # These fields are needed for filtering/validation but aren't settable during creation
+        essential_system_fields = ["status", "resolution", "created", "updated"]
+
+        for field in all_fields:
+            field_id = field.get("id", "")
+            field_name = field.get("name", "")
+
+            if field_id not in essential_system_fields:
+                continue
+
+            normalized_name = field_name.lower().replace(" ", "_")
+
+            # Skip if already in mappings from createmeta
+            if normalized_name in mappings:
+                continue
+
+            schema_info = field.get("schema", {})
+            field_type = schema_info.get("type", "string")
+
+            mappings[normalized_name] = {
+                "id": field_id,
+                "name": field_name,
+                "type": field_type,
+                "schema": schema_info.get("custom", field_type),
+                "required_for": [],  # Not required for creation
+                "available_for": ["*"],  # Available on all issue types
+                "allowed_values": []
+            }
+
         return mappings
 
     def _parse_field_metadata_fallback(self, all_fields: List[Dict]) -> Dict[str, Dict[str, Any]]:
@@ -499,7 +529,7 @@ class JiraFieldMapper:
                 "type": field_type,
                 "schema": schema_custom,
                 "required_for": [],
-                "available_for": [],
+                "available_for": ["*"],  # Unknown availability, assume all issue types
                 "allowed_values": []
             }
 

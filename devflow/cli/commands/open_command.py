@@ -128,6 +128,7 @@ def open_session(
     sync_upstream: Optional[bool] = None,
     auto_workspace: bool = False,
     sync_strategy: Optional[str] = None,
+    skip_feature_warning: bool = False,
 ) -> None:
     """Open/resume an existing session.
 
@@ -142,6 +143,7 @@ def open_session(
         conversation_id: Optional Claude session UUID to resume specific archived conversation - PROJ-63490
         model_profile: Optional model provider profile to use (overrides session default)
         create_branch: Whether to create a new branch when adding projects (None = prompt)
+        skip_feature_warning: If True, skip feature orchestration warning (used by daf feature run/resume)
         source_branch: Source branch to create from when adding projects (None = prompt/default)
         on_branch_exists: Action when branch exists (error/use-existing/add-suffix/skip)
         allow_uncommitted: Allow uncommitted changes when switching branches
@@ -291,6 +293,13 @@ def open_session(
             if selected_workspace_name:
                 from devflow.cli.utils import get_workspace_path
                 workspace_path = get_workspace_path(config, selected_workspace_name)
+
+    # Check if session is part of a feature orchestration
+    # Warn user and confirm before continuing (unless called from feature run/resume)
+    if not skip_feature_warning:
+        if not _check_and_warn_feature_orchestration(session, session_manager):
+            # User cancelled - exit without opening
+            return
 
     # Handle --projects flag (add multiple projects to session)
     if projects:
@@ -567,6 +576,99 @@ def open_session(
         if not check_concurrent_session(session_manager, active_conv.project_path, session.name, selected_workspace_name, action="open"):
             return
 
+    # Feature orchestration: Create story-specific branch from feature branch
+    # Each story gets its own branch, all merge back to the feature branch
+    # MULTI-PROJECT: Ensure feature branch exists in ALL repos that are part of this session
+    if session.conversations:
+        from devflow.orchestration.feature import FeatureManager
+        from devflow.cli.commands.feature_command import _ensure_feature_branch, _create_story_branch
+
+        try:
+            feature_manager = FeatureManager()
+            feature_context = feature_manager.get_session_context(session.name)
+
+            if feature_context:
+                feature = feature_context['feature']
+                feature_branch = feature.branch
+                feature_base_branch = feature.base_branch
+
+                # Generate story branch name: feature/demo1-aap-70185
+                story_branch = f"{feature_branch}-{session.issue_key.lower()}" if session.issue_key else f"{feature_branch}-{session.name}"
+
+                console.print(f"[dim]🎯 Feature orchestration: {feature.name}[/dim]")
+
+                # Multi-project support: Handle both patterns
+                # Pattern 1: Multi-conversation (separate conversations per repo)
+                # Pattern 2: Single multi-project conversation (one conversation, multiple projects)
+                for working_dir, conversation in session.conversations.items():
+                    conv_context = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+
+                    if not conv_context:
+                        continue
+
+                    # Pattern 2: Multi-project conversation (one conversation with multiple projects)
+                    if conv_context.is_multi_project and conv_context.projects:
+                        for repo_name, project_info in conv_context.projects.items():
+                            # Step 1: Ensure feature branch exists in this repo
+                            if not _ensure_feature_branch(project_info.project_path, feature_branch, feature_base_branch):
+                                console.print(f"[yellow]⚠[/yellow] Failed to ensure feature branch exists in {repo_name}")
+                                continue
+
+                            # Step 2: Create story branch from feature branch (with user choice)
+                            success, selected_branch = _create_story_branch(project_info.project_path, story_branch, feature_branch)
+                            if success:
+                                # Update project's branch to selected branch
+                                if project_info.branch != selected_branch:
+                                    project_info.branch = selected_branch
+                                    # Set base_branch based on selected branch
+                                    if selected_branch == feature_branch:
+                                        project_info.base_branch = feature_base_branch
+                                    else:
+                                        project_info.base_branch = feature_branch
+                                    session_manager.update_session(session)
+                                    console.print(f"[dim]Branch: {selected_branch} → {project_info.base_branch} ({repo_name})[/dim]")
+                            else:
+                                console.print(f"[yellow]⚠[/yellow] Failed to set up branch in {repo_name}, using feature branch")
+                                if project_info.branch != feature_branch:
+                                    project_info.branch = feature_branch
+                                    project_info.base_branch = feature_base_branch
+                                    session_manager.update_session(session)
+
+                    # Pattern 1: Single-project conversation
+                    elif conv_context.project_path:
+                        repo_name = working_dir or "main"
+
+                        # Step 1: Ensure feature branch exists in this repo
+                        if not _ensure_feature_branch(conv_context.project_path, feature_branch, feature_base_branch):
+                            console.print(f"[yellow]⚠[/yellow] Failed to ensure feature branch exists in {repo_name}")
+                            continue
+
+                        # Step 2: Create story branch from feature branch (only for active conversation, with user choice)
+                        if active_conv and conv_context.project_path == active_conv.project_path:
+                            success, selected_branch = _create_story_branch(conv_context.project_path, story_branch, feature_branch)
+                            if success:
+                                # Set session's branch to selected branch
+                                if conv_context.branch != selected_branch:
+                                    conv_context.branch = selected_branch
+                                    # Set base_branch based on selected branch
+                                    if selected_branch == feature_branch:
+                                        conv_context.base_branch = feature_base_branch
+                                    else:
+                                        conv_context.base_branch = feature_branch
+                                    session_manager.update_session(session)
+                                    console.print(f"[dim]Branch: {selected_branch} → {conv_context.base_branch} ({repo_name})[/dim]")
+                            else:
+                                console.print(f"[yellow]⚠[/yellow] Failed to set up branch in {repo_name}, using feature branch")
+                                if conv_context.branch != feature_branch:
+                                    conv_context.branch = feature_branch
+                                    conv_context.base_branch = feature_base_branch
+                                    session_manager.update_session(session)
+
+        except Exception as e:
+            # Silently skip if feature lookup fails
+            console.print(f"[yellow]⚠[/yellow] Feature orchestration error: {e}")
+            pass
+
     # Handle missing branch (can happen with synced sessions on first launch)
     # Skip branch creation for ticket_creation sessions (analysis-only) - PROJ-62990
     # Check session type BEFORE is_first_launch to prevent prompt for ticket_creation sessions
@@ -626,6 +728,9 @@ def open_session(
     if active_conv and active_conv.ai_agent_session_id:
         console.print(f"🆔 Claude Session ID: {active_conv.ai_agent_session_id}")
 
+    # Feature orchestration awareness
+    _display_feature_context(session)
+
     # Generate and display session summary
     _display_session_summary(session)
 
@@ -654,7 +759,9 @@ def open_session(
         _sync_branch_for_import(active_conv.project_path, active_conv.branch, remote_url)
 
         # Now handle branch checkout (will find branch if synced above)
-        checkout_successful = _handle_branch_checkout(active_conv.project_path, active_conv.branch, config)
+        # Pass base_branch for feature orchestration (creates from correct base)
+        base_branch_for_checkout = active_conv.base_branch if active_conv and active_conv.base_branch else None
+        checkout_successful = _handle_branch_checkout(active_conv.project_path, active_conv.branch, config, base_branch=base_branch_for_checkout)
 
         # Only proceed to sync check if checkout succeeded
         if not checkout_successful:
@@ -1063,6 +1170,120 @@ def open_session(
             console.print(f"  claude --resume {active_conv.ai_agent_session_id}")
 
 
+def _check_and_warn_feature_orchestration(session, session_manager) -> bool:
+    """Check if session is part of a feature and warn user.
+
+    Args:
+        session: Session object
+        session_manager: SessionManager instance
+
+    Returns:
+        True to continue opening, False to cancel
+    """
+    from devflow.orchestration.feature import FeatureManager
+    from rich.prompt import Confirm
+
+    try:
+        manager = FeatureManager()
+        context = manager.get_session_context(session.name)
+
+        if not context:
+            # Not part of a feature - continue normally
+            return True
+
+        # Session is part of a feature - show warning
+        feature_name = context['feature_name']
+        is_current = context['is_current']
+        is_completed = context['is_completed']
+        current_pos = context['current_index'] + 1
+        total = context['total_sessions']
+
+        console.print(f"\n[yellow]⚠️  Warning: Feature Orchestration Detected[/yellow]")
+        console.print(f"[bold]Feature:[/bold] {feature_name}")
+        console.print(f"[bold]Session:[/bold] {session.name} (Session {current_pos} of {total})")
+
+        if is_current:
+            console.print(f"[bold]Status:[/bold] [green]Current session in workflow[/green]")
+            console.print(f"\n[yellow]Recommendation:[/yellow] Use [cyan]daf -e feature resume {feature_name}[/cyan] instead")
+            console.print(f"[dim]This ensures proper workflow continuation and verification.[/dim]")
+        elif is_completed:
+            console.print(f"[bold]Status:[/bold] [green]✓ Already completed[/green]")
+            console.print(f"\n[yellow]Info:[/yellow] This session was already completed in the feature workflow.")
+            console.print(f"[dim]Opening it manually is fine for fixes or additional work.[/dim]")
+        else:
+            console.print(f"[bold]Status:[/bold] [yellow]○ Pending (not current)[/yellow]")
+            console.print(f"\n[yellow]Warning:[/yellow] Opening this session may break execution order!")
+            console.print(f"[dim]Feature orchestration requires sequential execution.[/dim]")
+            console.print(f"\n[yellow]Recommendation:[/yellow] Use [cyan]daf -e feature run {feature_name}[/cyan] instead")
+
+        console.print(f"\n[bold]Reasons to continue anyway:[/bold]")
+        console.print(f"  • Making fixes to already-completed work")
+        console.print(f"  • Investigating code in this session")
+        console.print(f"  • You know what you're doing")
+
+        # Ask for confirmation
+        if not Confirm.ask("\nContinue opening this session manually?", default=False):
+            console.print("[yellow]Cancelled[/yellow]")
+            console.print(f"[dim]Use [cyan]daf -e feature resume {feature_name}[/cyan] to follow the workflow[/dim]")
+            return False
+
+        console.print("[dim]Continuing with manual open...[/dim]\n")
+        return True
+
+    except Exception:
+        # If feature lookup fails, just continue normally
+        return True
+
+
+def _display_feature_context(session) -> None:
+    """Display feature orchestration context if session is part of a feature.
+
+    Args:
+        session: Session object
+    """
+    from devflow.orchestration.feature import FeatureManager
+
+    try:
+        manager = FeatureManager()
+        context = manager.get_session_context(session.name)
+
+        if context:
+            # Display feature context
+            console.print(f"\n[bold cyan]🎯 Feature Orchestration:[/bold cyan]")
+            console.print(f"   Feature: {context['feature_name']}")
+
+            # Progress indicator
+            current_pos = context['current_index'] + 1
+            total = context['total_sessions']
+            progress_pct = int((current_pos / total) * 100)
+            console.print(f"   Progress: Session {current_pos} of {total} ({progress_pct}%)")
+
+            # Status indicator
+            if context['is_current']:
+                console.print(f"   Status: [green]⧗ Current session[/green]")
+            elif context['is_completed']:
+                console.print(f"   Status: [green]✓ Completed[/green]")
+            else:
+                console.print(f"   Status: [yellow]○ Pending[/yellow]")
+
+            # Next session
+            if context['next_session']:
+                console.print(f"   Next: {context['next_session']}")
+
+            # Feature status
+            status_emoji = {
+                'created': '○',
+                'running': '⧗',
+                'paused': '⏸',
+                'complete': '✓',
+                'failed': '✗',
+            }.get(context['feature_status'], '?')
+            console.print(f"   Feature Status: {status_emoji} {context['feature_status']}")
+    except Exception:
+        # Silently skip if feature lookup fails
+        pass
+
+
 def _display_session_summary(session) -> None:
     """Display session summary from conversation parsing.
 
@@ -1322,13 +1543,14 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
     return True
 
 
-def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[any] = None) -> bool:
+def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[any] = None, base_branch: Optional[str] = None) -> bool:
     """Handle git branch checkout.
 
     Args:
         project_path: Project directory path
         branch_name: Branch name to checkout
         config: Configuration object (optional)
+        base_branch: Base branch to create from if branch doesn't exist (optional, defaults to repository default)
 
     Returns:
         True if on correct branch after checkout, False otherwise
@@ -1350,21 +1572,26 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
     if not GitUtils.branch_exists(path, branch_name):
         console.print(f"[yellow]Branch '{branch_name}' does not exist[/yellow]")
         if Confirm.ask("Create it now?", default=True):
-            # Get default branch to create from
-            default_branch = GitUtils.get_default_branch(path)
-            if not default_branch:
-                default_branch = "main"
+            # Get base branch to create from (use provided base_branch or default)
+            source_branch = base_branch
+            if not source_branch:
+                source_branch = GitUtils.get_default_branch(path)
+                if not source_branch:
+                    source_branch = "main"
 
-            # Ensure we're on the default branch and it's up-to-date
+            if base_branch:
+                console.print(f"[dim]Creating from base branch: {source_branch}[/dim]")
+
+            # Ensure we're on the source branch and it's up-to-date
             current = GitUtils.get_current_branch(path)
-            if current != default_branch:
-                console.print(f"[cyan]Checking out {default_branch}...[/cyan]")
-                checkout_success, _ = GitUtils.checkout_branch(path, default_branch)
+            if current != source_branch:
+                console.print(f"[cyan]Checking out {source_branch}...[/cyan]")
+                checkout_success, _ = GitUtils.checkout_branch(path, source_branch)
                 if not checkout_success:
-                    console.print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}, creating from current branch")
+                    console.print(f"[yellow]⚠[/yellow] Could not checkout {source_branch}, creating from current branch")
 
             # Pull latest changes before creating branch
-            console.print(f"[cyan]Pulling latest changes from {default_branch}...[/cyan]")
+            console.print(f"[cyan]Pulling latest changes from {source_branch}...[/cyan]")
             pull_success, pull_error = GitUtils.pull_current_branch(path)
             if not pull_success:
                 console.print(f"[yellow]⚠[/yellow] Could not pull latest changes: {pull_error}")

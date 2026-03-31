@@ -3,7 +3,7 @@
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 import urllib.request
 
 from rich.console import Console
@@ -206,6 +206,24 @@ def complete_session(
     hours = int(total_seconds // 3600)
     minutes = int((total_seconds % 3600) // 60)
     console.print(f"[green]✓[/green] Total time tracked: {hours}h {minutes}m")
+
+    # Feature orchestration awareness - check if session is part of a feature
+    from devflow.orchestration.feature import FeatureManager
+    feature_manager = FeatureManager()
+    feature_context = feature_manager.get_session_context(session.name)
+
+    # If part of a feature, skip individual PR creation (will create final PR after all sessions)
+    if feature_context:
+        console.print(f"\n[bold cyan]🎯 Feature Orchestration:[/bold cyan]")
+        console.print(f"   Feature: {feature_context['feature_name']}")
+        current_pos = feature_context['current_index'] + 1
+        total = feature_context['total_sessions']
+        console.print(f"   Session {current_pos} of {total} completed")
+
+        if not no_pr:
+            console.print(f"\n[dim]Skipping individual PR creation (part of feature orchestration)[/dim]")
+            console.print(f"[dim]Final PR will be created after all sessions complete[/dim]")
+            no_pr = True  # Override to skip PR creation for this session
 
     # Track whether commits were made during this completion cycle
     # This is used later to determine if we should prompt for PR/MR creation
@@ -795,10 +813,24 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
         else:
             console.print(f"[yellow]⚠[/yellow] Cannot attach to issue tracker - session has no issue key")
 
-    # Issue tracker auto-transition: In Progress → Code Review/Done/Testing (LAST STEP)
-    # This is done last, after all work is complete (commits, PR, summary, export)
+    # Feature orchestration: run verification FIRST (before JIRA transition)
+    # This ensures tickets don't get marked as complete if verification fails
+    verification_passed = True  # Default for non-feature sessions
+    if feature_context:
+        verification_passed = _handle_feature_completion(
+            session=session,
+            feature_context=feature_context,
+            feature_manager=feature_manager,
+            config=config,
+            config_loader=config_loader,
+        )
+
+    # Issue tracker auto-transition: In Progress → Code Review/Done/Testing
+    # For feature sessions: transition happens inside _handle_feature_completion (before opening next session)
+    # For standalone sessions: transition happens here
     # Skip for ticket_creation and investigation sessions - they only analyze code, don't work on the parent ticket
-    if config and session.issue_key and session.session_type == "development":
+    # Skip if verification failed - don't transition ticket if work isn't verified
+    if config and session.issue_key and session.session_type == "development" and verification_passed and not feature_context:
         # Detect backend for this session
         backend = get_issue_tracker_backend(session, config)
 
@@ -811,6 +843,216 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
         # Save updated session (status may have changed)
         session_manager.update_session(session)
+
+
+def _handle_feature_completion(
+    session,
+    feature_context: Dict,
+    feature_manager,
+    config,
+    config_loader,
+) -> bool:
+    """Handle feature orchestration completion workflow.
+
+    Runs verification and auto-advances to next session or creates final PR.
+
+    Args:
+        session: Completed session
+        feature_context: Feature context from get_session_context()
+        feature_manager: FeatureManager instance
+        config: Config object
+        config_loader: ConfigLoader instance
+
+    Returns:
+        True if verification passed (or skipped), False if verification failed
+    """
+    from rich.prompt import Confirm
+
+    feature_name = feature_context['feature_name']
+    feature = feature_manager.get_feature(feature_name)
+
+    if not feature:
+        console.print(f"[yellow]⚠[/yellow] Feature '{feature_name}' not found")
+        return False
+
+    console.print(f"\n[bold cyan]Running feature verification...[/bold cyan]")
+
+    # Run verification for this session
+    try:
+        result = feature_manager.verify_session(feature, session.name)
+
+        # Update feature session status
+        feature.session_statuses[session.name] = "complete"
+
+        # Display verification result
+        console.print(f"\n[bold]Verification Result:[/bold]")
+        console.print(f"  Status: {result.status.upper()}")
+        console.print(f"  Acceptance Criteria: {result.verified_criteria}/{result.total_criteria} verified")
+
+        if result.test_command:
+            test_status = "[green]✓ Passed[/green]" if result.tests_passed else "[red]✗ Failed[/red]"
+            console.print(f"  Tests: {test_status}")
+
+        if result.report_path:
+            console.print(f"  Report: {result.report_path}")
+
+        # Handle verification outcome
+        if result.status == "passed":
+            console.print(f"\n[green]✓[/green] Verification passed!")
+
+            # Create story PR: story branch → feature branch
+            # Multi-project: Create PRs for all repos involved in this story
+            if session.conversations:
+                _create_story_prs(session, feature, config_loader)
+
+            # Transition JIRA issue to Code Review BEFORE opening next session
+            # This ensures the user sees the transition prompt before moving on
+            if session.issue_key and session.issue_tracker == "jira":
+                from devflow.jira import transition_on_complete as jira_transition_on_complete
+                jira_transition_on_complete(session, config)
+                # Save updated session (status may have changed)
+                from devflow.session.manager import SessionManager
+                session_manager = SessionManager(config_loader=config_loader)
+                session_manager.update_session(session)
+
+            # Check if there are more sessions
+            next_session = feature_context.get('next_session')
+
+            if next_session:
+                # More sessions to go - auto-advance
+                feature.current_session_index += 1
+                feature.status = "running"
+                feature_manager.update_feature(feature)
+
+                console.print(f"\n[bold cyan]Next session: {next_session}[/bold cyan]")
+                console.print(f"[dim]Progress: Session {feature_context['current_index'] + 2} of {feature_context['total_sessions']}[/dim]")
+
+                # Check if auto-advance is enabled
+                auto_advance = feature.metadata.get('auto_advance', False) if hasattr(feature, 'metadata') else False
+
+                # Prompt to open next session (or auto-open if auto-advance enabled)
+                should_open_next = auto_advance
+                if not auto_advance:
+                    should_open_next = Confirm.ask(f"\nOpen next session '{next_session}'?", default=True)
+                else:
+                    console.print(f"\n[cyan]Auto-advance enabled: Opening next session...[/cyan]")
+
+                if should_open_next:
+                    console.print(f"\n[cyan]Opening {next_session}...[/cyan]")
+                    from devflow.cli.commands.open_command import open_session
+                    open_session(identifier=next_session, skip_feature_warning=True)
+                else:
+                    console.print(f"[dim]Resume later with: daf open {next_session}[/dim]")
+            else:
+                # Last session completed - feature complete!
+                feature.status = "complete"
+                feature_manager.update_feature(feature)
+
+                console.print(f"\n[green]🎉 Feature '{feature_name}' complete![/green]")
+                console.print(f"[green]All {feature_context['total_sessions']} sessions verified and completed![/green]")
+
+                # Create final PR for the feature: feature branch → base branch (main)
+                if session.active_conversation and session.active_conversation.project_path:
+                    working_dir = Path(session.active_conversation.project_path)
+
+                    if GitUtils.is_git_repository(working_dir):
+                        # Checkout feature branch for final PR
+                        feature_branch = feature.branch
+                        base_branch = feature.base_branch
+
+                        current_branch = GitUtils.get_current_branch(working_dir)
+                        if current_branch != feature_branch:
+                            console.print(f"[dim]Checking out feature branch '{feature_branch}' for PR creation...[/dim]")
+                            success, error = GitUtils.checkout_branch(working_dir, feature_branch)
+                            if not success:
+                                console.print(f"[yellow]⚠[/yellow] Failed to checkout feature branch: {error}")
+
+                        # Check if feature branch has commits ahead of base branch
+                        has_commits = GitUtils.has_commits_ahead(working_dir, feature_branch, base_branch)
+
+                        if not has_commits:
+                            console.print(f"\n[yellow]⚠ No commits to merge from {feature_branch} to {base_branch}[/yellow]")
+                            console.print(f"[dim]Story PRs may need to be merged first:[/dim]")
+                            console.print(f"  1. Merge all story PRs into {feature_branch}")
+                            console.print(f"  2. Then run: daf -e feature complete {feature_name}")
+                        elif Confirm.ask(f"\nCreate final PR/MR: {feature_branch} → {base_branch}?", default=True):
+                            console.print(f"\n[cyan]Creating PR/MR for feature '{feature_name}'...[/cyan]")
+
+                            # Push feature branch
+                            console.print(f"[cyan]Pushing feature branch '{feature_branch}'...[/cyan]")
+                            success, error = GitUtils.push_branch(working_dir, feature_branch)
+
+                            if not success:
+                                console.print(f"[yellow]⚠[/yellow] Failed to push feature branch: {error}")
+                            else:
+                                console.print(f"[green]✓[/green] Feature branch pushed")
+
+                                # Detect repository type
+                                repo_type = GitUtils.detect_repo_type(working_dir)
+
+                                if repo_type:
+                                    # Generate feature PR title and description
+                                    pr_title = f"Feature: {feature.name}"
+                                    pr_description = f"Feature orchestration: {feature.name}\n\nSessions completed:\n"
+                                    for sess_name in feature.sessions:
+                                        pr_description += f"- {sess_name}\n"
+
+                                    # Create PR based on repo type
+                                    if repo_type == "github":
+                                        pr_url = _create_github_pr(session, pr_title, pr_description, working_dir, config, target_branch=base_branch)
+                                    elif repo_type == "gitlab":
+                                        pr_url = _create_gitlab_mr(session, pr_title, pr_description, working_dir, config, target_branch=base_branch)
+                                    else:
+                                        console.print(f"[yellow]⚠[/yellow] Unsupported repository type: {repo_type}")
+                                        pr_url = None
+
+                                    if pr_url:
+                                        feature.pr_url = pr_url
+                                        feature_manager.update_feature(feature)
+                                        console.print(f"[green]✓[/green] Feature PR created: {pr_url}")
+
+                                        # Update parent issue tracker with PR URL
+                                        if feature.parent_issue_key:
+                                            try:
+                                                _update_issue_pr_field_by_key(feature.parent_issue_key, config, pr_url)
+                                            except:
+                                                pass
+
+            # Verification passed - return True to allow JIRA transition
+            return True
+
+        elif result.status in ["gaps_found", "failed"]:
+            # Verification failed - pause feature
+            console.print(f"\n[yellow]⚠[/yellow] Verification incomplete!")
+
+            if result.unverified_criteria:
+                console.print(f"\n[yellow]Unverified acceptance criteria:[/yellow]")
+                for criterion in result.unverified_criteria[:5]:  # Show first 5
+                    console.print(f"  - {criterion}")
+
+            if result.suggestions:
+                console.print(f"\n[yellow]Suggestions:[/yellow]")
+                for suggestion in result.suggestions:
+                    console.print(f"  - {suggestion}")
+
+            feature.status = "paused"
+            feature.session_statuses[session.name] = "paused"
+            feature_manager.update_feature(feature)
+
+            console.print(f"\n[yellow]Feature paused - fix verification issues and resume with:[/yellow]")
+            console.print(f"  daf feature resume {feature_name}")
+
+            # Verification failed - return False to prevent JIRA transition
+            return False
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Verification failed: {e}")
+        console.print(f"[yellow]Feature may need manual review[/yellow]")
+        feature.status = "paused"
+        feature_manager.update_feature(feature)
+
+        # Verification error - return False to prevent JIRA transition
+        return False
 
 
 def _add_session_summary_to_issue(session, config, session_name: str, hours: int, minutes: int, config_loader) -> None:
@@ -1520,6 +1762,273 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         return selected_branch
 
 
+def _update_existing_story_pr(
+    working_dir: Path,
+    story_branch: str,
+    pr_url: str,
+    session,
+    config,
+    repo_name: Optional[str] = None
+) -> bool:
+    """Update existing story PR with latest commits and JIRA.
+
+    Args:
+        working_dir: Working directory path
+        story_branch: Story branch name
+        pr_url: Existing PR URL
+        session: Session object
+        config: Config object
+        repo_name: Repository name (for multi-project)
+
+    Returns:
+        True if PR was updated (or already up-to-date), False if failed
+    """
+    console.print(f"\n[dim]Existing PR found{' for ' + repo_name if repo_name else ''}: {pr_url}[/dim]")
+
+    # Check if there are new commits to push
+    if GitUtils.has_unpushed_commits(working_dir, story_branch):
+        console.print(f"[cyan]Pushing latest commits to update PR...[/cyan]")
+        success, error = GitUtils.push_branch(working_dir, story_branch)
+        if success:
+            console.print(f"[green]✓[/green] PR updated with latest commits")
+        else:
+            console.print(f"[yellow]⚠[/yellow] Failed to push commits: {error}")
+            return False
+    else:
+        console.print(f"[dim]No new commits to push[/dim]")
+
+    # Update JIRA with existing PR URL
+    if session.issue_key and session.issue_tracker == "jira":
+        _update_issue_pr_field(session, config, pr_url, no_issue_update=False)
+
+    return True
+
+
+
+def _create_story_prs(session, feature, config_loader) -> List[str]:
+    """Create PR/MR for a story branch merging to feature branch.
+
+    Multi-project support: Creates PRs for all repos involved in this story.
+    Handles both multi-conversation and multi-project conversation patterns.
+
+    Args:
+        session: Session object
+        feature: FeatureOrchestration object
+        config_loader: ConfigLoader instance
+
+    Returns:
+        List of PR/MR URLs (one per repo)
+    """
+    from rich.prompt import Confirm
+
+    pr_urls = []
+    feature_branch = feature.branch
+
+    if not session.conversations:
+        return pr_urls
+
+    # Load config once
+    config = config_loader.load_config()
+    session_manager = SessionManager(config_loader)
+
+    # Iterate over all conversations in this session
+    for working_dir_name, conversation in session.conversations.items():
+        conv_context = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+
+        if not conv_context:
+            continue
+
+        # Pattern 2: Multi-project conversation (one conversation with multiple projects)
+        if conv_context.is_multi_project and conv_context.projects:
+            for repo_name, project_info in conv_context.projects.items():
+                working_dir = Path(project_info.project_path)
+                story_branch = project_info.branch
+
+                if not story_branch or not feature_branch:
+                    continue
+
+                if not GitUtils.is_git_repository(working_dir):
+                    continue
+
+                # Check if PR already exists for this branch
+                pr_status = _get_pr_for_branch(working_dir, story_branch)
+
+                if pr_status and pr_status['state'] == 'open':
+                    # PR already exists - update it with latest commits
+                    if _update_existing_story_pr(working_dir, story_branch, pr_status['url'], session, config, repo_name):
+                        pr_urls.append(pr_status['url'])
+                    continue
+
+                # Check if story branch has commits not in feature branch
+                has_commits = GitUtils.has_commits_ahead(working_dir, story_branch, feature_branch)
+
+                if not has_commits:
+                    console.print(f"[dim]No commits to merge in {repo_name}, skipping PR[/dim]")
+                    continue
+
+                # Prompt to create story PR
+                if not Confirm.ask(f"\nCreate PR for {repo_name}: {story_branch} → {feature_branch}?", default=True):
+                    console.print(f"[dim]Skipped PR for {repo_name}[/dim]")
+                    continue
+
+                # Ensure feature branch exists on remote (PR target must exist)
+                if not GitUtils.remote_branch_exists(working_dir, feature_branch):
+                    console.print(f"\n[cyan]Pushing feature branch '{feature_branch}' to remote (PR target)...[/cyan]")
+                    success, error = GitUtils.push_branch(working_dir, feature_branch)
+                    if not success:
+                        console.print(f"[yellow]⚠[/yellow] Failed to push feature branch in {repo_name}: {error}")
+                        console.print(f"[dim]Cannot create PR without remote target branch[/dim]")
+                        continue
+                    console.print(f"[green]✓[/green] Feature branch pushed")
+
+                # Push story branch
+                console.print(f"\n[cyan]Pushing '{story_branch}' in {repo_name}...[/cyan]")
+                success, error = GitUtils.push_branch(working_dir, story_branch)
+
+                if not success:
+                    console.print(f"[yellow]⚠[/yellow] Failed to push branch in {repo_name}: {error}")
+                    continue
+
+                console.print(f"[green]✓[/green] Branch pushed")
+
+                # Detect repository type
+                repo_type = GitUtils.detect_repo_type(working_dir)
+
+                if not repo_type:
+                    console.print(f"[yellow]⚠[/yellow] Could not detect repository type for {repo_name}")
+                    continue
+
+                # Generate PR title and description using same system as regular PRs
+                # This applies templates, AI filling, and AI summaries
+                pr_title = f"{session.issue_key}: {session.goal}" if session.issue_key and session.goal else session.name
+                pr_description = _generate_pr_description(
+                    session, working_dir, config_loader, target_branch=feature_branch
+                )
+
+                # Add feature context footer
+                pr_description += f"\n\n---\n*Part of feature orchestration: {feature.name}*"
+                if len(session.conversations) > 1:
+                    pr_description += f" (Repository: {repo_name})"
+
+                # Create PR based on repo type
+                pr_url = None
+                if repo_type == "github":
+                    pr_url = _create_github_pr(session, pr_title, pr_description, working_dir, config, target_branch=feature_branch)
+                elif repo_type == "gitlab":
+                    pr_url = _create_gitlab_mr(session, pr_title, pr_description, working_dir, config, target_branch=feature_branch)
+                else:
+                    console.print(f"[yellow]⚠[/yellow] Unsupported repository type: {repo_type}")
+                    continue
+
+                if pr_url:
+                    console.print(f"[green]✓[/green] Story PR created for {repo_name}: {pr_url}")
+                    pr_urls.append(pr_url)
+
+                    # Update JIRA issue with PR URL
+                    if session.issue_key and session.issue_tracker == "jira":
+                        _update_issue_pr_field(session, config, pr_url, no_issue_update=False)
+
+        # Pattern 1: Single-project conversation
+        elif conv_context.project_path:
+            working_dir = Path(conv_context.project_path)
+            story_branch = conv_context.branch
+            repo_name = working_dir_name or "main"
+
+            if not story_branch or not feature_branch:
+                continue
+
+            if not GitUtils.is_git_repository(working_dir):
+                continue
+
+            # Check if PR already exists for this branch
+            pr_status = _get_pr_for_branch(working_dir, story_branch)
+
+            if pr_status and pr_status['state'] == 'open':
+                # PR already exists - update it with latest commits
+                if _update_existing_story_pr(working_dir, story_branch, pr_status['url'], session, config, repo_name):
+                    pr_urls.append(pr_status['url'])
+                continue
+
+            # Check if story branch has commits not in feature branch
+            has_commits = GitUtils.has_commits_ahead(working_dir, story_branch, feature_branch)
+
+            if not has_commits:
+                console.print(f"[dim]No commits to merge in {repo_name}, skipping PR[/dim]")
+                continue
+
+            # Prompt to create story PR
+            prompt_msg = f"\nCreate PR for {repo_name}: {story_branch} → {feature_branch}?" if len(session.conversations) > 1 else f"\nCreate PR: {story_branch} → {feature_branch}?"
+
+            if not Confirm.ask(prompt_msg, default=True):
+                console.print(f"[dim]Skipped PR for {repo_name}[/dim]")
+                continue
+
+            # Ensure feature branch exists on remote (PR target must exist)
+            if not GitUtils.remote_branch_exists(working_dir, feature_branch):
+                console.print(f"\n[cyan]Pushing feature branch '{feature_branch}' to remote (PR target)...[/cyan]")
+                success, error = GitUtils.push_branch(working_dir, feature_branch)
+                if not success:
+                    console.print(f"[yellow]⚠[/yellow] Failed to push feature branch in {repo_name}: {error}")
+                    console.print(f"[dim]Cannot create PR without remote target branch[/dim]")
+                    continue
+                console.print(f"[green]✓[/green] Feature branch pushed")
+
+            # Push story branch
+            console.print(f"\n[cyan]Pushing '{story_branch}' in {repo_name}...[/cyan]")
+            success, error = GitUtils.push_branch(working_dir, story_branch)
+
+            if not success:
+                console.print(f"[yellow]⚠[/yellow] Failed to push branch in {repo_name}: {error}")
+                continue
+
+            console.print(f"[green]✓[/green] Branch pushed")
+
+            # Detect repository type
+            repo_type = GitUtils.detect_repo_type(working_dir)
+
+            if not repo_type:
+                console.print(f"[yellow]⚠[/yellow] Could not detect repository type for {repo_name}")
+                continue
+
+            # Generate PR title and description using same system as regular PRs
+            # This applies templates, AI filling, and AI summaries
+            pr_title = f"{session.issue_key}: {session.goal}" if session.issue_key and session.goal else session.name
+            pr_description = _generate_pr_description(
+                session, working_dir, config_loader, target_branch=feature_branch
+            )
+
+            # Add feature context footer
+            pr_description += f"\n\n---\n*Part of feature orchestration: {feature.name}*"
+            if len(session.conversations) > 1:
+                pr_description += f" (Repository: {repo_name})"
+
+            # Create PR based on repo type
+            pr_url = None
+            if repo_type == "github":
+                pr_url = _create_github_pr(session, pr_title, pr_description, working_dir, config, target_branch=feature_branch)
+            elif repo_type == "gitlab":
+                pr_url = _create_gitlab_mr(session, pr_title, pr_description, working_dir, config, target_branch=feature_branch)
+            else:
+                console.print(f"[yellow]⚠[/yellow] Unsupported repository type: {repo_type}")
+                continue
+
+            if pr_url:
+                console.print(f"[green]✓[/green] Story PR created for {repo_name}: {pr_url}")
+                pr_urls.append(pr_url)
+
+                # Update JIRA issue with PR URL
+                if session.issue_key and session.issue_tracker == "jira":
+                    _update_issue_pr_field(session, config, pr_url, no_issue_update=False)
+
+                # Store PR URL in conversation
+                if not conv_context.prs:
+                    conv_context.prs = []
+                conv_context.prs.append(pr_url)
+                session_manager.update_session(session)
+
+    return pr_urls
+
+
 def _create_pr_mr_for_project(session, proj_info, working_dir: Path, session_manager) -> Optional[str]:
     """Create PR or MR for a specific project in a multi-project session.
 
@@ -2174,13 +2683,14 @@ def _try_discover_org_template(working_dir: Path) -> Optional[str]:
     return None
 
 
-def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLoader) -> str:
+def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLoader, target_branch: Optional[str] = None) -> str:
     """Generate PR/MR description from session data using AI analysis and template.
 
     Args:
         session: Session object
         working_dir: Working directory path for git analysis
         config_loader: ConfigLoader instance to get template URL from config
+        target_branch: Optional target branch (for story PRs targeting feature branch instead of main)
 
     Returns:
         Formatted PR/MR description with AI-generated summary
@@ -2240,15 +2750,18 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
                         template_source = "user-config"
 
     # Gather git context for AI template filling
-    base_branch = _get_base_branch(active_conv, working_dir)
-    commit_log = GitUtils.get_commit_log(working_dir, base_branch)
-    changed_files = GitUtils.get_changed_files(working_dir, base_branch)
+    # Use provided target_branch for story PRs, otherwise detect from conversation
+    base_branch = target_branch if target_branch else _get_base_branch(active_conv, working_dir)
+    current_branch = active_conv.branch if active_conv else None
+
+    commit_log = GitUtils.get_commit_log(working_dir, base_branch, current_branch)
+    changed_files = GitUtils.get_changed_files(working_dir, base_branch, current_branch)
 
     git_context = {
         'commit_log': commit_log,
         'changed_files': changed_files,
         'base_branch': base_branch,
-        'current_branch': active_conv.branch if active_conv else None
+        'current_branch': current_branch
     }
 
     # If we have a template, use AI to fill it; otherwise use default format
@@ -3548,6 +4061,31 @@ def _update_jira_pr_field(issue_key: str, pr_url: str, config) -> None:
         console.print(f"[yellow]⚠[/yellow] JIRA error: {e}")
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Unexpected error updating JIRA: {e}")
+
+
+def _update_issue_pr_field_by_key(issue_key: str, config, pr_url: str) -> None:
+    """Update issue tracker with PR/MR URL using just the issue key.
+
+    Args:
+        issue_key: Issue tracker key (e.g., AAP-12345 for JIRA, #123 for GitHub)
+        config: Configuration object
+        pr_url: PR/MR URL to add
+    """
+    from devflow.utils.backend_detection import detect_backend_from_key
+
+    if not issue_key:
+        return
+
+    # Detect backend from key format
+    backend = detect_backend_from_key(issue_key)
+
+    if backend == "jira":
+        _update_jira_pr_field(issue_key, pr_url, config)
+    elif backend == "github":
+        # GitHub auto-links PRs via mentions
+        console.print(f"[dim]GitHub auto-links PRs via mentions - no field update needed[/dim]")
+    else:
+        console.print(f"[dim]PR linking not implemented for backend: {backend}[/dim]")
 
 
 def _cleanup_temp_directory(temp_dir: Optional[str]) -> None:

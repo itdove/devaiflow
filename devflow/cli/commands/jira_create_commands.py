@@ -162,7 +162,8 @@ def _get_required_custom_fields(
         # Check if this field is available for the given issue type
         # Some fields like "versions" are only available for Bug, not Story/Task/Epic
         available_for = field_info.get("available_for", [])
-        if available_for and issue_type not in available_for:
+        # '*' wildcard means available for all issue types
+        if available_for and "*" not in available_for and issue_type not in available_for:
             continue
 
         # This field is required - get its value
@@ -373,7 +374,8 @@ def _get_required_system_fields(
         # Check if this field is available for the given issue type
         # Some fields like "versions" are only available for Bug, not Story/Task/Epic
         available_for = field_info.get("available_for", [])
-        if available_for and issue_type not in available_for:
+        # '*' wildcard means available for all issue types
+        if available_for and "*" not in available_for and issue_type not in available_for:
             continue
 
         # This field is required - get its value
@@ -827,7 +829,8 @@ def create_issue(
 
                 # Validate field is available for this issue type
                 available_for = field_info.get("available_for", [])
-                if available_for and issue_type not in available_for:
+                # '*' wildcard means available for all issue types
+                if available_for and "*" not in available_for and issue_type not in available_for:
                     console.print(f"[yellow]⚠[/yellow] Field '{field_name}' is not available for {issue_type} issues")
                     console.print(f"  Available for: {', '.join(available_for)}")
                     console.print(f"  [dim]Skipping this field[/dim]")
@@ -918,7 +921,8 @@ def create_issue(
                     # If field has available_for constraint, check if current issue type is allowed
                     if field_info:
                         available_for = field_info.get("available_for", [])
-                        if available_for and issue_type not in available_for:
+                        # '*' wildcard means available for all issue types
+                        if available_for and "*" not in available_for and issue_type not in available_for:
                             fields_to_remove.append(field_id)
 
                 # Remove fields that aren't available for this issue type
@@ -938,7 +942,8 @@ def create_issue(
                 components_info = get_field_with_alias(config.jira.field_mappings, "components")
                 if components_info:
                     available_for = components_info.get("available_for", [])
-                    if issue_type.title() in available_for:
+                    # '*' wildcard means available for all issue types
+                    if "*" in available_for or issue_type.title() in available_for:
                         components_available = True
         except (TypeError, AttributeError):
             # field_mappings might be a Mock or not iterable

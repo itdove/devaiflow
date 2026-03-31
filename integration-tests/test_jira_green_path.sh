@@ -488,16 +488,16 @@ fi
 print_section "Test 5: Multi-Claude-Session Support"
 print_test "List all conversations in the session"
 
-# Use daf list to show all conversations (should show 1 active conversation)
-SESSIONS_LIST_OUTPUT=$(daf list "$RENAMED_SESSION" 2>&1)
+# Use daf session list-conversations to show all conversations (should show 1 active conversation)
+SESSIONS_LIST_OUTPUT=$(daf session list-conversations "$RENAMED_SESSION" 2>&1)
 SESSIONS_LIST_EXIT_CODE=$?
 
 if [ $SESSIONS_LIST_EXIT_CODE -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} daf list command executed successfully"
+    echo -e "  ${GREEN}✓${NC} daf session list-conversations command executed successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    echo -e "  ${RED}✗${NC} daf list FAILED with exit code $SESSIONS_LIST_EXIT_CODE"
-    echo -e "  ${RED}Command:${NC} daf list \"$RENAMED_SESSION\""
+    echo -e "  ${RED}✗${NC} daf session list-conversations FAILED with exit code $SESSIONS_LIST_EXIT_CODE"
+    echo -e "  ${RED}Command:${NC} daf session list-conversations \"$RENAMED_SESSION\""
     echo -e "  ${RED}Output:${NC}"
     echo "$SESSIONS_LIST_OUTPUT" | sed 's/^/    /'
     exit 1
@@ -564,7 +564,7 @@ fi
 
 echo ""
 echo -e "${BOLD}${CYAN}Multi-Claude-Session Features Tested:${NC}"
-echo -e "  ✓ daf list - Shows all conversations (active + archived)"
+echo -e "  ✓ daf session list-conversations - Shows all conversations (active + archived)"
 echo -e "  ✓ Conversation data structure - Supports active_session + archived_sessions"
 echo -e "  ✓ Session JSON format - Contains conversations field with Conversation objects"
 echo -e "  ✓ Unit test coverage - 16 tests for multi-session features (test_multi_claude_sessions.py)"
@@ -583,7 +583,7 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo "  ✓ daf jira update - Updated ticket description"
     echo "  ✓ daf open - Opened session (mock mode)"
     echo "  ✓ daf complete - Completed session workflow"
-    echo "  ✓ daf list - Multi-session support"
+    echo "  ✓ daf session list-conversations - Multi-session support"
     echo ""
     echo -e "${YELLOW}NOTE:${NC} daf sync test was skipped due to current mock mode limitations"
     echo "      (sprint/story_points fields not available in mock editable metadata)"

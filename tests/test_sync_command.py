@@ -17,6 +17,111 @@ from devflow.cli.commands.sync_command import sync_jira
 from devflow.cli.main import cli
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
+import json
+
+def restore_field_mappings(temp_daf_home):
+    """Restore field_mappings to jira.json after init command runs and enable JIRA backend."""
+    import json
+
+    # Use temp_daf_home directly to ensure correct path
+    backends_dir = temp_daf_home / "backends"
+    backends_dir.mkdir(exist_ok=True)
+    jira_config_path = backends_dir / "jira.json"
+
+    # Read current jira config
+    if jira_config_path.exists():
+        with open(jira_config_path, 'r') as f:
+            jira_config = json.load(f)
+    else:
+        jira_config = {"url": "https://jira.test.com", "user": "test-user", "project": "PROJ"}
+
+    # Add field_mappings if not present
+    if "field_mappings" not in jira_config or not jira_config["field_mappings"]:
+        jira_config["field_mappings"] = {
+            "status": {
+                "id": "status",
+                "name": "Status",
+                "type": "status",
+                "schema": "status",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "assignee": {
+                "id": "assignee",
+                "name": "Assignee",
+                "type": "user",
+                "schema": "user",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "issuetype": {
+                "id": "issuetype",
+                "name": "Issue Type",
+                "type": "issuetype",
+                "schema": "issuetype",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "priority": {
+                "id": "priority",
+                "name": "Priority",
+                "type": "priority",
+                "schema": "priority",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "summary": {
+                "id": "summary",
+                "name": "Summary",
+                "type": "string",
+                "schema": "string",
+                "required_for": [],
+                "available_for": ["*"],
+                "allowed_values": []
+            },
+            "story_points": {
+                "id": "customfield_12310243",
+                "name": "Story Points",
+                "type": "number"
+            },
+            "sprint": {
+                "id": "customfield_12310940",
+                "name": "Sprint",
+                "type": "string",
+                "schema": "com.atlassian.greenhopper.service.sprint.Sprint"
+            },
+            "epic_link": {
+                "id": "customfield_12311140",
+                "name": "Epic Link",
+                "type": "string"
+            }
+        }
+
+    # Write back jira config (always write, even if field_mappings existed)
+    with open(jira_config_path, 'w') as f:
+        json.dump(jira_config, f, indent=2)
+
+    # Also update main config.json to enable JIRA backend and force new format
+    main_config_path = temp_daf_home / "config.json"
+    if main_config_path.exists():
+        with open(main_config_path, 'r') as f:
+            main_config = json.load(f)
+
+        # Set issue tracker backend to jira
+        main_config["issue_tracker_backend"] = "jira"
+
+        # Remove entire jira section from config.json to force new format
+        # This makes ConfigLoader load field_mappings from backends/jira.json instead
+        if "jira" in main_config:
+            del main_config["jira"]
+
+        with open(main_config_path, 'w') as f:
+            json.dump(main_config, f, indent=2)
+
 
 
 def test_sync_creates_new_session_with_updated_timestamp(temp_daf_home, mock_jira_cli):
@@ -28,6 +133,7 @@ def test_sync_creates_new_session_with_updated_timestamp(temp_daf_home, mock_jir
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Set up mock issue tracker ticket with updated timestamp
     mock_jira_cli.set_ticket("PROJ-12345", {
@@ -67,6 +173,7 @@ def test_sync_updates_existing_session_when_ticket_changed(temp_daf_home, mock_j
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
 
@@ -124,6 +231,7 @@ def test_sync_skips_existing_session_when_ticket_unchanged(temp_daf_home, mock_j
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
 
@@ -179,6 +287,7 @@ def test_sync_updates_existing_session_without_jira_updated(temp_daf_home, mock_
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
 
@@ -235,6 +344,7 @@ def test_sync_handles_missing_updated_field_gracefully(temp_daf_home, mock_jira_
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Set up mock issue tracker ticket WITHOUT updated timestamp
     mock_jira_cli.set_ticket("PROJ-12345", {
@@ -274,6 +384,7 @@ def test_sync_multiple_sessions_mixed_updates(temp_daf_home, mock_jira_cli):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
 
@@ -374,6 +485,7 @@ def test_sync_ignores_ticket_creation_sessions_and_creates_development_session(t
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -452,6 +564,7 @@ def test_sync_inherits_workspace_from_creation_session(temp_daf_home, mock_jira_
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -509,6 +622,7 @@ def test_sync_no_workspace_inheritance_when_creation_session_missing(temp_daf_ho
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -555,6 +669,7 @@ def test_sync_no_workspace_inheritance_when_workspace_not_set(temp_daf_home, moc
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -631,6 +746,7 @@ def test_sync_no_sync_filters(temp_daf_home, mock_jira_cli, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Remove sync filters from config
     config_loader = ConfigLoader()
@@ -656,6 +772,7 @@ def test_sync_jira_auth_error(temp_daf_home, mock_jira_cli, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock JIRA client to raise auth error
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -679,6 +796,7 @@ def test_sync_jira_api_error(temp_daf_home, mock_jira_cli, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock JIRA client to raise API error
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -702,6 +820,7 @@ def test_sync_jira_connection_error(temp_daf_home, mock_jira_cli, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock JIRA client to raise connection error
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -724,6 +843,7 @@ def test_sync_no_tickets_found(temp_daf_home, mock_jira_cli, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock client to return empty list
     with patch('devflow.cli.commands.sync_command.JiraClient') as mock_client_class:
@@ -747,6 +867,7 @@ def test_sync_ticket_missing_issue_type(temp_daf_home, mock_jira_cli, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Set up ticket without type field
     mock_jira_cli.set_ticket("PROJ-999", {
@@ -782,6 +903,7 @@ def test_sync_multi_backend_with_workspace_filter(temp_daf_home, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock config with multiple workspaces
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -828,6 +950,7 @@ def test_sync_multi_backend_with_invalid_workspace_filter(temp_daf_home, capsys)
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock config with workspaces
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -869,6 +992,7 @@ def test_sync_multi_backend_with_repository_filter(temp_daf_home, capsys):
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock config with workspace
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -922,6 +1046,7 @@ def test_sync_multi_backend_with_invalid_repository_filter(temp_daf_home, capsys
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock config with workspace
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:
@@ -970,6 +1095,7 @@ def test_sync_github_inherits_workspace_from_creation_session(temp_daf_home, moc
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -1041,6 +1167,7 @@ def test_sync_multi_backend_with_workspace_and_repository_filters(temp_daf_home,
     with patch("rich.prompt.Prompt.ask", return_value="4"):
         with patch("rich.prompt.Confirm.ask", return_value=False):
             runner.invoke(cli, ["init", "--skip-jira-discovery"])
+    restore_field_mappings(temp_daf_home)
 
     # Mock config with multiple workspaces
     with patch('devflow.cli.commands.sync_command.ConfigLoader') as mock_loader_class:

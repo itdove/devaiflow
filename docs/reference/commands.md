@@ -13,6 +13,7 @@ Complete reference for all CLI commands with examples.
 - [Backup and Export](#backup-and-export)
 - [Maintenance Commands](#maintenance-commands)
 - [Utility Commands](#utility-commands)
+- [Experimental Features](#experimental-features)
 - [Using Slash Commands in Multi-Repository Sessions](#using-slash-commands-in-multi-repository-sessions)
 
 ## Core Session Commands
@@ -5063,6 +5064,89 @@ The `daf upgrade` command still works for backward compatibility but shows a dep
 - `daf upgrade` → `daf skills`
 - `daf upgrade --agent cursor` → `daf skills --agent cursor`
 - `daf upgrade --all-agents` → `daf skills --all-agents`
+
+---
+
+## Experimental Features
+
+⚠️ **EXPERIMENTAL** - These features are under active development and subject to change.
+
+### Enabling Experimental Features
+
+Use the `-e` or `--experimental` flag **before** the command:
+
+```bash
+# Enable experimental features (short form - recommended)
+daf -e feature list
+
+# Enable experimental features (long form)
+daf --experimental feature list
+
+# Environment variable (persistent)
+export DEVAIFLOW_EXPERIMENTAL=1
+daf feature list
+```
+
+**Important:** The `-e` flag must come **before** the command name, not after.
+
+### daf feature - Multi-Session Feature Orchestration
+
+**Status:** EXPERIMENTAL
+
+Orchestrate multiple sessions sequentially on a shared branch with automated verification between sessions.
+
+**Enable with:** `daf -e feature <command>` or `export DEVAIFLOW_EXPERIMENTAL=1`
+
+**Commands:**
+
+```bash
+# Create feature from parent ticket (auto-discovers children)
+daf -e feature create my-feature --parent "PROJ-100" --auto-order
+
+# Create feature with manual session list
+daf -e feature create my-feature --sessions "PROJ-101,PROJ-102,PROJ-103"
+
+# List all features
+daf -e feature list
+
+# Show feature status
+daf -e feature status my-feature
+
+# Sync feature with parent (add new children that now meet criteria)
+daf -e feature sync my-feature --parent "PROJ-100"
+daf -e feature sync my-feature --parent "PROJ-100" --auto-order
+daf -e feature sync my-feature --parent "PROJ-100" --dry-run
+
+# Run feature workflow (automatically opens first session)
+daf -e feature run my-feature                 # Prompts between sessions
+daf -e feature run my-feature --auto-advance  # Auto-advance (no prompts)
+
+# Resume feature (smart resume based on session status)
+daf -e feature resume my-feature
+
+# Reorder sessions (multiple modes)
+daf -e feature reorder my-feature                    # Interactive
+daf -e feature reorder my-feature PROJ-102 1         # Move session to position
+daf -e feature reorder my-feature --order "s2,s1,s3" # Direct order
+
+# Delete feature
+daf -e feature delete my-feature                          # Feature only
+daf -e feature delete my-feature --delete-sessions        # Feature + sessions
+daf -e feature delete my-feature --delete-sessions --delete-branch  # Everything
+```
+
+**Key Features:**
+- **Auto-discovery**: Parse parent tickets to find all child tickets
+- **Dependency ordering**: Topological sort based on blocking relationships
+- **Automated verification**: Run tests and validate artifacts between sessions
+- **JIRA integration**: Sync blocking relationships from JIRA
+- **Session auto-creation**: Create missing sessions automatically
+- **Shared branch**: All sessions work on same feature branch
+- **Integrated PR**: Single PR for entire feature at completion
+
+**Documentation:** See [../experimental/feature-orchestration.md](../experimental/feature-orchestration.md) for complete guide.
+
+**Report Issues:** https://github.com/itdove/devaiflow/issues
 
 ---
 

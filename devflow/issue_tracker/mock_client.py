@@ -165,8 +165,26 @@ class MockIssueTrackerClient(IssueTrackerClient):
                 resource_type="issue",
                 resource_id=issue_key
             )
-        # Simple update - merge payload into ticket
-        ticket.update(payload)
+        # Extract and merge fields from JIRA API payload format
+        if "fields" in payload:
+            for field_name, field_value in payload["fields"].items():
+                # Handle object values (assignee, priority, etc.)
+                if isinstance(field_value, dict):
+                    if "name" in field_value:
+                        ticket[field_name] = field_value["name"]
+                    elif "value" in field_value:
+                        ticket[field_name] = field_value["value"]
+                    elif "key" in field_value:
+                        ticket[field_name] = field_value["key"]
+                    else:
+                        ticket[field_name] = field_value
+                elif field_value is None:
+                    ticket[field_name] = None
+                else:
+                    ticket[field_name] = field_value
+        else:
+            # Fallback: simple merge if no fields key
+            ticket.update(payload)
         self.store.set_jira_ticket(issue_key, ticket)
 
     def update_ticket_field(self, issue_key: str, field_name: str, value: str) -> None:
@@ -222,11 +240,21 @@ class MockIssueTrackerClient(IssueTrackerClient):
         ticket = self.get_ticket(issue_key, field_mappings)
         return ticket.get("git_pull_request", "")
 
+    def resolve_assignee_for_comparison(self, assignee_filter: Optional[str]) -> Optional[str]:
+        """Resolve assignee filter for comparison (mock implementation).
+
+        For mock backend, resolve "currentUser()" to "test-user" for testing.
+        """
+        if assignee_filter == "currentUser()":
+            return "test-user"
+        return assignee_filter
+
     def get_child_issues(
         self,
         parent_key: str,
         issue_types: Optional[List[str]] = None,
         field_mappings: Optional[Dict] = None,
+        include_links: bool = False,
     ) -> List[Dict]:
         """Get child issues."""
         parent_ticket = self.store.get_jira_ticket(parent_key)

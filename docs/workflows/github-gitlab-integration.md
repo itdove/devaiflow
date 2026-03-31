@@ -770,7 +770,7 @@ daf sync
 - [GitHub Issues API](https://docs.github.com/en/rest/issues)
 - [Issue Templates](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests)
 - [DevAIFlow JIRA Integration](jira-integration.md)
-- [Architecture Overview](../reference/issue-tracker-architecture.md)
+- [Architecture Overview](../developer/issue-tracker-architecture.md)
 
 ## Next Steps
 
