@@ -145,10 +145,16 @@ daf active
 3. AI agent has shared context across all projects
 4. All projects typically use the same branch name
 
-**Before making changes:**
+**Before making changes (development sessions only):**
+
+**For development sessions (daf open):**
 1. Run `daf active` to see which projects are in the session
 2. Verify your current working directory
 3. Understand how changes might affect other projects
+
+**For analysis-only sessions (daf jira new, daf git new, daf investigate):**
+- Running `daf active` is NOT necessary - you're only reading files
+- Focus on analyzing the codebase, not checking session state
 
 ---
 
@@ -156,14 +162,15 @@ daf active
 
 For sessions opened via `daf open`:
 
-### 1. Session Start - Read Acceptance Criteria
+### 1. Session Start - Read Acceptance Criteria and Check Context
 
-**CRITICAL FIRST STEP:**
+**CRITICAL FIRST STEPS:**
+- Run `daf active` to see which projects are in this session
 - Read the issue immediately to understand acceptance criteria
 - Plan your work to address each criterion
 - Track which criteria you'll address as you work
 
-**Why:** Acceptance criteria define what "done" means.
+**Why:** Acceptance criteria define what "done" means. Checking context ensures you know which repositories are involved.
 
 ### 2. During Development
 
@@ -261,6 +268,10 @@ For sessions opened via `daf jira new` or `daf git new` (analysis-only sessions)
 
 **Purpose:** Analyze the codebase to create a well-informed issue
 
+**Context checking:**
+- `daf active` is NOT needed in analysis-only sessions
+- You're only reading files, not making changes
+
 **Constraints:**
 - ❌ DO NOT modify code or files
 - ❌ DO NOT run git commands
@@ -349,7 +360,7 @@ daf config refresh-jira-fields  # Refresh from JIRA API
 3. **Use session notes for details** - Track implementation decisions locally
 4. **Verify your work** - Test that acceptance criteria are actually met
 5. **Document blockers** - If stuck, document why in issue tracker
-6. **Check multi-project context** - Run `daf active` before making changes
+6. **Check multi-project context** - Run `daf active` before making changes (development sessions only)
 7. **Use correct issue tracker commands** - Auto-detection uses git remote URL
 
 ---
@@ -410,7 +421,7 @@ daf git view owner/repo#123 --comments
 3. Use `daf jira`/`daf git` commands for creates/updates
 4. Standard sessions: focus on acceptance criteria
 5. Ticket creation sessions: analyze only, no code changes
-6. Multi-project sessions: check `daf active` before changes
+6. Multi-project development sessions: check `daf active` before changes
 7. Defer git/PR/MR operations to user (`daf complete`)
 
 **For More Information:**
