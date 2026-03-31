@@ -875,7 +875,7 @@ def _build_ticket_creation_prompt(
         "Your task:",
         f"1. Analyze the codebase to understand how to implement: {goal}",
         "2. Read relevant files, search for patterns, understand the architecture",
-        f"3. Create a detailed JIRA {issue_type} using the 'daf jira create' command",
+        f"3. Create the JIRA {issue_type} using 'daf jira create' (this session uses JIRA backend)",
         parent_instruction,
         f"5. Use project: {project}; configured defaults: {defaults_str}",
         "6. Include detailed description and acceptance criteria based on your analysis",
