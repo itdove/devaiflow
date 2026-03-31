@@ -10,7 +10,6 @@ from devflow.jira.client import JiraClient
 from devflow.jira.field_mapper import JiraFieldMapper
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.jira.utils import merge_pr_urls
-from devflow.issue_tracker.factory import create_issue_tracker_client
 
 console = Console()
 
@@ -114,7 +113,12 @@ def update_jira_issue(
             sys.exit(1)
 
         # Initialize JIRA client and field mapper
-        jira_client = create_issue_tracker_client()
+        from devflow.utils import is_mock_mode
+        if is_mock_mode():
+            from devflow.mocks.jira_mock import MockJiraClient
+            jira_client = MockJiraClient(config=config)
+        else:
+            jira_client = JiraClient()
 
         # Ensure field mappings exist
         field_mapper = None

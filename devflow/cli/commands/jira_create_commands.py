@@ -11,7 +11,6 @@ from devflow.jira.client import JiraClient
 from devflow.jira.field_mapper import JiraFieldMapper
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.jira.utils import get_field_with_alias
-from devflow.issue_tracker.factory import create_issue_tracker_client
 
 console = Console()
 
@@ -57,7 +56,7 @@ def _ensure_field_mappings(config, config_loader) -> JiraFieldMapper:
     """
     from datetime import datetime
 
-    jira_client = create_issue_tracker_client()
+    jira_client = JiraClient()
 
     # Check if field mappings exist and are fresh
     if config.jira.field_mappings and not JiraFieldMapper(jira_client, config.jira.field_mappings).is_cache_stale(
@@ -744,7 +743,7 @@ def create_issue(
             issue_description = _get_description(description, description_file, template, interactive)
 
         # Create issue
-        jira_client = create_issue_tracker_client()
+        jira_client = JiraClient()
 
         # Build kwargs for generic create_issue method
         create_kwargs = {
