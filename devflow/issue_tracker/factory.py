@@ -47,8 +47,13 @@ def create_issue_tracker_client(
         >>> # Create GitLab client for enterprise instance
         >>> client = create_issue_tracker_client("gitlab", hostname="gitlab.cee.redhat.com", repository="group/project")
     """
+    import os
+
+    # Check for mock mode environment variable first - overrides everything
+    if os.getenv("DAF_MOCK_MODE") == "1":
+        backend = "mock"
     # If no backend specified, try to read from config
-    if backend is None:
+    elif backend is None:
         backend = get_backend_from_config()
 
     backend = backend.lower()

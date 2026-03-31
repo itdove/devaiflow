@@ -173,6 +173,7 @@ def validate_jira_ticket(issue_key: str, client: Optional['JiraClient'] = None) 
     """
     # Import here to avoid circular dependency
     from devflow.jira import JiraClient
+    from devflow.issue_tracker.factory import create_issue_tracker_client
     from devflow.jira.exceptions import (
         JiraNotFoundError,
         JiraAuthError,
@@ -183,7 +184,7 @@ def validate_jira_ticket(issue_key: str, client: Optional['JiraClient'] = None) 
     # Create client if not provided
     if not client:
         try:
-            client = JiraClient()
+            client = create_issue_tracker_client()
         except Exception as e:
             console.print(f"[red]✗[/red] Failed to initialize JIRA client: {e}")
             return None

@@ -108,10 +108,17 @@ def create_test_config():
         },
         "sync_filters": {
             "sync": {
-                "status": ["To Do", "In Progress"],
+                "status": ["New", "To Do", "In Progress"],
                 "required_fields": [],
                 "assignee": "currentUser()"
             }
+        },
+        "jira_issue_templates": {
+            "Bug": "Test bug description",
+            "Story": "Test story description",
+            "Task": "Test task description",
+            "Epic": "Test epic description",
+            "Spike": "Test spike description"
         }
     }
 

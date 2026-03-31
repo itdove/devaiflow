@@ -396,6 +396,7 @@ def create(
             sys.exit(1)
 
         session_list = []
+        parent = None  # Initialize parent (may be set by --parent-url logic)
 
         # Parse sessions from --sessions flag
         if sessions:
@@ -1419,6 +1420,12 @@ def sync(name: str, parent_url: Optional[str], auto_order: bool, dry_run: bool):
             # Still update external sessions even if no new children
             console.print(f"\n[dim]Updating external session statuses...[/dim]")
             feature.external_sessions = external_children
+
+            # Store parent_issue_key if parent_url was provided (even with no new children)
+            if parent_url:
+                feature.parent_issue_key = parent
+                console.print(f"[dim]Stored parent in feature metadata:[/dim] {parent}")
+
             feature_manager.update_feature(feature)
             console.print(f"[green]✓[/green] Updated {len(external_children)} external sessions")
             return

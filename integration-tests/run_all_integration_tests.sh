@@ -103,6 +103,7 @@ TESTS=(
     "test_upgrade_project_path.sh"
     "test_devaiflow_home.sh"
     "test_config.sh"
+    "test_feature_orchestration.sh"
 )
 
 TEST_DESCRIPTIONS=(
@@ -125,6 +126,7 @@ TEST_DESCRIPTIONS=(
     "Skills installation with --project-path flag"
     "DEVAIFLOW_HOME initialization and config creation"
     "Config prompts configuration validation"
+    "Feature orchestration (create → sync → list → delete multi-session features)"
 )
 
 # Counters
