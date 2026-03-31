@@ -175,8 +175,8 @@ unzip -l dist/devaiflow-*.whl | head -30
 Verify important files are included:
 - `LICENSE`
 - `README.md`
-- `DAF_AGENTS.md`
 - All Python modules in `devflow/`
+- Skills in `devflow/cli_skills/`
 
 ## Testing on TestPyPI
 
@@ -470,7 +470,7 @@ ERROR    File already exists. See https://pypi.org/help/#file-name-reuse
 
 ### Missing Files in Package
 
-**Problem:** Important files (like `LICENSE`, `DAF_AGENTS.md`) are missing from the uploaded package.
+**Problem:** Important files (like `LICENSE`, skills) are missing from the uploaded package.
 
 **Cause:** Files not included in package manifest.
 
@@ -480,16 +480,16 @@ ERROR    File already exists. See https://pypi.org/help/#file-name-reuse
    ```
    include LICENSE
    include README.md
-   include DAF_AGENTS.md
+   recursive-include devflow/cli_skills *.md
    ```
 
 2. **Verify with setup.py:**
    ```python
    setup(
        include_package_data=True,
-       data_files=[
-           ("", ["DAF_AGENTS.md"]),
-       ],
+       package_data={
+           'devflow': ['cli_skills/*/*.md'],
+       },
        ...
    )
    ```
@@ -497,7 +497,7 @@ ERROR    File already exists. See https://pypi.org/help/#file-name-reuse
 3. **Inspect package contents before uploading:**
    ```bash
    tar -tzf dist/devaiflow-*.tar.gz | grep LICENSE
-   tar -tzf dist/devaiflow-*.tar.gz | grep DAF_AGENTS.md
+   tar -tzf dist/devaiflow-*.tar.gz | grep cli_skills
    ```
 
 ### Command Not Found: twine

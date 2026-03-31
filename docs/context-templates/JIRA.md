@@ -65,4 +65,4 @@ run command
 
 ## Complete Reference
 
-See DAF_AGENTS.md for the complete JIRA Wiki markup reference and additional JIRA integration guidelines.
+See the **daf-workflow skill** and **ORGANIZATION.md** for JIRA Wiki markup reference and JIRA integration guidelines.

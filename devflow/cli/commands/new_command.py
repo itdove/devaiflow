@@ -124,7 +124,6 @@ def _generate_initial_prompt(
             Please start by reading the following context files if they exist:
             - AGENTS.md (agent-specific instructions)
             - CLAUDE.md (project guidelines and standards)
-            - DAF_AGENTS.md (daf tool usage guide)
 
             Also read the issue tracker ticket:
             daf jira view PROJ-52470"
