@@ -140,8 +140,52 @@ Running these commands inside Claude Code can cause:
 2. **Discover:** Run `daf config show --fields` to see YOUR custom fields
 3. **Read JIRA:** Use Atlassian MCP for fast reads
 
+## Skills Management
+
+DevAIFlow automatically discovers skills from multiple locations in a specific order:
+
+### Discovery Order (Load Order)
+
+1. **User-level**: `~/.claude/skills/` - Generic skills (daf-cli, git-cli, gh-cli, etc.)
+2. **Workspace-level**: `<workspace>/.claude/skills/` - Workspace-specific tools
+3. **Hierarchical**: `$DEVAIFLOW_HOME/.claude/skills/` - Organization-specific extensions
+4. **Project-level**: `<project>/.claude/skills/` - Project-specific skills
+
+### Precedence Rules
+
+When the same skill exists at multiple levels:
+
+**Project > Hierarchical > Workspace > User**
+
+Later-loaded skills can override or extend earlier ones. This is why generic skills (user-level) are loaded first, and organization-specific skills (hierarchical) are loaded after - they can extend the generic skills.
+
+### Best Practices
+
+1. **Use unique skill names** - Avoid naming conflicts by using unique names per level
+2. **Generic skills at user-level** - Place reusable tool documentation in `~/.claude/skills/`
+3. **Organization extensions in hierarchical** - Extend generic skills with company-specific details in `$DEVAIFLOW_HOME/.claude/skills/`
+4. **Project-specific only when needed** - Only place truly project-specific skills in `<project>/.claude/skills/`
+
+### Why This Order?
+
+Organization-specific skills (hierarchical) **extend** generic skills rather than replace them. For example:
+- `~/.claude/skills/daf-cli/` provides generic daf command documentation
+- `$DEVAIFLOW_HOME/.claude/skills/01-enterprise/` extends it with Red Hat-specific JIRA fields
+
+Both skills are loaded, but hierarchical skills add organization-specific context.
+
+### Duplicate Prevention
+
+DevAIFlow automatically prevents duplicate loading:
+- In single-project sessions, project-level skills are auto-loaded by Claude from `cwd`
+- DevAIFlow filters these out of `--add-dir` to prevent duplicates
+- Each skill directory is loaded exactly once
+
+**For detailed information**, see the comprehensive Skills Management Guide in `docs/guides/skills-management.md`.
+
 ## See Also
 
 - **daf-jira-fields skill** - Field mapping and validation rules
 - **Atlassian MCP** - Fast JIRA reads
 - **DAF_AGENTS.md** - Workflows and templates
+- **docs/guides/skills-management.md** - Comprehensive skills management guide
