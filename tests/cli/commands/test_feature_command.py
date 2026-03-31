@@ -494,7 +494,7 @@ class TestFeatureSync:
         runner,
         mock_config_loader,
         mock_session_manager,
-        mock_feature_storage,
+        mock_feature_manager,
         mock_url_parser,
         mock_issue_tracker_client,
         mock_outside_check,
@@ -506,7 +506,7 @@ class TestFeatureSync:
             branch="feature/test",
             sessions=["PROJ-124"],
         )
-        mock_feature_storage.load_feature.return_value = existing_feature
+        mock_feature_manager.get_feature.return_value = existing_feature
 
         # Mock URL parsing
         mock_url_parser.return_value = ("jira", "https://test.atlassian.net", "PROJ-123")
@@ -570,7 +570,7 @@ class TestFeatureSync:
         self,
         runner,
         mock_config_loader,
-        mock_feature_storage,
+        mock_feature_manager,
         mock_issue_tracker_client,
         mock_outside_check,
     ):
@@ -582,7 +582,7 @@ class TestFeatureSync:
             sessions=["PROJ-124"],
             parent_issue_key="PROJ-123",
         )
-        mock_feature_storage.load_feature.return_value = existing_feature
+        mock_feature_manager.get_feature.return_value = existing_feature
 
         # Mock child issues
         mock_issue_tracker_client.get_child_issues.return_value = [
@@ -608,7 +608,7 @@ class TestFeatureSync:
         self,
         runner,
         mock_config_loader,
-        mock_feature_storage,
+        mock_feature_manager,
     ):
         """Test sync fails when no parent in metadata and no --parent-url."""
         # Mock existing feature WITHOUT parent_issue_key
@@ -617,7 +617,7 @@ class TestFeatureSync:
             branch="feature/test",
             sessions=["session1", "session2"],
         )
-        mock_feature_storage.load_feature.return_value = existing_feature
+        mock_feature_manager.get_feature.return_value = existing_feature
 
         with runner.isolated_filesystem():
             result = runner.invoke(
@@ -633,7 +633,7 @@ class TestFeatureSync:
         runner,
         mock_config_loader,
         mock_session_manager,
-        mock_feature_storage,
+        mock_feature_manager,
         mock_url_parser,
         mock_issue_tracker_client,
         mock_outside_check,
@@ -645,7 +645,7 @@ class TestFeatureSync:
             branch="feature/test",
             sessions=["PROJ-124"],
         )
-        mock_feature_storage.load_feature.return_value = existing_feature
+        mock_feature_manager.get_feature.return_value = existing_feature
 
         # Mock URL parsing
         mock_url_parser.return_value = ("jira", "https://test.atlassian.net", "PROJ-123")
@@ -702,11 +702,11 @@ class TestFeatureSync:
         self,
         runner,
         mock_config_loader,
-        mock_feature_storage,
+        mock_feature_manager,
     ):
         """Test sync fails when feature doesn't exist."""
         # Mock feature not found
-        mock_feature_storage.load_feature.return_value = None
+        mock_feature_manager.get_feature.return_value = None
 
         with runner.isolated_filesystem():
             result = runner.invoke(
