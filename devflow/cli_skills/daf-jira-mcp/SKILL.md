@@ -10,14 +10,20 @@ When using MCP JIRA tools (e.g., `mcp__mcp-atlassian__jira_*`), you can leverage
 
 ## Core Concept
 
-**DevAIFlow stores JIRA field metadata that MCP tools need:**
+**CRITICAL: When using MCP JIRA tools, you MUST read DevAIFlow configuration first.**
+
+Unlike `daf jira create` commands (which are self-contained), MCP tools require you to manually:
+1. **Read configuration** via `daf config show --json`
+2. **Apply validation** logic yourself
+3. **Map field names** to JIRA field IDs
+4. **Format values** based on field types
+
+**DevAIFlow configuration provides JIRA field metadata that MCP tools need:**
 - Field IDs (customfield_12345) mapped to friendly names
 - Required fields per issue type
 - Allowed values for select/option fields
 - Field availability per issue type
 - Team/organization defaults
-
-**Get this data:** `daf config show --json`
 
 ## Step-by-Step: Using MCP with daf Intelligence
 
@@ -280,19 +286,63 @@ Invalid value 'High' for field 'customfield_12345'
 
 **Better approach:** Validate BEFORE calling MCP using daf config intelligence.
 
+## Field Format Requirements: ADF vs Wiki Markup
+
+**CRITICAL: Field format requirements differ between daf commands and MCP tools.**
+
+### With daf Commands (Recommended)
+- ✅ **Use JIRA Wiki markup** for all text fields
+- ✅ **Automatic conversion** - JIRA API converts Wiki markup to ADF for Cloud instances
+- ✅ **No format issues** - daf handles the complexity
+
+### With MCP Tools (Advanced)
+- ⚠️ **Format varies by field and JIRA instance**
+- **Description field**: May auto-convert Wiki markup to ADF (inconsistent)
+- **Custom rich text fields**: May require explicit **Atlassian Document Format (ADF)**
+- **Plain text fields**: Use plain strings
+
+**Example ADF format** (for custom fields that require it):
+```json
+{
+  "type": "doc",
+  "version": 1,
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Your text content here"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Known issues with MCP:**
+- `acceptance_criteria` custom field may fail with: "Operation value must be an Atlassian Document Format"
+- Auto-conversion behavior is inconsistent across JIRA field types
+- No reliable way to predict which fields need ADF vs plain text
+
+**Recommendation**: Use `daf jira create/update` for creating/updating tickets with rich text fields. MCP tools are best for reading data, searching, and advanced operations like sprint management.
+
 ## When to Use daf Commands Instead
 
 **Use `daf jira create/update` when:**
 - ✅ You want automatic validation (no manual checking)
 - ✅ You want friendly field names (no field ID mapping)
 - ✅ You want session integration (links issue to current session)
-- ✅ You're creating issues frequently (daf handles all this automatically)
+- ✅ You want automatic field format handling (Wiki markup → ADF conversion)
+- ✅ You're creating issues frequently (daf handles all complexity automatically)
+- ✅ **You're working with rich text custom fields** (avoids ADF format complexity)
 
 **Use MCP with daf intelligence when:**
 - ✅ You need advanced JIRA operations not in daf (e.g., sprint management)
-- ✅ You want direct API access with validation
+- ✅ You want direct API access for reading data
 - ✅ You're exploring JIRA data (searches, complex queries)
-- ✅ You understand the field mapping and validation process
+- ✅ You understand field mapping, validation, AND format requirements (ADF vs Wiki markup)
+- ⚠️ **Avoid MCP for creating/updating** if you have rich text custom fields (use daf commands instead)
 
 ## See Also
 

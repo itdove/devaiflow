@@ -14,14 +14,16 @@ argument-hint: "[TICKET-ID]"
 - **daf Commands**: Validated operations, friendly field names, session integration, team defaults
 
 **For complete MCP integration guide**, see **daf-jira-mcp skill** which shows how to:
-- Apply DevAIFlow's validation logic with MCP tools
-- Use field mappings and defaults from `daf config show --json`
+- Read field mappings and defaults from `daf config show --json` (for MCP tools)
+- Apply DevAIFlow's validation logic manually with MCP tools
 - Map friendly field names to JIRA field IDs
 - Apply issue type templates
 
 **When to use each:**
 - ✅ **Use MCP** for: reading tickets, searching, exploring JIRA data
-- ✅ **Use daf** for: creating/updating with validation, session integration, applying team defaults
+- ✅ **Use daf** for: creating/updating with validation (auto-applies config, no manual reading needed), session integration, team defaults
+
+**Note:** `daf jira create` commands are self-contained - they automatically load configuration, apply validation, and handle field mappings. You do NOT need to read `daf config show --json` before using daf commands.
 
 ---
 
