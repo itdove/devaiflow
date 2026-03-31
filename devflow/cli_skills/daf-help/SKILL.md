@@ -36,6 +36,8 @@ daf jira update PROJ-12345 --priority Major  # Update ticket
 **Configuration:**
 ```bash
 daf config show              # View current configuration
+daf skills                   # List all available skills
+daf skills <skill-name>      # Inspect specific skill
 ```
 
 **Getting Help:**
