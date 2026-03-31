@@ -885,8 +885,6 @@ def _build_ticket_creation_prompt(
     prompt_parts.extend([
         "⚠️  CRITICAL: Read the daf-jira skill to understand the correct command syntax for creating JIRA issues.",
         "",
-        "Use the `daf jira create` command to create your ticket based on your analysis.",
-        "",
         parent_note,
     ])
 
@@ -985,8 +983,6 @@ def _build_multiproject_ticket_creation_prompt(
         "6. Include detailed description and acceptance criteria based on cross-project analysis",
         "",
         "⚠️  CRITICAL: Read the daf-jira skill to understand the correct command syntax for creating JIRA issues.",
-        "",
-        "Use the `daf jira create` command to create your ticket based on your cross-project analysis.",
         "",
         parent_note,
     ]
