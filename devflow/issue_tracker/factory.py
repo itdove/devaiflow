@@ -12,7 +12,8 @@ from devflow.issue_tracker.interface import IssueTrackerClient
 def create_issue_tracker_client(
     backend: Optional[str] = None,
     timeout: int = 30,
-    hostname: Optional[str] = None
+    hostname: Optional[str] = None,
+    repository: Optional[str] = None
 ) -> IssueTrackerClient:
     """Create an issue tracker client based on backend configuration.
 
@@ -22,6 +23,8 @@ def create_issue_tracker_client(
         timeout: Timeout for API requests in seconds
         hostname: Hostname for enterprise instances (e.g., "gitlab.cee.redhat.com").
                   Only applicable for GitHub/GitLab backends.
+        repository: Repository in owner/repo format (GitHub) or group/project (GitLab).
+                    If provided, overrides config. Only applicable for GitHub/GitLab.
 
     Returns:
         IssueTrackerClient implementation for the specified backend
@@ -38,11 +41,11 @@ def create_issue_tracker_client(
         >>> # Create mock client for testing
         >>> client = create_issue_tracker_client("mock")
         >>>
-        >>> # Create GitHub Issues client
-        >>> client = create_issue_tracker_client("github")
+        >>> # Create GitHub Issues client with repository
+        >>> client = create_issue_tracker_client("github", repository="owner/repo")
         >>>
         >>> # Create GitLab client for enterprise instance
-        >>> client = create_issue_tracker_client("gitlab", hostname="gitlab.cee.redhat.com")
+        >>> client = create_issue_tracker_client("gitlab", hostname="gitlab.cee.redhat.com", repository="group/project")
     """
     # If no backend specified, try to read from config
     if backend is None:
@@ -59,35 +62,37 @@ def create_issue_tracker_client(
     elif backend == "github":
         from devflow.github.issues_client import GitHubClient
 
-        # Try to get repository from config
-        repository = None
-        try:
-            from devflow.config.loader import ConfigLoader
-            config_loader = ConfigLoader()
-            if config_loader.config_file.exists():
-                config = config_loader.load_config()
-                if config and hasattr(config, 'github') and config.github:
-                    repository = config.github.repository
-        except Exception:
-            pass
+        # Use provided repository or try to get from config
+        repo = repository
+        if not repo:
+            try:
+                from devflow.config.loader import ConfigLoader
+                config_loader = ConfigLoader()
+                if config_loader.config_file.exists():
+                    config = config_loader.load_config()
+                    if config and hasattr(config, 'github') and config.github:
+                        repo = config.github.repository
+            except Exception:
+                pass
 
-        return GitHubClient(timeout=timeout, repository=repository)
+        return GitHubClient(timeout=timeout, repository=repo)
     elif backend == "gitlab":
         from devflow.gitlab.issues_client import GitLabClient
 
-        # Try to get repository from config
-        repository = None
-        try:
-            from devflow.config.loader import ConfigLoader
-            config_loader = ConfigLoader()
-            if config_loader.config_file.exists():
-                config = config_loader.load_config()
-                if config and hasattr(config, 'gitlab') and config.gitlab:
-                    repository = config.gitlab.repository
-        except Exception:
-            pass
+        # Use provided repository or try to get from config
+        repo = repository
+        if not repo:
+            try:
+                from devflow.config.loader import ConfigLoader
+                config_loader = ConfigLoader()
+                if config_loader.config_file.exists():
+                    config = config_loader.load_config()
+                    if config and hasattr(config, 'gitlab') and config.gitlab:
+                        repo = config.gitlab.repository
+            except Exception:
+                pass
 
-        return GitLabClient(timeout=timeout, repository=repository, hostname=hostname)
+        return GitLabClient(timeout=timeout, repository=repo, hostname=hostname)
     else:
         raise ValueError(
             f"Unsupported issue tracker backend: {backend}. "

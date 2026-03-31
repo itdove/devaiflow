@@ -299,8 +299,8 @@ def feature():
     help="Comma-separated list of session names (in execution order)",
 )
 @click.option(
-    "--parent",
-    help="Parent ticket key (auto-discovers children). Mutually exclusive with --sessions.",
+    "--parent-url",
+    help="Parent issue URL. Auto-discovers children. Supports GitHub, GitLab, and JIRA URLs. Mutually exclusive with --sessions.",
 )
 @click.option(
     "--branch",
@@ -339,7 +339,7 @@ def feature():
 def create(
     name: str,
     sessions: Optional[str],
-    parent: Optional[str],
+    parent_url: Optional[str],
     branch: Optional[str],
     base_branch: Optional[str],
     verify: str,
@@ -361,20 +361,38 @@ def create(
           --branch "feature/oauth" \\
           --verify auto
 
-        # Auto-discover from parent epic
+        # Auto-discover from JIRA URL
         daf -e feature create oauth-integration \\
-          --parent "PROJ-100" \\
-          --auto-order \\
-          --verify auto
+          --parent-url "https://redhat.atlassian.net/browse/AAP-70183" \\
+          --auto-order
+
+        # Auto-discover from GitHub URL (works from any directory)
+        daf -e feature create web-ui \\
+          --parent-url "https://github.com/itdove/devaiflow/issues/305" \\
+          --auto-order
+
+        # Auto-discover from GitLab URL
+        daf -e feature create web-ui \\
+          --parent-url "https://gitlab.com/group/project/-/issues/42" \\
+          --auto-order
     """
     try:
-        # Validate: must have either --sessions or --parent
-        if not sessions and not parent:
-            console.print("[red]Error:[/red] Must provide either --sessions or --parent")
+        # Validate: must have either --sessions or --parent-url
+        if not sessions and not parent_url:
+            console.print("[red]Error:[/red] Must provide either --sessions or --parent-url")
             sys.exit(1)
 
-        if sessions and parent:
-            console.print("[red]Error:[/red] Cannot use both --sessions and --parent")
+        if sessions and parent_url:
+            console.print("[red]Error:[/red] Cannot use both --sessions and --parent-url")
+            sys.exit(1)
+
+        # Validate --parent-url is actually a URL
+        if parent_url and not (parent_url.startswith('http://') or parent_url.startswith('https://')):
+            console.print("[red]Error:[/red] --parent-url expects a full URL")
+            console.print("\n[yellow]Supported formats:[/yellow]")
+            console.print("  • GitHub: https://github.com/owner/repo/issues/123")
+            console.print("  • GitLab: https://gitlab.com/group/project/-/issues/42")
+            console.print("  • JIRA: https://redhat.atlassian.net/browse/AAP-70183")
             sys.exit(1)
 
         session_list = []
@@ -387,22 +405,49 @@ def create(
                 console.print("[red]Error:[/red] Feature requires at least 2 sessions")
                 sys.exit(1)
 
-        # Discover sessions from --parent flag
-        elif parent:
-            console.print(f"[bold]Discovering children from parent:[/bold] {parent}\n")
+        # Discover sessions from --parent-url
+        elif parent_url:
+            # Parse parent URL
+            from devflow.utils.url_parser import parse_issue_url, get_hostname_from_url
+            from devflow.issue_tracker.factory import create_issue_tracker_client
 
-            # Initialize managers
             config_loader = ConfigLoader()
             session_manager = SessionManager(config_loader=config_loader)
-
-            # Detect backend from parent key format
-            from devflow.issue_tracker.factory import create_issue_tracker_client
-            from devflow.utils.backend_detection import detect_backend_from_key
-
-            # Create appropriate client
             config = config_loader.load_config()
-            backend = detect_backend_from_key(parent, config)
-            issue_tracker_client = create_issue_tracker_client(backend=backend)
+
+            parsed = parse_issue_url(parent_url)
+
+            if not parsed:
+                console.print(f"[red]Error:[/red] Invalid URL: {parent_url}")
+                console.print("\n[yellow]Supported URL formats:[/yellow]")
+                console.print("  • GitHub: https://github.com/owner/repo/issues/123")
+                console.print("  • GitLab: https://gitlab.com/group/project/-/issues/42")
+                console.print("  • JIRA: https://redhat.atlassian.net/browse/AAP-70183")
+                sys.exit(1)
+
+            backend, repository, issue_id = parsed
+
+            # Construct parent key for display/storage
+            if backend == 'github':
+                parent = f"{repository}#{issue_id}"
+            elif backend == 'gitlab':
+                parent = f"{repository}#{issue_id}"
+            elif backend == 'jira':
+                parent = issue_id
+
+            console.print(f"[bold]Parsed parent URL:[/bold]")
+            console.print(f"[dim]Backend:[/dim] {backend}")
+            console.print(f"[dim]Repository:[/dim] {repository}")
+            console.print(f"[dim]Issue:[/dim] {parent}\n")
+
+            # Create client with repository info
+            if backend == 'github':
+                issue_tracker_client = create_issue_tracker_client(backend=backend, repository=repository)
+            elif backend == 'gitlab':
+                hostname = get_hostname_from_url(parent_url)
+                issue_tracker_client = create_issue_tracker_client(backend=backend, repository=repository, hostname=hostname)
+            else:
+                issue_tracker_client = create_issue_tracker_client(backend=backend)
 
             # Get sync filters from config
             sync_filters = None
@@ -803,7 +848,25 @@ def create(
         # Auto-detect base branch if not specified
         if not base_branch:
             from pathlib import Path
-            base_branch = GitUtils.get_default_branch(Path.cwd()) or "main"
+
+            # If parent_url was used, fetch default branch from API
+            if parent_url and backend in ['github', 'gitlab']:
+                try:
+                    if backend == 'github':
+                        repo_info = issue_tracker_client.get_repository_info(repository)
+                        base_branch = repo_info['default_branch']
+                        console.print(f"[dim]Detected default branch from API: {base_branch}[/dim]")
+                    elif backend == 'gitlab':
+                        project_info = issue_tracker_client.get_project_info(repository)
+                        base_branch = project_info['default_branch']
+                        console.print(f"[dim]Detected default branch from API: {base_branch}[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning:[/yellow] Could not fetch default branch from API: {e}")
+                    console.print(f"[dim]Falling back to 'main'[/dim]")
+                    base_branch = "main"
+            else:
+                # Try to detect from current git directory, fallback to "main"
+                base_branch = GitUtils.get_default_branch(Path.cwd()) or "main"
 
         # DRY RUN MODE: Show preview and exit (for --sessions path)
         if dry_run and sessions:
@@ -1137,34 +1200,56 @@ def delete(name: str, delete_sessions: bool, delete_branch: bool):
 
 @feature.command()
 @click.argument("name")
-@click.option("--parent", help="Parent ticket key to re-discover children from")
+@click.option("--parent-url", help="Parent issue URL to re-discover children from (optional if feature already has a parent)")
 @click.option("--auto-order", is_flag=True, help="Auto-order new sessions by dependencies")
 @click.option("--dry-run", is_flag=True, help="Preview changes without updating the feature")
 @require_experimental
 @require_outside_claude
-def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
+def sync(name: str, parent_url: Optional[str], auto_order: bool, dry_run: bool):
     """Sync a feature with its parent ticket to add new children.
 
-    Re-discovers children from the parent ticket and adds any that now meet
-    sync criteria (previously excluded due to missing assignee, required fields, etc.).
+    REQUIRES a parent ticket - re-discovers children from the parent and adds any that
+    now meet sync criteria (previously excluded due to missing assignee, required fields, etc.).
 
-    This is useful when you:
-    - Created a feature but some children didn't meet criteria
-    - Later updated those tickets to meet criteria
-    - Want to add them to the existing feature
+    By default, uses the parent URL from feature metadata (set during feature creation).
+
+    Use cases:
+    - You created a feature with --parent-url, but some children didn't meet criteria
+    - You later updated those tickets (assigned yourself, added required fields, etc.)
+    - You want to add them to the existing feature without recreating it
+
+    --parent-url is only needed if:
+    - Feature was created with --sessions (manual, no parent) and you want to add a parent now
+    - You want to sync from a different parent (rare edge case)
+
+    When --parent-url is provided, it's saved to feature metadata for future syncs.
 
     Examples:
 
-        # Re-discover and add new children
-        daf -e feature sync my-feature --parent "PROJ-100"
+        # Most common: sync using stored parent (feature created with --parent-url)
+        daf -e feature sync my-feature
 
-        # Preview what would be added
-        daf -e feature sync my-feature --parent "PROJ-100" --dry-run
+        # Preview what would be added (dry-run)
+        daf -e feature sync my-feature --dry-run
 
-        # Add and reorder by dependencies
-        daf -e feature sync my-feature --parent "PROJ-100" --auto-order
+        # Sync and reorder by dependencies
+        daf -e feature sync my-feature --auto-order
+
+        # Add parent to feature created with --sessions (saves parent for future syncs)
+        daf -e feature sync my-feature \
+          --parent-url "https://github.com/owner/repo/issues/100"
+
+    Note: Features created with --sessions (no parent) cannot sync without providing --parent-url.
     """
     try:
+        # Validate --parent-url is actually a URL (if provided)
+        if parent_url and not (parent_url.startswith('http://') or parent_url.startswith('https://')):
+            console.print("[red]Error:[/red] --parent-url expects a full URL")
+            console.print("\n[yellow]Supported formats:[/yellow]")
+            console.print("  • GitHub: https://github.com/owner/repo/issues/123")
+            console.print("  • GitLab: https://gitlab.com/group/project/-/issues/42")
+            console.print("  • JIRA: https://redhat.atlassian.net/browse/AAP-70183")
+            sys.exit(1)
         config_loader = ConfigLoader()
         session_manager = SessionManager(config_loader=config_loader)
         feature_manager = FeatureManager(config_loader=config_loader, session_manager=session_manager)
@@ -1175,27 +1260,61 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
             console.print(f"[red]Error:[/red] Feature '{name}' not found")
             sys.exit(1)
 
-        # Use parent from feature metadata if not provided
-        if not parent:
-            if hasattr(feature, 'parent_issue_key') and feature.parent_issue_key:
-                parent = feature.parent_issue_key
-                console.print(f"[dim]Using parent from feature: {parent}[/dim]\n")
-            else:
-                console.print(f"[red]Error:[/red] --parent is required (feature has no stored parent)")
-                console.print(f"[dim]Usage: daf -e feature sync {name} --parent <parent-key>[/dim]")
-                sys.exit(1)
-
-        console.print(f"[bold]Syncing feature '{name}' with parent {parent}[/bold]\n")
-        console.print(f"[dim]Current sessions:[/dim] {len(feature.sessions)}")
-        console.print(f"[dim]Current: {', '.join(feature.sessions)}[/dim]\n")
-
-        # Detect backend and create client
+        # Parse parent_url or use parent from feature metadata
+        from devflow.utils.url_parser import parse_issue_url, get_hostname_from_url
         from devflow.issue_tracker.factory import create_issue_tracker_client
         from devflow.utils.backend_detection import detect_backend_from_key
 
         config = config_loader.load_config()
-        backend = detect_backend_from_key(parent, config)
-        issue_tracker_client = create_issue_tracker_client(backend=backend)
+        parent = None
+        backend = None
+        repository = None
+        issue_tracker_client = None
+
+        # Use provided parent_url or fall back to feature metadata
+        if parent_url:
+            # Parse URL
+            parsed = parse_issue_url(parent_url)
+
+            if not parsed:
+                console.print(f"[red]Error:[/red] Invalid URL: {parent_url}")
+                sys.exit(1)
+
+            backend, repository, issue_id = parsed
+
+            if backend == 'github':
+                parent = f"{repository}#{issue_id}"
+            elif backend == 'gitlab':
+                parent = f"{repository}#{issue_id}"
+            elif backend == 'jira':
+                parent = issue_id
+
+            # Create client
+            if backend == 'github':
+                issue_tracker_client = create_issue_tracker_client(backend=backend, repository=repository)
+            elif backend == 'gitlab':
+                hostname = get_hostname_from_url(parent_url)
+                issue_tracker_client = create_issue_tracker_client(backend=backend, repository=repository, hostname=hostname)
+            else:
+                issue_tracker_client = create_issue_tracker_client(backend=backend)
+
+        else:
+            # Use parent from feature metadata
+            if hasattr(feature, 'parent_issue_key') and feature.parent_issue_key:
+                parent = feature.parent_issue_key
+                console.print(f"[dim]Using parent from feature: {parent}[/dim]\n")
+            else:
+                console.print(f"[red]Error:[/red] --parent-url is required (feature has no stored parent)")
+                console.print(f"[dim]Usage: daf -e feature sync {name} --parent-url <issue-url>[/dim]")
+                sys.exit(1)
+
+            # Detect backend from stored parent key
+            backend = detect_backend_from_key(parent, config)
+            issue_tracker_client = create_issue_tracker_client(backend=backend)
+
+        console.print(f"[bold]Syncing feature '{name}' with parent {parent}[/bold]\n")
+        console.print(f"[dim]Current sessions:[/dim] {len(feature.sessions)}")
+        console.print(f"[dim]Current: {', '.join(feature.sessions)}[/dim]\n")
 
         # Get sync filters (without assignee for team collaboration)
         sync_filters = None
@@ -1419,6 +1538,11 @@ def sync(name: str, parent: Optional[str], auto_order: bool, dry_run: bool):
         console.print(f"\n[dim]Updating external session statuses...[/dim]")
         feature.external_sessions = external_children
         console.print(f"[green]✓[/green] Updated {len(external_children)} external sessions")
+
+        # Store parent_issue_key if parent_url was provided (for "add parent later" scenario)
+        if parent_url:
+            feature.parent_issue_key = parent
+            console.print(f"[dim]Stored parent in feature metadata:[/dim] {parent}")
 
         # Save feature
         feature_manager.update_feature(feature)
@@ -1850,7 +1974,7 @@ def reorder(name: str, session: Optional[str], position: Optional[int], order: O
     Move mode: Move a specific session to a position
 
     Note: To reorder based on JIRA blocking relationships, use:
-          daf -e feature sync <name> --parent <parent> --auto-order
+          daf -e feature sync <name> --parent-url <parent-url> --auto-order
 
     Examples:
 

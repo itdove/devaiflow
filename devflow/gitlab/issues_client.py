@@ -237,6 +237,49 @@ class GitLabClient(IssueTrackerClient):
         """
         return repository.replace('/', '%2F')
 
+    def get_project_info(self, repository: Optional[str] = None) -> Dict:
+        """Fetch project metadata from GitLab API.
+
+        Args:
+            repository: Repository in group/project format (auto-detects if not provided)
+
+        Returns:
+            Dictionary with project metadata:
+            - default_branch: Default branch name
+            - full_name: Full project path (group/project)
+            - description: Project description
+            - url: Project URL
+
+        Raises:
+            IssueTrackerNotFoundError: If project not found
+            IssueTrackerApiError: If API request fails
+        """
+        repo = self._get_repository(repository)
+        encoded_repo = self._url_encode_repository(repo)
+
+        try:
+            output = self._run_glab_command([
+                'api',
+                f'projects/{encoded_repo}'
+            ])
+
+            project_data = json.loads(output)
+            return {
+                'default_branch': project_data.get('default_branch', 'main'),
+                'full_name': project_data.get('path_with_namespace', repo),
+                'description': project_data.get('description', ''),
+                'url': project_data.get('web_url', f'https://{self.hostname}/{repo}'),
+            }
+
+        except IssueTrackerApiError as e:
+            if 'Not Found' in str(e) or '404' in str(e):
+                raise IssueTrackerNotFoundError(
+                    f"GitLab project {repo} not found",
+                    resource_type="project",
+                    resource_id=repo
+                )
+            raise
+
     def get_ticket(self, issue_key: str, field_mappings: Optional[Dict] = None) -> Dict:
         """Fetch a GitLab issue by number.
 

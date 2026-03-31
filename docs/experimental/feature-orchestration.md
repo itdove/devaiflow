@@ -33,12 +33,23 @@ daf feature -e list           # This will NOT work
 
 ### Auto-discover from Parent Ticket
 
+Auto-discover child tickets using `--parent-url` with full issue URLs (works from any directory):
+
 ```bash
-# Discover child tickets from a parent epic/story
+# GitHub URL
 daf --experimental feature create my-feature \
-  --parent "PROJ-100" \
-  --auto-order \
-  --verify auto
+  --parent-url "https://github.com/itdove/devaiflow/issues/305" \
+  --auto-order
+
+# GitLab URL
+daf --experimental feature create my-feature \
+  --parent-url "https://gitlab.com/group/project/-/issues/42" \
+  --auto-order
+
+# JIRA URL
+daf --experimental feature create my-feature \
+  --parent-url "https://redhat.atlassian.net/browse/AAP-70183" \
+  --auto-order
 ```
 
 This will:
@@ -78,20 +89,41 @@ Create a new feature orchestration.
 
 **Options:**
 - `--sessions`: Comma-separated list of session names (manual mode)
-- `--parent`: Parent ticket key for auto-discovery (JIRA/GitHub/GitLab)
+- `--parent-url`: Parent issue URL for auto-discovery (GitHub/GitLab/JIRA)
 - `--branch`: Shared git branch (default: `feature/<name>`)
-- `--base-branch`: Base branch to create from (auto-detected)
+- `--base-branch`: Base branch to create from (auto-detected from API)
 - `--verify`: Verification mode (`auto`, `manual`, `skip`)
 - `--auto-order`: Order sessions by dependency relationships
 - `--filter-status`: Filter children by status (default: "To Do,New")
 - `--dry-run`: Preview without creating
 
+**Parent Discovery:**
+
+Use `--parent-url` with full issue URLs:
+
+| Backend | URL Format | Works From Any Dir? |
+|---------|-----------|---------------------|
+| GitHub | `https://github.com/owner/repo/issues/123` | ✅ Yes |
+| GitLab | `https://gitlab.com/group/project/-/issues/42` | ✅ Yes |
+| JIRA | `https://domain.atlassian.net/browse/AAP-123` | ✅ Yes |
+
+**Why URLs?**
+- No ambiguity (GitHub vs GitLab use same `owner/repo#123` format)
+- Works from any directory (no git repository required)
+- Fetches repository metadata (default branch) from API
+- Consistent across all backends
+
 **Examples:**
 
 ```bash
-# Auto-discover with dry-run preview
+# Auto-discover from GitHub URL
 daf --experimental feature create my-feature \
-  --parent "owner/repo#123" \
+  --parent-url "https://github.com/owner/repo/issues/123" \
+  --auto-order
+
+# Auto-discover from JIRA URL with dry-run preview
+daf --experimental feature create my-feature \
+  --parent-url "https://redhat.atlassian.net/browse/AAP-70183" \
   --auto-order \
   --dry-run
 
@@ -124,25 +156,49 @@ daf --experimental feature status my-feature
 
 Sync a feature with its parent ticket to add new children.
 
-Re-discovers children from the parent and adds any that now meet sync criteria.
+**REQUIRES a parent ticket** - Re-discovers children from the parent and adds any that now meet sync criteria.
 
-**Use Case:**
-- You created a feature but some children were excluded (missing assignee, required fields, etc.)
-- Later you updated those tickets to meet criteria
+**Parent URL is optional** - By default, uses the parent URL from feature metadata (set during `daf feature create`).
+
+**What does sync do?**
+
+Sync re-queries the parent ticket to discover all its children, then:
+1. Identifies children that NOW meet sync criteria (were previously excluded)
+2. Creates sessions for those newly-eligible children
+3. Adds them to the feature
+4. Updates external session statuses (for team collaboration)
+
+This is NOT for adding arbitrary sessions - it specifically re-discovers from the parent ticket.
+
+**Use Cases:**
+- You created a feature with `--parent-url`, but some children were excluded (missing assignee, required fields, etc.)
+- You later updated those tickets in the issue tracker (assigned yourself, added required fields, changed status)
 - You want to add them to the existing feature without recreating it
+
+**When you need `--parent-url`:**
+- Feature was created with `--sessions` (manual, no parent) and you want to add a parent now
+- You want to sync from a different parent (rare edge case)
+
+**Note:** When `--parent-url` is provided, it's saved to feature metadata for future syncs.
 
 **Examples:**
 
 ```bash
-# Re-discover and add new children
-daf --experimental feature sync my-feature --parent "PROJ-100"
+# Most common: sync using stored parent (feature created with --parent-url)
+daf --experimental feature sync my-feature
 
 # Preview what would be added (dry-run)
-daf --experimental feature sync my-feature --parent "PROJ-100" --dry-run
+daf --experimental feature sync my-feature --dry-run
 
-# Add new children and reorder by dependencies
-daf --experimental feature sync my-feature --parent "PROJ-100" --auto-order
+# Sync and reorder by dependencies
+daf --experimental feature sync my-feature --auto-order
+
+# Add parent to feature created with --sessions (saves for future syncs)
+daf --experimental feature sync my-feature \
+  --parent-url "https://github.com/owner/repo/issues/100"
 ```
+
+**Important:** Features created with `--sessions` (manual session list, no parent) cannot sync without providing `--parent-url` to add a parent first.
 
 **What it does:**
 1. Re-discovers all children from the parent ticket
@@ -305,22 +361,51 @@ daf --experimental feature delete my-feature --delete-sessions --delete-branch
 
 ## Parent Ticket Discovery
 
-Feature orchestration can auto-discover child tickets from parent tickets:
+Feature orchestration auto-discovers child tickets from parent tickets using `--parent-url` with full URLs.
 
-### JIRA
-Uses native parent-child relationships (Epic → Story, Story → Task/Sub-task).
+### Specifying Parent Issues
 
-### GitHub/GitLab
-Parses issue references from:
-1. **Description/body** (first priority)
-2. **Comments** (chronological order)
+Use `--parent-url` with full issue URLs (works from any directory):
 
-Supported formats:
-- `#123` - Same repository
-- `owner/repo#456` - Cross-repository
-- `GH-123`, `GL-123` - Prefixed format
+```bash
+# GitHub
+--parent-url "https://github.com/owner/repo/issues/123"
 
-**Ordering:** Children are ordered by appearance (description mentions first, then comment mentions).
+# GitLab
+--parent-url "https://gitlab.com/group/project/-/issues/42"
+
+# GitLab Enterprise
+--parent-url "https://gitlab.cee.redhat.com/group/project/-/issues/123"
+
+# JIRA
+--parent-url "https://redhat.atlassian.net/browse/AAP-70183"
+```
+
+**Why Full URLs?**
+
+Previously, feature creation supported issue keys like `owner/repo#123`, but this format is ambiguous:
+- GitHub uses: `owner/repo#123`
+- GitLab uses: `group/project#123` (identical format!)
+
+Without the hostname, there's no way to distinguish GitHub from GitLab. Full URLs eliminate this ambiguity and work from any directory (no git repository required).
+
+### Backend-Specific Discovery
+
+**JIRA:**
+- Uses native parent-child relationships (Epic → Story, Story → Task/Sub-task)
+- Fetches all children via JIRA API
+
+**GitHub/GitLab:**
+- Parses issue references from parent issue description and comments
+- Supported reference formats in parent description:
+  - `#123` - Same repository
+  - `owner/repo#456` - Cross-repository
+  - `GH-123`, `GL-123` - Prefixed format
+- Ordering: Description mentions first, then comment mentions chronologically
+
+**Repository Metadata:**
+- When using URLs, fetches repository metadata (default branch) from API
+- No git repository required on your local machine
 
 ## Verification Between Sessions
 
