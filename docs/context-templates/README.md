@@ -9,7 +9,6 @@ Context files are loaded in this order:
 1. **Default files** (from project directory):
    - AGENTS.md (agent-specific instructions)
    - CLAUDE.md (project guidelines and standards)
-   - DAF_AGENTS.md (daf tool usage guide)
 
 2. **Backend context** (from DEVAIFLOW_HOME):
    - `backends/JIRA.md` - JIRA-specific integration rules
@@ -266,4 +265,4 @@ daf new --name test-context --goal "Test context loading"
 - User-configured context: `daf config context --help`
 - AGENTS.md: Project-specific agent instructions
 - CLAUDE.md: Project guidelines and standards
-- DAF_AGENTS.md: DevAIFlow tool usage guide
+- Skills: daf-workflow, daf-cli, daf-jira-fields (auto-loaded)

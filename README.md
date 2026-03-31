@@ -550,11 +550,6 @@ DevAIFlow supports the following environment variables for customization:
    - Settings stored in `$DEVAIFLOW_HOME/` directory
    - Personal preferences only, no team sharing
 
-5. **Copy DAF_AGENTS.md**: Copy the `DAF_AGENTS.md` file to your project roots for automatic daf tool guidance in AI assistant sessions
-   - This file is automatically loaded when opening sessions
-   - Provides complete command reference and best practices
-   - Customize JIRA templates to match your organization's standards
-
 **Configuration Files:**
 - `backends/jira.json` - JIRA backend settings (URL, field mappings, transitions)
 - `organization.json` - Organization-wide settings (project, field aliases)

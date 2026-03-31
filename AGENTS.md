@@ -4,7 +4,7 @@
 
 **IMPORTANT**: The following general instructions apply to the DevAIFlow project and MUST be followed when contributing to this codebase.
 
-**For JIRA operations**: This project uses the `daf` tool for issue tracker integration. Always use `daf jira` commands (documented in DAF_AGENTS.md), NOT direct API calls.
+**For JIRA operations**: This project uses the `daf` tool for issue tracker integration. Always use `daf jira` commands (documented in the daf-workflow skill), NOT direct API calls.
 
 **Skills Documentation**: The skills (CLI command documentation) are located in the **`devflow/cli_skills/`** directory in the repository.
 
@@ -211,12 +211,12 @@ When creating pull requests, the `Assisted-by: <name of code assistant>` field i
 
 ### DevAIFlow (daf tool)
 
-**IMPORTANT**: For instructions on using the `daf` tool (DevAIFlow) for JIRA operations, session management, and workflows, see [DAF_AGENTS.md](DAF_AGENTS.md).
+**IMPORTANT**: For instructions on using the `daf` tool (DevAIFlow) for JIRA operations, session management, and workflows, see the **daf-workflow skill**.
 
-The DAF_AGENTS.md file is automatically loaded when you open sessions via `daf open` and contains:
+The daf-workflow skill is automatically loaded when you open sessions and contains:
 - Complete `daf jira` command reference
 - Session management workflows
-- JIRA integration best practices
+- Issue tracker integration (JIRA, GitHub Issues, GitLab Issues)
 - Configuration and troubleshooting
 
 **Quick reference:**
@@ -224,9 +224,9 @@ The DAF_AGENTS.md file is automatically loaded when you open sessions via `daf o
 - Create JIRA issues: `daf jira create {bug|story|task} --summary "..." --parent PROJ-12345`
 - Update JIRA issues: `daf jira update PROJ-12345 --description "..."`
 - Session management: `daf new`, `daf open`, `daf complete`
-- Configuration: `daf config edit`
+- Configuration: `daf config show`
 
-For complete documentation, refer to DAF_AGENTS.md.
+For complete documentation, refer to the daf-workflow, daf-cli, and daf-jira-fields skills.
 
 #### Safety Guards: Commands That Cannot Run Inside Claude Code
 
@@ -1526,22 +1526,13 @@ class Session(BaseModel):
   - Prominent placement in JIRA Integration section of skill
   - Updated "Tips for Claude Code Sessions" to lead with Wiki markup requirement
   - Skills deployed to workspace via daf skills command
-  - Makes Wiki markup requirement more visible than DAF_AGENTS.md alone
+  - Makes Wiki markup requirement more visible in daf-cli skill
   - Addresses issue of Claude forgetting to use JIRA Wiki markup in daf jira new sessions
   - All 1229 tests pass
-- ✓ Automatic version check and upgrade prompt for DAF_AGENTS.md
-  - Added `_get_bundled_daf_agents_content()` to read bundled file content for comparison
-  - Added `_check_and_upgrade_daf_agents()` to detect outdated installations and prompt for upgrade
-  - Modified `_validate_context_files()` to call upgrade check after finding DAF_AGENTS.md
-  - Content comparison detects when installed file differs from bundled version
-  - Prompts user: "DAF_AGENTS.md has been updated. Would you like to upgrade to the latest version?"
-  - User can accept (upgrade), decline (continue with current), or auto-upgrade in mock mode
-  - Upgrade works for both repository and workspace installations
-  - Non-blocking: session continues if upgrade declined or if bundled file cannot be read
-  - Follows same pattern as `devflow/utils/claude_commands.py` for consistency
-  - Comprehensive test coverage: 10 new tests covering all scenarios
-  - All 1556 tests pass
-  - Documentation updated in docs/02-installation.md with upgrade behavior explanation
+- ✓ Automatic version check and upgrade prompt for DAF_AGENTS.md (DEPRECATED - replaced by daf-workflow skill in v0.2.0)
+  - Note: DAF_AGENTS.md was removed in favor of the daf-workflow skill (see CHANGELOG.md for migration details)
+  - Migration logic helps users transition from DAF_AGENTS.md to daf-workflow skill
+  - All workflow guidance now provided through skills (daf-workflow, daf-cli, daf-jira-fields)
 - ✓ Official Windows OS support for DevAIFlow
   - Fixed SIGTERM signal handling in 4 command files (new_command.py, investigate_command.py, open_command.py, jira_new_command.py)
   - Windows uses SIGBREAK instead of Unix SIGTERM for graceful shutdown

@@ -1,4 +1,11 @@
-"""Utility functions for validating DAF_AGENTS.md context files."""
+"""Migration utilities for DAF_AGENTS.md to daf-workflow skill transition.
+
+NOTE: DAF_AGENTS.md was deprecated in v0.2.0 and replaced by the daf-workflow skill.
+This module helps users migrate by offering to delete old DAF_AGENTS.md files.
+
+The daf-workflow skill provides all workflow guidance and is automatically loaded
+by Claude Code, eliminating the need for DAF_AGENTS.md files.
+"""
 
 import importlib.resources
 import shutil

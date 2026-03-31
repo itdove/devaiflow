@@ -274,4 +274,5 @@ daf config show --json | jq '.jira.field_mappings'
 - **daf-jira skill** - daf commands for validated JIRA operations
 - **daf-jira-mcp skill** - Using MCP tools with daf intelligence
 - **daf-config skill** - View configuration and field mappings
-- **DAF_AGENTS.md** - JIRA templates and workflows
+- **daf-workflow skill** - Workflow guidance and issue tracker integration
+- **ORGANIZATION.md** - JIRA templates and organization standards

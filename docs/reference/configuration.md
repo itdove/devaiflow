@@ -1321,7 +1321,6 @@ When you create or open a session, context files are loaded in this order:
 1. **Default files** (from project directory):
    - `AGENTS.md` (agent-specific instructions)
    - `CLAUDE.md` (project guidelines and standards)
-   - `DAF_AGENTS.md` (daf tool usage guide)
 
 2. **Backend context** (from DEVAIFLOW_HOME):
    - `backends/JIRA.md` (JIRA-specific integration rules)
