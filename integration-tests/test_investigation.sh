@@ -262,13 +262,12 @@ print_test "Verify investigation session appears in daf list"
 
 LIST_OUTPUT=$(daf list 2>&1)
 
-# Search for the first 10 characters of the session name to handle truncation in table output
-SESSION_PREFIX="${TEST_INVESTIGATION:0:10}"
-if echo "$LIST_OUTPUT" | grep -q "$SESSION_PREFIX"; then
+# Session names are never truncated due to no_wrap=True on Name column
+if echo "$LIST_OUTPUT" | grep -q "$TEST_INVESTIGATION"; then
     echo -e "  ${GREEN}✓${NC} Investigation session appears in list"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    echo -e "  ${RED}✗${NC} Investigation session not found in list (looking for: $SESSION_PREFIX)"
+    echo -e "  ${RED}✗${NC} Investigation session not found in list (looking for: $TEST_INVESTIGATION)"
     exit 1
 fi
 
