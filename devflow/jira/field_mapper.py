@@ -70,10 +70,10 @@ class JiraFieldMapper:
         # Fetch all fields in the JIRA instance
         all_fields = self._fetch_all_fields()
 
-        # Try to fetch createmeta for common issue types
+        # Try to fetch createmeta for ALL issue types in the project
         # If createmeta fails (e.g., 404), fall back to using just all_fields
         try:
-            createmeta = self._fetch_createmeta(project_key, ["Bug", "Story", "Task", "Epic"])
+            createmeta = self._fetch_createmeta(project_key, issue_types=None)
             field_mappings = self._parse_field_metadata(all_fields, createmeta)
         except RuntimeError as e:
             # If createmeta fails, use fallback method
@@ -215,7 +215,7 @@ class JiraFieldMapper:
 
         return response.json()
 
-    def _fetch_createmeta(self, project_key: str, issue_types: List[str]) -> Dict:
+    def _fetch_createmeta(self, project_key: str, issue_types: Optional[List[str]] = None) -> Dict:
         """Fetch field metadata for specific issue types using new JIRA API.
 
         Uses the new JIRA 9.0+ API endpoints:
@@ -224,7 +224,8 @@ class JiraFieldMapper:
 
         Args:
             project_key: JIRA project key
-            issue_types: List of issue type names (e.g., ["Bug", "Story"])
+            issue_types: List of issue type names (e.g., ["Bug", "Story"]).
+                        If None, fetches metadata for ALL issue types in the project.
 
         Returns:
             Dictionary with project and issue type metadata in legacy format:
@@ -261,7 +262,11 @@ class JiraFieldMapper:
         # - Older JIRA: returns "values"
         all_issue_types = issue_types_data.get("issueTypes", issue_types_data.get("values", []))
 
-        # Step 2: Filter to requested issue types and fetch fields for each
+        # Step 2: If no filter specified, use ALL issue types
+        if issue_types is None:
+            issue_types = [it.get("name", "") for it in all_issue_types if it.get("name")]
+
+        # Step 3: Filter to requested issue types and fetch fields for each
         filtered_issue_types = []
         for issue_type in all_issue_types:
             issue_type_name = issue_type.get("name", "")

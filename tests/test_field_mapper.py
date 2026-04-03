@@ -809,3 +809,333 @@ def test_is_cache_stale_uses_days_when_hours_not_provided():
     # Should use max_age_days when max_age_hours is not specified
     assert mapper.is_cache_stale(timestamp, max_age_days=7) is False
     assert mapper.is_cache_stale(timestamp, max_age_days=2) is True
+
+
+def test_fetch_createmeta_with_all_issue_types():
+    """Test that _fetch_createmeta with issue_types=None fetches all types (itdove/devaiflow#361)."""
+    mock_client = Mock()
+
+    # Mock issuetypes response with Spike and Sub-task
+    issuetypes_response = Mock()
+    issuetypes_response.status_code = 200
+    issuetypes_response.json.return_value = {
+        "issueTypes": [
+            {"id": "1", "name": "Bug"},
+            {"id": "17", "name": "Story"},
+            {"id": "3", "name": "Task"},
+            {"id": "10", "name": "Epic"},
+            {"id": "5", "name": "Spike"},
+            {"id": "7", "name": "Sub-task"}
+        ]
+    }
+
+    # Mock field responses for each type
+    def create_field_response(field_id, field_name, required=False):
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            "fields": [
+                {
+                    "fieldId": field_id,
+                    "name": field_name,
+                    "required": required,
+                    "schema": {"type": "string"}
+                }
+            ]
+        }
+        return response
+
+    def mock_api_request(method, endpoint, **kwargs):
+        if endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes":
+            return issuetypes_response
+        elif "/issuetypes/" in endpoint:
+            # Return a simple field for each issue type
+            return create_field_response("customfield_123", "Test Field")
+        return Mock(status_code=404)
+
+    mock_client._api_request = mock_api_request
+
+    mapper = JiraFieldMapper(mock_client)
+
+    # Call with issue_types=None (fetch ALL types)
+    createmeta = mapper._fetch_createmeta("PROJ", issue_types=None)
+
+    # Verify all issue types are included
+    issue_type_names = [it["name"] for it in createmeta["projects"][0]["issuetypes"]]
+    assert "Bug" in issue_type_names
+    assert "Story" in issue_type_names
+    assert "Task" in issue_type_names
+    assert "Epic" in issue_type_names
+    assert "Spike" in issue_type_names
+    assert "Sub-task" in issue_type_names
+    assert len(issue_type_names) == 6
+
+
+def test_discover_fields_with_spike_issue_type():
+    """Test that discover_fields includes Spike-specific fields (itdove/devaiflow#361)."""
+    mock_client = Mock()
+
+    # Mock all_fields response
+    all_fields_response = Mock()
+    all_fields_response.status_code = 200
+    all_fields_response.json.return_value = [
+        {
+            "id": "customfield_12315940",
+            "name": "Acceptance Criteria",
+            "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}
+        }
+    ]
+
+    # Mock issuetypes response including Spike
+    issuetypes_response = Mock()
+    issuetypes_response.status_code = 200
+    issuetypes_response.json.return_value = {
+        "issueTypes": [
+            {"id": "17", "name": "Story"},
+            {"id": "10", "name": "Epic"},
+            {"id": "5", "name": "Spike"}
+        ]
+    }
+
+    # Mock field responses
+    spike_fields_response = Mock()
+    spike_fields_response.status_code = 200
+    spike_fields_response.json.return_value = {
+        "fields": [
+            {
+                "fieldId": "customfield_12315940",
+                "name": "Acceptance Criteria",
+                "required": True,
+                "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}
+            }
+        ]
+    }
+
+    story_fields_response = Mock()
+    story_fields_response.status_code = 200
+    story_fields_response.json.return_value = {
+        "fields": [
+            {
+                "fieldId": "customfield_12315940",
+                "name": "Acceptance Criteria",
+                "required": True,
+                "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}
+            }
+        ]
+    }
+
+    epic_fields_response = Mock()
+    epic_fields_response.status_code = 200
+    epic_fields_response.json.return_value = {
+        "fields": [
+            {
+                "fieldId": "customfield_12315940",
+                "name": "Acceptance Criteria",
+                "required": True,
+                "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}
+            }
+        ]
+    }
+
+    def mock_api_request(method, endpoint, **kwargs):
+        if endpoint == "/rest/api/2/field":
+            return all_fields_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes":
+            return issuetypes_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes/5":
+            return spike_fields_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes/17":
+            return story_fields_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes/10":
+            return epic_fields_response
+        return Mock(status_code=404)
+
+    mock_client._api_request = mock_api_request
+
+    mapper = JiraFieldMapper(mock_client)
+    field_mappings = mapper.discover_fields("PROJ")
+
+    # Verify acceptance_criteria is available for Spike
+    assert "acceptance_criteria" in field_mappings
+    assert "Spike" in field_mappings["acceptance_criteria"]["available_for"]
+    assert "Story" in field_mappings["acceptance_criteria"]["available_for"]
+    assert "Epic" in field_mappings["acceptance_criteria"]["available_for"]
+    assert "Spike" in field_mappings["acceptance_criteria"]["required_for"]
+
+
+def test_discover_fields_with_subtask_issue_type():
+    """Test that discover_fields includes Sub-task fields (itdove/devaiflow#361)."""
+    mock_client = Mock()
+
+    # Mock all_fields response
+    all_fields_response = Mock()
+    all_fields_response.status_code = 200
+    all_fields_response.json.return_value = [
+        {
+            "id": "customfield_12311140",
+            "name": "Parent Link",
+            "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:parent"}
+        }
+    ]
+
+    # Mock issuetypes response including Sub-task
+    issuetypes_response = Mock()
+    issuetypes_response.status_code = 200
+    issuetypes_response.json.return_value = {
+        "issueTypes": [
+            {"id": "17", "name": "Story"},
+            {"id": "7", "name": "Sub-task"}
+        ]
+    }
+
+    # Mock field responses
+    subtask_fields_response = Mock()
+    subtask_fields_response.status_code = 200
+    subtask_fields_response.json.return_value = {
+        "fields": [
+            {
+                "fieldId": "customfield_12311140",
+                "name": "Parent Link",
+                "required": True,
+                "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:parent"}
+            }
+        ]
+    }
+
+    story_fields_response = Mock()
+    story_fields_response.status_code = 200
+    story_fields_response.json.return_value = {
+        "fields": []
+    }
+
+    def mock_api_request(method, endpoint, **kwargs):
+        if endpoint == "/rest/api/2/field":
+            return all_fields_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes":
+            return issuetypes_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes/7":
+            return subtask_fields_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes/17":
+            return story_fields_response
+        return Mock(status_code=404)
+
+    mock_client._api_request = mock_api_request
+
+    mapper = JiraFieldMapper(mock_client)
+    field_mappings = mapper.discover_fields("PROJ")
+
+    # Verify parent_link is available for Sub-task
+    assert "parent_link" in field_mappings
+    assert "Sub-task" in field_mappings["parent_link"]["available_for"]
+    assert "Sub-task" in field_mappings["parent_link"]["required_for"]
+    # Should NOT be available for Story (not in that issue type's fields)
+    assert "Story" not in field_mappings["parent_link"]["available_for"]
+
+
+def test_discover_fields_with_custom_issue_types():
+    """Test that discover_fields handles custom organization-specific issue types (itdove/devaiflow#361)."""
+    mock_client = Mock()
+
+    # Mock all_fields response
+    all_fields_response = Mock()
+    all_fields_response.status_code = 200
+    all_fields_response.json.return_value = [
+        {
+            "id": "customfield_99999",
+            "name": "Custom Field",
+            "schema": {"type": "string"}
+        }
+    ]
+
+    # Mock issuetypes response with custom types
+    issuetypes_response = Mock()
+    issuetypes_response.status_code = 200
+    issuetypes_response.json.return_value = {
+        "issueTypes": [
+            {"id": "1", "name": "Bug"},
+            {"id": "100", "name": "Improvement"},
+            {"id": "101", "name": "Enhancement"}
+        ]
+    }
+
+    # Mock field responses
+    def create_field_response(field_id, field_name):
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            "fields": [
+                {
+                    "fieldId": field_id,
+                    "name": field_name,
+                    "required": False,
+                    "schema": {"type": "string"}
+                }
+            ]
+        }
+        return response
+
+    def mock_api_request(method, endpoint, **kwargs):
+        if endpoint == "/rest/api/2/field":
+            return all_fields_response
+        elif endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes":
+            return issuetypes_response
+        elif "/issuetypes/" in endpoint:
+            return create_field_response("customfield_99999", "Custom Field")
+        return Mock(status_code=404)
+
+    mock_client._api_request = mock_api_request
+
+    mapper = JiraFieldMapper(mock_client)
+    field_mappings = mapper.discover_fields("PROJ")
+
+    # Verify custom_field is available for all issue types
+    assert "custom_field" in field_mappings
+    assert "Bug" in field_mappings["custom_field"]["available_for"]
+    assert "Improvement" in field_mappings["custom_field"]["available_for"]
+    assert "Enhancement" in field_mappings["custom_field"]["available_for"]
+
+
+def test_fetch_createmeta_with_filtered_issue_types():
+    """Test that _fetch_createmeta still works with specific issue types list (backward compatibility)."""
+    mock_client = Mock()
+
+    # Mock issuetypes response
+    issuetypes_response = Mock()
+    issuetypes_response.status_code = 200
+    issuetypes_response.json.return_value = {
+        "issueTypes": [
+            {"id": "1", "name": "Bug"},
+            {"id": "17", "name": "Story"},
+            {"id": "3", "name": "Task"},
+            {"id": "5", "name": "Spike"}
+        ]
+    }
+
+    # Mock field responses
+    def create_field_response():
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {"fields": []}
+        return response
+
+    def mock_api_request(method, endpoint, **kwargs):
+        if endpoint == "/rest/api/2/issue/createmeta/PROJ/issuetypes":
+            return issuetypes_response
+        elif "/issuetypes/" in endpoint:
+            return create_field_response()
+        return Mock(status_code=404)
+
+    mock_client._api_request = mock_api_request
+
+    mapper = JiraFieldMapper(mock_client)
+
+    # Call with specific issue types (should only fetch Bug and Story)
+    createmeta = mapper._fetch_createmeta("PROJ", issue_types=["Bug", "Story"])
+
+    # Verify only requested issue types are included
+    issue_type_names = [it["name"] for it in createmeta["projects"][0]["issuetypes"]]
+    assert "Bug" in issue_type_names
+    assert "Story" in issue_type_names
+    assert "Task" not in issue_type_names
+    assert "Spike" not in issue_type_names
+    assert len(issue_type_names) == 2

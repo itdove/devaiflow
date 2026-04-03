@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Field discovery now fetches all issue types** (itdove/devaiflow#361)
+  - JIRA field discovery previously only fetched metadata for 4 hardcoded issue types (Bug, Story, Task, Epic)
+  - Now fetches metadata for ALL issue types available in the project (Spike, Sub-task, Improvement, Enhancement, custom types)
+  - Eliminates validation failures when creating issues with non-standard types
+  - Removes need for manual `backend_overrides` workarounds in `enterprise.json`
+  - Minimal performance impact: adds 2-6 API calls for typical JIRA projects
+  - Field mappings now have complete `available_for` lists including all issue types
+
 ## [2.1.0] - 2026-04-02
 
 ### Added
