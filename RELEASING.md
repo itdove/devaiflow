@@ -97,13 +97,11 @@ Update version in **devflow/__init__.py**:
 __version__ = "1.0.0"  # Remove -dev suffix
 ```
 
-Update version in **setup.py**:
-```python
-setup(
-    name="devaiflow",
-    version="1.0.0",  # Remove -dev suffix
-    ...
-)
+Update version in **pyproject.toml**:
+```toml
+[project]
+name = "devaiflow"
+version = "1.0.0"  # Remove -dev suffix
 ```
 
 Commit the version bump:
@@ -113,7 +111,7 @@ chore: bump version to 1.0.0 for release
 
 Prepare for v1.0.0 release:
 - Update version in devflow/__init__.py
-- Update version in setup.py
+- Update version in pyproject.toml
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
@@ -310,13 +308,10 @@ Update to patch version in **devflow/__init__.py**:
 __version__ = "1.0.1"
 ```
 
-Update version in **setup.py**:
-```python
-setup(
-    name="devaiflow",
-    version="1.0.1",
-    ...
-)
+Update version in **pyproject.toml**:
+```toml
+[project]
+version = "1.0.1"
 ```
 
 #### 4. Update CHANGELOG.md
@@ -421,12 +416,15 @@ Version number is stored in two locations:
    __version__ = "1.0.0"
    ```
 
-2. **setup.py** - Package metadata
-   ```python
-   version="1.0.0"
+2. **pyproject.toml** - Package metadata (PEP 621)
+   ```toml
+   [project]
+   version = "1.0.0"
    ```
 
 **Important**: Always keep these two files in sync during version bumps.
+
+**Note**: The project uses pyproject.toml (PEP 517/518/621) for package configuration. The setup.py file is kept for backward compatibility but contains no version information.
 
 ### Version Display
 
