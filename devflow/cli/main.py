@@ -428,8 +428,9 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 
 
 @cli.command()
-@click.argument("identifier", shell_complete=complete_session_identifiers)
+@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
 @click.option("--edit", is_flag=True, help="Edit session metadata via TUI instead of opening")
+@click.option("--status", help="Filter sessions by status when using interactive selection (e.g., 'in_progress,paused')")
 @click.option("--path", help="Project path (auto-detects conversation in multi-conversation sessions)")
 @workspace_option("Workspace name to use (overrides session stored workspace)")
 @click.option("--projects", help="Add multiple projects to session (comma-separated, requires --workspace)")
@@ -444,10 +445,11 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--auto-workspace", is_flag=True, help="Auto-select workspace without prompting")
 @click.option("--sync-strategy", type=click.Choice(['merge', 'rebase', 'skip'], case_sensitive=False), help="Strategy for syncing with upstream (merge/rebase/skip)")
 @json_option
-def open(ctx: click.Context, identifier: str, edit: bool, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
+def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
+    If not provided, an interactive session selection menu will be displayed.
 
     Use --path to specify which project to work on when the session has
     multiple conversations (multi-repository work). The path can be:
@@ -465,6 +467,12 @@ def open(ctx: click.Context, identifier: str, edit: bool, path: str, workspace: 
     Find conversation UUIDs with: daf info <session-name>
 
     Examples:
+        # Interactive session selection
+        daf open
+
+        # Interactive selection with status filter
+        daf open --status in_progress,paused
+
         # Open existing single-project session
         daf open PROJ-123
 
@@ -474,13 +482,34 @@ def open(ctx: click.Context, identifier: str, edit: bool, path: str, workspace: 
         # Add multiple projects to existing session
         daf open PROJ-123 -w primary --projects backend,frontend,shared
     """
+    from devflow.cli.commands.open_command import open_session, prompt_session_selection
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+
+    # Handle interactive session selection if no identifier provided
+    if not identifier:
+        if edit:
+            console.print("[red]✗[/red] --edit requires a session identifier")
+            console.print("[dim]Usage: daf open <session-name> --edit[/dim]")
+            sys.exit(1)
+
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+        identifier = prompt_session_selection(session_manager, status_filter=status)
+
+        if not identifier:
+            # User cancelled
+            return
+    elif status:
+        # --status flag only works with interactive selection (no identifier)
+        console.print("[yellow]⚠[/yellow] --status flag is only used with interactive selection (no identifier)")
+        console.print("[dim]Ignoring --status and opening specified session[/dim]")
+
     # Handle --edit flag (edit session metadata via TUI)
     if edit:
         from devflow.ui.session_editor_tui import run_session_editor_tui
         run_session_editor_tui(identifier)
         return
-
-    from devflow.cli.commands.open_command import open_session
 
     # Validate --projects and --path are mutually exclusive
     if path and projects:
