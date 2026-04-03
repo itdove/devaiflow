@@ -11,6 +11,7 @@ from typing import Optional
 
 from rich.console import Console
 from rich.prompt import Confirm
+from rich.table import Table
 
 from devflow.cli.commands.new_command import _generate_initial_prompt
 from devflow.cli.utils import check_concurrent_session, get_session_with_prompt, get_status_display, require_outside_claude, should_launch_claude_code
@@ -38,6 +39,153 @@ from devflow.utils.daf_agents_validation import (
 )
 
 console = Console()
+
+
+def prompt_session_selection(session_manager: SessionManager, status_filter: Optional[str] = None) -> Optional[str]:
+    """Display paginated list of sessions and prompt for selection.
+
+    Args:
+        session_manager: SessionManager instance
+        status_filter: Optional status filter (e.g., "in_progress,paused")
+
+    Returns:
+        Selected session name, or None if user cancelled
+    """
+    # Get all sessions sorted by last activity
+    sessions = session_manager.list_sessions(status=status_filter)
+
+    if not sessions:
+        if status_filter:
+            console.print(f"[dim]No sessions found with status: {status_filter}[/dim]")
+            console.print("[dim]Try without filter or use 'daf new' to create a session.[/dim]")
+        else:
+            console.print("[dim]No sessions found. Use 'daf new' to create one.[/dim]")
+        return None
+
+    # Sort by last activity (most recent first)
+    sessions.sort(key=lambda s: s.last_active, reverse=True)
+
+    # Store the most recent session for highlighting
+    most_recent_session = sessions[0] if sessions else None
+
+    # Pagination settings
+    limit = 25
+    total_sessions = len(sessions)
+    total_pages = (total_sessions + limit - 1) // limit
+    current_page = 1
+
+    # Show filter info if active
+    if status_filter:
+        console.print(f"\n[dim]Filtering by status: {status_filter}[/dim]")
+
+    while current_page <= total_pages:
+        # Clear screen for cleaner UX
+        console.print()
+
+        # Calculate slice for current page
+        start_idx = (current_page - 1) * limit
+        end_idx = min(start_idx + limit, total_sessions)
+        sessions_page = sessions[start_idx:end_idx]
+
+        # Create table
+        table = Table(
+            title=f"Your Sessions (Page {current_page}/{total_pages})",
+            show_header=True,
+            header_style="bold magenta"
+        )
+        table.add_column("#", style="cyan", justify="right", width=4)
+        table.add_column("Name", style="bold", no_wrap=True)
+        table.add_column("Workspace", style="dim")
+        table.add_column("Issue", style="dim")
+        table.add_column("Summary")
+        table.add_column("Status", style="dim")
+        table.add_column("Last Activity", style="dim", justify="right")
+
+        # Add rows with global numbering
+        for idx, session in enumerate(sessions_page, start=start_idx + 1):
+            # Status display
+            status_text, status_color = get_status_display(session.status)
+
+            # Last activity
+            time_diff = datetime.now() - session.last_active
+            hours_ago = int(time_diff.total_seconds() // 3600)
+            days_ago = hours_ago // 24
+
+            if days_ago > 0:
+                last_activity = f"{days_ago}d ago"
+            elif hours_ago > 0:
+                last_activity = f"{hours_ago}h ago"
+            else:
+                minutes_ago = int((time_diff.total_seconds() % 3600) // 60)
+                last_activity = f"{minutes_ago}m ago" if minutes_ago > 0 else "just now"
+
+            # Workspace display
+            workspace_display = session.workspace_name or "-"
+
+            # Issue key display
+            issue_display = session.issue_key or "-"
+
+            # Summary display
+            summary = session.issue_metadata.get("summary") if session.issue_metadata else session.goal or ""
+
+            # Highlight most recent session with indicator
+            is_most_recent = (session.name == most_recent_session.name if most_recent_session else False)
+            name_display = f"[green]▶[/green] {session.name}" if is_most_recent else f"  {session.name}"
+
+            table.add_row(
+                str(idx),
+                name_display,
+                workspace_display,
+                issue_display,
+                summary,
+                f"[{status_color}]{status_text}[/{status_color}]",
+                last_activity,
+            )
+
+        console.print(table)
+
+        # Build prompt text based on page
+        if current_page < total_pages:
+            prompt_text = f"\nEnter number to open (1-{total_sessions}), press Enter for next page, or 'q' to quit: "
+        else:
+            # Last page
+            prompt_text = f"\nEnter number to open (1-{total_sessions}), or 'q' to quit: "
+
+        # Prompt for input
+        try:
+            user_input = console.input(prompt_text).strip()
+
+            # Handle quit
+            if user_input.lower() == 'q':
+                return None
+
+            # Handle Enter for next page
+            if user_input == '':
+                if current_page < total_pages:
+                    current_page += 1
+                    continue
+                else:
+                    # On last page, Enter does nothing
+                    console.print("[yellow]Already on last page. Enter a number or 'q' to quit.[/yellow]")
+                    continue
+
+            # Handle number selection
+            try:
+                selection = int(user_input)
+                if 1 <= selection <= total_sessions:
+                    selected_session = sessions[selection - 1]
+                    console.print(f"\n[green]Opening session:[/green] {selected_session.name}")
+                    return selected_session.name
+                else:
+                    console.print(f"[red]Invalid number. Please enter a number between 1 and {total_sessions}.[/red]")
+                    continue
+            except ValueError:
+                console.print("[red]Invalid input. Please enter a number, press Enter for next page, or 'q' to quit.[/red]")
+                continue
+
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            return None
 
 
 def _extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[str]) -> Optional[str]:
