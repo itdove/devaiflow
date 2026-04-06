@@ -12,6 +12,10 @@ from rich.prompt import Prompt, Confirm
 
 from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, resolve_workspace_path, should_launch_claude_code
 from devflow.git.utils import GitUtils
+from devflow.utils.backend_detection import detect_backend_from_key
+from devflow.issue_tracker.factory import create_issue_tracker_client
+from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError, IssueTrackerAuthError, IssueTrackerApiError
+from devflow.utils.git_remote import GitRemoteDetector
 
 # Import unified utilities
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
@@ -22,6 +26,133 @@ from devflow.utils.daf_agents_validation import validate_daf_agents_md
 console = Console()
 
 
+@require_outside_claude
+def create_investigation_from_issue(
+    issue_key: str,
+    goal_override: Optional[str] = None,
+    parent: Optional[str] = None,
+    name: Optional[str] = None,
+    path: Optional[str] = None,
+    workspace: Optional[str] = None,
+    model_profile: Optional[str] = None,
+    projects: Optional[str] = None,
+    temp_clone: Optional[bool] = None,
+) -> None:
+    """Create investigation session from an existing issue tracker ticket.
+
+    This function fetches the issue details and creates an investigation session
+    with the issue summary as the goal.
+
+    Args:
+        issue_key: Issue identifier (PROJ-12345, owner/repo#123, #123)
+        goal_override: Optional goal to override issue summary
+        parent: Optional parent issue key (for tracking investigation under an epic)
+        name: Optional session name (auto-generated from issue key if not provided)
+        path: Optional project path (bypasses interactive selection if provided)
+        workspace: Optional workspace name (overrides session default and config default)
+        model_profile: Optional model provider profile to use
+        projects: Optional comma-separated list of project names for multi-project mode
+        temp_clone: Whether to clone to temp directory (None = prompt, True = clone, False = no clone)
+    """
+    from devflow.config.loader import ConfigLoader
+
+    config_loader = ConfigLoader()
+    config = config_loader.load_config()
+
+    if not config:
+        console_print("[red]✗[/red] No configuration found. Run [cyan]daf init[/cyan] first.")
+        if is_json_mode():
+            output_json(success=False, error={"message": "No configuration found", "code": "NO_CONFIG"})
+        sys.exit(1)
+
+    console_print(f"[dim]Fetching issue details for: {issue_key}[/dim]")
+
+    # Detect backend from issue key format
+    backend = detect_backend_from_key(issue_key, config)
+    console_print(f"[dim]Detected backend: {backend}[/dim]")
+
+    # Fetch issue details
+    try:
+        if backend == "jira":
+            # JIRA backend
+            from devflow.jira import JiraClient
+            client = JiraClient()
+            issue = client.get_ticket(issue_key)
+            issue_summary = issue.get("summary", "")
+            issue_description = issue.get("description", "")
+
+        else:
+            # GitHub/GitLab backend
+            detector = GitRemoteDetector()
+            platform_info = detector.parse_repository_info()
+            hostname = detector.get_hostname()
+
+            if platform_info:
+                platform, owner, repo_name = platform_info
+                actual_backend = "gitlab" if platform == "gitlab" else "github"
+                repository = f"{owner}/{repo_name}"
+            else:
+                # Default to GitHub if can't detect
+                actual_backend = "github"
+                repository = None
+
+            # Create appropriate client
+            client = create_issue_tracker_client(backend=actual_backend, hostname=hostname)
+
+            # Set repository if we have one
+            if repository and hasattr(client, 'repository'):
+                client.repository = repository
+
+            # Fetch issue
+            issue = client.get_ticket(issue_key)
+            issue_summary = issue.get("title", "") or issue.get("summary", "")
+            issue_description = issue.get("body", "") or issue.get("description", "")
+
+        console_print(f"[green]✓[/green] Fetched issue: {issue_summary}")
+
+    except IssueTrackerNotFoundError:
+        console_print(f"[red]✗[/red] Issue not found: {issue_key}")
+        if is_json_mode():
+            output_json(success=False, error={"message": f"Issue not found: {issue_key}", "code": "ISSUE_NOT_FOUND"})
+        sys.exit(1)
+    except IssueTrackerAuthError as e:
+        console_print(f"[red]✗[/red] Authentication failed: {e}")
+        if is_json_mode():
+            output_json(success=False, error={"message": str(e), "code": "AUTH_ERROR"})
+        sys.exit(1)
+    except IssueTrackerApiError as e:
+        console_print(f"[red]✗[/red] API error: {e}")
+        if is_json_mode():
+            output_json(success=False, error={"message": str(e), "code": "API_ERROR"})
+        sys.exit(1)
+    except Exception as e:
+        console_print(f"[red]✗[/red] Failed to fetch issue: {e}")
+        if is_json_mode():
+            output_json(success=False, error={"message": str(e), "code": "FETCH_ERROR"})
+        sys.exit(1)
+
+    # Use goal override if provided, otherwise use issue summary
+    goal = goal_override if goal_override else issue_summary
+
+    # Auto-generate session name from issue key if not provided
+    if not name:
+        # Normalize issue key for session name (replace # with issue-)
+        name = f"investigate-{issue_key.replace('#', 'issue-')}"
+        console_print(f"[dim]Auto-generated session name: {name}[/dim]")
+
+    # Create investigation session with fetched details
+    create_investigation_session(
+        goal=goal,
+        parent=parent or issue_key,  # Track under the issue if no parent provided
+        name=name,
+        path=path,
+        workspace=workspace,
+        model_profile=model_profile,
+        projects=projects,
+        temp_clone=temp_clone,
+        issue_key=issue_key,
+        issue_details={"summary": issue_summary, "description": issue_description},
+    )
 
 
 def slugify_goal(goal: str) -> str:
@@ -66,6 +197,8 @@ def create_investigation_session(
     model_profile: Optional[str] = None,
     projects: Optional[str] = None,
     temp_clone: Optional[bool] = None,
+    issue_key: Optional[str] = None,
+    issue_details: Optional[dict] = None,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
@@ -84,6 +217,8 @@ def create_investigation_session(
         model_profile: Optional model provider profile to use (e.g., "vertex", "llama-cpp")
         projects: Optional comma-separated list of project names for multi-project mode
         temp_clone: Whether to clone to temp directory (None = prompt, True = clone, False = no clone)
+        issue_key: Optional issue key (for sessions created from issues)
+        issue_details: Optional issue details dict with 'summary' and 'description' keys
     """
     from devflow.session.manager import SessionManager
     from devflow.config.loader import ConfigLoader
@@ -265,7 +400,10 @@ def create_investigation_session(
                 console_print(f"[dim]User declined temp clone or cloning failed - using current directory[/dim]")
 
     # Build the goal string for investigation
-    if parent:
+    if issue_key:
+        # Session created from issue - include issue key in goal
+        full_goal = f"Investigate {issue_key}: {goal}"
+    elif parent:
         full_goal = f"Investigate (under {parent}): {goal}"
     else:
         full_goal = f"Investigate: {goal}"
@@ -284,8 +422,10 @@ def create_investigation_session(
 
     # Set session_type to "investigation"
     session.session_type = "investigation"
-    # Set parent for tracking if provided
-    if parent:
+    # Set issue_key for tracking (use issue_key or parent)
+    if issue_key:
+        session.issue_key = issue_key
+    elif parent:
         session.issue_key = parent
 
     # AAP-64296: Store selected workspace in session
@@ -351,7 +491,13 @@ def create_investigation_session(
     # Build initial prompt with investigation-only constraints
     # AAP-64886: Get workspace path from session instead of using default
     workspace = resolve_workspace_path(config, session.workspace_name)
-    initial_prompt = _build_investigation_prompt(goal, parent, config, name, project_path=project_path, workspace=workspace)
+    initial_prompt = _build_investigation_prompt(
+        goal, parent, config, name,
+        project_path=project_path,
+        workspace=workspace,
+        issue_key=issue_key,
+        issue_details=issue_details
+    )
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
@@ -469,6 +615,8 @@ def _build_investigation_prompt(
     session_name: str,
     project_path: Optional[str] = None,
     workspace: Optional[str] = None,
+    issue_key: Optional[str] = None,
+    issue_details: Optional[dict] = None,
 ) -> str:
     """Build the initial prompt for investigation sessions.
 
@@ -479,12 +627,16 @@ def _build_investigation_prompt(
         session_name: Name of the session
         project_path: Project path
         workspace: Workspace path
+        issue_key: Optional issue key (for sessions created from issues)
+        issue_details: Optional issue details dict with 'summary' and 'description' keys
 
     Returns:
         Initial prompt string with investigation-focused instructions
     """
     # Build the "Work on" line
-    if parent:
+    if issue_key:
+        work_on_line = f"Work on: Investigate {issue_key}: {goal}"
+    elif parent:
         work_on_line = f"Work on: Investigate (tracking under {parent}): {goal}"
     else:
         work_on_line = f"Work on: Investigate: {goal}"
@@ -493,6 +645,35 @@ def _build_investigation_prompt(
         work_on_line,
         "",
     ]
+
+    # Add issue details section if session was created from an issue
+    if issue_key and issue_details:
+        from devflow.utils.backend_detection import detect_backend_from_key
+        backend = detect_backend_from_key(issue_key, config)
+
+        # Build issue URL if possible
+        issue_url = None
+        if backend == "jira" and config and hasattr(config, 'jira') and config.jira and hasattr(config.jira, 'url'):
+            issue_url = f"{config.jira.url.rstrip('/')}/browse/{issue_key}"
+
+        prompt_parts.append("## Issue Details")
+        prompt_parts.append("")
+        if issue_url:
+            prompt_parts.append(f"**Issue:** {issue_key} ({issue_url})")
+        else:
+            prompt_parts.append(f"**Issue:** {issue_key}")
+
+        if issue_details.get("summary"):
+            prompt_parts.append(f"**Summary:** {issue_details['summary']}")
+
+        if issue_details.get("description"):
+            prompt_parts.append("")
+            prompt_parts.append("**Description:**")
+            prompt_parts.append(issue_details['description'])
+
+        prompt_parts.append("")
+        prompt_parts.append("---")
+        prompt_parts.append("")
 
     # Add context files section
     default_files = [

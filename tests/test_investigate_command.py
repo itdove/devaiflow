@@ -609,3 +609,352 @@ class TestMultiProjectInvestigation:
         assert "READ-ONLY" in prompt
         assert "Do NOT modify any code or files in any project" in prompt
         assert "Investigate API integration" in prompt
+
+
+class TestInvestigateFromIssue:
+    """Test creating investigation sessions from issue tracker tickets."""
+
+    def test_investigate_from_jira_issue(self, temp_daf_home, monkeypatch):
+        """Test creating investigation session from JIRA issue."""
+        # Set mock mode
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+        ]
+        config_loader.save_config(config)
+
+        # Create workspace and project
+        workspace = Path(temp_daf_home) / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        test_project = workspace / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Mock JIRA client
+        with patch("devflow.jira.JiraClient") as MockJiraClient:
+            mock_client = MagicMock()
+            mock_client.get_ticket.return_value = {
+                "summary": "Investigate Redis caching for subscription API",
+                "description": "We need to research Redis caching options to improve performance",
+                "key": "PROJ-12345",
+            }
+            MockJiraClient.return_value = mock_client
+
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "investigate",
+                "PROJ-12345",
+                "--path", str(test_project),
+            ])
+
+            # Should succeed
+            assert result.exit_code == 0, f"Output: {result.output}"
+            assert "Fetched issue: Investigate Redis caching for subscription API" in result.output
+            assert "Created session" in result.output
+            assert "session_type: investigation" in result.output
+
+            # Verify session was created
+            session_manager = SessionManager(config_loader=config_loader)
+            sessions = session_manager.list_sessions()
+
+            created_session = None
+            for session in sessions:
+                if session.session_type == "investigation":
+                    created_session = session
+                    break
+
+            assert created_session is not None
+            assert created_session.session_type == "investigation"
+            assert created_session.issue_key == "PROJ-12345"
+            assert "Investigate Redis caching for subscription API" in created_session.goal
+            assert created_session.name == "investigate-PROJ-12345"
+
+    def test_investigate_from_github_issue(self, temp_daf_home, monkeypatch):
+        """Test creating investigation session from GitHub issue."""
+        # Set mock mode
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+        ]
+        config_loader.save_config(config)
+
+        # Create workspace and project
+        workspace = Path(temp_daf_home) / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        test_project = workspace / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Mock GitHub client
+        with patch("devflow.cli.commands.investigate_command.create_issue_tracker_client") as mock_factory:
+            mock_client = MagicMock()
+            mock_client.get_ticket.return_value = {
+                "title": "Investigate API timeout issues",
+                "body": "Users are reporting timeout issues with the API",
+                "number": 123,
+            }
+            mock_factory.return_value = mock_client
+
+            # Mock git remote detector
+            with patch("devflow.cli.commands.investigate_command.GitRemoteDetector") as MockDetector:
+                mock_detector = MagicMock()
+                mock_detector.parse_repository_info.return_value = ("github", "owner", "repo")
+                mock_detector.get_hostname.return_value = None
+                MockDetector.return_value = mock_detector
+
+                runner = CliRunner()
+                result = runner.invoke(cli, [
+                    "investigate",
+                    "#123",
+                    "--path", str(test_project),
+                ])
+
+                # Should succeed
+                assert result.exit_code == 0, f"Output: {result.output}"
+                assert "Fetched issue: Investigate API timeout issues" in result.output
+                assert "Created session" in result.output
+
+                # Verify session was created
+                session_manager = SessionManager(config_loader=config_loader)
+                sessions = session_manager.list_sessions()
+
+                created_session = None
+                for session in sessions:
+                    if session.session_type == "investigation":
+                        created_session = session
+                        break
+
+                assert created_session is not None
+                assert created_session.session_type == "investigation"
+                assert created_session.issue_key == "#123"
+                assert "Investigate API timeout issues" in created_session.goal
+                assert created_session.name == "investigate-issue-123"
+
+    def test_investigate_from_issue_not_found(self, temp_daf_home, monkeypatch):
+        """Test error handling when issue is not found."""
+        # Set mock mode
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+        ]
+        config_loader.save_config(config)
+
+        # Create workspace and project
+        workspace = Path(temp_daf_home) / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        test_project = workspace / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Mock JIRA client to raise not found error
+        from devflow.issue_tracker.exceptions import IssueTrackerNotFoundError
+        with patch("devflow.jira.JiraClient") as MockJiraClient:
+            mock_client = MagicMock()
+            mock_client.get_ticket.side_effect = IssueTrackerNotFoundError("Issue PROJ-99999 not found")
+            MockJiraClient.return_value = mock_client
+
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "investigate",
+                "PROJ-99999",
+                "--path", str(test_project),
+            ])
+
+            # Should fail
+            assert result.exit_code == 1
+            assert "Issue not found: PROJ-99999" in result.output
+
+    def test_investigate_from_issue_auth_error(self, temp_daf_home, monkeypatch):
+        """Test error handling when authentication fails."""
+        # Set mock mode
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+        ]
+        config_loader.save_config(config)
+
+        # Create workspace and project
+        workspace = Path(temp_daf_home) / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        test_project = workspace / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Mock JIRA client to raise auth error
+        from devflow.issue_tracker.exceptions import IssueTrackerAuthError
+        with patch("devflow.jira.JiraClient") as MockJiraClient:
+            mock_client = MagicMock()
+            mock_client.get_ticket.side_effect = IssueTrackerAuthError("Authentication failed")
+            MockJiraClient.return_value = mock_client
+
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "investigate",
+                "PROJ-12345",
+                "--path", str(test_project),
+            ])
+
+            # Should fail
+            assert result.exit_code == 1
+            assert "Authentication failed" in result.output
+
+    def test_investigate_from_issue_with_goal_override(self, temp_daf_home, monkeypatch):
+        """Test that --goal flag overrides issue summary."""
+        # Set mock mode
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+        ]
+        config_loader.save_config(config)
+
+        # Create workspace and project
+        workspace = Path(temp_daf_home) / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        test_project = workspace / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Mock JIRA client
+        with patch("devflow.jira.JiraClient") as MockJiraClient:
+            mock_client = MagicMock()
+            mock_client.get_ticket.return_value = {
+                "summary": "Original issue summary",
+                "description": "Original description",
+                "key": "PROJ-55555",
+            }
+            MockJiraClient.return_value = mock_client
+
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "investigate",
+                "PROJ-55555",
+                "--goal", "Custom investigation goal",
+                "--path", str(test_project),
+            ])
+
+            # Should succeed
+            assert result.exit_code == 0, f"Output: {result.output}"
+            assert "Created session" in result.output
+
+            # Verify session uses custom goal, not issue summary
+            session_manager = SessionManager(config_loader=config_loader)
+            sessions = session_manager.list_sessions()
+
+            created_session = None
+            for session in sessions:
+                if session.session_type == "investigation":
+                    created_session = session
+                    break
+
+            assert created_session is not None
+            assert "Custom investigation goal" in created_session.goal
+            assert "Original issue summary" not in created_session.goal
+
+    def test_investigate_from_issue_prompt_includes_description(self, temp_daf_home, monkeypatch):
+        """Test that investigation prompt includes issue description."""
+        from devflow.cli.commands.investigate_command import _build_investigation_prompt
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+
+        # Build prompt with issue details
+        prompt = _build_investigation_prompt(
+            goal="Investigate Redis caching",
+            parent=None,
+            config=config,
+            session_name="test-investigation",
+            project_path="/test/path",
+            workspace="/test/workspace",
+            issue_key="PROJ-12345",
+            issue_details={
+                "summary": "Investigate Redis caching for subscription API",
+                "description": "We need to research Redis caching options to improve performance"
+            }
+        )
+
+        # Verify prompt includes issue details
+        assert "PROJ-12345" in prompt
+        assert "Issue Details" in prompt
+        assert "Investigate Redis caching for subscription API" in prompt
+        assert "We need to research Redis caching options to improve performance" in prompt
+
+    def test_investigate_from_issue_custom_name(self, temp_daf_home, monkeypatch):
+        """Test creating investigation from issue with custom session name."""
+        # Set mock mode
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        # Create config
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+        ]
+        config_loader.save_config(config)
+
+        # Create workspace and project
+        workspace = Path(temp_daf_home) / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        test_project = workspace / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Mock JIRA client
+        with patch("devflow.jira.JiraClient") as MockJiraClient:
+            mock_client = MagicMock()
+            mock_client.get_ticket.return_value = {
+                "summary": "Test issue",
+                "description": "Test description",
+                "key": "PROJ-77777",
+            }
+            MockJiraClient.return_value = mock_client
+
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "investigate",
+                "PROJ-77777",
+                "--name", "custom-investigation-name",
+                "--path", str(test_project),
+            ])
+
+            # Should succeed
+            assert result.exit_code == 0, f"Output: {result.output}"
+
+            # Verify session uses custom name
+            session_manager = SessionManager(config_loader=config_loader)
+            sessions = session_manager.list_sessions()
+
+            created_session = None
+            for session in sessions:
+                if session.session_type == "investigation":
+                    created_session = session
+                    break
+
+            assert created_session is not None
+            assert created_session.name == "custom-investigation-name"

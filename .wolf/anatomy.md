@@ -1,13 +1,13 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-06T12:56:30.133Z
-> Files: 504 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-04-06T14:36:32.857Z
+> Files: 505 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
 - `.coverage` (~14200 tok)
 - `.gitignore` — Git ignore rules (~175 tok)
-- `AGENTS.md` — Agent Instructions for DevAIFlow (~20993 tok)
+- `AGENTS.md` — Agent Instructions for DevAIFlow (~21192 tok)
 - `CHANGELOG.md` — Change log (~4649 tok)
 - `CLAUDE.md` — OpenWolf (~139 tok)
 - `config.schema.json` (~9891 tok)
@@ -100,7 +100,7 @@
 
 - `__init__.py` — CLI commands for DevAIFlow. (~10 tok)
 - `completion.py` — Shell completion support for DevAIFlow. (~1235 tok)
-- `main.py` — Main CLI entry point for DevAIFlow. (~47109 tok)
+- `main.py` — Main CLI entry point for DevAIFlow. (~47322 tok)
 - `signal_handler.py` — Unified signal handler for CLI commands that launch Claude sessions. (~2578 tok)
 - `skills_discovery.py` — Utility for discovering skills from all hierarchical locations. (~1331 tok)
 - `utils.py` — Common utility functions for CLI commands. (~15760 tok)
@@ -134,7 +134,7 @@
 - `import_command.py` — Implementation of 'daf import' command. (~3262 tok)
 - `import_session_command.py` — Implementation of 'daf import-session' command. (~2195 tok)
 - `info_command.py` — Implementation of 'daf info' command. (~6561 tok)
-- `investigate_command.py` — Command for daf investigate - create investigation-only session without ticket creation. (~10149 tok)
+- `investigate_command.py` — Command for daf investigate - create investigation-only session without ticket creation. (~12343 tok)
 - `jira_add_comment_command.py` — Implementation of 'daf jira add-comment' command. (~1756 tok)
 - `jira_create_commands.py` — Implementation of 'daf jira create' command. (~18107 tok)
 - `jira_create_dynamic.py` — Dynamic command builder for daf jira create with field discovery. (~3074 tok)
@@ -230,7 +230,7 @@
 
 ## devflow/cli_skills/daf-workflow/
 
-- `SKILL.md` — DevAIFlow Workflow Guide (~3274 tok)
+- `SKILL.md` — DevAIFlow Workflow Guide (~3832 tok)
 
 ## devflow/cli_skills/daf-workspace/
 
@@ -709,6 +709,7 @@
 - `test_cleanup_sessions_command.py` — Tests for daf cleanup-sessions command. (~3720 tok)
 - `test_cli_utils_extended.py` — Extended tests for CLI utility functions. (~3673 tok)
 - `test_cli_utils.py` — Tests for CLI utility functions. (~8996 tok)
+- `test_investigate_command.py` — Tests for daf investigate command. (~10764 tok)
 - `test_release_manager_pyproject.py` — Tests for ReleaseManager with pyproject.toml support. (~1968 tok)
 
 ## tests/cli/commands/

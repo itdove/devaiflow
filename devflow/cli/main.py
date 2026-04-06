@@ -1916,6 +1916,7 @@ def git_check_auth(ctx: click.Context, repository: Optional[str]) -> None:
 
 @cli.command(name="investigate")
 @json_option
+@click.argument("issue_key", required=False)
 @click.option("--goal", help="Goal/description for the investigation (auto-detection of file:// paths and http(s):// URLs)")
 @click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
 @click.option("--parent", required=False, help="Optional parent issue key (for tracking investigation under an epic)")
@@ -1925,7 +1926,7 @@ def git_check_auth(ctx: click.Context, repository: Optional[str]) -> None:
 @click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
 @click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
-def investigate(ctx: click.Context, goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str) -> None:
+def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1936,7 +1937,16 @@ def investigate(ctx: click.Context, goal: str, goal_file: str, parent: Optional[
 
     Use this when you want to explore the codebase before committing to creating a issue tracker ticket.
 
+    ISSUE_KEY is optional. If provided, the command will fetch the issue details
+    and use the issue summary as the investigation goal. Supports:
+    - JIRA: PROJ-12345
+    - GitHub: owner/repo#123 or #123
+    - GitLab: owner/repo#123 or #123
+
     Examples:
+        daf investigate PROJ-12345
+        daf investigate owner/repo#123
+        daf investigate #123
         daf investigate --goal "Research Redis caching options for subscription API"
         daf investigate --goal "Investigate timeout issue in backup service" --parent PROJ-59038
         daf investigate --goal "file:///path/to/research-notes.md"
@@ -1944,6 +1954,12 @@ def investigate(ctx: click.Context, goal: str, goal_file: str, parent: Optional[
     """
     from devflow.cli.commands.investigate_command import create_investigation_session
     from devflow.cli.utils import process_goal_options
+
+    # If issue_key provided, fetch issue details and delegate to command
+    if issue_key:
+        from devflow.cli.commands.investigate_command import create_investigation_from_issue
+        create_investigation_from_issue(issue_key, goal, parent, name, path, workspace, model_profile, projects, temp_clone)
+        return
 
     # Prompt for goal if not provided
     if not goal and not goal_file:
