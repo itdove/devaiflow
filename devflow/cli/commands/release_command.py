@@ -1,5 +1,6 @@
 """Implementation of 'daf release' command."""
 
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -156,7 +157,9 @@ def create_release(
     console.print(f"[bold]Step 6:[/bold] Updating version to {context.target_version}...")
     try:
         manager.update_version_files(context.target_version, dry_run=dry_run)
-        console.print(f"[green]✓[/green] Updated devflow/__init__.py and setup.py")
+        # Determine which package file was updated
+        package_file = "pyproject.toml" if manager.pyproject_file.exists() and re.search(r'^version\s*=\s*["\']', manager.pyproject_file.read_text(), re.MULTILINE) else "setup.py"
+        console.print(f"[green]✓[/green] Updated devflow/__init__.py and {package_file}")
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to update version files: {e}")
         return
@@ -186,11 +189,13 @@ def create_release(
 
     # Step 8: Commit changes
     console.print("[bold]Step 8:[/bold] Committing version bump...")
+    # Determine which package file was updated
+    package_file = "pyproject.toml" if manager.pyproject_file.exists() and re.search(r'^version\s*=\s*["\']', manager.pyproject_file.read_text(), re.MULTILINE) else "setup.py"
     commit_msg = f"""chore: bump version to {context.target_version} for release
 
 Prepare for v{context.target_version} release:
 - Update version in devflow/__init__.py
-- Update version in setup.py
+- Update version in {package_file}
 - Update CHANGELOG.md with release date
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
