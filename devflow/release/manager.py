@@ -40,6 +40,7 @@ class ReleaseManager:
         """
         self.repo_path = repo_path
         self.init_file = repo_path / "devflow" / "__init__.py"
+        self.pyproject_file = repo_path / "pyproject.toml"
         self.setup_file = repo_path / "setup.py"
         self.changelog_file = repo_path / "CHANGELOG.md"
 
@@ -47,7 +48,8 @@ class ReleaseManager:
         """Read current version from version files.
 
         Returns:
-            Tuple of (init_version, setup_version)
+            Tuple of (init_version, package_version)
+            package_version is from pyproject.toml or setup.py (whichever has version)
 
         Raises:
             FileNotFoundError: If version files don't exist
@@ -63,20 +65,33 @@ class ReleaseManager:
             raise ValueError(f"Could not find __version__ in {self.init_file}")
         init_version = init_match.group(1)
 
-        # Read from setup.py
-        if not self.setup_file.exists():
-            raise FileNotFoundError(f"Setup file not found: {self.setup_file}")
+        # Try pyproject.toml first (modern PEP 517/518/621 format)
+        package_version = None
+        if self.pyproject_file.exists():
+            pyproject_content = self.pyproject_file.read_text()
+            # Match: version = "X.Y.Z" or version = "X.Y.Z-dev"
+            pyproject_match = re.search(r'^version\s*=\s*["\']([^"\']+)["\']', pyproject_content, re.MULTILINE)
+            if pyproject_match:
+                package_version = pyproject_match.group(1)
 
-        setup_content = self.setup_file.read_text()
-        setup_match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', setup_content)
-        if not setup_match:
-            raise ValueError(f"Could not find version in {self.setup_file}")
-        setup_version = setup_match.group(1)
+        # Fall back to setup.py if pyproject.toml doesn't have version
+        if package_version is None:
+            if not self.setup_file.exists():
+                raise FileNotFoundError(f"Package file not found: neither {self.pyproject_file} nor {self.setup_file} found")
 
-        return init_version, setup_version
+            setup_content = self.setup_file.read_text()
+            setup_match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', setup_content)
+            if not setup_match:
+                raise ValueError(
+                    f"Could not find version in {self.pyproject_file} or {self.setup_file}. "
+                    f"Ensure version is defined in [project] section of pyproject.toml or as version= in setup.py"
+                )
+            package_version = setup_match.group(1)
+
+        return init_version, package_version
 
     def update_version_files(self, new_version: Version, dry_run: bool = False) -> None:
-        """Update version in devflow/__init__.py and setup.py.
+        """Update version in devflow/__init__.py and package file (pyproject.toml or setup.py).
 
         Args:
             new_version: New version to set
@@ -95,16 +110,35 @@ class ReleaseManager:
         if not dry_run:
             self.init_file.write_text(new_init_content)
 
-        # Update setup.py
-        setup_content = self.setup_file.read_text()
-        new_setup_content = re.sub(
-            r'(version\s*=\s*["\'])[^"\']+(["\'])',
-            rf'\g<1>{version_str}\g<2>',
-            setup_content
-        )
+        # Update pyproject.toml if it exists and has version field
+        if self.pyproject_file.exists():
+            pyproject_content = self.pyproject_file.read_text()
+            # Check if pyproject.toml has a version field
+            if re.search(r'^version\s*=\s*["\']', pyproject_content, re.MULTILINE):
+                new_pyproject_content = re.sub(
+                    r'^(version\s*=\s*["\'])[^"\']+(["\'])',
+                    rf'\g<1>{version_str}\g<2>',
+                    pyproject_content,
+                    flags=re.MULTILINE
+                )
 
-        if not dry_run:
-            self.setup_file.write_text(new_setup_content)
+                if not dry_run:
+                    self.pyproject_file.write_text(new_pyproject_content)
+                return
+
+        # Fall back to updating setup.py if pyproject.toml doesn't exist or has no version
+        if self.setup_file.exists():
+            setup_content = self.setup_file.read_text()
+            # Only update setup.py if it has a version field (not all setup.py files do after pyproject.toml migration)
+            if re.search(r'version\s*=\s*["\']', setup_content):
+                new_setup_content = re.sub(
+                    r'(version\s*=\s*["\'])[^"\']+(["\'])',
+                    rf'\g<1>{version_str}\g<2>',
+                    setup_content
+                )
+
+                if not dry_run:
+                    self.setup_file.write_text(new_setup_content)
 
     def update_changelog(
         self,
@@ -667,13 +701,14 @@ class ReleaseManager:
             ValueError: If validation fails
         """
         # Read current versions
-        init_version, setup_version = self.read_current_version()
+        init_version, package_version = self.read_current_version()
 
         # Validate versions are in sync
-        if init_version != setup_version:
+        if init_version != package_version:
+            package_file = "pyproject.toml" if self.pyproject_file.exists() and re.search(r'^version\s*=\s*["\']', self.pyproject_file.read_text(), re.MULTILINE) else "setup.py"
             raise ValueError(
                 f"Version mismatch: devflow/__init__.py has {init_version}, "
-                f"setup.py has {setup_version}. Fix before releasing."
+                f"{package_file} has {package_version}. Fix before releasing."
             )
 
         # Parse versions
@@ -991,13 +1026,15 @@ class ReleaseManager:
         # Verify version files match acceptable versions
         # Accept: version_str (1.0.0), version_str-dev (1.0.0-dev), or next_dev_version (1.1.0-dev)
         try:
-            init_version, setup_version = self.read_current_version()
+            init_version, package_version = self.read_current_version()
             acceptable_versions = [version_str, f"{version_str}-dev", next_dev_version_str]
+
+            package_file = "pyproject.toml" if self.pyproject_file.exists() and re.search(r'^version\s*=\s*["\']', self.pyproject_file.read_text(), re.MULTILINE) else "setup.py"
 
             if init_version not in acceptable_versions:
                 return False, f"Version mismatch: devflow/__init__.py has {init_version}, expected one of {', '.join(acceptable_versions)}", None
-            if setup_version not in acceptable_versions:
-                return False, f"Version mismatch: setup.py has {setup_version}, expected one of {', '.join(acceptable_versions)}", None
+            if package_version not in acceptable_versions:
+                return False, f"Version mismatch: {package_file} has {package_version}, expected one of {', '.join(acceptable_versions)}", None
         except Exception as e:
             return False, f"Error reading version files: {e}", None
 

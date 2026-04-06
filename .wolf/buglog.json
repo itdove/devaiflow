@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-360",
+      "timestamp": "2026-04-06T01:50:00Z",
+      "error_message": "daf release command fails with pyproject.toml - expects setup.py version field - ValueError: Could not find version in setup.py",
+      "file": "devflow/release/manager.py, devflow/cli/commands/release_command.py",
+      "root_cause": "ReleaseManager was hardcoded to read/write version from setup.py, but project migrated to pyproject.toml (PEP 517/518/621) format where setup.py is just an empty setup() call with no version field",
+      "fix": "Modified ReleaseManager to: (1) Check pyproject.toml first for version field, fall back to setup.py for backward compatibility; (2) Update version in pyproject.toml when it exists; (3) Skip empty setup.py files during updates; (4) Show correct package file names (pyproject.toml vs setup.py) in error messages and commit messages; (5) Added comprehensive test coverage (8 new tests)",
+      "tags": ["release", "pyproject.toml", "packaging", "version-management", "pep-517", "pep-518", "pep-621"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-06T01:50:00Z"
+    }
+  ]
+}
