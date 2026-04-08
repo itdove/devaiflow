@@ -14,6 +14,7 @@
 - `CONTRIBUTING.md` — Contributing to DevAIFlow (~2695 tok)
 - `coverage.json` (~12790 tok)
 - `demo_branch_selection.sh` — Demo script showing the new branch source selection feature (~846 tok)
+- `FORK_WORKFLOW_SETUP.md` — Fork-Based Workflow Setup Guide (~1503 tok)
 - `LICENSE` — Project license (~3029 tok)
 - `pyproject.toml` — Python project configuration (~702 tok)
 - `QUICKREF.md` — DevAIFlow Quick Reference (~1384 tok)
