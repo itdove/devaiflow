@@ -307,6 +307,73 @@ daf git create {bug|story|task} \
 
 ---
 
+## Workflow: Investigation Sessions
+
+For sessions opened via `daf investigate` (analysis-only sessions for codebase exploration):
+
+**Purpose:** Analyze the codebase before committing to creating a ticket or starting implementation
+
+**Creating investigation sessions:**
+
+**From scratch (manual goal):**
+```bash
+daf investigate --goal "Research Redis caching options for subscription API"
+daf investigate --goal "Investigate timeout issue" --parent PROJ-59038
+```
+
+**From existing issue (auto-fetch details):**
+```bash
+# JIRA
+daf investigate PROJ-12345
+
+# GitHub/GitLab
+daf investigate owner/repo#123
+daf investigate #123
+```
+
+**How it works:**
+- When you provide an issue key, daf automatically:
+  - Fetches the issue details from the issue tracker
+  - Uses the issue summary as the investigation goal
+  - Includes issue description and link in the initial prompt
+  - Auto-generates session name (e.g., `investigate-PROJ-12345`)
+  - Stores issue key for tracking
+
+**Context checking:**
+- `daf active` is NOT needed in investigation sessions
+- You're only reading files, not making changes
+
+**Constraints:**
+- ❌ DO NOT modify code or files
+- ❌ DO NOT create git commits or checkout branches
+- ✅ ONLY read files, search code, analyze architecture
+- ✅ Document findings and recommendations
+- ✅ Create issue tracker tickets for discovered bugs/improvements (optional)
+
+**Workflow:**
+1. Analyze the codebase to understand the problem/feature
+2. Read relevant files, search for patterns, understand architecture
+3. Identify feasibility and implementation approaches
+4. Document findings and recommendations
+5. (Optional) Create tickets for discovered issues using `daf jira create` or `daf git create`
+
+**When analysis is complete:**
+- Provide a summary of findings
+- List key files and components involved
+- Suggest implementation approaches
+- Note any concerns or blockers
+- User saves findings with `daf note` or exports them
+
+**Overriding issue summary (optional):**
+```bash
+# Fetch issue details but use custom goal
+daf investigate PROJ-12345 --goal "Custom investigation focus"
+```
+
+**Why:** Investigation sessions provide a safe read-only environment to explore the codebase before committing to changes or ticket creation.
+
+---
+
 ## Command Usage Guidelines
 
 **See these skills for detailed documentation:**

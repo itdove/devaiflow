@@ -2,16 +2,151 @@
   "version": 1,
   "created_at": "2026-04-06T12:35:01.489Z",
   "lifetime": {
-    "total_tokens_estimated": 0,
-    "total_reads": 0,
-    "total_writes": 0,
-    "total_sessions": 7,
-    "anatomy_hits": 0,
-    "anatomy_misses": 0,
-    "repeated_reads_blocked": 0,
-    "estimated_savings_vs_bare_cli": 0
+    "total_tokens_estimated": 108651,
+    "total_reads": 7,
+    "total_writes": 15,
+    "total_sessions": 9,
+    "anatomy_hits": 5,
+    "anatomy_misses": 1,
+    "repeated_reads_blocked": 14,
+    "estimated_savings_vs_bare_cli": 190705
   },
-  "sessions": [],
+  "sessions": [
+    {
+      "id": "session-2026-04-06-0944",
+      "started": "2026-04-06T13:44:19.889Z",
+      "ended": "2026-04-06T14:38:25.390Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 20993,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 11917,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/main.py",
+          "tokens_estimated": 47109,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/utils/backend_detection.py",
+          "tokens_estimated": 1809,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/git_open_command.py",
+          "tokens_estimated": 2094,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 10780,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli_skills/daf-workflow/SKILL.md",
+          "tokens_estimated": 3274,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/main.py",
+          "tokens_estimated": 920,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 323,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 1539,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 454,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 329,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 123,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 676,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 4198,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 26,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 112,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 107,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 421,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 420,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 357,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli_skills/daf-workflow/SKILL.md",
+          "tokens_estimated": 670,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 97976,
+        "output_tokens_estimated": 10675,
+        "reads_count": 7,
+        "writes_count": 15,
+        "repeated_reads_blocked": 14,
+        "anatomy_lookups": 5
+      }
+    }
+  ],
   "daemon_usage": [],
   "waste_flags": [],
   "optimization_report": {

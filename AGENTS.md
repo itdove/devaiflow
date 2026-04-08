@@ -1706,6 +1706,17 @@ class Session(BaseModel):
   - Prevents session name collisions during sync
   - Comprehensive test coverage (2 new tests)
   - All 3631 tests pass
+- ✓ Issue key support for daf investigate command (itdove/devaiflow#363)
+  - Added optional issue_key positional argument to daf investigate command
+  - Supports JIRA (PROJ-12345), GitHub (#123, owner/repo#123), and GitLab issue keys
+  - Automatically fetches issue details and uses summary as investigation goal
+  - Auto-generates session name from issue key (e.g., investigate-PROJ-12345)
+  - --goal flag still works and overrides issue summary when both provided
+  - Investigation prompt includes issue details (summary, description, link)
+  - Comprehensive error handling (issue not found, auth errors, API failures)
+  - Examples: daf investigate PROJ-12345, daf investigate owner/repo#123, daf investigate #123
+  - Comprehensive test coverage (7 new tests)
+  - All 22 investigate tests pass
 
 ## Release Management
 
