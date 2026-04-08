@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-04-06T12:35:01.489Z",
   "lifetime": {
-    "total_tokens_estimated": 108651,
-    "total_reads": 7,
-    "total_writes": 15,
-    "total_sessions": 9,
-    "anatomy_hits": 5,
-    "anatomy_misses": 1,
-    "repeated_reads_blocked": 14,
-    "estimated_savings_vs_bare_cli": 190705
+    "total_tokens_estimated": 153928,
+    "total_reads": 14,
+    "total_writes": 19,
+    "total_sessions": 18,
+    "anatomy_hits": 7,
+    "anatomy_misses": 5,
+    "repeated_reads_blocked": 16,
+    "estimated_savings_vs_bare_cli": 191105
   },
   "sessions": [
     {
@@ -144,6 +144,149 @@
         "writes_count": 15,
         "repeated_reads_blocked": 14,
         "anatomy_lookups": 5
+      }
+    },
+    {
+      "id": "session-2026-04-06-1049",
+      "started": "2026-04-06T14:49:40.616Z",
+      "ended": "2026-04-06T14:50:24.604Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_investigate_command.py",
+          "tokens_estimated": 10764,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/investigate_command.py",
+          "tokens_estimated": 12343,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 23107,
+        "output_tokens_estimated": 0,
+        "reads_count": 2,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-04-08-2157",
+      "started": "2026-04-08T01:57:55.993Z",
+      "ended": "2026-04-08T01:58:02.699Z",
+      "reads": [
+        {
+          "file": "/private/tmp/claude-501/-Users-dvernier-development-devaiflow-devaiflow/b25d0f9a-8d0d-4273-b2e2-3fe114b626aa/tasks/bmqy2pcnp.output",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-04-08-2157",
+      "started": "2026-04-08T01:57:55.993Z",
+      "ended": "2026-04-08T01:58:43.135Z",
+      "reads": [
+        {
+          "file": "/private/tmp/claude-501/-Users-dvernier-development-devaiflow-devaiflow/b25d0f9a-8d0d-4273-b2e2-3fe114b626aa/tasks/bmqy2pcnp.output",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-04-08-2157",
+      "started": "2026-04-08T01:57:55.993Z",
+      "ended": "2026-04-08T01:59:32.777Z",
+      "reads": [
+        {
+          "file": "/private/tmp/claude-501/-Users-dvernier-development-devaiflow-devaiflow/b25d0f9a-8d0d-4273-b2e2-3fe114b626aa/tasks/bmqy2pcnp.output",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 1,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-04-08-2157",
+      "started": "2026-04-08T01:57:55.993Z",
+      "ended": "2026-04-08T02:00:32.232Z",
+      "reads": [
+        {
+          "file": "/private/tmp/claude-501/-Users-dvernier-development-devaiflow-devaiflow/b25d0f9a-8d0d-4273-b2e2-3fe114b626aa/tasks/bmqy2pcnp.output",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21192,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 243,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 175,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 344,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 216,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 21192,
+        "output_tokens_estimated": 978,
+        "reads_count": 2,
+        "writes_count": 4,
+        "repeated_reads_blocked": 1,
+        "anatomy_lookups": 1
       }
     }
   ],

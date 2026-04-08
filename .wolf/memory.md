@@ -72,3 +72,61 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-04-06 10:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-08 21:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-08 21:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-08 21:47
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-08 21:52
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:53 | Created .github/workflows/publish-test.yml | — | ~370 |
+| 21:53 | Edited RELEASING.md | modified workflow() | ~868 |
+| 21:53 | Edited RELEASING.md | 7→8 lines | ~83 |
+| 21:54 | Edited docs/developer/publishing-to-pypi.md | expanded (+28 lines) | ~441 |
+| 21:54 | Edited docs/developer/publishing-to-pypi.md | 5→7 lines | ~88 |
+| 21:54 | Edited docs/developer/publishing-to-pypi.md | modified TestPyPI() | ~163 |
+
+## Session: 2026-04-08 21:57
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-08 21:57
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-08 21:57
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:59 | Created .github/workflows/publish-test.yml, Updated RELEASING.md and publishing-to-pypi.md | publish-test.yml, RELEASING.md, docs/developer/publishing-to-pypi.md | TestPyPI workflow ready | ~1300 |
+| 22:00 | Edited AGENTS.md | expanded (+6 lines) | ~227 |
+| 22:00 | Edited AGENTS.md | 6→7 lines | ~163 |
+| 22:00 | Edited AGENTS.md | 19→21 lines | ~321 |
+| 22:00 | Edited AGENTS.md | tests() → needed() | ~202 |
+| 22:00 | Updated AGENTS.md testing guidelines | AGENTS.md | Added when to run/skip pytest | ~200 |
+| 22:00 | Session end: 4 writes across 1 files (AGENTS.md) | 2 reads | ~22170 tok |
+
+## Session: 2026-04-08 22:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

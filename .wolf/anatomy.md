@@ -1,13 +1,13 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-06T14:36:32.857Z
-> Files: 505 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T02:00:17.107Z
+> Files: 506 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
 - `.coverage` (~14200 tok)
 - `.gitignore` — Git ignore rules (~175 tok)
-- `AGENTS.md` — Agent Instructions for DevAIFlow (~21192 tok)
+- `AGENTS.md` — Agent Instructions for DevAIFlow (~21442 tok)
 - `CHANGELOG.md` — Change log (~4649 tok)
 - `CLAUDE.md` — OpenWolf (~139 tok)
 - `config.schema.json` (~9891 tok)
@@ -18,7 +18,7 @@
 - `pyproject.toml` — Python project configuration (~702 tok)
 - `QUICKREF.md` — DevAIFlow Quick Reference (~1384 tok)
 - `README.md` — Project documentation (~6603 tok)
-- `RELEASING.md` — Release Management Process (~2707 tok)
+- `RELEASING.md` — Release Management Process (~3523 tok)
 - `requirements-dev.txt` (~28 tok)
 - `requirements.txt` — Python dependencies (~72 tok)
 - `SECURITY.md` — Security Policy (~1380 tok)
@@ -42,6 +42,7 @@
 
 - `integration-tests.yml` — GitHub Actions CI/CD - Integration Tests Workflow (~387 tok)
 - `lint.yml` — GitHub Actions CI/CD - Lint Workflow (~534 tok)
+- `publish-test.yml` — GitHub Actions CI/CD - TestPyPI Publish Workflow (~370 tok)
 - `publish.yml` — GitHub Actions CI/CD - PyPI Publish Workflow (~582 tok)
 - `test.yml` — GitHub Actions CI/CD - Test Workflow (~467 tok)
 
@@ -456,7 +457,7 @@
 - `feature-orchestration-architecture.md` — Feature Orchestration Implementation Summary (~3896 tok)
 - `feature-orchestration.md` — Feature Orchestration Flow (~4079 tok)
 - `issue-tracker-architecture.md` — Issue Tracker Architecture (~2650 tok)
-- `publishing-to-pypi.md` — Publishing DevAIFlow to PyPI (~3596 tok)
+- `publishing-to-pypi.md` — Publishing DevAIFlow to PyPI (~4007 tok)
 - `release-management.md` — Release Management (~4727 tok)
 
 ## docs/experimental/
