@@ -363,6 +363,121 @@ git branch -d hotfix/1.0.1
 git push origin --delete hotfix/1.0.1
 ```
 
+## Testing Releases with TestPyPI
+
+Before publishing to production PyPI, it's recommended to test the release workflow using TestPyPI. This helps catch packaging issues early without affecting the production package.
+
+### Prerequisites
+
+1. **TestPyPI Account**: Create account at https://test.pypi.org/account/register/
+2. **Trusted Publishing Setup**: Configure at https://test.pypi.org/manage/account/publishing/
+   - PyPI Project Name: `devaiflow`
+   - Owner: `itdove`
+   - Repository name: `devaiflow`
+   - Workflow name: `publish-test.yml`
+   - Environment name: `testpypi`
+3. **GitHub Environment**: Create environment `testpypi` at https://github.com/itdove/devaiflow/settings/environments
+
+### Tag Naming Convention
+
+- **TestPyPI**: `v2.2.0-test`, `v2.2.0-test1`, `v2.2.0-test2`
+- **Production PyPI**: `v2.2.0`, `v2.2.1`, `v2.3.0`
+
+The `-test` suffix ensures the workflow only triggers for test releases.
+
+### Testing Workflow
+
+#### 1. Create Test Release Branch
+
+```bash
+# Create test release branch from main
+git checkout -b release-2.2-test main
+```
+
+#### 2. Update Version to Test Version
+
+Update version in **devflow/__init__.py**:
+```python
+__version__ = "2.2.0-test1"
+```
+
+Update version in **pyproject.toml**:
+```toml
+[project]
+version = "2.2.0-test1"
+```
+
+#### 3. Commit and Tag
+
+```bash
+# Commit version changes
+git add pyproject.toml devflow/__init__.py
+git commit -m "chore: bump version to 2.2.0-test1 for TestPyPI"
+
+# Create and push test tag
+git tag -a v2.2.0-test1 -m "Test release for TestPyPI"
+git push origin v2.2.0-test1
+```
+
+#### 4. Monitor GitHub Actions
+
+The `publish-test.yml` workflow will automatically trigger:
+1. Go to https://github.com/itdove/devaiflow/actions
+2. Find the "Publish to TestPyPI" workflow run
+3. Monitor the build and publish steps
+
+#### 5. Verify Publication on TestPyPI
+
+Visit https://test.pypi.org/project/devaiflow/ to verify:
+- Package uploaded successfully
+- Version number is correct
+- README renders properly
+- Metadata is accurate
+
+#### 6. Test Installation from TestPyPI
+
+```bash
+# Create test environment
+python -m venv /tmp/test-devaiflow
+source /tmp/test-devaiflow/bin/activate
+
+# Install from TestPyPI
+pip install --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  devaiflow==2.2.0-test1
+
+# Verify installation
+daf --version
+daf --help
+
+# Cleanup
+deactivate
+rm -rf /tmp/test-devaiflow
+```
+
+#### 7. Proceed with Production Release
+
+If testing is successful:
+1. Delete the test branch: `git branch -D release-2.2-test`
+2. Follow the regular release workflow with production version (v2.2.0)
+3. Production workflow (`publish.yml`) will publish to production PyPI
+
+### Manual Workflow Trigger
+
+You can also manually trigger the TestPyPI workflow:
+1. Go to https://github.com/itdove/devaiflow/actions/workflows/publish-test.yml
+2. Click "Run workflow"
+3. Select the branch with test version
+4. Click "Run workflow" button
+
+### Automated Workflow Details
+
+The TestPyPI workflow (`.github/workflows/publish-test.yml`):
+- Triggers on tags matching `v*-test*`
+- Uses Trusted Publishing (no API tokens needed)
+- Publishes to https://test.pypi.org/
+- Supports `skip-existing` for re-running tests
+
 ## Release Checklist
 
 Use this checklist for each release:
@@ -374,6 +489,7 @@ Use this checklist for each release:
 - [ ] CHANGELOG.md updated with all changes
 - [ ] Version bump PR reviewed and approved
 - [ ] JIRA epic marked as complete
+- [ ] (Optional) Test release on TestPyPI with `-test` suffix tag
 
 ### Release Branch
 - [ ] Create release branch (`release/X.Y`)

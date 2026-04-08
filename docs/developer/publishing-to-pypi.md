@@ -2,8 +2,36 @@
 
 This guide documents the complete process for publishing the DevAIFlow package to PyPI (Python Package Index).
 
+## Publishing Methods
+
+DevAIFlow supports two methods for publishing to PyPI:
+
+### 1. Automated Publishing via GitHub Actions (Recommended)
+
+The repository includes GitHub Actions workflows for automated publishing using **Trusted Publishing** (no API tokens needed):
+
+- **`.github/workflows/publish-test.yml`**: Publishes to TestPyPI when you push tags matching `v*-test*` (e.g., `v2.2.0-test1`)
+- **`.github/workflows/publish.yml`**: Publishes to production PyPI when you push tags matching `v*` (e.g., `v2.2.0`)
+
+**Benefits:**
+- ✅ No API tokens to manage or secure
+- ✅ Uses OpenID Connect (OIDC) Trusted Publishing
+- ✅ Automatic builds on tag push
+- ✅ Consistent, repeatable builds
+- ✅ Audit trail via GitHub Actions logs
+
+**See [RELEASING.md](../../RELEASING.md#testing-releases-with-testpypi) for complete automated workflow instructions.**
+
+### 2. Manual Publishing (Documented Below)
+
+Traditional manual publishing using local builds and twine. Useful for:
+- Testing without creating git tags
+- Troubleshooting packaging issues
+- One-off manual releases
+
 ## Table of Contents
 
+- [Publishing Methods](#publishing-methods)
 - [Prerequisites](#prerequisites)
 - [Pre-Release Checklist](#pre-release-checklist)
 - [Building the Package](#building-the-package)
@@ -14,6 +42,8 @@ This guide documents the complete process for publishing the DevAIFlow package t
 - [Security Considerations](#security-considerations)
 
 ## Prerequisites
+
+**Note:** If using the automated GitHub Actions workflow (recommended), you only need TestPyPI and PyPI accounts with Trusted Publishing configured. API tokens and `~/.pypirc` configuration are NOT required for automated publishing.
 
 ### 1. PyPI Accounts
 
@@ -31,7 +61,13 @@ You need accounts on both TestPyPI and production PyPI:
 1. Register at https://test.pypi.org/account/register/
 2. Verify your email address
 3. Enable Two-Factor Authentication (2FA) - **Required**
-4. Create an API token at https://test.pypi.org/manage/account/token/
+4. **For Automated Publishing**: Configure Trusted Publishing at https://test.pypi.org/manage/account/publishing/
+   - PyPI Project Name: `devaiflow`
+   - Owner: `itdove`
+   - Repository name: `devaiflow`
+   - Workflow name: `publish-test.yml`
+   - Environment name: `testpypi`
+5. **For Manual Publishing**: Create an API token at https://test.pypi.org/manage/account/token/
    - Token name: "DevAIFlow Testing"
    - Scope: "Entire account"
 

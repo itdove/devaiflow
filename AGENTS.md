@@ -563,6 +563,12 @@ except JiraAuthError as e:
 
 ### Testing Guidelines
 
+**When to Run Tests**:
+- ✅ **Run pytest** when making code changes (Python files in `devflow/`, `tests/`, or `integration-tests/`)
+- ⏭️ **Skip pytest** for documentation-only changes (`.md` files, `docs/`, `CHANGELOG.md`, `README.md`)
+- ⏭️ **Skip pytest** for workflow/config-only changes (`.github/workflows/`, `.yml` files without code changes)
+- ⚠️ **Always run pytest** if you modified any `.py` file, even if it seems minor
+
 **Integration Tests**: Can be run from inside AI agent sessions using the test runner script `./run_all_integration_tests.sh`, which uses environment isolation (unsets `DEVAIFLOW_IN_SESSION` and `AI_AGENT_SESSION_ID`, sets temporary `DEVAIFLOW_HOME`) to avoid conflicts. Individual test scripts still require running outside AI agent sessions unless you manually set up the isolated environment.
 
 **Debug Mode for Integration Tests**: All integration test scripts support a `--debug` flag that enables verbose bash output (`set -x`) for easier troubleshooting:
@@ -587,12 +593,13 @@ When `--debug` is used with the test runner, it automatically propagates to all 
 - Use `pytest -x --tb=line -v` to see which test is running and stop on first failure
 - Check for missing input sequences in `CliRunner().invoke(..., input="...")` calls
 
-**⚠️ CRITICAL TESTING REQUIREMENT**: ALL TESTS MUST BE SUCCESSFUL before marking any task as complete. When tests fail:
+**⚠️ CRITICAL TESTING REQUIREMENT**: ALL TESTS MUST BE SUCCESSFUL before marking any task as complete when code changes are made. When tests fail:
 - **DO NOT** ask the user for permission to continue fixing tests
 - **DO NOT** stop after fixing some tests - continue fixing ALL failing tests
-- **ALWAYS** run the full test suite (`pytest`) after every change
-- **ONLY** mark the task as complete when ALL 2000+ tests pass
+- **ALWAYS** run the full test suite (`pytest`) after every code change
+- **ONLY** mark the task as complete when ALL 3600+ tests pass
 - If you encounter test failures, continue fixing them systematically until every test passes
+- **EXCEPTION**: Documentation-only or workflow-only changes do not require running pytest
 
 **⚠️ TEST DATA ANONYMIZATION REQUIREMENT**: ALL test data MUST be anonymized and MUST NOT contain organization-specific information:
 - **NEVER** use real organization names, project names, product names, or service names in test data
@@ -606,7 +613,7 @@ When `--debug` is used with the test runner, it automatically propagates to all 
 - **RATIONALE**: Tests should be portable and not tied to any specific organization's configuration
 - **ENFORCEMENT**: When writing or modifying tests, search for organization-specific terms and replace with generic equivalents
 
-**IMPORTANT**: These testing requirements must be followed for all code changes:
+**IMPORTANT**: These testing requirements must be followed for code changes:
 
 1. **Create Tests for New Methods**
    - When creating any new method or function, **always create a corresponding test**
@@ -617,9 +624,11 @@ When `--debug` is used with the test runner, it automatically propagates to all 
      - Boundary conditions
      - Integration with other components (using mocks)
 
-2. **Run Full Test Suite After Each Task**
-   - **After completing each task**, run the complete test suite using `pytest`
-   - Verify that all tests pass before marking a task as complete
+2. **Run Full Test Suite After Code Changes**
+   - **After completing each task with code changes**, run the complete test suite using `pytest`
+   - **Documentation-only changes** (markdown files, docs/, CHANGELOG.md) do NOT require running pytest
+   - **Workflow-only changes** (.github/workflows/ without code changes) do NOT require running pytest
+   - Verify that all tests pass before marking a code change task as complete
    - This ensures that new changes don't break existing functionality
    - If any tests fail:
      - Fix the failing tests immediately
@@ -687,6 +696,7 @@ When `--debug` is used with the test runner, it automatically propagates to all 
 
 **Example Testing Workflow**:
 ```bash
+# CODE CHANGE EXAMPLE:
 # 1. Implement new method in devflow/session/manager.py
 # 2. Create test in tests/test_session_manager.py
 # 3. Run tests to verify new functionality (can run inside Claude Code)
@@ -695,10 +705,15 @@ pytest tests/test_session_manager.py
 # 4. Run full test suite before completing task (can run inside Claude Code)
 pytest
 
-# 5. Run integration tests (can run inside Claude Code with test runner)
+# 5. Run integration tests if needed (can run inside Claude Code with test runner)
 cd integration-tests && ./run_all_integration_tests.sh
 
 # 6. Only mark task as complete if ALL tests pass (unit + integration)
+
+# DOCUMENTATION-ONLY CHANGE EXAMPLE:
+# 1. Update docs/developer/publishing-to-pypi.md
+# 2. Update RELEASING.md
+# 3. No pytest needed - mark task complete after verifying changes
 ```
 
 ### Test Coverage Strategy
