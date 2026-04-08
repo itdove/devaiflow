@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-04-06T12:35:01.489Z",
   "lifetime": {
-    "total_tokens_estimated": 313479,
-    "total_reads": 41,
-    "total_writes": 62,
-    "total_sessions": 25,
-    "anatomy_hits": 25,
-    "anatomy_misses": 11,
+    "total_tokens_estimated": 325498,
+    "total_reads": 45,
+    "total_writes": 66,
+    "total_sessions": 29,
+    "anatomy_hits": 27,
+    "anatomy_misses": 13,
     "repeated_reads_blocked": 25,
-    "estimated_savings_vs_bare_cli": 204743
+    "estimated_savings_vs_bare_cli": 205143
   },
   "sessions": [
     {
@@ -715,6 +715,67 @@
         "writes_count": 18,
         "repeated_reads_blocked": 3,
         "anatomy_lookups": 6
+      }
+    },
+    {
+      "id": "session-2026-04-08-1246",
+      "started": "2026-04-08T16:46:51.349Z",
+      "ended": "2026-04-08T17:03:21.036Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/ai/ai-guardian/.claude/skills/release/README.md",
+          "tokens_estimated": 6603,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/ai/ai-guardian/.claude/skills/release/EXAMPLE_USAGE.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.gitignore",
+          "tokens_estimated": 175,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/ai/ai-guardian/tests/test_release_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/skills/release/README.md",
+          "tokens_estimated": 980,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/skills/release/EXAMPLE_USAGE.md",
+          "tokens_estimated": 2178,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.gitignore",
+          "tokens_estimated": 32,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 2051,
+          "action": "create"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 6778,
+        "output_tokens_estimated": 5241,
+        "reads_count": 4,
+        "writes_count": 4,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 2
       }
     }
   ],

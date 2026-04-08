@@ -1,17 +1,12 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T14:20:27.349Z
-> Files: 511 tracked | Anatomy hits: 0 | Misses: 0
-
-## ../../../.claude/skills/release/
-
-- `release_helper.py` — ReleaseHelper: get_current_version, update_version, calculate_next_version, update_changelog + 2 mor (~3826 tok)
-- `SKILL.md` — DevAIFlow Release Skill (~2689 tok)
+> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T17:01:10.464Z
+> Files: 506 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
 - `.coverage` (~14200 tok)
-- `.gitignore` — Git ignore rules (~175 tok)
+- `.gitignore` — Git ignore rules (~185 tok)
 - `AGENTS.md` — Agent Instructions for DevAIFlow (~21442 tok)
 - `CHANGELOG.md` — Change log (~4649 tok)
 - `CLAUDE.md` — OpenWolf (~139 tok)
@@ -19,7 +14,6 @@
 - `CONTRIBUTING.md` — Contributing to DevAIFlow (~2695 tok)
 - `coverage.json` (~12790 tok)
 - `demo_branch_selection.sh` — Demo script showing the new branch source selection feature (~846 tok)
-- `FORK_WORKFLOW_SETUP.md` — Fork-Based Workflow Setup Guide (~1503 tok)
 - `LICENSE` — Project license (~3029 tok)
 - `pyproject.toml` — Python project configuration (~702 tok)
 - `QUICKREF.md` — DevAIFlow Quick Reference (~1384 tok)
@@ -39,6 +33,11 @@
 ## .claude/rules/
 
 - `openwolf.md` (~313 tok)
+
+## .claude/skills/release/
+
+- `EXAMPLE_USAGE.md` — Release Skill Usage Examples (~1906 tok)
+- `README.md` — Project documentation (~858 tok)
 
 ## .github/
 
@@ -65,8 +64,8 @@
 
 ## .pytest_cache/v/cache/
 
-- `lastfailed` (~4039 tok)
-- `nodeids` (~92198 tok)
+- `lastfailed` (~4066 tok)
+- `nodeids` (~92590 tok)
 - `stepwise` (~1 tok)
 
 ## demos/
@@ -718,11 +717,7 @@
 - `test_claude_config_dir_integration.py` — Integration tests for CLAUDE_CONFIG_DIR environment variable support. (~1166 tok)
 - `test_claude_mock.py` — Tests for MockClaudeCode. (~2214 tok)
 - `test_cleanup_conversation.py` — Tests for cleanup_conversation command. (~1601 tok)
-- `test_cleanup_sessions_command.py` — Tests for daf cleanup-sessions command. (~3720 tok)
-- `test_cli_utils_extended.py` — Extended tests for CLI utility functions. (~3673 tok)
-- `test_cli_utils.py` — Tests for CLI utility functions. (~8996 tok)
-- `test_investigate_command.py` — Tests for daf investigate command. (~10764 tok)
-- `test_release_manager_pyproject.py` — Tests for ReleaseManager with pyproject.toml support. (~1968 tok)
+- `test_release_skill_helper.py` — create_test_repo, test_get_current_version, test_version_mismatch_detection, test_update_version (~2051 tok)
 
 ## tests/cli/commands/
 
