@@ -2,15 +2,69 @@
 
 This document describes the release management process for DevAIFlow (daf tool).
 
-> **💡 Recommended**: Use the automated `daf release` command instead of following these manual steps. See [docs/08-release-management.md](docs/08-release-management.md) for the automated workflow.
+> **💡 Recommended**: Use the automated `/release` skill instead of following these manual steps.
 >
 > This document is maintained as a reference for:
 > - Understanding the release process details
 > - Troubleshooting release issues
 > - Custom scenarios not covered by automation
 
+## ⚠️ Release Authorization Policy
+
+**IMPORTANT**: This repository uses a fork-based workflow with strict release authorization.
+
+### Repository Access Model
+
+**Fork-Based Workflow:**
+
+- **Maintainers** (@itdove): Write/Admin access
+  - Can push tags
+  - Can create releases
+  - Can use `/release` skill
+  - Handle PyPI publications
+
+- **Contributors**: Must use forks
+  - Cannot push tags
+  - All changes via PRs
+  - See [CONTRIBUTING.md](CONTRIBUTING.md)
+
+### Authorized Release Managers
+
+Currently authorized to create production releases:
+- **@itdove** (Repository Owner)
+
+### For Contributors
+
+**DO NOT create release tags.**
+
+Instead:
+1. Fork the repository
+2. Submit PRs with your changes
+3. Update CHANGELOG.md in your PR
+4. Maintainers will handle releases
+
+### For Maintainers
+
+Use the `/release` skill for automated release management:
+
+```bash
+/release minor   # 2.1.0 -> 2.2.0
+/release patch   # 2.2.0 -> 2.2.1
+/release major   # 2.0.0 -> 3.0.0
+/release test    # 2.2.0-dev -> 2.2.0-test1
+```
+
+### Tag Monitoring
+
+The `.github/workflows/tag-monitor.yml` workflow:
+- Logs all tag creation events
+- Verifies authorization for production tags
+- Creates security issues for unauthorized attempts
+- Provides audit trail for all releases
+
 ## Table of Contents
 
+- [Release Authorization Policy](#release-authorization-policy)
 - [Version Numbering](#version-numbering)
 - [Branch Strategy](#branch-strategy)
 - [Release Workflow](#release-workflow)

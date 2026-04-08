@@ -2,8 +2,44 @@
 
 Thank you for your interest in contributing to DevAIFlow! This document provides guidelines and instructions for contributing.
 
+## ⚠️ Fork-Based Workflow
+
+**IMPORTANT**: This repository uses a fork-based workflow for all external contributions.
+
+### Quick Start for Contributors
+
+```bash
+# 1. Fork the repository on GitHub
+gh repo fork itdove/devaiflow --clone
+cd devaiflow
+
+# 2. Create feature branch
+git checkout -b feature-name
+
+# 3. Make changes and commit
+git add .
+git commit -m "feat: description"
+
+# 4. Push to your fork
+git push origin feature-name
+
+# 5. Create pull request
+gh pr create --web
+```
+
+### Release Authorization
+
+**Contributors CANNOT create releases** - Only repository maintainers can:
+
+- ✅ **You CAN**: Submit PRs with features/fixes, update CHANGELOG.md in your PR
+- ❌ **You CANNOT**: Create version tags, modify version numbers, push production releases
+- ✅ **Maintainers handle**: All releases via the `/release` skill
+
+See [RELEASING.md](RELEASING.md) for the complete release authorization policy.
+
 ## Table of Contents
 
+- [Fork-Based Workflow](#fork-based-workflow)
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Making Changes](#making-changes)

@@ -1,7 +1,12 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T02:00:17.107Z
-> Files: 506 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T14:20:27.349Z
+> Files: 511 tracked | Anatomy hits: 0 | Misses: 0
+
+## ../../../.claude/skills/release/
+
+- `release_helper.py` — ReleaseHelper: get_current_version, update_version, calculate_next_version, update_changelog + 2 mor (~3826 tok)
+- `SKILL.md` — DevAIFlow Release Skill (~2689 tok)
 
 ## ./
 
@@ -11,14 +16,15 @@
 - `CHANGELOG.md` — Change log (~4649 tok)
 - `CLAUDE.md` — OpenWolf (~139 tok)
 - `config.schema.json` (~9891 tok)
-- `CONTRIBUTING.md` — Contributing to DevAIFlow (~2458 tok)
+- `CONTRIBUTING.md` — Contributing to DevAIFlow (~2695 tok)
 - `coverage.json` (~12790 tok)
 - `demo_branch_selection.sh` — Demo script showing the new branch source selection feature (~846 tok)
+- `FORK_WORKFLOW_SETUP.md` — Fork-Based Workflow Setup Guide (~1503 tok)
 - `LICENSE` — Project license (~3029 tok)
 - `pyproject.toml` — Python project configuration (~702 tok)
 - `QUICKREF.md` — DevAIFlow Quick Reference (~1384 tok)
 - `README.md` — Project documentation (~6603 tok)
-- `RELEASING.md` — Release Management Process (~3523 tok)
+- `RELEASING.md` — Release Management Process (~3825 tok)
 - `requirements-dev.txt` (~28 tok)
 - `requirements.txt` — Python dependencies (~72 tok)
 - `SECURITY.md` — Security Policy (~1380 tok)
@@ -34,6 +40,10 @@
 
 - `openwolf.md` (~313 tok)
 
+## .github/
+
+- `CODEOWNERS` — CODEOWNERS - Define code ownership and required reviewers (~222 tok)
+
 ## .github/ISSUE_TEMPLATE/
 
 - `agent-validation.md` — Environment (~360 tok)
@@ -44,6 +54,7 @@
 - `lint.yml` — GitHub Actions CI/CD - Lint Workflow (~534 tok)
 - `publish-test.yml` — GitHub Actions CI/CD - TestPyPI Publish Workflow (~370 tok)
 - `publish.yml` — GitHub Actions CI/CD - PyPI Publish Workflow (~582 tok)
+- `tag-monitor.yml` — CI: Tag Creation Monitor (~1799 tok)
 - `test.yml` — GitHub Actions CI/CD - Test Workflow (~467 tok)
 
 ## .pytest_cache/

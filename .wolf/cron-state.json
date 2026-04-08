@@ -1,6 +1,6 @@
 {
-  "last_heartbeat": null,
-  "engine_status": "initialized",
+  "last_heartbeat": "2026-04-08T14:17:46.043Z",
+  "engine_status": "running",
   "execution_log": [],
   "dead_letter_queue": [],
   "upcoming": []

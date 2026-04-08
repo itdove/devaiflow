@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-04-06T12:35:01.489Z",
   "lifetime": {
-    "total_tokens_estimated": 153928,
-    "total_reads": 14,
-    "total_writes": 19,
-    "total_sessions": 18,
-    "anatomy_hits": 7,
-    "anatomy_misses": 5,
-    "repeated_reads_blocked": 16,
-    "estimated_savings_vs_bare_cli": 191105
+    "total_tokens_estimated": 313479,
+    "total_reads": 41,
+    "total_writes": 62,
+    "total_sessions": 25,
+    "anatomy_hits": 25,
+    "anatomy_misses": 11,
+    "repeated_reads_blocked": 25,
+    "estimated_savings_vs_bare_cli": 204743
   },
   "sessions": [
     {
@@ -287,6 +287,434 @@
         "writes_count": 4,
         "repeated_reads_blocked": 1,
         "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-04-08-0929",
+      "started": "2026-04-08T13:29:20.612Z",
+      "ended": "2026-04-08T14:14:47.040Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/projects/-Users-dvernier-development-devaiflow-devaiflow/4ae7f50f-9be8-45d5-bc21-43781148c4fe/tool-results/b1hys292b.txt",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/RELEASING.md",
+          "tokens_estimated": 3523,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/release/manager.py",
+          "tokens_estimated": 14891,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/SKILL.md",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/publish.yml",
+          "tokens_estimated": 582,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/CONTRIBUTING.md",
+          "tokens_estimated": 2458,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 1673,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/.claude/skills/release/SKILL.md",
+          "tokens_estimated": 3073,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 87,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 120,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 124,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 95,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 73,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 1673,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/CODEOWNERS",
+          "tokens_estimated": 238,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/CONTRIBUTING.md",
+          "tokens_estimated": 406,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/RELEASING.md",
+          "tokens_estimated": 564,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 81,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 516,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 44569,
+        "output_tokens_estimated": 7050,
+        "reads_count": 9,
+        "writes_count": 12,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 6
+      }
+    },
+    {
+      "id": "session-2026-04-08-0929",
+      "started": "2026-04-08T13:29:20.612Z",
+      "ended": "2026-04-08T14:17:39.860Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/projects/-Users-dvernier-development-devaiflow-devaiflow/4ae7f50f-9be8-45d5-bc21-43781148c4fe/tool-results/b1hys292b.txt",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/RELEASING.md",
+          "tokens_estimated": 3523,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/release/manager.py",
+          "tokens_estimated": 14891,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/SKILL.md",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/publish.yml",
+          "tokens_estimated": 582,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/CONTRIBUTING.md",
+          "tokens_estimated": 2458,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 1673,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/.claude/skills/release/SKILL.md",
+          "tokens_estimated": 3073,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 87,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 120,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 124,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 95,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 73,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 1673,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/CODEOWNERS",
+          "tokens_estimated": 238,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/CONTRIBUTING.md",
+          "tokens_estimated": 406,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/RELEASING.md",
+          "tokens_estimated": 564,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 81,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 516,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/FORK_WORKFLOW_SETUP.md",
+          "tokens_estimated": 1957,
+          "action": "create"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 44569,
+        "output_tokens_estimated": 9007,
+        "reads_count": 9,
+        "writes_count": 13,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 6
+      }
+    },
+    {
+      "id": "session-2026-04-08-0929",
+      "started": "2026-04-08T13:29:20.612Z",
+      "ended": "2026-04-08T14:21:20.785Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/projects/-Users-dvernier-development-devaiflow-devaiflow/4ae7f50f-9be8-45d5-bc21-43781148c4fe/tool-results/b1hys292b.txt",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/RELEASING.md",
+          "tokens_estimated": 3523,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/release/manager.py",
+          "tokens_estimated": 14891,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/SKILL.md",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/publish.yml",
+          "tokens_estimated": 582,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/CONTRIBUTING.md",
+          "tokens_estimated": 2458,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 1673,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/.claude/skills/release/SKILL.md",
+          "tokens_estimated": 3073,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 87,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 120,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 124,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 95,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 73,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 1673,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/CODEOWNERS",
+          "tokens_estimated": 238,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/CONTRIBUTING.md",
+          "tokens_estimated": 406,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/RELEASING.md",
+          "tokens_estimated": 564,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 81,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.github/workflows/tag-monitor.yml",
+          "tokens_estimated": 516,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/FORK_WORKFLOW_SETUP.md",
+          "tokens_estimated": 1957,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/FORK_WORKFLOW_SETUP.md",
+          "tokens_estimated": 235,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/FORK_WORKFLOW_SETUP.md",
+          "tokens_estimated": 87,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/FORK_WORKFLOW_SETUP.md",
+          "tokens_estimated": 108,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/FORK_WORKFLOW_SETUP.md",
+          "tokens_estimated": 187,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/FORK_WORKFLOW_SETUP.md",
+          "tokens_estimated": 163,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 44569,
+        "output_tokens_estimated": 9787,
+        "reads_count": 9,
+        "writes_count": 18,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 6
       }
     }
   ],
