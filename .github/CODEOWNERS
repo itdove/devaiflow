@@ -1,0 +1,28 @@
+# CODEOWNERS - Define code ownership and required reviewers
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @itdove
+
+# Critical workflow files - require owner approval
+/.github/workflows/publish.yml @itdove
+/.github/workflows/publish-test.yml @itdove
+/.github/workflows/tag-monitor.yml @itdove
+
+# Release documentation - require owner approval
+/RELEASING.md @itdove
+/CONTRIBUTING.md @itdove
+
+# Security and configuration
+/.github/CODEOWNERS @itdove
+/.gitignore @itdove
+
+# Version files - require owner approval
+/pyproject.toml @itdove
+/devflow/__init__.py @itdove
+
+# Release management module
+/devflow/release/ @itdove
+
+# CLI commands that affect releases
+/devflow/cli/commands/release_command.py @itdove
