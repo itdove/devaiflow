@@ -57,8 +57,11 @@ dmypy.json
 *.tar.gz
 T-*.md
 
-# Claude Code session files (should not be committed to repo)
-.claude/
+# Claude Code - only track release skill
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/release/
 
 # DevAIFlow test artifacts (session metadata files created during testing)
 tests/*.md
