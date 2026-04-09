@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T17:01:10.464Z
-> Files: 506 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T22:00:01.008Z
+> Files: 503 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -14,7 +14,6 @@
 - `CONTRIBUTING.md` — Contributing to DevAIFlow (~2695 tok)
 - `coverage.json` (~12790 tok)
 - `demo_branch_selection.sh` — Demo script showing the new branch source selection feature (~846 tok)
-- `FORK_WORKFLOW_SETUP.md` — Fork-Based Workflow Setup Guide (~1503 tok)
 - `LICENSE` — Project license (~3029 tok)
 - `pyproject.toml` — Python project configuration (~702 tok)
 - `QUICKREF.md` — DevAIFlow Quick Reference (~1384 tok)
@@ -39,6 +38,8 @@
 
 - `EXAMPLE_USAGE.md` — Release Skill Usage Examples (~1906 tok)
 - `README.md` — Project documentation (~858 tok)
+- `release_helper.py` — ReleaseHelper: get_current_version, update_version, calculate_next_version, update_changelog + 2 more (~3826 tok)
+- `SKILL.md` — DevAIFlow Release Skill (~2689 tok)
 
 ## .github/
 
@@ -66,7 +67,7 @@
 ## .pytest_cache/v/cache/
 
 - `lastfailed` (~4066 tok)
-- `nodeids` (~92590 tok)
+- `nodeids` (~92783 tok)
 - `stepwise` (~1 tok)
 
 ## demos/
@@ -714,11 +715,6 @@
 - `test_branch_workflow_ux_fixes.py` — Tests for issue #331: Branch workflow UX issues. (~5629 tok)
 - `test_check_command.py` — Tests for daf check command. (~3490 tok)
 - `test_claude_agent_skills_filtering.py` — Tests for Claude agent skills filtering in launch_with_prompt. (~4144 tok)
-- `test_claude_commands.py` — Tests for devflow/utils/claude_commands.py - bundled skills installation. (~6382 tok)
-- `test_claude_config_dir_integration.py` — Integration tests for CLAUDE_CONFIG_DIR environment variable support. (~1166 tok)
-- `test_claude_mock.py` — Tests for MockClaudeCode. (~2214 tok)
-- `test_cleanup_conversation.py` — Tests for cleanup_conversation command. (~1601 tok)
-- `test_release_skill_helper.py` — create_test_repo, test_get_current_version, test_version_mismatch_detection, test_update_version (~2051 tok)
 
 ## tests/cli/commands/
 
