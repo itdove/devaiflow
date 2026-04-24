@@ -1561,7 +1561,9 @@ class JiraClient(IssueTrackerClient):
 
         Args:
             issue_key: issue tracker key
-            field_name: Field name or custom field ID (e.g., "customfield_12310220" for PR link)
+            field_name: Field name or custom field ID (e.g., "customfield_XXXXX" for PR link)
+                       Note: Field IDs are instance-specific. Use normalized names from
+                       field_mappings instead of hardcoding field IDs.
             value: New value for the field
 
         Raises:
@@ -1713,7 +1715,8 @@ class JiraClient(IssueTrackerClient):
         Args:
             issue_key: issue tracker key
             field_mappings: Optional field mappings dict from config to resolve custom field IDs
-                          (e.g., {"git_pull_request": {"id": "customfield_12310220"}})
+                          (e.g., {"git_pull_request": {"id": "customfield_XXXXX"}})
+                          Note: Field IDs are instance-specific and discovered dynamically.
 
         Returns:
             Current PR links (comma-separated), empty string if field not set

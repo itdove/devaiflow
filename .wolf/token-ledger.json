@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-04-06T12:35:01.489Z",
   "lifetime": {
-    "total_tokens_estimated": 325498,
-    "total_reads": 45,
-    "total_writes": 66,
-    "total_sessions": 33,
-    "anatomy_hits": 27,
-    "anatomy_misses": 13,
-    "repeated_reads_blocked": 25,
-    "estimated_savings_vs_bare_cli": 205143
+    "total_tokens_estimated": 687511,
+    "total_reads": 89,
+    "total_writes": 91,
+    "total_sessions": 49,
+    "anatomy_hits": 56,
+    "anatomy_misses": 28,
+    "repeated_reads_blocked": 40,
+    "estimated_savings_vs_bare_cli": 436063
   },
   "sessions": [
     {
@@ -776,6 +776,512 @@
         "writes_count": 4,
         "repeated_reads_blocked": 0,
         "anatomy_lookups": 2
+      }
+    },
+    {
+      "id": "session-2026-04-20-1917",
+      "started": "2026-04-20T23:17:22.195Z",
+      "ended": "2026-04-20T23:18:53.685Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/storage/file_backend.py",
+          "tokens_estimated": 3352,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 3352,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-04-20-1917",
+      "started": "2026-04-20T23:17:22.195Z",
+      "ended": "2026-04-20T23:19:39.864Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/storage/file_backend.py",
+          "tokens_estimated": 3352,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 3352,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-04-24-0918",
+      "started": "2026-04-24T13:18:52.006Z",
+      "ended": "2026-04-24T13:22:20.147Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 6763,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 25990,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command_functions.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_field_mapper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 15008,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 229,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 216,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 144,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 140,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 594,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 69203,
+        "output_tokens_estimated": 1323,
+        "reads_count": 7,
+        "writes_count": 5,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 4
+      }
+    },
+    {
+      "id": "session-2026-04-24-0918",
+      "started": "2026-04-24T13:18:52.006Z",
+      "ended": "2026-04-24T13:24:33.087Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 6763,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 25990,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command_functions.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_field_mapper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 15008,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 229,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 216,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 144,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 140,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 594,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 69203,
+        "output_tokens_estimated": 1323,
+        "reads_count": 7,
+        "writes_count": 5,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 4
+      }
+    },
+    {
+      "id": "session-2026-04-24-0918",
+      "started": "2026-04-24T13:18:52.006Z",
+      "ended": "2026-04-24T13:27:20.211Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 6763,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 25990,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command_functions.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_field_mapper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 15008,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/settings.local.json",
+          "tokens_estimated": 305,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 229,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 216,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 144,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 140,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 594,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 69508,
+        "output_tokens_estimated": 1323,
+        "reads_count": 8,
+        "writes_count": 5,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 5
+      }
+    },
+    {
+      "id": "session-2026-04-24-0918",
+      "started": "2026-04-24T13:18:52.006Z",
+      "ended": "2026-04-24T13:28:39.663Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 6763,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 25990,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command_functions.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_field_mapper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 15008,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/settings.local.json",
+          "tokens_estimated": 305,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/settings.json",
+          "tokens_estimated": 441,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/settings.json",
+          "tokens_estimated": 441,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 229,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 216,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 144,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 140,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 594,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 70390,
+        "output_tokens_estimated": 1323,
+        "reads_count": 10,
+        "writes_count": 5,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 7
+      }
+    },
+    {
+      "id": "session-2026-04-24-0918",
+      "started": "2026-04-24T13:18:52.006Z",
+      "ended": "2026-04-24T13:31:32.009Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 6763,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 25990,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command_functions.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_jira_update_command.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_field_mapper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 15008,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/settings.local.json",
+          "tokens_estimated": 305,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/settings.json",
+          "tokens_estimated": 441,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.claude/settings.json",
+          "tokens_estimated": 441,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 229,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/field_mapper.py",
+          "tokens_estimated": 216,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 144,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/jira/client.py",
+          "tokens_estimated": 140,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/docs/guides/troubleshooting.md",
+          "tokens_estimated": 594,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 70390,
+        "output_tokens_estimated": 1323,
+        "reads_count": 10,
+        "writes_count": 5,
+        "repeated_reads_blocked": 3,
+        "anatomy_lookups": 7
       }
     }
   ],
