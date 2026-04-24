@@ -600,6 +600,57 @@ Field 'acceptance_criteria' is required
 
 **Note:** This is a known JIRA configuration issue where tickets can be created without required fields but cannot be transitioned without them. There is no fix on the daf tool side - the field must be added to the JIRA ticket before transition.
 
+### JIRA Field ID Mismatch - "Git Pull Request field not found"
+
+**Problem:** Error message: "Git Pull Request field not found" or similar errors when trying to update PR links in JIRA.
+
+**Cause:** JIRA custom field IDs (e.g., `customfield_XXXXX`) are instance-specific and vary between JIRA installations. The field ID in your configuration may not match your JIRA instance.
+
+**Example:**
+- Red Hat JIRA uses `customfield_10875` for "Git Pull Request"
+- Another JIRA instance might use `customfield_12310220`
+- Your JIRA instance likely uses a different ID
+
+**Solution:**
+
+1. **Refresh field mappings to auto-discover your instance's field IDs:**
+   ```bash
+   daf config refresh-jira-fields
+   ```
+
+2. **Verify the discovered field ID in your config:**
+   ```bash
+   # Check the field_mappings in your config
+   cat ~/.daf-sessions/backends/jira.json | grep -A 3 "git_pull_request"
+   ```
+   
+   You should see something like:
+   ```json
+   "git_pull_request": {
+     "id": "customfield_XXXXX",  # Your instance-specific ID
+     "name": "Git Pull Request"
+   }
+   ```
+
+3. **If field discovery doesn't find the field, verify it exists in JIRA:**
+   - Go to your JIRA instance
+   - Open any issue
+   - Click "..." → "Edit"
+   - Check if "Git Pull Request" field appears in the edit dialog
+
+4. **Manual field ID lookup (if needed):**
+   ```bash
+   # Use JIRA API to find the field ID
+   curl -H "Authorization: Bearer $JIRA_API_TOKEN" \
+        https://your-jira.atlassian.net/rest/api/2/field | \
+        jq '.[] | select(.name=="Git Pull Request")'
+   ```
+
+**Prevention:**
+- Always use normalized field names (e.g., `git_pull_request`) in your code, not hardcoded field IDs
+- Let DevAIFlow's field discovery handle the ID mapping
+- Never copy field IDs from documentation examples - they are instance-specific
+
 ### JIRA Custom Field Errors
 
 **Problem:** JIRA commands fail with "Unknown field" or "Field not found" errors

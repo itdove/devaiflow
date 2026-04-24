@@ -566,7 +566,7 @@ def test_discover_editable_fields_success(monkeypatch):
     all_fields_response.status_code = 200
     all_fields_response.json.return_value = [
         {
-            "id": "customfield_12310220",
+            "id": "customfield_99999",
             "name": "Git Pull Request",
             "schema": {"type": "any", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiurl"}
         },
@@ -582,7 +582,7 @@ def test_discover_editable_fields_success(monkeypatch):
     editmeta_response.status_code = 200
     editmeta_response.json.return_value = {
         "fields": {
-            "customfield_12310220": {
+            "customfield_99999": {
                 "name": "Git Pull Request",
                 "schema": {
                     "type": "any",
@@ -622,7 +622,7 @@ def test_discover_editable_fields_success(monkeypatch):
 
     # Verify the mappings
     assert "git_pull_request" in field_mappings
-    assert field_mappings["git_pull_request"]["id"] == "customfield_12310220"
+    assert field_mappings["git_pull_request"]["id"] == "customfield_99999"
     assert field_mappings["git_pull_request"]["name"] == "Git Pull Request"
     assert field_mappings["git_pull_request"]["type"] == "any"
     assert field_mappings["git_pull_request"]["schema"] == "multiurl"
@@ -662,7 +662,7 @@ def test_fetch_editmeta_success():
     editmeta_response.status_code = 200
     editmeta_response.json.return_value = {
         "fields": {
-            "customfield_12310220": {
+            "customfield_99999": {
                 "name": "Git Pull Request",
                 "schema": {"type": "any", "custom": "multiurl"},
                 "required": False
@@ -676,7 +676,7 @@ def test_fetch_editmeta_success():
     editmeta = mapper._fetch_editmeta("PROJ-12345")
 
     assert "fields" in editmeta
-    assert "customfield_12310220" in editmeta["fields"]
+    assert "customfield_99999" in editmeta["fields"]
 
 
 def test_fetch_editmeta_failure():
@@ -702,14 +702,14 @@ def test_parse_editmeta():
 
     all_fields = [
         {
-            "id": "customfield_12310220",
+            "id": "customfield_99999",
             "name": "Git Pull Request"
         }
     ]
 
     editmeta = {
         "fields": {
-            "customfield_12310220": {
+            "customfield_99999": {
                 "name": "Git Pull Request",
                 "schema": {
                     "type": "any",
@@ -738,7 +738,7 @@ def test_parse_editmeta():
 
     # Verify git_pull_request mapping
     assert "git_pull_request" in mappings
-    assert mappings["git_pull_request"]["id"] == "customfield_12310220"
+    assert mappings["git_pull_request"]["id"] == "customfield_99999"
     assert mappings["git_pull_request"]["name"] == "Git Pull Request"
     assert mappings["git_pull_request"]["type"] == "any"
     assert mappings["git_pull_request"]["schema"] == "multiurl"

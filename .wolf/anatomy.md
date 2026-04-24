@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-08T22:00:01.008Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-04-24T13:21:57.970Z
 > Files: 503 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
@@ -343,9 +343,9 @@
 ## devflow/jira/
 
 - `__init__.py` — JIRA integration for DevAIFlow. (~111 tok)
-- `client.py` — JIRA REST API client for DevAIFlow. (~25990 tok)
+- `client.py` — JIRA REST API client for DevAIFlow. (~26060 tok)
 - `exceptions.py` — Custom exceptions for JIRA client operations. (~485 tok)
-- `field_mapper.py` — JIRA custom field mapper for discovering and caching field metadata. (~6763 tok)
+- `field_mapper.py` — JIRA custom field mapper for discovering and caching field metadata. (~6939 tok)
 - `transitions.py` — issue tracker ticket transition management. (~3618 tok)
 - `utils.py` — Utility functions for JIRA operations. (~4182 tok)
 - `validation.py` — JIRA field validation based on config.jira rules. (~4122 tok)
@@ -492,7 +492,7 @@
 - `session-management.md` — Session Management (~8306 tok)
 - `skills-management.md` — Skills Management Guide (~2626 tok)
 - `ssl-configuration.md` — SSL Certificate Verification Configuration (~1344 tok)
-- `troubleshooting.md` — Troubleshooting Guide (~15008 tok)
+- `troubleshooting.md` — Troubleshooting Guide (~15461 tok)
 
 ## docs/reference/
 

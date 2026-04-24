@@ -117,7 +117,7 @@ class JiraFieldMapper:
             Dictionary mapping normalized field names to field metadata:
             {
                 "git_pull_request": {
-                    "id": "customfield_12310220",
+                    "id": "customfield_XXXXX",  # Instance-specific, discovered via field discovery
                     "name": "Git Pull Request",
                     "type": "any",
                     "schema": "multiurl",
@@ -125,6 +125,13 @@ class JiraFieldMapper:
                 },
                 ...
             }
+
+            IMPORTANT: Field IDs (customfield_XXXXX) vary by JIRA instance.
+            Use the normalized field name (e.g., 'git_pull_request') to access
+            field_mappings rather than hardcoding field IDs.
+
+            The field ID is automatically discovered and cached when you run:
+                daf config refresh-jira-fields
 
         Raises:
             RuntimeError: If API request fails
@@ -188,7 +195,7 @@ class JiraFieldMapper:
             Dictionary with editable field metadata:
             {
                 "fields": {
-                    "customfield_12310220": {
+                    "customfield_XXXXX": {  # Instance-specific field ID
                         "name": "Git Pull Request",
                         "schema": {
                             "type": "any",
@@ -199,6 +206,10 @@ class JiraFieldMapper:
                     ...
                 }
             }
+
+            Note: Field IDs (customfield_XXXXX) are instance-specific and vary
+            between JIRA installations. The exact ID is discovered dynamically
+            from the API response.
 
         Raises:
             RuntimeError: If API request fails

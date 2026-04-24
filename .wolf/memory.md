@@ -244,3 +244,93 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-04-20 19:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 20:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 20:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 21:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 21:35
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 22:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 22:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 22:30
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 22:31
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 16:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 16:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 16:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 17:08
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-21 17:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-04-24 09:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 09:19 | Edited devflow/jira/field_mapper.py | expanded (+7 lines) | ~229 |
+| 09:19 | Edited devflow/jira/field_mapper.py | 15→19 lines | ~216 |
+| 09:19 | Edited devflow/jira/client.py | modified update_ticket_field() | ~144 |
+| 09:19 | Edited devflow/jira/client.py | modified get_ticket_pr_links() | ~140 |
+| 09:21 | Edited docs/guides/troubleshooting.md | modified lookup() | ~555 |
+| 09:22 | Session end: 5 writes across 3 files (field_mapper.py, client.py, troubleshooting.md) | 7 reads | ~70526 tok |
+| 09:24 | Session end: 5 writes across 3 files (field_mapper.py, client.py, troubleshooting.md) | 7 reads | ~70526 tok |
+| 09:27 | Session end: 5 writes across 3 files (field_mapper.py, client.py, troubleshooting.md) | 8 reads | ~70831 tok |
+| 09:28 | Session end: 5 writes across 3 files (field_mapper.py, client.py, troubleshooting.md) | 10 reads | ~71713 tok |
+| 09:31 | Session end: 5 writes across 3 files (field_mapper.py, client.py, troubleshooting.md) | 10 reads | ~71713 tok |
+
+## Session: 2026-04-24 09:35
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

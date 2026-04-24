@@ -293,8 +293,8 @@ def test_update_issue_git_pull_request(mock_jira_client, monkeypatch):
         response = Mock()
         if method == "PUT" and "/rest/api/2/issue/PROJ-12345" in endpoint:
             payload = kwargs.get("json", {})
-            assert "customfield_12310220" in payload["fields"]
-            assert payload["fields"]["customfield_12310220"] == "https://github.com/org/repo/pull/123"
+            assert "customfield_99999" in payload["fields"]
+            assert payload["fields"]["customfield_99999"] == "https://github.com/org/repo/pull/123"
             response.status_code = 204
         return response
 
@@ -302,7 +302,7 @@ def test_update_issue_git_pull_request(mock_jira_client, monkeypatch):
 
     mock_jira_client.update_issue(
         "PROJ-12345",
-        {"fields": {"customfield_12310220": "https://github.com/org/repo/pull/123"}}
+        {"fields": {"customfield_99999": "https://github.com/org/repo/pull/123"}}
     )
 
 
@@ -314,7 +314,7 @@ def test_get_ticket_pr_links(mock_jira_client, monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": "https://github.com/org/repo/pull/123,https://github.com/org/repo/pull/456"
+                    "customfield_99999": "https://github.com/org/repo/pull/123,https://github.com/org/repo/pull/456"
                 }
             }
         return response
@@ -323,7 +323,7 @@ def test_get_ticket_pr_links(mock_jira_client, monkeypatch):
 
     # Provide field_mappings to enable PR link extraction
     field_mappings = {
-        "git_pull_request": {"id": "customfield_12310220"}
+        "git_pull_request": {"id": "customfield_99999"}
     }
 
     pr_links = mock_jira_client.get_ticket_pr_links("PROJ-12345", field_mappings=field_mappings)
@@ -339,7 +339,7 @@ def test_get_ticket_pr_links_empty(mock_jira_client, monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": ""
+                    "customfield_99999": ""
                 }
             }
         return response
@@ -348,7 +348,7 @@ def test_get_ticket_pr_links_empty(mock_jira_client, monkeypatch):
 
     # Provide field_mappings to enable PR link extraction
     field_mappings = {
-        "git_pull_request": {"id": "customfield_12310220"}
+        "git_pull_request": {"id": "customfield_99999"}
     }
 
     pr_links = mock_jira_client.get_ticket_pr_links("PROJ-12345", field_mappings=field_mappings)
@@ -364,7 +364,7 @@ def test_get_ticket_pr_links_as_list(mock_jira_client, monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": [
+                    "customfield_99999": [
                         "https://github.com/org/repo/pull/123",
                         "https://github.com/org/repo/pull/456"
                     ]
@@ -376,7 +376,7 @@ def test_get_ticket_pr_links_as_list(mock_jira_client, monkeypatch):
 
     # Provide field_mappings to enable PR link extraction
     field_mappings = {
-        "git_pull_request": {"id": "customfield_12310220"}
+        "git_pull_request": {"id": "customfield_99999"}
     }
 
     pr_links = mock_jira_client.get_ticket_pr_links("PROJ-12345", field_mappings=field_mappings)
@@ -393,7 +393,7 @@ def test_get_ticket_pr_links_as_empty_list(mock_jira_client, monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": []
+                    "customfield_99999": []
                 }
             }
         return response
@@ -402,7 +402,7 @@ def test_get_ticket_pr_links_as_empty_list(mock_jira_client, monkeypatch):
 
     # Provide field_mappings to enable PR link extraction
     field_mappings = {
-        "git_pull_request": {"id": "customfield_12310220"}
+        "git_pull_request": {"id": "customfield_99999"}
     }
 
     pr_links = mock_jira_client.get_ticket_pr_links("PROJ-12345", field_mappings=field_mappings)
@@ -426,7 +426,7 @@ def test_get_ticket_detailed_with_pr_links(mock_jira_client, monkeypatch):
                     "priority": {"name": "Major"},
                     "assignee": {"displayName": "John Doe"},
                     "reporter": {"displayName": "Jane Doe"},
-                    "customfield_12310220": "https://github.com/org/repo/pull/123"
+                    "customfield_99999": "https://github.com/org/repo/pull/123"
                 }
             }
         return response
@@ -435,7 +435,7 @@ def test_get_ticket_detailed_with_pr_links(mock_jira_client, monkeypatch):
 
     # Provide field_mappings to enable PR link extraction
     field_mappings = {
-        "git_pull_request": {"id": "customfield_12310220"}
+        "git_pull_request": {"id": "customfield_99999"}
     }
 
     ticket = mock_jira_client.get_ticket_detailed("PROJ-12345", field_mappings=field_mappings)
@@ -462,7 +462,7 @@ def test_get_ticket_pr_links_without_cached_field_mappings(mock_jira_client, mon
             response.status_code = 200
             response.json.return_value = [
                 {
-                    "id": "customfield_12310220",
+                    "id": "customfield_99999",
                     "name": "Git Pull Request",
                     "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
                 }
@@ -472,7 +472,7 @@ def test_get_ticket_pr_links_without_cached_field_mappings(mock_jira_client, mon
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": {
+                    "customfield_99999": {
                         "name": "Git Pull Request",
                         "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
                         "operations": ["set"]
@@ -483,16 +483,16 @@ def test_get_ticket_pr_links_without_cached_field_mappings(mock_jira_client, mon
         elif method == "GET" and "/rest/api/2/issue/PROJ-12345" in endpoint:
             response.status_code = 200
             # Check if this is a field-specific query
-            if "params" in kwargs and kwargs["params"].get("fields") == "customfield_12310220":
+            if "params" in kwargs and kwargs["params"].get("fields") == "customfield_99999":
                 response.json.return_value = {
                     "fields": {
-                        "customfield_12310220": "https://github.com/org/repo/pull/123"
+                        "customfield_99999": "https://github.com/org/repo/pull/123"
                     }
                 }
             else:
                 response.json.return_value = {
                     "fields": {
-                        "customfield_12310220": "https://github.com/org/repo/pull/123"
+                        "customfield_99999": "https://github.com/org/repo/pull/123"
                     }
                 }
         return response
@@ -526,7 +526,7 @@ def test_get_ticket_pr_links_with_empty_field_mappings(mock_jira_client, monkeyp
             response.status_code = 200
             response.json.return_value = [
                 {
-                    "id": "customfield_12310220",
+                    "id": "customfield_99999",
                     "name": "Git Pull Request",
                     "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
                 }
@@ -536,7 +536,7 @@ def test_get_ticket_pr_links_with_empty_field_mappings(mock_jira_client, monkeyp
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": {
+                    "customfield_99999": {
                         "name": "Git Pull Request",
                         "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
                         "operations": ["set"]
@@ -548,7 +548,7 @@ def test_get_ticket_pr_links_with_empty_field_mappings(mock_jira_client, monkeyp
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": "https://github.com/org/repo/pull/123,https://github.com/org/repo/pull/456"
+                    "customfield_99999": "https://github.com/org/repo/pull/123,https://github.com/org/repo/pull/456"
                 }
             }
         return response
@@ -622,7 +622,7 @@ def test_multiple_pr_creation_scenario(mock_jira_client, monkeypatch):
             response.status_code = 200
             response.json.return_value = [
                 {
-                    "id": "customfield_12310220",
+                    "id": "customfield_99999",
                     "name": "Git Pull Request",
                     "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"}
                 }
@@ -632,7 +632,7 @@ def test_multiple_pr_creation_scenario(mock_jira_client, monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": {
+                    "customfield_99999": {
                         "name": "Git Pull Request",
                         "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url"},
                         "operations": ["set"]
@@ -644,14 +644,14 @@ def test_multiple_pr_creation_scenario(mock_jira_client, monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "fields": {
-                    "customfield_12310220": jira_pr_state
+                    "customfield_99999": jira_pr_state
                 }
             }
         # Mock ticket PUT to update PR field
         elif method == "PUT" and "/rest/api/2/issue/PROJ-12345" in endpoint:
             payload = kwargs.get("json", {})
-            if "customfield_12310220" in payload.get("fields", {}):
-                jira_pr_state = payload["fields"]["customfield_12310220"]
+            if "customfield_99999" in payload.get("fields", {}):
+                jira_pr_state = payload["fields"]["customfield_99999"]
             response.status_code = 204
 
         return response
@@ -665,7 +665,7 @@ def test_multiple_pr_creation_scenario(mock_jira_client, monkeypatch):
     # Add first PR
     new_pr_url = "https://github.com/org/repo/pull/123"
     updated_prs = new_pr_url if not current_prs else f"{current_prs},{new_pr_url}"
-    mock_jira_client.update_ticket_field("PROJ-12345", "customfield_12310220", updated_prs)
+    mock_jira_client.update_ticket_field("PROJ-12345", "customfield_99999", updated_prs)
     assert jira_pr_state == "https://github.com/org/repo/pull/123"
 
     # Scenario: Second PR creation (one existing PR, still no cached field mapping)
@@ -677,7 +677,7 @@ def test_multiple_pr_creation_scenario(mock_jira_client, monkeypatch):
     # Add second PR
     new_pr_url = "https://github.com/org/repo/pull/456"
     updated_prs = f"{current_prs},{new_pr_url}"
-    mock_jira_client.update_ticket_field("PROJ-12345", "customfield_12310220", updated_prs)
+    mock_jira_client.update_ticket_field("PROJ-12345", "customfield_99999", updated_prs)
 
     # Verify both PRs are present (not overwritten)
     assert jira_pr_state == "https://github.com/org/repo/pull/123,https://github.com/org/repo/pull/456"

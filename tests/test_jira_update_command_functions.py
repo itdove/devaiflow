@@ -40,7 +40,7 @@ def mock_field_mapper():
     mapper.get_field_id.side_effect = lambda field_name: {
         "acceptance_criteria": "customfield_12315940",
         "workstream": "customfield_12319275",
-        "git_pull_request": "customfield_12310220",
+        "git_pull_request": "customfield_99999",
     }.get(field_name, None)
     mapper._cache = {
         "workstream": {"id": "customfield_12319275", "name": "Workstream"},
@@ -304,7 +304,7 @@ class TestUpdateJiraIssue:
         mock_field_mapper.get_field_id.side_effect = lambda field_name: {
             "acceptance_criteria": "customfield_12315940",
             "workstream": "customfield_12319275",
-            "git_pull_request": "customfield_12310220",
+            "git_pull_request": "customfield_99999",
             "parent": "parent",
         }.get(field_name, None)
         mock_field_mapper.discover_editable_fields.return_value = {
