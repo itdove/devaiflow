@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-24T13:21:57.970Z
-> Files: 503 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-04-30T13:04:53.422Z
+> Files: 505 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -27,7 +27,7 @@
 
 ## .claude/
 
-- `settings.json` (~441 tok)
+- `settings.json` (~450 tok)
 - `settings.local.json` (~305 tok)
 
 ## .claude/rules/
@@ -162,7 +162,7 @@
 - `new_command_multiproject.py` — Multi-project session creation logic for DevAIFlow (Issue #149). (~4292 tok)
 - `new_command.py` — Implementation of 'daf new' command. (~27498 tok)
 - `note_command.py` — Implementation of 'daf note' and 'daf notes' commands. (~1903 tok)
-- `open_command.py` — Implementation of 'daf open' command. (~50903 tok)
+- `open_command.py` — Implementation of 'daf open' command. (~51350 tok)
 - `pause_command.py` — Implementation of 'daf pause' command. (~619 tok)
 - `provider_commands.py` — Implementation of 'daf model' commands for managing model provider profiles. (~6464 tok)
 - `rebuild_index_command.py` — Implementation of 'daf rebuild-index' command. (~2992 tok)
@@ -421,7 +421,7 @@
 - `model_provider.py` — Utilities for managing model provider configuration and profiles. (~1813 tok)
 - `paths.py` — Path utilities for DevAIFlow. (~659 tok)
 - `ssl_helper.py` — SSL verification helper for HTTP requests. (~840 tok)
-- `temp_directory.py` — Temporary directory utilities for issue tracker ticket creation sessions. (~2726 tok)
+- `temp_directory.py` — Temporary directory utilities for ticket creation sessions. Includes extract_repo_name, clone_to_temp_directory, prompt_and_clone_to_temp, cleanup. Creates nested structure: /tmp/daf-session-xxx/repo-name/ (~3966 tok)
 - `time_parser.py` — Time expression parser for filtering. (~1026 tok)
 - `update_checker.py` — Update checker for DevAIFlow. (~2612 tok)
 - `url_parser.py` — URL parser for issue tracker URLs. (~1411 tok)
@@ -715,6 +715,8 @@
 - `test_branch_workflow_ux_fixes.py` — Tests for issue #331: Branch workflow UX issues. (~5629 tok)
 - `test_check_command.py` — Tests for daf check command. (~3490 tok)
 - `test_claude_agent_skills_filtering.py` — Tests for Claude agent skills filtering in launch_with_prompt. (~4144 tok)
+- `test_open_command.py` — Tests for daf open command. (~23046 tok)
+- `test_temp_directory_utils.py` — Tests for devflow/utils/temp_directory.py. (~8370 tok)
 
 ## tests/cli/commands/
 

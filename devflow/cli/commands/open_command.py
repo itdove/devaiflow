@@ -3468,19 +3468,34 @@ def _log_error(message: str) -> None:
 def _cleanup_temp_directory_on_exit(temp_dir: Optional[str]) -> None:
     """Clean up a temporary directory when exiting a session.
 
+    Handles both nested structure (/tmp/daf-session-xxx/repo-name/)
+    and legacy flat structure (/tmp/daf-jira-analysis-xxx/).
+
     Args:
         temp_dir: Path to temporary directory (can be None)
     """
     import shutil
+    import tempfile as _tempfile
 
     if not temp_dir:
         return
 
     try:
-        if Path(temp_dir).exists():
+        temp_path = Path(temp_dir)
+        if not temp_path.exists():
+            return
+
+        # Check if this is a nested structure by examining the parent
+        parent = temp_path.parent
+        parent_name = parent.name
+
+        if parent_name.startswith("daf-session-") and parent.parent == Path(_tempfile.gettempdir()):
+            console.print(f"[dim]Cleaning up temporary directory: {parent}[/dim]")
+            shutil.rmtree(str(parent))
+        else:
             console.print(f"[dim]Cleaning up temporary directory: {temp_dir}[/dim]")
             shutil.rmtree(temp_dir)
-            console.print(f"[green]✓[/green] Temporary directory removed")
+        console.print(f"[green]✓[/green] Temporary directory removed")
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Could not remove temporary directory: {e}")
         console.print(f"[dim]You may need to manually delete: {temp_dir}[/dim]")
@@ -3628,11 +3643,17 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
         # Conversation files are stored at stable location based on original_project_path
         # This allows conversation to persist even when temp directory changes
 
-        # Delete old temp directory if it exists
-        if Path(conv.temp_directory).exists():
+        # Delete old temp directory if it exists (handles nested structure)
+        old_temp_path = Path(conv.temp_directory)
+        if old_temp_path.exists():
             console.print(f"[dim]Deleting old temporary directory...[/dim]")
             try:
-                shutil.rmtree(conv.temp_directory)
+                # Check if nested structure: clean parent session dir
+                old_parent = old_temp_path.parent
+                if old_parent.name.startswith("daf-session-") and old_parent.parent == Path(tempfile.gettempdir()):
+                    shutil.rmtree(str(old_parent))
+                else:
+                    shutil.rmtree(conv.temp_directory)
                 console.print(f"[green]✓[/green] Old temporary directory removed")
             except Exception as e:
                 console.print(f"[yellow]⚠[/yellow] Could not delete old temp directory: {e}")
@@ -3650,13 +3671,18 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
             session_manager.update_session(session)
             return
 
-        # Re-clone to fresh temp directory
+        # Re-clone to fresh temp directory with nested structure
         console.print(f"[cyan]Re-cloning repository to get latest version from main branch...[/cyan]")
         console.print(f"[dim]Remote URL: {remote_url}[/dim]")
 
+        from devflow.utils.temp_directory import extract_repo_name
+        repo_name = extract_repo_name(remote_url)
+
         try:
-            new_temp_dir = tempfile.mkdtemp(prefix="daf-jira-analysis-")
-            console.print(f"[dim]Created new temporary directory: {new_temp_dir}[/dim]")
+            new_session_dir = tempfile.mkdtemp(prefix="daf-session-")
+            new_clone_dir = os.path.join(new_session_dir, repo_name)
+            os.makedirs(new_clone_dir, exist_ok=True)
+            console.print(f"[dim]Created new temporary directory: {new_clone_dir}[/dim]")
         except Exception as e:
             console.print(f"[red]✗[/red] Failed to create temporary directory: {e}")
             console.print(f"[yellow]Falling back to existing project path[/yellow]")
@@ -3666,12 +3692,12 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
             return
 
         console.print(f"[dim]Cloning... (this may take a moment)[/dim]")
-        if not GitUtils.clone_repository(remote_url, Path(new_temp_dir), branch=None):
+        if not GitUtils.clone_repository(remote_url, Path(new_clone_dir), branch=None):
             console.print(f"[red]✗[/red] Failed to clone repository")
             console.print(f"[yellow]Falling back to existing project path[/yellow]")
             try:
-                shutil.rmtree(new_temp_dir)
-            except:
+                shutil.rmtree(new_session_dir)
+            except Exception:
                 pass
             conv.temp_directory = None
             conv.original_project_path = None
@@ -3679,23 +3705,23 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
             return
 
         # Checkout default branch
-        default_branch = GitUtils.get_default_branch(Path(new_temp_dir))
+        default_branch = GitUtils.get_default_branch(Path(new_clone_dir))
         if default_branch:
             console.print(f"[dim]Checked out default branch: {default_branch}[/dim]")
         else:
             # Try common default branches
             for branch in ["main", "master", "develop"]:
-                if GitUtils.branch_exists(Path(new_temp_dir), branch):
-                    success, error_msg = GitUtils.checkout_branch(Path(new_temp_dir), branch)
+                if GitUtils.branch_exists(Path(new_clone_dir), branch):
+                    success, error_msg = GitUtils.checkout_branch(Path(new_clone_dir), branch)
                     if success:
                         console.print(f"[dim]Checked out branch: {branch}[/dim]")
                         break
                     # Silently continue to next branch if checkout fails
 
-        # Update session with new temp directory
+        # Update session with new temp directory (clone dir with repo name)
         # IMPORTANT: Store the resolved path (handles macOS /var -> /private/var)
         # This ensures the path matches what Claude Code will see
-        resolved_temp_dir = str(Path(new_temp_dir).resolve())
+        resolved_temp_dir = str(Path(new_clone_dir).resolve())
         conv.temp_directory = resolved_temp_dir
         conv.project_path = resolved_temp_dir
         session_manager.update_session(session)
@@ -3703,7 +3729,7 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
 
         # Restore conversation file from stable location to new temp directory
         # This uses original_project_path as stable identifier
-        if _copy_conversation_to_temp(session, new_temp_dir, config):
+        if _copy_conversation_to_temp(session, new_clone_dir, config):
             console.print(f"[green]✓[/green] Restored conversation history from stable storage")
         else:
             console.print(f"[dim]No previous conversation to restore (this may be first launch)[/dim]")
@@ -3749,10 +3775,15 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
 
         console.print(f"[dim]Remote URL: {remote_url}[/dim]")
 
-        # Create temporary directory
+        # Create nested temp directory with repo name
+        from devflow.utils.temp_directory import extract_repo_name
+        repo_name = extract_repo_name(remote_url)
+
         try:
-            temp_dir = tempfile.mkdtemp(prefix="daf-jira-analysis-")
-            console.print(f"[dim]Created temporary directory: {temp_dir}[/dim]")
+            session_dir = tempfile.mkdtemp(prefix="daf-session-")
+            clone_dir = os.path.join(session_dir, repo_name)
+            os.makedirs(clone_dir, exist_ok=True)
+            console.print(f"[dim]Created temporary directory: {clone_dir}[/dim]")
         except Exception as e:
             console.print(f"[red]✗[/red] Failed to create temporary directory: {e}")
             console.print("[yellow]Falling back to current directory[/yellow]")
@@ -3762,38 +3793,38 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
         console.print(f"[cyan]Cloning repository...[/cyan]")
         console.print(f"[dim]This may take a moment...[/dim]")
 
-        if not GitUtils.clone_repository(remote_url, Path(temp_dir), branch=None):
+        if not GitUtils.clone_repository(remote_url, Path(clone_dir), branch=None):
             console.print(f"[red]✗[/red] Failed to clone repository")
             console.print("[yellow]Falling back to current directory[/yellow]")
             try:
-                shutil.rmtree(temp_dir)
-            except:
+                shutil.rmtree(session_dir)
+            except Exception:
                 pass
             return
 
         # Checkout default branch
-        default_branch = GitUtils.get_default_branch(Path(temp_dir))
+        default_branch = GitUtils.get_default_branch(Path(clone_dir))
         if default_branch:
             console.print(f"[dim]Checked out default branch: {default_branch}[/dim]")
         else:
             # Try common default branches
             for branch in ["main", "master", "develop"]:
-                if GitUtils.branch_exists(Path(temp_dir), branch):
-                    success, error_msg = GitUtils.checkout_branch(Path(temp_dir), branch)
+                if GitUtils.branch_exists(Path(clone_dir), branch):
+                    success, error_msg = GitUtils.checkout_branch(Path(clone_dir), branch)
                     if success:
                         console.print(f"[dim]Checked out branch: {branch}[/dim]")
                         break
                     # Silently continue to next branch if checkout fails
 
-        # Update session with temp directory
+        # Update session with temp directory (clone dir with repo name)
         # IMPORTANT: Store the resolved path (handles macOS /var -> /private/var)
         # This ensures the path matches what Claude Code will see
-        resolved_temp_dir = str(Path(temp_dir).resolve())
+        resolved_temp_dir = str(Path(clone_dir).resolve())
         conv.temp_directory = resolved_temp_dir
         conv.original_project_path = str(current_path.absolute())
         conv.project_path = resolved_temp_dir
         session_manager.update_session(session)
-        console.print(f"[green]✓[/green] Using temporary clone: {temp_dir}")
+        console.print(f"[green]✓[/green] Using temporary clone: {clone_dir}")
 
 
 

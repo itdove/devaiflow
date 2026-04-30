@@ -6,6 +6,8 @@ directories for clean analysis during ticket creation sessions.
 Extracted from jira_new_command.py to be reused by jira_open_command.py.
 """
 
+import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -16,6 +18,41 @@ from rich.prompt import Confirm, Prompt
 from devflow.cli.utils import console_print, is_json_mode
 from devflow.git.utils import GitUtils
 from devflow.utils.paths import is_mock_mode
+
+
+def extract_repo_name(url: str) -> str:
+    """Extract repository name from a git URL.
+
+    Supports HTTPS and SSH URL formats, with or without .git suffix.
+
+    Args:
+        url: Git remote URL (HTTPS or SSH format)
+
+    Returns:
+        Repository name extracted from the URL, or "repo" as fallback
+    """
+    if not url:
+        return "repo"
+
+    # Strip trailing slashes and whitespace
+    url = url.strip().rstrip("/")
+
+    # Remove .git suffix if present
+    if url.endswith(".git"):
+        url = url[:-4]
+
+    # Extract the last path component
+    # Works for both:
+    #   https://github.com/user/repo-name
+    #   git@github.com:user/repo-name
+    parts = re.split(r"[/:]", url)
+    name = parts[-1] if parts else ""
+
+    # Validate: allow alphanumeric, hyphens, dots, underscores
+    if name and re.match(r"^[\w.\-]+$", name):
+        return name
+
+    return "repo"
 
 
 def should_clone_to_temp(path: Path) -> bool:
@@ -30,6 +67,31 @@ def should_clone_to_temp(path: Path) -> bool:
         True if we should prompt to clone, False otherwise
     """
     return GitUtils.is_git_repository(path)
+
+
+def _create_nested_temp_directory(remote_url: str) -> Optional[tuple[str, str]]:
+    """Create a nested temp directory structure with the repo name as subdirectory.
+
+    Creates: /tmp/daf-session-<random>/<repo-name>/
+
+    Args:
+        remote_url: Git remote URL to extract repo name from
+
+    Returns:
+        Tuple of (session_base_dir, clone_target_dir) or None on failure
+    """
+    repo_name = extract_repo_name(remote_url)
+
+    try:
+        session_dir = tempfile.mkdtemp(prefix="daf-session-")
+        clone_dir = os.path.join(session_dir, repo_name)
+        os.makedirs(clone_dir, exist_ok=True)
+        console_print(f"[dim]Created temporary directory: {clone_dir}[/dim]")
+        return (session_dir, clone_dir)
+    except Exception as e:
+        console_print(f"[red]✗[/red] Failed to create temporary directory: {e}")
+        console_print("[yellow]Falling back to current directory[/yellow]")
+        return None
 
 
 def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
@@ -129,8 +191,89 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
         return default_branch
 
 
+def _checkout_default_branch(clone_dir: str) -> None:
+    """Attempt to checkout the default branch in a cloned repository.
+
+    Args:
+        clone_dir: Path to the cloned repository
+    """
+    default_branch = GitUtils.get_default_branch(Path(clone_dir))
+    if default_branch:
+        console_print(f"[dim]Checked out default branch: {default_branch}[/dim]")
+        current_branch = GitUtils.get_current_branch(Path(clone_dir))
+        if current_branch != default_branch:
+            success, error_msg = GitUtils.checkout_branch(Path(clone_dir), default_branch)
+            if not success:
+                console_print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}")
+                if error_msg:
+                    console_print(f"[dim]Checkout error: {error_msg}[/dim]")
+    else:
+        console_print(f"[yellow]⚠[/yellow] Could not determine default branch (trying main, master, develop)")
+        for branch in ["main", "master", "develop"]:
+            if GitUtils.branch_exists(Path(clone_dir), branch):
+                success, error_msg = GitUtils.checkout_branch(Path(clone_dir), branch)
+                if success:
+                    console_print(f"[dim]Checked out branch: {branch}[/dim]")
+                    break
+
+
+def clone_to_temp_directory(current_path: Path) -> Optional[tuple[str, str]]:
+    """Clone repository to temporary directory without prompting (non-interactive).
+
+    Used when --temp-clone flag is explicitly passed.
+
+    Args:
+        current_path: Current project directory path
+
+    Returns:
+        Tuple of (temp_directory, original_project_path) if cloned,
+        None if cloning failed
+    """
+    # Get remote URL
+    console_print("[dim]Detecting git remote URL...[/dim]")
+    remote_url = GitUtils.get_remote_url(current_path)
+    if not remote_url:
+        console_print("[yellow]⚠[/yellow] Could not detect git remote URL")
+        console_print("[yellow]Falling back to current directory[/yellow]")
+        return None
+
+    console_print(f"[dim]Remote URL: {remote_url}[/dim]")
+
+    # Create nested temp directory structure
+    dir_result = _create_nested_temp_directory(remote_url)
+    if not dir_result:
+        return None
+
+    session_dir, clone_dir = dir_result
+
+    # Clone repository
+    console_print(f"[cyan]Cloning repository...[/cyan]")
+    console_print(f"[dim]This may take a moment...[/dim]")
+
+    if not GitUtils.clone_repository(remote_url, Path(clone_dir), branch=None):
+        console_print(f"[red]✗[/red] Failed to clone repository")
+        console_print("[yellow]Falling back to current directory[/yellow]")
+        try:
+            shutil.rmtree(session_dir)
+        except Exception:
+            pass
+        return None
+
+    console_print(f"[green]✓[/green] Repository cloned")
+
+    # Auto-detect and checkout default branch
+    _checkout_default_branch(clone_dir)
+
+    original_path = str(current_path.absolute())
+    return (clone_dir, original_path)
+
+
 def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
     """Prompt user and clone repository to temporary directory.
+
+    Creates a nested directory structure: /tmp/daf-session-<id>/<repo-name>/
+    This ensures the repo name appears in file paths, enabling pattern matching
+    like "**/repo-name/**" to work correctly.
 
     Args:
         current_path: Current project directory path
@@ -157,38 +300,35 @@ def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
 
     console_print(f"[dim]Remote URL: {remote_url}[/dim]")
 
-    # Create temporary directory
-    try:
-        temp_dir = tempfile.mkdtemp(prefix="daf-jira-analysis-")
-        console_print(f"[dim]Created temporary directory: {temp_dir}[/dim]")
-    except Exception as e:
-        console_print(f"[red]✗[/red] Failed to create temporary directory: {e}")
-        console_print("[yellow]Falling back to current directory[/yellow]")
+    # Create nested temp directory structure
+    dir_result = _create_nested_temp_directory(remote_url)
+    if not dir_result:
         return None
+
+    session_dir, clone_dir = dir_result
 
     # Clone repository
     console_print(f"[cyan]Cloning repository...[/cyan]")
     console_print(f"[dim]This may take a moment...[/dim]")
 
-    if not GitUtils.clone_repository(remote_url, Path(temp_dir), branch=None):
+    if not GitUtils.clone_repository(remote_url, Path(clone_dir), branch=None):
         console_print(f"[red]✗[/red] Failed to clone repository")
         console_print("[yellow]Falling back to current directory[/yellow]")
-        # Clean up temp directory
         try:
-            shutil.rmtree(temp_dir)
-        except:
+            shutil.rmtree(session_dir)
+        except Exception:
             pass
         return None
 
     console_print(f"[green]✓[/green] Repository cloned")
 
     # Prompt user to select branch (unless in non-interactive mode)
-    selected_branch = _prompt_for_branch_selection(Path(temp_dir))
+    selected_branch = _prompt_for_branch_selection(Path(clone_dir))
 
     if selected_branch:
         # Checkout the selected branch
         console_print(f"[dim]Checking out branch: {selected_branch}...[/dim]")
-        success, error_msg = GitUtils.checkout_branch(Path(temp_dir), selected_branch)
+        success, error_msg = GitUtils.checkout_branch(Path(clone_dir), selected_branch)
         if success:
             console_print(f"[green]✓[/green] Checked out branch: {selected_branch}")
         else:
@@ -200,35 +340,20 @@ def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
 
     # If no branch was selected or checkout failed, fall back to auto-detection
     if not selected_branch:
-        default_branch = GitUtils.get_default_branch(Path(temp_dir))
-        if default_branch:
-            console_print(f"[dim]Checked out default branch: {default_branch}[/dim]")
-            # Branch was already checked out during clone, but let's verify
-            current_branch = GitUtils.get_current_branch(Path(temp_dir))
-            if current_branch != default_branch:
-                success, error_msg = GitUtils.checkout_branch(Path(temp_dir), default_branch)
-                if not success:
-                    console_print(f"[yellow]⚠[/yellow] Could not checkout {default_branch}")
-                    if error_msg:
-                        console_print(f"[dim]Checkout error: {error_msg}[/dim]")
-        else:
-            console_print(f"[yellow]⚠[/yellow] Could not determine default branch (trying main, master, develop)")
-            # Try common default branches
-            for branch in ["main", "master", "develop"]:
-                if GitUtils.branch_exists(Path(temp_dir), branch):
-                    success, error_msg = GitUtils.checkout_branch(Path(temp_dir), branch)
-                    if success:
-                        console_print(f"[dim]Checked out branch: {branch}[/dim]")
-                        break
-                    # Silently continue to next branch if checkout fails
+        _checkout_default_branch(clone_dir)
 
-    # Return temp directory and original path
+    # Return clone directory (with repo name) and original path
     original_path = str(current_path.absolute())
-    return (temp_dir, original_path)
+    return (clone_dir, original_path)
 
 
 def cleanup_temp_directory(temp_dir: Optional[str]) -> None:
     """Clean up a temporary directory.
+
+    Handles both nested structure (/tmp/daf-session-xxx/repo-name/)
+    and legacy flat structure (/tmp/daf-jira-analysis-xxx/).
+
+    For nested structures, cleans up the parent session directory.
 
     Args:
         temp_dir: Path to temporary directory (can be None)
@@ -237,7 +362,21 @@ def cleanup_temp_directory(temp_dir: Optional[str]) -> None:
         return
 
     try:
-        if Path(temp_dir).exists():
+        temp_path = Path(temp_dir)
+        if not temp_path.exists():
+            return
+
+        # Check if this is a nested structure by examining the parent
+        parent = temp_path.parent
+        parent_name = parent.name
+
+        if parent_name.startswith("daf-session-") and parent.parent == Path(tempfile.gettempdir()):
+            # Nested structure: clean up the parent session directory
+            console_print(f"[dim]Cleaning up temporary directory: {parent}[/dim]")
+            shutil.rmtree(str(parent))
+            console_print(f"[green]✓[/green] Temporary directory removed")
+        else:
+            # Legacy flat structure or direct temp dir
             console_print(f"[dim]Cleaning up temporary directory: {temp_dir}[/dim]")
             shutil.rmtree(temp_dir)
             console_print(f"[green]✓[/green] Temporary directory removed")
