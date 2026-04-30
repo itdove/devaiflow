@@ -84,6 +84,38 @@
       "related_bugs": [],
       "occurrences": 3,
       "last_seen": "2026-04-08T14:20:08.541Z"
+    },
+    {
+      "id": "bug-006",
+      "timestamp": "2026-04-30T12:56:12.266Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/open_command.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 8→14 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-30T12:56:12.266Z"
+    },
+    {
+      "id": "bug-007",
+      "timestamp": "2026-04-30T12:56:38.582Z",
+      "error_message": "Wrong reference: new_temp_dir should be new_clone_dir",
+      "file": "devflow/cli/commands/open_command.py",
+      "root_cause": "Used \"new_temp_dir\" instead of \"new_clone_dir\"",
+      "fix": "Changed new_temp_dir → new_clone_dir",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-30T12:56:38.582Z"
     }
   ]
 }

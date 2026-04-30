@@ -1482,14 +1482,16 @@ def test_temp_directory_conversation_file_persistence(temp_daf_home, monkeypatch
     _handle_temp_directory_for_ticket_creation(session, session_manager)
 
     # Verify:
-    # 1. Session project_path was updated to new temp directory
+    # 1. Session project_path was updated to new temp directory (with repo name subdirectory)
+    # The remote URL is https://git.example.com/test/repo.git, so repo name is "repo"
+    expected_clone_dir = str((new_temp_dir / "repo").resolve())
     reloaded_session = session_manager.get_session("test-ticket-creation")
     reloaded_active_conv = reloaded_session.active_conversation
     assert reloaded_active_conv is not None
-    assert reloaded_active_conv.project_path == str(new_temp_dir)
+    assert reloaded_active_conv.project_path == expected_clone_dir
 
     # 2. Conversation file exists in new temp directory
-    new_session_dir = capture.get_session_dir(str(new_temp_dir))
+    new_session_dir = capture.get_session_dir(expected_clone_dir)
     new_conversation_file = new_session_dir / f"{session_id}.jsonl"
     assert new_conversation_file.exists(), "Conversation file should exist in new temp directory"
     assert new_conversation_file.stat().st_size > 0, "Conversation file should not be empty"
@@ -1604,7 +1606,9 @@ def test_temp_directory_conversation_file_persistence_when_temp_dir_deleted(temp
 
     # Verify:
     # 1. Conversation file was backed up and restored even though temp dir was deleted
-    new_session_dir = capture.get_session_dir(str(new_temp_dir))
+    # With nested structure, the clone dir is new_temp_dir/repo (from remote URL)
+    expected_clone_dir = str((new_temp_dir / "repo").resolve())
+    new_session_dir = capture.get_session_dir(expected_clone_dir)
     new_conversation_file = new_session_dir / f"{session_id}.jsonl"
     assert new_conversation_file.exists(), "Conversation file should exist in new temp directory"
     assert new_conversation_file.stat().st_size > 0, "Conversation file should not be empty"
