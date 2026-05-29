@@ -2877,7 +2877,7 @@ Format as markdown bullets. Return ONLY the bullet points, nothing else."""
 
         # Try using Claude CLI for best quality
         result = subprocess.run(
-            ["claude"],
+            ["claude", "-p"],
             input=prompt,
             capture_output=True,
             text=True,
@@ -3600,7 +3600,7 @@ Return ONLY the commit message."""
 
         # Call Claude CLI
         result = subprocess.run(
-            ["claude"],
+            ["claude", "-p"],
             input=prompt,
             capture_output=True,
             text=True,
@@ -3766,7 +3766,7 @@ Return ONLY the commit message in this exact format, nothing else."""
 
         # Call Claude CLI
         result = subprocess.run(
-            ["claude"],
+            ["claude", "-p"],
             input=prompt,
             capture_output=True,
             text=True,

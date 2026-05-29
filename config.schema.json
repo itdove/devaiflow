@@ -340,6 +340,7 @@
         "custom_field_defaults": {
           "anyOf": [
             {
+              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -352,6 +353,7 @@
         "system_field_defaults": {
           "anyOf": [
             {
+              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -377,6 +379,7 @@
           "anyOf": [
             {
               "additionalProperties": {
+                "additionalProperties": true,
                 "type": "object"
               },
               "type": "object"
