@@ -18,6 +18,7 @@ def mock_session():
     session = Mock()
     session.issue_key = "PROJ-12345"
     session.goal = "Add user authentication feature"
+    session.issue_tracker = "jira"
 
     # Mock active conversation
     conversation = Mock()
@@ -248,12 +249,40 @@ Assisted-by: Claude
                     assert result == "Filled via API"
                     mock_api.assert_called_once()
 
+    def test_claude_cli_uses_print_flag(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
+        """Test that Claude CLI is called with -p flag for non-interactive mode."""
+        monkeypatch.chdir(tmp_path)
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
+                mock_result = Mock()
+                mock_result.returncode = 0
+                mock_result.stdout = "Filled template"
+                mock_run.return_value = mock_result
+
+                mock_loader = Mock()
+                mock_loader.config_file.exists.return_value = False
+                mock_config_loader_class.return_value = mock_loader
+
+                fill_pr_template_with_ai(
+                    sample_template,
+                    mock_session,
+                    tmp_path,
+                    git_context
+                )
+
+                # Verify -p flag is used
+                call_args = mock_run.call_args
+                cmd = call_args[0][0] if call_args[0] else call_args.kwargs.get('args', [])
+                assert cmd == ["claude", "-p"], f"Expected ['claude', '-p'], got {cmd}"
+
     def test_session_without_issue_key(self, sample_template, git_context, tmp_path, monkeypatch):
         """Test template filling when session has no issue key."""
         monkeypatch.chdir(tmp_path)
 
         session_no_issue = Mock()
         session_no_issue.issue_key = None
+        session_no_issue.issue_tracker = None
         session_no_issue.goal = "Refactoring work"
         session_no_issue.active_conversation = None
 
@@ -463,6 +492,7 @@ class TestFillTemplateFallback:
         """Test fallback template filling without JIRA issue key."""
         session_no_issue = Mock()
         session_no_issue.issue_key = None
+        session_no_issue.issue_tracker = "jira"
         session_no_issue.goal = "General improvements"
 
         git_context = {
@@ -510,6 +540,7 @@ class TestFillTemplateFallback:
 
         session = Mock()
         session.issue_key = "PROJ-999"
+        session.issue_tracker = "jira"
         session.goal = "Fix bug"
 
         git_context = {}
@@ -523,3 +554,103 @@ class TestFillTemplateFallback:
 
             # Should replace various patterns
             assert "PROJ-999" in result
+
+    def test_fallback_with_github_issue_key(self):
+        """Test fallback with GitHub issue key format (owner/repo#123)."""
+        template = """Jira Issue: <PROJ-NNNN>
+
+## Description
+<!-- Describe what this PR does -->
+
+Assisted-by: <name of code assistant>
+
+## Testing
+### Steps to test
+1. Pull down the PR
+2. ...
+3. ...
+"""
+        session = Mock()
+        session.issue_key = "itdove/ai-guardian#860"
+        session.issue_tracker = "github"
+        session.goal = "Add path-file parameter types"
+
+        git_context = {
+            'changed_files': ["src/plugins/tray.py", "tests/test_tray.py"],
+        }
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            mock_loader = Mock()
+            mock_loader.config_file.exists.return_value = False
+            mock_config_loader_class.return_value = mock_loader
+
+            result = _fill_template_fallback(template, session, git_context)
+
+            # Should replace Jira Issue link with GitHub URL
+            assert "https://github.com/itdove/ai-guardian/issues/860" in result
+            # Should replace Assisted-by placeholder
+            assert "Assisted-by: Claude" in result
+            assert "<name of code assistant>" not in result
+            # Should fill description
+            assert "Add path-file parameter types" in result
+            # Should replace generic test steps
+            assert "2. ..." not in result
+
+    def test_fallback_assisted_by_replacement(self, mock_session):
+        """Test fallback replaces Assisted-by placeholder patterns."""
+        template = """Assisted-by: <name of code assistant>
+<!-- If you use any AI tool -->
+Assisted-by: <!-- Who helped -->
+"""
+        git_context = {}
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            mock_loader = Mock()
+            mock_loader.config_file.exists.return_value = False
+            mock_config_loader_class.return_value = mock_loader
+
+            result = _fill_template_fallback(template, mock_session, git_context)
+
+            assert "<name of code assistant>" not in result
+            assert "<!-- Who helped -->" not in result
+            assert result.count("Assisted-by: Claude") >= 1
+
+    def test_fallback_removes_instructional_comments(self, mock_session):
+        """Test fallback removes standalone HTML comment instructions."""
+        template = """## Description
+<!-- Describe what this PR does -->
+Some real content
+
+<!-- This is an instruction that should be removed -->
+More content
+"""
+        git_context = {}
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            mock_loader = Mock()
+            mock_loader.config_file.exists.return_value = False
+            mock_config_loader_class.return_value = mock_loader
+
+            result = _fill_template_fallback(template, mock_session, git_context)
+
+            assert "<!-- This is an instruction that should be removed -->" not in result
+            assert "More content" in result
+
+    def test_fallback_jira_url_no_double_slash(self, mock_session):
+        """Test fallback doesn't produce double slashes in JIRA URL."""
+        template = """Jira Issue: <PROJ-NNNN>"""
+
+        git_context = {}
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            mock_config = Mock()
+            mock_config.jira.url = "https://jira.example.com/"  # trailing slash
+            mock_loader = Mock()
+            mock_loader.config_file.exists.return_value = True
+            mock_loader.load_config.return_value = mock_config
+            mock_config_loader_class.return_value = mock_loader
+
+            result = _fill_template_fallback(template, mock_session, git_context)
+
+            assert "https://jira.example.com/browse/PROJ-12345" in result
+            assert "//browse" not in result

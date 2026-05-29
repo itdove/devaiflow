@@ -1,7 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-04-30T13:04:53.422Z
-> Files: 505 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-29T12:20:37.265Z
+> Files: 507 tracked | Anatomy hits: 0 | Misses: 0
+
+## ../../../.claude/plans/
+
+- `sparkling-munching-hennessy.md` — Fix PR Template Not Being Filled During `daf complete` (~766 tok)
 
 ## ./
 
@@ -127,7 +131,7 @@
 - `check_command.py` — Implementation of 'daf check' command. (~1058 tok)
 - `cleanup_command.py` — Implementation of 'daf cleanup-conversation' command. (~6300 tok)
 - `cleanup_sessions_command.py` — Implementation of 'daf cleanup-sessions' command. (~1484 tok)
-- `complete_command.py` — Implementation of 'daf complete' command. (~51802 tok)
+- `complete_command.py` — Implementation of 'daf complete' command. (~51807 tok)
 - `config_export_command.py` — Implementation of 'daf config export' command. (~476 tok)
 - `config_import_command.py` — Implementation of 'daf config import' command. (~619 tok)
 - `context_commands.py` — Implementation of 'daf config context' commands. (~2136 tok)
@@ -314,7 +318,7 @@
 ## devflow/git/
 
 - `__init__.py` — Git integration utilities for DevAIFlow. (~14 tok)
-- `pr_template.py` — AI-powered PR/MR template parsing and filling. (~2974 tok)
+- `pr_template.py` — AI-powered PR/MR template parsing and filling. (~3701 tok)
 - `utils.py` — Git utilities for branch management. (~15440 tok)
 
 ## devflow/github/
@@ -715,6 +719,7 @@
 - `test_branch_workflow_ux_fixes.py` — Tests for issue #331: Branch workflow UX issues. (~5629 tok)
 - `test_check_command.py` — Tests for daf check command. (~3490 tok)
 - `test_claude_agent_skills_filtering.py` — Tests for Claude agent skills filtering in launch_with_prompt. (~4144 tok)
+- `test_git_pr_template.py` — Tests for AI-powered PR/MR template parsing and filling. (~7570 tok)
 - `test_open_command.py` — Tests for daf open command. (~23046 tok)
 - `test_temp_directory_utils.py` — Tests for devflow/utils/temp_directory.py. (~8370 tok)
 

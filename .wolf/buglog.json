@@ -116,6 +116,22 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-04-30T12:56:38.582Z"
+    },
+    {
+      "id": "bug-008",
+      "timestamp": "2026-05-29T12:19:15.293Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/git/pr_template.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→14 lines (2 removed) | Also: \"\"\"Simple fallback template filling when AI is not; Uses basic pattern matching as a last resort.",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-29T12:19:39.794Z"
     }
   ]
 }

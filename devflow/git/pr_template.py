@@ -45,11 +45,20 @@ def fill_pr_template_with_ai(
         config = config_loader.load_config() if config_loader.config_file.exists() else None
         jira_url = config.jira.url if config and config.jira else None
 
-        # Session context
+        # Detect issue tracker backend
+        issue_tracker = getattr(session, 'issue_tracker', None) or "jira"
+
+        # Session context — build issue URL based on backend
         if session.issue_key:
-            context_parts.append(f"JIRA Issue: {session.issue_key}")
-            if jira_url:
-                context_parts.append(f"JIRA URL: {jira_url}/browse/{session.issue_key}")
+            if issue_tracker == "github":
+                context_parts.append(f"GitHub Issue: {session.issue_key}")
+            elif issue_tracker == "gitlab":
+                context_parts.append(f"GitLab Issue: {session.issue_key}")
+            else:
+                context_parts.append(f"JIRA Issue: {session.issue_key}")
+                if jira_url:
+                    jira_base = jira_url.rstrip('/')
+                    context_parts.append(f"JIRA URL: {jira_base}/browse/{session.issue_key}")
 
         context_parts.append(f"Session Goal: {session.goal}")
 
@@ -110,7 +119,7 @@ Generate the filled PR/MR description now:"""
 
         # Try Claude CLI first (faster, better)
         result = subprocess.run(
-            ["claude"],
+            ["claude", "-p"],
             input=prompt,
             capture_output=True,
             text=True,
@@ -233,9 +242,10 @@ Generate the filled PR/MR description now:"""
 
 
 def _fill_template_fallback(template_content: str, session, git_context: dict) -> str:
-    """Simple fallback template filling when AI is not available.
+    """Fallback template filling when AI is not available.
 
-    Uses basic pattern matching as a last resort.
+    Uses pattern matching to fill common PR template placeholders.
+    Handles both JIRA-style (PROJ-123) and GitHub-style (owner/repo#123) issue keys.
 
     Args:
         template_content: Raw template content
@@ -243,42 +253,97 @@ def _fill_template_fallback(template_content: str, session, git_context: dict) -
         git_context: Git context dictionary
 
     Returns:
-        Filled template with basic substitutions
+        Filled template with substitutions applied
     """
     import re
 
     console.print("[dim]Using fallback template filling (no AI)[/dim]")
 
-    # Load JIRA URL from config
+    # Load config for issue tracker URL
     config_loader = ConfigLoader()
     config = config_loader.load_config() if config_loader.config_file.exists() else None
     jira_url = config.jira.url if config and config.jira else None
 
+    # Detect issue tracker backend
+    issue_tracker = getattr(session, 'issue_tracker', None) or "jira"
+
     filled = template_content
 
-    # Replace issue tracker placeholders (e.g., PROJ-NNNN, JIRA-KEY, ISSUE-123)
+    # Replace issue tracker placeholders
     if session.issue_key:
+        # Replace JIRA-style placeholders (e.g., PROJ-NNNN, JIRA-KEY, ISSUE-123)
         filled = re.sub(
             r'(?:PROJ|JIRA|ISSUE)-(?:NNNN|\w+)',
             session.issue_key,
             filled,
             flags=re.IGNORECASE
         )
-        if jira_url:
+
+        # Fill "Jira Issue:" link based on backend
+        if issue_tracker == "jira" and jira_url:
+            jira_base = jira_url.rstrip('/')
             filled = re.sub(
                 r'(Jira Issue:\s*)<[^>]*>',
-                f'\\1<{jira_url}/browse/{session.issue_key}>',
+                f'\\1<{jira_base}/browse/{session.issue_key}>',
                 filled,
                 flags=re.IGNORECASE
             )
+        elif issue_tracker == "github":
+            # GitHub issue: build link from issue key (owner/repo#123)
+            match = re.match(r'([^#]+)#(\d+)', session.issue_key)
+            if match:
+                repo_path, issue_num = match.groups()
+                github_url = f'https://github.com/{repo_path}/issues/{issue_num}'
+                filled = re.sub(
+                    r'(Jira Issue:\s*)<[^>]*>',
+                    f'\\1<{github_url}>',
+                    filled,
+                    flags=re.IGNORECASE
+                )
 
-    # Fill in basic description from session goal
+    # Fill in description section
     description_pattern = r'(## Description\s*\n)(?:<!--.*?-->\s*\n)?'
     filled = re.sub(
         description_pattern,
-        f'\\1{session.goal}\n\nAssisted-by: Claude\n\n',
+        f'\\1{session.goal}\n\n',
         filled,
         flags=re.DOTALL
+    )
+
+    # Replace "Assisted-by" placeholders
+    filled = re.sub(
+        r'(Assisted-by:\s*)(?:<[^>]*>|<!-- .* -->)',
+        r'\1Claude',
+        filled,
+    )
+
+    # Replace generic "Assisted-by:" lines that still have placeholder text
+    filled = re.sub(
+        r'Assisted-by:\s*<name of code assistant>',
+        'Assisted-by: Claude',
+        filled,
+        flags=re.IGNORECASE
+    )
+
+    # Fill testing steps if they contain placeholder "..." entries
+    changed_files = git_context.get('changed_files', [])
+    if changed_files:
+        test_steps = "1. Pull down the PR and verify changes build successfully\n"
+        test_steps += "2. Review the changed files for correctness\n"
+        test_steps += "3. Run the project's test suite\n"
+        # Replace generic numbered steps with placeholder dots
+        filled = re.sub(
+            r'1\.\s+(?:Pull down the PR\s*\n)?2\.\s+\.\.\.\s*\n3\.\s+\.\.\.',
+            test_steps.rstrip(),
+            filled,
+        )
+
+    # Remove standalone instructional HTML comments (lines that are only a comment)
+    filled = re.sub(
+        r'^[ \t]*<!--[^>]*?-->[ \t]*\n',
+        '',
+        filled,
+        flags=re.MULTILINE
     )
 
     return filled
