@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T20:22:00.025Z
-> Files: 521 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T21:13:17.789Z
+> Files: 522 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../.claude/plans/
 
@@ -729,6 +729,7 @@
 - `test_investigate_command.py` — Tests for daf investigate command. (~11028 tok)
 - `test_jira_new_command.py` — Tests for daf jira new command. (~18520 tok)
 - `test_jira_new_multiproject.py` — Tests for multi-project support in daf jira new command (Issue #179). (~2417 tok)
+- `test_multi_project_session_creation.py` — Tests for multi-project session creation workflow. (~6249 tok)
 - `test_open_command.py` — Tests for daf open command. (~23046 tok)
 - `test_open_multiproject_selection.py` — Tests for multi-project selection in daf open _prompt_for_working_directory (Issue #177). (~1998 tok)
 - `test_repository_selection_jira_new.py` — Tests for unified project selection used by 'daf jira new' and other commands. (~1260 tok)
