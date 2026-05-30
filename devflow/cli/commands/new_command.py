@@ -12,7 +12,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from devflow.cli.utils import check_concurrent_session, console_print, get_status_display, is_json_mode, output_json as json_output, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, serialize_session, should_launch_claude_code
+from devflow.cli.utils import check_concurrent_session, console_print, get_status_display, is_json_mode, output_json as json_output, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, serialize_session, should_launch_claude_code, unified_project_selection
 from devflow.config.loader import ConfigLoader
 from devflow.git.utils import GitUtils
 from devflow.jira import JiraClient
@@ -482,64 +482,14 @@ def create_new_session(
                 console.print(f"[yellow]⚠[/yellow] Warning: {error}")
 
     # Multi-project workflow (Issue #149)
-    # If --projects flag is provided OR user wants to select multiple projects interactively
+    # If --projects flag is provided, handle directly
     multi_project_names = None
 
     if projects:
         # --projects flag provided - use those projects
         multi_project_names = [p.strip() for p in projects.split(',')]
-    elif workspace_path and not non_interactive and path is None:
-        # No --projects flag, but we have a workspace - offer interactive multi-project selection
-        workspace_path_obj = Path(workspace_path)
-        available_repos = scan_workspace_repositories(workspace_path_obj)
 
-        if len(available_repos) > 1:
-            # Multiple repos available - ask if user wants multi-project session
-            console.print(f"\n[cyan]Detected {len(available_repos)} git repositories in workspace '{selected_workspace_name}':[/cyan]")
-            for repo in available_repos[:10]:  # Show first 10
-                console.print(f"  • {repo}")
-            if len(available_repos) > 10:
-                console.print(f"  ... and {len(available_repos) - 10} more")
-
-            if Confirm.ask("\nCreate multi-project session (work across multiple repos)?", default=False):
-                # User wants multi-project - let them select projects
-                from rich.prompt import Prompt
-
-                console.print("\n[bold]Select projects (comma-separated numbers or names):[/bold]")
-                for i, repo in enumerate(available_repos, 1):
-                    console.print(f"{i}. {repo}")
-
-                selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)")
-
-                # Parse selection (could be numbers or names)
-                selected_projects = []
-                for item in selection.split(','):
-                    item = item.strip()
-                    if item.isdigit():
-                        # Numeric selection
-                        idx = int(item) - 1
-                        if 0 <= idx < len(available_repos):
-                            selected_projects.append(available_repos[idx])
-                    else:
-                        # Name selection
-                        if item in available_repos:
-                            selected_projects.append(item)
-                        else:
-                            console.print(f"[yellow]⚠[/yellow] Project '{item}' not found - skipping")
-
-                if len(selected_projects) > 1:
-                    multi_project_names = selected_projects
-                    console.print(f"\n[green]✓[/green] Selected {len(multi_project_names)} projects:")
-                    for proj in multi_project_names:
-                        console.print(f"  • {proj}")
-                elif len(selected_projects) == 1:
-                    # Only one project selected - continue with single-project flow
-                    path = str(workspace_path_obj / selected_projects[0])
-                    console.print(f"\n[dim]Only one project selected - continuing with single-project session[/dim]")
-                else:
-                    console.print("\n[yellow]⚠[/yellow] No valid projects selected - continuing with single-project session")
-
-    # If multi-project mode, create multi-project session
+    # If multi-project mode via --projects flag, create multi-project session
     if multi_project_names:
         # Validate all projects exist in workspace
         if not workspace_path:
@@ -606,36 +556,63 @@ def create_new_session(
                     json_output(success=False, error={"code": "NO_PATH", "message": "Path required in non-interactive mode"})
                 raise click.Abort()
         else:
-            # Interactive mode: offer suggestions and prompts
-            # Always offer intelligent repository suggestions (with or without JIRA)
-            # Pass selected workspace to ensure correct repository discovery
-            suggested_path = _suggest_and_select_repository(
+            # Interactive mode: use unified project selection with AI suggestions
+            result = _suggest_and_select_repository(
                 config_loader,
                 issue_metadata_dict=issue_metadata_dict,
                 issue_key=issue_key,
                 workspace_name=selected_workspace_name,
+                allow_multi_project=(workspace_path is not None),
             )
-            if suggested_path:
-                path = suggested_path
-            elif is_current_dir_a_project:
-                # Current directory is a project - offer to use it
-                if Confirm.ask(f"Use current directory?\n  {current_dir}", default=True):
-                    path = str(current_dir)
+            if result:
+                selected_paths, is_multi = result
+                if is_multi and selected_paths:
+                    # Multi-project selected via unified UI
+                    multi_names = [Path(p).name for p in selected_paths]
+                    from devflow.cli.commands.new_command_multiproject import create_multi_project_session
+                    create_multi_project_session(
+                        session_manager=session_manager,
+                        config_loader=config_loader,
+                        config=config,
+                        name=name,
+                        goal=goal,
+                        issue_key=issue_key,
+                        issue_metadata_dict=issue_metadata_dict,
+                        issue_title=issue_title,
+                        project_names=multi_names,
+                        workspace_path=workspace_path,
+                        selected_workspace_name=selected_workspace_name,
+                        force_new_session=force_new_session,
+                        model_profile=model_profile,
+                        output_json=output_json,
+                        create_branch=create_branch,
+                        source_branch=source_branch,
+                        on_branch_exists=on_branch_exists,
+                        allow_uncommitted=allow_uncommitted,
+                        sync_upstream=sync_upstream,
+                        non_interactive=non_interactive,
+                    )
+                    return
+                elif selected_paths:
+                    path = selected_paths[0]
+            if not path:
+                if is_current_dir_a_project:
+                    if Confirm.ask(f"Use current directory?\n  {current_dir}", default=True):
+                        path = str(current_dir)
+                    else:
+                        path = Prompt.ask("Enter project path")
+                        if not path or not path.strip():
+                            console.print("[red]✗[/red] Project path cannot be empty")
+                            raise click.Abort()
+                        path = path.strip()
                 else:
+                    console.print(f"\n[yellow]Current directory is not a git repository[/yellow]")
+                    console.print(f"[dim]You must select a project directory for the session[/dim]")
                     path = Prompt.ask("Enter project path")
                     if not path or not path.strip():
                         console.print("[red]✗[/red] Project path cannot be empty")
                         raise click.Abort()
                     path = path.strip()
-            else:
-                # Not in a project directory and no suggestions - must specify path
-                console.print(f"\n[yellow]Current directory is not a git repository[/yellow]")
-                console.print(f"[dim]You must select a project directory for the session[/dim]")
-                path = Prompt.ask("Enter project path")
-                if not path or not path.strip():
-                    console.print("[red]✗[/red] Project path cannot be empty")
-                    raise click.Abort()
-                path = path.strip()
 
     project_path = str(Path(path).absolute())
 
@@ -1020,83 +997,69 @@ def _suggest_and_select_repository(
     issue_metadata_dict: Optional[dict] = None,
     issue_key: Optional[str] = None,
     workspace_name: Optional[str] = None,
-) -> Optional[str]:
+    allow_multi_project: bool = False,
+) -> Optional[tuple]:
     """Suggest repositories based on issue tracker ticket and let user select.
+
+    Uses unified_project_selection for consistent UX across all commands,
+    with AI suggestions and per-project memory as enhancements.
 
     Args:
         config_loader: ConfigLoader instance
         issue_metadata_dict: issue tracker ticket metadata (if available)
         issue_key: issue tracker key (if available)
-        workspace_name: Optional workspace name to use (AAP-64886)
+        workspace_name: Optional workspace name to use
+        allow_multi_project: Whether to offer multi-project selection
 
     Returns:
-        Selected repository path or None if user cancelled
+        Tuple of (selected_paths, is_multi_project) or None if cancelled/no workspace
     """
     config = config_loader.load_config()
 
     # Get available repositories from workspace
     available_repos = []
-    workspace_path = None
-    # AAP-64886: Use selected workspace instead of default
     workspace_path_str = resolve_workspace_path(config, workspace_name)
     if workspace_path_str:
-        workspace_path = Path(workspace_path_str).expanduser()
         try:
             available_repos = scan_workspace_repositories(workspace_path_str)
         except (ValueError, RuntimeError) as e:
             console.print(f"[yellow]Warning: {e}[/yellow]")
 
     if not available_repos:
-        # No workspace configured or no repos found
         return None
 
-    # Calculate default repository using 3-tier priority system
+    # Calculate default repository using project-specific memory
     default_repo = None
+    suggested_repo_source = None
 
     if config and config.prompts and issue_key:
-        # Tier 1: Project-specific memory (JIRA project key or Git owner/repo)
-        # Check for JIRA project key (format: "PROJ-123")
+        # Tier 1: Project-specific memory (JIRA project key)
         project_key = issue_key.split('-')[0] if '-' in issue_key and not issue_key.startswith('#') else None
         if project_key and config.prompts.remember_last_repo_per_project:
             remembered_repo = config.prompts.remember_last_repo_per_project.get(project_key)
             if remembered_repo and remembered_repo in available_repos:
                 default_repo = remembered_repo
-                console.print(f"\n[cyan]Remembered repository for {project_key}: {remembered_repo}[/cyan]")
-                console.print("[dim]Press Enter to use it, or type a different selection[/dim]")
+                suggested_repo_source = f"remembered for {project_key}"
 
-        # Check for Git issue key (format: "owner/repo#123" or "#123")
-        if not default_repo and '#' in issue_key:
-            # Extract owner/repo part if present
-            if '/' in issue_key and '#' in issue_key:
-                git_repo_key = issue_key.split('#')[0]  # Extract "owner/repo"
-                if config.prompts.remember_last_repo_per_git_repo:
-                    remembered_repo = config.prompts.remember_last_repo_per_git_repo.get(git_repo_key)
-                    if remembered_repo and remembered_repo in available_repos:
-                        default_repo = remembered_repo
-                        console.print(f"\n[cyan]Remembered repository for {git_repo_key}: {remembered_repo}[/cyan]")
-                        console.print("[dim]Press Enter to use it, or type a different selection[/dim]")
+        # Check for Git issue key (format: "owner/repo#123")
+        if not default_repo and '#' in issue_key and '/' in issue_key:
+            git_repo_key = issue_key.split('#')[0]
+            if config.prompts.remember_last_repo_per_git_repo:
+                remembered_repo = config.prompts.remember_last_repo_per_git_repo.get(git_repo_key)
+                if remembered_repo and remembered_repo in available_repos:
+                    default_repo = remembered_repo
+                    suggested_repo_source = f"remembered for {git_repo_key}"
 
-    # Tier 2: Workspace-level last-used repo (fallback)
-    if not default_repo and config and config.prompts and workspace_name:
-        if config.prompts.last_used_repo_per_workspace:
-            remembered_repo = config.prompts.last_used_repo_per_workspace.get(workspace_name)
-            if remembered_repo and remembered_repo in available_repos:
-                default_repo = remembered_repo
-                console.print(f"\n[cyan]Last used repository in workspace '{workspace_name}': {remembered_repo}[/cyan]")
-                console.print("[dim]Press Enter to use it, or type a different selection[/dim]")
-
-    # Generate repository suggestions using the learning model
+    # Generate AI suggestions for suggested_repo marker
     suggester = RepositorySuggester()
-
+    suggested_repo = None
     suggestions = []
+
     if issue_metadata_dict:
-        # Extract ticket information for suggestions
         summary = issue_metadata_dict.get("summary", "")
         description = issue_metadata_dict.get("description")
         ticket_type = issue_metadata_dict.get("type")
         labels = issue_metadata_dict.get("labels", [])
-
-        # Get config keywords for fallback
         config_keywords = config.repos.keywords if config and config.repos else {}
 
         suggestions = suggester.suggest_repositories(
@@ -1109,121 +1072,16 @@ def _suggest_and_select_repository(
             config_keywords=config_keywords,
         )
 
-    # Display suggestions
-    if suggestions:
-        console.print("\n[bold cyan]Suggested repositories (based on ticket content):[/bold cyan]")
-        for i, suggestion in enumerate(suggestions, 1):
-            confidence_pct = int(suggestion.confidence * 100)
-            console.print(f"  {i}. [bold]{suggestion.repository}[/bold] ({confidence_pct}% confidence)")
-            if suggestion.reasons:
-                console.print(f"     [dim]• {suggestion.reasons[0]}[/dim]")
-        console.print()
+        if suggestions and not default_repo:
+            suggested_repo = suggestions[0].repository
+            suggested_repo_source = "suggested"
+            default_repo = suggested_repo
 
-    # Display all available repositories
-    console.print(f"\n[bold]Available repositories ({len(available_repos)}):[/bold]")
-    for i, repo in enumerate(available_repos, 1):
-        # Highlight if it's in suggestions
-        if suggestions and any(s.repository == repo for s in suggestions[:3]):
-            console.print(f"  {i}. {repo} [dim](suggested)[/dim]")
-        else:
-            console.print(f"  {i}. {repo}")
-
-    # Prompt for selection
-    console.print(f"\n[bold]Select repository:[/bold]")
-    console.print(f"  • Enter a number (1-{len(available_repos)}) to select from the list above")
-    console.print(f"  • Enter a repository name")
-    console.print(f"  • Enter an absolute path (starting with / or ~)")
-    console.print(f"  • Enter 'cancel' or 'q' to use current directory")
-
-    # Tier 3: Calculate default selection based on suggestions or default_repo
-    default_selection = "1"  # Final fallback: first repository
-    if default_repo and default_repo in available_repos:
-        # Use the remembered repo index as default
-        default_index = available_repos.index(default_repo) + 1
-        default_selection = str(default_index)
-    elif suggestions:
-        # Use first suggestion as default
-        suggested_repo = suggestions[0].repository
-        if suggested_repo in available_repos:
-            default_index = available_repos.index(suggested_repo) + 1
-            default_selection = str(default_index)
-
-    selection = Prompt.ask("Selection", default=default_selection)
-
-    # Validate input is not empty
-    if not selection or selection.strip() == "":
-        console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(available_repos)}), repository name, path, or 'cancel'/'q'")
-        return None
-
-    # Handle cancel
-    if selection.lower() in ["cancel", "q"]:
-        return None
-
-    # Check if it's a number (selecting from list)
-    if selection.isdigit():
-        repo_index = int(selection) - 1
-        if 0 <= repo_index < len(available_repos):
-            repo_name = available_repos[repo_index]
-            console.print(f"[dim]Selected: {repo_name}[/dim]")
-
-            if workspace_path:
-                selected_path = str(workspace_path / repo_name)
-
-                # Record selection for learning
-                if issue_metadata_dict:
-                    suggester.record_selection(
-                        repository=repo_name,
-                        issue_key=issue_key,
-                        ticket_type=issue_metadata_dict.get("type"),
-                        summary=issue_metadata_dict.get("summary"),
-                        description=issue_metadata_dict.get("description"),
-                        labels=issue_metadata_dict.get("labels", []),
-                    )
-
-                # Remember this repository (project-specific, git-specific, and workspace-level)
-                if config:
-                    config_updated = False
-
-                    # Save for JIRA project (format: "PROJ-123")
-                    if issue_key and '-' in issue_key and not issue_key.startswith('#'):
-                        project_key = issue_key.split('-')[0]
-                        config.prompts.remember_last_repo_per_project[project_key] = repo_name
-                        console.print(f"[dim]Remembered {repo_name} for {project_key} tickets[/dim]")
-                        config_updated = True
-
-                    # Save for Git repository (format: "owner/repo#123")
-                    if issue_key and '#' in issue_key and '/' in issue_key:
-                        git_repo_key = issue_key.split('#')[0]  # Extract "owner/repo"
-                        config.prompts.remember_last_repo_per_git_repo[git_repo_key] = repo_name
-                        console.print(f"[dim]Remembered {repo_name} for {git_repo_key} issues[/dim]")
-                        config_updated = True
-
-                    # Always save as last-used repo for this workspace (fallback)
-                    if workspace_name:
-                        config.prompts.last_used_repo_per_workspace[workspace_name] = repo_name
-                        config_updated = True
-
-                    if config_updated:
-                        config_loader.save_config(config)
-
-                return selected_path
-        else:
-            console.print(f"[red]✗[/red] Invalid selection. Please choose 1-{len(available_repos)}")
-            return None
-
-    # Check if it's an absolute path
-    elif selection.startswith("/") or selection.startswith("~"):
-        project_path = Path(selection).expanduser().absolute()
-
-        if not project_path.exists():
-            console.print(f"[yellow]⚠[/yellow] Path does not exist: {project_path}")
-            if not Confirm.ask("Use this path anyway?", default=False):
-                return None
-
-        # Record selection for learning (use directory name as repo)
+    # Build learning callback
+    def on_selection(repo_name, ws_path):
         if issue_metadata_dict:
             suggester.record_selection(
-                repository=project_path.name,
+                repository=repo_name,
                 issue_key=issue_key,
                 ticket_type=issue_metadata_dict.get("type"),
                 summary=issue_metadata_dict.get("summary"),
@@ -1231,61 +1089,32 @@ def _suggest_and_select_repository(
                 labels=issue_metadata_dict.get("labels", []),
             )
 
-        return str(project_path)
+        # Save per-project memory
+        if config and issue_key:
+            config_updated = False
+            if '-' in issue_key and not issue_key.startswith('#'):
+                pk = issue_key.split('-')[0]
+                config.prompts.remember_last_repo_per_project[pk] = repo_name
+                config_updated = True
+            if '#' in issue_key and '/' in issue_key:
+                grk = issue_key.split('#')[0]
+                config.prompts.remember_last_repo_per_git_repo[grk] = repo_name
+                config_updated = True
+            if config_updated:
+                config_loader.save_config(config)
 
-    # Otherwise treat as repository name
-    else:
-        repo_name = selection
-
-        if workspace_path:
-            project_path = workspace_path / repo_name
-
-            if not project_path.exists():
-                console.print(f"[yellow]⚠[/yellow] Repository not found: {project_path}")
-                if not Confirm.ask("Use this path anyway?", default=False):
-                    return None
-
-            # Record selection for learning
-            if issue_metadata_dict:
-                suggester.record_selection(
-                    repository=repo_name,
-                    issue_key=issue_key,
-                    ticket_type=issue_metadata_dict.get("type"),
-                    summary=issue_metadata_dict.get("summary"),
-                    description=issue_metadata_dict.get("description"),
-                    labels=issue_metadata_dict.get("labels", []),
-                )
-
-            # Remember this repository (project-specific, git-specific, and workspace-level)
-            if config:
-                config_updated = False
-
-                # Save for JIRA project (format: "PROJ-123")
-                if issue_key and '-' in issue_key and not issue_key.startswith('#'):
-                    project_key = issue_key.split('-')[0]
-                    config.prompts.remember_last_repo_per_project[project_key] = repo_name
-                    console.print(f"[dim]Remembered {repo_name} for {project_key} tickets[/dim]")
-                    config_updated = True
-
-                # Save for Git repository (format: "owner/repo#123")
-                if issue_key and '#' in issue_key and '/' in issue_key:
-                    git_repo_key = issue_key.split('#')[0]  # Extract "owner/repo"
-                    config.prompts.remember_last_repo_per_git_repo[git_repo_key] = repo_name
-                    console.print(f"[dim]Remembered {repo_name} for {git_repo_key} issues[/dim]")
-                    config_updated = True
-
-                # Always save as last-used repo for this workspace (fallback)
-                if workspace_name:
-                    config.prompts.last_used_repo_per_workspace[workspace_name] = repo_name
-                    config_updated = True
-
-                if config_updated:
-                    config_loader.save_config(config)
-
-            return str(project_path)
-        else:
-            console.print(f"[red]✗[/red] No workspace configured in config")
-            return None
+    # Delegate to unified project selection
+    return unified_project_selection(
+        workspace_path=workspace_path_str,
+        repo_options=available_repos,
+        suggested_repo=suggested_repo or default_repo,
+        suggested_repo_source=suggested_repo_source,
+        default_repo=default_repo,
+        allow_multi_project=allow_multi_project,
+        on_selection=on_selection,
+        config_loader=config_loader,
+        workspace_name=workspace_name,
+    )
 
 
 def _get_default_source_branch(path: Path) -> str:

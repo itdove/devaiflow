@@ -11,7 +11,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, resolve_workspace_path, should_launch_claude_code
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
 from devflow.git.utils import GitUtils
 from devflow.utils.backend_detection import detect_backend_from_key
 from devflow.issue_tracker.factory import create_issue_tracker_client
@@ -322,36 +322,66 @@ def create_investigation_session(
             sys.exit(1)
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
     else:
-        # Prompt for repository selection from workspace with multi-project support (Issue #182)
-        from devflow.cli.utils import prompt_repository_selection_with_multiproject
-        project_paths, selected_workspace_name = prompt_repository_selection_with_multiproject(
+        # Unified project selection (matches daf open UX)
+        selected_workspace_name = select_workspace(
             config,
             workspace_flag=workspace,
-            allow_multiple=True  # Enable multi-project mode for daf investigate
+            session=None,
+            skip_prompt=is_json_mode(),
         )
-        if not project_paths:
-            # User cancelled or no workspace configured
+
+        if not selected_workspace_name:
+            console_print(f"[yellow]⚠[/yellow] No workspace selected")
+            if is_json_mode():
+                output_json(success=False, error={"message": "No workspace selected", "code": "NO_WORKSPACE"})
+            sys.exit(1)
+
+        ws_path = get_workspace_path(config, selected_workspace_name)
+        if not ws_path:
+            console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
+            if is_json_mode():
+                output_json(success=False, error={"message": f"Workspace path not found: {selected_workspace_name}", "code": "NO_WORKSPACE"})
+            sys.exit(1)
+
+        console_print(f"[dim]Scanning workspace: {ws_path}[/dim]")
+        try:
+            repo_options = scan_workspace_repositories(ws_path)
+        except (ValueError, RuntimeError) as e:
+            console_print(f"[yellow]Warning: {e}[/yellow]")
+            repo_options = []
+
+        if not repo_options:
+            console_print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+            if is_json_mode():
+                output_json(success=False, error={"message": "No repositories found", "code": "NO_REPOSITORY"})
+            sys.exit(1)
+
+        project_paths_result, is_multi = unified_project_selection(
+            workspace_path=ws_path,
+            repo_options=repo_options,
+            allow_multi_project=True,
+            config_loader=config_loader,
+            workspace_name=selected_workspace_name,
+        )
+        if not project_paths_result:
             if is_json_mode():
                 output_json(success=False, error={"message": "Repository selection cancelled or failed", "code": "NO_REPOSITORY"})
             sys.exit(1)
 
-        # Check if multi-project mode was selected (Issue #182)
-        if len(project_paths) > 1:
-            # Multi-project investigation session
+        if is_multi:
             return _create_multi_project_investigation_session(
                 config=config,
                 config_loader=config_loader,
                 name=name,
                 goal=goal,
                 parent=parent,
-                project_paths=project_paths,
+                project_paths=project_paths_result,
                 workspace=workspace,
                 selected_workspace_name=selected_workspace_name,
                 model_profile=model_profile,
             )
 
-        # Single project mode - use first (and only) path
-        project_path = project_paths[0]
+        project_path = project_paths_result[0]
 
     working_directory = Path(project_path).name
 

@@ -14,7 +14,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from devflow.cli.commands.new_command import _generate_initial_prompt
-from devflow.cli.utils import check_concurrent_session, get_session_with_prompt, get_status_display, require_outside_claude, should_launch_claude_code
+from devflow.cli.utils import check_concurrent_session, extract_repository_from_issue_key, get_session_with_prompt, get_status_display, get_workspace_path, require_outside_claude, scan_workspace_repositories, should_launch_claude_code, unified_project_selection
 from devflow.config.loader import ConfigLoader
 from devflow.git.utils import GitUtils
 from devflow.jira import transition_on_start as jira_transition_on_start
@@ -189,48 +189,8 @@ def prompt_session_selection(session_manager: SessionManager, status_filter: Opt
 
 
 def _extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[str]) -> Optional[str]:
-    """Extract repository name from GitHub/GitLab issue key.
-
-    Args:
-        issue_key: Issue key (e.g., "owner/repo#123", "#123", "PROJ-123")
-        issue_tracker: Issue tracker type ("github", "gitlab", "jira", etc.)
-
-    Returns:
-        Repository name (e.g., "repo") if extractable, None otherwise
-
-    Examples:
-        >>> _extract_repository_from_issue_key("itdove/devaiflow#146", "github")
-        'devaiflow'
-        >>> _extract_repository_from_issue_key("#123", "github")
-        None
-        >>> _extract_repository_from_issue_key("PROJ-123", "jira")
-        None
-    """
-    # Only process GitHub/GitLab issues
-    if not issue_tracker or issue_tracker not in ["github", "gitlab"]:
-        return None
-
-    if not issue_key:
-        return None
-
-    # Check if issue key contains owner/repo format
-    # Format: owner/repo#123
-    if "/" in issue_key and "#" in issue_key:
-        # Extract the part between / and #
-        try:
-            # Split on / to get [owner, repo#123]
-            parts = issue_key.split("/")
-            if len(parts) >= 2:
-                # Get the last part which should be "repo#123"
-                repo_with_number = parts[-1]
-                # Split on # to get [repo, 123]
-                repo = repo_with_number.split("#")[0]
-                return repo if repo else None
-        except (IndexError, ValueError):
-            return None
-
-    # Issue key doesn't contain repository info (e.g., "#123")
-    return None
+    """Deprecated: use extract_repository_from_issue_key from devflow.cli.utils."""
+    return extract_repository_from_issue_key(issue_key, issue_tracker)
 
 
 def _set_terminal_title(session) -> None:
@@ -369,7 +329,7 @@ def open_session(
 
     # AAP-63377: Workspace selection
     # Select workspace using priority resolution (--workspace flag > session.workspace_name > default > prompt)
-    from devflow.cli.utils import select_workspace, get_workspace_path
+    from devflow.cli.utils import select_workspace
     selected_workspace_name = select_workspace(
         config,
         workspace_flag=workspace,
@@ -439,7 +399,7 @@ def open_session(
             # (session.workspace_name was updated by _handle_workspace_mismatch)
             selected_workspace_name = session.workspace_name
             if selected_workspace_name:
-                from devflow.cli.utils import get_workspace_path
+
                 workspace_path = get_workspace_path(config, selected_workspace_name)
 
     # Check if session is part of a feature orchestration
@@ -2793,8 +2753,6 @@ def _prompt_for_working_directory(
     Returns:
         True if working directory was set successfully, False if user cancelled
     """
-    from rich.prompt import Prompt
-
     console.print(f"\n[bold]Select working directory for session:[/bold] {session.name}")
     if session.issue_key:
         console.print(f"[dim]Issue: {session.issue_key}[/dim]")
@@ -2804,221 +2762,65 @@ def _prompt_for_working_directory(
     # Try to extract repository suggestion from issue key (GitHub/GitLab)
     suggested_repo = None
     if session.issue_key and session.issue_tracker:
-        suggested_repo = _extract_repository_from_issue_key(session.issue_key, session.issue_tracker)
-        if suggested_repo:
-            console.print(f"[cyan]ℹ Issue repository:[/cyan] {suggested_repo} (from {session.issue_key})")
+        suggested_repo = extract_repository_from_issue_key(session.issue_key, session.issue_tracker)
 
-    # Try to detect available repositories from config
+    # Resolve workspace and scan repos
     config = config_loader.load_config()
-    repo_options = []
-    suggested_repo_index = None
+    workspace_path = None
 
     if config and config.repos:
-        # Use selected workspace if provided, otherwise fall back to default
         if selected_workspace_name:
-            from devflow.cli.utils import get_workspace_path
             workspace_path = get_workspace_path(config, selected_workspace_name)
         else:
             workspace_path = config.repos.get_default_workspace_path()
 
-        if workspace_path:
-            workspace = Path(workspace_path).expanduser()
-            console.print(f"\n[cyan]Scanning workspace:[/cyan] {workspace}")
-
-            if workspace.exists() and workspace.is_dir():
-                # List all git repositories in workspace
-                try:
-                    from devflow.git.utils import GitUtils
-                    directories = [d for d in workspace.iterdir() if d.is_dir() and not d.name.startswith('.')]
-                    # Filter to only include git repositories
-                    git_repos = [d.name for d in directories if GitUtils.is_git_repository(d)]
-
-                    # Sort repositories, but put suggested repo first if it exists
-                    if suggested_repo and suggested_repo in git_repos:
-                        # Move suggested repo to front
-                        git_repos.remove(suggested_repo)
-                        repo_options = [suggested_repo] + sorted(git_repos)
-                        suggested_repo_index = 0  # First item
-                    else:
-                        repo_options = sorted(git_repos)
-
-                    if repo_options:
-                        console.print(f"\n[bold]Available repositories ({len(repo_options)}):[/bold]")
-                        for i, repo in enumerate(repo_options, 1):
-                            # Highlight suggested repository
-                            if suggested_repo and repo == suggested_repo:
-                                console.print(f"  {i}. {repo} [dim](from issue)[/dim]")
-                            else:
-                                console.print(f"  {i}. {repo}")
-                except Exception as e:
-                    console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
-
-    # Multi-project selection (Issue #177)
-    # If multiple repositories available, offer multi-project mode
-    if len(repo_options) > 1:
-        if Confirm.ask("\nCreate multi-project session (work across multiple repos)?", default=False):
-            # User wants multi-project mode - show selection UI
-            console.print("\n[bold]Select projects (comma-separated numbers or names):[/bold]")
-            for i, repo in enumerate(repo_options, 1):
-                if suggested_repo and repo == suggested_repo:
-                    console.print(f"{i}. {repo} [dim](from issue)[/dim]")
-                else:
-                    console.print(f"{i}. {repo}")
-
-            # Calculate default based on suggested repo
-            default_selection = "1"  # Default to first repository
-            if suggested_repo and suggested_repo in repo_options:
-                default_index = repo_options.index(suggested_repo) + 1
-                default_selection = str(default_index)
-
-            selection = Prompt.ask("\nEnter project numbers or names (e.g., 1,3,5 or backend-api,frontend-app)", default=default_selection)
-
-            # Parse selection (could be numbers or names)
-            selected_projects = []
-            for item in selection.split(','):
-                item = item.strip()
-                if item.isdigit():
-                    # Numeric selection
-                    idx = int(item) - 1
-                    if 0 <= idx < len(repo_options):
-                        selected_projects.append(repo_options[idx])
-                else:
-                    # Name selection
-                    if item in repo_options:
-                        selected_projects.append(item)
-                    else:
-                        console.print(f"[yellow]⚠[/yellow] Project '{item}' not found - skipping")
-
-            if len(selected_projects) > 1:
-                # Create multi-project session
-                console.print(f"\n[green]✓[/green] Selected {len(selected_projects)} projects:")
-                for proj in selected_projects:
-                    console.print(f"  • {proj}")
-
-                # Create multi-project conversation
-                return _create_multi_project_conversation_for_open(
-                    session=session,
-                    project_names=selected_projects,
-                    workspace_path=str(workspace),
-                    config=config,
-                    config_loader=config_loader,
-                    session_manager=session_manager,
-                    selected_workspace_name=selected_workspace_name,
-                    create_branch=create_branch,
-                    source_branch=source_branch,
-                    on_branch_exists=on_branch_exists,
-                    allow_uncommitted=allow_uncommitted,
-                    sync_upstream=sync_upstream,
-                )
-            elif len(selected_projects) == 1:
-                # Only one project selected - continue with single-project flow
-                console.print(f"\n[dim]Only one project selected - continuing with single-project session[/dim]")
-                # Set the selected project and continue to single-project logic below
-                repo_options = selected_projects
-                suggested_repo_index = 0
-            else:
-                console.print("\n[yellow]⚠[/yellow] No valid projects selected - continuing with single-project prompt")
-
-    # Single-project selection (original behavior)
-    # Prompt for working directory with default suggestion
-    console.print(f"\n[bold]Select working directory:[/bold]")
-    if repo_options:
-        console.print(f"  • Enter a number (1-{len(repo_options)}) to select from the list above")
-        console.print(f"  • Enter a repository name")
-        console.print(f"  • Enter an absolute path (starting with / or ~)")
-        console.print(f"  • Enter 'cancel' or 'q' to exit")
-    else:
-        console.print(f"  • Enter a repository name from workspace")
-        console.print(f"  • Enter an absolute path (starting with / or ~)")
-        console.print(f"  • Enter 'cancel' or 'q' to exit")
-
-    # Set default to suggested repository if found, otherwise default to first repo
-    default_value = "1"  # Default to first repository
-    if suggested_repo_index is not None:
-        default_value = str(suggested_repo_index + 1)  # 1-indexed for display
-
-    selection = Prompt.ask("Selection", default=default_value)
-
-    # Validate input is not empty
-    if not selection or selection.strip() == "":
-        if repo_options:
-            console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(repo_options)}), repository name, path, or 'cancel'/'q'")
-        else:
-            console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a repository name, path, or 'cancel'/'q'")
+    if not workspace_path:
+        console.print("[yellow]⚠[/yellow] No workspace configured")
         return False
 
-    # Handle cancel
-    if selection.lower() in ["cancel", "q"]:
+    try:
+        repo_options = scan_workspace_repositories(workspace_path)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[yellow]Warning: Could not scan workspace: {e}[/yellow]")
+        repo_options = []
+
+    if not repo_options:
+        console.print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+        return False
+
+    # Use unified project selection
+    selected_paths, is_multi = unified_project_selection(
+        workspace_path=workspace_path,
+        repo_options=repo_options,
+        suggested_repo=suggested_repo,
+        suggested_repo_source="from issue" if suggested_repo else None,
+        allow_multi_project=True,
+        config_loader=config_loader,
+        workspace_name=selected_workspace_name,
+    )
+
+    if not selected_paths:
         console.print(f"\n[yellow]Cancelled[/yellow] - session not opened")
         return False
 
-    # Check if it's a number (selecting from list)
-    if selection.isdigit() and repo_options:
-        repo_index = int(selection) - 1
-        if 0 <= repo_index < len(repo_options):
-            repo_name = repo_options[repo_index]
-            console.print(f"[dim]Selected: {repo_name}[/dim]")
+    if is_multi:
+        project_names = [Path(p).name for p in selected_paths]
+        return _create_multi_project_conversation_for_open(
+            session=session,
+            project_names=project_names,
+            workspace_path=workspace_path,
+            config=config,
+            config_loader=config_loader,
+            session_manager=session_manager,
+            selected_workspace_name=selected_workspace_name,
+            create_branch=create_branch,
+            source_branch=source_branch,
+            on_branch_exists=on_branch_exists,
+            allow_uncommitted=allow_uncommitted,
+            sync_upstream=sync_upstream,
+        )
 
-            if config and config.repos:
-                # Use selected workspace if provided, otherwise fall back to default
-                if selected_workspace_name:
-                    from devflow.cli.utils import get_workspace_path
-                    workspace_path = get_workspace_path(config, selected_workspace_name)
-                else:
-                    workspace_path = config.repos.get_default_workspace_path()
-
-                if not workspace_path:
-
-                    console.print("[yellow]⚠[/yellow] No default workspace configured")
-
-                    return None
-
-                workspace = Path(workspace_path).expanduser()
-                project_path = workspace / repo_name
-            else:
-                console.print(f"[red]✗[/red] No workspace configured in config")
-                return False
-        else:
-            console.print(f"[red]✗[/red] Invalid selection. Please choose 1-{len(repo_options)}")
-            return False
-    # Check if it's an absolute path
-    elif selection.startswith("/") or selection.startswith("~"):
-        project_path = Path(selection).expanduser().absolute()
-
-        if not project_path.exists():
-            console.print(f"[yellow]⚠[/yellow] Path does not exist: {project_path}")
-            if not Confirm.ask("Use this path anyway?", default=False):
-                console.print(f"\n[yellow]Cancelled[/yellow] - session not opened")
-                return False
-    # Otherwise treat as repository name
-    else:
-        repo_name = selection
-
-        if config and config.repos:
-            # Use selected workspace if provided, otherwise fall back to default
-            if selected_workspace_name:
-                from devflow.cli.utils import get_workspace_path
-                workspace_path = get_workspace_path(config, selected_workspace_name)
-            else:
-                workspace_path = config.repos.get_default_workspace_path()
-
-            if not workspace_path:
-
-                console.print("[yellow]⚠[/yellow] No default workspace configured")
-
-                return None
-
-            workspace = Path(workspace_path).expanduser()
-            project_path = workspace / repo_name
-
-            if not project_path.exists():
-                console.print(f"[yellow]⚠[/yellow] Repository not found: {project_path}")
-                if not Confirm.ask("Use this path anyway?", default=False):
-                    console.print(f"\n[yellow]Cancelled[/yellow] - session not opened")
-                    return False
-        else:
-            console.print(f"[red]✗[/red] No workspace configured in config")
-            return False
+    project_path = Path(selected_paths[0])
 
     # Update session with selected directory
     # For multi-conversation sessions, update or create active conversation
@@ -3031,7 +2833,6 @@ def _prompt_for_working_directory(
         # Get workspace for portable paths - use selected workspace if provided
         config = config_loader.load_config()
         if selected_workspace_name and config and config.repos:
-            from devflow.cli.utils import get_workspace_path
             workspace = get_workspace_path(config, selected_workspace_name)
         else:
             workspace = config.repos.get_default_workspace_path() if config and config.repos else None

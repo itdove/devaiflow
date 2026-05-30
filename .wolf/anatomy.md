@@ -1,10 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-29T12:20:37.265Z
-> Files: 507 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T17:58:11.475Z
+> Files: 518 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../.claude/plans/
 
+- `giggly-strolling-balloon.md` — Unify Project Selection UX Across daf Commands (~1254 tok)
 - `sparkling-munching-hennessy.md` — Fix PR Template Not Being Filled During `daf complete` (~766 tok)
 
 ## ./
@@ -120,7 +121,7 @@
 - `main.py` — Main CLI entry point for DevAIFlow. (~47322 tok)
 - `signal_handler.py` — Unified signal handler for CLI commands that launch Claude sessions. (~2578 tok)
 - `skills_discovery.py` — Utility for discovering skills from all hierarchical locations. (~1331 tok)
-- `utils.py` — Common utility functions for CLI commands. (~15760 tok)
+- `utils.py` — Common utility functions for CLI commands. (~18055 tok)
 
 ## devflow/cli/commands/
 
@@ -131,7 +132,7 @@
 - `check_command.py` — Implementation of 'daf check' command. (~1058 tok)
 - `cleanup_command.py` — Implementation of 'daf cleanup-conversation' command. (~6300 tok)
 - `cleanup_sessions_command.py` — Implementation of 'daf cleanup-sessions' command. (~1484 tok)
-- `complete_command.py` — Implementation of 'daf complete' command. (~51807 tok)
+- `complete_command.py` — Implementation of 'daf complete' command. (~51282 tok)
 - `config_export_command.py` — Implementation of 'daf config export' command. (~476 tok)
 - `config_import_command.py` — Implementation of 'daf config import' command. (~619 tok)
 - `context_commands.py` — Implementation of 'daf config context' commands. (~2136 tok)
@@ -144,19 +145,19 @@
 - `git_check_auth_command.py` — Implementation of 'daf git check-auth' command. (~1411 tok)
 - `git_commands.py` — Git-based issue tracker CLI command group for DevAIFlow. (~164 tok)
 - `git_create_command.py` — Implementation of 'daf git create' command. (~5406 tok)
-- `git_new_command.py` — Command for daf git new - create GitHub/GitLab issue with session-type for ticket creation workflow. (~14122 tok)
+- `git_new_command.py` — Command for daf git new - create GitHub/GitLab issue with session-type for ticket creation workflow. (~13567 tok)
 - `git_open_command.py` — Command for daf git open - open or create session from GitHub/GitLab issue. (~2094 tok)
 - `git_update_command.py` — Implementation of 'daf git update' command. (~2244 tok)
 - `git_view_command.py` — Implementation of 'daf git view' command. (~2215 tok)
 - `import_command.py` — Implementation of 'daf import' command. (~3262 tok)
 - `import_session_command.py` — Implementation of 'daf import-session' command. (~2195 tok)
 - `info_command.py` — Implementation of 'daf info' command. (~6561 tok)
-- `investigate_command.py` — Command for daf investigate - create investigation-only session without ticket creation. (~12343 tok)
+- `investigate_command.py` — Command for daf investigate - create investigation-only session without ticket creation. (~12701 tok)
 - `jira_add_comment_command.py` — Implementation of 'daf jira add-comment' command. (~1756 tok)
 - `jira_create_commands.py` — Implementation of 'daf jira create' command. (~18107 tok)
 - `jira_create_dynamic.py` — Dynamic command builder for daf jira create with field discovery. (~3074 tok)
 - `jira_field_utils.py` — Common utilities for JIRA field processing in dynamic commands. (~1410 tok)
-- `jira_new_command.py` — Command for daf jira new - create issue tracker ticket with session-type for ticket creation workflow. (~14348 tok)
+- `jira_new_command.py` — Command for daf jira new - create issue tracker ticket with session-type for ticket creation workflo (~13783 tok)
 - `jira_open_command.py` — Command for daf jira open - open or create session from issue tracker ticket. (~2270 tok)
 - `jira_update_command.py` — Implementation of 'daf jira update' command. (~7088 tok)
 - `jira_update_dynamic.py` — Dynamic command builder for daf jira update with field discovery. (~1988 tok)
@@ -164,9 +165,9 @@
 - `link_command.py` — Implementation of 'daf link' command. (~2314 tok)
 - `list_command.py` — Implementation of 'daf list' command. (~4987 tok)
 - `new_command_multiproject.py` — Multi-project session creation logic for DevAIFlow (Issue #149). (~4292 tok)
-- `new_command.py` — Implementation of 'daf new' command. (~27498 tok)
+- `new_command.py` — Implementation of 'daf new' command. (~24904 tok)
 - `note_command.py` — Implementation of 'daf note' and 'daf notes' commands. (~1903 tok)
-- `open_command.py` — Implementation of 'daf open' command. (~51350 tok)
+- `open_command.py` — Implementation of 'daf open' command. (~48238 tok)
 - `pause_command.py` — Implementation of 'daf pause' command. (~619 tok)
 - `provider_commands.py` — Implementation of 'daf model' commands for managing model provider profiles. (~6464 tok)
 - `rebuild_index_command.py` — Implementation of 'daf rebuild-index' command. (~2992 tok)
@@ -318,7 +319,7 @@
 ## devflow/git/
 
 - `__init__.py` — Git integration utilities for DevAIFlow. (~14 tok)
-- `pr_template.py` — AI-powered PR/MR template parsing and filling. (~3701 tok)
+- `pr_template.py` — AI-powered PR/MR template parsing and filling. (~3063 tok)
 - `utils.py` — Git utilities for branch management. (~15440 tok)
 
 ## devflow/github/
@@ -373,7 +374,7 @@
 ## devflow/release/
 
 - `__init__.py` — Release management utilities. (~133 tok)
-- `manager.py` — Release manager for automating release mechanics. (~14891 tok)
+- `manager.py` — Release manager for automating release mechanics. (~14992 tok)
 - `permissions.py` — Permission checking for release operations. (~2884 tok)
 - `version.py` — Version parsing and comparison utilities for release management. (~1692 tok)
 
@@ -413,7 +414,7 @@
 
 ## devflow/utils/
 
-- `__init__.py` — Utility functions for DevAIFlow. (~60 tok)
+- `__init__.py` — Utility functions for DevAIFlow. (~186 tok)
 - `audit_log.py` — Audit logging for DevAIFlow operations. (~1444 tok)
 - `backend_detection.py` — Utilities for detecting issue tracker backend from session metadata and issue keys. (~1809 tok)
 - `claude_commands.py` — Utilities for managing bundled Claude Code skills. (~6464 tok)
@@ -425,7 +426,7 @@
 - `model_provider.py` — Utilities for managing model provider configuration and profiles. (~1813 tok)
 - `paths.py` — Path utilities for DevAIFlow. (~659 tok)
 - `ssl_helper.py` — SSL verification helper for HTTP requests. (~840 tok)
-- `temp_directory.py` — Temporary directory utilities for ticket creation sessions. Includes extract_repo_name, clone_to_temp_directory, prompt_and_clone_to_temp, cleanup. Creates nested structure: /tmp/daf-session-xxx/repo-name/ (~3966 tok)
+- `temp_directory.py` — " to work correctly. (~3686 tok)
 - `time_parser.py` — Time expression parser for filtering. (~1026 tok)
 - `update_checker.py` — Update checker for DevAIFlow. (~2612 tok)
 - `url_parser.py` — URL parser for issue tracker URLs. (~1411 tok)
@@ -719,9 +720,19 @@
 - `test_branch_workflow_ux_fixes.py` — Tests for issue #331: Branch workflow UX issues. (~5629 tok)
 - `test_check_command.py` — Tests for daf check command. (~3490 tok)
 - `test_claude_agent_skills_filtering.py` — Tests for Claude agent skills filtering in launch_with_prompt. (~4144 tok)
-- `test_git_pr_template.py` — Tests for AI-powered PR/MR template parsing and filling. (~7570 tok)
+- `test_git_new_multiproject.py` — Tests for multi-project support in daf git new command (Issue #179). (~2594 tok)
+- `test_git_pr_template.py` — Tests for AI-powered PR/MR template parsing and filling. (~7548 tok)
+- `test_github_repo_suggestion.py` — Tests for GitHub/GitLab repository auto-suggestion in daf open command. (~2849 tok)
+- `test_investigate_command.py` — Tests for daf investigate command. (~11028 tok)
+- `test_jira_new_command.py` — Tests for daf jira new command. (~18520 tok)
+- `test_jira_new_multiproject.py` — Tests for multi-project support in daf jira new command (Issue #179). (~2417 tok)
 - `test_open_command.py` — Tests for daf open command. (~23046 tok)
+- `test_open_multiproject_selection.py` — Tests for multi-project selection in daf open _prompt_for_working_directory (Issue #177). (~1998 tok)
+- `test_repository_selection_jira_new.py` — Tests for unified project selection used by 'daf jira new' and other commands. (~1260 tok)
+- `test_repository_selection.py` — Tests for repository selection prompt in 'daf new' command (PROJ-61069). (~2576 tok)
 - `test_temp_directory_utils.py` — Tests for devflow/utils/temp_directory.py. (~8370 tok)
+- `test_workspace_selection_bug.py` — Test for workspace selection bug fix (AAP-64504). (~1319 tok)
+- `test_workspace.py` — Tests for workspace functionality (AAP-63377). (~4513 tok)
 
 ## tests/cli/commands/
 

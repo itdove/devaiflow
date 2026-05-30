@@ -158,12 +158,17 @@ class TestCreateJiraTicketSession:
         # Setup mocks
         mock_confirm.return_value = False  # Don't launch Claude
 
-        # Call the function
+        # Create test project directory
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Call the function (provide path to skip interactive project selection)
         create_jira_ticket_session(
             issue_type="story",
             parent="PROJ-59038",
             goal="Add retry logic to subscription API",
-            name=None  # Auto-generate name
+            name=None,  # Auto-generate name
+            path=str(test_project),
         )
 
         # Session is created with auto-generated name (from goal slug + random suffix)
@@ -199,12 +204,17 @@ class TestCreateJiraTicketSession:
         # Setup mocks
         mock_confirm.return_value = False  # Don't launch Claude
 
-        # Call the function
+        # Create test project directory
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
+        # Call the function (provide path to skip interactive project selection)
         create_jira_ticket_session(
             issue_type="bug",
             parent="PROJ-60000",
             goal="Fix timeout in backup operation",
-            name="custom-session-name"
+            name="custom-session-name",
+            path=str(test_project),
         )
 
         # Session keeps custom name (renaming only happens in mock mode or when Claude creates a ticket)
@@ -244,12 +254,17 @@ class TestCreateJiraTicketSession:
         mock_confirm.return_value = True  # Launch Claude
         mock_should_launch.return_value = True  # Override mock mode check
 
+        # Create test project directory
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
         # Call the function
         create_jira_ticket_session(
             issue_type="task",
             parent="PROJ-59038",
             goal="Update documentation",
-            name="doc-update"
+            name="doc-update",
+            path=str(test_project),
         )
 
         # Verify Claude was launched
@@ -291,12 +306,17 @@ class TestCreateJiraTicketSession:
         # Setup mocks
         mock_confirm.return_value = False  # Don't launch Claude
 
+        # Create test project directory
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
         # Create session
         create_jira_ticket_session(
             issue_type="story",
             parent="PROJ-59038",
             goal="Test goal",
-            name="test-session"
+            name="test-session",
+            path=str(test_project),
         )
 
         # After PROJ-60665, sessions are renamed to creation-{ISSUE_KEY}
@@ -339,12 +359,16 @@ class TestCreateJiraTicketSession:
 
         # After PROJ-60665, sessions are renamed to creation-{ISSUE_KEY}
         # Don't assume ticket numbers - find sessions by goal instead
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
         for issue_type in issue_types:
             create_jira_ticket_session(
                 issue_type=issue_type,
                 parent="PROJ-59038",
                 goal=f"Test {issue_type}",
-                name=f"test-{issue_type}"
+                name=f"test-{issue_type}",
+                path=str(test_project),
             )
 
             session_manager = SessionManager(config_loader=ConfigLoader())
@@ -427,11 +451,16 @@ class TestJiraNewCommandInteractivePrompts:
 
         runner = CliRunner()
 
+        # Create test project dir
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
         # Run command without --goal, providing goal through prompt
         # Input: goal description + no to temp clone prompt
         result = runner.invoke(cli, [
             "jira", "new", "story",
-            "--parent", "PROJ-59038"
+            "--parent", "PROJ-59038",
+            "--path", str(test_project),
         ], input="Add retry logic to subscription API\nn\n")
 
         # Verify command succeeded
@@ -462,12 +491,17 @@ class TestJiraNewCommandInteractivePrompts:
 
         runner = CliRunner()
 
+        # Create test project dir
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
         # Run command with --goal
         # Input: no to temp clone prompt
         result = runner.invoke(cli, [
             "jira", "new", "bug",
             "--parent", "PROJ-60000",
-            "--goal", "Fix timeout in backup operation"
+            "--goal", "Fix timeout in backup operation",
+            "--path", str(test_project),
         ], input="n\n")
 
         # Verify command succeeded
@@ -498,12 +532,17 @@ class TestJiraNewCommandInteractivePrompts:
 
         runner = CliRunner()
 
+        # Create test project dir
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
         # Run command with --name but without --goal
         # Input: goal description + no to temp clone prompt
         result = runner.invoke(cli, [
             "jira", "new", "task",
             "--parent", "PROJ-59038",
-            "--name", "my-custom-task"
+            "--name", "my-custom-task",
+            "--path", str(test_project),
         ], input="Update documentation for new feature\nn\n")
 
         # Verify command succeeded
@@ -528,6 +567,12 @@ class TestJiraNewCommandInteractivePrompts:
 class TestJiraNewMockMode:
     """Test daf jira new command in mock mode."""
 
+    @pytest.fixture(autouse=True)
+    def create_test_project_dir(self, temp_daf_home):
+        """Create test project directory for all tests in this class."""
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_mock_mode_creates_ticket_story(self, temp_daf_home):
         """Test that mock mode creates a mock JIRA story ticket."""
@@ -544,7 +589,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "story",
             "--parent", "PROJ-59038",
-            "--goal", "Add retry logic to subscription API"
+            "--goal", "Add retry logic to subscription API",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command succeeded
@@ -585,7 +631,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "bug",
             "--parent", "PROJ-60000",
-            "--goal", "Fix timeout in backup operation"
+            "--goal", "Fix timeout in backup operation",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command succeeded
@@ -612,7 +659,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "task",
             "--parent", "PROJ-59038",
-            "--goal", "Update documentation"
+            "--goal", "Update documentation",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command succeeded
@@ -639,7 +687,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "epic",
             "--parent", "PROJ-50000",
-            "--goal", "Implement new backup feature"
+            "--goal", "Implement new backup feature",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command succeeded
@@ -668,7 +717,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "story",
             "--parent", "PROJ-59038",
-            "--goal", "Test persistence"
+            "--goal", "Test persistence",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         assert result.exit_code == 0
@@ -707,7 +757,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "story",
             "--parent", "CUSTOM-1000",
-            "--goal", "Test custom project"
+            "--goal", "Test custom project",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         assert result.exit_code == 0, f"Command failed: {result.output}"
@@ -744,7 +795,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "story",
             "--parent", "PROJ-59038",
-            "--goal", "Test Claude session"
+            "--goal", "Test Claude session",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         assert result.exit_code == 0, f"Command failed: {result.output}"
@@ -800,7 +852,8 @@ class TestJiraNewMockMode:
         result = runner.invoke(cli, [
             "jira", "new", "story",
             "--parent", "PROJ-59038",
-            "--goal", "Test JIRA metadata"
+            "--goal", "Test JIRA metadata",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         assert result.exit_code == 0, f"Command failed: {result.output}"
@@ -837,6 +890,12 @@ class TestJiraNewMockMode:
 
 class TestJiraNewPathFlag:
     """Test the --path flag for daf jira new command."""
+
+    @pytest.fixture(autouse=True)
+    def create_test_project_dir(self, temp_daf_home):
+        """Create test project directory for all tests in this class."""
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
 
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_path_flag_with_valid_path(self, temp_daf_home, tmp_path):
@@ -962,7 +1021,8 @@ class TestJiraNewPathFlag:
         result = runner.invoke(cli, [
             "jira", "new", "task",
             "--parent", "PROJ-59038",
-            "--goal", "Test without path flag"
+            "--goal", "Test without path flag",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command succeeded (mock mode handles the fallback)
@@ -1095,6 +1155,12 @@ class TestJiraNewPathFlag:
 class TestJiraNewWithGoalFromFile:
     """Test daf jira new command with goal from file:// path."""
 
+    @pytest.fixture(autouse=True)
+    def create_test_project_dir(self, temp_daf_home):
+        """Create test project directory for all tests in this class."""
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
+
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_jira_new_with_file_goal(self, temp_daf_home, tmp_path):
         """Test daf jira new with --goal pointing to a file."""
@@ -1117,7 +1183,8 @@ class TestJiraNewWithGoalFromFile:
             "jira", "new", "story",
             "--parent", "PROJ-59038",
             "--goal", f"file://{requirements_file}",
-            "--name", "file-goal-test"
+            "--name", "file-goal-test",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command succeeded
@@ -1164,7 +1231,8 @@ class TestJiraNewWithGoalFromFile:
             "jira", "new", "task",
             "--parent", "PROJ-59038",
             "--goal", "http://docs.example.com/spec.txt",
-            "--name", "url-goal-test"
+            "--name", "url-goal-test",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command succeeded
@@ -1196,7 +1264,8 @@ class TestJiraNewWithGoalFromFile:
         result = runner.invoke(cli, [
             "jira", "new", "bug",
             "--parent", "PROJ-60000",
-            "--goal", "file:///path/that/does/not/exist.txt"
+            "--goal", "file:///path/that/does/not/exist.txt",
+            "--path", str(Path(temp_daf_home) / "test-project"),
         ])
 
         # Verify command failed with appropriate error
@@ -1206,6 +1275,12 @@ class TestJiraNewWithGoalFromFile:
 
 class TestExceptionHandlingInCleanup:
     """Tests for PROJ-61150: Proper exception handling in cleanup code."""
+
+    @pytest.fixture(autouse=True)
+    def create_test_project_dir(self, temp_daf_home):
+        """Create test project directory for all tests in this class."""
+        test_project = Path(temp_daf_home) / "test-project"
+        test_project.mkdir(exist_ok=True)
 
     @patch.dict("os.environ", {"DAF_MOCK_MODE": "1"})
     def test_cleanup_finally_block_allows_value_error_from_end_work_session(self, temp_daf_home):

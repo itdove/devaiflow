@@ -132,6 +132,246 @@
       "related_bugs": [],
       "occurrences": 2,
       "last_seen": "2026-05-29T12:19:39.794Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-05-30T13:27:29.760Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/complete_command.py",
+      "root_cause": "7 lines replaced/restructured",
+      "fix": "Rewrote 13→7 lines (7 removed) | Also: commit_text = message.content[0].text.strip(); # Clean up any code fences | Also: commit_text = result.stdout.strip(); # Clean up any code fences or extra formatting",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-30T13:27:47.748Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-05-30T13:28:22.165Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/git/pr_template.py",
+      "root_cause": "9 lines replaced/restructured",
+      "fix": "Rewrote 11→3 lines (9 removed) | Also: # Clean up code fences if present; if filled_template.startswith('```'): | Also: def _fill_template_with_api(template_content: str,; template_content: Raw template content",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-30T13:29:31.584Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-05-30T13:28:52.101Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/open_command.py",
+      "root_cause": "27 lines replaced/restructured",
+      "fix": "Rewrote 34→4 lines (27 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T13:28:52.101Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-05-30T13:45:36.786Z",
+      "error_message": "Incorrect value in code",
+      "file": "tests/test_git_pr_template.py",
+      "root_cause": "Had \"Test context\"",
+      "fix": "Changed to \"Test prompt\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T13:45:36.786Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-05-30T14:07:46.328Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/complete_command.py",
+      "root_cause": "16 lines replaced/restructured",
+      "fix": "Rewrote 20→4 lines (16 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T14:07:46.328Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-05-30T16:14:36.923Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/utils.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 76→101 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:14:36.923Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-05-30T16:15:16.720Z",
+      "error_message": "Wrong reference: should_launch_claude_code should be scan_workspace_repositories",
+      "file": "devflow/cli/commands/investigate_command.py",
+      "root_cause": "Used \"should_launch_claude_code\" instead of \"scan_workspace_repositories\"",
+      "fix": "Changed should_launch_claude_code → scan_workspace_repositories",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:15:16.720Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-05-30T16:15:33.857Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/investigate_command.py",
+      "root_cause": "12 lines replaced/restructured",
+      "fix": "Rewrote 31→61 lines (12 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:15:33.857Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-05-30T16:16:34.544Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/jira_new_command.py",
+      "root_cause": "12 lines replaced/restructured",
+      "fix": "Rewrote 30→53 lines (12 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:16:34.544Z"
+    },
+    {
+      "id": "bug-018",
+      "timestamp": "2026-05-30T16:17:20.360Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/git_new_command.py",
+      "root_cause": "14 lines replaced/restructured",
+      "fix": "Rewrote 37→59 lines (14 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:17:20.360Z"
+    },
+    {
+      "id": "bug-019",
+      "timestamp": "2026-05-30T16:20:59.315Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/new_command.py",
+      "root_cause": "131 lines replaced/restructured",
+      "fix": "Rewrote 271→123 lines (131 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:20:59.315Z"
+    },
+    {
+      "id": "bug-020",
+      "timestamp": "2026-05-30T16:22:15.760Z",
+      "error_message": "Wrong reference: _extract_repository_from_issue_key should be extract_repository_from_issue_key",
+      "file": "devflow/cli/commands/open_command.py",
+      "root_cause": "Used \"_extract_repository_from_issue_key\" instead of \"extract_repository_from_issue_key\"",
+      "fix": "Changed _extract_repository_from_issue_key → extract_repository_from_issue_key",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:22:15.760Z"
+    },
+    {
+      "id": "bug-021",
+      "timestamp": "2026-05-30T16:22:40.971Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/open_command.py",
+      "root_cause": "36 lines replaced/restructured",
+      "fix": "Rewrote 43→3 lines (36 removed) | Also: from rich.prompt import Prompt; if suggested_repo:",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-30T16:23:37.474Z"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-05-30T16:25:25.175Z",
+      "error_message": "Significant refactor of ",
+      "file": "tests/test_investigate_command.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 11→15 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T16:25:25.175Z"
+    },
+    {
+      "id": "bug-023",
+      "timestamp": "2026-05-30T16:46:10.384Z",
+      "error_message": "Significant refactor of ",
+      "file": "tests/test_jira_new_command.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 7→8 lines (2 removed) | Also: # Call the function; name=\"custom-session-name\"",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-30T16:46:24.109Z"
     }
   ]
 }
