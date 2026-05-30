@@ -2174,12 +2174,23 @@ def _handle_conversation_selection(
         console.print(f"\n[dim]Mock mode: Auto-selecting the existing conversation[/dim]")
         choice = "1"
     else:
+        # Default to the most recently active conversation
+        most_recent_idx = 1
+        if len(session.conversations) > 1:
+            most_recent_time = None
+            for i, (_, conv) in enumerate(session.conversations.items(), 1):
+                conv_time = conv.active_session.last_active
+                if most_recent_time is None or conv_time > most_recent_time:
+                    most_recent_time = conv_time
+                    most_recent_idx = i
+        default_selection = str(most_recent_idx)
+
         console.print(f"\n[bold]Options:[/bold]")
         console.print(f"  [cyan]n[/cyan] - Create new conversation for '{detected_repo_name}'")
         console.print(f"  [cyan]1-{len(session.conversations)}[/cyan] - Select existing conversation")
         console.print(f"  [cyan]c[/cyan] - Cancel")
 
-        choice = Prompt.ask("Selection", default="n")
+        choice = Prompt.ask("Selection", default=default_selection)
 
     if choice.lower() == "c":
         console.print(f"\n[yellow]Cancelled[/yellow] - session not opened")
