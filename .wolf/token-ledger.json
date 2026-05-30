@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-04-06T12:35:01.489Z",
   "lifetime": {
-    "total_tokens_estimated": 893722,
-    "total_reads": 101,
+    "total_tokens_estimated": 966446,
+    "total_reads": 104,
     "total_writes": 91,
-    "total_sessions": 87,
+    "total_sessions": 93,
     "anatomy_hits": 67,
     "anatomy_misses": 29,
     "repeated_reads_blocked": 58,
-    "estimated_savings_vs_bare_cli": 1017124
+    "estimated_savings_vs_bare_cli": 1017524
   },
   "sessions": [
     {
@@ -1386,6 +1386,40 @@
         "writes_count": 0,
         "repeated_reads_blocked": 0,
         "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-30-1510",
+      "started": "2026-05-30T19:10:01.873Z",
+      "ended": "2026-05-30T19:10:56.558Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/AGENTS.md",
+          "tokens_estimated": 21442,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.daf-sessions/ENTERPRISE.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/complete_command.py",
+          "tokens_estimated": 51282,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 72724,
+        "output_tokens_estimated": 0,
+        "reads_count": 3,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 2
       }
     }
   ],

@@ -1,10 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T18:53:02.445Z
-> Files: 518 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T21:13:17.789Z
+> Files: 522 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../.claude/plans/
 
+- `atomic-exploring-rose.md` — Fix: Skip PR creation when branch has no diff from remote base (PR already merged) (~713 tok)
 - `giggly-strolling-balloon.md` — Unify Project Selection UX Across daf Commands (~1254 tok)
 - `sparkling-munching-hennessy.md` — Fix PR Template Not Being Filled During `daf complete` (~766 tok)
 
@@ -132,7 +133,7 @@
 - `check_command.py` — Implementation of 'daf check' command. (~1058 tok)
 - `cleanup_command.py` — Implementation of 'daf cleanup-conversation' command. (~6300 tok)
 - `cleanup_sessions_command.py` — Implementation of 'daf cleanup-sessions' command. (~1484 tok)
-- `complete_command.py` — Implementation of 'daf complete' command. (~51282 tok)
+- `complete_command.py` — Implementation of 'daf complete' command. (~51768 tok)
 - `config_export_command.py` — Implementation of 'daf config export' command. (~476 tok)
 - `config_import_command.py` — Implementation of 'daf config import' command. (~619 tok)
 - `context_commands.py` — Implementation of 'daf config context' commands. (~2136 tok)
@@ -720,12 +721,15 @@
 - `test_branch_workflow_ux_fixes.py` — Tests for issue #331: Branch workflow UX issues. (~5629 tok)
 - `test_check_command.py` — Tests for daf check command. (~3490 tok)
 - `test_claude_agent_skills_filtering.py` — Tests for Claude agent skills filtering in launch_with_prompt. (~4144 tok)
+- `test_complete_base_branch.py` — Tests for issue #150: Use stored base_branch in daf complete. (~4628 tok)
+- `test_complete_command.py` — Tests for complete command. (~49744 tok)
 - `test_git_new_multiproject.py` — Tests for multi-project support in daf git new command (Issue #179). (~2594 tok)
 - `test_git_pr_template.py` — Tests for AI-powered PR/MR template parsing and filling. (~7548 tok)
 - `test_github_repo_suggestion.py` — Tests for GitHub/GitLab repository auto-suggestion in daf open command. (~2849 tok)
 - `test_investigate_command.py` — Tests for daf investigate command. (~11028 tok)
 - `test_jira_new_command.py` — Tests for daf jira new command. (~18520 tok)
 - `test_jira_new_multiproject.py` — Tests for multi-project support in daf jira new command (Issue #179). (~2417 tok)
+- `test_multi_project_session_creation.py` — Tests for multi-project session creation workflow. (~6249 tok)
 - `test_open_command.py` — Tests for daf open command. (~23046 tok)
 - `test_open_multiproject_selection.py` — Tests for multi-project selection in daf open _prompt_for_working_directory (Issue #177). (~1998 tok)
 - `test_repository_selection_jira_new.py` — Tests for unified project selection used by 'daf jira new' and other commands. (~1260 tok)

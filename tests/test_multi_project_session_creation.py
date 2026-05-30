@@ -445,6 +445,7 @@ def test_multi_project_complete_workflow_integration(temp_daf_home, tmp_path):
         mock_git_complete.has_unpushed_commits.return_value = True
         mock_git_complete.get_current_branch.return_value = "test-123"  # Match the branch name
         mock_git_complete.get_default_branch.return_value = "main"
+        mock_git_complete.fetch_origin.return_value = (True, None)
 
         # Mock PR creation functions
         with patch('devflow.cli.commands.complete_command._create_github_pr') as mock_gh_pr:
