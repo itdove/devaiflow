@@ -707,13 +707,6 @@ def _build_investigation_prompt(
         prompt_parts.append("---")
         prompt_parts.append("")
 
-    # Add context files section
-    default_files = [
-        ("AGENTS.md", "agent-specific instructions"),
-        ("CLAUDE.md", "project guidelines and standards"),
-        # Note: daf-workflow skill is auto-loaded by Claude Code
-    ]
-
     # Load configured context files
     configured_files = []
     if config and config.context_files:
@@ -722,15 +715,20 @@ def _build_investigation_prompt(
     # Load hierarchical context files
     hierarchical_files = load_hierarchical_context_files(config)
 
-    # Discover skills
-    skill_files = discover_skills(project_path=project_path, workspace=workspace)
+    # Discover only hierarchical + project-level skills for prompt
+    # User-level and workspace-level skills are already auto-discovered by Claude Code via --add-dir
+    skill_files = discover_skills(
+        project_path=project_path, workspace=workspace,
+        include_levels={"hierarchical", "project"},
+    )
 
-    # Combine regular context files
-    regular_files = default_files + hierarchical_files + configured_files
+    # Combine context files (AGENTS.md/CLAUDE.md auto-read by Claude Code)
+    regular_files = hierarchical_files + configured_files
 
-    prompt_parts.append("Please start by reading the following context files if they exist:")
-    for path, description in regular_files:
-        prompt_parts.append(f"- {path} ({description})")
+    if regular_files:
+        prompt_parts.append("Please start by reading the following context files if they exist:")
+        for path, description in regular_files:
+            prompt_parts.append(f"- {path} ({description})")
 
     # Add skill loading section
     if skill_files:
@@ -815,13 +813,6 @@ def _build_multiproject_investigation_prompt(
         "",
     ]
 
-    # Add context files section
-    default_files = [
-        ("AGENTS.md", "agent-specific instructions"),
-        ("CLAUDE.md", "project guidelines and standards"),
-        # Note: daf-workflow skill is auto-loaded by Claude Code
-    ]
-
     # Load configured context files
     configured_files = []
     if config and config.context_files:
@@ -830,15 +821,20 @@ def _build_multiproject_investigation_prompt(
     # Load hierarchical context files
     hierarchical_files = load_hierarchical_context_files(config)
 
-    # Discover skills from first project (skills are workspace-level)
-    skill_files = discover_skills(project_path=project_paths[0], workspace=workspace)
+    # Discover only hierarchical + project-level skills for prompt
+    # User-level and workspace-level skills are already auto-discovered by Claude Code via --add-dir
+    skill_files = discover_skills(
+        project_path=project_paths[0], workspace=workspace,
+        include_levels={"hierarchical", "project"},
+    )
 
-    # Combine regular context files
-    regular_files = default_files + hierarchical_files + configured_files
+    # Combine context files (AGENTS.md/CLAUDE.md auto-read by Claude Code)
+    regular_files = hierarchical_files + configured_files
 
-    prompt_parts.append("Please start by reading the following context files if they exist:")
-    for path, description in regular_files:
-        prompt_parts.append(f"- {path} ({description})")
+    if regular_files:
+        prompt_parts.append("Please start by reading the following context files if they exist:")
+        for path, description in regular_files:
+            prompt_parts.append(f"- {path} ({description})")
 
     # Add skill loading section
     if skill_files:

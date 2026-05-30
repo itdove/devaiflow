@@ -784,33 +784,28 @@ def _build_ticket_creation_prompt(
         "",
     ]
 
-    # Add context files section (includes skills registered as hidden context files)
-    default_files = [
-        ("AGENTS.md", "agent-specific instructions"),
-        ("CLAUDE.md", "project guidelines and standards"),
-        # Note: daf-workflow skill is auto-loaded by Claude Code
-    ]
-
     # Load configured context files from config (non-skill files only)
     configured_files = []
     if config and config.context_files:
-        # Only include non-skill context files from config (hidden=false)
-        # Skills will be discovered from filesystem instead
         configured_files = [(f.path, f.description) for f in config.context_files.files if not f.hidden]
 
     # Load hierarchical context files (only those that exist)
     hierarchical_files = load_hierarchical_context_files(config)
 
-    # Discover skills from filesystem (instead of loading from config)
-    # This ensures we only reference skills that actually exist on disk
-    skill_files = discover_skills(project_path=project_path, workspace=workspace)
+    # Discover only hierarchical + project-level skills for prompt
+    # User-level and workspace-level skills are already auto-discovered by Claude Code via --add-dir
+    skill_files = discover_skills(
+        project_path=project_path, workspace=workspace,
+        include_levels={"hierarchical", "project"},
+    )
 
-    # Combine regular context files: defaults + hierarchical + configured (no skills from config)
-    regular_files = default_files + hierarchical_files + configured_files
+    # Combine context files (AGENTS.md/CLAUDE.md auto-read by Claude Code)
+    regular_files = hierarchical_files + configured_files
 
-    prompt_parts.append("Please start by reading the following context files if they exist:")
-    for path, description in regular_files:
-        prompt_parts.append(f"- {path} ({description})")
+    if regular_files:
+        prompt_parts.append("Please start by reading the following context files if they exist:")
+        for path, description in regular_files:
+            prompt_parts.append(f"- {path} ({description})")
 
     # Add explicit skill loading section if skills are present
     if skill_files:
