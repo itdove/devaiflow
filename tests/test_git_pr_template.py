@@ -195,7 +195,7 @@ Assisted-by: Claude
                     )
 
                     assert result == "Filled via fallback"
-                    mock_fallback.assert_called_once_with(sample_template, mock_session, git_context)
+                    mock_fallback.assert_called_once_with(sample_template, mock_session, git_context, jira_url=None)
 
     def test_claude_cli_error_fallback(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
         """Test fallback when Claude CLI has an error."""
@@ -390,7 +390,7 @@ class TestFillTemplateWithApi:
                 mock_client.messages.create.return_value = mock_message
                 mock_anthropic_class.return_value = mock_client
 
-                result = _fill_template_with_api(sample_template, "Test context")
+                result = _fill_template_with_api("Test prompt")
 
                 assert result == "Filled template via API"
                 mock_client.messages.create.assert_called_once()
@@ -400,7 +400,7 @@ class TestFillTemplateWithApi:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY not set"):
-            _fill_template_with_api(sample_template, "Test context")
+            _fill_template_with_api("Test prompt")
 
     def test_api_call_with_code_fences(self, sample_template, monkeypatch):
         """Test that API output code fences are cleaned."""
@@ -422,7 +422,7 @@ Test content
                 mock_client.messages.create.return_value = mock_message
                 mock_anthropic_class.return_value = mock_client
 
-                result = _fill_template_with_api(sample_template, "Test context")
+                result = _fill_template_with_api("Test prompt")
 
                 # Code fences should be removed
                 assert not result.startswith("```")
@@ -443,7 +443,7 @@ Test content
                 mock_anthropic_class.return_value = mock_client
 
                 with pytest.raises(RuntimeError, match="No content in API response"):
-                    _fill_template_with_api(sample_template, "Test context")
+                    _fill_template_with_api("Test prompt")
 
     def test_api_call_exception(self, sample_template, monkeypatch):
         """Test API filling handles exceptions properly."""
@@ -457,7 +457,7 @@ Test content
                 mock_anthropic_class.return_value = mock_client
 
                 with pytest.raises(RuntimeError, match="API template filling failed"):
-                    _fill_template_with_api(sample_template, "Test context")
+                    _fill_template_with_api("Test prompt")
 
 
 class TestFillTemplateFallback:

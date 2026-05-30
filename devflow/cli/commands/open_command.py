@@ -1585,19 +1585,14 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
     branch_exists_locally = GitUtils.branch_exists(path, branch_name)
 
     # Check if branch exists on remote (use the correct remote name)
-    branch_exists_remotely = subprocess.run(
+    ls_remote_result = subprocess.run(
         ["git", "ls-remote", "--heads", remote_name, branch_name],
         cwd=path,
         capture_output=True,
         text=True,
         timeout=10,
-    ).returncode == 0 and bool(subprocess.run(
-        ["git", "ls-remote", "--heads", remote_name, branch_name],
-        cwd=path,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    ).stdout.strip())
+    )
+    branch_exists_remotely = ls_remote_result.returncode == 0 and bool(ls_remote_result.stdout.strip())
 
     if not branch_exists_locally and not branch_exists_remotely:
         # Branch doesn't exist anywhere - this is unexpected but not critical
@@ -3466,39 +3461,9 @@ def _log_error(message: str) -> None:
 
 
 def _cleanup_temp_directory_on_exit(temp_dir: Optional[str]) -> None:
-    """Clean up a temporary directory when exiting a session.
-
-    Handles both nested structure (/tmp/daf-session-xxx/repo-name/)
-    and legacy flat structure (/tmp/daf-jira-analysis-xxx/).
-
-    Args:
-        temp_dir: Path to temporary directory (can be None)
-    """
-    import shutil
-    import tempfile as _tempfile
-
-    if not temp_dir:
-        return
-
-    try:
-        temp_path = Path(temp_dir)
-        if not temp_path.exists():
-            return
-
-        # Check if this is a nested structure by examining the parent
-        parent = temp_path.parent
-        parent_name = parent.name
-
-        if parent_name.startswith("daf-session-") and parent.parent == Path(_tempfile.gettempdir()):
-            console.print(f"[dim]Cleaning up temporary directory: {parent}[/dim]")
-            shutil.rmtree(str(parent))
-        else:
-            console.print(f"[dim]Cleaning up temporary directory: {temp_dir}[/dim]")
-            shutil.rmtree(temp_dir)
-        console.print(f"[green]✓[/green] Temporary directory removed")
-    except Exception as e:
-        console.print(f"[yellow]⚠[/yellow] Could not remove temporary directory: {e}")
-        console.print(f"[dim]You may need to manually delete: {temp_dir}[/dim]")
+    """Clean up a temporary directory when exiting a session."""
+    from devflow.utils.temp_directory import cleanup_temp_directory
+    cleanup_temp_directory(temp_dir)
 
 
 def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:

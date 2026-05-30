@@ -43,6 +43,19 @@ class ReleaseManager:
         self.pyproject_file = repo_path / "pyproject.toml"
         self.setup_file = repo_path / "setup.py"
         self.changelog_file = repo_path / "CHANGELOG.md"
+        self._package_file_name: Optional[str] = None
+
+    @property
+    def package_file_name(self) -> str:
+        """Name of the file that holds the package version (cached)."""
+        if self._package_file_name is None:
+            if self.pyproject_file.exists():
+                content = self.pyproject_file.read_text()
+                if re.search(r'^version\s*=\s*["\']', content, re.MULTILINE):
+                    self._package_file_name = "pyproject.toml"
+            if self._package_file_name is None:
+                self._package_file_name = "setup.py"
+        return self._package_file_name
 
     def read_current_version(self) -> Tuple[str, str]:
         """Read current version from version files.
@@ -705,7 +718,7 @@ class ReleaseManager:
 
         # Validate versions are in sync
         if init_version != package_version:
-            package_file = "pyproject.toml" if self.pyproject_file.exists() and re.search(r'^version\s*=\s*["\']', self.pyproject_file.read_text(), re.MULTILINE) else "setup.py"
+            package_file = self.package_file_name
             raise ValueError(
                 f"Version mismatch: devflow/__init__.py has {init_version}, "
                 f"{package_file} has {package_version}. Fix before releasing."
@@ -1029,7 +1042,7 @@ class ReleaseManager:
             init_version, package_version = self.read_current_version()
             acceptable_versions = [version_str, f"{version_str}-dev", next_dev_version_str]
 
-            package_file = "pyproject.toml" if self.pyproject_file.exists() and re.search(r'^version\s*=\s*["\']', self.pyproject_file.read_text(), re.MULTILINE) else "setup.py"
+            package_file = self.package_file_name
 
             if init_version not in acceptable_versions:
                 return False, f"Version mismatch: devflow/__init__.py has {init_version}, expected one of {', '.join(acceptable_versions)}", None
