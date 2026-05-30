@@ -30,6 +30,33 @@ from devflow.utils.dependencies import require_tool
 console = Console()
 
 
+def _get_remote_aware_base_ref(working_dir: Path, base_branch: str) -> str:
+    """Fetch origin and return remote ref for accurate diff comparison.
+
+    When a PR has been merged remotely, the local base branch may not reflect
+    the merge. Fetching and comparing against origin/{base_branch} ensures we
+    detect that the branch changes are already in the remote base.
+
+    Falls back to the local base branch if no remote ref exists (e.g., local-only repos).
+    """
+    success, _ = GitUtils.fetch_origin(working_dir)
+    if success:
+        remote_ref = f"origin/{base_branch}"
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", remote_ref],
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return remote_ref
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+    return base_branch
+
+
 def _get_base_branch(active_conv, working_dir: Path) -> str:
     """Get the base branch from session or detect from repository.
 
@@ -358,8 +385,13 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
             elif not pr_status or pr_status['state'] in ['merged', 'closed']:
                 # No open PR - check if we should create one
+                # Use remote ref to detect if changes are already merged upstream
                 base_branch = proj_info.base_branch
-                changed_files = GitUtils.get_changed_files(working_dir, base_branch, proj_info.branch) if base_branch else None
+                if base_branch:
+                    remote_base = _get_remote_aware_base_ref(working_dir, base_branch)
+                    changed_files = GitUtils.get_changed_files(working_dir, remote_base, proj_info.branch)
+                else:
+                    changed_files = None
 
                 if changed_files:
                     should_create = not no_pr
@@ -519,8 +551,13 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
             elif not pr_status or pr_status['state'] in ['merged', 'closed']:
                 # No open PR - check if we should create one
+                # Use remote ref to detect if changes are already merged upstream
                 base_branch = conv.base_branch or _get_base_branch(conv, working_dir)
-                changed_files = GitUtils.get_changed_files(working_dir, base_branch, conv.branch) if base_branch else None
+                if base_branch:
+                    remote_base = _get_remote_aware_base_ref(working_dir, base_branch)
+                    changed_files = GitUtils.get_changed_files(working_dir, remote_base, conv.branch)
+                else:
+                    changed_files = None
 
                 if changed_files:
                     should_create = not no_pr
@@ -693,14 +730,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                 elif pr_status and pr_status['state'] in ['merged', 'closed']:
                     # PR exists but is merged/closed
                     # Check if there are changes from base branch BEFORE prompting for new PR
-                    # Determine if there are any changes that warrant creating a new PR
+                    # Use remote ref to detect if changes are already merged upstream
                     has_changes = has_uncommitted or commit_made_this_cycle
 
-                    # If no work this cycle, check for changes from base branch
+                    # If no work this cycle, check for changes from remote base branch
                     if not has_changes:
                         base_branch = _get_base_branch(active_conv, working_dir)
                         if base_branch:
-                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
+                            remote_base = _get_remote_aware_base_ref(working_dir, base_branch)
+                            changed_files = GitUtils.get_changed_files(working_dir, remote_base, active_conv.branch)
                             has_changes = bool(changed_files)
 
                     # Only prompt if there are actual changes
@@ -733,14 +771,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                 else:
                     # No existing PR for this branch
                     # Check if we should create a PR based on work done and changes from base
-                    # Determine if there are any changes that warrant creating a PR
+                    # Use remote ref to detect if changes are already merged upstream
                     has_changes = has_uncommitted or commit_made_this_cycle
 
-                    # If no work this cycle, check for changes from base branch
+                    # If no work this cycle, check for changes from remote base branch
                     if not has_changes:
                         base_branch = _get_base_branch(active_conv, working_dir)
                         if base_branch:
-                            changed_files = GitUtils.get_changed_files(working_dir, base_branch, active_conv.branch)
+                            remote_base = _get_remote_aware_base_ref(working_dir, base_branch)
+                            changed_files = GitUtils.get_changed_files(working_dir, remote_base, active_conv.branch)
                             has_changes = bool(changed_files)
 
                     # Only prompt if there are actual changes

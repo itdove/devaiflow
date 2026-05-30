@@ -189,13 +189,13 @@ def test_complete_uses_stored_base_branch_from_develop(temp_daf_home, monkeypatc
     # Complete the session
     complete_session("base-branch-test")
 
-    # Verify that get_changed_files was called with "develop" as base_branch, not "main"
-    # This is the key fix - when checking for changes, use the stored base_branch
-    assert any(base == "develop" for _, base, _ in get_changed_files_calls), \
-        f"Expected get_changed_files to be called with base_branch='develop', but got calls: {get_changed_files_calls}"
+    # Verify that get_changed_files was called with "develop" (or "origin/develop") as base_branch
+    # In local repos without remotes, the function falls back to the local ref
+    assert any("develop" in base for _, base, _ in get_changed_files_calls), \
+        f"Expected get_changed_files to be called with base_branch containing 'develop', but got calls: {get_changed_files_calls}"
 
     # Verify NO calls used "main" as base_branch
-    assert not any(base == "main" for _, base, _ in get_changed_files_calls), \
+    assert not any(base in ("main", "origin/main") for _, base, _ in get_changed_files_calls), \
         f"get_changed_files should NOT use 'main' as base_branch, but got calls: {get_changed_files_calls}"
 
 
@@ -271,9 +271,9 @@ def test_complete_uses_stored_base_branch_from_main(temp_daf_home, monkeypatch, 
     # Complete the session
     complete_session("base-branch-main-test")
 
-    # Verify that get_changed_files was called with "main" as base_branch
-    assert any(base == "main" for _, base, _ in get_changed_files_calls), \
-        f"Expected get_changed_files to be called with base_branch='main', but got calls: {get_changed_files_calls}"
+    # Verify that get_changed_files was called with "main" (or "origin/main") as base_branch
+    assert any("main" in base for _, base, _ in get_changed_files_calls), \
+        f"Expected get_changed_files to be called with base_branch containing 'main', but got calls: {get_changed_files_calls}"
 
 
 def test_complete_fallback_to_detected_default_for_old_sessions(temp_daf_home, monkeypatch, tmp_path, capsys):

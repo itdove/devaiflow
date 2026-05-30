@@ -4088,3 +4088,227 @@ def test_complete_no_pr_prompt_after_merged_branch(temp_daf_home, tmp_path, monk
     captured = capsys.readouterr()
     assert ("Branch has no changes from" in captured.out or
             "No new commits - skipping PR creation" in captured.out)
+
+
+def test_complete_session_skips_pr_when_merged_remotely(temp_daf_home, tmp_path, monkeypatch, capsys):
+    """Test that PR creation is skipped when PR was merged remotely (GitHub/GitLab reports merged).
+
+    This covers the real-world scenario where:
+    - User creates a PR and it gets merged on GitHub
+    - Local main has NOT been pulled, so local git diff still shows changes
+    - _get_pr_for_branch returns {'state': 'merged'} from GitHub API
+    - After fetching origin, origin/main has the merged changes → no diff
+    - daf complete should NOT prompt for a new PR
+    """
+    import subprocess
+
+    # Create a git repository with a remote
+    repo_dir = tmp_path / "test-remote-merged"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    # Create initial commit on main
+    (repo_dir / "test.txt").write_text("original")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_dir, capture_output=True)
+
+    # Create feature branch with changes
+    subprocess.run(["git", "checkout", "-b", "feature-892"], cwd=repo_dir, capture_output=True)
+    (repo_dir / "feature.txt").write_text("new feature")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Add feature"], cwd=repo_dir, capture_output=True)
+
+    # Create session
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="remote-merged-test",
+        goal="Test remote merged PR",
+        working_directory="test-remote-merged",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-remote-merged",
+        branch="feature-892",
+    )
+
+    session_manager.start_work_session("remote-merged-test")
+    session_manager.end_work_session("remote-merged-test")
+
+    # Mock _get_pr_for_branch to report the PR as merged (as GitHub would)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._get_pr_for_branch",
+        lambda w, b: {"url": "https://github.com/org/repo/pull/42", "state": "merged"},
+    )
+
+    # Mock _get_remote_aware_base_ref to return the remote ref (simulating a repo with remote)
+    remote_ref_calls = []
+    def mock_get_remote_aware_base_ref(working_dir, base_branch):
+        remote_ref_calls.append((str(working_dir), base_branch))
+        return f"origin/{base_branch}"
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._get_remote_aware_base_ref",
+        mock_get_remote_aware_base_ref,
+    )
+
+    # Mock get_changed_files: return empty when comparing against origin/ (simulating merged state)
+    def mock_get_changed_files(path, base_branch=None, current_branch=None):
+        if base_branch and base_branch.startswith("origin/"):
+            return []  # No changes vs remote (PR was merged)
+        return ["feature.txt"]  # Would show changes vs local main
+    monkeypatch.setattr(GitUtils, "get_changed_files", staticmethod(mock_get_changed_files))
+
+    # Mock away prompts
+    confirm_prompts = []
+    def mock_confirm_ask(prompt, **kwargs):
+        confirm_prompts.append(prompt)
+        return False
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
+
+    complete_session("remote-merged-test")
+
+    captured = capsys.readouterr()
+
+    # Verify the remote-aware ref was used
+    assert len(remote_ref_calls) > 0, "_get_remote_aware_base_ref should have been called"
+
+    # Verify no PR creation prompt
+    pr_prompts = [p for p in confirm_prompts if "PR" in p or "MR" in p]
+    assert len(pr_prompts) == 0, f"Should not prompt for PR when merged remotely, got: {pr_prompts}"
+
+    # Should show the skip message (Rich may wrap text, so check key fragments)
+    assert "skipping PR" in captured.out
+    assert "creation" in captured.out
+
+
+def test_complete_session_creates_pr_when_new_changes_after_merge(temp_daf_home, tmp_path, monkeypatch, capsys):
+    """Test that PR creation IS offered when there are genuine new changes after a previous merge.
+
+    Scenario: PR was merged, but user made additional commits afterward.
+    Even after fetching origin, the diff shows real new changes.
+    """
+    import subprocess
+
+    repo_dir = tmp_path / "test-new-after-merge"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    (repo_dir / "test.txt").write_text("original")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_dir, capture_output=True)
+
+    subprocess.run(["git", "checkout", "-b", "feature-new-work"], cwd=repo_dir, capture_output=True)
+    (repo_dir / "feature.txt").write_text("new feature")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Add feature"], cwd=repo_dir, capture_output=True)
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="new-after-merge-test",
+        goal="Test new changes after merge",
+        working_directory="test-new-after-merge",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-new-after-merge",
+        branch="feature-new-work",
+    )
+
+    session_manager.start_work_session("new-after-merge-test")
+    session_manager.end_work_session("new-after-merge-test")
+
+    # Previous PR was merged
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._get_pr_for_branch",
+        lambda w, b: {"url": "https://github.com/org/repo/pull/42", "state": "merged"},
+    )
+
+    # Mock _get_remote_aware_base_ref to return remote ref
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._get_remote_aware_base_ref",
+        lambda working_dir, base_branch: f"origin/{base_branch}",
+    )
+
+    # Even after fetch, there are new changes (user made more commits after merge)
+    def mock_get_changed_files(path, base_branch=None, current_branch=None):
+        return ["feature.txt", "extra.txt"]  # New files not yet merged
+    monkeypatch.setattr(GitUtils, "get_changed_files", staticmethod(mock_get_changed_files))
+
+    # Track prompts - decline PR creation
+    confirm_prompts = []
+    def mock_confirm_ask(prompt, **kwargs):
+        confirm_prompts.append(prompt)
+        return False
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
+
+    complete_session("new-after-merge-test")
+
+    captured = capsys.readouterr()
+
+    # Should show the merged message and prompt for new PR
+    assert "merged" in captured.out.lower()
+    # Should have prompted for PR creation (user declined via mock)
+    pr_prompts = [p for p in confirm_prompts if "PR" in p or "MR" in p]
+    assert len(pr_prompts) > 0, "Should prompt for PR when there are new changes after merge"
+
+
+def test_complete_session_fetch_origin_called_before_diff(temp_daf_home, tmp_path, monkeypatch, capsys):
+    """Test that fetch_origin is called before get_changed_files for accurate comparison."""
+    import subprocess
+
+    repo_dir = tmp_path / "test-fetch-order"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+
+    (repo_dir / "test.txt").write_text("original")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_dir, capture_output=True)
+
+    subprocess.run(["git", "checkout", "-b", "feature-order"], cwd=repo_dir, capture_output=True)
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="fetch-order-test",
+        goal="Test fetch order",
+        working_directory="test-fetch-order",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-fetch-order",
+        branch="feature-order",
+    )
+
+    session_manager.start_work_session("fetch-order-test")
+    session_manager.end_work_session("fetch-order-test")
+
+    # No existing PR
+    monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
+
+    # Track call order
+    call_order = []
+
+    def mock_fetch_origin(path):
+        call_order.append("fetch_origin")
+        return (True, None)
+
+    def mock_get_changed_files(path, base_branch=None, current_branch=None):
+        call_order.append("get_changed_files")
+        return []
+
+    monkeypatch.setattr(GitUtils, "fetch_origin", staticmethod(mock_fetch_origin))
+    monkeypatch.setattr(GitUtils, "get_changed_files", staticmethod(mock_get_changed_files))
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", lambda *args, **kwargs: False)
+
+    complete_session("fetch-order-test")
+
+    # Verify fetch was called before get_changed_files
+    if "fetch_origin" in call_order and "get_changed_files" in call_order:
+        fetch_idx = call_order.index("fetch_origin")
+        changed_idx = call_order.index("get_changed_files")
+        assert fetch_idx < changed_idx, "fetch_origin must be called before get_changed_files"
