@@ -17,7 +17,6 @@ def mock_workspace(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    # Create test repositories as git repos
     for repo_name in ["repo1", "repo2", "repo3"]:
         repo_path = workspace / repo_name
         repo_path.mkdir()
@@ -44,37 +43,42 @@ def mock_config_loader(mock_workspace, temp_daf_home):
     return config_loader
 
 
+def _get_path(result):
+    """Extract path from _suggest_and_select_repository result (now returns tuple)."""
+    if result is None:
+        return None
+    paths, is_multi = result
+    if paths is None:
+        return None
+    return paths[0] if paths else None
+
+
 def test_empty_input_uses_default(mock_workspace, mock_config_loader, monkeypatch):
     """Test that pressing Enter without input uses the default selection (first repository)."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate empty input (pressing Enter) - returns default
     def mock_ask(prompt, **kwargs):
-        # When user presses Enter, Prompt.ask returns the default value
         return kwargs.get('default', '')
 
     monkeypatch.setattr(Prompt, "ask", mock_ask)
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns path to first repository (default is "1")
-    assert result is not None
-    assert "repo1" in result or "repo2" in result or "repo3" in result
+    path = _get_path(result)
+    assert path is not None
+    assert "repo1" in path or "repo2" in path or "repo3" in path
 
 
 def test_whitespace_input_returns_none_with_error(mock_workspace, mock_config_loader, monkeypatch):
     """Test that entering only whitespace shows error and returns None (PROJ-61069)."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate whitespace input (user explicitly types spaces)
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "   ")
 
-    # Mock console to capture output
     console_output = []
     original_print = Console.print
 
@@ -85,17 +89,15 @@ def test_whitespace_input_returns_none_with_error(mock_workspace, mock_config_lo
 
     monkeypatch.setattr(Console, "print", mock_print)
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns None
-    assert result is None
+    path = _get_path(result)
+    assert path is None
 
-    # Verify: Error message was shown
     error_messages = [msg for msg in console_output if "Empty selection not allowed" in msg]
     assert len(error_messages) > 0
 
@@ -104,65 +106,57 @@ def test_valid_number_selection_succeeds(mock_workspace, mock_config_loader, mon
     """Test that selecting a valid number returns the correct repository."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate selecting first repository
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "1")
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns path to first repository
-    assert result is not None
-    assert "repo1" in result or "repo2" in result or "repo3" in result
+    path = _get_path(result)
+    assert path is not None
+    assert "repo1" in path or "repo2" in path or "repo3" in path
 
 
 def test_cancel_returns_none(mock_workspace, mock_config_loader, monkeypatch):
     """Test that entering 'cancel' returns None."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate cancel
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "cancel")
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns None (use current directory)
-    assert result is None
+    path = _get_path(result)
+    assert path is None
 
 
 def test_q_returns_none(mock_workspace, mock_config_loader, monkeypatch):
     """Test that entering 'q' returns None (alias for cancel)."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate 'q'
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "q")
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns None (use current directory)
-    assert result is None
+    path = _get_path(result)
+    assert path is None
 
 
 def test_invalid_number_returns_none(mock_workspace, mock_config_loader, monkeypatch):
     """Test that selecting an invalid number shows error and returns None."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate invalid number (out of range)
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "999")
 
-    # Mock console to capture output
     console_output = []
     original_print = Console.print
 
@@ -173,17 +167,15 @@ def test_invalid_number_returns_none(mock_workspace, mock_config_loader, monkeyp
 
     monkeypatch.setattr(Console, "print", mock_print)
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns None
-    assert result is None
+    path = _get_path(result)
+    assert path is None
 
-    # Verify: Error message was shown
     error_messages = [msg for msg in console_output if "Invalid selection" in msg]
     assert len(error_messages) > 0
 
@@ -192,76 +184,63 @@ def test_valid_repo_name_succeeds(mock_workspace, mock_config_loader, monkeypatc
     """Test that entering a valid repository name returns the correct path."""
     from rich.prompt import Prompt, Confirm
 
-    # Mock Prompt.ask to simulate entering repository name
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "repo2")
-
-    # Mock Confirm.ask to always return True (use the path)
     monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: True)
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns path to repo2
-    assert result is not None
-    assert "repo2" in result
+    path = _get_path(result)
+    assert path is not None
+    assert "repo2" in path
 
 
 def test_absolute_path_succeeds(mock_workspace, mock_config_loader, monkeypatch, tmp_path):
     """Test that entering an absolute path works correctly."""
     from rich.prompt import Prompt
 
-    # Create a test directory
     test_path = tmp_path / "custom-repo"
     test_path.mkdir()
 
-    # Mock Prompt.ask to simulate entering absolute path
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: str(test_path))
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns the absolute path
-    assert result == str(test_path)
+    path = _get_path(result)
+    assert path == str(test_path)
 
 
 def test_tilde_path_succeeds(mock_workspace, mock_config_loader, monkeypatch, tmp_path):
     """Test that entering a path with tilde (~) works correctly."""
     from rich.prompt import Prompt, Confirm
 
-    # Mock Prompt.ask to simulate entering tilde path
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "~/test-repo")
-
-    # Mock Confirm.ask to return True if path doesn't exist
     monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: True)
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns expanded path (not None)
-    assert result is not None
-    assert "~" not in result  # Tilde should be expanded
+    path = _get_path(result)
+    assert path is not None
+    assert "~" not in path
 
 
 def test_empty_input_error_message_includes_valid_options(mock_workspace, mock_config_loader, monkeypatch):
     """Test that error message for empty input includes all valid selection options (PROJ-61069)."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate empty input
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "")
 
-    # Mock console to capture output
     console_output = []
     original_print = Console.print
 
@@ -272,21 +251,18 @@ def test_empty_input_error_message_includes_valid_options(mock_workspace, mock_c
 
     monkeypatch.setattr(Console, "print", mock_print)
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Returns None
-    assert result is None
+    path = _get_path(result)
+    assert path is None
 
-    # Verify: Error message includes all valid options
     error_messages = [msg for msg in console_output if "Empty selection not allowed" in msg]
     assert len(error_messages) > 0
 
-    # Check that error message mentions valid options
     error_msg = error_messages[0]
     assert "number" in error_msg.lower()
     assert "repository name" in error_msg.lower() or "path" in error_msg.lower()
@@ -294,29 +270,25 @@ def test_empty_input_error_message_includes_valid_options(mock_workspace, mock_c
 
 
 def test_default_selection_displayed_and_used(mock_workspace, mock_config_loader, monkeypatch):
-    """Test that default selection is shown in prompt and used when Enter is pressed (itdove/devaiflow#280)."""
+    """Test that default selection is shown in prompt and used when Enter is pressed."""
     from rich.prompt import Prompt
 
-    # Track what default value was passed to Prompt.ask
     captured_default = {}
 
     def mock_ask(prompt, **kwargs):
         captured_default['value'] = kwargs.get('default')
-        # Simulate user pressing Enter (returns the default)
         return kwargs.get('default', '')
 
     monkeypatch.setattr(Prompt, "ask", mock_ask)
 
-    # Call the function
     result = _suggest_and_select_repository(
         config_loader=mock_config_loader,
         issue_key=None,
         issue_metadata_dict=None,
     )
 
-    # Verify: Default was set to "1" (first repository)
     assert captured_default.get('value') == "1"
 
-    # Verify: Returns path to first repository
-    assert result is not None
-    assert "repo1" in result or "repo2" in result or "repo3" in result
+    path = _get_path(result)
+    assert path is not None
+    assert "repo1" in path or "repo2" in path or "repo3" in path

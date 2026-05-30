@@ -67,3 +67,6 @@ T-*.md
 tests/*.md
 /test_*.sh
 integration-tests/*.bak
+
+#ai-guardian
+/.ai-guardian

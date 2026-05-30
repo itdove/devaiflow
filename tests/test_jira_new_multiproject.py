@@ -17,7 +17,6 @@ def mock_workspace_with_multiple_repos(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    # Create three mock git repos
     for repo_name in ["backend-api", "frontend-app", "database"]:
         repo_path = workspace / repo_name
         repo_path.mkdir()
@@ -45,18 +44,18 @@ class TestJiraNewMultiProjectSelection:
     @patch("devflow.cli.commands.jira_new_command.should_launch_claude_code", return_value=False)
     @patch("devflow.session.manager.SessionManager")
     @patch("devflow.config.loader.ConfigLoader")
-    @patch("rich.prompt.Confirm.ask")
-    @patch("rich.prompt.Prompt.ask")
-    @patch("devflow.cli.utils.select_workspace")
-    @patch("devflow.cli.utils.scan_workspace_repositories")
+    @patch("devflow.cli.commands.jira_new_command.unified_project_selection")
+    @patch("devflow.cli.commands.jira_new_command.scan_workspace_repositories")
+    @patch("devflow.cli.commands.jira_new_command.select_workspace")
+    @patch("devflow.cli.commands.jira_new_command.get_workspace_path")
     @patch("devflow.utils.is_mock_mode", return_value=True)
     def test_jira_new_with_multiproject_selection(
         self,
         mock_is_mock_mode,
-        mock_scan_repos,
+        mock_get_ws_path,
         mock_select_workspace,
-        mock_prompt_ask,
-        mock_confirm_ask,
+        mock_scan_repos,
+        mock_unified_select,
         mock_config_loader,
         mock_session_manager,
         mock_should_launch,
@@ -64,13 +63,15 @@ class TestJiraNewMultiProjectSelection:
         config_with_workspace,
     ):
         """Test that daf jira new supports multi-project selection."""
-        # Setup mocks
         mock_select_workspace.return_value = "test-workspace"
+        mock_get_ws_path.return_value = str(mock_workspace_with_multiple_repos)
         mock_scan_repos.return_value = ["backend-api", "frontend-app", "database"]
 
-        # User selects multi-project mode and chooses projects 1,2
-        mock_confirm_ask.return_value = True  # Accept multi-project mode
-        mock_prompt_ask.return_value = "1,2"  # Select backend-api and frontend-app
+        mock_unified_select.return_value = (
+            [str(mock_workspace_with_multiple_repos / "backend-api"),
+             str(mock_workspace_with_multiple_repos / "frontend-app")],
+            True
+        )
 
         mock_config_loader.return_value.load_config.return_value = config_with_workspace
 
@@ -78,55 +79,48 @@ class TestJiraNewMultiProjectSelection:
         mock_session.name = "test-session"
         mock_session_manager.return_value.create_session.return_value = mock_session
 
-        # Call the function
         create_jira_ticket_session(
             goal="Add Redis caching",
             issue_type="story",
             parent="PROJ-1234",
             name="test-session",
-            path=None,  # Use interactive selection
+            path=None,
             branch=None,
             workspace="test-workspace",
             affects_versions=None,
         )
 
-        # Verify multi-project selection was offered
-        mock_confirm_ask.assert_called_once()
-        call_args = str(mock_confirm_ask.call_args)
-        assert "multi-project" in call_args.lower()
-
-        # Verify selection prompt was shown
-        mock_prompt_ask.assert_called_once()
+        mock_unified_select.assert_called_once()
 
 
     @patch("devflow.session.manager.SessionManager")
     @patch("devflow.config.loader.ConfigLoader")
-    @patch("rich.prompt.Confirm.ask")
-    @patch("rich.prompt.Prompt.ask")
-    @patch("devflow.cli.utils.select_workspace")
-    @patch("devflow.cli.utils.scan_workspace_repositories")
+    @patch("devflow.cli.commands.jira_new_command.unified_project_selection")
+    @patch("devflow.cli.commands.jira_new_command.scan_workspace_repositories")
+    @patch("devflow.cli.commands.jira_new_command.select_workspace")
+    @patch("devflow.cli.commands.jira_new_command.get_workspace_path")
     @patch("devflow.utils.is_mock_mode", return_value=True)
     def test_jira_new_single_project_fallback(
         self,
         mock_is_mock_mode,
-        mock_scan_repos,
+        mock_get_ws_path,
         mock_select_workspace,
-        mock_prompt_ask,
-        mock_confirm_ask,
+        mock_scan_repos,
+        mock_unified_select,
         mock_config_loader,
         mock_session_manager,
         mock_workspace_with_multiple_repos,
         config_with_workspace,
     ):
         """Test that declining multi-project mode falls back to single-project."""
-        # Setup mocks
         mock_select_workspace.return_value = "test-workspace"
+        mock_get_ws_path.return_value = str(mock_workspace_with_multiple_repos)
         mock_scan_repos.return_value = ["backend-api", "frontend-app", "database"]
 
-        # User declines multi-project mode
-        mock_confirm_ask.return_value = False
-        # Then selects single project
-        mock_prompt_ask.side_effect = ["1"]  # Select backend-api
+        mock_unified_select.return_value = (
+            [str(mock_workspace_with_multiple_repos / "backend-api")],
+            False
+        )
 
         mock_config_loader.return_value.load_config.return_value = config_with_workspace
 
@@ -134,7 +128,6 @@ class TestJiraNewMultiProjectSelection:
         mock_session.name = "test-session"
         mock_session_manager.return_value.create_session.return_value = mock_session
 
-        # Call the function
         create_jira_ticket_session(
             goal="Fix bug",
             issue_type="bug",
@@ -146,10 +139,7 @@ class TestJiraNewMultiProjectSelection:
             affects_versions=None,
         )
 
-        # Verify multi-project was offered but declined
-        mock_confirm_ask.assert_called_once()
-
-        # Should still create a session (single-project mode)
+        mock_unified_select.assert_called_once()
         mock_session_manager.return_value.create_session.assert_called()
 
 
@@ -162,7 +152,6 @@ class TestMultiProjectTicketCreationSession:
             create_multi_project_ticket_creation_session,
         )
 
-        # Create mock repos
         workspace = tmp_path / "workspace"
         workspace.mkdir()
 
@@ -174,7 +163,6 @@ class TestMultiProjectTicketCreationSession:
             git_dir.mkdir()
             project_paths.append(str(repo_path))
 
-        # Create mock config and session manager
         mock_config = MagicMock()
         mock_session_manager = MagicMock()
 
@@ -182,7 +170,6 @@ class TestMultiProjectTicketCreationSession:
         mock_session.name = "test-session"
         mock_session_manager.create_session.return_value = mock_session
 
-        # Create multi-project ticket creation session
         session, ai_agent_session_id = create_multi_project_ticket_creation_session(
             session_manager=mock_session_manager,
             config=mock_config,
@@ -195,14 +182,9 @@ class TestMultiProjectTicketCreationSession:
             issue_type="story",
         )
 
-        # Verify session was created
         assert session == mock_session
         assert ai_agent_session_id is not None
-
-        # Verify session_type was set
         assert session.session_type == "ticket_creation"
-
-        # Verify add_multi_project_conversation was called
         session.add_multi_project_conversation.assert_called_once()
 
 
@@ -215,7 +197,6 @@ class TestMultiProjectPromptBuilder:
             _build_multiproject_ticket_creation_prompt,
         )
 
-        # Create mock project paths
         workspace = tmp_path / "workspace"
         workspace.mkdir()
 
@@ -225,12 +206,10 @@ class TestMultiProjectPromptBuilder:
             repo_path.mkdir()
             project_paths.append(str(repo_path))
 
-        # Create mock config
         mock_config = MagicMock()
         mock_config.jira.project = "PROJ"
         mock_config.jira.custom_field_defaults = {}
 
-        # Build prompt
         prompt = _build_multiproject_ticket_creation_prompt(
             issue_type="story",
             goal="Add Redis caching",
@@ -242,15 +221,10 @@ class TestMultiProjectPromptBuilder:
             affects_versions=None,
         )
 
-        # Verify prompt mentions all projects
         assert "backend-api" in prompt
         assert "frontend-app" in prompt
         assert "database" in prompt
-
-        # Verify prompt indicates it's multi-project
         assert "MULTI-PROJECT" in prompt or "multi-project" in prompt
-
-        # Verify prompt has read-only constraints
         assert "READ-ONLY" in prompt
         assert "Do NOT modify" in prompt or "DO NOT modify" in prompt
 

@@ -5,7 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from devflow.cli.commands.open_command import _extract_repository_from_issue_key, _prompt_for_working_directory
+from devflow.cli.utils import extract_repository_from_issue_key as _extract_repository_from_issue_key
+from devflow.cli.commands.open_command import _prompt_for_working_directory
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 

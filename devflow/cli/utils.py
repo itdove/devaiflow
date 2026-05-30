@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import click
@@ -1455,3 +1455,198 @@ def prompt_repository_selection_with_multiproject(
 
     # Return as list for consistency
     return [project_path], selected_workspace_name
+
+
+def extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[str]) -> Optional[str]:
+    """Extract repository name from GitHub/GitLab issue key.
+
+    Args:
+        issue_key: Issue key (e.g., "owner/repo#123", "#123", "PROJ-123")
+        issue_tracker: Issue tracker type ("github", "gitlab", "jira", etc.)
+
+    Returns:
+        Repository name (e.g., "repo") if extractable, None otherwise
+
+    Examples:
+        >>> extract_repository_from_issue_key("itdove/devaiflow#146", "github")
+        'devaiflow'
+        >>> extract_repository_from_issue_key("#123", "github")
+        >>> extract_repository_from_issue_key("PROJ-123", "jira")
+    """
+    if not issue_tracker or issue_tracker not in ["github", "gitlab"]:
+        return None
+
+    if not issue_key:
+        return None
+
+    # Format: owner/repo#123
+    if "/" in issue_key and "#" in issue_key:
+        try:
+            parts = issue_key.split("/")
+            if len(parts) >= 2:
+                repo_with_number = parts[-1]
+                repo = repo_with_number.split("#")[0]
+                return repo if repo else None
+        except (IndexError, ValueError):
+            return None
+
+    return None
+
+
+def unified_project_selection(
+    workspace_path: str,
+    repo_options: list,
+    *,
+    suggested_repo: Optional[str] = None,
+    suggested_repo_source: Optional[str] = None,
+    default_repo: Optional[str] = None,
+    allow_multi_project: bool = False,
+    on_selection: Optional[Callable] = None,
+    config_loader=None,
+    workspace_name: Optional[str] = None,
+) -> Tuple[Optional[List[str]], bool]:
+    """Unified project/repository selection matching daf open UX.
+
+    Canonical flow:
+    1. Show numbered repo list with optional markers
+    2. If allow_multi_project and 2+ repos: ask multi-project question
+    3. Single selection prompt: number / name / path / cancel
+
+    When config_loader and workspace_name are provided, automatically uses and
+    saves the last-used repository per workspace as default.
+
+    Args:
+        workspace_path: Resolved workspace directory path
+        repo_options: List of repository names found in workspace
+        suggested_repo: Repository name to highlight (e.g., from issue key)
+        suggested_repo_source: Label for suggestion (e.g., "from issue", "remembered")
+        default_repo: Repository name to use as default selection (overrides last-used)
+        allow_multi_project: Whether to offer multi-project session option
+        on_selection: Callback(repo_name, workspace_path) called after selection
+        config_loader: ConfigLoader for reading/saving last-used repo per workspace
+        workspace_name: Workspace name for last-used repo tracking
+
+    Returns:
+        Tuple of (selected_paths, is_multi_project).
+        selected_paths is None if user cancelled.
+    """
+    from rich.prompt import Prompt
+
+    workspace = Path(workspace_path).expanduser()
+
+    if not repo_options:
+        console.print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+        return None, False
+
+    # Auto-detect last-used repo per workspace when config is available
+    last_used_repo = None
+    if not default_repo and config_loader and workspace_name:
+        try:
+            config = config_loader.load_config()
+            if config and config.prompts and config.prompts.last_used_repo_per_workspace:
+                remembered = config.prompts.last_used_repo_per_workspace.get(workspace_name)
+                if remembered and remembered in repo_options:
+                    last_used_repo = remembered
+                    default_repo = remembered
+        except Exception:
+            pass
+
+    # Put suggested repo first if it exists in the list
+    display_repos = list(repo_options)
+    suggested_repo_index = None
+    if suggested_repo and suggested_repo in display_repos:
+        display_repos.remove(suggested_repo)
+        display_repos = [suggested_repo] + sorted(display_repos)
+        suggested_repo_index = 0
+
+    # 1. Show numbered list
+    source_label = suggested_repo_source or "suggested"
+    console.print(f"\n[bold]Available repositories ({len(display_repos)}):[/bold]")
+    for i, repo in enumerate(display_repos, 1):
+        markers = []
+        if suggested_repo and repo == suggested_repo:
+            markers.append(source_label)
+        if last_used_repo and repo == last_used_repo:
+            markers.append("last used")
+        if markers:
+            console.print(f"  {i}. {repo} [dim]({', '.join(markers)})[/dim]")
+        else:
+            console.print(f"  {i}. {repo}")
+
+    # 2. Multi-project question (after list, matching daf open)
+    if allow_multi_project and len(display_repos) > 1:
+        if Confirm.ask("\nCreate multi-project session (work across multiple repos)?", default=False):
+            project_paths = prompt_multi_project_selection(display_repos, workspace_path, suggested_repo)
+            if not project_paths:
+                return None, False
+            return project_paths, True
+
+    # 3. Single selection prompt
+    console.print(f"\n[bold]Select working directory:[/bold]")
+    console.print(f"  • Enter a number (1-{len(display_repos)}) to select from the list above")
+    console.print(f"  • Enter a repository name")
+    console.print(f"  • Enter an absolute path (starting with / or ~)")
+    console.print(f"  • Enter 'cancel' or 'q' to exit")
+
+    # Calculate default: explicit default_repo > suggested_repo > first repo
+    default_value = "1"
+    if default_repo and default_repo in display_repos:
+        default_value = str(display_repos.index(default_repo) + 1)
+    elif suggested_repo_index is not None:
+        default_value = str(suggested_repo_index + 1)
+
+    selection = Prompt.ask("Selection", default=default_value)
+
+    if not selection or selection.strip() == "":
+        console.print(f"[red]✗[/red] Empty selection not allowed. Please enter a number (1-{len(display_repos)}), repository name, path, or 'cancel'/'q'")
+        return None, False
+
+    # Handle cancel
+    if selection.lower() in ["cancel", "q"]:
+        console.print(f"\n[yellow]Cancelled[/yellow]")
+        return None, False
+
+    def _save_last_used(repo_name: str) -> None:
+        """Save the selected repo as last-used for this workspace."""
+        if on_selection:
+            on_selection(repo_name, workspace_path)
+        if config_loader and workspace_name:
+            try:
+                cfg = config_loader.load_config()
+                if cfg and cfg.prompts:
+                    cfg.prompts.last_used_repo_per_workspace[workspace_name] = repo_name
+                    config_loader.save_config(cfg)
+            except Exception:
+                pass
+
+    # Number selection
+    if selection.isdigit():
+        repo_index = int(selection) - 1
+        if 0 <= repo_index < len(display_repos):
+            repo_name = display_repos[repo_index]
+            console_print(f"[dim]Selected: {repo_name}[/dim]")
+            _save_last_used(repo_name)
+            return [str(workspace / repo_name)], False
+        else:
+            console.print(f"[red]✗[/red] Invalid selection. Please choose 1-{len(display_repos)}")
+            return None, False
+
+    # Absolute path
+    if selection.startswith("/") or selection.startswith("~"):
+        project_path = Path(selection).expanduser().absolute()
+        if not project_path.exists():
+            console.print(f"[yellow]⚠[/yellow] Path does not exist: {project_path}")
+            if not Confirm.ask("Use this path anyway?", default=False):
+                return None, False
+        _save_last_used(project_path.name)
+        return [str(project_path)], False
+
+    # Repository name
+    repo_name = selection
+    project_path = workspace / repo_name
+    if not project_path.exists():
+        console.print(f"[yellow]⚠[/yellow] Repository not found: {project_path}")
+        if not Confirm.ask("Use this path anyway?", default=False):
+            return None, False
+    _save_last_used(repo_name)
+    return [str(project_path)], False

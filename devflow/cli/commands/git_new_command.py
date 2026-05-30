@@ -10,7 +10,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, is_json_mode, output_json, prompt_repository_selection, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
 from devflow.cli.commands.sync_command import issue_key_to_session_name
 from devflow.git.utils import GitUtils
 
@@ -133,7 +133,7 @@ def _create_mock_git_issue(
     store.set_jira_ticket(full_issue_key, mock_issue)
 
     # Build initial prompt with session name
-    from devflow.cli.utils import get_workspace_path
+
     workspace_path = None
     if session.workspace_name and config and config.repos:
         workspace_path = get_workspace_path(config, session.workspace_name)
@@ -410,7 +410,6 @@ def create_git_issue_session(
         project_names = [p.strip() for p in projects.split(',')]
 
         # Get workspace path
-        from devflow.cli.utils import get_workspace_path
         workspace_path = get_workspace_path(config, workspace)
         if not workspace_path:
             console_print(f"[red]✗[/red] Workspace '{workspace}' not found")
@@ -463,26 +462,49 @@ def create_git_issue_session(
             return
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
     else:
-        # Prompt for repository selection from workspace with multi-project support (Issue #179)
-        from devflow.cli.utils import prompt_repository_selection_with_multiproject
-        project_paths, selected_workspace_name = prompt_repository_selection_with_multiproject(
+        # Unified project selection (matches daf open UX)
+        selected_workspace_name = select_workspace(
             config,
             workspace_flag=workspace,
-            allow_multiple=True  # Enable multi-project mode for git new
+            session=None,
+            skip_prompt=is_json_mode(),
         )
-        if not project_paths:
-            # User cancelled or no workspace configured
+
+        if not selected_workspace_name:
+            console_print(f"[yellow]⚠[/yellow] No workspace selected")
             return
 
-        # Check if multi-project mode was selected
-        if len(project_paths) > 1:
-            # Multi-project ticket creation session - need to select target repository
-            target_repo_path = _prompt_for_target_repository(project_paths, repository)
+        ws_path = get_workspace_path(config, selected_workspace_name)
+        if not ws_path:
+            console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
+            return
+
+        try:
+            repo_options = scan_workspace_repositories(ws_path)
+        except (ValueError, RuntimeError) as e:
+            console_print(f"[yellow]Warning: {e}[/yellow]")
+            repo_options = []
+
+        if not repo_options:
+            console_print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
+            return
+
+        project_paths_result, is_multi = unified_project_selection(
+            workspace_path=ws_path,
+            repo_options=repo_options,
+            allow_multi_project=True,
+            config_loader=config_loader,
+            workspace_name=selected_workspace_name,
+        )
+        if not project_paths_result:
+            return
+
+        if is_multi:
+            target_repo_path = _prompt_for_target_repository(project_paths_result, repository)
             if not target_repo_path:
                 console_print("[yellow]Cancelled[/yellow]")
                 return
 
-            # Multi-project issue creation session
             return _create_multi_project_git_session(
                 config=config,
                 config_loader=config_loader,
@@ -490,15 +512,14 @@ def create_git_issue_session(
                 goal=goal,
                 issue_type=issue_type,
                 parent=parent,
-                project_paths=project_paths,
+                project_paths=project_paths_result,
                 target_repo_path=target_repo_path,
                 workspace=workspace,
                 selected_workspace_name=selected_workspace_name,
                 repository=repository,
             )
 
-        # Single project mode - use first (and only) path
-        project_path = project_paths[0]
+        project_path = project_paths_result[0]
 
     working_directory = Path(project_path).name
 
@@ -654,7 +675,7 @@ def create_git_issue_session(
     session_manager.update_session(session)
 
     # Build initial prompt with analysis-only constraints and session metadata
-    from devflow.cli.utils import get_workspace_path
+
     workspace_path = None
     if session.workspace_name and config and config.repos:
         workspace_path = get_workspace_path(config, session.workspace_name)
@@ -1045,7 +1066,7 @@ def _create_multi_project_git_session(
         repository: Optional repository in owner/repo format
     """
     from devflow.cli.commands.ticket_creation_multiproject import create_multi_project_ticket_creation_session
-    from devflow.cli.utils import get_workspace_path
+
     from devflow.session.manager import SessionManager
 
     # Build the goal string that includes the issue creation task
@@ -1124,57 +1145,3 @@ def _create_multi_project_git_session(
         handle_claude_code_launch_failure(session, session_manager, name)
 
 
-def _prompt_for_repository_selection(config, workspace_flag: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
-    """Prompt user to select a repository from workspace.
-
-    Args:
-        config: Configuration object
-        workspace_flag: Optional workspace name from command line flag
-
-    Returns:
-        Tuple of (project_path, workspace_name) if selected, (None, None) if cancelled
-    """
-    # Select workspace using priority resolution system
-    selected_workspace_name = select_workspace(
-        config,
-        workspace_flag=workspace_flag,
-        session=None,
-        skip_prompt=False
-    )
-
-    if not selected_workspace_name:
-        # No workspace selected - fall back to current directory
-        console_print(f"[yellow]⚠[/yellow] No workspace selected")
-        console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd()), None
-
-    # Get workspace path from workspace name
-    from devflow.cli.utils import get_workspace_path
-    workspace_path = get_workspace_path(config, selected_workspace_name)
-    if not workspace_path:
-        console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
-        console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd()), None
-
-    console_print(f"\n[cyan]Scanning workspace:[/cyan] {workspace_path}")
-
-    # Scan for git repositories in workspace
-    try:
-        repo_options = scan_workspace_repositories(workspace_path)
-    except (ValueError, RuntimeError) as e:
-        console_print(f"[yellow]Warning: {e}[/yellow]")
-        console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd()), None
-
-    if not repo_options:
-        console_print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
-        console_print(f"[dim]Make sure your workspace contains git repositories.[/dim]")
-        console_print(f"[dim]Using current directory: {Path.cwd()}[/dim]")
-        return str(Path.cwd()), None
-
-    # Prompt user to select repository
-    project_path = prompt_repository_selection(repo_options, workspace_path, allow_cancel=True)
-    if not project_path:
-        return None, None
-
-    return project_path, selected_workspace_name

@@ -1,4 +1,4 @@
-"""Tests for repository selection in 'daf jira new' command (PROJ-61069)."""
+"""Tests for unified project selection used by 'daf jira new' and other commands."""
 
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from devflow.cli.commands.jira_new_command import _prompt_for_repository_selection
+from devflow.cli.utils import unified_project_selection
 from devflow.config.loader import ConfigLoader
 
 
@@ -17,7 +17,6 @@ def mock_workspace(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    # Create test repositories as git repos
     for repo_name in ["repo1", "repo2", "repo3"]:
         repo_path = workspace / repo_name
         repo_path.mkdir()
@@ -26,54 +25,29 @@ def mock_workspace(tmp_path):
     return workspace
 
 
-@pytest.fixture
-def mock_config(mock_workspace, temp_daf_home):
-    """Create a mock config with workspace path."""
-    from devflow.config.models import WorkspaceDefinition
-
-    config_loader = ConfigLoader()
-    config_loader.create_default_config()
-
-    config = config_loader.load_config()
-    # Use new workspaces list instead of old workspace field
-    config.repos.workspaces = [
-        WorkspaceDefinition(name="default", path=str(mock_workspace))
-    ]
-    # Set last-used workspace for the selection system
-    config.repos.last_used_workspace = "default"
-    config_loader.save_config(config)
-
-    return config
-
-
-def test_empty_input_uses_default(mock_workspace, mock_config, monkeypatch):
+def test_empty_input_uses_default(mock_workspace, monkeypatch):
     """Test that pressing Enter without input uses the default selection (first repository)."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate empty input (pressing Enter) - returns default
-    def mock_ask(prompt, **kwargs):
-        # When user presses Enter, Prompt.ask returns the default value
-        return kwargs.get('default', '')
+    monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: kwargs.get('default', ''))
 
-    monkeypatch.setattr(Prompt, "ask", mock_ask)
+    result, is_multi = unified_project_selection(
+        workspace_path=str(mock_workspace),
+        repo_options=["repo1", "repo2", "repo3"],
+    )
 
-    # Call the function
-    result = _prompt_for_repository_selection(config=mock_config)
-
-    # Verify: Returns tuple with path to first repository (default is "1")
     assert result is not None
-    assert result[0] is not None
-    assert "repo1" in result[0] or "repo2" in result[0] or "repo3" in result[0]
+    assert len(result) == 1
+    assert "repo1" in result[0]
+    assert is_multi is False
 
 
-def test_whitespace_input_returns_none_with_error(mock_workspace, mock_config, monkeypatch):
-    """Test that entering only whitespace shows error and returns None (PROJ-61069)."""
+def test_whitespace_input_returns_none_with_error(mock_workspace, monkeypatch):
+    """Test that entering only whitespace shows error and returns None."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate whitespace input
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "   ")
 
-    # Mock console to capture output
     console_output = []
     original_print = Console.print
 
@@ -84,74 +58,68 @@ def test_whitespace_input_returns_none_with_error(mock_workspace, mock_config, m
 
     monkeypatch.setattr(Console, "print", mock_print)
 
-    # Call the function
-    result = _prompt_for_repository_selection(config=mock_config)
+    result, is_multi = unified_project_selection(
+        workspace_path=str(mock_workspace),
+        repo_options=["repo1", "repo2", "repo3"],
+    )
 
-    # Verify: Returns (None, None)
-    assert result == (None, None)
-
-    # Verify: Error message was shown
+    assert result is None
     error_messages = [msg for msg in console_output if "Empty selection not allowed" in msg]
     assert len(error_messages) > 0
 
 
-def test_valid_number_selection_succeeds(mock_workspace, mock_config, monkeypatch):
+def test_valid_number_selection_succeeds(mock_workspace, monkeypatch):
     """Test that selecting a valid number returns the correct repository path."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate selecting first repository
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "1")
 
-    # Call the function
-    result = _prompt_for_repository_selection(config=mock_config)
+    result, is_multi = unified_project_selection(
+        workspace_path=str(mock_workspace),
+        repo_options=["repo1", "repo2", "repo3"],
+    )
 
-    # Verify: Returns tuple with path to first repository
     assert result is not None
-    assert result[0] is not None
-    assert "repo1" in result[0] or "repo2" in result[0] or "repo3" in result[0]
+    assert len(result) == 1
+    assert "repo1" in result[0]
 
 
-def test_cancel_returns_none(mock_workspace, mock_config, monkeypatch):
+def test_cancel_returns_none(mock_workspace, monkeypatch):
     """Test that entering 'cancel' returns None."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate cancel
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "cancel")
 
-    # Call the function
-    result = _prompt_for_repository_selection(config=mock_config)
+    result, is_multi = unified_project_selection(
+        workspace_path=str(mock_workspace),
+        repo_options=["repo1", "repo2", "repo3"],
+    )
 
-    # Verify: Returns (None, None) (user cancelled)
-    assert result == (None, None)
+    assert result is None
 
 
-def test_valid_repo_name_succeeds(mock_workspace, mock_config, monkeypatch):
+def test_valid_repo_name_succeeds(mock_workspace, monkeypatch):
     """Test that entering a valid repository name returns the correct path."""
     from rich.prompt import Prompt, Confirm
 
-    # Mock Prompt.ask to simulate entering repository name
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "repo2")
-
-    # Mock Confirm.ask to always return True (use the path)
     monkeypatch.setattr(Confirm, "ask", lambda prompt, default=False: True)
 
-    # Call the function
-    result = _prompt_for_repository_selection(config=mock_config)
+    result, is_multi = unified_project_selection(
+        workspace_path=str(mock_workspace),
+        repo_options=["repo1", "repo2", "repo3"],
+    )
 
-    # Verify: Returns tuple with path to repo2
     assert result is not None
-    assert result[0] is not None
     assert "repo2" in result[0]
 
 
-def test_invalid_number_returns_none(mock_workspace, mock_config, monkeypatch):
+def test_invalid_number_returns_none(mock_workspace, monkeypatch):
     """Test that selecting an invalid number shows error and returns None."""
     from rich.prompt import Prompt
 
-    # Mock Prompt.ask to simulate invalid number (out of range)
     monkeypatch.setattr(Prompt, "ask", lambda prompt, **kwargs: "999")
 
-    # Mock console to capture output
     console_output = []
     original_print = Console.print
 
@@ -162,12 +130,11 @@ def test_invalid_number_returns_none(mock_workspace, mock_config, monkeypatch):
 
     monkeypatch.setattr(Console, "print", mock_print)
 
-    # Call the function
-    result = _prompt_for_repository_selection(config=mock_config)
+    result, is_multi = unified_project_selection(
+        workspace_path=str(mock_workspace),
+        repo_options=["repo1", "repo2", "repo3"],
+    )
 
-    # Verify: Returns (None, None)
-    assert result == (None, None)
-
-    # Verify: Error message was shown
+    assert result is None
     error_messages = [msg for msg in console_output if "Invalid selection" in msg]
     assert len(error_messages) > 0

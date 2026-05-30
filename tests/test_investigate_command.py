@@ -426,9 +426,13 @@ class TestMultiProjectInvestigation:
         project2.mkdir(exist_ok=True)
 
         # Mock the repository selection to return multiple projects
-        with patch("devflow.cli.utils.prompt_repository_selection_with_multiproject") as mock_prompt, \
+        with patch("devflow.cli.commands.investigate_command.unified_project_selection") as mock_select, \
+             patch("devflow.cli.commands.investigate_command.select_workspace") as mock_ws, \
+             patch("devflow.cli.commands.investigate_command.scan_workspace_repositories") as mock_scan, \
              patch("devflow.cli.commands.investigate_command.should_launch_claude_code") as mock_launch:
-            mock_prompt.return_value = ([str(project1), str(project2)], "default")
+            mock_ws.return_value = "default"
+            mock_scan.return_value = ["backend-api", "frontend-app"]
+            mock_select.return_value = ([str(project1), str(project2)], True)
             mock_launch.return_value = False  # Don't launch Claude in tests
 
             runner = CliRunner()
@@ -493,9 +497,13 @@ class TestMultiProjectInvestigation:
         project2.mkdir(exist_ok=True)
 
         # Mock the repository selection to return multiple projects
-        with patch("devflow.cli.utils.prompt_repository_selection_with_multiproject") as mock_prompt, \
+        with patch("devflow.cli.commands.investigate_command.unified_project_selection") as mock_select, \
+             patch("devflow.cli.commands.investigate_command.select_workspace") as mock_ws, \
+             patch("devflow.cli.commands.investigate_command.scan_workspace_repositories") as mock_scan, \
              patch("devflow.cli.commands.investigate_command.should_launch_claude_code") as mock_launch:
-            mock_prompt.return_value = ([str(project1), str(project2)], "default")
+            mock_ws.return_value = "default"
+            mock_scan.return_value = ["backend-api", "frontend-app"]
+            mock_select.return_value = ([str(project1), str(project2)], True)
             mock_launch.return_value = False  # Don't launch Claude in tests
 
             runner = CliRunner()
@@ -546,8 +554,12 @@ class TestMultiProjectInvestigation:
         project1.mkdir(exist_ok=True)
 
         # Mock the repository selection to return single project
-        with patch("devflow.cli.utils.prompt_repository_selection_with_multiproject") as mock_prompt:
-            mock_prompt.return_value = ([str(project1)], "default")
+        with patch("devflow.cli.commands.investigate_command.unified_project_selection") as mock_select, \
+             patch("devflow.cli.commands.investigate_command.select_workspace") as mock_ws, \
+             patch("devflow.cli.commands.investigate_command.scan_workspace_repositories") as mock_scan:
+            mock_ws.return_value = "default"
+            mock_scan.return_value = ["backend-api"]
+            mock_select.return_value = ([str(project1)], False)
 
             runner = CliRunner()
             result = runner.invoke(cli, [

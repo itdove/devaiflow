@@ -432,13 +432,16 @@ def test_new_command_w_flag_uses_correct_workspace(monkeypatch, tmp_path):
     monkeypatch.setattr(Prompt, 'ask', lambda *args, **kwargs: "1")
 
     # Test repository discovery with ai workspace
-    selected_path = _suggest_and_select_repository(
+    result = _suggest_and_select_repository(
         config_loader,
         workspace_name="ai"
     )
 
     # Verify the selected path is from ai workspace, not primary
-    assert selected_path is not None
+    assert result is not None
+    selected_paths, is_multi = result
+    assert selected_paths is not None
+    selected_path = selected_paths[0]
     assert "devaiflow" in selected_path or "ml-models" in selected_path
     assert str(ai_ws) in selected_path
     assert str(primary_ws) not in selected_path
