@@ -625,7 +625,18 @@
 | 16:21 | Edited tests/test_complete_command.py | modified mock_get_remote_aware_base_ref() | ~570 |
 | 16:22 | Edited tests/test_complete_command.py | modified mock_get_changed_files() | ~222 |
 
-## Session: 2026-05-30 16:26
+## Session: 2026-05-30 14:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 14:53 | Edited devflow/cli/commands/open_command.py | expanded (+11 lines) | ~254 |
+
+## Session: 2026-05-30 14:55
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-05-30 14:56
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
@@ -639,3 +650,9 @@
 | -- | Updated base branch assertions | tests/test_complete_base_branch.py | Assertions match origin/ prefix pattern | ~50 |
 | -- | Added 3 new tests | tests/test_complete_command.py | Merged remotely, new changes after merge, fetch order | ~300 |
 | -- | Full test suite | all | 3696 passed, 2 pre-existing failures | ~10 |
+
+## Session: 2026-05-30 14:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 2026-05-30 | Changed conversation selection default from "n" (new) to most recently active conversation number | devflow/cli/commands/open_command.py | 3609 tests pass | ~500 |

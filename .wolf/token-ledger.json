@@ -8,6 +8,9 @@
     "total_sessions": 85,
     "anatomy_hits": 69,
     "anatomy_misses": 30,
+    "total_sessions": 87,
+    "anatomy_hits": 67,
+    "anatomy_misses": 29,
     "repeated_reads_blocked": 58,
     "estimated_savings_vs_bare_cli": 1017524
   },

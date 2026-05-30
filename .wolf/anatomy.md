@@ -168,7 +168,7 @@
 - `new_command_multiproject.py` — Multi-project session creation logic for DevAIFlow (Issue #149). (~4292 tok)
 - `new_command.py` — Implementation of 'daf new' command. (~24904 tok)
 - `note_command.py` — Implementation of 'daf note' and 'daf notes' commands. (~1903 tok)
-- `open_command.py` — Implementation of 'daf open' command. (~48238 tok)
+- `open_command.py` — Implementation of 'daf open' command. (~48391 tok)
 - `pause_command.py` — Implementation of 'daf pause' command. (~619 tok)
 - `provider_commands.py` — Implementation of 'daf model' commands for managing model provider profiles. (~6464 tok)
 - `rebuild_index_command.py` — Implementation of 'daf rebuild-index' command. (~2992 tok)
