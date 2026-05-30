@@ -24,6 +24,7 @@ from devflow.issue_tracker.factory import create_issue_tracker_client
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError, IssueTrackerValidationError
 from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.manager import SessionManager
+from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
 
 console = Console()
@@ -3608,13 +3609,7 @@ Return ONLY the commit message."""
         )
 
         if result.returncode == 0:
-            commit_text = result.stdout.strip()
-            # Clean up any code fences
-            commit_text = commit_text.strip('`').strip()
-            if commit_text.startswith('```'):
-                lines = commit_text.split('\n')
-                commit_text = '\n'.join(line for line in lines if not line.strip().startswith('```'))
-                commit_text = commit_text.strip()
+            commit_text = strip_code_fences(result.stdout.strip())
             return commit_text
 
         return None
@@ -3676,13 +3671,7 @@ Return ONLY the commit message."""
         )
 
         if message.content and len(message.content) > 0:
-            commit_text = message.content[0].text.strip()
-            # Clean up any code fences
-            commit_text = commit_text.strip('`').strip()
-            if commit_text.startswith('```'):
-                lines = commit_text.split('\n')
-                commit_text = '\n'.join(line for line in lines if not line.strip().startswith('```'))
-                commit_text = commit_text.strip()
+            commit_text = strip_code_fences(message.content[0].text.strip())
             return commit_text
 
         return None
@@ -3774,15 +3763,7 @@ Return ONLY the commit message in this exact format, nothing else."""
         )
 
         if result.returncode == 0:
-            commit_text = result.stdout.strip()
-
-            # Clean up any code fences or extra formatting
-            commit_text = commit_text.strip('`').strip()
-            if commit_text.startswith('```'):
-                lines = commit_text.split('\n')
-                commit_text = '\n'.join(line for line in lines if not line.strip().startswith('```'))
-                commit_text = commit_text.strip()
-
+            commit_text = strip_code_fences(result.stdout.strip())
             console.print(f"[dim]Generated commit message using Claude CLI[/dim]")
             return commit_text
 
@@ -3890,17 +3871,7 @@ Return ONLY the commit message in this exact format, nothing else."""
             }]
         )
 
-        # Extract the commit message
-        commit_text = message.content[0].text.strip()
-
-        # Clean up any code fences or extra formatting
-        commit_text = commit_text.strip('`').strip()
-        if commit_text.startswith('```'):
-            # Remove code fence markers
-            lines = commit_text.split('\n')
-            commit_text = '\n'.join(line for line in lines if not line.strip().startswith('```'))
-            commit_text = commit_text.strip()
-
+        commit_text = strip_code_fences(message.content[0].text.strip())
         return commit_text
 
     except Exception as e:
@@ -4089,22 +4060,6 @@ def _update_issue_pr_field_by_key(issue_key: str, config, pr_url: str) -> None:
 
 
 def _cleanup_temp_directory(temp_dir: Optional[str]) -> None:
-    """Clean up a temporary directory.
-
-    Args:
-        temp_dir: Path to temporary directory (can be None)
-    """
-    import shutil
-    from pathlib import Path
-
-    if not temp_dir:
-        return
-
-    try:
-        if Path(temp_dir).exists():
-            console.print(f"[dim]Cleaning up temporary directory: {temp_dir}[/dim]")
-            shutil.rmtree(temp_dir)
-            console.print(f"[green]✓[/green] Temporary directory removed")
-    except Exception as e:
-        console.print(f"[yellow]⚠[/yellow] Could not remove temporary directory: {e}")
-        console.print(f"[dim]You may need to manually delete: {temp_dir}[/dim]")
+    """Clean up a temporary directory."""
+    from devflow.utils.temp_directory import cleanup_temp_directory
+    cleanup_temp_directory(temp_dir)

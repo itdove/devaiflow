@@ -6,6 +6,7 @@ from typing import Optional
 
 from rich.console import Console
 from devflow.config.loader import ConfigLoader
+from devflow.utils import strip_code_fences
 
 console = Console()
 
@@ -36,55 +37,54 @@ def fill_pr_template_with_ai(
     Returns:
         Filled template ready for PR/MR creation
     """
-    try:
-        # Build comprehensive context for AI
-        context_parts = []
+    # Build comprehensive context for AI
+    context_parts = []
 
-        # Load JIRA URL from config
-        config_loader = ConfigLoader()
-        config = config_loader.load_config() if config_loader.config_file.exists() else None
-        jira_url = config.jira.url if config and config.jira else None
+    # Load JIRA URL from config
+    config_loader = ConfigLoader()
+    config = config_loader.load_config() if config_loader.config_file.exists() else None
+    jira_url = config.jira.url if config and config.jira else None
 
-        # Detect issue tracker backend
-        issue_tracker = getattr(session, 'issue_tracker', None) or "jira"
+    # Detect issue tracker backend
+    issue_tracker = getattr(session, 'issue_tracker', None) or "jira"
 
-        # Session context — build issue URL based on backend
-        if session.issue_key:
-            if issue_tracker == "github":
-                context_parts.append(f"GitHub Issue: {session.issue_key}")
-            elif issue_tracker == "gitlab":
-                context_parts.append(f"GitLab Issue: {session.issue_key}")
-            else:
-                context_parts.append(f"JIRA Issue: {session.issue_key}")
-                if jira_url:
-                    jira_base = jira_url.rstrip('/')
-                    context_parts.append(f"JIRA URL: {jira_base}/browse/{session.issue_key}")
+    # Session context — build issue URL based on backend
+    if session.issue_key:
+        if issue_tracker == "github":
+            context_parts.append(f"GitHub Issue: {session.issue_key}")
+        elif issue_tracker == "gitlab":
+            context_parts.append(f"GitLab Issue: {session.issue_key}")
+        else:
+            context_parts.append(f"JIRA Issue: {session.issue_key}")
+            if jira_url:
+                jira_base = jira_url.rstrip('/')
+                context_parts.append(f"JIRA URL: {jira_base}/browse/{session.issue_key}")
 
-        context_parts.append(f"Session Goal: {session.goal}")
+    context_parts.append(f"Session Goal: {session.goal}")
 
-        # Get branch from active conversation 
-        active_conv = session.active_conversation
-        if active_conv and active_conv.branch:
-            context_parts.append(f"Branch: {active_conv.branch}")
+    # Get branch from active conversation
+    active_conv = session.active_conversation
+    if active_conv and active_conv.branch:
+        context_parts.append(f"Branch: {active_conv.branch}")
 
-        # Git context
-        if git_context.get('commit_log'):
-            context_parts.append(f"\nCommit History:\n{git_context['commit_log']}")
+    # Git context
+    if git_context.get('commit_log'):
+        context_parts.append(f"\nCommit History:\n{git_context['commit_log']}")
 
-        if git_context.get('changed_files'):
-            files_str = "\n".join(git_context['changed_files'][:30])
-            total_files = len(git_context['changed_files'])
-            context_parts.append(f"\nFiles Changed ({total_files}):\n{files_str}")
-            if total_files > 30:
-                context_parts.append(f"... and {total_files - 30} more files")
+    if git_context.get('changed_files'):
+        files_str = "\n".join(git_context['changed_files'][:30])
+        total_files = len(git_context['changed_files'])
+        context_parts.append(f"\nFiles Changed ({total_files}):\n{files_str}")
+        if total_files > 30:
+            context_parts.append(f"... and {total_files - 30} more files")
 
-        if git_context.get('base_branch'):
-            context_parts.append(f"\nBase Branch: {git_context['base_branch']}")
+    if git_context.get('base_branch'):
+        context_parts.append(f"\nBase Branch: {git_context['base_branch']}")
 
-        context = "\n".join(context_parts)
+    context = "\n".join(context_parts)
 
-        # Build prompt for AI
-        prompt = f"""You are helping to create a pull request. You have been given a PR template and context about the changes.
+    # Build prompt for AI
+    prompt = f"""You are helping to create a pull request. You have been given a PR template and context about the changes.
 
 Your task is to fill in the template by:
 1. Reading the template carefully to understand what each section asks for
@@ -117,6 +117,7 @@ Your task is to fill in the template by:
 
 Generate the filled PR/MR description now:"""
 
+    try:
         # Try Claude CLI first (faster, better)
         result = subprocess.run(
             ["claude", "-p"],
@@ -127,43 +128,31 @@ Generate the filled PR/MR description now:"""
         )
 
         if result.returncode == 0:
-            filled_template = result.stdout.strip()
-
-            # Clean up any code fences if AI added them
-            if filled_template.startswith('```'):
-                lines = filled_template.split('\n')
-                # Remove first and last line if they're code fences
-                if lines[0].strip().startswith('```'):
-                    lines = lines[1:]
-                if lines and lines[-1].strip().startswith('```'):
-                    lines = lines[:-1]
-                filled_template = '\n'.join(lines).strip()
-
+            filled_template = strip_code_fences(result.stdout.strip())
             console.print("[dim]✓ Template filled using AI (Claude CLI)[/dim]")
             return filled_template
 
         # Fallback to Anthropic API if Claude CLI not available
         console.print("[dim]Claude CLI not available, trying Anthropic API...[/dim]")
-        return _fill_template_with_api(template_content, context)
+        return _fill_template_with_api(prompt)
 
     except FileNotFoundError:
         # Claude CLI not installed, try API
         console.print("[dim]Claude CLI not found, trying Anthropic API...[/dim]")
-        return _fill_template_with_api(template_content, context)
+        return _fill_template_with_api(prompt)
     except subprocess.TimeoutExpired:
         console.print("[yellow]⚠[/yellow] AI template filling timed out, using fallback")
-        return _fill_template_fallback(template_content, session, git_context)
+        return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url)
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] AI template filling failed: {e}")
-        return _fill_template_fallback(template_content, session, git_context)
+        return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url)
 
 
-def _fill_template_with_api(template_content: str, context: str) -> str:
+def _fill_template_with_api(prompt: str) -> str:
     """Fill template using Anthropic API as fallback.
 
     Args:
-        template_content: Raw template content
-        context: Formatted context string
+        prompt: Pre-built prompt string
 
     Returns:
         Filled template or raises exception
@@ -178,39 +167,6 @@ def _fill_template_with_api(template_content: str, context: str) -> str:
 
         client = anthropic.Anthropic(api_key=api_key)
 
-        prompt = f"""You are helping to create a pull request. You have been given a PR template and context about the changes.
-
-Your task is to fill in the template by:
-1. Reading the template carefully to understand what each section asks for
-2. Using the provided context (commits, files changed, JIRA info, session goal) to populate each section
-3. Preserving the template structure and markdown formatting
-4. Replacing placeholder comments and example text with actual content
-5. Being specific and technical in your descriptions
-
-**PR Template:**
-```
-{template_content}
-```
-
-**Context about the changes:**
-```
-{context}
-```
-
-**Instructions:**
-- Read each section's HTML comments (<!-- ... -->) to understand what information is needed
-- Replace placeholder patterns like "PROJ-NNNN", "JIRA-KEY", etc. with actual values
-- Fill in the Description/Summary section based on commits and changes
-- For "Assisted-by" fields, use: Claude
-- For "Steps to test" sections, generate specific testing steps based on the changes
-- For "Deployment considerations", analyze if changes need special deployment handling
-- Preserve all markdown formatting (headers, lists, checkboxes, etc.)
-- Remove or replace instructional comments with actual content
-- Do NOT add any extra sections or content not in the template
-- Return ONLY the filled template, nothing else
-
-Generate the filled PR/MR description now:"""
-
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=2000,
@@ -223,14 +179,7 @@ Generate the filled PR/MR description now:"""
         if message.content and len(message.content) > 0:
             filled_template = message.content[0].text.strip()
 
-            # Clean up code fences if present
-            if filled_template.startswith('```'):
-                lines = filled_template.split('\n')
-                if lines[0].strip().startswith('```'):
-                    lines = lines[1:]
-                if lines and lines[-1].strip().startswith('```'):
-                    lines = lines[:-1]
-                filled_template = '\n'.join(lines).strip()
+            filled_template = strip_code_fences(filled_template)
 
             console.print("[dim]✓ Template filled using AI (Anthropic API)[/dim]")
             return filled_template
@@ -241,7 +190,7 @@ Generate the filled PR/MR description now:"""
         raise RuntimeError(f"API template filling failed: {e}")
 
 
-def _fill_template_fallback(template_content: str, session, git_context: dict) -> str:
+def _fill_template_fallback(template_content: str, session, git_context: dict, jira_url: Optional[str] = None) -> str:
     """Fallback template filling when AI is not available.
 
     Uses pattern matching to fill common PR template placeholders.
@@ -251,6 +200,7 @@ def _fill_template_fallback(template_content: str, session, git_context: dict) -
         template_content: Raw template content
         session: Session object
         git_context: Git context dictionary
+        jira_url: JIRA base URL (avoids reloading config)
 
     Returns:
         Filled template with substitutions applied
@@ -259,10 +209,10 @@ def _fill_template_fallback(template_content: str, session, git_context: dict) -
 
     console.print("[dim]Using fallback template filling (no AI)[/dim]")
 
-    # Load config for issue tracker URL
-    config_loader = ConfigLoader()
-    config = config_loader.load_config() if config_loader.config_file.exists() else None
-    jira_url = config.jira.url if config and config.jira else None
+    if jira_url is None:
+        config_loader = ConfigLoader()
+        config = config_loader.load_config() if config_loader.config_file.exists() else None
+        jira_url = config.jira.url if config and config.jira else None
 
     # Detect issue tracker backend
     issue_tracker = getattr(session, 'issue_tracker', None) or "jira"
@@ -271,10 +221,10 @@ def _fill_template_fallback(template_content: str, session, git_context: dict) -
 
     # Replace issue tracker placeholders
     if session.issue_key:
-        # Replace JIRA-style placeholders (e.g., PROJ-NNNN, JIRA-KEY, ISSUE-123)
+        # Replace JIRA-style placeholders (e.g., PROJ-NNNN, JIRA-123, ISSUE-456)
         filled = re.sub(
-            r'(?:PROJ|JIRA|ISSUE)-(?:NNNN|\w+)',
-            session.issue_key,
+            r'(?:PROJ|JIRA|ISSUE)-(?:NNNN|\d+)',
+            session.issue_key.replace('\\', '\\\\'),
             filled,
             flags=re.IGNORECASE
         )
@@ -303,9 +253,10 @@ def _fill_template_fallback(template_content: str, session, git_context: dict) -
 
     # Fill in description section
     description_pattern = r'(## Description\s*\n)(?:<!--.*?-->\s*\n)?'
+    goal_text = session.goal
     filled = re.sub(
         description_pattern,
-        f'\\1{session.goal}\n\n',
+        lambda m: m.group(1) + goal_text + '\n\n',
         filled,
         flags=re.DOTALL
     )

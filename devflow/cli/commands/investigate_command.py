@@ -1,6 +1,7 @@
 """Command for daf investigate - create investigation-only session without ticket creation."""
 
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -136,8 +137,9 @@ def create_investigation_from_issue(
 
     # Auto-generate session name from issue key if not provided
     if not name:
-        # Normalize issue key for session name (replace # with issue-)
-        name = f"investigate-{issue_key.replace('#', 'issue-')}"
+        sanitized_key = issue_key.replace('#', 'issue-')
+        sanitized_key = re.sub(r'[^a-zA-Z0-9_\-]', '-', sanitized_key)
+        name = f"investigate-{sanitized_key}"
         console_print(f"[dim]Auto-generated session name: {name}[/dim]")
 
     # Create investigation session with fetched details
