@@ -388,8 +388,8 @@ def test_generate_initial_prompt_ticket_creation_no_unit_tests_even_if_enabled(t
     # Verify analysis-only constraints ARE included
     assert "ANALYSIS-ONLY" in prompt
 
-    # Should still include defaults
-    assert "AGENTS.md (agent-specific instructions)" in prompt
+    # AGENTS.md/CLAUDE.md no longer in prompt (auto-read by Claude Code)
+    assert "AGENTS.md (agent-specific instructions)" not in prompt
 
 
 @pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")

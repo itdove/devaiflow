@@ -70,8 +70,9 @@ def test_multiproject_without_project_paths_falls_back():
         project_paths=None,  # No project paths provided
     )
 
-    # Should still have workspace-level files
-    assert "AGENTS.md (agent-specific instructions)" in prompt
+    # AGENTS.md/CLAUDE.md no longer in prompt (auto-read by Claude Code)
+    # Just verify prompt was generated without error
+    assert prompt is not None
 
     # Should not crash or include project-level section
     assert "Also read project-level context files for each project:" not in prompt

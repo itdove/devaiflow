@@ -216,6 +216,49 @@ def test_discover_skills_all_locations(temp_daf_home, tmp_path):
     assert "Project skill" in descriptions
 
 
+def test_discover_skills_include_levels_filter(temp_daf_home, tmp_path):
+    """Test that include_levels filters out unwanted levels."""
+    # Create user skill
+    user_skills_dir = Path.home() / ".claude" / "skills"
+    user_skills_dir.mkdir(parents=True, exist_ok=True)
+    user_skill_dir = user_skills_dir / "user-only-skill"
+    user_skill_dir.mkdir(exist_ok=True)
+    (user_skill_dir / "SKILL.md").write_text("---\ndescription: User only\n---\n")
+
+    # Create project skill
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    project_skills_dir = project_dir / ".claude" / "skills"
+    project_skills_dir.mkdir(parents=True)
+    proj_skill_dir = project_skills_dir / "proj-only-skill"
+    proj_skill_dir.mkdir()
+    (proj_skill_dir / "SKILL.md").write_text("---\ndescription: Project only\n---\n")
+
+    # With include_levels={"hierarchical", "project"}, user skills should be excluded
+    result = discover_skills(
+        project_path=str(project_dir),
+        include_levels={"hierarchical", "project"},
+    )
+    descriptions = [r[1] for r in result]
+    assert "User only" not in descriptions
+    assert "Project only" in descriptions
+
+    # With include_levels={"user"}, project skills should be excluded
+    result = discover_skills(
+        project_path=str(project_dir),
+        include_levels={"user"},
+    )
+    descriptions = [r[1] for r in result]
+    assert "User only" in descriptions
+    assert "Project only" not in descriptions
+
+    # With include_levels=None (default), both should be included
+    result = discover_skills(project_path=str(project_dir))
+    descriptions = [r[1] for r in result]
+    assert "User only" in descriptions
+    assert "Project only" in descriptions
+
+
 def test_discover_skills_malformed_frontmatter(temp_daf_home, tmp_path):
     """Test handling of malformed YAML frontmatter."""
     user_skills_dir = Path.home() / ".claude" / "skills"

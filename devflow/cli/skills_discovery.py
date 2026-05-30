@@ -6,7 +6,11 @@ from typing import Optional
 from devflow.utils.paths import get_claude_config_dir
 
 
-def discover_skills(project_path: Optional[str] = None, workspace: Optional[str] = None) -> list[tuple[str, str]]:
+def discover_skills(
+    project_path: Optional[str] = None,
+    workspace: Optional[str] = None,
+    include_levels: Optional[set] = None,
+) -> list[tuple[str, str]]:
     """Discover all skills from user-level, workspace-level, hierarchical (DEVAIFLOW_HOME), and project-level locations.
 
     Discovery order (guarantees load order - generic skills before organization-specific extensions):
@@ -21,6 +25,8 @@ def discover_skills(project_path: Optional[str] = None, workspace: Optional[str]
     Args:
         project_path: Project directory path (for project-level skills)
         workspace: Workspace directory path (for workspace-level skills)
+        include_levels: Optional set of levels to include. Valid values: "user", "workspace",
+            "hierarchical", "project". None means all levels (default, backward compatible).
 
     Returns:
         List of tuples (skill_path, description) for all discovered skills in load order
@@ -50,17 +56,18 @@ def discover_skills(project_path: Optional[str] = None, workspace: Optional[str]
         return (str(skill_file.resolve()), description)
 
     # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/) - generic skills like daf-cli, git-cli
-    user_skills_dir = get_claude_config_dir() / "skills"
-    if user_skills_dir.exists():
-        for skill_dir in sorted(user_skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                result = _scan_skill_dir(skill_file, skill_dir.name)
-                if result:
-                    discovered_skills.append(result)
+    if include_levels is None or "user" in include_levels:
+        user_skills_dir = get_claude_config_dir() / "skills"
+        if user_skills_dir.exists():
+            for skill_dir in sorted(user_skills_dir.iterdir()):
+                if skill_dir.is_dir():
+                    skill_file = skill_dir / "SKILL.md"
+                    result = _scan_skill_dir(skill_file, skill_dir.name)
+                    if result:
+                        discovered_skills.append(result)
 
     # 2. Workspace-level skills: <workspace>/.claude/skills/ (generic tool skills)
-    if workspace:
+    if (include_levels is None or "workspace" in include_levels) and workspace:
         from devflow.utils.claude_commands import get_workspace_skills_dir
         workspace_skills_dir = get_workspace_skills_dir(workspace)
         if workspace_skills_dir.exists():
@@ -73,20 +80,21 @@ def discover_skills(project_path: Optional[str] = None, workspace: Optional[str]
 
     # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (organization-specific skills that extend generic ones)
     # These are numbered (01-enterprise, 02-organization, 03-team, 04-user) to guarantee order
-    from devflow.utils.paths import get_cs_home
-    cs_home = get_cs_home()
-    hierarchical_skills_dir = cs_home / ".claude" / "skills"
-    if hierarchical_skills_dir.exists():
-        # Sort to ensure numbered order (01-, 02-, 03-, 04-)
-        for skill_dir in sorted(hierarchical_skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                result = _scan_skill_dir(skill_file, skill_dir.name)
-                if result:
-                    discovered_skills.append(result)
+    if include_levels is None or "hierarchical" in include_levels:
+        from devflow.utils.paths import get_cs_home
+        cs_home = get_cs_home()
+        hierarchical_skills_dir = cs_home / ".claude" / "skills"
+        if hierarchical_skills_dir.exists():
+            # Sort to ensure numbered order (01-, 02-, 03-, 04-)
+            for skill_dir in sorted(hierarchical_skills_dir.iterdir()):
+                if skill_dir.is_dir():
+                    skill_file = skill_dir / "SKILL.md"
+                    result = _scan_skill_dir(skill_file, skill_dir.name)
+                    if result:
+                        discovered_skills.append(result)
 
     # 4. Project-level skills: <project>/.claude/skills/
-    if project_path:
+    if (include_levels is None or "project" in include_levels) and project_path:
         project_skills_dir = Path(project_path) / ".claude" / "skills"
         if project_skills_dir.exists():
             for skill_dir in sorted(project_skills_dir.iterdir()):

@@ -80,12 +80,15 @@ def _generate_initial_prompt(
 
     The prompt includes:
     - A clear goal statement (if goal/JIRA provided)
-    - Instructions to read AGENTS.md and CLAUDE.md (always included)
-    - Note: daf-workflow skill is auto-loaded by Claude Code
-    - Instructions to read configured context files (from config, including hidden skills)
-    - issue tracker ticket reading instruction using daf jira view (if issue_key is provided)
+    - Hierarchical context files (ENTERPRISE.md, ORGANIZATION.md, etc.)
+    - Configured context files from config
+    - Hierarchical + project-level skill loading instructions
+    - Issue tracker ticket reading instruction (if issue_key is provided)
     - Analysis-only constraints (if session_type is "ticket_creation")
     - Multi-project scope constraints (if other_projects is provided)
+
+    Note: AGENTS.md, CLAUDE.md, and user-level skills are NOT included in the prompt
+    because Claude Code auto-reads them from the project cwd and via --add-dir.
 
     Args:
         name: Session group name
@@ -102,31 +105,6 @@ def _generate_initial_prompt(
 
     Returns:
         Formatted initial prompt for Claude Code
-
-    Examples:
-        Without goal or JIRA (exploratory session):
-            "Please start by reading the following context files if they exist:
-            - AGENTS.md (agent-specific instructions)
-            - CLAUDE.md (project guidelines and standards)
-            - (daf-workflow skill auto-loaded)"
-
-        With goal only:
-            "Work on: backup-feature
-
-            Please start by reading the following context files if they exist:
-            - AGENTS.md (agent-specific instructions)
-            - CLAUDE.md (project guidelines and standards)
-            - (daf-workflow skill auto-loaded)"
-
-        With JIRA and title:
-            "Work on: Implement customer backup and restore
-
-            Please start by reading the following context files if they exist:
-            - AGENTS.md (agent-specific instructions)
-            - CLAUDE.md (project guidelines and standards)
-
-            Also read the issue tracker ticket:
-            daf jira view PROJ-52470"
     """
     prompt = ""
 
@@ -145,49 +123,31 @@ def _generate_initial_prompt(
     if goal_line:
         prompt = f"Work on: {goal_line}\n\n"
 
-    # Build list of all context files (defaults + configured)
-    # Default context files (always included)
-    # Note: DAF_AGENTS.md replaced by daf-workflow skill (auto-loaded)
-    default_files = [
-        ("AGENTS.md", "agent-specific instructions"),
-        ("CLAUDE.md", "project guidelines and standards"),
-    ]
-
     # Load configured context files from config (non-skill files only)
     config_loader = ConfigLoader()
     config = config_loader.load_config()
     configured_files = []
     if config and config.context_files:
-        # Only include non-skill context files from config (hidden=false)
-        # Skills will be discovered from filesystem instead
         configured_files = [(f.path, f.description) for f in config.context_files.files if not f.hidden]
 
     # Load hierarchical context files (only those that exist)
     hierarchical_files = load_hierarchical_context_files(config)
 
-    # Discover skills from filesystem (instead of loading from config)
-    # This ensures we only reference skills that actually exist on disk
-    skill_files = discover_skills(project_path=project_path, workspace=workspace)
+    # Discover only hierarchical + project-level skills for prompt
+    # User-level and workspace-level skills are already auto-discovered by Claude Code via --add-dir
+    skill_files = discover_skills(
+        project_path=project_path, workspace=workspace,
+        include_levels={"hierarchical", "project"},
+    )
 
-    # Combine regular context files: defaults + hierarchical + configured (no skills from config)
-    regular_files = default_files + hierarchical_files + configured_files
+    # Combine context files: hierarchical + configured (AGENTS.md/CLAUDE.md auto-read by Claude Code)
+    regular_files = hierarchical_files + configured_files
 
     # Add context loading instructions
-    prompt += "Please start by reading the following context files if they exist:\n"
-    for path, description in regular_files:
-        prompt += f"- {path} ({description})\n"
-
-    # For multi-project sessions, also read project-level default files
-    if is_multi_project and project_paths:
-        from pathlib import Path
-        prompt += "\nAlso read project-level context files for each project:\n"
-        for repo_name in sorted(project_paths.keys()):
-            proj_path = project_paths[repo_name]
-            # Get project directory name relative to workspace
-            proj_dir = Path(proj_path).name if workspace else repo_name
-            prompt += f"\n{repo_name}:\n"
-            for filename, description in default_files:
-                prompt += f"- {proj_dir}/{filename} ({description})\n"
+    if regular_files:
+        prompt += "Please start by reading the following context files if they exist:\n"
+        for path, description in regular_files:
+            prompt += f"- {path} ({description})\n"
 
     # Add explicit skill loading section if skills are present
     if skill_files:
