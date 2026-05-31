@@ -764,3 +764,23 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-05-31 12:54
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-05-31 12:55
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-05-31 12:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:58 | Created .release-config.json | — | ~97 |
+| 13:00 | Edited pyproject.toml | "2.2.0-dev" → "2.2.0" | ~5 |
+| 13:00 | Edited devflow/__init__.py | "2.2.0-dev" → "2.2.0" | ~6 |
+| 13:01 | Edited CHANGELOG.md | expanded (+33 lines) | ~655 |
+| 13:01 | Edited CHANGELOG.md | 2→3 lines | ~56 |

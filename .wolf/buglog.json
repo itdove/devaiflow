@@ -452,6 +452,38 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-30T22:11:44.088Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-05-31T17:00:27.150Z",
+      "error_message": "Incorrect value in code",
+      "file": "pyproject.toml",
+      "root_cause": "Had \"2.2.0-dev\"",
+      "fix": "Changed to \"2.2.0\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "toml"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-31T17:00:27.150Z"
+    },
+    {
+      "id": "bug-030",
+      "timestamp": "2026-05-31T17:00:30.505Z",
+      "error_message": "Incorrect value in code",
+      "file": "devflow/__init__.py",
+      "root_cause": "Had \"2.2.0-dev\"",
+      "fix": "Changed to \"2.2.0\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-31T17:00:30.505Z"
     }
   ]
 }

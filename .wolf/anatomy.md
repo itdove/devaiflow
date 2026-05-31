@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-31T14:40:06.660Z
-> Files: 527 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-31T17:01:13.070Z
+> Files: 528 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../.claude/plans/
 
@@ -14,15 +14,16 @@
 
 - `.coverage` (~14200 tok)
 - `.gitignore` — Git ignore rules (~185 tok)
+- `.release-config.json` (~97 tok)
 - `AGENTS.md` — Agent Instructions for DevAIFlow (~21442 tok)
-- `CHANGELOG.md` — Change log (~4649 tok)
+- `CHANGELOG.md` — Changelog (~5108 tok)
 - `CLAUDE.md` — OpenWolf (~139 tok)
 - `config.schema.json` (~9891 tok)
 - `CONTRIBUTING.md` — Contributing to DevAIFlow (~2695 tok)
 - `coverage.json` (~12790 tok)
 - `demo_branch_selection.sh` — Demo script showing the new branch source selection feature (~846 tok)
 - `LICENSE` — Project license (~3029 tok)
-- `pyproject.toml` — Python project configuration (~702 tok)
+- `pyproject.toml` — DevAIFlow - Manage AI coding assistant sessions with optional issue tracker integration (~654 tok)
 - `QUICKREF.md` — DevAIFlow Quick Reference (~1384 tok)
 - `README.md` — Project documentation (~6603 tok)
 - `RELEASING.md` — Release Management Process (~3825 tok)
@@ -88,7 +89,7 @@
 
 ## devflow/
 
-- `__init__.py` — DevAIFlow - AI-Powered Development Workflow Manager with JIRA integration. (~31 tok)
+- `__init__.py` — DevAIFlow - AI-Powered Development Workflow Manager with JIRA integration. (~30 tok)
 - `exceptions.py` — Custom exceptions for daf tool. (~300 tok)
 
 ## devflow/agent/
