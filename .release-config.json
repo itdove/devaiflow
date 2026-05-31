@@ -1,0 +1,15 @@
+{
+  "version_files": [
+    {
+      "path": "pyproject.toml",
+      "pattern": "version = \"{version}\"",
+      "description": "Python project metadata"
+    },
+    {
+      "path": "devflow/__init__.py",
+      "pattern": "__version__ = \"{version}\"",
+      "description": "Python package version"
+    }
+  ],
+  "changelog": "CHANGELOG.md"
+}

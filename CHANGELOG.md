@@ -7,14 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-05-31
+
+### Added
+- **Fork-based workflow and release automation skill** (#369, #371)
+  - Release skill for automated version management, CHANGELOG updates, and git operations
+  - Fork-based contribution workflow with authorization controls
+  - Support for major, minor, patch, hotfix, and test releases
+- **TestPyPI workflow for release testing** (#368)
+  - GitHub Actions workflow for publishing test releases to TestPyPI
+  - Updated release documentation with test release procedures
+- **CODEOWNERS and tag monitoring** (#370)
+  - CODEOWNERS file for automated review assignments
+  - Tag monitoring workflow for release tracking
+- **Default conversation selection to most recently active** (#379)
+  - When multiple conversations exist, automatically selects the most recent one
+  - Improves UX by reducing manual conversation selection
+- **Comprehensive test coverage for investigate command** (#366)
+
+### Changed
+- **Unified project selection UX across daf commands** (#378)
+  - Consistent project selection behavior across all commands
+- **Optimized initial prompt by removing redundant skill file reading** (#381, #382)
+  - Faster session startup by eliminating duplicate skill loading
+- **Simplified and hardened code since v2.1.0 release** (#377)
+- **Restructured temp directory utilities** (#375)
+  - Fixed open command references
+- **Replaced instance-specific JIRA field IDs with generic placeholders in docs** (#373)
+- **Added pyproject.toml support for version management** (#360, #365)
+
 ### Fixed
-- **Field discovery now fetches all issue types** (itdove/devaiflow#361)
+- **Field discovery now fetches all issue types** (#361, #362)
   - JIRA field discovery previously only fetched metadata for 4 hardcoded issue types (Bug, Story, Task, Epic)
   - Now fetches metadata for ALL issue types available in the project (Spike, Sub-task, Improvement, Enhancement, custom types)
   - Eliminates validation failures when creating issues with non-standard types
   - Removes need for manual `backend_overrides` workarounds in `enterprise.json`
   - Minimal performance impact: adds 2-6 API calls for typical JIRA projects
   - Field mappings now have complete `available_for` lists including all issue types
+- **Skip PR creation when branch has no diff from remote base** (#380)
+- **Git branch matching logic updated** (#394)
+  - Fixed branch name matching for more reliable branch detection
+- **PR template now properly filled when creating PRs on daf exit** (#376)
 
 ## [2.1.0] - 2026-04-02
 
@@ -315,7 +348,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JIRA auto-transition for analysis-only sessions
 - Project path encoding for conversation files
 
-[unreleased]: https://github.com/itdove/devaiflow/compare/v2.1.0...HEAD
+[unreleased]: https://github.com/itdove/devaiflow/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/itdove/devaiflow/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/itdove/devaiflow/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/itdove/devaiflow/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/itdove/devaiflow/tags/v1.0.0
