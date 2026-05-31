@@ -420,6 +420,38 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-30T20:20:02.911Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-05-30T21:46:05.239Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/new_command.py",
+      "root_cause": "25 lines replaced/restructured",
+      "fix": "Rewrote 50→32 lines (25 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T21:46:05.239Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-05-30T22:11:44.088Z",
+      "error_message": "Significant refactor of ",
+      "file": "devflow/cli/commands/new_command.py",
+      "root_cause": "23 lines replaced/restructured",
+      "fix": "Rewrote 52→30 lines (23 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-30T22:11:44.088Z"
     }
   ]
 }

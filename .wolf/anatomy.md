@@ -1,12 +1,13 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T21:13:17.789Z
-> Files: 522 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T22:11:44.072Z
+> Files: 526 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../.claude/plans/
 
 - `atomic-exploring-rose.md` — Fix: Skip PR creation when branch has no diff from remote base (PR already merged) (~713 tok)
 - `giggly-strolling-balloon.md` — Unify Project Selection UX Across daf Commands (~1254 tok)
+- `optimized-doodling-conway.md` — Plan: Remove redundant skill file reading from initial prompt (~737 tok)
 - `sparkling-munching-hennessy.md` — Fix PR Template Not Being Filled During `daf complete` (~766 tok)
 
 ## ./
@@ -121,7 +122,7 @@
 - `completion.py` — Shell completion support for DevAIFlow. (~1235 tok)
 - `main.py` — Main CLI entry point for DevAIFlow. (~47322 tok)
 - `signal_handler.py` — Unified signal handler for CLI commands that launch Claude sessions. (~2578 tok)
-- `skills_discovery.py` — Utility for discovering skills from all hierarchical locations. (~1331 tok)
+- `skills_discovery.py` — Utility for discovering skills from all hierarchical locations. (~1492 tok)
 - `utils.py` — Common utility functions for CLI commands. (~18055 tok)
 
 ## devflow/cli/commands/
@@ -146,19 +147,19 @@
 - `git_check_auth_command.py` — Implementation of 'daf git check-auth' command. (~1411 tok)
 - `git_commands.py` — Git-based issue tracker CLI command group for DevAIFlow. (~164 tok)
 - `git_create_command.py` — Implementation of 'daf git create' command. (~5406 tok)
-- `git_new_command.py` — Command for daf git new - create GitHub/GitLab issue with session-type for ticket creation workflow. (~13567 tok)
+- `git_new_command.py` — Command for daf git new - create GitHub/GitLab issue with session-type for ticket creation workflow. (~13572 tok)
 - `git_open_command.py` — Command for daf git open - open or create session from GitHub/GitLab issue. (~2094 tok)
 - `git_update_command.py` — Implementation of 'daf git update' command. (~2244 tok)
 - `git_view_command.py` — Implementation of 'daf git view' command. (~2215 tok)
 - `import_command.py` — Implementation of 'daf import' command. (~3262 tok)
 - `import_session_command.py` — Implementation of 'daf import-session' command. (~2195 tok)
 - `info_command.py` — Implementation of 'daf info' command. (~6561 tok)
-- `investigate_command.py` — Command for daf investigate - create investigation-only session without ticket creation. (~12701 tok)
+- `investigate_command.py` — Command for daf investigate - create investigation-only session without ticket creation. (~12705 tok)
 - `jira_add_comment_command.py` — Implementation of 'daf jira add-comment' command. (~1756 tok)
 - `jira_create_commands.py` — Implementation of 'daf jira create' command. (~18107 tok)
 - `jira_create_dynamic.py` — Dynamic command builder for daf jira create with field discovery. (~3074 tok)
 - `jira_field_utils.py` — Common utilities for JIRA field processing in dynamic commands. (~1410 tok)
-- `jira_new_command.py` — Command for daf jira new - create issue tracker ticket with session-type for ticket creation workflo (~13783 tok)
+- `jira_new_command.py` — Command for daf jira new - create issue tracker ticket with session-type for ticket creation workflo (~13686 tok)
 - `jira_open_command.py` — Command for daf jira open - open or create session from issue tracker ticket. (~2270 tok)
 - `jira_update_command.py` — Implementation of 'daf jira update' command. (~7088 tok)
 - `jira_update_dynamic.py` — Dynamic command builder for daf jira update with field discovery. (~1988 tok)
@@ -166,7 +167,7 @@
 - `link_command.py` — Implementation of 'daf link' command. (~2314 tok)
 - `list_command.py` — Implementation of 'daf list' command. (~4987 tok)
 - `new_command_multiproject.py` — Multi-project session creation logic for DevAIFlow (Issue #149). (~4292 tok)
-- `new_command.py` — Implementation of 'daf new' command. (~24904 tok)
+- `new_command.py` — Implementation of 'daf new' command. (~24373 tok)
 - `note_command.py` — Implementation of 'daf note' and 'daf notes' commands. (~1903 tok)
 - `open_command.py` — Implementation of 'daf open' command. (~48391 tok)
 - `pause_command.py` — Implementation of 'daf pause' command. (~619 tok)
@@ -726,14 +727,17 @@
 - `test_git_new_multiproject.py` — Tests for multi-project support in daf git new command (Issue #179). (~2594 tok)
 - `test_git_pr_template.py` — Tests for AI-powered PR/MR template parsing and filling. (~7548 tok)
 - `test_github_repo_suggestion.py` — Tests for GitHub/GitLab repository auto-suggestion in daf open command. (~2849 tok)
+- `test_initial_prompt_with_context_files.py` — Tests for initial prompt generation with configured context files and session types. (~5156 tok)
 - `test_investigate_command.py` — Tests for daf investigate command. (~11028 tok)
 - `test_jira_new_command.py` — Tests for daf jira new command. (~18520 tok)
 - `test_jira_new_multiproject.py` — Tests for multi-project support in daf jira new command (Issue #179). (~2417 tok)
 - `test_multi_project_session_creation.py` — Tests for multi-project session creation workflow. (~6249 tok)
+- `test_multiproject_prompt.py` — Test for multi-project session initial prompt generation. (~2569 tok)
 - `test_open_command.py` — Tests for daf open command. (~23046 tok)
 - `test_open_multiproject_selection.py` — Tests for multi-project selection in daf open _prompt_for_working_directory (Issue #177). (~1998 tok)
 - `test_repository_selection_jira_new.py` — Tests for unified project selection used by 'daf jira new' and other commands. (~1260 tok)
 - `test_repository_selection.py` — Tests for repository selection prompt in 'daf new' command (PROJ-61069). (~2576 tok)
+- `test_skills_discovery.py` — Tests for skills discovery. (~3005 tok)
 - `test_temp_directory_utils.py` — Tests for devflow/utils/temp_directory.py. (~8370 tok)
 - `test_workspace_selection_bug.py` — Test for workspace selection bug fix (AAP-64504). (~1319 tok)
 - `test_workspace.py` — Tests for workspace functionality (AAP-63377). (~4513 tok)
