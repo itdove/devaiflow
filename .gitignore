@@ -68,5 +68,8 @@ tests/*.md
 /test_*.sh
 integration-tests/*.bak
 
+# OpenWolf (session-local tracking files)
+.wolf/
+
 #ai-guardian
 /.ai-guardian
