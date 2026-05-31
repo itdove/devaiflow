@@ -91,16 +91,15 @@ All notable changes to this project will be documented in this file.
 
 
 def test_get_current_version():
-    """Test getting current version from both files."""
+    """Test getting current version from all detected files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         create_test_repo(tmp_path)
 
         helper = ReleaseHelper(tmp_path)
-        pyproject_ver, init_ver, match = helper.get_current_version()
+        version, match = helper.get_current_version()
 
-        assert pyproject_ver == "2.1.0-dev"
-        assert init_ver == "2.1.0-dev"
+        assert version == "2.1.0-dev"
         assert match is True
 
 
@@ -117,15 +116,14 @@ def test_version_mismatch_detection():
         init_path.write_text(content)
 
         helper = ReleaseHelper(tmp_path)
-        pyproject_ver, init_ver, match = helper.get_current_version()
+        version, match = helper.get_current_version()
 
-        assert pyproject_ver == "2.1.0-dev"
-        assert init_ver == "2.2.0-dev"
+        assert version is None
         assert match is False
 
 
 def test_update_version():
-    """Test updating version in both files."""
+    """Test updating version in all files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         create_test_repo(tmp_path)
@@ -135,10 +133,9 @@ def test_update_version():
 
         assert success is True
 
-        # Verify both files updated
-        pyproject_ver, init_ver, match = helper.get_current_version()
-        assert pyproject_ver == "2.2.0"
-        assert init_ver == "2.2.0"
+        # Verify all files updated
+        version, match = helper.get_current_version()
+        assert version == "2.2.0"
         assert match is True
 
 
