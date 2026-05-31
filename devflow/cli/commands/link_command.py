@@ -1,5 +1,6 @@
 """Implementation of 'daf link' command."""
 
+import logging
 import subprocess
 import sys
 from typing import Optional
@@ -14,6 +15,7 @@ from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, Jira
 from devflow.session.manager import SessionManager
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def _fetch_issue_metadata_dict(issue_key: str) -> Optional[dict]:
@@ -48,11 +50,11 @@ def _fetch_issue_metadata_dict(issue_key: str) -> Optional[dict]:
         raise RuntimeError(f"Timeout validating issue tracker ticket {issue_key}")
 
 
-@require_outside_claude
 def link_jira(
     name: str,
     issue_key: str,
     force: bool = False,
+    rename_prefix: Optional[str] = None,
 ) -> None:
     """Link a issue tracker ticket to a session group.
 
@@ -60,6 +62,7 @@ def link_jira(
         name: Session group name
         issue_key: issue tracker key to link
         force: Skip confirmation prompts
+        rename_prefix: If provided, rename the session to {prefix}-{issue_key_slug}
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -125,23 +128,40 @@ def link_jira(
 
         session_manager.update_session(session)
 
+    # Rename session if --rename-prefix provided
+    renamed_to = None
+    if rename_prefix:
+        from devflow.cli.commands.sync_command import issue_key_to_session_name
+        base_slug = issue_key_to_session_name(issue_key)
+        new_name = f"{rename_prefix}-{base_slug}"
+
+        try:
+            session_manager.rename_session(name, new_name)
+            renamed_to = new_name
+            console_print(f"[green]✓[/green] Renamed session to: [bold]{new_name}[/bold]")
+        except ValueError as e:
+            console_print(f"[yellow]⚠[/yellow] Could not rename session: {e}")
+            logger.warning(f"Rename failed for session '{name}' to '{new_name}': {e}")
+
+    display_name = renamed_to or name
+
     if is_json_mode():
-        output_json(
-            success=True,
-            data={
-                "session_group": name,
-                "issue_key": issue_key,
-                "sessions_updated": len(sessions),
-                "replaced": existing_jira,
-                "metadata": issue_metadata_dict
-            }
-        )
+        data = {
+            "session_group": display_name,
+            "issue_key": issue_key,
+            "sessions_updated": len(sessions),
+            "replaced": existing_jira,
+            "metadata": issue_metadata_dict,
+        }
+        if renamed_to:
+            data["renamed_from"] = name
+        output_json(success=True, data=data)
     else:
-        console.print(f"[green]✓[/green] Linked session group '{name}' to {issue_key}")
+        console.print(f"[green]✓[/green] Linked session group '{display_name}' to {issue_key}")
         console.print(f"[dim]All {len(sessions)} session(s) in group now associated with {issue_key}[/dim]")
         console.print()
         console.print(f"[dim]You can now use either identifier:[/dim]")
-        console.print(f"  daf open {name}")
+        console.print(f"  daf open {display_name}")
         console.print(f"  daf open {issue_key}")
 
 
