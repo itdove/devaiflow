@@ -1,9 +1,9 @@
-"""Temporary directory utilities for issue tracker ticket creation sessions.
+"""Temporary directory utilities for sessions.
 
-This module provides shared functions for cloning repositories to temporary
-directories for clean analysis during ticket creation sessions.
+This module provides shared functions for creating temporary directories
+and cloning repositories for clean analysis during sessions.
 
-Extracted from jira_new_command.py to be reused by jira_open_command.py.
+Extracted from jira_new_command.py to be reused by other commands.
 """
 
 import os
@@ -53,6 +53,27 @@ def extract_repo_name(url: str) -> str:
         return name
 
     return "repo"
+
+
+def create_empty_temp_directory(prefix: str = "daf-investigation-") -> Optional[str]:
+    """Create an empty temporary directory for investigations without a specific project.
+
+    Unlike clone_to_temp_directory(), this does NOT clone any repository.
+    It creates a bare directory that will be cleaned up on session exit.
+
+    Args:
+        prefix: Prefix for the temp directory name
+
+    Returns:
+        Path to the created temporary directory, or None on failure
+    """
+    try:
+        temp_dir = tempfile.mkdtemp(prefix=prefix)
+        console_print(f"[dim]Created empty temporary directory: {temp_dir}[/dim]")
+        return temp_dir
+    except Exception as e:
+        console_print(f"[red]✗[/red] Failed to create temporary directory: {e}")
+        return None
 
 
 def should_clone_to_temp(path: Path) -> bool:

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
-from devflow.cli.commands.investigate_command import slugify_goal, create_investigation_session
+from devflow.cli.commands.investigate_command import slugify_goal, create_investigation_session, _prompt_investigation_location
 from devflow.cli.main import cli
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -439,6 +439,7 @@ class TestMultiProjectInvestigation:
             result = runner.invoke(cli, [
                 "investigate",
                 "--goal", "Investigate authentication flow across backend and frontend",
+                "--workspace", "default",
             ])
 
             # Should succeed
@@ -511,6 +512,7 @@ class TestMultiProjectInvestigation:
                 "investigate",
                 "--goal", "Investigate caching implementation",
                 "--parent", "PROJ-12345",
+                "--workspace", "default",
             ])
 
             # Should succeed
@@ -565,6 +567,7 @@ class TestMultiProjectInvestigation:
             result = runner.invoke(cli, [
                 "investigate",
                 "--goal", "Research caching options",
+                "--workspace", "default",
             ])
 
             # Should succeed
@@ -970,3 +973,234 @@ class TestInvestigateFromIssue:
 
             assert created_session is not None
             assert created_session.name == "custom-investigation-name"
+
+
+class TestOptionalProjectSelection:
+    """Test optional project/repo selection for daf investigate (#364)."""
+
+    def test_investigation_no_project_defaults_to_cwd_in_mock_mode(self, temp_daf_home, monkeypatch):
+        """Test that mock mode defaults to current directory when no project specified."""
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+        monkeypatch.delenv("DEVAIFLOW_IN_SESSION", raising=False)
+        monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "investigate",
+            "--goal", "Generic research on caching patterns",
+        ])
+
+        assert result.exit_code == 0
+        assert "Created session" in result.output
+        assert "investigation" in result.output
+        assert "Non-interactive mode - using current directory" in result.output
+
+        session_manager = SessionManager(config_loader=config_loader)
+        sessions = session_manager.list_sessions()
+        investigation = next((s for s in sessions if s.session_type == "investigation"), None)
+        assert investigation is not None
+        assert "Generic research on caching patterns" in investigation.goal
+
+    def test_investigation_no_project_json_mode(self, temp_daf_home, monkeypatch):
+        """Test that JSON mode defaults to current directory when no project specified."""
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+        monkeypatch.delenv("DEVAIFLOW_IN_SESSION", raising=False)
+        monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "investigate",
+            "--goal", "Research API design patterns",
+            "--json",
+        ])
+
+        assert result.exit_code == 0
+        assert '"success": true' in result.output
+        assert '"investigation"' in result.output
+
+    def test_prompt_investigation_location_mock_mode_returns_cwd(self, temp_daf_home, monkeypatch):
+        """Test _prompt_investigation_location returns cwd in mock mode."""
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        result = _prompt_investigation_location(
+            config, config_loader, "test-session", "Test goal", None, None,
+        )
+
+        assert result is not None
+        assert len(result) == 4
+        project_path, ws_name, temp_dir, orig_path = result
+        assert project_path is not None
+        assert ws_name is None
+        assert temp_dir is None
+        assert orig_path is None
+
+    def test_prompt_investigation_location_current_dir(self, temp_daf_home, monkeypatch):
+        """Test _prompt_investigation_location option 1 (current directory)."""
+        monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        with patch("devflow.cli.commands.investigate_command.Prompt") as mock_prompt:
+            mock_prompt.ask.return_value = "1"
+            result = _prompt_investigation_location(
+                config, config_loader, "test-session", "Test goal", None, None,
+            )
+
+        assert result is not None
+        project_path, ws_name, temp_dir, orig_path = result
+        assert project_path is not None
+        assert ws_name is None
+        assert temp_dir is None
+
+    def test_prompt_investigation_location_temp_directory(self, temp_daf_home, monkeypatch):
+        """Test _prompt_investigation_location option 2 (empty temp directory)."""
+        monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        with patch("devflow.cli.commands.investigate_command.Prompt") as mock_prompt, \
+             patch("devflow.utils.temp_directory.create_empty_temp_directory") as mock_create:
+            mock_prompt.ask.return_value = "2"
+            mock_create.return_value = "/tmp/daf-investigation-test123"
+
+            result = _prompt_investigation_location(
+                config, config_loader, "test-session", "Test goal", None, None,
+            )
+
+        assert result is not None
+        project_path, ws_name, temp_dir, orig_path = result
+        assert project_path == "/tmp/daf-investigation-test123"
+        assert temp_dir == "/tmp/daf-investigation-test123"
+        assert orig_path is None
+
+    def test_prompt_investigation_location_custom_path(self, temp_daf_home, monkeypatch, tmp_path):
+        """Test _prompt_investigation_location option 3 (custom path)."""
+        monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        custom_dir = tmp_path / "custom-investigation"
+        custom_dir.mkdir()
+
+        with patch("devflow.cli.commands.investigate_command.Prompt") as mock_prompt:
+            mock_prompt.ask.side_effect = ["3", str(custom_dir)]
+            result = _prompt_investigation_location(
+                config, config_loader, "test-session", "Test goal", None, None,
+            )
+
+        assert result is not None
+        project_path, ws_name, temp_dir, orig_path = result
+        assert str(custom_dir) in project_path
+        assert temp_dir is None
+
+    def test_prompt_investigation_location_invalid_choice(self, temp_daf_home, monkeypatch):
+        """Test _prompt_investigation_location with invalid selection."""
+        monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        with patch("devflow.cli.commands.investigate_command.Prompt") as mock_prompt:
+            mock_prompt.ask.return_value = "99"
+            result = _prompt_investigation_location(
+                config, config_loader, "test-session", "Test goal", None, None,
+            )
+
+        assert result is None
+
+    def test_investigation_with_workspace_flag_uses_repo_selection(self, temp_daf_home, monkeypatch):
+        """Test that --workspace flag still triggers workspace repo selection."""
+        monkeypatch.setenv("DAF_MOCK_MODE", "1")
+        monkeypatch.delenv("DEVAIFLOW_IN_SESSION", raising=False)
+        monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        from devflow.config.models import WorkspaceDefinition
+
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="default", path=str(Path(temp_daf_home) / "workspace"))
+        ]
+        config_loader.save_config(config)
+
+        workspace = Path(temp_daf_home) / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        project = workspace / "backend-api"
+        project.mkdir(exist_ok=True)
+
+        with patch("devflow.cli.commands.investigate_command.unified_project_selection") as mock_select, \
+             patch("devflow.cli.commands.investigate_command.select_workspace") as mock_ws, \
+             patch("devflow.cli.commands.investigate_command.scan_workspace_repositories") as mock_scan:
+            mock_ws.return_value = "default"
+            mock_scan.return_value = ["backend-api"]
+            mock_select.return_value = ([str(project)], False)
+
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "investigate",
+                "--goal", "Research API design",
+                "--workspace", "default",
+            ])
+
+            assert result.exit_code == 0
+            assert "Created session" in result.output
+            mock_ws.assert_called_once()
+            mock_scan.assert_called_once()
+
+
+class TestCreateEmptyTempDirectory:
+    """Test the create_empty_temp_directory utility function."""
+
+    def test_creates_directory(self):
+        """Test that create_empty_temp_directory creates an actual directory."""
+        from devflow.utils.temp_directory import create_empty_temp_directory
+        temp_dir = create_empty_temp_directory()
+        try:
+            assert temp_dir is not None
+            assert Path(temp_dir).exists()
+            assert Path(temp_dir).is_dir()
+            assert "daf-investigation-" in temp_dir
+        finally:
+            if temp_dir:
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_custom_prefix(self):
+        """Test that create_empty_temp_directory respects custom prefix."""
+        from devflow.utils.temp_directory import create_empty_temp_directory
+        temp_dir = create_empty_temp_directory(prefix="daf-test-")
+        try:
+            assert temp_dir is not None
+            assert "daf-test-" in Path(temp_dir).name
+        finally:
+            if temp_dir:
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_cleanup_works_for_empty_temp_dir(self):
+        """Test that cleanup_temp_directory handles empty temp dirs."""
+        from devflow.utils.temp_directory import create_empty_temp_directory, cleanup_temp_directory
+        temp_dir = create_empty_temp_directory()
+        assert temp_dir is not None
+        assert Path(temp_dir).exists()
+        cleanup_temp_directory(temp_dir)
+        assert not Path(temp_dir).exists()
