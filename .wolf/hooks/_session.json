@@ -1,62 +1,78 @@
 {
-  "session_id": "session-2026-05-31-1037",
-  "started": "2026-05-31T14:37:29.316Z",
+  "session_id": "session-2026-05-31-1049",
+  "started": "2026-05-31T14:49:37.523Z",
   "files_read": {
     "/Users/dvernier/.daf-sessions/ENTERPRISE.md": {
       "count": 1,
       "tokens": 0,
-      "first_read": "2026-05-31T14:37:35.685Z"
-    },
-    "/Users/dvernier/.daf-sessions/ORGANIZATION.md": {
-      "count": 1,
-      "tokens": 0,
-      "first_read": "2026-05-31T14:37:36.170Z"
+      "first_read": "2026-05-31T14:49:42.986Z"
     },
     "/Users/dvernier/.daf-sessions/TEAM.md": {
       "count": 1,
       "tokens": 0,
-      "first_read": "2026-05-31T14:37:36.183Z"
+      "first_read": "2026-05-31T14:49:43.167Z"
     },
     "/Users/dvernier/.daf-sessions/USER.md": {
       "count": 1,
       "tokens": 0,
-      "first_read": "2026-05-31T14:37:36.636Z"
+      "first_read": "2026-05-31T14:49:43.588Z"
     },
-    "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/new_command.py": {
-      "count": 7,
-      "tokens": 24373,
-      "first_read": "2026-05-31T14:37:52.280Z"
-    },
-    "/Users/dvernier/development/devaiflow/devaiflow/devflow/git/utils.py": {
-      "count": 2,
-      "tokens": 15440,
-      "first_read": "2026-05-31T14:38:36.785Z"
-    },
-    "/Users/dvernier/development/devaiflow/devaiflow/devflow/utils/backend_detection.py": {
-      "count": 2,
-      "tokens": 1809,
-      "first_read": "2026-05-31T14:38:49.375Z"
-    },
-    "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/open_command.py": {
+    "/Users/dvernier/.daf-sessions/ORGANIZATION.md": {
       "count": 1,
-      "tokens": 48391,
-      "first_read": "2026-05-31T14:39:41.611Z"
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:43.605Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/01-enterprise/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:44.062Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/02-organization/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:44.488Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/03-team/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:44.946Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/04-user/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:45.438Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/enterprise/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:45.832Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/user/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:46.696Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/team/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:47.312Z"
+    },
+    "/Users/dvernier/.daf-sessions/.claude/skills/organization/SKILL.md": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-31T14:49:47.335Z"
+    },
+    "/Users/dvernier/development/devaiflow/devaiflow/.claude/skills/release/SKILL.md": {
+      "count": 1,
+      "tokens": 2689,
+      "first_read": "2026-05-31T14:49:47.902Z"
     }
   },
-  "files_written": [
-    {
-      "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/git/utils.py",
-      "action": "edit",
-      "tokens": 241,
-      "at": "2026-05-31T14:40:06.671Z"
-    }
-  ],
-  "edit_counts": {
-    "devflow/git/utils.py": 1
-  },
-  "anatomy_hits": 4,
-  "anatomy_misses": 4,
-  "repeated_reads_warned": 8,
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 0,
+  "anatomy_misses": 9,
+  "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
-  "stop_count": 1
+  "stop_count": 0
 }
