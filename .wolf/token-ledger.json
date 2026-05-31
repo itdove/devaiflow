@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-04-06T12:35:01.489Z",
   "lifetime": {
-    "total_tokens_estimated": 991511,
-    "total_reads": 105,
-    "total_writes": 92,
-    "total_sessions": 101,
-    "anatomy_hits": 68,
-    "anatomy_misses": 29,
-    "repeated_reads_blocked": 58,
-    "estimated_savings_vs_bare_cli": 1017724
+    "total_tokens_estimated": 1090281,
+    "total_reads": 119,
+    "total_writes": 99,
+    "total_sessions": 103,
+    "anatomy_hits": 74,
+    "anatomy_misses": 37,
+    "repeated_reads_blocked": 66,
+    "estimated_savings_vs_bare_cli": 1182411
   },
   "sessions": [
     {
@@ -1448,6 +1448,176 @@
         "writes_count": 1,
         "repeated_reads_blocked": 0,
         "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-31-1024",
+      "started": "2026-05-31T14:24:46.362Z",
+      "ended": "2026-05-31T14:26:25.854Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/release_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 3826,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 108,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 190,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 134,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 3826,
+        "output_tokens_estimated": 432,
+        "reads_count": 3,
+        "writes_count": 3,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-31-1024",
+      "started": "2026-05-31T14:24:46.362Z",
+      "ended": "2026-05-31T14:27:14.236Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/release_helper.py",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/.claude/skills/release/release_helper.py",
+          "tokens_estimated": 3826,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 108,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 190,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/tests/test_release_skill_helper.py",
+          "tokens_estimated": 134,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 3826,
+        "output_tokens_estimated": 432,
+        "reads_count": 3,
+        "writes_count": 3,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-31-1037",
+      "started": "2026-05-31T14:37:29.316Z",
+      "ended": "2026-05-31T14:44:08.897Z",
+      "reads": [
+        {
+          "file": "/Users/dvernier/.daf-sessions/ENTERPRISE.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.daf-sessions/ORGANIZATION.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.daf-sessions/TEAM.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/.daf-sessions/USER.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/new_command.py",
+          "tokens_estimated": 24373,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/git/utils.py",
+          "tokens_estimated": 15440,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/utils/backend_detection.py",
+          "tokens_estimated": 1809,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/cli/commands/open_command.py",
+          "tokens_estimated": 48391,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dvernier/development/devaiflow/devaiflow/devflow/git/utils.py",
+          "tokens_estimated": 241,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 90013,
+        "output_tokens_estimated": 241,
+        "reads_count": 8,
+        "writes_count": 1,
+        "repeated_reads_blocked": 8,
+        "anatomy_lookups": 4
       }
     }
   ],
