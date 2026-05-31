@@ -298,7 +298,7 @@ class TestUpgradeAllComprehensive:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console'):
                         mock_slash.return_value = ([], [], [])
-                        mock_ref.return_value = (["gh-cli", "git-cli"], [], [])
+                        mock_ref.return_value = (["gh-cli", "glab-cli"], [], [])
 
                         upgrade_all(upgrade_skills=True, upgrade_hierarchical_skills=False, quiet=False)
 

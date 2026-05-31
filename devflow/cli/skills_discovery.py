@@ -55,7 +55,7 @@ def discover_skills(
 
         return (str(skill_file.resolve()), description)
 
-    # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/) - generic skills like daf-cli, git-cli
+    # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/) - generic skills like daf-cli, gh-cli
     if include_levels is None or "user" in include_levels:
         user_skills_dir = get_claude_config_dir() / "skills"
         if user_skills_dir.exists():

@@ -197,7 +197,7 @@ daf git add-comment owner/repo#123 "Fixed authentication bug"
 ```
 
 **Do NOT:**
-- ❌ Create git commits (see **git-cli skill**)
+- ❌ Create git commits (handled by `daf complete`)
 - ❌ Create pull/merge requests (see **gh-cli** and **glab-cli skills**)
 - ❌ Run user-facing `daf` commands (new, open, complete, config, init, upgrade)
 
@@ -378,7 +378,6 @@ daf investigate PROJ-12345 --goal "Custom investigation focus"
 
 **See these skills for detailed documentation:**
 - **daf-cli skill** - Command syntax, flags, and examples
-- **git-cli skill** - Git command restrictions and rationale
 - **gh-cli skill** - GitHub PR restrictions and workflow
 - **glab-cli skill** - GitLab MR restrictions and workflow
 

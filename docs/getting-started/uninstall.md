@@ -68,7 +68,7 @@ If you installed DevAIFlow skills in Claude Code:
 rm -rf ~/.claude/skills/daf-*
 
 # Remove bundled reference skills
-rm -rf ~/.claude/skills/gh-cli ~/.claude/skills/git-cli ~/.claude/skills/glab-cli ~/.claude/skills/daf-cli
+rm -rf ~/.claude/skills/gh-cli ~/.claude/skills/glab-cli ~/.claude/skills/daf-cli
 
 # (Legacy) Remove old commands directory if it exists
 rm -rf ~/.claude/commands/daf-*

@@ -630,6 +630,5 @@ git remote add upstream https://github.com/original-owner/repo.git
 ## See Also
 
 - daf tool operations: See daf-cli skill
-- Git operations: See git-cli skill
 - GitLab MR creation: See glab-cli skill
 - GitHub CLI documentation: https://cli.github.com/manual/

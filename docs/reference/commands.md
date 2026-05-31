@@ -5011,7 +5011,6 @@ DevAIFlow includes two types of skills:
 These skills provide reference documentation that Claude reads automatically:
 - **`daf-cli`** - Complete daf tool command reference
 - **`gh-cli`** - GitHub CLI reference for PR operations
-- **`git-cli`** - Git workflow guidance
 - **`glab-cli`** - GitLab CLI reference for MR operations
 
 All slash commands are READ-ONLY and safe to run inside Claude Code sessions.
@@ -5048,7 +5047,7 @@ If you want to remove the bundled skills:
 
 ```bash
 # Remove all bundled skills from Claude
-rm -rf ~/.claude/skills/daf-* ~/.claude/skills/gh-cli ~/.claude/skills/git-cli ~/.claude/skills/glab-cli
+rm -rf ~/.claude/skills/daf-* ~/.claude/skills/gh-cli ~/.claude/skills/glab-cli
 
 # Remove from specific agent
 rm -rf ~/.cursor/skills/daf-*

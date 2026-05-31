@@ -18,7 +18,7 @@ DevAIFlow supports installing bundled skills to multiple AI coding assistants si
 
 DevAIFlow includes bundled skills that provide:
 - **Slash commands**: Interactive commands like `/daf-help`, `/daf-list`, `/daf-active`
-- **Reference skills**: Auto-loaded documentation (daf-cli, gh-cli, git-cli, glab-cli)
+- **Reference skills**: Auto-loaded documentation (daf-cli, gh-cli, glab-cli)
 
 These skills can be installed to multiple AI agents using the `daf skills` command with multi-agent flags.
 
