@@ -606,6 +606,5 @@ glab mr list -F json | jq '.[] | select(.source_branch == "feature-branch")'
 ## See Also
 
 - daf tool operations: See daf-cli skill
-- Git operations: See git-cli skill
 - GitHub PR creation: See gh-cli skill
 - GitLab CLI documentation: https://gitlab.com/gitlab-org/cli/-/tree/main/docs

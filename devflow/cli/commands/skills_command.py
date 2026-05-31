@@ -679,7 +679,7 @@ def _list_skills(
             for skill in skills:
                 # Determine type based on naming convention
                 # Skills starting with "daf-" are user-invocable commands
-                # Others (gh-cli, git-cli, glab-cli) are reference documentation
+                # Others (gh-cli, glab-cli) are reference documentation
                 if skill.startswith("daf-"):
                     skill_type = "Command"
                 else:

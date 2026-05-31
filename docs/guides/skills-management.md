@@ -18,7 +18,6 @@ Skills are discovered and loaded in this order:
 
 **Examples:**
 - `daf-cli` - DevAIFlow CLI commands
-- `git-cli` - Git command reference
 - `gh-cli` - GitHub CLI reference
 - `glab-cli` - GitLab CLI reference
 
@@ -172,7 +171,6 @@ $DEVAIFLOW_HOME/.claude/skills/
 
 Place tool documentation and reusable skills in `~/.claude/skills/`:
 - `daf-cli` - Available everywhere
-- `git-cli` - Available everywhere
 - `gh-cli` - Available everywhere
 
 ### 3. Organization Extensions in Hierarchical

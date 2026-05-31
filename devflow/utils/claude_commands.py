@@ -215,7 +215,7 @@ def install_or_upgrade_reference_skills(
     """Install or upgrade bundled reference skills to specified directory.
 
     Reference skills are skills WITHOUT a 'name:' field that provide context and
-    documentation (like daf-cli, gh-cli, git-cli, glab-cli).
+    documentation (like daf-cli, gh-cli, glab-cli).
 
     Args:
         dry_run: If True, only report what would be changed without actually changing
@@ -398,7 +398,7 @@ def install_skills_to_agents(
         ...     level='global'
         ... )
         >>> results['claude']  # (changed, up_to_date, failed)
-        (['daf-cli', 'git-cli'], ['commit'], [])
+        (['daf-cli'], ['commit'], [])
     """
     from devflow.agent.skill_directories import get_skill_install_paths, validate_agent_names
 
@@ -520,7 +520,7 @@ def get_skill_status(workspace: str, skill_name: str) -> Optional[str]:
 
     Args:
         workspace: Workspace root directory path
-        skill_name: Name of skill directory (e.g., "daf-cli", "git-cli")
+        skill_name: Name of skill directory (e.g., "daf-cli", "gh-cli")
 
     Returns:
         "not_installed", "up_to_date", "outdated", or None if skill doesn't exist in bundle

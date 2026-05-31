@@ -503,7 +503,7 @@ daf skills
 
 This installs all bundled skills globally to `~/.claude/skills/`:
 - **Slash commands** (`/daf-*`) - Skills with `name:` field in frontmatter (e.g., `/daf-help`, `/daf-list`, `/daf-status`)
-- **Reference skills** - Skills without `name:` field that are auto-loaded (e.g., `daf-cli`, `gh-cli`, `git-cli`, `glab-cli`)
+- **Reference skills** - Skills without `name:` field that are auto-loaded (e.g., `daf-cli`, `gh-cli`, `glab-cli`)
 
 These enable you to use DevAIFlow features directly within Claude Code sessions.
 

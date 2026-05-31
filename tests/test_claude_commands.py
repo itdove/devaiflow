@@ -80,14 +80,13 @@ def test_list_reference_skills():
     """Test listing reference skills (user-invocable: false)."""
     reference_skills = list_reference_skills()
 
-    # Should have 4 reference skills
-    assert len(reference_skills) >= 4
+    # Should have 3 reference skills
+    assert len(reference_skills) >= 3
 
     # Check expected reference skills
     skill_names = [s.name for s in reference_skills]
     assert "daf-cli" in skill_names
     assert "gh-cli" in skill_names
-    assert "git-cli" in skill_names
     assert "glab-cli" in skill_names
 
     # All should have user-invocable: false in SKILL.md
@@ -190,7 +189,7 @@ def test_install_reference_skills_fresh_install(temp_user_home):
     changed, up_to_date, failed = install_or_upgrade_reference_skills(quiet=True)
 
     # All reference skills should be installed
-    assert len(changed) >= 4
+    assert len(changed) >= 3
     assert len(up_to_date) == 0
     assert len(failed) == 0
 
@@ -200,7 +199,6 @@ def test_install_reference_skills_fresh_install(temp_user_home):
     assert (skills_dir / "daf-cli").exists()
     assert (skills_dir / "daf-cli" / "SKILL.md").exists()
     assert (skills_dir / "gh-cli").exists()
-    assert (skills_dir / "git-cli").exists()
     assert (skills_dir / "glab-cli").exists()
 
 
