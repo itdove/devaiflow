@@ -23,6 +23,7 @@ from devflow.github import transition_on_complete as github_transition_on_comple
 from devflow.issue_tracker.factory import create_issue_tracker_client
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError, IssueTrackerValidationError
 from devflow.utils.backend_detection import get_issue_tracker_backend
+from devflow.utils.model_provider import get_co_authored_by_line
 from devflow.session.manager import SessionManager
 from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
@@ -316,11 +317,12 @@ def complete_session(
                     commit_message_short = _prompt_for_commit_message(auto_message, config)
 
                     if commit_message_short:
+                        co_authored_by = get_co_authored_by_line(config, session.model_profile)
                         full_message = f"""{commit_message_short}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{co_authored_by}"""
 
                         success, error_msg = GitUtils.commit_all(working_dir, full_message)
                         if success:
@@ -482,11 +484,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                     commit_message_short = _prompt_for_commit_message(auto_message, config)
 
                     if commit_message_short:
+                        co_authored_by = get_co_authored_by_line(config, session.model_profile)
                         full_message = f"""{commit_message_short}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{co_authored_by}"""
 
                         success, error_msg = GitUtils.commit_all(working_dir, full_message)
                         if success:
@@ -620,11 +623,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
                 if commit_message_short:
                     # Create commit with standard format
+                    co_authored_by = get_co_authored_by_line(config, session.model_profile)
                     full_message = f"""{commit_message_short}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{co_authored_by}"""
                 else:
                     # User cancelled the commit
                     should_commit = False
@@ -1319,11 +1323,12 @@ def _sync_branch_for_export(session, issue_key: str, config_loader) -> None:
             console.print(f"[dim]Skipping commit - changes will not be included in export[/dim]")
         else:
             # Create WIP commit
+            co_authored_by = get_co_authored_by_line(config, session.model_profile)
             commit_message = f"""WIP: Session export for {issue_key}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{co_authored_by}"""
 
             success, error_msg = GitUtils.commit_all(working_dir, commit_message)
             if success:
@@ -2835,6 +2840,8 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
         else:
             description_content = f"## Summary\n{summary_bullets}\n"
 
+        config = config_loader.load_config()
+        co_authored_by = get_co_authored_by_line(config, session.model_profile)
         description = f"""{jira_section}{description_content}
 
 ## Test plan
@@ -2844,7 +2851,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{co_authored_by}"""
 
     return description
 

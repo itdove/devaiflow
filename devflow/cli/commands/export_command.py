@@ -10,6 +10,7 @@ from devflow.config.loader import ConfigLoader
 from devflow.export.manager import ExportManager
 from devflow.git.utils import GitUtils
 from devflow.session.manager import SessionManager
+from devflow.utils.model_provider import get_co_authored_by_line
 
 console = Console()
 
@@ -57,11 +58,13 @@ def export_sessions(
     # Now syncs ALL conversations in multi-conversation sessions
     # Captures remote URLs for fork support
     if not all_sessions and issue_keys:
+        config = config_loader.load_config()
         for identifier in issue_keys:
             sessions = session_manager.index.get_sessions(identifier)
             if sessions:
                 for session in sessions:
-                    _sync_all_branches_for_export(session)
+                    co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                    _sync_all_branches_for_export(session, co_authored_by=co_authored_by)
                     # Save session to persist remote URLs
                     session_manager.update_session(session)
 
@@ -87,7 +90,7 @@ def export_sessions(
         raise
 
 
-def _sync_all_branches_for_export(session) -> None:
+def _sync_all_branches_for_export(session, co_authored_by: Optional[str] = None) -> None:
     """Sync all conversation branches before export for team handoff.
 
     For multi-conversation sessions, syncs all branches across all conversations.
@@ -96,6 +99,7 @@ def _sync_all_branches_for_export(session) -> None:
 
     Args:
         session: Session object
+        co_authored_by: Optional Co-Authored-By line for commit messages
     """
     # Check if this is a multi-project session (new architecture)
     active_conv = session.active_conversation
@@ -111,6 +115,7 @@ def _sync_all_branches_for_export(session) -> None:
                     issue_key=session.issue_key,
                     working_dir_name=proj_name,
                     conversation=active_conv,  # Pass conversation to update remote_url
+                    co_authored_by=co_authored_by,
                 )
     # Multi-conversation support (old architecture - backward compatibility)
     elif session.conversations:
@@ -127,6 +132,7 @@ def _sync_all_branches_for_export(session) -> None:
                     issue_key=session.issue_key,
                     working_dir_name=working_dir,
                     conversation=active,  # Pass active session to update remote_url
+                    co_authored_by=co_authored_by,
                 )
     # Legacy single-conversation support (fallback for sessions without working_directory)
     elif session.active_conversation:
@@ -138,6 +144,7 @@ def _sync_all_branches_for_export(session) -> None:
                 branch=active_conv.branch,
                 session_name=session.name,
                 issue_key=session.issue_key,
+                co_authored_by=co_authored_by,
             )
 
 
@@ -148,6 +155,7 @@ def _sync_single_conversation_branch(
     issue_key: Optional[str] = None,
     working_dir_name: Optional[str] = None,
     conversation = None,
+    co_authored_by: Optional[str] = None,
 ) -> None:
     """Sync a single conversation's branch before export.
 
@@ -167,6 +175,7 @@ def _sync_single_conversation_branch(
         issue_key: Optional issue key
         working_dir_name: Optional working directory name (for multi-conversation sessions)
         conversation: Optional ConversationContext to update with remote URL
+        co_authored_by: Optional Co-Authored-By line for commit messages
 
     Raises:
         ValueError: If checkout, commit, or push fails
@@ -224,11 +233,12 @@ def _sync_single_conversation_branch(
         # Generate WIP commit message
         identifier = issue_key if issue_key else session_name
         dir_label = f" ({working_dir_name})" if working_dir_name else ""
+        attribution = co_authored_by or "Co-Authored-By: Claude <noreply@anthropic.com>"
         commit_message = f"""WIP: Export for {identifier}{dir_label}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{attribution}"""
 
         # Commit all changes (REQUIRED)
         success, error_msg = GitUtils.commit_all(working_dir, commit_message)

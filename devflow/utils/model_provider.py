@@ -5,6 +5,7 @@ and build environment variables for launching Claude Code with alternative AI pr
 """
 
 import os
+import re
 from typing import Dict, Optional, Any
 
 
@@ -180,3 +181,75 @@ def get_profile_display_name(profile: Optional[Dict[str, Any]]) -> str:
             return f"{name} ({base_url})"
 
     return name
+
+
+def parse_claude_model_display_name(model_id: str) -> str:
+    """Parse a Claude model ID into a human-readable display name.
+
+    Args:
+        model_id: Model identifier (e.g., "claude-opus-4-6", "claude-3-5-sonnet-20241022")
+
+    Returns:
+        Human-readable name (e.g., "Claude Opus 4.6") or the original ID if not a Claude model
+    """
+    if not model_id or not model_id.startswith("claude-"):
+        return model_id or "Claude"
+
+    # Strip context marker like [1m]
+    clean_id = re.sub(r'\[.*?\]$', '', model_id)
+
+    # Claude 4.x format: claude-{tier}-{major}-{minor}[-date]
+    match = re.match(r'^claude-(opus|sonnet|haiku)-(\d+)-(\d+)(?:-\d+)?$', clean_id)
+    if match:
+        tier = match.group(1).capitalize()
+        major = match.group(2)
+        minor = match.group(3)
+        return f"Claude {tier} {major}.{minor}"
+
+    # Claude 3.x format: claude-{major}[-{minor}]-{tier}[-date]
+    match = re.match(r'^claude-(\d+)(?:-(\d+))?-(opus|sonnet|haiku)(?:-\d+)?$', clean_id)
+    if match:
+        major = match.group(1)
+        minor = match.group(2)
+        tier = match.group(3).capitalize()
+        if minor:
+            return f"Claude {major}.{minor} {tier}"
+        return f"Claude {major} {tier}"
+
+    return model_id
+
+
+def get_model_attribution_name(config, model_profile_override: Optional[str] = None) -> str:
+    """Resolve the model display name for commit attribution.
+
+    Args:
+        config: Merged configuration object
+        model_profile_override: Optional profile name from session.model_profile
+
+    Returns:
+        Display name (e.g., "Claude Opus 4.6", "Claude") for use in Co-Authored-By
+    """
+    profile = get_active_profile(config, override_profile_name=model_profile_override)
+    model_name = get_model_name_from_profile(profile)
+
+    if not model_name:
+        return "Claude"
+
+    if model_name.startswith("claude-"):
+        return parse_claude_model_display_name(model_name)
+
+    return model_name
+
+
+def get_co_authored_by_line(config=None, model_profile_override: Optional[str] = None) -> str:
+    """Build the Co-Authored-By attribution line for commit messages.
+
+    Args:
+        config: Merged configuration object (optional)
+        model_profile_override: Optional profile name from session.model_profile
+
+    Returns:
+        Full attribution string, e.g., "Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+    """
+    name = get_model_attribution_name(config, model_profile_override) if config else "Claude"
+    return f"Co-Authored-By: {name} <noreply@anthropic.com>"
