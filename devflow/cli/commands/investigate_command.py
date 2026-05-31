@@ -189,6 +189,166 @@ def slugify_goal(goal: str) -> str:
     return slug
 
 
+def _select_from_workspace_repos(
+    config,
+    config_loader,
+    workspace_flag: Optional[str],
+    name: str,
+    goal: str,
+    parent: Optional[str],
+    model_profile: Optional[str],
+):
+    """Select project(s) from workspace repositories.
+
+    This is the existing workspace selection flow extracted into a helper.
+
+    Returns:
+        Tuple of (project_path, selected_workspace_name) for single project,
+        or calls _create_multi_project_investigation_session and returns
+        ("multi_project_handled",) sentinel for multi-project.
+        Returns None if selection was cancelled or failed.
+    """
+    selected_workspace_name = select_workspace(
+        config,
+        workspace_flag=workspace_flag,
+        session=None,
+        skip_prompt=is_json_mode(),
+    )
+
+    if not selected_workspace_name:
+        console_print("[yellow]⚠[/yellow] No workspace selected")
+        if is_json_mode():
+            output_json(success=False, error={"message": "No workspace selected", "code": "NO_WORKSPACE"})
+        return None
+
+    ws_path = get_workspace_path(config, selected_workspace_name)
+    if not ws_path:
+        console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
+        if is_json_mode():
+            output_json(success=False, error={"message": f"Workspace path not found: {selected_workspace_name}", "code": "NO_WORKSPACE"})
+        return None
+
+    console_print(f"[dim]Scanning workspace: {ws_path}[/dim]")
+    try:
+        repo_options = scan_workspace_repositories(ws_path)
+    except (ValueError, RuntimeError) as e:
+        console_print(f"[yellow]Warning: {e}[/yellow]")
+        repo_options = []
+
+    if not repo_options:
+        console_print("[yellow]⚠[/yellow] No git repositories found in workspace")
+        if is_json_mode():
+            output_json(success=False, error={"message": "No repositories found", "code": "NO_REPOSITORY"})
+        return None
+
+    project_paths_result, is_multi = unified_project_selection(
+        workspace_path=ws_path,
+        repo_options=repo_options,
+        allow_multi_project=True,
+        config_loader=config_loader,
+        workspace_name=selected_workspace_name,
+    )
+    if not project_paths_result:
+        if is_json_mode():
+            output_json(success=False, error={"message": "Repository selection cancelled or failed", "code": "NO_REPOSITORY"})
+        return None
+
+    if is_multi:
+        _create_multi_project_investigation_session(
+            config=config,
+            config_loader=config_loader,
+            name=name,
+            goal=goal,
+            parent=parent,
+            project_paths=project_paths_result,
+            workspace=workspace_flag,
+            selected_workspace_name=selected_workspace_name,
+            model_profile=model_profile,
+        )
+        return ("multi_project_handled",)
+
+    return (project_paths_result[0], selected_workspace_name)
+
+
+def _prompt_investigation_location(config, config_loader, name, goal, parent, model_profile):
+    """Prompt user for investigation location when no path/workspace specified.
+
+    Presents 4 options:
+      1. Current directory
+      2. Empty temporary directory
+      3. Specify a custom path
+      4. Select from workspace repositories
+
+    In mock/JSON mode, defaults to current directory without prompting.
+
+    Returns:
+        Tuple of (project_path, selected_workspace_name, temp_directory, original_project_path)
+        or ("multi_project_handled",) sentinel if multi-project was created.
+        Returns None if selection was cancelled or failed.
+    """
+    from devflow.utils.paths import is_mock_mode
+
+    mock_mode = is_mock_mode()
+    is_json = is_json_mode()
+
+    if mock_mode or is_json:
+        cwd = os.getcwd()
+        console_print(f"[dim]Non-interactive mode - using current directory: {cwd}[/dim]")
+        return (cwd, None, None, None)
+
+    cwd = os.getcwd()
+    console_print("\nWhere would you like to run this investigation?\n")
+    console_print(f"  1. Current directory ({cwd})")
+    console_print("  2. Empty temporary directory (auto-cleaned on session exit)")
+    console_print("  3. Specify a custom path")
+    console_print("  4. Select from workspace repositories")
+    console_print()
+
+    choice = Prompt.ask("Selection", default="1")
+
+    if choice == "1":
+        console_print(f"[dim]Using current directory: {cwd}[/dim]")
+        return (cwd, None, None, None)
+
+    elif choice == "2":
+        from devflow.utils.temp_directory import create_empty_temp_directory
+        temp_dir = create_empty_temp_directory()
+        if temp_dir:
+            console_print(f"[green]✓[/green] Created temporary directory: {temp_dir}")
+            return (temp_dir, None, temp_dir, None)
+        else:
+            console_print("[red]✗[/red] Failed to create temporary directory")
+            return None
+
+    elif choice == "3":
+        custom_path = Prompt.ask("Enter path")
+        abs_path = str(Path(custom_path).expanduser().absolute())
+        if not Path(abs_path).exists():
+            console_print(f"[yellow]⚠[/yellow] Directory does not exist: {abs_path}")
+            if Confirm.ask("Create this directory?", default=True):
+                Path(abs_path).mkdir(parents=True, exist_ok=True)
+                console_print(f"[green]✓[/green] Created directory: {abs_path}")
+            else:
+                return None
+        console_print(f"[dim]Using custom path: {abs_path}[/dim]")
+        return (abs_path, None, None, None)
+
+    elif choice == "4":
+        result = _select_from_workspace_repos(
+            config, config_loader, None, name, goal, parent, model_profile,
+        )
+        if result is None:
+            return None
+        if len(result) == 1 and result[0] == "multi_project_handled":
+            return result
+        project_path, ws_name = result
+        return (project_path, ws_name, None, None)
+
+    else:
+        console_print(f"[red]✗[/red] Invalid selection: {choice}")
+        return None
+
+
 @require_outside_claude
 def create_investigation_session(
     goal: str,
@@ -271,6 +431,8 @@ def create_investigation_session(
 
     # Determine project path
     selected_workspace_name = None
+    loc_temp_directory = None
+    loc_original_path = None
     if projects and workspace:
         # Multi-project mode via --projects flag
         # Parse project names
@@ -321,79 +483,45 @@ def create_investigation_session(
                 output_json(success=False, error={"message": f"Directory does not exist: {project_path}", "code": "INVALID_PATH"})
             sys.exit(1)
         console_print(f"[dim]Using specified path: {project_path}[/dim]")
+    elif workspace:
+        # --workspace provided without --projects: go to workspace repo selection
+        result = _select_from_workspace_repos(
+            config, config_loader, workspace, name, goal, parent, model_profile,
+        )
+        if result is None:
+            sys.exit(1)
+        if len(result) == 1 and result[0] == "multi_project_handled":
+            return
+        project_path, selected_workspace_name = result
     else:
-        # Unified project selection (matches daf open UX)
-        selected_workspace_name = select_workspace(
-            config,
-            workspace_flag=workspace,
-            session=None,
-            skip_prompt=is_json_mode(),
+        # No --path, --projects, or --workspace: ask user where to work
+        result = _prompt_investigation_location(
+            config, config_loader, name, goal, parent, model_profile,
         )
-
-        if not selected_workspace_name:
-            console_print(f"[yellow]⚠[/yellow] No workspace selected")
+        if result is None:
             if is_json_mode():
-                output_json(success=False, error={"message": "No workspace selected", "code": "NO_WORKSPACE"})
+                output_json(success=False, error={"message": "Location selection cancelled", "code": "NO_LOCATION"})
             sys.exit(1)
+        if len(result) == 1 and result[0] == "multi_project_handled":
+            return
+        project_path, selected_workspace_name, loc_temp_directory, loc_original_path = result
 
-        ws_path = get_workspace_path(config, selected_workspace_name)
-        if not ws_path:
-            console_print(f"[yellow]⚠[/yellow] Could not find workspace path for: {selected_workspace_name}")
-            if is_json_mode():
-                output_json(success=False, error={"message": f"Workspace path not found: {selected_workspace_name}", "code": "NO_WORKSPACE"})
-            sys.exit(1)
-
-        console_print(f"[dim]Scanning workspace: {ws_path}[/dim]")
-        try:
-            repo_options = scan_workspace_repositories(ws_path)
-        except (ValueError, RuntimeError) as e:
-            console_print(f"[yellow]Warning: {e}[/yellow]")
-            repo_options = []
-
-        if not repo_options:
-            console_print(f"[yellow]⚠[/yellow] No git repositories found in workspace")
-            if is_json_mode():
-                output_json(success=False, error={"message": "No repositories found", "code": "NO_REPOSITORY"})
-            sys.exit(1)
-
-        project_paths_result, is_multi = unified_project_selection(
-            workspace_path=ws_path,
-            repo_options=repo_options,
-            allow_multi_project=True,
-            config_loader=config_loader,
-            workspace_name=selected_workspace_name,
-        )
-        if not project_paths_result:
-            if is_json_mode():
-                output_json(success=False, error={"message": "Repository selection cancelled or failed", "code": "NO_REPOSITORY"})
-            sys.exit(1)
-
-        if is_multi:
-            return _create_multi_project_investigation_session(
-                config=config,
-                config_loader=config_loader,
-                name=name,
-                goal=goal,
-                parent=parent,
-                project_paths=project_paths_result,
-                workspace=workspace,
-                selected_workspace_name=selected_workspace_name,
-                model_profile=model_profile,
-            )
-
-        project_path = project_paths_result[0]
-
-    working_directory = Path(project_path).name
-
-    # Prompt to clone project in temporary directory for clean analysis
-    # Skip in mock mode or JSON mode
+    # For empty temp directories (no project), use session name as working_directory
     temp_directory = None
     original_project_path = None
+    if loc_temp_directory:
+        temp_directory = loc_temp_directory
+        original_project_path = loc_original_path
+        working_directory = name
+    else:
+        working_directory = Path(project_path).name
     mock_mode = is_mock_mode()
     is_json = is_json_mode()
 
-    # Handle temp_clone parameter
-    if temp_clone is False:
+    # Handle temp_clone parameter (skip if we already have a temp dir from location prompt)
+    if temp_directory:
+        console_print(f"[dim]Using temporary directory from location selection[/dim]")
+    elif temp_clone is False:
         # --no-temp-clone flag: explicitly skip temp cloning
         console_print(f"[dim]Skipping temp directory clone (--no-temp-clone flag set)[/dim]")
     elif temp_clone is True:
