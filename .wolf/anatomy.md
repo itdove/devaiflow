@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-30T22:11:44.072Z
-> Files: 526 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-31T14:40:06.660Z
+> Files: 527 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../.claude/plans/
 
@@ -322,7 +322,7 @@
 
 - `__init__.py` — Git integration utilities for DevAIFlow. (~14 tok)
 - `pr_template.py` — AI-powered PR/MR template parsing and filling. (~3063 tok)
-- `utils.py` — Git utilities for branch management. (~15440 tok)
+- `utils.py` — Git utilities for branch management. (~15537 tok)
 
 ## devflow/github/
 
@@ -735,6 +735,7 @@
 - `test_multiproject_prompt.py` — Test for multi-project session initial prompt generation. (~2569 tok)
 - `test_open_command.py` — Tests for daf open command. (~23046 tok)
 - `test_open_multiproject_selection.py` — Tests for multi-project selection in daf open _prompt_for_working_directory (Issue #177). (~1998 tok)
+- `test_release_skill_helper.py` — create_test_repo, test_get_current_version, test_version_mismatch_detection, test_update_version (~2000 tok)
 - `test_repository_selection_jira_new.py` — Tests for unified project selection used by 'daf jira new' and other commands. (~1260 tok)
 - `test_repository_selection.py` — Tests for repository selection prompt in 'daf new' command (PROJ-61069). (~2576 tok)
 - `test_skills_discovery.py` — Tests for skills discovery. (~3005 tok)

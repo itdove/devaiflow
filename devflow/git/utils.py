@@ -347,10 +347,14 @@ class GitUtils:
             # For GitHub/GitLab, extract just the issue number
             if backend in ["github", "gitlab"]:
                 # Parse formats: #123, owner/repo#123, 123
-                # Extract number from various formats
-                match = re.search(r'#?(\d+)$', issue_key)
-                if match:
-                    return match.group(1)  # Just the number
+                # Only extract if it looks like an actual issue reference,
+                # not an arbitrary session name that happens to end with digits
+                if re.match(r'^#?\d+$', issue_key) or re.match(r'^[\w.-]+/[\w.-]+#\d+$', issue_key):
+                    match = re.search(r'#?(\d+)$', issue_key)
+                    if match:
+                        return match.group(1)  # Just the number
+                # Not a recognized issue reference - use as-is (sanitized)
+                return GitUtils.slugify(issue_key)
             # For JIRA or other backends, use lowercase issue key
             return issue_key.lower()
 
