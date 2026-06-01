@@ -550,3 +550,160 @@ def test_link_json_error_for_invalid_jira(mock_jira_cli, temp_daf_home):
     assert output_data["success"] is False
     assert "error" in output_data
     assert output_data["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_link_with_rename_prefix_jira_key(mock_jira_cli, temp_daf_home):
+    """Test --rename-prefix renames session using JIRA-style issue key."""
+    mock_jira_cli.set_ticket("PROJ-456", {
+        "key": "PROJ-456",
+        "fields": {"summary": "Add caching", "status": {"name": "New"}}
+    })
+
+    runner = CliRunner()
+
+    # Create a session
+    result = runner.invoke(cli, [
+        "new", "--name", "my-goal-abc123", "--goal", "Add caching",
+        "--path", str(temp_daf_home / "test-project")
+    ], input="n\n")
+    assert result.exit_code == 0
+
+    # Link with --rename-prefix
+    result = runner.invoke(cli, [
+        "link", "my-goal-abc123", "--jira", "PROJ-456", "--rename-prefix", "creation"
+    ])
+    assert result.exit_code == 0
+    assert "creation-PROJ-456" in result.output
+
+    # Verify: session accessible by new name
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("creation-PROJ-456")
+    assert sessions is not None
+    assert len(sessions) > 0
+    assert sessions[0].issue_key == "PROJ-456"
+
+    # Verify: old name no longer exists
+    old_sessions = config_loader.load_sessions().get_sessions("my-goal-abc123")
+    assert len(old_sessions) == 0
+
+
+def test_link_rename_prefix_slug_generation():
+    """Test that issue_key_to_session_name produces correct slugs for rename-prefix usage."""
+    from devflow.cli.commands.sync_command import issue_key_to_session_name
+
+    # JIRA-style keys
+    assert issue_key_to_session_name("PROJ-456") == "PROJ-456"
+
+    # GitHub-style keys (owner/repo#123)
+    assert issue_key_to_session_name("itdove/devaiflow#456") == "itdove-devaiflow-456"
+
+    # Enterprise hostname keys
+    assert issue_key_to_session_name("itdove/devaiflow#60", "github.enterprise.com") == "github-enterprise-com-itdove-devaiflow-60"
+
+    # Default hostnames omit hostname
+    assert issue_key_to_session_name("itdove/devaiflow#60", "github.com") == "itdove-devaiflow-60"
+
+
+def test_link_with_rename_prefix_conflict(mock_jira_cli, temp_daf_home):
+    """Test --rename-prefix warns but doesn't fail when target name exists."""
+    mock_jira_cli.set_ticket("PROJ-111", {
+        "key": "PROJ-111",
+        "fields": {"summary": "First", "status": {"name": "New"}}
+    })
+    mock_jira_cli.set_ticket("PROJ-222", {
+        "key": "PROJ-222",
+        "fields": {"summary": "Second", "status": {"name": "New"}}
+    })
+
+    runner = CliRunner()
+
+    # Create two sessions — one with the name that the rename would produce
+    result = runner.invoke(cli, [
+        "new", "--name", "creation-PROJ-222", "--goal", "Existing",
+        "--path", str(temp_daf_home / "project1")
+    ], input="n\n")
+    assert result.exit_code == 0
+
+    result = runner.invoke(cli, [
+        "new", "--name", "my-session", "--goal", "New work",
+        "--path", str(temp_daf_home / "project2")
+    ], input="n\n")
+    assert result.exit_code == 0
+
+    # Link with --rename-prefix — target name already exists
+    result = runner.invoke(cli, [
+        "link", "my-session", "--jira", "PROJ-222", "--rename-prefix", "creation"
+    ])
+
+    # Should succeed (link works) but warn about rename failure
+    assert result.exit_code == 0
+    assert "Could not rename" in result.output or "already exists" in result.output
+
+    # Verify: session is still linked (even though rename failed)
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("my-session")
+    assert len(sessions) > 0
+    assert sessions[0].issue_key == "PROJ-222"
+
+
+def test_link_works_inside_claude_session(mock_jira_cli, temp_daf_home, monkeypatch):
+    """Test that link_jira works when called from inside a Claude session (no @require_outside_claude)."""
+    mock_jira_cli.set_ticket("PROJ-789", {
+        "key": "PROJ-789",
+        "fields": {"summary": "Inside session", "status": {"name": "New"}}
+    })
+
+    runner = CliRunner()
+
+    # Create a session
+    result = runner.invoke(cli, [
+        "new", "--name", "in-agent-test", "--goal", "Test inside agent",
+        "--path", str(temp_daf_home / "test-project")
+    ], input="n\n")
+    assert result.exit_code == 0
+
+    # Simulate being inside a Claude session
+    monkeypatch.setenv("DEVAIFLOW_IN_SESSION", "in-agent-test")
+
+    # Link should work (not be blocked by require_outside_claude)
+    result = runner.invoke(cli, [
+        "link", "in-agent-test", "--jira", "PROJ-789"
+    ])
+    assert result.exit_code == 0
+    assert "Linked" in result.output or "PROJ-789" in result.output
+
+    # Verify: session is linked
+    config_loader = ConfigLoader()
+    sessions = config_loader.load_sessions().get_sessions("in-agent-test")
+    assert len(sessions) > 0
+    assert sessions[0].issue_key == "PROJ-789"
+
+
+def test_link_with_rename_prefix_json_output(mock_jira_cli, temp_daf_home):
+    """Test --rename-prefix includes renamed_from in JSON output."""
+    mock_jira_cli.set_ticket("PROJ-999", {
+        "key": "PROJ-999",
+        "fields": {"summary": "JSON test", "status": {"name": "New"}}
+    })
+
+    runner = CliRunner()
+
+    # Create a session
+    result = runner.invoke(cli, [
+        "new", "--name", "json-rename-test", "--goal", "Test JSON",
+        "--path", str(temp_daf_home / "test-project")
+    ], input="n\n")
+    assert result.exit_code == 0
+
+    # Link with --rename-prefix and --json
+    result = runner.invoke(cli, [
+        "link", "json-rename-test", "--jira", "PROJ-999",
+        "--rename-prefix", "creation", "--json"
+    ])
+    assert result.exit_code == 0
+
+    output_data = json.loads(result.output)
+    assert output_data["success"] is True
+    assert output_data["data"]["session_group"] == "creation-PROJ-999"
+    assert output_data["data"]["renamed_from"] == "json-rename-test"
+    assert output_data["data"]["issue_key"] == "PROJ-999"

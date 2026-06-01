@@ -1309,8 +1309,9 @@ def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str, goal
 @click.argument("name", shell_complete=complete_session_identifiers)
 @click.option("--jira", "issue_key", required=True, help="issue tracker key to link")
 @click.option("--force", is_flag=True, help="Skip confirmation prompts (auto-replace existing links)")
+@click.option("--rename-prefix", help="Rename session to {prefix}-{issue_key_slug} after linking")
 @json_option
-def link(ctx: click.Context, name: str, issue_key: str, force: bool) -> None:
+def link(ctx: click.Context, name: str, issue_key: str, force: bool, rename_prefix: str) -> None:
     """Link a issue tracker ticket to a session group.
 
     Associates a issue tracker ticket with all sessions in the specified session group.
@@ -1318,7 +1319,7 @@ def link(ctx: click.Context, name: str, issue_key: str, force: bool) -> None:
     """
     from devflow.cli.commands.link_command import link_jira
 
-    link_jira(name, issue_key, force)
+    link_jira(name, issue_key, force, rename_prefix=rename_prefix)
 
 
 @cli.command()
