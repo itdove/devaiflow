@@ -129,6 +129,20 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         },
         "notes": "VS Code extension - limited CLI integration",
     },
+    "opencode": {
+        "name": "OpenCode",
+        "description": "Open source terminal AI coding agent by Anomaly (multi-provider)",
+        "cli_command": "opencode",
+        "install_url": "https://opencode.ai",
+        "status": "experimental",
+        "features": {
+            "session_management": True,
+            "conversation_export": True,
+            "message_counting": True,
+            "resume_support": True,
+            "skills_support": False,
+        },
+    },
 }
 
 

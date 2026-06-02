@@ -17,13 +17,14 @@ from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
 from devflow.agent.aider_agent import AiderAgent
 from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
+from devflow.agent.opencode_agent import OpenCodeAgent
 
 
 def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = None) -> AgentInterface:
     """Create an agent client for the specified backend.
 
     Args:
-        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush")
+        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode")
         agent_home: Optional custom home directory for the agent
 
     Returns:
@@ -73,13 +74,18 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         >>> agent.get_agent_name()
         'crush'
 
+        >>> # Create OpenCode agent
+        >>> agent = create_agent_client("opencode")
+        >>> agent.get_agent_name()
+        'opencode'
+
         >>> # Create with custom home directory
         >>> agent = create_agent_client("claude", Path("/custom/path"))
 
     Note:
         Only Claude Code and Ollama have been fully tested. Other agents (GitHub Copilot,
-        Cursor, Windsurf, Aider, Continue, Crush) are experimental and may have limitations in
-        session management, conversation export, and message counting capabilities.
+        Cursor, Windsurf, Aider, Continue, Crush, OpenCode) are experimental and may have
+        limitations in session management, conversation export, and message counting capabilities.
     """
     backend = backend.lower()
 
@@ -97,10 +103,12 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         return AiderAgent(aider_dir=agent_home)
     elif backend == "continue":
         return ContinueAgent(continue_dir=agent_home)
-    elif backend in ("crush", "opencode"):
+    elif backend == "crush":
         return CrushAgent(crush_dir=agent_home)
+    elif backend in ("opencode", "opencode-ai"):
+        return OpenCodeAgent(opencode_dir=agent_home)
     else:
         raise ValueError(
             f"Unsupported agent backend: {backend}. "
-            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf, aider, continue, crush"
+            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf, aider, continue, crush, opencode"
         )
