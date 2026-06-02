@@ -422,12 +422,14 @@ class ConfigSelect(Container):
         """Compose the select widgets."""
         yield Label(self._label)
 
-        yield Select(
-            options=self._choices,
-            value=self._value if self._value else Select.BLANK,
-            allow_blank=self._allow_blank,
-            id=f"select_{_sanitize_widget_id(self.config_key)}",
-        )
+        select_kwargs = {
+            "options": self._choices,
+            "allow_blank": self._allow_blank,
+            "id": f"select_{_sanitize_widget_id(self.config_key)}",
+        }
+        if self._value and self._value in {v for _, v in self._choices}:
+            select_kwargs["value"] = self._value
+        yield Select(**select_kwargs)
 
         if self._help_text:
             yield Label(self._help_text, classes="help-text")
@@ -435,7 +437,7 @@ class ConfigSelect(Container):
     def get_value(self) -> Optional[str]:
         """Get current select value."""
         select = self.query_one(f"#select_{_sanitize_widget_id(self.config_key)}", Select)
-        return select.value if select.value != Select.BLANK else None
+        return select.value if isinstance(select.value, str) else None
 
 
 class ContextFileEntry(Container):
@@ -2083,6 +2085,10 @@ class ConfigTUI(App):
                     "github-copilot": "GitHub Copilot (experimental)",
                     "cursor": "Cursor (experimental)",
                     "windsurf": "Windsurf (experimental)",
+                    "aider": "Aider (experimental)",
+                    "continue": "Continue (experimental)",
+                    "crush": "Crush (experimental)",
+                    "opencode": "OpenCode (experimental)",
                 }.get(self.config.agent_backend, self.config.agent_backend)
 
                 yield Static(
@@ -2101,6 +2107,10 @@ class ConfigTUI(App):
                         ("GitHub Copilot (experimental)", "github-copilot"),
                         ("Cursor (experimental)", "cursor"),
                         ("Windsurf (experimental)", "windsurf"),
+                        ("Aider (experimental)", "aider"),
+                        ("Continue (experimental)", "continue"),
+                        ("Crush (experimental)", "crush"),
+                        ("OpenCode (experimental)", "opencode"),
                     ],
                     value=self.config.agent_backend,
                     help_text="Select which AI coding assistant to use with DevAIFlow",
@@ -2788,7 +2798,7 @@ class ConfigTUI(App):
             # Try to get summary mode from select widget
             try:
                 summary_mode_select = self.query_one("#select_session_summary_mode", Select)
-                summary_mode = summary_mode_select.value if summary_mode_select.value != Select.BLANK else "local"
+                summary_mode = summary_mode_select.value if isinstance(summary_mode_select.value, str) else "local"
             except NoMatches:
                 # Fallback to config value if widget not found
                 summary_mode = self.config.session_summary.mode
@@ -3035,7 +3045,7 @@ class ConfigTUI(App):
                 try:
                     # Try to get from dropdown (ConfigSelect)
                     components_val = self.query_one(key_to_id("select", "jira.components"), Select).value
-                    if components_val and components_val != Select.BLANK:
+                    if isinstance(components_val, str) and components_val:
                         # Single component from dropdown - store as list
                         if not self.config.jira.system_field_defaults:
                             self.config.jira.system_field_defaults = {}
@@ -3076,7 +3086,7 @@ class ConfigTUI(App):
                                 try:
                                     # Try dropdown first
                                     value = self.query_one(key_to_id("select", config_key), Select).value
-                                    if value and value != Select.BLANK:
+                                    if isinstance(value, str) and value:
                                         self.config.jira.custom_field_defaults[field_key] = value
                                     elif field_key in self.config.jira.custom_field_defaults:
                                         # Clear if blank selected
@@ -3097,7 +3107,7 @@ class ConfigTUI(App):
                 self.config.jira.time_tracking = self.query_one(key_to_id("checkbox", "jira.time_tracking"), Checkbox).value
 
                 comment_type = self.query_one(key_to_id("select", "jira.comment_visibility_type"), Select).value
-                self.config.jira.comment_visibility_type = comment_type if comment_type != Select.BLANK else None
+                self.config.jira.comment_visibility_type = comment_type if isinstance(comment_type, str) else None
 
                 comment_val = self.query_one(key_to_id("input", "jira.comment_visibility_value"), Input).value.strip()
                 self.config.jira.comment_visibility_value = comment_val if comment_val else None
@@ -3154,11 +3164,11 @@ class ConfigTUI(App):
                 # Note: repos.workspace field removed - now using workspaces list
 
                 detection_method = self.query_one(key_to_id("select", "repos.detection.method"), Select).value
-                if detection_method and detection_method != Select.BLANK:
+                if isinstance(detection_method, str) and detection_method:
                     self.config.repos.detection.method = detection_method
 
                 detection_fallback = self.query_one(key_to_id("select", "repos.detection.fallback"), Select).value
-                if detection_fallback and detection_fallback != Select.BLANK:
+                if isinstance(detection_fallback, str) and detection_fallback:
                     self.config.repos.detection.fallback = detection_fallback
 
                 # PR Template URL
@@ -3185,7 +3195,7 @@ class ConfigTUI(App):
                 )
 
                 pr_status_val = self.query_one(key_to_id("select", "prompts.auto_create_pr_status"), Select).value
-                self.config.prompts.auto_create_pr_status = pr_status_val if pr_status_val and pr_status_val != Select.BLANK else "prompt"
+                self.config.prompts.auto_create_pr_status = pr_status_val if isinstance(pr_status_val, str) and pr_status_val else "prompt"
 
                 self.config.prompts.auto_add_issue_summary = _choice_to_bool(
                     self.query_one(key_to_id("select", "prompts.auto_add_issue_summary"), Select).value
@@ -3215,14 +3225,14 @@ class ConfigTUI(App):
                 )
 
                 sync_val = self.query_one(key_to_id("select", "prompts.auto_sync_with_base"), Select).value
-                self.config.prompts.auto_sync_with_base = sync_val if sync_val != Select.BLANK else None
+                self.config.prompts.auto_sync_with_base = sync_val if isinstance(sync_val, str) else None
 
                 self.config.prompts.auto_complete_on_exit = _choice_to_bool(
                     self.query_one(key_to_id("select", "prompts.auto_complete_on_exit"), Select).value
                 )
 
                 branch_strat = self.query_one(key_to_id("select", "prompts.default_branch_strategy"), Select).value
-                self.config.prompts.default_branch_strategy = branch_strat if branch_strat != Select.BLANK else None
+                self.config.prompts.default_branch_strategy = branch_strat if isinstance(branch_strat, str) else None
 
                 # use_issue_key_as_branch is a boolean field (not tri-state)
                 use_issue_key = self.query_one(key_to_id("select", "prompts.use_issue_key_as_branch"), Select).value
@@ -3246,7 +3256,7 @@ class ConfigTUI(App):
                 if not self._get_agent_backend_enforcement_source():
                     # User can choose - collect the value
                     agent_backend_val = self.query_one(key_to_id("select", "agent_backend"), Select).value
-                    if agent_backend_val and agent_backend_val != Select.BLANK:
+                    if isinstance(agent_backend_val, str) and agent_backend_val:
                         self.config.agent_backend = agent_backend_val
                 # If enforced, keep the value from org/team (already in self.config)
 
@@ -3254,7 +3264,7 @@ class ConfigTUI(App):
                 # Always preserve the value even when not using Claude
                 if _is_vertex_ai_available() and self.config.agent_backend == "claude":
                     region_val = self.query_one(key_to_id("select", "gcp_vertex_region"), Select).value
-                    self.config.gcp_vertex_region = region_val if region_val != Select.BLANK else None
+                    self.config.gcp_vertex_region = region_val if isinstance(region_val, str) else None
                 # If Vertex AI not available or not using Claude, keep existing value
 
                 # Ollama configuration (only when Ollama is selected)
@@ -3274,7 +3284,7 @@ class ConfigTUI(App):
 
                 # Session summary settings (works for all agents)
                 summary_mode = self.query_one(key_to_id("select", "session_summary.mode"), Select).value
-                if summary_mode and summary_mode != Select.BLANK:
+                if isinstance(summary_mode, str) and summary_mode:
                     self.config.session_summary.mode = summary_mode
 
                 # API key env - query from ConfigInput widget (always exists, just might be hidden)

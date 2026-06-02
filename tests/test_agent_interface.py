@@ -16,6 +16,7 @@ from devflow.agent import (
     AiderAgent,
     ContinueAgent,
     CrushAgent,
+    OpenCodeAgent,
     create_agent_client,
 )
 from devflow.utils.dependencies import ToolNotFoundError
@@ -409,12 +410,19 @@ class TestAgentFactory:
         assert isinstance(agent, CrushAgent)
         assert agent.get_agent_name() == "crush"
 
-    def test_create_opencode_agent_alias(self):
-        """Test factory accepts 'opencode' as alias for 'crush'."""
+    def test_create_opencode_agent(self):
+        """Test factory creates OpenCodeAgent for 'opencode' backend."""
         agent = create_agent_client("opencode")
 
-        assert isinstance(agent, CrushAgent)
-        assert agent.get_agent_name() == "crush"
+        assert isinstance(agent, OpenCodeAgent)
+        assert agent.get_agent_name() == "opencode"
+
+    def test_create_opencode_ai_alias(self):
+        """Test factory accepts 'opencode-ai' as alias for 'opencode'."""
+        agent = create_agent_client("opencode-ai")
+
+        assert isinstance(agent, OpenCodeAgent)
+        assert agent.get_agent_name() == "opencode"
 
     def test_create_crush_custom_home(self):
         """Test factory passes custom agent_home to CrushAgent."""

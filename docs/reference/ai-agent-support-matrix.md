@@ -20,11 +20,12 @@ Before diving into the agent matrix, it's important to understand the three dist
 - Ollama (CLI that launches Claude Code)
 - Aider (TUI)
 - Crush (TUI)
+- OpenCode (TUI)
 
 **Configuration:**
 ```json
 {
-  "agent_backend": "claude"  // or "ollama", "cursor", "github-copilot", etc.
+  "agent_backend": "claude"  // or "ollama", "cursor", "github-copilot", "opencode", etc.
 }
 ```
 
@@ -190,7 +191,8 @@ This is why token tracking is currently **Claude Code only** - it's the only age
 | **Windsurf** | `windsurf` | ⚠️  Experimental | `windsurf` | Limited | ✅ Experimental |
 | **Aider** | `aider` | ⚠️  Experimental | `aider` | Limited | ✅ Experimental |
 | **Continue** | `continue` | ⚠️  Experimental | `continue` (VS Code ext) | Limited | ✅ Experimental |
-| **Crush** | `crush`, `opencode` | ⚠️  Experimental | `crush` | Limited | ✅ Experimental |
+| **Crush** | `crush` | ⚠️  Experimental | `crush` | Limited | ✅ Experimental |
+| **OpenCode** | `opencode`, `opencode-ai` | ⚠️  Experimental | `opencode` | Full CLI support | ✅ Experimental |
 
 ## Configuration
 
@@ -206,10 +208,11 @@ daf config set agent_backend windsurf
 daf config set agent_backend aider
 daf config set agent_backend continue
 daf config set agent_backend crush
+daf config set agent_backend opencode
 
 # Or manually edit $DEVAIFLOW_HOME/config.json
 {
-  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush"
+  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode"
   "ollama": {
     "default_model": "qwen3-coder"  // optional, only for ollama backend
   }
@@ -250,8 +253,9 @@ Each agent has its own skills directory where DevAIFlow installs bundled skills:
 | **Aider** | `~/.aider/skills/` | `<project>/.aider/skills/` | _(none)_ |
 | **Continue** | `~/.continue/skills/` | `<project>/.continue/skills/` | _(none)_ |
 | **Crush** | `~/.local/share/crush/skills/` | `<project>/.crush/skills/` | `$XDG_DATA_HOME` |
+| **OpenCode** | `~/.config/opencode/skills/` | `<project>/.opencode/skills/` | `$XDG_CONFIG_HOME` |
 
-**Note:** Claude Code, GitHub Copilot, and Crush support environment variables to override the default config/data directory.
+**Note:** Claude Code, GitHub Copilot, Crush, and OpenCode support environment variables to override the default config/data directory.
 
 ### Installation Levels
 
@@ -655,7 +659,7 @@ windsurf <project-path>  # Launch/resume Windsurf
 
 ### Crush (Experimental)
 
-**Backend:** `crush` or `opencode`
+**Backend:** `crush`
 
 **Features:**
 - ✅ Launch Crush TUI-based agent
@@ -743,12 +747,92 @@ winget install Charm.Crush
 - Headless/scriptable AI workflows
 
 **History:**
-Crush (formerly OpenCode) was created by Kujtim and later acquired by Charmbracelet. It continues to be actively developed and maintained by the Charm team.
+Crush (formerly OpenCode by Kujtim Hoxha) was later acquired by Charmbracelet. It continues to be actively developed and maintained by the Charm team. Note: This is NOT the same as OpenCode by Anomaly (anomalyco/opencode) — see below.
 
 **External Resources:**
 - [GitHub](https://github.com/charmbracelet/crush)
 - [Charm Blog Announcement](https://charm.land/blog/crush-comes-home/)
 - [The New Stack Review](https://thenewstack.io/terminal-user-interfaces-review-of-crush-ex-opencode-al/)
+
+---
+
+### OpenCode (Experimental)
+
+**Backend:** `opencode` or `opencode-ai`
+
+**Features:**
+- ✅ Launch OpenCode terminal-based agent
+- ✅ Non-interactive prompt passing via `opencode run`
+- ✅ Session management with `--session` and `--continue`
+- ✅ JSON output for programmatic interaction
+- ✅ Token/cost statistics via `opencode stats`
+- ✅ Multi-provider support (Anthropic, OpenAI, Google, and more)
+- ✅ MCP server management
+- ⚠️  Session detection via CLI output parsing
+- ⚠️  Skills support TBD
+
+**CLI Commands:**
+```bash
+opencode                    # Launch new interactive session
+opencode run <prompt>       # Non-interactive single prompt
+opencode --session <id>     # Resume specific session
+opencode --continue         # Resume last session
+opencode session list       # List all sessions (supports --format json)
+opencode export <id>        # Export session data
+opencode stats              # Token/cost statistics
+opencode db path            # Show database location
+opencode serve --port N     # Start headless server
+```
+
+**Session Storage:**
+- Location: `~/.config/opencode/` (default, follows XDG spec)
+- Database accessible via `opencode db path` and `opencode db <query>`
+- Sessions queryable via `opencode session list --format json`
+
+**Environment Variables:**
+- `XDG_CONFIG_HOME` - Override config directory location
+
+**AI-Powered Summaries:**
+- ❌ Not yet supported (session format needs investigation)
+- Auto-downgrades to "local" mode (git-based summaries)
+
+**Token Usage Tracking:**
+- ⚠️  Experimental — uses `opencode stats` CLI command
+- May support input tokens, output tokens, and cost data
+
+**Known Limitations:**
+- Session detection relies on `opencode session list` CLI polling
+- Skills support is TBD (uses `.opencode/` directory structure)
+- Token extraction depends on `opencode stats` availability
+
+**Advantages:**
+- ✅ Open source (MIT license) — no vendor lock-in
+- ✅ Multi-provider support out of the box
+- ✅ Rich CLI with JSON output for automation
+- ✅ Built-in session management, export/import
+- ✅ MCP server support
+- ✅ Massive community adoption (169k+ GitHub stars)
+
+**Installation:**
+```bash
+# Install script
+curl -fsSL https://opencode.ai/install | bash
+
+# Or see: https://opencode.ai/docs
+```
+
+**Important:** OpenCode (anomalyco/opencode) is NOT the same as Charmbracelet's Crush (formerly also called "opencode"). They are completely separate projects.
+
+**External Resources:**
+- [GitHub](https://github.com/anomalyco/opencode)
+- [Documentation](https://opencode.ai/docs)
+- [CLI Reference](https://opencode.ai/docs/cli)
+
+**Recommended Use Cases:**
+- Teams wanting an open source, multi-provider AI coding agent
+- Developers who prefer terminal-based tools with rich CLI
+- Projects requiring session management and cost tracking
+- Teams that need JSON output for automation/scripting
 
 ---
 
@@ -765,6 +849,7 @@ Crush (formerly OpenCode) was created by Kujtim and later acquired by Charmbrace
 - **Aider**: ⚠️  Unit tests only, no real-world testing
 - **Continue**: ⚠️  Unit tests only, no real-world testing
 - **Crush**: ⚠️  Unit tests only, no real-world testing
+- **OpenCode**: ⚠️  Unit tests only, no real-world testing
 
 **Test Results:**
 - All 2039 unit tests pass (3 skipped)
@@ -817,6 +902,14 @@ Crush (formerly OpenCode) was created by Kujtim and later acquired by Charmbrace
 - LSP integration and code-aware context are priorities
 - You want MCP plugin extensibility
 - Session tracking is more important than conversation export
+
+**Use OpenCode when:**
+- You want an open source, vendor-neutral AI coding agent
+- Multi-provider support out of the box is important
+- Rich CLI capabilities (JSON output, session management) are needed
+- You want session export/import and cost tracking
+- MCP server support is a priority
+- You prefer terminal-based tools with a large community
 
 ## Migration Between Agents
 

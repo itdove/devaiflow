@@ -263,10 +263,10 @@ class TestSupportedAgents:
 
     def test_supported_agents_list(self):
         """Test SUPPORTED_AGENTS contains expected agents."""
-        expected_agents = ['claude', 'copilot', 'github-copilot', 'cursor', 'windsurf', 'aider', 'continue']
+        expected_agents = ['claude', 'copilot', 'github-copilot', 'cursor', 'windsurf', 'aider', 'continue', 'opencode']
         assert set(SUPPORTED_AGENTS) == set(expected_agents)
 
     def test_supported_agents_count(self):
         """Test SUPPORTED_AGENTS has the expected count."""
-        # 6 unique agents + 1 alias
-        assert len(SUPPORTED_AGENTS) == 7
+        # 7 unique agents + 1 alias (github-copilot -> copilot)
+        assert len(SUPPORTED_AGENTS) == 8

@@ -44,6 +44,12 @@ in their official documentation. See the links below for the authoritative sourc
    - Env var: None (hardcoded path)
    - Docs: https://continue.dev/docs
 
+7. OpenCode (Experimental)
+   - Global: ~/.config/opencode/skills/ (or $XDG_CONFIG_HOME/opencode/skills/)
+   - Project: <project>/.opencode/skills/
+   - Env var: XDG_CONFIG_HOME (standard XDG override)
+   - Docs: https://opencode.ai/docs
+
 Note: Paths marked as "Experimental" are based on conventional patterns observed
 in the wild but may not be officially supported by the agent. Always check the
 official documentation before adding a new agent or updating paths.
@@ -141,10 +147,21 @@ def get_agent_global_skills_dir(agent: str) -> Path:
         # Path: ~/.continue/skills/
         return Path.home() / '.continue' / 'skills'
 
+    elif agent == 'opencode':
+        # OpenCode: follows XDG spec
+        # Docs: https://opencode.ai/docs
+        # Default: ~/.config/opencode/skills/ or $XDG_CONFIG_HOME/opencode/skills/
+        xdg_config = os.environ.get('XDG_CONFIG_HOME')
+        if xdg_config:
+            base_dir = Path(xdg_config).expanduser() / 'opencode'
+        else:
+            base_dir = Path.home() / '.config' / 'opencode'
+        return base_dir / 'skills'
+
     else:
         raise ValueError(
             f"Unknown agent: {agent}. "
-            f"Supported: claude, copilot, cursor, windsurf, aider, continue"
+            f"Supported: claude, copilot, cursor, windsurf, aider, continue, opencode"
         )
 
 
@@ -182,10 +199,13 @@ def get_agent_project_skills_dir(agent: str, project_path: Path) -> Path:
     elif agent == 'continue':
         return project_path / '.continue' / 'skills'
 
+    elif agent == 'opencode':
+        return project_path / '.opencode' / 'skills'
+
     else:
         raise ValueError(
             f"Unknown agent: {agent}. "
-            f"Supported: claude, copilot, cursor, windsurf, aider, continue"
+            f"Supported: claude, copilot, cursor, windsurf, aider, continue, opencode"
         )
 
 
@@ -246,7 +266,7 @@ def get_skill_install_paths(
 
 
 # Supported agent names
-SUPPORTED_AGENTS = ['claude', 'copilot', 'github-copilot', 'cursor', 'windsurf', 'aider', 'continue']
+SUPPORTED_AGENTS = ['claude', 'copilot', 'github-copilot', 'cursor', 'windsurf', 'aider', 'continue', 'opencode']
 
 
 def validate_agent_names(agents: List[str]) -> List[str]:
@@ -265,9 +285,11 @@ def validate_agent_names(agents: List[str]) -> List[str]:
     for agent in agents:
         agent_lower = agent.lower()
 
-        # Normalize github-copilot to copilot
+        # Normalize aliases
         if agent_lower == 'github-copilot':
             agent_lower = 'copilot'
+        elif agent_lower == 'opencode-ai':
+            agent_lower = 'opencode'
 
         if agent_lower not in SUPPORTED_AGENTS and agent_lower != 'copilot':
             raise ValueError(
