@@ -275,6 +275,87 @@ class TestClaudeAgent:
         assert "Failed to detect new Claude Code session" in str(exc_info.value)
 
 
+class TestClaudeAgentHeadless:
+    """Test ClaudeAgent headless and auto-approve modes."""
+
+    @patch("devflow.agent.claude_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_headless(self, mock_popen, mock_require_tool):
+        """Test headless mode adds --print flag."""
+        agent = ClaudeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="test-uuid",
+            headless=True,
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--print" in cmd
+        assert "--session-id" in cmd
+        assert "Fix bug" in cmd
+
+    @patch("devflow.agent.claude_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_auto_approve(self, mock_popen, mock_require_tool):
+        """Test auto-approve mode adds --dangerously-skip-permissions flag."""
+        agent = ClaudeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="test-uuid",
+            auto_approve=True,
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--dangerously-skip-permissions" in cmd
+        assert "--print" not in cmd  # not headless
+
+    @patch("devflow.agent.claude_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_headless_and_auto_approve(self, mock_popen, mock_require_tool):
+        """Test both headless and auto-approve flags together."""
+        agent = ClaudeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="test-uuid",
+            headless=True,
+            auto_approve=True,
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--print" in cmd
+        assert "--dangerously-skip-permissions" in cmd
+
+    @patch("devflow.agent.claude_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_default_no_flags(self, mock_popen, mock_require_tool):
+        """Test default launch has neither --print nor --dangerously-skip-permissions."""
+        agent = ClaudeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="test-uuid",
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--print" not in cmd
+        assert "--dangerously-skip-permissions" not in cmd
+
+
 class TestAgentFactory:
     """Test create_agent_client factory function."""
 

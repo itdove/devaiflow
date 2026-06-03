@@ -322,6 +322,8 @@ def create_new_session(
     sync_upstream: Optional[bool] = None,
     auto_workspace: bool = False,
     session_index: Optional[int] = None,
+    headless: bool = False,
+    auto_approve: bool = False,
 ) -> None:
     """Create a new session or add conversation to existing session.
 
@@ -493,6 +495,8 @@ def create_new_session(
             allow_uncommitted=allow_uncommitted,
             sync_upstream=sync_upstream,
             non_interactive=non_interactive,
+            headless=headless,
+            auto_approve=auto_approve,
         )
         return
 
@@ -551,6 +555,8 @@ def create_new_session(
                         allow_uncommitted=allow_uncommitted,
                         sync_upstream=sync_upstream,
                         non_interactive=non_interactive,
+                        headless=headless,
+                        auto_approve=auto_approve,
                     )
                     return
                 elif selected_paths:
@@ -902,7 +908,9 @@ def create_new_session(
                 skills_dirs=None,  # Will be auto-discovered
                 workspace_path=workspace_path,
                 config=config,
-                env=env
+                env=env,
+                headless=headless,
+                auto_approve=auto_approve
             )
             # Wait for the agent process to complete
             process.wait()

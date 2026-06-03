@@ -331,8 +331,10 @@ def cli(ctx: click.Context, non_interactive: bool, experimental: bool) -> None:
 @click.option("--sync-upstream/--no-sync-upstream", default=None, help="Sync with upstream before creating branch (default: prompt)")
 @click.option("--auto-workspace", is_flag=True, help="Auto-select workspace without prompting")
 @click.option("--session-index", type=int, help="Select existing session by index (for multi-session selection)")
+@click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
+@click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, session_index: int) -> None:
+def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, session_index: int, headless: bool, auto_approve: bool) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -424,6 +426,8 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
         sync_upstream=sync_upstream,
         auto_workspace=auto_workspace,
         session_index=session_index,
+        headless=headless,
+        auto_approve=auto_approve,
     )
 
 
@@ -444,8 +448,10 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--sync-upstream/--no-sync-upstream", default=None, help="Sync with upstream when opening session (default: prompt)")
 @click.option("--auto-workspace", is_flag=True, help="Auto-select workspace without prompting")
 @click.option("--sync-strategy", type=click.Choice(['merge', 'rebase', 'skip'], case_sensitive=False), help="Strategy for syncing with upstream (merge/rebase/skip)")
+@click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
+@click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @json_option
-def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str) -> None:
+def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str, headless: bool, auto_approve: bool) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -539,6 +545,8 @@ def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str
         sync_upstream=sync_upstream,
         auto_workspace=auto_workspace,
         sync_strategy=sync_strategy,
+        headless=headless,
+        auto_approve=auto_approve,
     )
 
 
@@ -1611,7 +1619,9 @@ jira.add_command(create_jira_update_command())
 @click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
 @click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--affects-versions", help="Affected version for bugs (required for bug type)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str]) -> None:
+@click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
+@click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str], headless: bool, auto_approve: bool) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1679,13 +1689,15 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
                 affects_versions = prompt_for_affected_version(field_mapper)
         # else: affects_versions stays None (field is optional for this issue type)
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone)
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve)
 
 
 @jira.command(name="open")
 @json_option
 @click.argument("issue_key")
-def jira_open(ctx: click.Context, issue_key: str) -> None:
+@click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
+@click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+def jira_open(ctx: click.Context, issue_key: str, headless: bool, auto_approve: bool) -> None:
     """Open or create session for issue tracker ticket.
 
     Validates that the issue tracker ticket exists, then either:
@@ -1699,7 +1711,7 @@ def jira_open(ctx: click.Context, issue_key: str) -> None:
     """
     from devflow.cli.commands.jira_open_command import jira_open_session
 
-    jira_open_session(issue_key)
+    jira_open_session(issue_key, headless=headless, auto_approve=auto_approve)
 
 
 @cli.group()
@@ -1835,7 +1847,9 @@ def git_add_comment(ctx: click.Context, issue_key: str, comment: str, repository
 @json_option
 @click.argument("issue_key")
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> None:
+@click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
+@click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+def git_open(ctx: click.Context, issue_key: str, repository: Optional[str], headless: bool, auto_approve: bool) -> None:
     """Open or create session for GitHub/GitLab issue.
 
     Validates that the issue exists, then either:
@@ -1850,7 +1864,7 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> N
     """
     from devflow.cli.commands.git_open_command import git_open_session
 
-    git_open_session(issue_key, repository)
+    git_open_session(issue_key, repository, headless=headless, auto_approve=auto_approve)
 
 
 @git.command(name="new")
@@ -1866,7 +1880,9 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str]) -> N
 @click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
 @click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, projects: str, temp_clone: bool, repository: Optional[str]) -> None:
+@click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
+@click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, projects: str, temp_clone: bool, repository: Optional[str], headless: bool, auto_approve: bool) -> None:
     """Create GitHub/GitLab issue with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1895,7 +1911,7 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository, projects=projects, temp_clone=temp_clone)
+    create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve)
 
 
 @git.command(name="check-auth")
@@ -1927,7 +1943,9 @@ def git_check_auth(ctx: click.Context, repository: Optional[str]) -> None:
 @click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
 @click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
-def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str) -> None:
+@click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
+@click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str, headless: bool, auto_approve: bool) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1969,7 +1987,7 @@ def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_fi
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    create_investigation_session(goal, parent, name, path, workspace, model_profile, projects=projects, temp_clone=temp_clone)
+    create_investigation_session(goal, parent, name, path, workspace, model_profile, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve)
 
 
 @cli.group()

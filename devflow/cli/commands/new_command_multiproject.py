@@ -43,6 +43,8 @@ def create_multi_project_session(
     allow_uncommitted: bool = False,
     sync_upstream: Optional[bool] = None,
     non_interactive: bool = False,
+    headless: bool = False,
+    auto_approve: bool = False,
 ) -> None:
     """Create a multi-project session with conversations for multiple repositories.
 
@@ -364,7 +366,9 @@ def create_multi_project_session(
                 skills_dirs=None,  # Will be auto-discovered
                 workspace_path=workspace_path,
                 config=config,
-                env=env
+                env=env,
+                headless=headless,
+                auto_approve=auto_approve,
             )
             process.wait()
         finally:

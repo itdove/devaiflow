@@ -13,7 +13,7 @@ console = Console()
 
 
 @require_outside_claude
-def jira_open_session(issue_key: str) -> None:
+def jira_open_session(issue_key: str, headless: bool = False, auto_approve: bool = False) -> None:
     """Open session for issue tracker ticket, creating it if needed.
 
     This command validates that the issue tracker ticket exists, then either:
@@ -22,6 +22,8 @@ def jira_open_session(issue_key: str) -> None:
 
     Args:
         issue_key: issue tracker key (e.g., PROJ-12345)
+        headless: Run agent without interactive UI
+        auto_approve: Auto-approve all agent tool permissions
     """
     config_loader = ConfigLoader()
     config = config_loader.load_config()
@@ -54,7 +56,7 @@ def jira_open_session(issue_key: str) -> None:
 
             from devflow.cli.commands.open_command import open_session
             # Use the full session name to avoid infinite loop
-            open_session(session.name)
+            open_session(session.name, headless=headless, auto_approve=auto_approve)
             return
         # If we found sessions but none are ticket_creation, continue to create a new creation-* session
         # This allows creating analysis sessions even when development sessions exist
@@ -169,4 +171,4 @@ def jira_open_session(issue_key: str) -> None:
 
     # 4. Open the newly created session
     from devflow.cli.commands.open_command import open_session
-    open_session(session_name, skip_jira_transition=True)
+    open_session(session_name, skip_jira_transition=True, headless=headless, auto_approve=auto_approve)

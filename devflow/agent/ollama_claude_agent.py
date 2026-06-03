@@ -131,6 +131,8 @@ class OllamaClaudeAgent(AgentInterface):
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
+        headless: bool = False,
+        auto_approve: bool = False,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with initial prompt (for new sessions).
 
@@ -153,6 +155,8 @@ class OllamaClaudeAgent(AgentInterface):
             workspace_path: Workspace path (currently not used)
             config: Configuration object (currently not used)
             env: Environment variables dict (optional, defaults to os.environ)
+            headless: Run without interactive UI (not supported by this agent)
+            auto_approve: Auto-approve tool permissions (not supported by this agent)
 
         Returns:
             Subprocess handle for the launched process
