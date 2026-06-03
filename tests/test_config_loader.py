@@ -751,3 +751,141 @@ def test_hierarchical_config_source_no_migration_if_already_in_new_location(temp
         org_config_data = json.load(f)
     assert "hierarchical_config_source" in org_config_data
     assert org_config_data["hierarchical_config_source"] == "file:///Users/test/old-configs"
+
+
+def test_save_agent_backend_to_user_config_not_enterprise(temp_daf_home):
+    """Test that TUI saves agent_backend to config.json, not enterprise.json.
+
+    Regression test for issue #412: agent_backend was incorrectly written to
+    enterprise.json instead of config.json when changed via TUI.
+    """
+    loader = ConfigLoader()
+    config = loader.create_default_config()
+
+    config.agent_backend = "opencode"
+    loader.save_config(config)
+
+    # agent_backend should be in config.json (user config)
+    with open(loader.config_file, "r") as f:
+        user_data = json.load(f)
+    assert user_data.get("agent_backend") == "opencode"
+
+    # enterprise.json should NOT have agent_backend set
+    enterprise_file = loader.config_dir / "enterprise.json"
+    with open(enterprise_file, "r") as f:
+        enterprise_data = json.load(f)
+    assert enterprise_data.get("agent_backend") is None
+
+
+def test_save_preserves_enterprise_agent_backend(temp_daf_home):
+    """Test that saving config preserves existing enterprise agent_backend.
+
+    When enterprise.json already has agent_backend set by an admin,
+    a user saving via TUI should not overwrite it.
+    """
+    loader = ConfigLoader()
+
+    # Simulate enterprise admin setting agent_backend
+    enterprise_file = loader.config_dir / "enterprise.json"
+    with open(enterprise_file, "w") as f:
+        json.dump({"agent_backend": "claude"}, f)
+
+    config = loader.create_default_config()
+    config.agent_backend = "opencode"
+    loader.save_config(config)
+
+    # enterprise.json should still have admin's value
+    with open(enterprise_file, "r") as f:
+        enterprise_data = json.load(f)
+    assert enterprise_data.get("agent_backend") == "claude"
+
+    # When enterprise enforces, user config should NOT store agent_backend
+    with open(loader.config_file, "r") as f:
+        user_data = json.load(f)
+    assert user_data.get("agent_backend") is None
+
+
+def test_save_preserves_enterprise_backend_overrides(temp_daf_home):
+    """Test that saving config preserves existing enterprise backend_overrides."""
+    loader = ConfigLoader()
+
+    enterprise_file = loader.config_dir / "enterprise.json"
+    overrides = {"field_mappings": {"components": {"required_for": ["Bug", "Story"]}}}
+    with open(enterprise_file, "w") as f:
+        json.dump({"agent_backend": "claude", "backend_overrides": overrides}, f)
+
+    config = loader.create_default_config()
+    loader.save_config(config)
+
+    with open(enterprise_file, "r") as f:
+        enterprise_data = json.load(f)
+    assert enterprise_data.get("backend_overrides") == overrides
+
+
+def test_agent_backend_merge_hierarchy(temp_daf_home):
+    """Test agent_backend merge: Enterprise > Team > User > default.
+
+    Verifies config hierarchy for agent_backend follows the correct priority.
+    """
+    loader = ConfigLoader()
+
+    # Set user config with agent_backend = "opencode"
+    user_data = {
+        "agent_backend": "opencode",
+        "repos": {
+            "workspaces": [
+                {"name": "default", "path": str(Path.home() / "development")}
+            ]
+        }
+    }
+    with open(loader.config_file, "w") as f:
+        json.dump(user_data, f)
+
+    config = loader.load_config()
+    assert config is not None
+    assert config.agent_backend == "opencode"
+
+
+def test_agent_backend_enterprise_overrides_user(temp_daf_home):
+    """Test that enterprise agent_backend overrides user's choice."""
+    loader = ConfigLoader()
+
+    # User wants opencode
+    user_data = {
+        "agent_backend": "opencode",
+        "repos": {
+            "workspaces": [
+                {"name": "default", "path": str(Path.home() / "development")}
+            ]
+        }
+    }
+    with open(loader.config_file, "w") as f:
+        json.dump(user_data, f)
+
+    # Enterprise enforces claude
+    enterprise_file = loader.config_dir / "enterprise.json"
+    with open(enterprise_file, "w") as f:
+        json.dump({"agent_backend": "claude"}, f)
+
+    config = loader.load_config()
+    assert config is not None
+    assert config.agent_backend == "claude"
+
+
+def test_agent_backend_defaults_to_claude(temp_daf_home):
+    """Test that agent_backend defaults to 'claude' when not set anywhere."""
+    loader = ConfigLoader()
+
+    user_data = {
+        "repos": {
+            "workspaces": [
+                {"name": "default", "path": str(Path.home() / "development")}
+            ]
+        }
+    }
+    with open(loader.config_file, "w") as f:
+        json.dump(user_data, f)
+
+    config = loader.load_config()
+    assert config is not None
+    assert config.agent_backend == "claude"

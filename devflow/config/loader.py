@@ -740,14 +740,14 @@ class ConfigLoader:
         # Merge GitHub configs
         merged_github = self._merge_github_config(enterprise_config, org_config, team_config)
 
-        # Merge agent_backend with priority: Enterprise > Organization > Team > User
+        # Merge agent_backend with priority: Enterprise > Team > User > default
         # Enterprise can enforce agent backend for all organizations
-        # Organization can enforce agent backend for all teams
         # Team can enforce agent backend for that team
-        # User can only choose if enterprise/org/team haven't enforced it
+        # User can only choose if enterprise/team haven't enforced it
         agent_backend = (
             enterprise_config.agent_backend  # Enterprise takes highest precedence
             or team_config.agent_backend  # Then team
+            or user_config.agent_backend  # Then user preference
             or "claude"  # Default to claude if not set anywhere
         )
 
@@ -914,8 +914,16 @@ class ConfigLoader:
             # Model provider is enforced - don't save user override
             user_model_provider = None
 
+        # Check if agent_backend is enforced by enterprise or team
+        # If enforced, don't save it in user config (prevent user override)
+        user_agent_backend = config.agent_backend
+        if enterprise_config.agent_backend or team_config.agent_backend:
+            # agent_backend is enforced - don't save user override
+            user_agent_backend = None
+
         # Extract user config
         user_config = UserConfig(
+            agent_backend=user_agent_backend,  # User's agent backend choice (only if not enforced)
             backend_config_source=config.backend_config_source,
             repos=config.repos,
             time_tracking=config.time_tracking,
@@ -952,30 +960,24 @@ class ConfigLoader:
         with open(backends_dir / "jira.json", "w") as f:
             json.dump(backend_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
 
-        # Extract enterprise config
-        # Note: agent_backend is retrieved from config.agent_backend (already merged with Enterprise > Team priority)
-        # backend_overrides come from field_mappings which don't exist in the merged config
-        # For now, we'll need to check if enterprise.json exists and preserve its content
-        # This is because the merged config doesn't preserve the source of these values
-        enterprise_config = EnterpriseConfig(
-            agent_backend=config.agent_backend,  # This is already the merged value
-            backend_overrides=None,  # Preserve existing value if file exists
-        )
-
-        # If enterprise.json exists, preserve backend_overrides
+        # Extract enterprise config — preserve existing values, never overwrite with user choices
         enterprise_file = self.config_dir / "enterprise.json"
+        existing_enterprise_data = {}
         if enterprise_file.exists():
             try:
                 with open(enterprise_file, "r") as f:
-                    existing_data = json.load(f)
-                if "backend_overrides" in existing_data:
-                    enterprise_config.backend_overrides = existing_data["backend_overrides"]
+                    existing_enterprise_data = json.load(f)
             except Exception:
-                pass  # Ignore errors, will use default
+                pass
+
+        enterprise_config_to_save = EnterpriseConfig(
+            agent_backend=existing_enterprise_data.get("agent_backend"),
+            backend_overrides=existing_enterprise_data.get("backend_overrides"),
+        )
 
         # Save enterprise config (enterprise.json)
         with open(self.config_dir / "enterprise.json", "w") as f:
-            json.dump(enterprise_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
+            json.dump(enterprise_config_to_save.model_dump(by_alias=True, exclude_none=False), f, indent=2)
 
         # Extract organization config (workflow policies and project settings)
         org_config = OrganizationConfig(
