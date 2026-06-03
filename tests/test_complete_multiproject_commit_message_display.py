@@ -15,8 +15,11 @@ from devflow.session.manager import SessionManager
 from devflow.git.utils import GitUtils
 
 
-def test_multiproject_workflow_displays_commit_message_before_committing(temp_daf_home, monkeypatch, capsys):
+def test_multiproject_workflow_displays_commit_message_before_committing(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Test that multi-project workflow (projects array) displays commit message before committing."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     # Create session with projects array
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -99,8 +102,11 @@ def test_multiproject_workflow_displays_commit_message_before_committing(temp_da
     assert "Changes committed" in captured.out
 
 
-def test_multiproject_with_multiple_repos_displays_commit_messages(temp_daf_home, monkeypatch, capsys):
+def test_multiproject_with_multiple_repos_displays_commit_messages(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Test that multi-project sessions with 2+ repos display commit message for each."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     # Create session with 2 projects
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -181,8 +187,11 @@ def test_multiproject_with_multiple_repos_displays_commit_messages(temp_daf_home
     assert "Changes committed" in captured.out
 
 
-def test_multiproject_user_can_decline_and_edit_message(temp_daf_home, monkeypatch, capsys):
+def test_multiproject_user_can_decline_and_edit_message(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Test that user can decline suggested message and provide their own in multi-project."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     # Create session with projects array
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -260,8 +269,11 @@ def test_multiproject_user_can_decline_and_edit_message(temp_daf_home, monkeypat
     assert "chore: bump package versions" in commit_messages_used[0]
 
 
-def test_multiproject_allows_user_to_edit_commit_message(temp_daf_home, monkeypatch, capsys):
+def test_multiproject_allows_user_to_edit_commit_message(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Test that user can edit commit message in multi-project sessions."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     # Create session with projects array
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -334,8 +346,11 @@ def test_multiproject_allows_user_to_edit_commit_message(temp_daf_home, monkeypa
     assert "🤖 Generated with [Claude Code]" in commit_messages_used[0]
 
 
-def test_single_project_session_still_works_correctly(temp_daf_home, monkeypatch, capsys):
+def test_single_project_session_still_works_correctly(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Regression test: Verify single-project sessions continue to work correctly."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     # Create single-project session
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
