@@ -720,6 +720,23 @@ def create_git_issue_session(
         elif config and config.repos and config.repos.workspaces:
             workspace_path_for_skills = config.repos.get_default_workspace_path()
 
+        # Warn if agent does not support permission prompts
+        if not agent.supports_permission_prompts():
+            console_print(
+                "\n[bold yellow]⚠  Warning:[/bold yellow] [yellow]"
+                f"{agent.get_agent_name()} does not support permission prompts. "
+                "This is a ticket-creation (analysis-only) session, but the agent "
+                "may still modify files without confirmation.[/yellow]"
+            )
+            initial_prompt += (
+                "\n\n⚠️  CRITICAL SAFETY NOTICE: Your agent backend does NOT have a "
+                "permission system. All file edits and shell commands execute immediately "
+                "without user confirmation. You MUST NOT write, edit, or delete any files. "
+                "You MUST NOT run destructive shell commands. Only use read-only operations "
+                "(read files, grep, find, git log, git diff). Violations risk unintended "
+                "changes to the user's codebase."
+            )
+
         # Debug: Print agent being executed
         console_print(f"\n[dim]Debug - Agent launch:[/dim]")
         console_print(f"[dim]  Agent backend: {agent_backend}[/dim]")

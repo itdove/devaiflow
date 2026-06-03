@@ -346,6 +346,17 @@ class OpenCodeAgent(AgentInterface):
         """
         return "opencode"
 
+    def supports_permission_prompts(self) -> bool:
+        """OpenCode auto-approves all tool calls without user confirmation.
+
+        Unlike Claude Code, OpenCode does not have a built-in permission system.
+        File edits and shell commands execute immediately without prompts.
+
+        Returns:
+            False — OpenCode has no permission prompt system.
+        """
+        return False
+
     def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
         """Extract token usage statistics using ``opencode stats``.
 

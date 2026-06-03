@@ -1703,3 +1703,52 @@ class TestCrushAgent:
         count = agent.get_session_message_count(session_id, project_path)
 
         assert count == 0
+
+
+class TestSupportsPermissionPrompts:
+    """Test supports_permission_prompts() across all agent implementations."""
+
+    def test_claude_supports_permissions(self):
+        """Claude Code has a built-in permission system."""
+        agent = ClaudeAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_ollama_supports_permissions(self):
+        """Ollama uses Claude Code, so it inherits permission support."""
+        agent = OllamaClaudeAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_copilot_supports_permissions(self):
+        """GitHub Copilot uses default (True) — IDE manages permissions."""
+        agent = GitHubCopilotAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_cursor_supports_permissions(self):
+        """Cursor uses default (True) — IDE manages permissions."""
+        agent = CursorAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_windsurf_supports_permissions(self):
+        """Windsurf uses default (True) — IDE manages permissions."""
+        agent = WindsurfAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_aider_supports_permissions(self):
+        """Aider uses default (True)."""
+        agent = AiderAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_continue_supports_permissions(self):
+        """Continue uses default (True)."""
+        agent = ContinueAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_crush_supports_permissions(self):
+        """Crush uses default (True)."""
+        agent = CrushAgent()
+        assert agent.supports_permission_prompts() is True
+
+    def test_opencode_does_not_support_permissions(self):
+        """OpenCode auto-approves all tool calls — returns False."""
+        agent = OpenCodeAgent()
+        assert agent.supports_permission_prompts() is False

@@ -318,6 +318,7 @@ daf skills --agents cursor
 
 | Feature | Claude Code | Ollama | GitHub Copilot | Cursor | Windsurf |
 |---------|-------------|--------|----------------|--------|----------|
+| Permission prompts | ✅ Full | ✅ Full (via Claude Code) | ⚠️  IDE-managed | ⚠️  IDE-managed | ⚠️  IDE-managed |
 | Launch session | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
 | Resume session | ✅ Full | ✅ Full | ⚠️  Workspace-based | ⚠️  Workspace-based | ⚠️  Workspace-based |
 | Session ID capture | ✅ Automatic | ✅ Automatic | ⚠️  Generated | ⚠️  Generated | ⚠️  Generated |
@@ -801,6 +802,7 @@ opencode serve --port N     # Start headless server
 - May support input tokens, output tokens, and cost data
 
 **Known Limitations:**
+- **⚠️  No permission prompts:** OpenCode auto-approves all tool calls (file edits, shell commands) without user confirmation. Unlike Claude Code, there is no built-in permission system. DevAIFlow displays a warning banner before launching OpenCode sessions. For ticket creation sessions (`daf git new`, `daf jira new`), an additional safety constraint is injected into the prompt to enforce read-only behavior.
 - Session detection relies on `opencode session list` CLI polling
 - Skills support is TBD (uses `.opencode/` directory structure)
 - Token extraction depends on `opencode stats` availability
@@ -833,6 +835,11 @@ curl -fsSL https://opencode.ai/install | bash
 - Developers who prefer terminal-based tools with rich CLI
 - Projects requiring session management and cost tracking
 - Teams that need JSON output for automation/scripting
+
+**Not Recommended For:**
+- Workflows requiring permission prompts before code modification (use Claude Code instead)
+- Production codebases where unconfirmed file edits are a safety concern
+- Automated pipelines where destructive operations must be gated
 
 ---
 
