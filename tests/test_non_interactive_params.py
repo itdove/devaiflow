@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch, call
 from click.testing import CliRunner
 
 from devflow.cli.main import cli
-from devflow.cli.commands.new_command import _is_non_interactive
+from devflow.cli.utils import is_non_interactive as _is_non_interactive
 
 # Import helper functions from conftest (functions are in module scope)
 import sys
@@ -392,3 +392,212 @@ class TestSyncStrategyChoices:
             ])
             # Help should succeed
             assert result.exit_code == 0
+
+
+# ===== Phase 2: daf complete non-interactive params =====
+
+class TestDafCompleteNonInteractiveParams:
+    """Test daf complete command non-interactive parameters."""
+
+    def test_yes_flag(self):
+        """Test --yes flag appears in help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['complete', '--help'])
+        assert result.exit_code == 0
+        assert '--yes' in result.output
+
+    def test_commit_message_parameter(self):
+        """Test --commit-message parameter appears in help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['complete', '--help'])
+        assert result.exit_code == 0
+        assert '--commit-message' in result.output
+
+    def test_export_commit_flags(self):
+        """Test --export-commit and --no-export-commit flags."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['complete', '--help'])
+        assert result.exit_code == 0
+        assert '--export-commit' in result.output
+        assert '--no-export-commit' in result.output
+
+    def test_pr_template_url_parameter(self):
+        """Test --pr-template-url parameter appears in help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['complete', '--help'])
+        assert result.exit_code == 0
+        assert '--pr-template-url' in result.output
+
+    def test_no_retry_flag(self):
+        """Test --no-retry flag appears in help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['complete', '--help'])
+        assert result.exit_code == 0
+        assert '--no-retry' in result.output
+
+    def test_existing_flags_still_present(self):
+        """Test existing flags are preserved."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['complete', '--help'])
+        assert result.exit_code == 0
+        assert '--no-commit' in result.output
+        assert '--no-pr' in result.output
+        assert '--no-issue-update' in result.output
+        assert '--latest' in result.output
+        assert '--attach-to-issue' in result.output
+
+
+class TestIsNonInteractiveShared:
+    """Test the shared is_non_interactive() from utils."""
+
+    def test_shared_function_import(self):
+        """Test that is_non_interactive can be imported from utils."""
+        from devflow.cli.utils import is_non_interactive
+        assert callable(is_non_interactive)
+
+    def test_shared_function_detects_env_var(self):
+        """Test shared function detects DAF_NON_INTERACTIVE env var."""
+        from devflow.cli.utils import is_non_interactive
+        original_values = clear_all_ci_env_vars()
+        try:
+            assert not is_non_interactive()
+            os.environ['DAF_NON_INTERACTIVE'] = '1'
+            assert is_non_interactive()
+        finally:
+            restore_env_vars(original_values)
+
+    def test_shared_function_detects_json_param(self):
+        """Test shared function detects output_json parameter."""
+        from devflow.cli.utils import is_non_interactive
+        original_values = clear_all_ci_env_vars()
+        try:
+            assert is_non_interactive(output_json=True)
+            assert not is_non_interactive(output_json=False)
+        finally:
+            restore_env_vars(original_values)
+
+
+# ===== Phase 3: JIRA operations non-interactive =====
+
+class TestDafJiraAddCommentNonInteractive:
+    """Test daf jira add-comment non-interactive parameters."""
+
+    def test_yes_flag(self):
+        """Test --yes flag appears in add-comment help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['jira', 'add-comment', '--help'])
+        assert result.exit_code == 0
+        assert '--yes' in result.output
+
+    def test_existing_flags_preserved(self):
+        """Test existing flags are still present."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['jira', 'add-comment', '--help'])
+        assert result.exit_code == 0
+        assert '--file' in result.output
+        assert '--stdin' in result.output
+        assert '--public' in result.output
+
+
+# ===== Phase 4: daf import-session non-interactive =====
+
+class TestDafImportSessionNonInteractive:
+    """Test daf import-session non-interactive parameters."""
+
+    def test_path_parameter(self):
+        """Test --path parameter appears in import-session help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['import-session', '--help'])
+        assert result.exit_code == 0
+        assert '--path' in result.output
+
+    def test_yes_flag(self):
+        """Test --yes flag appears in import-session help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['import-session', '--help'])
+        assert result.exit_code == 0
+        assert '--yes' in result.output
+
+    def test_existing_flags_preserved(self):
+        """Test existing flags are still present."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['import-session', '--help'])
+        assert result.exit_code == 0
+        assert '--jira' in result.output
+        assert '--goal' in result.output
+        assert '--goal-file' in result.output
+
+
+class TestCompleteCommandSignature:
+    """Test complete_session function accepts new parameters."""
+
+    def test_function_accepts_new_params(self):
+        """Test that complete_session accepts all new parameters."""
+        import inspect
+        from devflow.cli.commands.complete_command import complete_session
+
+        sig = inspect.signature(complete_session)
+        param_names = list(sig.parameters.keys())
+
+        assert 'yes' in param_names
+        assert 'commit_message' in param_names
+        assert 'export_commit' in param_names
+        assert 'pr_template_url' in param_names
+        assert 'no_retry' in param_names
+
+    def test_new_params_are_optional(self):
+        """Test that all new parameters have defaults."""
+        import inspect
+        from devflow.cli.commands.complete_command import complete_session
+
+        sig = inspect.signature(complete_session)
+        for param_name in ['yes', 'commit_message', 'export_commit', 'pr_template_url', 'no_retry']:
+            param = sig.parameters[param_name]
+            assert param.default is not inspect.Parameter.empty, f"{param_name} should have a default"
+
+
+class TestImportSessionCommandSignature:
+    """Test import_session function accepts new parameters."""
+
+    def test_function_accepts_new_params(self):
+        """Test that import_session accepts path and yes parameters."""
+        import inspect
+        from devflow.cli.commands.import_session_command import import_session
+
+        sig = inspect.signature(import_session)
+        param_names = list(sig.parameters.keys())
+
+        assert 'path' in param_names
+        assert 'yes' in param_names
+
+    def test_new_params_are_optional(self):
+        """Test that all new parameters have defaults."""
+        import inspect
+        from devflow.cli.commands.import_session_command import import_session
+
+        sig = inspect.signature(import_session)
+        for param_name in ['path', 'yes']:
+            param = sig.parameters[param_name]
+            assert param.default is not inspect.Parameter.empty, f"{param_name} should have a default"
+
+
+class TestJiraAddCommentSignature:
+    """Test add_comment function accepts new parameters."""
+
+    def test_function_accepts_yes_param(self):
+        """Test that add_comment accepts yes parameter."""
+        import inspect
+        from devflow.cli.commands.jira_add_comment_command import add_comment
+
+        sig = inspect.signature(add_comment)
+        param_names = list(sig.parameters.keys())
+
+        assert 'yes' in param_names
+
+    def test_yes_param_defaults_false(self):
+        """Test that yes parameter defaults to False."""
+        import inspect
+        from devflow.cli.commands.jira_add_comment_command import add_comment
+
+        sig = inspect.signature(add_comment)
+        assert sig.parameters['yes'].default is False

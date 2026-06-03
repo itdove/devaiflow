@@ -6,7 +6,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from devflow.cli.utils import get_status_display, require_outside_claude
+from devflow.cli.utils import get_status_display, is_non_interactive, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.discovery import SessionDiscovery
 from devflow.session.manager import SessionManager
@@ -15,13 +15,15 @@ console = Console()
 
 
 @require_outside_claude
-def import_session(uuid: str, issue_key: str = None, goal: str = None) -> None:
+def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str = None, yes: bool = False) -> None:
     """Import an existing Claude Code session into daf tool.
 
     Args:
         uuid: Claude session UUID to import
         issue_key: issue tracker key (will prompt if not provided)
         goal: Session goal (will prompt if not provided)
+        path: Project path (skip path prompt if provided)
+        yes: Skip confirmation prompts
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -76,7 +78,10 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None) -> None:
 
     # Prompt for issue key if not provided
     if not issue_key:
-        issue_key= Prompt.ask(
+        if is_non_interactive():
+            console.print("[red]✗[/red] --jira is required in non-interactive mode")
+            return
+        issue_key = Prompt.ask(
             "[bold]issue tracker key[/bold]",
             default="",
         )
@@ -86,41 +91,57 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None) -> None:
 
     # Prompt for goal if not provided
     if not goal:
-        # Use first message as default goal
-        default_goal = session_to_import.first_message or ""
-        if len(default_goal) > 80:
-            default_goal = default_goal[:80] + "..."
+        if is_non_interactive():
+            # Use first message as default goal in non-interactive mode
+            goal = session_to_import.first_message or "Imported session"
+            if len(goal) > 80:
+                goal = goal[:80] + "..."
+        else:
+            # Use first message as default goal
+            default_goal = session_to_import.first_message or ""
+            if len(default_goal) > 80:
+                default_goal = default_goal[:80] + "..."
 
-        goal = Prompt.ask(
-            "[bold]Session goal/description[/bold]",
-            default=default_goal,
-        )
-        if not goal:
-            console.print("[red]Goal is required[/red]")
-            return
+            goal = Prompt.ask(
+                "[bold]Session goal/description[/bold]",
+                default=default_goal,
+            )
+            if not goal:
+                console.print("[red]Goal is required[/red]")
+                return
 
     # Determine project path and working directory
     project_path = session_to_import.project_path
     working_directory = session_to_import.working_directory
 
-    # If project path is not absolute or doesn't exist, prompt
-    if not project_path or not Path(project_path).exists():
-        current_dir = os.getcwd()
-        use_current = Confirm.ask(
-            f"Use current directory?\n  [dim]{current_dir}[/dim]",
-            default=True,
-        )
+    # Use CLI-provided path if given
+    if path:
+        project_path = str(Path(path).expanduser().resolve())
+        working_directory = Path(project_path).name
 
-        if use_current:
+    # If project path is not absolute or doesn't exist, prompt
+    elif not project_path or not Path(project_path).exists():
+        if yes or is_non_interactive():
+            current_dir = os.getcwd()
             project_path = current_dir
             working_directory = Path(current_dir).name
         else:
-            project_path = Prompt.ask("Project path")
-            if not project_path or not project_path.strip():
-                console.print("[red]✗[/red] Project path cannot be empty")
-                return
-            project_path = project_path.strip()
-            working_directory = Path(project_path).name
+            current_dir = os.getcwd()
+            use_current = Confirm.ask(
+                f"Use current directory?\n  [dim]{current_dir}[/dim]",
+                default=True,
+            )
+
+            if use_current:
+                project_path = current_dir
+                working_directory = Path(current_dir).name
+            else:
+                project_path = Prompt.ask("Project path")
+                if not project_path or not project_path.strip():
+                    console.print("[red]✗[/red] Project path cannot be empty")
+                    return
+                project_path = project_path.strip()
+                working_directory = Path(project_path).name
 
     # Check for existing sessions with same issue key
     existing_sessions = session_manager.index.get_sessions(issue_key)
@@ -132,9 +153,10 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None) -> None:
             console.print(f"      Goal: {s.goal}")
         console.print()
 
-        if not Confirm.ask(f"Create new session for {issue_key}?", default=True):
-            console.print("[dim]Import cancelled[/dim]")
-            return
+        if not yes and not is_non_interactive():
+            if not Confirm.ask(f"Create new session for {issue_key}?", default=True):
+                console.print("[dim]Import cancelled[/dim]")
+                return
 
     # Create the session
     # Sanitize session name to remove characters that cause issues in bash (#, /)

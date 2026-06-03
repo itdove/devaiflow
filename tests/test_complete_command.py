@@ -3764,7 +3764,7 @@ def test_complete_no_duplicate_push_when_creating_pr(temp_daf_home, tmp_path, mo
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm)
 
     # Mock PR creation to avoid needing gh/glab CLI
-    monkeypatch.setattr("devflow.cli.commands.complete_command._create_pr_mr", lambda s, w, sm: "https://example.com/pr/1")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._create_pr_mr", lambda s, w, sm, **kwargs: "https://example.com/pr/1")
     monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
 
     # Complete the session

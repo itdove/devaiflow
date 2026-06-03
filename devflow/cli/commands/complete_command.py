@@ -9,7 +9,7 @@ import urllib.request
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from devflow.cli.utils import add_jira_comment, get_session_with_prompt, get_status_display, require_outside_claude
+from devflow.cli.utils import add_jira_comment, get_session_with_prompt, get_status_display, is_non_interactive, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.exceptions import ToolNotFoundError
 from devflow.export.manager import ExportManager
@@ -113,7 +113,12 @@ def complete_session(
     latest: bool = False,
     no_commit: bool = False,
     no_pr: bool = False,
-    no_issue_update: bool = False
+    no_issue_update: bool = False,
+    yes: bool = False,
+    commit_message: Optional[str] = None,
+    export_commit: Optional[bool] = None,
+    pr_template_url: Optional[str] = None,
+    no_retry: bool = False,
 ) -> None:
     """Mark a session as complete.
 
@@ -125,6 +130,11 @@ def complete_session(
         no_commit: If True, skip git commit prompt
         no_pr: If True, skip PR/MR creation prompt
         no_issue_update: If True, skip JIRA update prompt
+        yes: If True, skip all confirmation prompts (use defaults)
+        commit_message: Commit message to use directly (skip prompt)
+        export_commit: If set, control commit before export (True/False)
+        pr_template_url: PR/MR template URL (skip template discovery prompt)
+        no_retry: If True, don't retry on PR/MR creation failure
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -153,9 +163,10 @@ def complete_session(
             console.print(f"  Goal: {session.goal}")
         console.print(f"  Last active: {session.last_active.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        if not Confirm.ask("\nContinue?", default=True):
-            console.print("[dim]Cancelled[/dim]")
-            return
+        if not yes and not is_non_interactive():
+            if not Confirm.ask("\nContinue?", default=True):
+                console.print("[dim]Cancelled[/dim]")
+                return
     else:
         # Require identifier if --latest not specified
         if not identifier:
@@ -305,6 +316,8 @@ def complete_session(
                 should_commit = True
                 if no_commit:
                     should_commit = False
+                elif yes or is_non_interactive():
+                    should_commit = True
                 elif config and config.prompts and config.prompts.auto_commit_on_complete is not None:
                     should_commit = config.prompts.auto_commit_on_complete
                 else:
@@ -314,7 +327,7 @@ def complete_session(
                     auto_message = f"{session.issue_key}: {session.goal} ({proj_name})" if session.issue_key else f"{session.goal} ({proj_name})"
 
                     # Display commit message and prompt for confirmation
-                    commit_message_short = _prompt_for_commit_message(auto_message, config)
+                    commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
 
                     if commit_message_short:
                         co_authored_by = get_co_authored_by_line(config, session.model_profile)
@@ -337,7 +350,9 @@ def complete_session(
                         # Push to remote
                         if GitUtils.has_unpushed_commits(working_dir, proj_info.branch):
                             should_push = True
-                            if config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                            if yes or is_non_interactive():
+                                should_push = True
+                            elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
                                 should_push = config.prompts.auto_push_to_remote
                             else:
                                 should_push = Confirm.ask(f"  Push to remote?", default=True)
@@ -361,7 +376,9 @@ def complete_session(
                 # Push unpushed commits if any
                 if GitUtils.has_unpushed_commits(working_dir, proj_info.branch):
                     should_push = not no_pr
-                    if should_push and config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                    if should_push and (yes or is_non_interactive()):
+                        should_push = True
+                    elif should_push and config and config.prompts and config.prompts.auto_push_to_remote is not None:
                         should_push = config.prompts.auto_push_to_remote
                     elif should_push:
                         should_push = Confirm.ask(f"  Push latest commits to update PR/MR?", default=True)
@@ -397,7 +414,9 @@ def complete_session(
 
                 if changed_files:
                     should_create = not no_pr
-                    if should_create and config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
+                    if should_create and (yes or is_non_interactive()):
+                        should_create = True
+                    elif should_create and config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
                         should_create = config.prompts.auto_create_pr_on_complete
                     elif should_create:
                         should_create = Confirm.ask(f"  Create PR/MR for {proj_name}?", default=True)
@@ -472,6 +491,8 @@ def complete_session(
                 should_commit = True
                 if no_commit:
                     should_commit = False
+                elif yes or is_non_interactive():
+                    should_commit = True
                 elif config and config.prompts and config.prompts.auto_commit_on_complete is not None:
                     should_commit = config.prompts.auto_commit_on_complete
                 else:
@@ -481,7 +502,7 @@ def complete_session(
                     auto_message = f"{session.issue_key}: {session.goal} ({working_dir_name})" if session.issue_key else f"{session.goal} ({working_dir_name})"
 
                     # Display commit message and prompt for confirmation
-                    commit_message_short = _prompt_for_commit_message(auto_message, config)
+                    commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
 
                     if commit_message_short:
                         co_authored_by = get_co_authored_by_line(config, session.model_profile)
@@ -504,7 +525,9 @@ def complete_session(
                         # Push to remote
                         if GitUtils.has_unpushed_commits(working_dir, conv.branch):
                             should_push = True
-                            if config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                            if yes or is_non_interactive():
+                                should_push = True
+                            elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
                                 should_push = config.prompts.auto_push_to_remote
                             else:
                                 should_push = Confirm.ask(f"  Push to remote?", default=True)
@@ -528,7 +551,9 @@ def complete_session(
                 # Push unpushed commits if any
                 if GitUtils.has_unpushed_commits(working_dir, conv.branch):
                     should_push = not no_pr
-                    if should_push and config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                    if should_push and (yes or is_non_interactive()):
+                        should_push = True
+                    elif should_push and config and config.prompts and config.prompts.auto_push_to_remote is not None:
                         should_push = config.prompts.auto_push_to_remote
                     elif should_push:
                         should_push = Confirm.ask(f"  Push latest commits to update PR/MR?", default=True)
@@ -564,7 +589,9 @@ def complete_session(
 
                 if changed_files:
                     should_create = not no_pr
-                    if should_create and config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
+                    if should_create and (yes or is_non_interactive()):
+                        should_create = True
+                    elif should_create and config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
                         should_create = config.prompts.auto_create_pr_on_complete
                     elif should_create:
                         should_create = Confirm.ask(f"  Create PR/MR for {working_dir_name}?", default=True)
@@ -607,6 +634,8 @@ def complete_session(
             if no_commit:
                 should_commit = False
                 console.print("\n[dim]Skipping commit (--no-commit flag)[/dim]")
+            elif yes or is_non_interactive():
+                should_commit = True
             elif config and config.prompts and config.prompts.auto_commit_on_complete is not None:
                 should_commit = config.prompts.auto_commit_on_complete
                 if should_commit:
@@ -619,7 +648,7 @@ def complete_session(
                 auto_message = _generate_commit_message(session)
 
                 # Display commit message and prompt for confirmation
-                commit_message_short = _prompt_for_commit_message(auto_message, config)
+                commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
 
                 if commit_message_short:
                     # Create commit with standard format
@@ -649,7 +678,9 @@ def complete_session(
                     if success and GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
                         # Check if auto_push_to_remote is configured
                         should_push = True
-                        if config and config.prompts and config.prompts.auto_push_to_remote is not None:
+                        if yes or is_non_interactive():
+                            should_push = True
+                        elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
                             should_push = config.prompts.auto_push_to_remote
                             if should_push:
                                 console.print("\n[dim]Automatically pushing to remote (configured in prompts)[/dim]")
@@ -709,6 +740,8 @@ def complete_session(
                         if no_pr:
                             should_push = False
                             console.print("\n[dim]Skipping PR update (--no-pr flag)[/dim]")
+                        elif yes or is_non_interactive():
+                            should_push = True
                         elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
                             should_push = config.prompts.auto_push_to_remote
                             if should_push:
@@ -752,6 +785,8 @@ def complete_session(
                         if no_pr:
                             should_create_pr = False
                             console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
+                        elif yes or is_non_interactive():
+                            should_create_pr = True
                         elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
                             should_create_pr = config.prompts.auto_create_pr_on_complete
                             if should_create_pr:
@@ -760,7 +795,7 @@ def complete_session(
                             should_create_pr = Confirm.ask("Create a new PR/MR?", default=True)
 
                         if should_create_pr:
-                            pr_url = _create_pr_mr(session, working_dir, session_manager)
+                            pr_url = _create_pr_mr(session, working_dir, session_manager, yes=yes, pr_template_url=pr_template_url, no_retry=no_retry)
 
                             # Update issue tracker ticket with PR URL if created successfully
                             if pr_url and session.issue_key:
@@ -794,6 +829,8 @@ def complete_session(
                         if no_pr:
                             should_create_pr = False
                             console.print("[dim]Skipping PR creation (--no-pr flag)[/dim]")
+                        elif yes or is_non_interactive():
+                            should_create_pr = True
                         elif config and config.prompts and config.prompts.auto_create_pr_on_complete is not None:
                             should_create_pr = config.prompts.auto_create_pr_on_complete
                             if should_create_pr:
@@ -802,7 +839,7 @@ def complete_session(
                             should_create_pr = Confirm.ask("Create a PR/MR now?", default=True)
 
                         if should_create_pr:
-                            pr_url = _create_pr_mr(session, working_dir, session_manager)
+                            pr_url = _create_pr_mr(session, working_dir, session_manager, yes=yes, pr_template_url=pr_template_url, no_retry=no_retry)
 
                             # Update issue tracker ticket with PR URL if created successfully
                             if pr_url and session.issue_key:
@@ -836,6 +873,8 @@ def complete_session(
             if no_issue_update:
                 should_add_summary = False
                 console.print(f"\n[dim]Skipping {backend_name} update (--no-issue-update flag)[/dim]")
+            elif yes or is_non_interactive():
+                should_add_summary = True
             elif config and config.prompts and config.prompts.auto_add_issue_summary is not None:
                 should_add_summary = config.prompts.auto_add_issue_summary
                 if should_add_summary:
@@ -853,7 +892,7 @@ def complete_session(
     # Export and attach to issue tracker if requested
     if attach_to_issue:
         if session.issue_key:
-            _export_and_attach_to_issue(session, config, session.name, config_loader)
+            _export_and_attach_to_issue(session, config, session.name, config_loader, yes=yes, export_commit=export_commit)
         else:
             console.print(f"[yellow]⚠[/yellow] Cannot attach to issue tracker - session has no issue key")
 
@@ -1284,7 +1323,7 @@ _Generated by DevAIFlow_"""
         console.print(f"[yellow]⚠[/yellow] Failed to generate session summary: {e}")
 
 
-def _sync_branch_for_export(session, issue_key: str, config_loader) -> None:
+def _sync_branch_for_export(session, issue_key: str, config_loader, yes: bool = False, export_commit: Optional[bool] = None) -> None:
     """Sync branch before export for team handoff.
 
     Commits any uncommitted changes and pushes branch to remote.
@@ -1293,6 +1332,8 @@ def _sync_branch_for_export(session, issue_key: str, config_loader) -> None:
         session: Session object with project_path and branch
         issue_key: issue tracker key for commit message
         config_loader: ConfigLoader instance for accessing configuration
+        yes: Skip all confirmation prompts
+        export_commit: If set, control commit before export (True/False)
     """
     # Get active conversation for accessing conversation-specific fields
     active_conv = session.active_conversation
@@ -1319,7 +1360,15 @@ def _sync_branch_for_export(session, issue_key: str, config_loader) -> None:
             for line in status_summary.split('\n'):
                 console.print(f"  {line}")
 
-        if not Confirm.ask("\nCommit all changes before export for teammate handoff?", default=True):
+        should_export_commit = True
+        if export_commit is not None:
+            should_export_commit = export_commit
+        elif yes or is_non_interactive():
+            should_export_commit = True
+        else:
+            should_export_commit = Confirm.ask("\nCommit all changes before export for teammate handoff?", default=True)
+
+        if not should_export_commit:
             console.print(f"[dim]Skipping commit - changes will not be included in export[/dim]")
         else:
             # Create WIP commit
@@ -1347,7 +1396,9 @@ def _sync_branch_for_export(session, issue_key: str, config_loader) -> None:
 
         # Check if auto_push_to_remote is configured
         should_push = True
-        if config and config.prompts and config.prompts.auto_push_to_remote is not None:
+        if yes or is_non_interactive():
+            should_push = True
+        elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
             should_push = config.prompts.auto_push_to_remote
             if should_push:
                 console.print(f"[dim]Automatically pushing to remote (configured in prompts)[/dim]")
@@ -1379,7 +1430,7 @@ def _sync_branch_for_export(session, issue_key: str, config_loader) -> None:
             console.print(f"[yellow]Your teammate may not have the latest changes[/yellow]")
 
 
-def _export_and_attach_to_issue(session, config, session_name: str, config_loader) -> None:
+def _export_and_attach_to_issue(session, config, session_name: str, config_loader, yes: bool = False, export_commit: Optional[bool] = None) -> None:
     """Export session group and attach to issue tracker (backend-agnostic).
 
     Args:
@@ -1387,6 +1438,8 @@ def _export_and_attach_to_issue(session, config, session_name: str, config_loade
         config: Configuration object
         session_name: Session group name
         config_loader: ConfigLoader instance
+        yes: Skip confirmation prompts
+        export_commit: Control commit before export
     """
     issue_key = session.issue_key
     if not issue_key:
@@ -1396,23 +1449,25 @@ def _export_and_attach_to_issue(session, config, session_name: str, config_loade
     backend = get_issue_tracker_backend(session, config)
 
     if backend == "jira":
-        _export_and_attach_to_jira(issue_key, session_name, config_loader)
+        _export_and_attach_to_jira(issue_key, session_name, config_loader, yes=yes, export_commit=export_commit)
     elif backend == "github":
         # GitHub doesn't support file attachments
         console.print(f"[yellow]ℹ[/yellow] GitHub Issues don't support file attachments")
         console.print(f"[dim]Export will be created locally instead[/dim]")
-        _export_session_locally(issue_key, session_name, config_loader)
+        _export_session_locally(issue_key, session_name, config_loader, yes=yes, export_commit=export_commit)
     else:
         console.print(f"[dim]Export/attach not implemented for backend: {backend}[/dim]")
 
 
-def _export_and_attach_to_jira(issue_key: str, session_name: str, config_loader) -> None:
+def _export_and_attach_to_jira(issue_key: str, session_name: str, config_loader, yes: bool = False, export_commit: Optional[bool] = None) -> None:
     """Export session group and attach to JIRA ticket.
 
     Args:
         issue_key: JIRA issue key
         session_name: Session group name
         config_loader: ConfigLoader instance
+        yes: Skip confirmation prompts
+        export_commit: Control commit before export
     """
     try:
         import tempfile
@@ -1439,7 +1494,7 @@ def _export_and_attach_to_jira(issue_key: str, session_name: str, config_loader)
             None
         )
         if session_with_branch:
-            _sync_branch_for_export(session_with_branch, issue_key, config_loader)
+            _sync_branch_for_export(session_with_branch, issue_key, config_loader, yes=yes, export_commit=export_commit)
 
         # Export with conversation history to temp directory
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1513,13 +1568,15 @@ _Generated by DevAIFlow_"""
         console.print(f"[yellow]⚠[/yellow] Failed to export and attach: {e}")
 
 
-def _export_session_locally(issue_key: str, session_name: str, config_loader) -> None:
+def _export_session_locally(issue_key: str, session_name: str, config_loader, yes: bool = False, export_commit: Optional[bool] = None) -> None:
     """Export session group locally (for backends that don't support file attachments).
 
     Args:
         issue_key: Issue key
         session_name: Session group name
         config_loader: ConfigLoader instance
+        yes: Skip confirmation prompts
+        export_commit: Control commit before export
     """
     try:
         from datetime import datetime
@@ -1544,7 +1601,7 @@ def _export_session_locally(issue_key: str, session_name: str, config_loader) ->
             None
         )
         if session_with_branch:
-            _sync_branch_for_export(session_with_branch, issue_key, config_loader)
+            _sync_branch_for_export(session_with_branch, issue_key, config_loader, yes=yes, export_commit=export_commit)
 
         # Export to current directory
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1693,6 +1750,13 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     Returns:
         Selected branch name or None if skip/error
     """
+    # In non-interactive mode, auto-select default branch
+    if is_non_interactive():
+        default_branch = GitUtils.get_default_branch(working_dir)
+        if default_branch:
+            return default_branch
+        return None
+
     # Check auto_select_target_branch configuration
     if config and config.prompts:
         auto_select = config.prompts.auto_select_target_branch
@@ -2192,13 +2256,16 @@ def _create_pr_mr_for_conversation(session, conversation, working_dir: Path, ses
     return pr_url
 
 
-def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
+def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False, pr_template_url: Optional[str] = None, no_retry: bool = False) -> Optional[str]:
     """Create PR or MR based on repository type.
 
     Args:
         session: Session object
         working_dir: Working directory path
         session_manager: SessionManager instance
+        yes: Skip all confirmation prompts
+        pr_template_url: PR/MR template URL
+        no_retry: Don't retry on failure
 
     Returns:
         PR/MR URL if successful, None otherwise
@@ -2226,7 +2293,9 @@ def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
     if GitUtils.has_unpushed_commits(working_dir, current_branch):
         # Check if auto_push_to_remote is configured
         should_push = True
-        if config and config.prompts and config.prompts.auto_push_to_remote is not None:
+        if yes or is_non_interactive():
+            should_push = True
+        elif config and config.prompts and config.prompts.auto_push_to_remote is not None:
             should_push = config.prompts.auto_push_to_remote
             if should_push:
                 console.print(f"\n[dim]Automatically pushing to remote (configured in prompts)[/dim]")
@@ -2248,7 +2317,7 @@ def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
         console.print(f"[dim]Branch '{current_branch}' is up to date with remote[/dim]")
 
     # Generate PR/MR description from session data
-    description = _generate_pr_description(session, working_dir, session_manager.config_loader)
+    description = _generate_pr_description(session, working_dir, session_manager.config_loader, pr_template_url=pr_template_url)
 
     # Generate PR/MR title from session and git data
     title = _generate_pr_title(session, working_dir)
@@ -2287,6 +2356,8 @@ def _create_pr_mr(session, working_dir: Path, session_manager) -> Optional[str]:
             console.print("  - Network connectivity issues")
             console.print("  - Insufficient repository permissions")
 
+            if no_retry or is_non_interactive():
+                break
             if not Confirm.ask(f"\nWould you like to try again? (Attempt {attempt + 2}/{max_retries})", default=True):
                 break
 
@@ -2728,7 +2799,7 @@ def _try_discover_org_template(working_dir: Path) -> Optional[str]:
     return None
 
 
-def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLoader, target_branch: Optional[str] = None) -> str:
+def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLoader, target_branch: Optional[str] = None, pr_template_url: Optional[str] = None) -> str:
     """Generate PR/MR description from session data using AI analysis and template.
 
     Args:
@@ -2736,6 +2807,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
         working_dir: Working directory path for git analysis
         config_loader: ConfigLoader instance to get template URL from config
         target_branch: Optional target branch (for story PRs targeting feature branch instead of main)
+        pr_template_url: CLI-provided template URL (overrides config)
 
     Returns:
         Formatted PR/MR description with AI-generated summary
@@ -2765,7 +2837,14 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
         if template_content:
             template_source = "repository"
 
-    # Priority 3: User configured URL (lowest priority - for testing)
+    # Priority 3: CLI-provided template URL
+    if not template_content and pr_template_url:
+        console.print(f"[dim]Using CLI-provided template URL[/dim]")
+        template_content = _fetch_pr_template(pr_template_url)
+        if template_content:
+            template_source = "cli-provided"
+
+    # Priority 4: User configured URL (lowest priority - for testing)
     if not template_content and config and config.pr_template_url:
         console.print(f"[dim]Using user-configured template URL[/dim]")
         template_content = _fetch_pr_template(config.pr_template_url)
@@ -2774,9 +2853,9 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
 
     # If still no template and no user config, optionally prompt (skip if auto-create enabled)
     if not template_content and config and not config.pr_template_url:
-        # Skip prompt if auto_create_pr_on_complete is enabled (automated workflow)
+        # Skip prompt if auto_create_pr_on_complete is enabled (automated workflow) or non-interactive
         auto_create = config.prompts and config.prompts.auto_create_pr_on_complete
-        if not auto_create:
+        if not auto_create and not is_non_interactive():
             console.print("\n[yellow]No PR/MR template discovered or configured.[/yellow]")
             if Confirm.ask("Would you like to configure a PR/MR template URL now?", default=True):
                 console.print(f"\n[dim]Example: https://raw.githubusercontent.com/YOUR-ORG/.github/main/.github/PULL_REQUEST_TEMPLATE.md[/dim]")
@@ -3168,12 +3247,15 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
             create_as_draft = False
             console.print("[dim]Creating as ready for review (configured in prompts)[/dim]")
         else:  # "prompt"
-            create_as_draft = Confirm.ask("Create PR as draft?", default=True)
+            if is_non_interactive():
+                create_as_draft = True
+            else:
+                create_as_draft = Confirm.ask("Create PR as draft?", default=True)
 
     # Detect if this is a fork and get upstream info (if not already provided)
     # prompt_for_remote=True asks user which remote is upstream if auto-detection fails
     if upstream_info is None:
-        upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=True)
+        upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=not is_non_interactive())
 
     try:
         # Build command with or without --draft flag
@@ -3350,12 +3432,15 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
             create_as_draft = False
             console.print("[dim]Creating as ready for review (configured in prompts)[/dim]")
         else:  # "prompt"
-            create_as_draft = Confirm.ask("Create MR as draft?", default=True)
+            if is_non_interactive():
+                create_as_draft = True
+            else:
+                create_as_draft = Confirm.ask("Create MR as draft?", default=True)
 
     # Detect if this is a fork and get upstream info (if not already provided)
     # prompt_for_remote=True asks user which remote is upstream if auto-detection fails
     if upstream_info is None:
-        upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=True)
+        upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=not is_non_interactive())
 
     try:
         # Build command with or without --draft flag
@@ -3461,7 +3546,7 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
         return None
 
 
-def _prompt_for_commit_message(auto_message: str, config) -> Optional[str]:
+def _prompt_for_commit_message(auto_message: str, config, commit_message: Optional[str] = None) -> Optional[str]:
     """Display commit message and prompt user for confirmation.
 
     This function provides a consistent commit message review flow across all session types.
@@ -3471,13 +3556,22 @@ def _prompt_for_commit_message(auto_message: str, config) -> Optional[str]:
     Args:
         auto_message: Auto-generated commit message to display
         config: Configuration object (may be None)
+        commit_message: CLI-provided commit message (skip prompt if provided)
 
     Returns:
         Final commit message to use, or None if user cancels
     """
+    # If commit message provided via CLI, use it directly
+    if commit_message is not None:
+        return commit_message
+
     # Display the suggested commit message
     console.print(f"\n[dim]Suggested commit message:[/dim]")
     console.print(f"[cyan]{auto_message}[/cyan]")
+
+    # In non-interactive mode, use auto message
+    if is_non_interactive():
+        return auto_message
 
     # Check if user wants to accept AI commit message automatically
     use_auto = True
@@ -3950,6 +4044,8 @@ def _update_issue_pr_field(session, config, pr_url: str, no_issue_update: bool =
     if no_issue_update:
         should_update = False
         console.print(f"\n[dim]Skipping {backend_name} PR update (--no-issue-update flag)[/dim]")
+    elif is_non_interactive():
+        should_update = True
     elif config and config.prompts and config.prompts.auto_update_jira_pr_url is not None:
         should_update = config.prompts.auto_update_jira_pr_url
         if should_update:

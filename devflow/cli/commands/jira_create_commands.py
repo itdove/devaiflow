@@ -5,7 +5,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import output_json as json_output, is_json_mode, console_print, require_outside_claude
+from devflow.cli.utils import output_json as json_output, is_json_mode, is_non_interactive, console_print, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.jira.client import JiraClient
 from devflow.jira.field_mapper import JiraFieldMapper
@@ -189,7 +189,7 @@ def _get_required_custom_fields(
             continue
 
         # Case 3: Prompt user (only in interactive mode)
-        if not is_json_mode():
+        if not is_json_mode() and not is_non_interactive():
             allowed_values = field_info.get("allowed_values", [])
 
             if allowed_values:
@@ -206,7 +206,7 @@ def _get_required_custom_fields(
             else:
                 field_value = Prompt.ask(f"Enter {field_name} value")
         else:
-            # JSON mode - return error for missing required field
+            # Non-interactive or JSON mode - return error for missing required field
             json_output(
                 success=False,
                 error={
@@ -269,7 +269,7 @@ def _get_project(config, config_loader, flag_value: Optional[str]) -> Optional[s
     # Case 3: Prompt user
     console_print("\n[yellow]⚠[/yellow] No JIRA project configured.")
     console_print("[dim]Examples: PROJ, DEVOPS[/dim]")
-    project_key = Prompt.ask("[bold]Enter JIRA project key[/bold]") if not is_json_mode() else None
+    project_key = Prompt.ask("[bold]Enter JIRA project key[/bold]") if not is_json_mode() and not is_non_interactive() else None
 
     if project_key and project_key.strip():
         project_key = project_key.strip().upper()
@@ -393,7 +393,7 @@ def _get_required_system_fields(
             continue
 
         # Case 2: Prompt user (only in interactive mode)
-        if not is_json_mode():
+        if not is_json_mode() and not is_non_interactive():
             allowed_values = field_info.get("allowed_values", [])
 
             if allowed_values:
@@ -410,7 +410,7 @@ def _get_required_system_fields(
             else:
                 field_value = Prompt.ask(f"Enter {field_key} value")
         else:
-            # JSON mode - return error for missing required field
+            # Non-interactive or JSON mode - return error for missing required field
             json_output(
                 success=False,
                 error={
@@ -503,7 +503,7 @@ def _get_affected_version(config, config_loader, field_mapper, flag_value: Optio
     from devflow.utils import is_mock_mode
     if is_mock_mode():
         affected_version = "v1.0.0"
-    elif not is_json_mode():
+    elif not is_json_mode() and not is_non_interactive():
         # Use common prompt function
         from devflow.jira.utils import prompt_for_affected_version
         affected_version = prompt_for_affected_version(field_mapper)
@@ -716,7 +716,7 @@ def create_issue(
 
         # Prompt for summary if not provided
         if not summary:
-            if not is_json_mode():
+            if not is_json_mode() and not is_non_interactive():
                 summary = Prompt.ask(f"\n[bold]{type_config['label']} summary[/bold]")
                 if not summary or not summary.strip():
                     console.print("[red]✗[/red] Summary is required")

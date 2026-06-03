@@ -5,7 +5,7 @@ import click
 from rich.console import Console
 from rich.prompt import Confirm
 
-from devflow.cli.utils import output_json as json_output, console_print
+from devflow.cli.utils import output_json as json_output, console_print, is_non_interactive
 from devflow.jira import JiraClient
 from devflow.jira.exceptions import (
     JiraError,
@@ -25,7 +25,8 @@ def add_comment(
     file_path: str = None,
     stdin: bool = False,
     public: bool = False,
-    output_json: bool = False
+    output_json: bool = False,
+    yes: bool = False,
 ) -> None:
     """Add a comment to a JIRA issue.
 
@@ -95,8 +96,7 @@ def add_comment(
         sys.exit(1)
 
     # Confirm if making comment public
-    if public and not output_json:
-        # Confirm making comment public
+    if public and not output_json and not yes and not is_non_interactive():
         if not Confirm.ask("Make comment PUBLIC (visible to all)?", default=False):
             console.print("Cancelled. Comment not added.")
             return
