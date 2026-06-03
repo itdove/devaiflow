@@ -469,6 +469,21 @@ class TestOpenCodeAgentCaptureSession:
             agent.capture_session_id("/home/user/project", timeout=1, poll_interval=0.5)
 
 
+class TestOpenCodeAgentPermissions:
+    """Test OpenCodeAgent permission prompt support."""
+
+    def test_supports_permission_prompts_returns_false(self):
+        """OpenCode does not support permission prompts."""
+        agent = OpenCodeAgent()
+        assert agent.supports_permission_prompts() is False
+
+    def test_supports_permission_prompts_is_consistent(self):
+        """Multiple calls return same value."""
+        agent = OpenCodeAgent()
+        assert agent.supports_permission_prompts() is False
+        assert agent.supports_permission_prompts() is False
+
+
 class TestOpenCodeAgentFactory:
     """Test factory integration for OpenCodeAgent."""
 

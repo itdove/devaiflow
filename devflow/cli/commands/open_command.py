@@ -1080,6 +1080,14 @@ def open_session(
             agent_backend = config.agent_backend if config else "claude"
             agent = create_agent_client(agent_backend)
 
+            # Warn if agent does not support permission prompts
+            if not agent.supports_permission_prompts():
+                console.print(
+                    "\n[bold yellow]⚠  Warning:[/bold yellow] [yellow]"
+                    f"{agent.get_agent_name()} does not support permission prompts. "
+                    "Code may be modified without confirmation.[/yellow]"
+                )
+
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
 

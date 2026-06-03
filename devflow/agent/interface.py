@@ -215,6 +215,19 @@ class AgentInterface(ABC):
         """
         pass
 
+    def supports_permission_prompts(self) -> bool:
+        """Whether this agent prompts the user before modifying files or running commands.
+
+        Agents like Claude Code prompt before each file write or shell command unless
+        explicitly told to skip permissions. Agents that auto-approve all tool calls
+        should return False so that callers can warn users.
+
+        Returns:
+            True if the agent has a built-in permission system (default).
+            False if the agent auto-approves all tool calls without user confirmation.
+        """
+        return True
+
     @abstractmethod
     def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
         """Extract token usage statistics from a session.
