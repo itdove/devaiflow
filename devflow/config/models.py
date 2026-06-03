@@ -537,6 +537,7 @@ class UserConfig(BaseModel):
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     pr_template_url: Optional[str] = None  # URL to PR/MR template
     storage: StorageConfig = Field(default_factory=StorageConfig)  # Storage backend config
+    agent_backend: Optional[str] = None  # AI agent backend preference (e.g., "claude", "opencode") — only saved when not enforced by enterprise/team
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (deprecated - use model_provider.profiles.vertex.vertex_region instead)
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests
