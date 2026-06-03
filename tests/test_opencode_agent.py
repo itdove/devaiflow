@@ -84,7 +84,7 @@ class TestOpenCodeAgentLaunch:
         result = agent.launch_with_prompt(
             project_path="/home/user/project",
             initial_prompt="Fix the login bug",
-            session_id="test-session-id",
+            session_id="ses_abc123",
         )
 
         mock_require.assert_called_once()
@@ -94,7 +94,7 @@ class TestOpenCodeAgentLaunch:
         assert "--prompt" in cmd
         assert "Fix the login bug" in cmd
         assert "--session" in cmd
-        assert "test-session-id" in cmd
+        assert "ses_abc123" in cmd
         assert "run" not in cmd
         assert call_args[1]["cwd"] == "/home/user/project"
         assert result == mock_process
@@ -109,7 +109,7 @@ class TestOpenCodeAgentLaunch:
         agent.launch_with_prompt(
             project_path="/home/user/project",
             initial_prompt="Fix the login bug",
-            session_id="test-session-id",
+            session_id="ses_headless123",
             headless=True,
         )
 
@@ -158,6 +158,59 @@ class TestOpenCodeAgentLaunch:
         cmd = call_args[0][0]
         assert cmd[1] == "run"
         assert "--dangerously-skip-permissions" in cmd
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_skips_uuid_session_id(self, mock_popen, mock_require):
+        """Test that DevAIFlow UUID session IDs are NOT passed to --session."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="29798353-1758-43a9-b95a-05bac425c3f3",
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--session" not in cmd
+        assert "--prompt" in cmd
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_passes_ses_prefixed_session_id(self, mock_popen, mock_require):
+        """Test that OpenCode session IDs (ses-prefixed) ARE passed to --session."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="ses_real_opencode_id",
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--session" in cmd
+        assert "ses_real_opencode_id" in cmd
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_empty_session_id(self, mock_popen, mock_require):
+        """Test that empty session ID does not add --session flag."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="",
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--session" not in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")

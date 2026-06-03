@@ -138,7 +138,7 @@ class OpenCodeAgent(AgentInterface):
         else:
             cmd = ["opencode", "--prompt", initial_prompt]
 
-        if session_id:
+        if session_id and session_id.startswith("ses"):
             cmd.extend(["--session", session_id])
 
         if model_provider_profile:
