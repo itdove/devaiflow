@@ -86,9 +86,10 @@ def test_add_comment_public_flag(monkeypatch):
     mock_client.add_comment.assert_called_once_with("PROJ-12345", "Public comment", public=True)
 
 
-def test_add_comment_public_flag_cancelled(monkeypatch):
+def test_add_comment_public_flag_cancelled(monkeypatch, clean_ci_env):
     """Test cancelling public comment."""
     mock_client = MagicMock()
+    monkeypatch.setattr('devflow.cli.commands.jira_add_comment_command.is_non_interactive', lambda **kw: False)
 
     with patch('devflow.cli.commands.jira_add_comment_command.JiraClient', return_value=mock_client):
         with patch('devflow.cli.commands.jira_add_comment_command.Confirm.ask', return_value=False):

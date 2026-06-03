@@ -94,7 +94,7 @@ def test_session_workspace_name_optional():
     assert session.workspace_name is None
 
 
-def test_get_active_session_for_project_with_workspace():
+def test_get_active_session_for_project_with_workspace(temp_daf_home):
     """Test workspace-aware concurrent session detection."""
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
@@ -157,7 +157,7 @@ def test_get_active_session_for_project_with_workspace():
     manager.delete_session(f"workspace-session-2-{unique_suffix}")
 
 
-def test_get_active_session_for_project_no_workspace():
+def test_get_active_session_for_project_no_workspace(temp_daf_home):
     """Test backward compatibility - workspace_name=None still works."""
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
@@ -196,7 +196,7 @@ def test_get_active_session_for_project_no_workspace():
     manager.delete_session(f"legacy-session-{unique_suffix}")
 
 
-def test_workspace_persistence_in_session():
+def test_workspace_persistence_in_session(temp_daf_home):
     """Test that workspace_name is persisted in session metadata."""
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager

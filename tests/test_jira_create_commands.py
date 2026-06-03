@@ -173,10 +173,11 @@ class TestGetProject:
 
         assert result == "PROJ"
 
-    def test_prompt_user_when_no_flag_or_config(self, mock_config, mock_config_loader, monkeypatch):
+    def test_prompt_user_when_no_flag_or_config(self, mock_config, mock_config_loader, monkeypatch, clean_ci_env):
         """Test that user is prompted when no flag or config value."""
         mock_config.jira.project = None
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_json_mode', lambda: False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_non_interactive', lambda **kw: False)
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args: "NEWPROJ")
 
         result = _get_project(mock_config, mock_config_loader, None)
@@ -198,6 +199,13 @@ class TestGetProject:
 
 class TestGetAffectedVersion:
     """Tests for _get_affected_version function."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_ci_env(self, monkeypatch):
+        """Ensure is_non_interactive() returns False so prompts are shown."""
+        for var in ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'TRAVIS', 'CIRCLECI', 'DAF_NON_INTERACTIVE']:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_non_interactive', lambda **kw: False)
 
     def test_use_flag_value_when_provided(self, mock_config, mock_config_loader, mock_field_mapper, monkeypatch):
         """Test that flag value is used when provided."""
@@ -699,9 +707,10 @@ class TestCreateIssue:
 class TestCreateBug:
     """Tests for creating bugs using create_issue function."""
 
-    def test_create_bug_prompts_for_summary(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch):
+    def test_create_bug_prompts_for_summary(self, mock_config, mock_config_loader, mock_jira_client, monkeypatch, clean_ci_env):
         """Test that create_issue for bugs prompts for summary when not provided."""
         monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+        monkeypatch.setattr('devflow.cli.commands.jira_create_commands.is_non_interactive', lambda **kw: False)
         monkeypatch.setattr('devflow.cli.commands.jira_create_commands.Prompt.ask', lambda *args: "Prompted bug summary")
 
         with patch('devflow.cli.commands.jira_create_commands.ConfigLoader', return_value=mock_config_loader):

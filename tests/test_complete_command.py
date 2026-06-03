@@ -1542,8 +1542,11 @@ def test_complete_session_latest_with_no_sessions(temp_daf_home, monkeypatch, ca
     assert "No sessions found" in captured.out
 
 
-def test_complete_session_latest_user_cancels(temp_daf_home, monkeypatch, capsys):
+def test_complete_session_latest_user_cancels(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Test --latest flag when user cancels confirmation."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     # Create a session
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -2583,8 +2586,11 @@ def test_fetch_github_template_all_methods_fail(monkeypatch, capsys):
     assert "private repository" in captured.out
 
 
-def test_complete_ticket_creation_session_skips_git_operations(temp_daf_home, tmp_path, monkeypatch, capsys):
+def test_complete_ticket_creation_session_skips_git_operations(temp_daf_home, tmp_path, monkeypatch, capsys, clean_ci_env):
     """Test that ticket_creation sessions skip git operations (commit/PR) entirely."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     import subprocess
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
@@ -3596,8 +3602,11 @@ def test_complete_pushes_commits_after_committing_with_prompt(temp_daf_home, tmp
     assert "Commits pushed to remote" in captured.out
 
 
-def test_complete_skips_push_when_user_declines(temp_daf_home, tmp_path, monkeypatch, capsys):
+def test_complete_skips_push_when_user_declines(temp_daf_home, tmp_path, monkeypatch, capsys, clean_ci_env):
     """Test Push is skipped when user declines the prompt."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     import subprocess
 
     # Create a git repository with a remote
@@ -3764,7 +3773,7 @@ def test_complete_no_duplicate_push_when_creating_pr(temp_daf_home, tmp_path, mo
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm)
 
     # Mock PR creation to avoid needing gh/glab CLI
-    monkeypatch.setattr("devflow.cli.commands.complete_command._create_pr_mr", lambda s, w, sm: "https://example.com/pr/1")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._create_pr_mr", lambda s, w, sm, **kwargs: "https://example.com/pr/1")
     monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
 
     # Complete the session
@@ -3870,8 +3879,11 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
             "No new commits - skipping PR creation" in captured.out)
 
 
-def test_complete_prompts_pr_when_commit_made(temp_daf_home, tmp_path, monkeypatch, capsys):
+def test_complete_prompts_pr_when_commit_made(temp_daf_home, tmp_path, monkeypatch, capsys, clean_ci_env):
     """Test that daf complete DOES prompt for PR when a commit was made this cycle."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     import subprocess
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
@@ -3943,8 +3955,11 @@ def test_complete_prompts_pr_when_commit_made(temp_daf_home, tmp_path, monkeypat
     assert len(pr_prompts) > 0, f"Expected PR prompt after making a commit, but got no prompts"
 
 
-def test_complete_prompts_pr_when_uncommitted_changes_exist(temp_daf_home, tmp_path, monkeypatch, capsys):
+def test_complete_prompts_pr_when_uncommitted_changes_exist(temp_daf_home, tmp_path, monkeypatch, capsys, clean_ci_env):
     """Test that daf complete prompts for PR when uncommitted changes exist (even if user declines commit)."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     import subprocess
     from devflow.config.loader import ConfigLoader
     from devflow.session.manager import SessionManager
@@ -4182,12 +4197,15 @@ def test_complete_session_skips_pr_when_merged_remotely(temp_daf_home, tmp_path,
     assert "creation" in captured.out
 
 
-def test_complete_session_creates_pr_when_new_changes_after_merge(temp_daf_home, tmp_path, monkeypatch, capsys):
+def test_complete_session_creates_pr_when_new_changes_after_merge(temp_daf_home, tmp_path, monkeypatch, capsys, clean_ci_env):
     """Test that PR creation IS offered when there are genuine new changes after a previous merge.
 
     Scenario: PR was merged, but user made additional commits afterward.
     Even after fetching origin, the diff shows real new changes.
     """
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.complete_command.is_non_interactive', lambda **kw: False)
+
     import subprocess
 
     repo_dir = tmp_path / "test-new-after-merge"

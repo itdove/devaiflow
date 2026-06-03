@@ -12,7 +12,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from devflow.cli.utils import check_concurrent_session, console_print, get_status_display, is_json_mode, output_json as json_output, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, serialize_session, should_launch_claude_code, unified_project_selection
+from devflow.cli.utils import check_concurrent_session, console_print, get_status_display, is_json_mode, is_non_interactive, output_json as json_output, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, serialize_session, should_launch_claude_code, unified_project_selection
 from devflow.config.loader import ConfigLoader
 from devflow.git.utils import GitUtils
 from devflow.jira import JiraClient
@@ -30,35 +30,6 @@ from devflow.utils.daf_agents_validation import validate_daf_agents_md
 console = Console()
 
 
-def _is_non_interactive(output_json: bool = False) -> bool:
-    """Check if running in non-interactive mode.
-
-    Non-interactive mode is enabled when:
-    - --json flag is set
-    - --non-interactive global flag is set (sets DAF_NON_INTERACTIVE=1)
-    - Running in CI environment (CI, GITHUB_ACTIONS, GITLAB_CI, etc.)
-    - DAF_NON_INTERACTIVE=1 environment variable is explicitly set
-
-    Args:
-        output_json: Whether JSON output mode is enabled
-
-    Returns:
-        True if in non-interactive mode (no user prompts allowed)
-    """
-    # Check if in JSON mode
-    if output_json:
-        return True
-
-    # Check for CI environment variables
-    ci_vars = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'TRAVIS', 'CIRCLECI']
-    if any(os.getenv(var) for var in ci_vars):
-        return True
-
-    # Check for explicit non-interactive flag (set by --non-interactive or manually)
-    if os.getenv('DAF_NON_INTERACTIVE') == '1':
-        return True
-
-    return False
 
 
 
@@ -353,7 +324,7 @@ def create_new_session(
     config = config_loader.load_config()
 
     # Determine if in non-interactive mode
-    non_interactive = _is_non_interactive(output_json)
+    non_interactive = is_non_interactive(output_json)
 
     # Load or auto-detect template
     from devflow.templates.manager import TemplateManager

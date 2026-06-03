@@ -474,7 +474,7 @@ def test_select_target_branch_filters_current_branch(monkeypatch, tmp_path):
     assert result == "main"
 
 
-def test_select_target_branch_filters_current_when_default(monkeypatch, tmp_path):
+def test_select_target_branch_filters_current_when_default(monkeypatch, tmp_path, clean_ci_env):
     """Test filtering works when current branch IS the default branch."""
     def mock_list_remote_branches(path, remote):
         return ["main", "develop", "release/2.5"]
@@ -482,6 +482,7 @@ def test_select_target_branch_filters_current_when_default(monkeypatch, tmp_path
     def mock_get_default_branch(path):
         return "main"
 
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
 
@@ -525,7 +526,7 @@ def test_select_target_branch_empty_after_filtering(monkeypatch, tmp_path):
     assert result is None
 
 
-def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path):
+def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path, clean_ci_env):
     """Test fork scenario - current local branch filtered from both upstream and origin branches."""
     def mock_list_remote_branches(path, remote):
         # Return different branches for different remotes
@@ -541,6 +542,7 @@ def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path):
     def mock_get_remote_name_for_url(path, url):
         return "upstream"
 
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_remote_name_for_url", mock_get_remote_name_for_url)
@@ -678,7 +680,7 @@ def test_create_gitlab_mr_strips_remote_prefix_from_target_branch(monkeypatch, t
     assert "upstream/develop" not in glab_cmd
 
 
-def test_select_target_branch_shows_both_upstream_and_origin(monkeypatch, tmp_path):
+def test_select_target_branch_shows_both_upstream_and_origin(monkeypatch, tmp_path, clean_ci_env):
     """Test that branch selection shows branches from both upstream and origin when upstream exists."""
 
     # Mock git utilities
@@ -699,6 +701,7 @@ def test_select_target_branch_shows_both_upstream_and_origin(monkeypatch, tmp_pa
             return "upstream"
         return None
 
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_remote_name_for_url", mock_get_remote_name_for_url)
@@ -738,7 +741,7 @@ def test_select_target_branch_shows_both_upstream_and_origin(monkeypatch, tmp_pa
     assert "/" in result  # Should have remote prefix when multiple remotes
 
 
-def test_select_target_branch_origin_only_no_prefix(monkeypatch, tmp_path):
+def test_select_target_branch_origin_only_no_prefix(monkeypatch, tmp_path, clean_ci_env):
     """Test that branch selection shows branches without prefix when only origin exists (no upstream)."""
 
     # Mock git utilities
@@ -751,6 +754,7 @@ def test_select_target_branch_origin_only_no_prefix(monkeypatch, tmp_path):
     def mock_get_default_branch(path):
         return "main"
 
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
 

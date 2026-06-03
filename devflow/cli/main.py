@@ -886,8 +886,13 @@ def notes(ctx: click.Context, identifier: str, latest: bool) -> None:
 @click.option("--no-commit", is_flag=True, help="Skip git commit (don't commit changes)")
 @click.option("--no-pr", is_flag=True, help="Skip PR/MR creation (don't create pull request)")
 @click.option("--no-issue-update", is_flag=True, help="Skip issue tracker updates (don't add summary or update fields)")
+@click.option("--yes", is_flag=True, help="Skip all confirmation prompts (use defaults)")
+@click.option("--commit-message", type=str, default=None, help="Provide commit message directly (skip prompt)")
+@click.option("--export-commit/--no-export-commit", default=None, help="Control whether to commit before export")
+@click.option("--pr-template-url", type=str, default=None, help="PR/MR template URL (skip template discovery prompt)")
+@click.option("--no-retry", is_flag=True, help="Don't retry on PR/MR creation failure")
 @json_option
-def complete(ctx: click.Context, identifier: str, status: str, attach_to_issue: bool, latest: bool, no_commit: bool, no_pr: bool, no_issue_update: bool) -> None:
+def complete(ctx: click.Context, identifier: str, status: str, attach_to_issue: bool, latest: bool, no_commit: bool, no_pr: bool, no_issue_update: bool, yes: bool, commit_message: str, export_commit: bool, pr_template_url: str, no_retry: bool) -> None:
     """Mark a session as complete.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -897,10 +902,17 @@ def complete(ctx: click.Context, identifier: str, status: str, attach_to_issue: 
     for team handoff or documentation. The export includes conversation history.
 
     The --no-commit, --no-pr, and --no-issue-update flags skip interactive prompts for automated workflows.
+    Use --yes to skip all confirmation prompts with default values.
     """
     from devflow.cli.commands.complete_command import complete_session
 
-    complete_session(identifier, status, attach_to_issue, latest, no_commit, no_pr, no_issue_update)
+    complete_session(
+        identifier, status, attach_to_issue, latest,
+        no_commit, no_pr, no_issue_update,
+        yes=yes, commit_message=commit_message,
+        export_commit=export_commit, pr_template_url=pr_template_url,
+        no_retry=no_retry,
+    )
 
 
 @cli.command()
@@ -1293,8 +1305,10 @@ def discover(ctx: click.Context) -> None:
 @click.option("--jira", help="issue tracker key (will prompt if not provided)")
 @click.option("--goal", help="Session goal (auto-detection of file:// paths and http(s):// URLs)")
 @click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
+@click.option("--path", "project_path", type=str, default=None, help="Project path (skip path prompt)")
+@click.option("--yes", is_flag=True, help="Skip confirmation prompts")
 @json_option
-def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str, goal_file: str) -> None:
+def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str, goal_file: str, project_path: str, yes: bool) -> None:
     """Import an existing Claude Code session that is not yet managed by daf tool.
 
     This registers a Claude Code session (created manually with 'claude --session-id')
@@ -1310,7 +1324,7 @@ def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str, goal
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    import_session(uuid, issue_key=jira, goal=goal)
+    import_session(uuid, issue_key=jira, goal=goal, path=project_path, yes=yes)
 
 
 @cli.command()
@@ -1571,7 +1585,8 @@ def jira_view(ctx: click.Context, issue_key: str, history: bool, children: bool,
 @click.option("--file", "file_path", type=click.Path(exists=True), help="Read comment from file")
 @click.option("--stdin", is_flag=True, help="Read comment from stdin")
 @click.option("--public", is_flag=True, help="Make comment public (requires confirmation)")
-def jira_add_comment(ctx: click.Context, issue_key: str, comment: str, file_path: str, stdin: bool, public: bool) -> None:
+@click.option("--yes", is_flag=True, help="Skip confirmation prompts")
+def jira_add_comment(ctx: click.Context, issue_key: str, comment: str, file_path: str, stdin: bool, public: bool, yes: bool) -> None:
     """Add a comment to a JIRA issue.
 
     By default, comments are restricted to Example Group visibility.
@@ -1593,7 +1608,7 @@ def jira_add_comment(ctx: click.Context, issue_key: str, comment: str, file_path
     from devflow.cli.commands.jira_add_comment_command import add_comment
 
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    add_comment(issue_key, comment, file_path, stdin, public, output_json)
+    add_comment(issue_key, comment, file_path, stdin, public, output_json, yes=yes)
 
 
 # Add dynamic jira create command with field discovery

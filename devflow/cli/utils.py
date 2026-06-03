@@ -423,6 +423,34 @@ def is_json_mode() -> bool:
         return "--json" in sys.argv
 
 
+def is_non_interactive(output_json: bool = False) -> bool:
+    """Check if running in non-interactive mode.
+
+    Non-interactive mode is enabled when:
+    - --json flag is set (or output_json param is True)
+    - --non-interactive global flag is set (sets DAF_NON_INTERACTIVE=1)
+    - Running in CI environment (CI, GITHUB_ACTIONS, GITLAB_CI, etc.)
+    - DAF_NON_INTERACTIVE=1 environment variable is explicitly set
+
+    Args:
+        output_json: Whether JSON output mode is enabled
+
+    Returns:
+        True if in non-interactive mode (no user prompts allowed)
+    """
+    if output_json or is_json_mode():
+        return True
+
+    ci_vars = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_HOME', 'TRAVIS', 'CIRCLECI']
+    if any(os.getenv(var) for var in ci_vars):
+        return True
+
+    if os.getenv('DAF_NON_INTERACTIVE') == '1':
+        return True
+
+    return False
+
+
 def get_status_display(status: str) -> tuple[str, str]:
     """Get status display text and color.
 

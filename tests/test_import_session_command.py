@@ -108,8 +108,11 @@ def test_import_session_with_jira_and_goal(temp_daf_home, monkeypatch, capsys, m
     assert "Imported session for PROJ-999" in captured.out
 
 
-def test_import_session_prompts_for_jira(temp_daf_home, monkeypatch, capsys, mock_discovered_session):
+def test_import_session_prompts_for_jira(temp_daf_home, monkeypatch, capsys, mock_discovered_session, clean_ci_env):
     """Test that import prompts for issue key if not provided."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.import_session_command.is_non_interactive', lambda **kw: False)
+
     # Mock discovery
     mock_discovery = Mock()
     mock_discovery.discover_sessions.return_value = [mock_discovered_session]
@@ -137,8 +140,11 @@ def test_import_session_prompts_for_jira(temp_daf_home, monkeypatch, capsys, moc
     assert sessions[0].issue_key == "PROJ-888"
 
 
-def test_import_session_empty_issue_key(temp_daf_home, monkeypatch, capsys, mock_discovered_session):
+def test_import_session_empty_issue_key(temp_daf_home, monkeypatch, capsys, mock_discovered_session, clean_ci_env):
     """Test import fails when issue key is empty."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.import_session_command.is_non_interactive', lambda **kw: False)
+
     # Mock discovery
     mock_discovery = Mock()
     mock_discovery.discover_sessions.return_value = [mock_discovered_session]
@@ -157,8 +163,11 @@ def test_import_session_empty_issue_key(temp_daf_home, monkeypatch, capsys, mock
     assert "issue key is required" in captured.out
 
 
-def test_import_session_empty_goal(temp_daf_home, monkeypatch, capsys, mock_discovered_session):
+def test_import_session_empty_goal(temp_daf_home, monkeypatch, capsys, mock_discovered_session, clean_ci_env):
     """Test import fails when goal is empty."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.import_session_command.is_non_interactive', lambda **kw: False)
+
     # Mock discovery
     mock_discovery = Mock()
     mock_discovery.discover_sessions.return_value = [mock_discovered_session]
@@ -211,8 +220,11 @@ def test_import_session_long_first_message(temp_daf_home, monkeypatch, capsys):
     assert "..." in captured.out  # Truncation indicator
 
 
-def test_import_session_missing_project_path(temp_daf_home, monkeypatch, capsys):
+def test_import_session_missing_project_path(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Test import prompts for project path if missing."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.import_session_command.is_non_interactive', lambda **kw: False)
+
     from devflow.session.discovery import DiscoveredSession
 
     discovered = DiscoveredSession(
@@ -249,8 +261,11 @@ def test_import_session_missing_project_path(temp_daf_home, monkeypatch, capsys)
     assert sessions[0].active_conversation.project_path is not None
 
 
-def test_import_session_custom_project_path(temp_daf_home, monkeypatch, capsys):
+def test_import_session_custom_project_path(temp_daf_home, monkeypatch, capsys, clean_ci_env):
     """Test import with custom project path."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.import_session_command.is_non_interactive', lambda **kw: False)
+
     from devflow.session.discovery import DiscoveredSession
 
     discovered = DiscoveredSession(
@@ -341,8 +356,11 @@ def test_import_session_with_existing_sessions(temp_daf_home, monkeypatch, capsy
     assert "Found 1 existing session" in captured.out
 
 
-def test_import_session_cancel_with_existing(temp_daf_home, monkeypatch, capsys, mock_discovered_session):
+def test_import_session_cancel_with_existing(temp_daf_home, monkeypatch, capsys, mock_discovered_session, clean_ci_env):
     """Test cancelling import when other sessions exist."""
+    # Ensure interactive mode for this test
+    monkeypatch.setattr('devflow.cli.commands.import_session_command.is_non_interactive', lambda **kw: False)
+
     # Create existing session
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
