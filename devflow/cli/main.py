@@ -4033,8 +4033,6 @@ def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: 
     Opens a NiceGUI-based web interface for viewing and managing
     DevAIFlow sessions, configuration, and issue tracker data.
 
-    Requires the 'web' optional dependency: pip install devaiflow[web]
-
     \b
     Examples:
         daf dashboard                  # Auto port, auto-open browser
@@ -4048,23 +4046,7 @@ def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: 
     if ctx.invoked_subcommand is not None:
         return
 
-    try:
-        from devflow.web import HAS_NICEGUI, DashboardApp
-    except Exception:
-        HAS_NICEGUI = False
-        DashboardApp = None
-
-    if not HAS_NICEGUI or DashboardApp is None:
-        console.print(
-            "[red]✗[/red] NiceGUI is required for the web dashboard but is not installed."
-        )
-        console.print("")
-        console.print("Install it with:")
-        console.print("  [bold]pip install devaiflow[web][/bold]")
-        console.print("")
-        console.print("Or install NiceGUI directly:")
-        console.print("  [bold]pip install nicegui[/bold]")
-        return
+    from devflow.web import DashboardApp
 
     # Check if already running
     from devflow.web.app import get_dashboard_status

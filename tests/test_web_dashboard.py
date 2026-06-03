@@ -648,21 +648,6 @@ class TestDashboardCLICommand:
         commands = cli.commands if hasattr(cli, "commands") else {}
         assert "dashboard" in commands
 
-    def test_dashboard_command_nicegui_missing(self):
-        """Test graceful error when NiceGUI is not installed."""
-        from devflow.cli.main import cli
-
-        runner = CliRunner()
-
-        with patch("devflow.cli.main.console") as mock_console:
-            with patch.dict("sys.modules", {"devflow.web": MagicMock(HAS_NICEGUI=False, DashboardApp=None)}):
-                # We need to simulate the import failing
-                result = runner.invoke(cli, ["dashboard"])
-
-        # The command should handle the missing dependency gracefully
-        # (either via console.print or via exit code)
-        # Don't assert specific output since it depends on import behavior
-
     def test_dashboard_command_help(self):
         """Test that dashboard command has proper help text."""
         from devflow.cli.main import cli
@@ -695,22 +680,12 @@ class TestDashboardCLICommand:
 
 
 class TestWebInit:
-    """Tests for devflow/web/__init__.py optional dependency handling."""
-
-    def test_has_nicegui_flag_when_available(self):
-        """Test HAS_NICEGUI is True when nicegui is importable."""
-        # The actual import behavior depends on whether nicegui is installed
-        # We test the module structure is correct
-        from devflow.web import HAS_NICEGUI
-
-        # HAS_NICEGUI should be a boolean
-        assert isinstance(HAS_NICEGUI, bool)
+    """Tests for devflow/web/__init__.py module structure."""
 
     def test_module_exports(self):
         """Test that web module exports expected symbols."""
         import devflow.web
 
-        assert hasattr(devflow.web, "HAS_NICEGUI")
         assert hasattr(devflow.web, "DashboardApp")
 
 
