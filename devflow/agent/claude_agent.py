@@ -106,6 +106,8 @@ class ClaudeAgent(AgentInterface):
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
+        headless: bool = False,
+        auto_approve: bool = False,
     ) -> subprocess.Popen:
         """Launch Claude Code with initial prompt (for new sessions).
 
@@ -121,6 +123,8 @@ class ClaudeAgent(AgentInterface):
             profile_name: Profile name for audit logging (optional)
             enforcement_source: Enforcement source for audit logging (optional)
             env: Environment variables dict (optional, defaults to os.environ)
+            headless: Run non-interactively (--print), outputs to stdout and exits
+            auto_approve: Auto-approve all tool permissions (--dangerously-skip-permissions)
 
         Returns:
             Subprocess handle for the launched Claude Code process
@@ -151,11 +155,18 @@ class ClaudeAgent(AgentInterface):
         final_env, base_cmd = self._build_env_and_cmd(model_provider_profile, base_env=env)
 
         # Build full command with session ID and prompt
-        # Format: claude [--model model] --session-id <uuid> "<prompt>" --add-dir ...
+        # Format: claude [--print] [--dangerously-skip-permissions] [--model model] --session-id <uuid> "<prompt>" --add-dir ...
+        cmd = ["claude"]
+
+        if headless:
+            cmd.append("--print")
+        if auto_approve:
+            cmd.append("--dangerously-skip-permissions")
+
         if model_provider_profile and model_provider_profile.get("model_name"):
-            cmd = ["claude", "--model", model_provider_profile["model_name"], "--session-id", session_id, initial_prompt]
-        else:
-            cmd = ["claude", "--session-id", session_id, initial_prompt]
+            cmd.extend(["--model", model_provider_profile["model_name"]])
+
+        cmd.extend(["--session-id", session_id, initial_prompt])
 
         # Discover and add skills directories if not provided
         if skills_dirs is None:

@@ -54,6 +54,8 @@ class AgentInterface(ABC):
         workspace_path: Optional[str] = None,
         config = None,
         env: Optional[Dict[str, str]] = None,
+        headless: bool = False,
+        auto_approve: bool = False,
     ) -> subprocess.Popen:
         """Launch agent with initial prompt (for new sessions).
 
@@ -71,6 +73,8 @@ class AgentInterface(ABC):
             workspace_path: Workspace path for auto-discovering workspace skills (optional)
             config: Configuration object for context files discovery (optional)
             env: Environment variables dict (optional, defaults to os.environ)
+            headless: Run without interactive UI (agent processes prompt and exits)
+            auto_approve: Auto-approve all tool permissions (file edits, commands)
 
         Returns:
             Subprocess handle for the launched agent

@@ -230,6 +230,8 @@ def create_git_issue_session(
     repository: Optional[str] = None,
     projects: Optional[str] = None,
     temp_clone: Optional[bool] = None,
+    headless: bool = False,
+    auto_approve: bool = False,
 ) -> None:
     """Create a new session for GitHub/GitLab issue creation.
 
@@ -736,7 +738,9 @@ def create_git_issue_session(
             skills_dirs=None,  # Will be auto-discovered
             workspace_path=workspace_path_for_skills,
             config=config,
-            env=env
+            env=env,
+            headless=headless,
+            auto_approve=auto_approve,
         )
         # Wait for the agent process to complete
         process.wait()

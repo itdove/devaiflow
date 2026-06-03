@@ -103,10 +103,13 @@ class OpenCodeAgent(AgentInterface):
         workspace_path: Optional[str] = None,
         config=None,
         env: Optional[Dict[str, str]] = None,
+        headless: bool = False,
+        auto_approve: bool = False,
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
 
-        Uses ``opencode run <prompt>`` for non-interactive prompt passing.
+        By default launches in interactive TUI mode with ``opencode --prompt``.
+        Use ``headless=True`` for non-interactive execution via ``opencode run``.
 
         Args:
             project_path: Absolute path to project
@@ -117,6 +120,8 @@ class OpenCodeAgent(AgentInterface):
             workspace_path: Workspace path (ignored)
             config: Configuration object (ignored)
             env: Environment variables dict (optional, defaults to os.environ)
+            headless: Run non-interactively (opencode run), exits after completion
+            auto_approve: Auto-approve all tool permissions
 
         Returns:
             Subprocess handle for OpenCode process
@@ -128,12 +133,21 @@ class OpenCodeAgent(AgentInterface):
 
         final_env = env if env is not None else os.environ.copy()
 
-        cmd = ["opencode", "run", initial_prompt]
+        if headless:
+            cmd = ["opencode", "run", initial_prompt]
+        else:
+            cmd = ["opencode", "--prompt", initial_prompt]
+
+        if session_id:
+            cmd.extend(["--session", session_id])
 
         if model_provider_profile:
             model_name = model_provider_profile.get("model_name")
             if model_name:
                 cmd.extend(["--model", model_name])
+
+        if auto_approve:
+            cmd.append("--dangerously-skip-permissions")
 
         return subprocess.Popen(
             cmd,

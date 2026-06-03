@@ -361,6 +361,8 @@ def create_investigation_session(
     temp_clone: Optional[bool] = None,
     issue_key: Optional[str] = None,
     issue_details: Optional[dict] = None,
+    headless: bool = False,
+    auto_approve: bool = False,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
@@ -721,7 +723,9 @@ def create_investigation_session(
             skills_dirs=None,  # Will be auto-discovered
             workspace_path=workspace_path,
             config=config,
-            env=env
+            env=env,
+            headless=headless,
+            auto_approve=auto_approve,
         )
         # Wait for the agent process to complete
         process.wait()
@@ -1159,7 +1163,9 @@ def _create_multi_project_investigation_session(
             skills_dirs=None,  # Will be auto-discovered
             workspace_path=workspace_resolved,
             config=config,
-            env=env
+            env=env,
+            headless=headless,
+            auto_approve=auto_approve,
         )
         # Wait for the agent process to complete
         process.wait()

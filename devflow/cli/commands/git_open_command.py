@@ -18,6 +18,8 @@ console = Console()
 def git_open_session(
     issue_key: str,
     repository: Optional[str] = None,
+    headless: bool = False,
+    auto_approve: bool = False,
 ) -> None:
     """Open session for GitHub/GitLab issue, creating it if needed.
 
@@ -28,6 +30,8 @@ def git_open_session(
     Args:
         issue_key: Issue key (#123 or owner/repo#123)
         repository: Repository in owner/repo format (optional, will auto-detect)
+        headless: Run agent without interactive UI
+        auto_approve: Auto-approve all agent tool permissions
     """
     config_loader = ConfigLoader()
     config = config_loader.load_config()
@@ -66,7 +70,7 @@ def git_open_session(
         console_print(f"[dim]Session type: {session.session_type}, status: {session.status}[/dim]")
 
         from devflow.cli.commands.open_command import open_session
-        open_session(session.name)
+        open_session(session.name, headless=headless, auto_approve=auto_approve)
         return
 
     # No session found - validate issue exists

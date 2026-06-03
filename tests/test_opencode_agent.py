@@ -75,8 +75,8 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt(self, mock_popen, mock_require):
-        """Test launching OpenCode with initial prompt."""
+    def test_launch_with_prompt_interactive_default(self, mock_popen, mock_require):
+        """Test launching OpenCode with prompt defaults to interactive mode."""
         agent = OpenCodeAgent()
         mock_process = Mock()
         mock_popen.return_value = mock_process
@@ -89,9 +89,75 @@ class TestOpenCodeAgentLaunch:
 
         mock_require.assert_called_once()
         call_args = mock_popen.call_args
-        assert call_args[0][0] == ["opencode", "run", "Fix the login bug"]
+        cmd = call_args[0][0]
+        assert cmd[0] == "opencode"
+        assert "--prompt" in cmd
+        assert "Fix the login bug" in cmd
+        assert "--session" in cmd
+        assert "test-session-id" in cmd
+        assert "run" not in cmd
         assert call_args[1]["cwd"] == "/home/user/project"
         assert result == mock_process
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_headless(self, mock_popen, mock_require):
+        """Test launching OpenCode in headless mode uses 'opencode run'."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix the login bug",
+            session_id="test-session-id",
+            headless=True,
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert cmd[0] == "opencode"
+        assert cmd[1] == "run"
+        assert "Fix the login bug" in cmd
+        assert "--prompt" not in cmd
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_auto_approve(self, mock_popen, mock_require):
+        """Test launching OpenCode with auto-approve adds --dangerously-skip-permissions."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="test-id",
+            auto_approve=True,
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert "--dangerously-skip-permissions" in cmd
+        assert "--prompt" in cmd  # still interactive
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_headless_and_auto_approve(self, mock_popen, mock_require):
+        """Test launching OpenCode with both headless and auto-approve."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="Fix bug",
+            session_id="test-id",
+            headless=True,
+            auto_approve=True,
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert cmd[1] == "run"
+        assert "--dangerously-skip-permissions" in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")

@@ -82,6 +82,8 @@ class GitHubCopilotAgent(AgentInterface):
         workspace_path: Optional[str] = None,
         config = None,
         env: Optional[Dict[str, str]] = None,
+        headless: bool = False,
+        auto_approve: bool = False,
     ) -> subprocess.Popen:
         """Launch VS Code with GitHub Copilot.
 
@@ -98,6 +100,8 @@ class GitHubCopilotAgent(AgentInterface):
             workspace_path: Workspace path (ignored)
             config: Configuration object (ignored)
             env: Environment variables dict (optional, defaults to os.environ)
+            headless: Run without interactive UI (not supported by this agent)
+            auto_approve: Auto-approve tool permissions (not supported by this agent)
 
         Returns:
             Subprocess handle for VS Code process
