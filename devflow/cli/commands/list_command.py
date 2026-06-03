@@ -2,18 +2,92 @@
 
 import os
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 from rich.table import Table
 
 from devflow.agent import create_agent_client
-from devflow.cli.utils import get_active_conversation, get_status_display, output_json as json_output, serialize_sessions
+from devflow.cli.utils import get_active_conversation, get_status_display, output_json as json_output, serialize_session, serialize_sessions
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 from devflow.utils.time_parser import parse_time_expression
 
 console = Console()
+
+
+def _compute_session_token_usage(session, agent) -> Optional[Dict[str, Any]]:
+    """Compute aggregated token usage for a session across all conversations.
+
+    Args:
+        session: Session object with conversations
+        agent: Agent client instance for extracting token usage
+
+    Returns:
+        Dict with token usage data if any tokens found, None otherwise.
+        Keys: total_tokens, input_tokens, output_tokens,
+              cache_creation_input_tokens, cache_read_input_tokens
+    """
+    if not session.conversations:
+        return None
+
+    total_input = 0
+    total_output = 0
+    total_cache_creation = 0
+    total_cache_read = 0
+    found_any = False
+
+    for working_dir, conversation in session.conversations.items():
+        # Handle both Conversation (new format) and ConversationContext (old format)
+        conv = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+        if conv and conv.project_path and conv.ai_agent_session_id:
+            try:
+                token_usage = agent.extract_token_usage(
+                    conv.ai_agent_session_id,
+                    conv.project_path
+                )
+                if token_usage:
+                    found_any = True
+                    total_input += token_usage.get("input_tokens", 0)
+                    total_output += token_usage.get("output_tokens", 0)
+                    total_cache_creation += token_usage.get("cache_creation_input_tokens", 0)
+                    total_cache_read += token_usage.get("cache_read_input_tokens", 0)
+            except Exception:
+                pass  # Silently ignore errors for this conversation
+
+    if not found_any:
+        return None
+
+    return {
+        "total_tokens": total_input + total_output,
+        "input_tokens": total_input,
+        "output_tokens": total_output,
+        "cache_creation_input_tokens": total_cache_creation,
+        "cache_read_input_tokens": total_cache_read,
+    }
+
+
+def _serialize_sessions_with_tokens(
+    sessions: list,
+    agent_backend: str,
+) -> List[Dict[str, Any]]:
+    """Serialize sessions with token usage data included.
+
+    Args:
+        sessions: List of Session objects to serialize
+        agent_backend: Agent backend name for token extraction
+
+    Returns:
+        List of JSON-compatible dicts with token_usage field added
+    """
+    agent = create_agent_client(agent_backend)
+    result = []
+    for session in sessions:
+        session_dict = serialize_session(session)
+        token_usage = _compute_session_token_usage(session, agent)
+        session_dict["token_usage"] = token_usage
+        result.append(session_dict)
+    return result
 
 
 def _display_page(
@@ -149,19 +223,9 @@ def _display_page(
         total_tokens = 0
         if session.conversations:
             agent = create_agent_client(agent_backend)
-            for working_dir, conversation in session.conversations.items():
-                # Handle both Conversation (new format) and ConversationContext (old format)
-                conv = conversation.active_session if hasattr(conversation, 'active_session') else conversation
-                if conv and conv.project_path and conv.ai_agent_session_id:
-                    try:
-                        token_usage = agent.extract_token_usage(
-                            conv.ai_agent_session_id,
-                            conv.project_path
-                        )
-                        if token_usage:
-                            total_tokens += token_usage.get("total_tokens", 0)
-                    except Exception:
-                        pass  # Silently ignore errors for this conversation
+            usage = _compute_session_token_usage(session, agent)
+            if usage:
+                total_tokens = usage.get("total_tokens", 0)
 
             # Format total tokens
             if total_tokens > 0:
@@ -349,11 +413,15 @@ def list_sessions(
             end_idx = limit
             sessions_to_output = sessions[start_idx:end_idx]
 
-        # Output JSON
+        # Get agent backend for token extraction
+        config = config_loader.load_config()
+        agent_backend = config.agent_backend if config else "claude"
+
+        # Output JSON with token usage data
         json_output(
             success=True,
             data={
-                "sessions": serialize_sessions(sessions_to_output),
+                "sessions": _serialize_sessions_with_tokens(sessions_to_output, agent_backend),
                 "total_count": total_sessions,
             },
             metadata={
