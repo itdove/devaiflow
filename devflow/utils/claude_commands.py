@@ -215,7 +215,7 @@ def install_or_upgrade_reference_skills(
     """Install or upgrade bundled reference skills to specified directory.
 
     Reference skills are skills WITHOUT a 'name:' field that provide context and
-    documentation (like daf-cli, gh-cli, glab-cli).
+    documentation (like daf-cli, daf-git, daf-jira).
 
     Args:
         dry_run: If True, only report what would be changed without actually changing
@@ -520,7 +520,7 @@ def get_skill_status(workspace: str, skill_name: str) -> Optional[str]:
 
     Args:
         workspace: Workspace root directory path
-        skill_name: Name of skill directory (e.g., "daf-cli", "gh-cli")
+        skill_name: Name of skill directory (e.g., "daf-cli", "daf-git")
 
     Returns:
         "not_installed", "up_to_date", "outdated", or None if skill doesn't exist in bundle

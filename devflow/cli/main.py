@@ -3829,7 +3829,7 @@ def upgrade(
 
     Skills installed:
     - Slash commands: /daf-active, /daf-help, /daf-info, etc.
-    - Reference skills: daf-cli, gh-cli, glab-cli
+    - Reference skills: daf-cli, daf-git, daf-jira, etc.
     - Hierarchical skills from organization config files
 
     Items that are already up-to-date will be skipped.

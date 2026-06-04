@@ -28,7 +28,7 @@ def upgrade_all(
 
     This command will:
     - Install slash commands (daf-*) to target directory
-    - Install reference skills (daf-cli, gh-cli, etc.) to target directory
+    - Install reference skills (daf-cli, daf-git, etc.) to target directory
     - Install organization-specific skills from hierarchical config files
     - Skip items that are already up-to-date
 

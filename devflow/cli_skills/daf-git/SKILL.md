@@ -115,8 +115,8 @@ When using `daf git create`, `daf git add-comment`, or `daf git update` commands
 
 ### Syntax Reference
 
-| Element | ✅ GitHub/GitLab Markdown (CORRECT) | ❌ JIRA Wiki Markup (WRONG) |
-|---------|-------------------------------------|------------------------------|
+| Element | Markdown (CORRECT) | JIRA Wiki (WRONG) |
+|---------|--------------------|--------------------|
 | Header 2 | `## Header` | `h2. Header` |
 | Header 3 | `### Header` | `h3. Header` |
 | Bold | `**bold**` | `*bold*` |
@@ -125,94 +125,20 @@ When using `daf git create`, `daf git add-comment`, or `daf git update` commands
 | Inline code | `` `code` `` | `{{code}}` |
 | Unordered list | `- item` | `* item` |
 | Ordered list | `1. item` | `# item` |
-| Link | `[text](url)` | `[text|url]` |
+| Link | `[text](url)` | `[text\|url]` |
 | Checkbox | `- [ ] item` | N/A |
 | Checked box | `- [x] item` | N/A |
 
 ### When to Use Each Syntax
 
-**✅ Use Markdown for GitHub/GitLab operations:**
+**Use Markdown for GitHub/GitLab operations:**
 - `daf git create` - Creating GitHub/GitLab issues
 - `daf git add-comment` - Adding comments to issues
 - `daf git update` - Updating issue descriptions
 - Pull request descriptions and comments
 
-**✅ Use JIRA Wiki markup for JIRA operations:**
-- `daf jira create` - Creating JIRA tickets
-- `daf jira add-comment` - Adding JIRA comments
-- `daf jira update` - Updating JIRA descriptions
-
-**Why this matters:**
-- GitHub/GitLab will NOT render JIRA Wiki markup correctly
-- Using `h3. Header` in GitHub will display as plain text, not a header
-- Using `{code}` blocks will not format as code in GitHub
-- Acceptance criteria checkboxes must use `- [ ]` format in Markdown
-
-### Example: Creating Issue with Markdown
-
-```bash
-# Correct Markdown formatting for GitHub/GitLab
-daf git create enhancement --summary "Add caching layer" \
-  --description "$(cat <<'EOF'
-## Overview
-
-Implement Redis caching to improve API performance.
-
-### Requirements
-
-- Cache should store subscription lookups
-- Configurable TTL (default: 5 minutes)
-- Handle cache misses gracefully
-
-### Implementation Notes
-
-Use `redis-py` client with the following configuration:
-
-```python
-redis_client = Redis(
-    host='localhost',
-    port=6379,
-    decode_responses=True
-)
-```
-
-### Testing
-
-- [ ] Unit tests for cache hit/miss scenarios
-- [ ] Integration tests with Redis
-- [ ] Performance benchmarks
-
-**Target:** 50ms response time for cached responses
-EOF
-)" \
-  --labels "backend,enhancement"
-```
-
-### Common Mistakes to Avoid
-
-❌ **DON'T** use JIRA Wiki markup in GitHub/GitLab issues:
-```bash
-# WRONG - This will not render correctly in GitHub
-daf git create bug --description "h3. Bug Description
-
-*Problem:* API times out
-
-{code:python}
-# broken code
-{code}"
-```
-
-✅ **DO** use Markdown syntax:
-```bash
-# CORRECT - Proper Markdown formatting
-daf git create bug --description "### Bug Description
-
-**Problem:** API times out
-
-\`\`\`python
-# broken code
-\`\`\`"
-```
+**Use JIRA Wiki markup for JIRA operations:**
+- `daf jira create` / `daf jira add-comment` / `daf jira update`
 
 ## Ticket Creation Sessions
 
@@ -228,37 +154,199 @@ daf git new task --goal "Refactor auth module" --parent "#123"
 **Purpose:** Analyze the codebase to create a well-informed issue
 
 **Constraints:**
-- ❌ DO NOT modify code or files
-- ❌ DO NOT run git commands
-- ✅ ONLY read files, search code, analyze architecture
-- ✅ Create issue when analysis is complete using `daf git create`
+- DO NOT modify code or files
+- DO NOT run git commands
+- ONLY read files, search code, analyze architecture
+- Create issue when analysis is complete using `daf git create`
 
 **See also:** daf-workflow skill for complete ticket creation workflow.
 
 ---
 
-## Typical Workflows
+## GitHub Operations
 
-**Workflow: Working on existing issue**
+### Authentication
+
 ```bash
-# 1. View issue details
-gh issue view 456 --comments    # or: glab issue view 456 --comments
+# Interactive login
+gh auth login
 
-# 2. Add status comment
-daf git add-comment 456 "Started implementation"
+# Check status
+gh auth status
 
-# 3. Work on implementation
-# ... do work in Claude Code session ...
+# Token-based login
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
+gh auth login --with-token < <(echo $GITHUB_TOKEN)
 ```
 
-**Workflow: Create issue without session**
+**Fine-grained tokens:** Some organizations require fine-grained tokens instead of classic tokens.
+
+When you see: "forbids access via a personal access token (classic)":
+1. Go to: https://github.com/settings/personal-access-tokens/new
+2. Select "Only select repositories" and choose the specific repo
+3. Grant permissions: Contents (R/W), Issues (R/W), Pull requests (R/W)
+4. Authenticate: `gh auth login` and paste the token
+
+**Pre-flight auth check:**
 ```bash
-# Create issue for someone else to work on
-daf git create --summary "Refactor auth module" \
-  --type task \
-  --assignee teammate \
-  --labels "refactor,backend"
+# Auto-detect repository from git remote
+daf git check-auth
+
+# Or specify repository explicitly
+daf git check-auth owner/repo
 ```
+
+### PR Creation (daf complete pattern)
+
+```bash
+# Basic PR creation
+gh pr create --draft --title "Title" --body "Description"
+
+# Fork detection - create PR to upstream
+gh pr create --draft --title "Title" --body "Description" --repo upstream-owner/upstream-repo
+
+# Create PR with template
+gh pr create --draft --title "PROJ-123: Feature" --body "$(cat <<'EOF'
+## Description
+...
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+```
+
+**Fork detection:**
+```bash
+# Check if repository is a fork
+gh repo view --json isFork,parent
+
+# List remotes to see upstream
+git remote -v
+```
+
+### Fetching Files from Private Repos
+
+```bash
+# Fetch file contents (raw)
+gh api \
+  -H "Accept: application/vnd.github.raw" \
+  "/repos/owner/repo/contents/path/to/file"
+
+# Fetch from specific branch
+gh api \
+  -H "Accept: application/vnd.github.raw" \
+  "/repos/owner/repo/contents/path/to/file?ref=branch-name"
+
+# Fetch PR template from organization .github repo
+gh api \
+  -H "Accept: application/vnd.github.raw" \
+  "/repos/YOUR-ORG/.github/contents/.github/PULL_REQUEST_TEMPLATE.md"
+```
+
+---
+
+## GitLab Operations
+
+### Authentication
+
+```bash
+# Interactive login (GitLab.com)
+glab auth login
+
+# Self-hosted GitLab (full parameters)
+glab auth login --hostname gitlab.example.com \
+  --api-host gitlab.example.com \
+  --api-protocol https \
+  --git-protocol git \
+  -t $GITLAB_TOKEN
+
+# Check status
+glab auth status
+```
+
+**Token:** Create at GitLab Settings > Access Tokens with `api` scope.
+
+### MR Creation (daf complete pattern)
+
+```bash
+# Basic MR creation
+glab mr create --draft --title "Title" --description "Description"
+
+# Fork detection - create MR to upstream
+glab mr create --draft \
+  --title "Title" \
+  --description "Description" \
+  --target-project upstream-group/upstream-repo
+
+# Create MR to specific target branch
+glab mr create --target-branch develop --title "Title" --description "Body"
+```
+
+**Fork detection:**
+```bash
+# Check if project is a fork
+glab repo view -F json | jq '.forked_from_project'
+
+# List remotes to see upstream
+git remote -v
+```
+
+### Fetching Files from Private Repos
+
+```bash
+# Fetch file contents (raw) - URL encode paths with %2F
+glab api "projects/group%2Fproject/repository/files/path%2Fto%2Ffile/raw?ref=main"
+
+# Multi-level groups
+glab api "projects/group%2Fsubgroup%2Fproject/repository/files/README.md/raw?ref=main"
+```
+
+---
+
+## gh vs glab Syntax Differences
+
+| Operation | GitHub (`gh`) | GitLab (`glab`) |
+|-----------|---------------|-----------------|
+| JSON output | `--json` | `-F json` (NOT `--json`) |
+| Create PR/MR | `gh pr create --body` | `glab mr create --description` |
+| Fork target | `--repo owner/repo` | `--target-project group/repo` |
+| Hostname | N/A (default) | `--hostname` (auth only, NEVER in mr create) |
+| Check MR | `gh pr list --head branch` | `glab mr list -F json \| jq` |
+| Ready for review | `gh pr ready 123` | `glab mr update 123 --ready` |
+| Approve | `gh pr review 123 --approve` | `glab mr approve 123` |
+
+**Common mistakes:**
+- Using `--json` with glab (use `-F json`)
+- Using `--body` with glab mr create (use `--description`)
+- Using `--hostname` with glab mr create (only for `glab auth login`)
+
+## PR/MR Template
+
+Standard template used by daf tool:
+
+```markdown
+## Description
+
+[Brief description of changes]
+
+## Testing
+
+### Steps to test
+1. Pull down the PR/MR
+2. [Add specific test steps]
+
+### Scenarios tested
+- [ ] Test scenario 1
+- [ ] Test scenario 2
+
+## Deployment considerations
+- [ ] This code change is ready for deployment on its own
+- [ ] This code change requires considerations before being deployed:
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+**GitLab addition:** Add `Jira Issue: https://jira.example.com/browse/PROJ-XXXXX` at the top if using JIRA.
 
 ## GitHub/GitLab vs JIRA
 
@@ -269,11 +357,6 @@ daf git create --summary "Refactor auth module" \
 - **Workflows**: Binary state (open/closed) + optional status labels
 - **Sprints**: Uses milestones instead
 - **Attachments**: GitHub doesn't support files, GitLab does
-
-**Label conventions:**
-- Type: `bug`, `enhancement`, `task`, `spike`, `epic`
-- Priority: `priority: critical`, `priority: high`, `priority: medium`, `priority: low`
-- Points: `points: 1`, `points: 2`, `points: 3`, `points: 5`, `points: 8`
 
 ## Platform Detection
 
@@ -291,9 +374,22 @@ Both platforms use `#` format for issues:
 - **GitHub**: GitHub CLI (`gh`) installed and authenticated (`gh auth login`)
 - **GitLab**: GitLab CLI (`glab`) installed and authenticated (`glab auth login`)
 
-## Why Use This
+## Typical Workflows
 
-- ✅ Integrated with daf session workflow (create, update, comment)
-- ✅ Mock mode for testing
-- ✅ Consistent API across GitHub and GitLab
-- ✅ View issues with `gh`/`glab` CLI directly (already installed)
+**Working on existing issue:**
+```bash
+# 1. View issue details
+gh issue view 456 --comments    # or: glab issue view 456 --comments
+
+# 2. Add status comment
+daf git add-comment 456 "Started implementation"
+
+# 3. Work on implementation...
+```
+
+**Create issue without session:**
+```bash
+daf git create task --summary "Refactor auth module" \
+  --assignee teammate \
+  --labels "refactor,backend"
+```

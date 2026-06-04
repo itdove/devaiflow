@@ -633,7 +633,7 @@ def test_handle_upgrade_commands_success(
 
     # Mock successful upgrade with some changes
     mock_slash_cmds.return_value = (["daf-active", "daf-help"], [], [])
-    mock_ref_skills.return_value = (["daf-cli", "gh-cli"], [], [])
+    mock_ref_skills.return_value = (["daf-cli", "daf-git"], [], [])
 
     tui = ConfigTUI()
     tui.notify = Mock()
@@ -667,7 +667,7 @@ def test_handle_upgrade_commands_up_to_date(
 
     # Mock all skills up-to-date
     mock_slash_cmds.return_value = ([], ["daf-active", "daf-help"], [])
-    mock_ref_skills.return_value = ([], ["daf-cli", "gh-cli"], [])
+    mock_ref_skills.return_value = ([], ["daf-cli", "daf-git"], [])
 
     tui = ConfigTUI()
     tui.notify = Mock()
@@ -699,7 +699,7 @@ def test_handle_upgrade_commands_with_failures(
 
     # Mock with some failures
     mock_slash_cmds.return_value = (["daf-active"], ["daf-help"], ["daf-failed"])
-    mock_ref_skills.return_value = (["daf-cli"], [], ["gh-cli"])
+    mock_ref_skills.return_value = (["daf-cli"], [], ["daf-git"])
 
     tui = ConfigTUI()
     tui.notify = Mock()

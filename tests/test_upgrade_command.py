@@ -298,7 +298,7 @@ class TestUpgradeAllComprehensive:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console'):
                         mock_slash.return_value = ([], [], [])
-                        mock_ref.return_value = (["gh-cli", "glab-cli"], [], [])
+                        mock_ref.return_value = (["daf-cli", "daf-git"], [], [])
 
                         upgrade_all(upgrade_skills=True, upgrade_hierarchical_skills=False, quiet=False)
 
@@ -311,7 +311,7 @@ class TestUpgradeAllComprehensive:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
                         mock_slash.return_value = (["daf-list"], [], [])
-                        mock_ref.return_value = (["gh-cli"], [], [])
+                        mock_ref.return_value = (["daf-git"], [], [])
 
                         upgrade_all(dry_run=True, upgrade_skills=True, upgrade_hierarchical_skills=False, quiet=False)
 
@@ -326,7 +326,7 @@ class TestUpgradeAllComprehensive:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
                         mock_slash.return_value = (["daf-list"], [], ["daf-broken"])
-                        mock_ref.return_value = ([], [], ["gh-cli-broken"])
+                        mock_ref.return_value = ([], [], ["daf-git-broken"])
 
                         upgrade_all(upgrade_skills=True, upgrade_hierarchical_skills=False, quiet=False)
 
@@ -410,7 +410,7 @@ class TestUpgradeAllComprehensive:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
                         mock_slash.return_value = (["daf-list", "daf-active"], [], [])
-                        mock_ref.return_value = (["gh-cli"], [], [])
+                        mock_ref.return_value = (["daf-git"], [], [])
 
                         upgrade_all(upgrade_skills=True, upgrade_hierarchical_skills=False, quiet=False)
 
@@ -424,7 +424,7 @@ class TestUpgradeAllComprehensive:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
                         mock_slash.return_value = ([], ["daf-list"], [])
-                        mock_ref.return_value = ([], ["gh-cli"], [])
+                        mock_ref.return_value = ([], ["daf-git"], [])
 
                         upgrade_all(upgrade_skills=True, upgrade_hierarchical_skills=False, quiet=False)
 
@@ -438,7 +438,7 @@ class TestUpgradeAllComprehensive:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console') as mock_console:
                         mock_slash.return_value = (["daf-list"], [], ["daf-broken"])
-                        mock_ref.return_value = ([], [], ["gh-cli-broken"])
+                        mock_ref.return_value = ([], [], ["daf-git-broken"])
 
                         upgrade_all(upgrade_skills=True, upgrade_hierarchical_skills=False, quiet=False)
 
@@ -495,7 +495,7 @@ class TestProjectPathInstallation:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console'):
                         mock_slash.return_value = (["daf-list"], [], [])
-                        mock_ref.return_value = (["gh-cli"], [], [])
+                        mock_ref.return_value = (["daf-git"], [], [])
 
                         upgrade_all(
                             upgrade_skills=True,
@@ -604,7 +604,7 @@ class TestProjectPathInstallation:
                 with patch('devflow.cli.commands.upgrade_command.install_or_upgrade_reference_skills') as mock_ref:
                     with patch('devflow.cli.commands.upgrade_command.console'):
                         mock_slash.return_value = (["daf-list"], [], [])
-                        mock_ref.return_value = (["gh-cli"], [], [])
+                        mock_ref.return_value = (["daf-git"], [], [])
 
                         upgrade_all(
                             dry_run=True,
