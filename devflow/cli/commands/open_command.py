@@ -1115,6 +1115,9 @@ def open_session(
                         auto_approve=auto_approve
                     )
                     process.wait()
+                    if not headless:
+                        from devflow.cli.utils import reset_terminal_after_tui
+                        reset_terminal_after_tui()
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")
@@ -1283,6 +1286,9 @@ def open_session(
                     # For non-resumable agents, wait for the launched process
                     process.wait()
             finally:
+                if not headless:
+                    from devflow.cli.utils import reset_terminal_after_tui
+                    reset_terminal_after_tui()
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")
 

@@ -17,6 +17,7 @@ from devflow.cli.utils import (
     get_status_display,
     resolve_goal_input,
     process_goal_options,
+    reset_terminal_after_tui,
     _is_valid_file_or_url,
     _resolve_file_or_url,
     require_outside_claude,
@@ -950,3 +951,54 @@ def test_resolve_file_or_url_nonexistent_file():
         _resolve_file_or_url("/tmp/nonexistent_file_12345.md")
 
     assert "File not found" in str(exc_info.value)
+
+
+class TestResetTerminalAfterTui:
+    """Tests for reset_terminal_after_tui."""
+
+    @patch("subprocess.run")
+    def test_writes_escape_sequences_and_calls_stty(self, mock_run):
+        """Verify escape sequences are written and stty sane is called."""
+        import io
+        import sys
+        import subprocess
+
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: True
+        with patch.object(sys, "stdout", fake_stdout):
+            reset_terminal_after_tui()
+
+        written = fake_stdout.getvalue()
+        assert "\033[?1049l" in written
+        assert "\033[0m" in written
+        mock_run.assert_called_once()
+        args = mock_run.call_args
+        assert args[0][0] == ["stty", "sane"]
+        assert args[1]["stdin"] == subprocess.DEVNULL
+        assert args[1]["stdout"] == subprocess.DEVNULL
+        assert args[1]["stderr"] == subprocess.DEVNULL
+
+    @patch("subprocess.run", side_effect=OSError("stty not found"))
+    def test_stty_failure_is_silenced(self, mock_run):
+        """If stty fails, exception is silenced (non-TTY safe)."""
+        import io
+        import sys
+
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: True
+        with patch.object(sys, "stdout", fake_stdout):
+            reset_terminal_after_tui()
+
+    @patch("subprocess.run")
+    def test_skipped_when_not_tty(self, mock_run):
+        """No escape sequences or stty when stdout is not a TTY."""
+        import io
+        import sys
+
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: False
+        with patch.object(sys, "stdout", fake_stdout):
+            reset_terminal_after_tui()
+
+        assert fake_stdout.getvalue() == ""
+        mock_run.assert_not_called()

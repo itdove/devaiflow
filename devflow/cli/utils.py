@@ -22,6 +22,38 @@ from devflow.utils.backend_detection import detect_backend_from_key
 console = Console()
 
 
+def reset_terminal_after_tui() -> None:
+    """Reset terminal state after a TUI-based agent (e.g. OpenCode) exits.
+
+    TUI agents use the alternate screen buffer and may not fully restore
+    terminal state on exit. This resets the terminal to a known-good state
+    so subsequent CLI output renders correctly.
+
+    Safe to call after any agent — these operations are no-ops when the
+    terminal is already in normal state. Silently skipped in non-TTY
+    environments (CI, tests, pipes).
+    """
+    import subprocess
+
+    try:
+        if not sys.stdout.isatty():
+            return
+        sys.stdout.write("\033[?1049l")  # exit alternate screen buffer
+        sys.stdout.write("\033[0m")  # reset text attributes
+        sys.stdout.flush()
+    except (OSError, ValueError):
+        pass
+    try:
+        subprocess.run(
+            ["stty", "sane"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, FileNotFoundError):
+        pass
+
+
 def check_outside_ai_session() -> None:
     """Check if running inside an AI agent session and exit with error if so.
 
