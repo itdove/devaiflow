@@ -1,7 +1,7 @@
 ---
 name: daf-workflow
 description: DevAIFlow session context loader. Activates when DAF_SESSION_NAME env var is set. Reads session metadata, issue tracker tickets, and context files to understand the current task. Provides per-command workflow guidance for daf open, daf new, daf git new, daf jira new, and daf investigate.
-user-invocable: false
+user-invocable: true
 ---
 
 # DevAIFlow Session Context

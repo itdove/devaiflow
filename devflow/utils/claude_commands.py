@@ -647,3 +647,186 @@ def build_claude_command(
                 cmd.extend(["--add-dir", str(cs_home)])
 
     return cmd
+
+
+def _get_bundled_hooks_dir() -> Path:
+    """Get path to bundled hooks directory."""
+    return Path(__file__).parent.parent / "hooks"
+
+
+def install_claude_session_start_hook(
+    dry_run: bool = False,
+    quiet: bool = False,
+) -> bool:
+    """Install Claude Code SessionStart hook for DevAIFlow.
+
+    Copies the hook script to ~/.claude/hooks/ and adds the SessionStart
+    hook entry to ~/.claude/settings.json (user-level, merging with existing hooks).
+
+    The hook checks DAF_SESSION_NAME env var and injects instruction to
+    follow the daf-workflow skill. No-op when env var is not set.
+
+    Returns:
+        True if hook was installed or updated, False if already up-to-date
+    """
+    import json
+
+    claude_dir = get_claude_config_dir()
+    hooks_dir = claude_dir / "hooks"
+    settings_file = claude_dir / "settings.json"
+
+    # Source hook script
+    src_hook = _get_bundled_hooks_dir() / "claude_session_start.py"
+    dest_hook = hooks_dir / "daf-session-start.py"
+
+    if not src_hook.exists():
+        if not quiet:
+            console.print("[red]✗[/red] Hook source not found: {src_hook}")
+        return False
+
+    # Check if hook script needs update
+    hook_changed = False
+    if dest_hook.exists():
+        if dest_hook.read_text() == src_hook.read_text():
+            if not quiet:
+                console.print("  [dim]✓ Claude SessionStart hook (up-to-date)[/dim]")
+        else:
+            hook_changed = True
+    else:
+        hook_changed = True
+
+    if hook_changed and not dry_run:
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_hook, dest_hook)
+        if not quiet:
+            console.print("  [green]✓[/green] Installed Claude SessionStart hook")
+
+    # Merge hook config into settings.json
+    hook_command = f'python3 "{dest_hook}"'
+    daf_hook_entry = {
+        "type": "command",
+        "command": hook_command,
+        "timeout": 5,
+    }
+
+    # Load existing settings
+    existing = {}
+    if settings_file.exists():
+        try:
+            existing = json.loads(settings_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+
+    hooks = existing.setdefault("hooks", {})
+    session_start_hooks = hooks.setdefault("SessionStart", [])
+
+    # Check if daf hook already present
+    already_installed = False
+    for entry in session_start_hooks:
+        for hook in entry.get("hooks", []):
+            if "daf-session-start" in hook.get("command", ""):
+                if hook.get("command") == hook_command:
+                    already_installed = True
+                else:
+                    hook["command"] = hook_command
+                    hook_changed = True
+
+    if not already_installed:
+        session_start_hooks.append({
+            "matcher": "",
+            "hooks": [daf_hook_entry],
+        })
+        hook_changed = True
+
+    if hook_changed and not dry_run:
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
+        settings_file.write_text(json.dumps(existing, indent=2) + "\n")
+        if not quiet:
+            console.print("  [green]✓[/green] Updated ~/.claude/settings.json with SessionStart hook")
+
+    return hook_changed
+
+
+_OPENCODE_PLUGIN_TS = """\
+/**
+ * OpenCode plugin for DevAIFlow session context.
+ *
+ * Checks DAF_SESSION_NAME env var on chat messages. If set, prepends
+ * instruction to follow daf-workflow skill. If not set, no-op.
+ */
+
+let sessionInitDone = false;
+
+export default async (ctx) => {
+  return {
+    async "chat.message"(input, output) {
+      const sessionName = process.env.DAF_SESSION_NAME;
+      if (!sessionName || sessionInitDone) return;
+
+      sessionInitDone = true;
+
+      const command = process.env.DAF_COMMAND || "unknown";
+      const prefix =
+        `DevAIFlow session active (session: ${sessionName}, command: ${command}). ` +
+        `Follow the daf-workflow skill Session Initialization instructions.\\n\\n`;
+
+      if (output.parts && output.parts.length > 0 && output.parts[0].type === "text") {
+        output.parts[0] = {
+          type: "text",
+          text: prefix + (output.parts[0].text || ""),
+        };
+      }
+    },
+  };
+};
+"""
+
+
+def install_opencode_plugin(
+    dry_run: bool = False,
+    quiet: bool = False,
+) -> bool:
+    """Install OpenCode plugin for DevAIFlow.
+
+    Writes the TypeScript plugin to ~/.config/opencode/plugins/daf-workflow.ts
+    from an inline template (no source file dependency).
+
+    The plugin checks DAF_SESSION_NAME on chat messages and injects instruction
+    to follow the daf-workflow skill. No-op when env var is not set.
+
+    Returns:
+        True if plugin was installed or updated, False if already up-to-date
+    """
+    import os
+
+    xdg_config = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+    plugins_dir = Path(xdg_config) / "opencode" / "plugins"
+    dest_plugin = plugins_dir / "daf-workflow.ts"
+
+    if dest_plugin.exists() and dest_plugin.read_text() == _OPENCODE_PLUGIN_TS:
+        if not quiet:
+            console.print("  [dim]✓ OpenCode plugin (up-to-date)[/dim]")
+        return False
+
+    if not dry_run:
+        plugins_dir.mkdir(parents=True, exist_ok=True)
+        dest_plugin.write_text(_OPENCODE_PLUGIN_TS)
+        if not quiet:
+            console.print("  [green]✓[/green] Installed OpenCode plugin (daf-workflow.ts)")
+
+    return True
+
+
+def install_agent_hooks(
+    dry_run: bool = False,
+    quiet: bool = False,
+) -> None:
+    """Install hooks and plugins for all supported agents.
+
+    Called during daf upgrade / daf setup.
+    """
+    if not quiet:
+        console.print("\n[bold]Agent Hooks & Plugins:[/bold]")
+
+    install_claude_session_start_hook(dry_run=dry_run, quiet=quiet)
+    install_opencode_plugin(dry_run=dry_run, quiet=quiet)

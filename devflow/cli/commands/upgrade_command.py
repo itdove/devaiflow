@@ -10,6 +10,7 @@ from devflow.utils.claude_commands import (
     install_or_upgrade_reference_skills,
     install_or_upgrade_slash_commands,
     install_skills_to_agents,
+    install_agent_hooks,
 )
 
 console = Console()
@@ -154,6 +155,13 @@ def upgrade_all(
 
         if not quiet:
             console.print()
+
+    # Install agent hooks and plugins (Claude SessionStart, OpenCode plugin)
+    try:
+        install_agent_hooks(dry_run=dry_run, quiet=quiet)
+    except Exception as e:
+        if not quiet:
+            console.print(f"[yellow]⚠[/yellow] Hook installation warning: {e}")
 
     # Overall summary
     if not quiet:
