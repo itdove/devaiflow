@@ -559,10 +559,10 @@ class TestOpenCodeAgentPermissions:
 
 
 class TestOpenCodeAgentAgentsMdTrigger:
-    """Test AGENTS.md trigger for daf-workflow skill (#430)."""
+    """Test AGENTS.md trigger for daf-workflow skill (#430, #433)."""
 
-    def test_ensure_trigger_appends_to_existing_agents_md(self, tmp_path):
-        """Test trigger is appended to an existing AGENTS.md."""
+    def test_ensure_trigger_prepends_to_existing_agents_md(self, tmp_path):
+        """Test trigger is prepended to an existing AGENTS.md (#433)."""
         agent = OpenCodeAgent()
         project_dir = tmp_path / "project"
         project_dir.mkdir()
@@ -576,6 +576,8 @@ class TestOpenCodeAgentAgentsMdTrigger:
         assert "# Existing agent instructions" in content
         assert "Some content." in content
         assert agent.AGENTS_MD_TRIGGER in content
+        # Trigger must be at the TOP of the file
+        assert content.startswith(agent.AGENTS_MD_TRIGGER)
 
     def test_ensure_trigger_creates_agents_md_if_missing(self, tmp_path):
         """Test AGENTS.md is created with trigger when file does not exist."""
@@ -610,7 +612,7 @@ class TestOpenCodeAgentAgentsMdTrigger:
         assert content_after_second.count(agent.AGENTS_MD_TRIGGER) == 1
 
     def test_ensure_trigger_preserves_existing_content(self, tmp_path):
-        """Test existing AGENTS.md content is preserved when trigger is added."""
+        """Test existing AGENTS.md content is preserved below trigger (#433)."""
         agent = OpenCodeAgent()
         project_dir = tmp_path / "project"
         project_dir.mkdir()
@@ -620,21 +622,69 @@ class TestOpenCodeAgentAgentsMdTrigger:
         agent.ensure_agents_md_trigger(str(project_dir))
 
         content = (project_dir / "AGENTS.md").read_text()
-        assert content.startswith(original)
-        assert agent.AGENTS_MD_TRIGGER in content
+        # Trigger at top, existing content preserved below
+        assert content.startswith(agent.AGENTS_MD_TRIGGER)
+        assert original.strip() in content
 
     def test_ensure_trigger_already_present(self, tmp_path):
-        """Test no modification when trigger line already exists."""
+        """Test no modification when trigger block already exists."""
         agent = OpenCodeAgent()
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        existing = f"# Instructions\n\n{agent.AGENTS_MD_TRIGGER}\n"
+        existing = f"{agent.AGENTS_MD_TRIGGER}\n\n# Instructions\n"
         (project_dir / "AGENTS.md").write_text(existing)
 
         result = agent.ensure_agents_md_trigger(str(project_dir))
 
         assert result is False
         assert (project_dir / "AGENTS.md").read_text() == existing
+
+    def test_ensure_trigger_migrates_legacy_trigger(self, tmp_path):
+        """Test legacy trigger at end is replaced with new block at top (#433)."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        agents_md = project_dir / "AGENTS.md"
+        legacy_content = (
+            "# My Project Instructions\n\n"
+            "Follow the coding standards.\n\n"
+            f"{agent._LEGACY_TRIGGER}\n"
+        )
+        agents_md.write_text(legacy_content)
+
+        result = agent.ensure_agents_md_trigger(str(project_dir))
+
+        assert result is True
+        content = agents_md.read_text()
+        # New trigger at the top
+        assert content.startswith(agent.AGENTS_MD_TRIGGER)
+        # Legacy trigger removed
+        assert agent._LEGACY_TRIGGER not in content
+        # Original content preserved
+        assert "# My Project Instructions" in content
+        assert "Follow the coding standards." in content
+
+    def test_ensure_trigger_migrates_legacy_trigger_appended_with_newlines(self, tmp_path):
+        """Test legacy trigger appended with \\n\\n prefix is cleaned up (#433)."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        agents_md = project_dir / "AGENTS.md"
+        # Simulate the old append behavior: original content + \n\n + trigger + \n
+        legacy_content = (
+            "# Instructions\n\nSome content.\n"
+            f"\n\n{agent._LEGACY_TRIGGER}\n"
+        )
+        agents_md.write_text(legacy_content)
+
+        result = agent.ensure_agents_md_trigger(str(project_dir))
+
+        assert result is True
+        content = agents_md.read_text()
+        assert content.startswith(agent.AGENTS_MD_TRIGGER)
+        assert agent._LEGACY_TRIGGER not in content
+        assert "# Instructions" in content
+        assert "Some content." in content
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")

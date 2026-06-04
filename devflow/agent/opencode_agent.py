@@ -66,9 +66,25 @@ class OpenCodeAgent(AgentInterface):
 
         self.opencode_dir = Path(opencode_dir)
 
-    # Trigger line appended to the project's AGENTS.md so OpenCode
-    # discovers the daf-workflow skill on startup without --prompt.
-    AGENTS_MD_TRIGGER = (
+    # Prominent trigger block prepended to the project's AGENTS.md so
+    # OpenCode discovers the daf-workflow skill on startup without --prompt.
+    # Must be at the TOP of the file so the LLM sees it first.
+    AGENTS_MD_TRIGGER = "\n".join(
+        [
+            "# DevAIFlow Session",
+            "",
+            "**IMPORTANT:** If the `DAF_SESSION_NAME` environment variable is set, you MUST:",
+            "1. Read and follow the **daf-workflow** skill instructions immediately",
+            "2. Run `daf info` to get session metadata",
+            "3. Read the issue tracker ticket with comments",
+            "4. Start working on the task described in the session goal",
+            "",
+            "Do NOT wait for user input — begin the session initialization workflow now.",
+        ]
+    )
+
+    # Legacy trigger text (pre-#433) — detected for migration.
+    _LEGACY_TRIGGER = (
         "When DAF_SESSION_NAME environment variable is set, "
         "immediately follow the daf-workflow skill instructions."
     )
@@ -77,8 +93,12 @@ class OpenCodeAgent(AgentInterface):
         """Ensure the project's AGENTS.md contains the daf-workflow trigger.
 
         Checks if ``AGENTS.md`` in *project_path* already contains the trigger
-        line.  If the file exists but the line is missing, it is appended.  If
-        the file does not exist it is created with just the trigger line.
+        block.  If the file exists but the block is missing, it is **prepended**
+        at the top so the LLM sees it first.  If the file does not exist it is
+        created with just the trigger block.
+
+        When a legacy (pre-#433) single-line trigger is found, it is removed
+        and replaced by the new prominent block at the top of the file.
 
         The operation is idempotent -- calling it multiple times on the same
         project is safe and will not duplicate the trigger.
@@ -95,13 +115,23 @@ class OpenCodeAgent(AgentInterface):
 
         if agents_md.exists():
             content = agents_md.read_text()
-            if self.AGENTS_MD_TRIGGER not in content:
-                with open(agents_md, "a") as f:
-                    f.write(f"\n\n{self.AGENTS_MD_TRIGGER}\n")
-                return True
-            return False
 
-        # File does not exist -- create it with the trigger line.
+            # Already has the new trigger block — nothing to do.
+            if self.AGENTS_MD_TRIGGER in content:
+                return False
+
+            # Remove legacy trigger if present.
+            if self._LEGACY_TRIGGER in content:
+                content = content.replace(f"\n\n{self._LEGACY_TRIGGER}\n", "")
+                content = content.replace(f"{self._LEGACY_TRIGGER}\n", "")
+                content = content.replace(self._LEGACY_TRIGGER, "")
+
+            # Prepend the new trigger block at the top.
+            content = content.lstrip("\n")
+            agents_md.write_text(f"{self.AGENTS_MD_TRIGGER}\n\n{content}")
+            return True
+
+        # File does not exist -- create it with the trigger block.
         agents_md.write_text(f"{self.AGENTS_MD_TRIGGER}\n")
         return True
 
