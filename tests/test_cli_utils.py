@@ -958,8 +958,8 @@ class TestResetTerminalAfterTui:
     """Tests for reset_terminal_after_tui."""
 
     @patch("subprocess.run")
-    def test_writes_escape_sequences_and_calls_stty(self, mock_run):
-        """Verify escape sequences are written and stty sane is called."""
+    def test_writes_escape_sequences_and_calls_stty_and_tput(self, mock_run):
+        """Verify escape sequences are written, stty sane and tput reset are called."""
         import io
         import sys
         import subprocess
@@ -972,16 +972,23 @@ class TestResetTerminalAfterTui:
         written = fake_stdout.getvalue()
         assert "\033[?1049l" in written
         assert "\033[0m" in written
-        mock_run.assert_called_once()
-        args = mock_run.call_args
-        assert args[0][0] == ["stty", "sane"]
-        assert args[1]["stdin"] == subprocess.DEVNULL
-        assert args[1]["stdout"] == subprocess.DEVNULL
-        assert args[1]["stderr"] == subprocess.DEVNULL
+        assert mock_run.call_count == 2
+        # First call: stty sane
+        stty_args = mock_run.call_args_list[0]
+        assert stty_args[0][0] == ["stty", "sane"]
+        assert stty_args[1]["stdin"] == subprocess.DEVNULL
+        assert stty_args[1]["stdout"] == subprocess.DEVNULL
+        assert stty_args[1]["stderr"] == subprocess.DEVNULL
+        # Second call: tput reset
+        tput_args = mock_run.call_args_list[1]
+        assert tput_args[0][0] == ["tput", "reset"]
+        assert tput_args[1]["stdin"] == subprocess.DEVNULL
+        assert tput_args[1]["stdout"] == subprocess.DEVNULL
+        assert tput_args[1]["stderr"] == subprocess.DEVNULL
 
-    @patch("subprocess.run", side_effect=OSError("stty not found"))
-    def test_stty_failure_is_silenced(self, mock_run):
-        """If stty fails, exception is silenced (non-TTY safe)."""
+    @patch("subprocess.run", side_effect=OSError("command not found"))
+    def test_subprocess_failures_are_silenced(self, mock_run):
+        """If stty or tput fails, exceptions are silenced."""
         import io
         import sys
 
@@ -989,6 +996,25 @@ class TestResetTerminalAfterTui:
         fake_stdout.isatty = lambda: True
         with patch.object(sys, "stdout", fake_stdout):
             reset_terminal_after_tui()
+
+    @patch("subprocess.run")
+    def test_tput_failure_does_not_affect_stty(self, mock_run):
+        """If tput reset fails, stty sane still runs successfully."""
+        import io
+        import sys
+
+        def side_effect(cmd, **kwargs):
+            if cmd == ["tput", "reset"]:
+                raise FileNotFoundError("tput not found")
+
+        mock_run.side_effect = side_effect
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: True
+        with patch.object(sys, "stdout", fake_stdout):
+            reset_terminal_after_tui()
+
+        # stty sane was called successfully (first call)
+        assert mock_run.call_args_list[0][0][0] == ["stty", "sane"]
 
     @patch("subprocess.run")
     def test_skipped_when_not_tty(self, mock_run):
