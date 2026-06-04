@@ -46,8 +46,6 @@ def reset_terminal_after_tui() -> None:
     try:
         subprocess.run(
             ["stty", "sane"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except (OSError, FileNotFoundError):
@@ -55,8 +53,6 @@ def reset_terminal_after_tui() -> None:
     try:
         subprocess.run(
             ["tput", "reset"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except (OSError, FileNotFoundError):
