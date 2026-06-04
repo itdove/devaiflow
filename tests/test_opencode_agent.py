@@ -76,7 +76,7 @@ class TestOpenCodeAgentLaunch:
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
     def test_launch_with_prompt_interactive_default(self, mock_popen, mock_require):
-        """Test launching OpenCode with prompt defaults to interactive mode."""
+        """Test launching OpenCode with prompt uses --prompt in TUI mode."""
         agent = OpenCodeAgent()
         mock_process = Mock()
         mock_popen.return_value = mock_process
@@ -137,7 +137,7 @@ class TestOpenCodeAgentLaunch:
         call_args = mock_popen.call_args
         cmd = call_args[0][0]
         assert "--dangerously-skip-permissions" in cmd
-        assert "--prompt" in cmd  # still interactive
+        assert "--prompt" in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")

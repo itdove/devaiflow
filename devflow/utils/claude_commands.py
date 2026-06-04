@@ -647,3 +647,5 @@ def build_claude_command(
                 cmd.extend(["--add-dir", str(cs_home)])
 
     return cmd
+
+

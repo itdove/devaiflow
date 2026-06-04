@@ -155,6 +155,7 @@ def upgrade_all(
         if not quiet:
             console.print()
 
+
     # Overall summary
     if not quiet:
         console.print("\n[bold]Summary:[/bold]")

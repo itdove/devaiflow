@@ -576,7 +576,7 @@ def create_jira_ticket_session(
     if headless:
         initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
     else:
-        initial_prompt = ""  # Skill + env vars provide context
+        initial_prompt = "Read your daf-workflow skill and follow the Session Initialization instructions."
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):

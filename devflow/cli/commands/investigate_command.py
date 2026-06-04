@@ -662,7 +662,7 @@ def create_investigation_session(
             issue_details=issue_details
         )
     else:
-        initial_prompt = ""  # Skill + env vars provide context
+        initial_prompt = "Read your daf-workflow skill and follow the Session Initialization instructions."
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
@@ -1107,7 +1107,7 @@ def _create_multi_project_investigation_session(
             workspace=workspace_path,
         )
     else:
-        initial_prompt = ""  # Skill + env vars provide context
+        initial_prompt = "Read your daf-workflow skill and follow the Session Initialization instructions."
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
