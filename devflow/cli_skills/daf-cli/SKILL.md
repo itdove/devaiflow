@@ -93,7 +93,7 @@ DevAIFlow automatically discovers skills from multiple locations in a specific o
 
 ### Discovery Order (Load Order)
 
-1. **User-level**: `~/.claude/skills/` - Generic skills (daf-cli, gh-cli, glab-cli, etc.)
+1. **User-level**: `~/.claude/skills/` - Generic skills (daf-cli, daf-git, daf-jira, etc.)
 2. **Workspace-level**: `<workspace>/.claude/skills/` - Workspace-specific tools
 3. **Hierarchical**: `$DEVAIFLOW_HOME/.claude/skills/` - Organization-specific extensions
 4. **Project-level**: `<project>/.claude/skills/` - Project-specific skills

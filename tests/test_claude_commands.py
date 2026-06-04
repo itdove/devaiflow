@@ -80,14 +80,12 @@ def test_list_reference_skills():
     """Test listing reference skills (user-invocable: false)."""
     reference_skills = list_reference_skills()
 
-    # Should have 3 reference skills
-    assert len(reference_skills) >= 3
+    # Should have at least 1 reference skill
+    assert len(reference_skills) >= 1
 
     # Check expected reference skills
     skill_names = [s.name for s in reference_skills]
     assert "daf-cli" in skill_names
-    assert "gh-cli" in skill_names
-    assert "glab-cli" in skill_names
 
     # All should have user-invocable: false in SKILL.md
     for skill in reference_skills:
@@ -188,7 +186,7 @@ def test_install_reference_skills_fresh_install(temp_user_home):
     """Test installing reference skills to user home."""
     changed, up_to_date, failed = install_or_upgrade_reference_skills(quiet=True)
 
-    # All reference skills should be installed
+    # All reference skills should be installed (daf-cli, daf-jira-fields, daf-jira-mcp)
     assert len(changed) >= 3
     assert len(up_to_date) == 0
     assert len(failed) == 0
@@ -198,20 +196,19 @@ def test_install_reference_skills_fresh_install(temp_user_home):
     assert skills_dir.exists()
     assert (skills_dir / "daf-cli").exists()
     assert (skills_dir / "daf-cli" / "SKILL.md").exists()
-    assert (skills_dir / "gh-cli").exists()
-    assert (skills_dir / "glab-cli").exists()
+    assert (skills_dir / "daf-jira-fields").exists()
 
 
 def test_install_reference_skills_already_up_to_date(temp_user_home):
     """Test upgrade when reference skills are already up-to-date."""
     # First install
     changed1, _, _ = install_or_upgrade_reference_skills(quiet=True)
-    assert len(changed1) >= 4
+    assert len(changed1) >= 3
 
     # Second install should show all up-to-date
     changed2, up_to_date2, failed2 = install_or_upgrade_reference_skills(quiet=True)
     assert len(changed2) == 0
-    assert len(up_to_date2) >= 4
+    assert len(up_to_date2) >= 3
     assert len(failed2) == 0
 
 

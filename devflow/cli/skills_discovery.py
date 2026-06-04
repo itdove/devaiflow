@@ -15,7 +15,7 @@ def discover_skills(
 
     Discovery order (guarantees load order - generic skills before organization-specific extensions):
     1. User-level generic skills: ~/.claude/skills/ (alphabetical)
-    2. Workspace-level skills: <workspace>/.claude/skills/ (alphabetical) - generic tool skills (daf-cli, gh-cli, etc.)
+    2. Workspace-level skills: <workspace>/.claude/skills/ (alphabetical) - generic tool skills (daf-cli, daf-git, etc.)
     3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (numbered: 01-enterprise, 02-organization, etc.) - extends generic skills
     4. Project-level skills: <project>/.claude/skills/ (alphabetical)
 
@@ -55,7 +55,7 @@ def discover_skills(
 
         return (str(skill_file.resolve()), description)
 
-    # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/) - generic skills like daf-cli, gh-cli
+    # 1. User-level skills: ~/.claude/skills/ (or $CLAUDE_CONFIG_DIR/skills/) - generic skills like daf-cli, daf-git
     if include_levels is None or "user" in include_levels:
         user_skills_dir = get_claude_config_dir() / "skills"
         if user_skills_dir.exists():
