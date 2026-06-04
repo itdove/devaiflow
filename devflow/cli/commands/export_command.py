@@ -79,6 +79,11 @@ def export_sessions(
         console.print(f"[green]✓[/green] Export created successfully")
         console.print(f"Location: {export_file}")
 
+        # Display conversation warnings if any
+        for warning in export_manager.get_conversation_warnings():
+            console.print()
+            console.print(f"[yellow]⚠  {warning}[/yellow]")
+
         # Show export size
         size_mb = export_file.stat().st_size / (1024 * 1024)
         console.print(f"Size: {size_mb:.2f} MB")

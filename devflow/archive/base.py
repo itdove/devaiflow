@@ -4,10 +4,12 @@ import json
 import tarfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from devflow.config.loader import ConfigLoader
 from devflow.utils.paths import get_claude_config_dir
+
+CONVERSATION_BACKUP_BACKENDS = {"claude", "ollama"}
 
 
 class ArchiveManagerBase:
@@ -24,16 +26,46 @@ class ArchiveManagerBase:
             config_loader: ConfigLoader instance. Defaults to new instance.
         """
         self.config_loader = config_loader or ConfigLoader()
+        self._conversation_warnings: List[str] = []
 
-    def _find_conversation_file(self, session_id: str) -> Optional[Path]:
-        """Find the .jsonl conversation file for a session ID.
+    def _is_conversation_backupable(self, agent_backend: str) -> bool:
+        """Check if an agent backend supports conversation file backup.
+
+        Only agents that store conversations as individual files (JSONL)
+        can be backed up with the current archive mechanism.
 
         Args:
-            session_id: Claude session UUID
+            agent_backend: Agent backend name (e.g., "claude", "opencode")
 
         Returns:
-            Path to .jsonl file if found, None otherwise
+            True if conversation backup is supported
         """
+        return agent_backend.lower() in CONVERSATION_BACKUP_BACKENDS
+
+    def get_conversation_warnings(self) -> List[str]:
+        """Get warnings about skipped conversations.
+
+        Returns:
+            List of warning messages from the last operation
+        """
+        return list(self._conversation_warnings)
+
+    def _find_conversation_file(
+        self, session_id: str, agent_backend: Optional[str] = None
+    ) -> Optional[Path]:
+        """Find the conversation file for a session ID.
+
+        Args:
+            session_id: Agent session UUID
+            agent_backend: Agent backend name. If provided and not supported,
+                records a warning and returns None.
+
+        Returns:
+            Path to conversation file if found, None otherwise
+        """
+        if agent_backend and not self._is_conversation_backupable(agent_backend):
+            return None
+
         claude_dir = get_claude_config_dir() / "projects"
         if not claude_dir.exists():
             return None

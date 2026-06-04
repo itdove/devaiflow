@@ -89,6 +89,11 @@ def import_sessions(
         console.print(f"[green]✓[/green] Import completed successfully")
         console.print(f"Imported {len(imported_keys)} session(s)")
 
+        # Display conversation warnings if any
+        for warning in export_manager.get_conversation_warnings():
+            console.print()
+            console.print(f"[yellow]⚠  {warning}[/yellow]")
+
         if imported_keys:
             console.print("\nImported sessions:")
             for key in imported_keys:

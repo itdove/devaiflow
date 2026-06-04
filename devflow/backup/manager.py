@@ -27,13 +27,25 @@ class BackupManager(ArchiveManagerBase):
         """
         super().__init__(config_loader)
 
+    def _get_agent_backend(self) -> str:
+        """Get the configured agent backend.
+
+        Returns:
+            Agent backend name (e.g., "claude", "opencode")
+        """
+        try:
+            config = self.config_loader.load_config()
+            return config.agent_backend if config else "claude"
+        except Exception:
+            return "claude"
+
     def create_backup(self, output_path: Optional[Path] = None) -> Path:
         """Create a complete backup of all sessions.
 
         Includes:
         - sessions.json (main index)
         - All session directories (metadata, notes, etc.)
-        - All conversation history (.jsonl files)
+        - All conversation history (.jsonl files) — only for supported agent backends
 
         Args:
             output_path: Output file path. Defaults to timestamped backup file.
@@ -41,12 +53,16 @@ class BackupManager(ArchiveManagerBase):
         Returns:
             Path to created backup file
         """
+        self._conversation_warnings = []
+
         if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = get_cs_home() / f"backups/devaiflow-backup-{timestamp}.tar.gz"
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
         backup_data = self._collect_backup_data()
+        agent_backend = self._get_agent_backend()
+        skipped_conversations: List[str] = []
 
         # Create tar.gz archive
         with tarfile.open(output_path, "w:gz") as tar:
@@ -54,7 +70,8 @@ class BackupManager(ArchiveManagerBase):
             self._add_json_to_tar(tar, "backup-metadata.json", {
                 "version": "1.0",
                 "archive_type": "backup",
-                "created": datetime.now().isoformat()
+                "created": datetime.now().isoformat(),
+                "agent_backend": agent_backend,
             })
 
             # Add sessions.json
@@ -72,16 +89,40 @@ class BackupManager(ArchiveManagerBase):
                 # Iterate over conversations in the session
                 conversations = session_data.get("conversations", {})
                 for working_dir, conversation in conversations.items():
-                    ai_agent_session_id = conversation.get("ai_agent_session_id")
-                    if ai_agent_session_id:
-                        jsonl_path = self._find_conversation_file(ai_agent_session_id)
+                    # Collect all session IDs from the conversation
+                    # (supports both old flat format and new active_session/archived format)
+                    session_ids = []
+                    if "ai_agent_session_id" in conversation:
+                        session_ids.append(conversation["ai_agent_session_id"])
+                    else:
+                        active = conversation.get("active_session", {})
+                        if active.get("ai_agent_session_id"):
+                            session_ids.append(active["ai_agent_session_id"])
+                        for archived in conversation.get("archived_sessions", []):
+                            if archived.get("ai_agent_session_id"):
+                                session_ids.append(archived["ai_agent_session_id"])
+
+                    for ai_agent_session_id in session_ids:
+                        jsonl_path = self._find_conversation_file(
+                            ai_agent_session_id, agent_backend=agent_backend
+                        )
                         if jsonl_path and jsonl_path.exists():
-                            # Store with a recognizable name
                             arcname = f"conversations/{session_name}-{working_dir}-{ai_agent_session_id}.jsonl"
                             tar.add(jsonl_path, arcname=arcname)
+                        elif not self._is_conversation_backupable(agent_backend):
+                            entry = f"{session_name} ({working_dir})"
+                            if entry not in skipped_conversations:
+                                skipped_conversations.append(entry)
 
             # Add diagnostic logs
             self._add_diagnostic_logs(tar)
+
+        if skipped_conversations:
+            self._conversation_warnings.append(
+                f"Conversation backup not supported for '{agent_backend}' agent backend.\n"
+                f"Session metadata has been backed up, but conversation history was skipped.\n"
+                f"Skipped conversations: {', '.join(skipped_conversations)}"
+            )
 
         return output_path
 
@@ -92,6 +133,8 @@ class BackupManager(ArchiveManagerBase):
             backup_path: Path to backup file
             merge: If True, merge with existing sessions. If False, replace all.
         """
+        self._conversation_warnings = []
+
         if not backup_path.exists():
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
 
@@ -115,6 +158,7 @@ class BackupManager(ArchiveManagerBase):
                 )
 
             # Read backup metadata if exists
+            archive_agent_backend = None
             if backup_metadata_file.exists():
                 with open(backup_metadata_file, "r") as f:
                     metadata = json.load(f)
@@ -124,6 +168,10 @@ class BackupManager(ArchiveManagerBase):
                         raise ValueError(
                             "This is an export archive. Use 'daf import' to import exported sessions."
                         )
+
+                    archive_agent_backend = metadata.get("agent_backend")
+
+            agent_backend = self._get_agent_backend()
 
             # Restore sessions.json
             sessions_json = temp_dir / "sessions.json"
@@ -174,68 +222,76 @@ class BackupManager(ArchiveManagerBase):
             # Restore conversation history files
             conversations_dir = temp_dir / "conversations"
             if conversations_dir.exists():
-                # Find Claude's projects directory
-                claude_dir = get_claude_config_dir() / "projects"
-                if not claude_dir.exists():
-                    claude_dir.mkdir(parents=True)
+                if not self._is_conversation_backupable(agent_backend):
+                    conversation_count = len(list(conversations_dir.glob("*.jsonl")))
+                    if conversation_count > 0:
+                        self._conversation_warnings.append(
+                            f"Conversation restore not supported for '{agent_backend}' agent backend.\n"
+                            f"Session metadata has been restored, but {conversation_count} conversation file(s) were skipped."
+                        )
+                else:
+                    # Find Claude's projects directory
+                    claude_dir = get_claude_config_dir() / "projects"
+                    if not claude_dir.exists():
+                        claude_dir.mkdir(parents=True)
 
-                # Load the restored sessions for fallback lookup
-                restored_sessions = self.config_loader.load_sessions()
+                    # Load the restored sessions for fallback lookup
+                    restored_sessions = self.config_loader.load_sessions()
 
-                for conversation_file in conversations_dir.glob("*.jsonl"):
-                    # Parse filename to extract UUID
-                    # Format: {group_name}-{session_id}-{working_dir}-{UUID}.jsonl
-                    # where UUID is always the last 5 dash-separated parts
-                    parts = conversation_file.stem.rsplit("-", 5)  # Split on last 5 dashes (UUID has 4)
-                    if len(parts) < 6:
-                        # Invalid format, skip
-                        continue
+                    for conversation_file in conversations_dir.glob("*.jsonl"):
+                        # Parse filename to extract UUID
+                        # Format: {group_name}-{session_id}-{working_dir}-{UUID}.jsonl
+                        # where UUID is always the last 5 dash-separated parts
+                        parts = conversation_file.stem.rsplit("-", 5)  # Split on last 5 dashes (UUID has 4)
+                        if len(parts) < 6:
+                            # Invalid format, skip
+                            continue
 
-                    ai_agent_session_id = "-".join(parts[-5:])  # Reconstruct UUID
+                        ai_agent_session_id = "-".join(parts[-5:])  # Reconstruct UUID
 
-                    # IMPORTANT: Use session metadata FIRST
-                    # The conversation file may contain paths from the backup source machine,
-                    # but we need to place it at the restore target's project path.
-                    project_path = None
+                        # IMPORTANT: Use session metadata FIRST
+                        # The conversation file may contain paths from the backup source machine,
+                        # but we need to place it at the restore target's project path.
+                        project_path = None
 
-                    # Find the session that owns this conversation by matching the ai_agent_session_id
-                    for session_name, session in restored_sessions.sessions.items():
-                        # Check all conversations in the session 
-                        if session.conversations:
-                            for conversation in session.conversations.values():
-                                # Iterate through all sessions (active + archived) in this Conversation
-                                for conv in conversation.get_all_sessions():
-                                    if conv.ai_agent_session_id == ai_agent_session_id:
-                                        project_path = conv.project_path
+                        # Find the session that owns this conversation by matching the ai_agent_session_id
+                        for session_name, session in restored_sessions.sessions.items():
+                            # Check all conversations in the session
+                            if session.conversations:
+                                for conversation in session.conversations.values():
+                                    # Iterate through all sessions (active + archived) in this Conversation
+                                    for conv in conversation.get_all_sessions():
+                                        if conv.ai_agent_session_id == ai_agent_session_id:
+                                            project_path = conv.project_path
+                                            break
+                                    if project_path:
                                         break
-                                if project_path:
-                                    break
+                            if project_path:
+                                break
+
+                        # Fallback: If no session metadata, scan conversation file for cwd
+                        # This handles edge cases where session metadata is incomplete
+                        if not project_path:
+                            with open(conversation_file, "r") as f:
+                                for line in f:
+                                    try:
+                                        msg = json.loads(line)
+                                        if "cwd" in msg:
+                                            project_path = msg["cwd"]
+                                            break
+                                    except json.JSONDecodeError:
+                                        continue
+
+                        # Copy conversation file if we found a project_path
                         if project_path:
-                            break
+                            # Encode path like Claude does
+                            encoded_path = self._encode_path(project_path)
+                            target_dir = claude_dir / encoded_path
+                            target_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Fallback: If no session metadata, scan conversation file for cwd
-                    # This handles edge cases where session metadata is incomplete
-                    if not project_path:
-                        with open(conversation_file, "r") as f:
-                            for line in f:
-                                try:
-                                    msg = json.loads(line)
-                                    if "cwd" in msg:
-                                        project_path = msg["cwd"]
-                                        break
-                                except json.JSONDecodeError:
-                                    continue
-
-                    # Copy conversation file if we found a project_path
-                    if project_path:
-                        # Encode path like Claude does
-                        encoded_path = self._encode_path(project_path)
-                        target_dir = claude_dir / encoded_path
-                        target_dir.mkdir(parents=True, exist_ok=True)
-
-                        # Copy conversation file
-                        target_file = target_dir / f"{ai_agent_session_id}.jsonl"
-                        shutil.copy2(conversation_file, target_file)
+                            # Copy conversation file
+                            target_file = target_dir / f"{ai_agent_session_id}.jsonl"
+                            shutil.copy2(conversation_file, target_file)
 
             # Restore diagnostic logs
             self._restore_diagnostic_logs(temp_dir)

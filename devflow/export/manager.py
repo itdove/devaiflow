@@ -27,6 +27,18 @@ class ExportManager(ArchiveManagerBase):
         """
         super().__init__(config_loader)
 
+    def _get_agent_backend(self) -> str:
+        """Get the configured agent backend.
+
+        Returns:
+            Agent backend name (e.g., "claude", "opencode")
+        """
+        try:
+            config = self.config_loader.load_config()
+            return config.agent_backend if config else "claude"
+        except Exception:
+            return "claude"
+
     def export_sessions(
         self,
         identifiers: Optional[List[str]] = None,
@@ -44,6 +56,7 @@ class ExportManager(ArchiveManagerBase):
         Returns:
             Path to created export file
         """
+        self._conversation_warnings = []
         sessions_index = self.config_loader.load_sessions()
 
         # Determine which sessions to export
@@ -131,24 +144,46 @@ class ExportManager(ArchiveManagerBase):
                     tar.add(session_dir, arcname=f"sessions/{group_name}")
 
             # Add conversation history (always included for team handoff)
+            agent_backend = self._get_agent_backend()
+            skipped_conversations: List[str] = []
+
             for session_name, session in sessions_to_export.items():
-                # Export ALL conversations in the session 
+                # Export ALL conversations in the session
                 if session.conversations:
                     for working_dir, conversation in session.conversations.items():
                         # Process all sessions (active + archived) in this Conversation
                         for conv in conversation.get_all_sessions():
                             if conv.ai_agent_session_id:
-                                jsonl_path = self._find_conversation_file(conv.ai_agent_session_id)
+                                jsonl_path = self._find_conversation_file(
+                                    conv.ai_agent_session_id,
+                                    agent_backend=agent_backend,
+                                )
                                 if jsonl_path and jsonl_path.exists():
                                     # Include working_dir in arcname for clarity
                                     arcname = f"conversations/{session_name}-{working_dir}-{conv.ai_agent_session_id}.jsonl"
                                     tar.add(jsonl_path, arcname=arcname)
+                                elif not self._is_conversation_backupable(agent_backend):
+                                    skipped_conversations.append(
+                                        f"{session_name} ({working_dir})"
+                                    )
                 # Fallback: Support legacy single-conversation sessions
                 elif session.ai_agent_session_id:
-                    jsonl_path = self._find_conversation_file(session.ai_agent_session_id)
+                    jsonl_path = self._find_conversation_file(
+                        session.ai_agent_session_id,
+                        agent_backend=agent_backend,
+                    )
                     if jsonl_path and jsonl_path.exists():
                         arcname = f"conversations/{session_name}-{session.ai_agent_session_id}.jsonl"
                         tar.add(jsonl_path, arcname=arcname)
+                    elif not self._is_conversation_backupable(agent_backend):
+                        skipped_conversations.append(session_name)
+
+            if skipped_conversations:
+                self._conversation_warnings.append(
+                    f"Conversation export not supported for '{agent_backend}' agent backend.\n"
+                    f"Session metadata has been exported, but conversation history was skipped.\n"
+                    f"Skipped conversations: {', '.join(skipped_conversations)}"
+                )
 
             # Add mock data if in mock mode
             # This is needed for collaboration workflow tests where sessions are exported/imported
@@ -252,6 +287,8 @@ class ExportManager(ArchiveManagerBase):
         Returns:
             List of imported JIRA keys
         """
+        self._conversation_warnings = []
+
         if not export_path.exists():
             raise FileNotFoundError(f"Export file not found: {export_path}")
 
@@ -335,69 +372,79 @@ class ExportManager(ArchiveManagerBase):
 
             # Import conversation history files if present
             conversations_dir = temp_dir / "conversations"
+            agent_backend = self._get_agent_backend()
+
             if conversations_dir.exists():
-                claude_dir = get_claude_config_dir() / "projects"
-                if not claude_dir.exists():
-                    claude_dir.mkdir(parents=True)
+                if not self._is_conversation_backupable(agent_backend):
+                    conversation_count = len(list(conversations_dir.glob("*.jsonl")))
+                    if conversation_count > 0:
+                        self._conversation_warnings.append(
+                            f"Conversation import not supported for '{agent_backend}' agent backend.\n"
+                            f"Session metadata has been imported, but {conversation_count} conversation file(s) were skipped."
+                        )
+                else:
+                    claude_dir = get_claude_config_dir() / "projects"
+                    if not claude_dir.exists():
+                        claude_dir.mkdir(parents=True)
 
-                for conversation_file in conversations_dir.glob("*.jsonl"):
-                    # Parse filename to extract UUID
-                    # Format: {group_name}-{session_id}-{working_dir}-{UUID}.jsonl
-                    # where UUID is always the last 5 dash-separated parts
-                    parts = conversation_file.stem.rsplit("-", 5)
-                    if len(parts) < 6:
-                        # Invalid format, skip
-                        continue
+                    for conversation_file in conversations_dir.glob("*.jsonl"):
+                        # Parse filename to extract UUID
+                        # Format: {group_name}-{session_id}-{working_dir}-{UUID}.jsonl
+                        # where UUID is always the last 5 dash-separated parts
+                        parts = conversation_file.stem.rsplit("-", 5)
+                        if len(parts) < 6:
+                            # Invalid format, skip
+                            continue
 
-                    ai_agent_session_id = "-".join(parts[-5:])
+                        ai_agent_session_id = "-".join(parts[-5:])
 
-                    # IMPORTANT: Use session metadata FIRST
-                    # The conversation file may contain paths from the exporter's machine,
-                    # but we need to place it at the importer's project path.
-                    project_path = None
+                        # IMPORTANT: Use session metadata FIRST
+                        # The conversation file may contain paths from the exporter's machine,
+                        # but we need to place it at the importer's project path.
+                        project_path = None
 
-                    # Find the session that owns this conversation by matching the ai_agent_session_id
-                    for session_name, session in existing_sessions.sessions.items():
-                        # Check all conversations in the session 
-                        if session.conversations:
-                            for conversation in session.conversations.values():
-                                # Iterate through all sessions (active + archived) in this Conversation
-                                for conv in conversation.get_all_sessions():
-                                    if conv.ai_agent_session_id == ai_agent_session_id:
-                                        # For ticket_creation sessions with temp_directory,
-                                        # use original_project_path for conversation storage
-                                        if conv.temp_directory and conv.original_project_path:
-                                            project_path = conv.original_project_path
-                                        else:
-                                            project_path = conv.project_path
+                        # Find the session that owns this conversation by matching the ai_agent_session_id
+                        for session_name, session in existing_sessions.sessions.items():
+                            # Check all conversations in the session
+                            if session.conversations:
+                                for conversation in session.conversations.values():
+                                    # Iterate through all sessions (active + archived) in this Conversation
+                                    for conv in conversation.get_all_sessions():
+                                        if conv.ai_agent_session_id == ai_agent_session_id:
+                                            # For ticket_creation sessions with temp_directory,
+                                            # use original_project_path for conversation storage
+                                            if conv.temp_directory and conv.original_project_path:
+                                                project_path = conv.original_project_path
+                                            else:
+                                                project_path = conv.project_path
+                                            break
+                                    if project_path:
                                         break
-                                if project_path:
-                                    break
+                            if project_path:
+                                break
+
+                        # Fallback: If no session metadata, scan conversation file for cwd
+                        # This handles edge cases where session metadata is incomplete
+                        if not project_path:
+                            with open(conversation_file, "r") as f:
+                                for line in f:
+                                    try:
+                                        msg = json.loads(line)
+                                        if "cwd" in msg:
+                                            project_path = msg["cwd"]
+                                            break
+                                    except json.JSONDecodeError:
+                                        continue
+
+                        # Copy conversation file if we found a project_path
                         if project_path:
-                            break
+                            encoded_path = self._encode_path(project_path)
+                            target_dir = claude_dir / encoded_path
+                            target_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Fallback: If no session metadata, scan conversation file for cwd
-                    # This handles edge cases where session metadata is incomplete
-                    if not project_path:
-                        with open(conversation_file, "r") as f:
-                            for line in f:
-                                try:
-                                    msg = json.loads(line)
-                                    if "cwd" in msg:
-                                        project_path = msg["cwd"]
-                                        break
-                                except json.JSONDecodeError:
-                                    continue
-
-                    # Copy conversation file if we found a project_path
-                    if project_path:
-                        encoded_path = self._encode_path(project_path)
-                        target_dir = claude_dir / encoded_path
-                        target_dir.mkdir(parents=True, exist_ok=True)
-
-                        target_file = target_dir / f"{ai_agent_session_id}.jsonl"
-                        if not target_file.exists() or not merge:
-                            shutil.copy2(conversation_file, target_file)
+                            target_file = target_dir / f"{ai_agent_session_id}.jsonl"
+                            if not target_file.exists() or not merge:
+                                shutil.copy2(conversation_file, target_file)
 
             # Import mock data if present (for mock mode testing)
             # This is needed for collaboration workflow tests where sessions are exported/imported

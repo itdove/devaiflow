@@ -43,6 +43,11 @@ def create_backup(output: Optional[str] = None) -> None:
         size_mb = backup_file.stat().st_size / (1024 * 1024)
         console.print(f"Size: {size_mb:.2f} MB")
 
+        # Display conversation warnings if any
+        for warning in backup_manager.get_conversation_warnings():
+            console.print()
+            console.print(f"[yellow]⚠  {warning}[/yellow]")
+
     except Exception as e:
         console.print(f"[red]✗[/red] Backup failed: {e}")
         raise
