@@ -27,14 +27,17 @@ This shows: session name, goal, issue key, status, working directory, branch, wo
 If `daf info` shows an issue key (e.g., `owner/repo#123` or `PROJ-456`), read the ticket using that key:
 
 ```bash
-# For GitHub/GitLab issues (use the issue key from daf info)
-daf git view <issue_key> --comments
+# For GitHub issues (use the issue number from daf info)
+gh issue view <number> --comments
+
+# For GitLab issues
+glab issue view <number> --comments
 
 # For JIRA tickets (use the issue key from daf info)
 daf jira view <issue_key> --comments
 ```
 
-Replace `<issue_key>` with the actual key shown in `daf info` output.
+Replace `<number>` or `<issue_key>` with the actual value shown in `daf info` output.
 
 ### 3. Read Context Files
 
@@ -196,7 +199,7 @@ DevAIFlow auto-detects your issue tracker from git remote URLs:
 |--------|------|---------------|
 | Ticket creation session | `daf jira new` | `daf git new` |
 | Create ticket (no session) | `daf jira create` | `daf git create` |
-| View ticket | `daf jira view` | `daf git view` |
+| View ticket | `daf jira view` | `gh issue view` / `glab issue view` |
 | Update ticket | `daf jira update` | `daf git update` |
 | Add comment | `daf jira add-comment` | `daf git add-comment` |
 

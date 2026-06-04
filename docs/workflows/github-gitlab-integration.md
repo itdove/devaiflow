@@ -213,7 +213,8 @@ daf note owner-repo-60 "Progress update"
 ```bash
 # ✅ Quotes required - # starts comments in bash
 daf git open "owner/repo#60"
-daf git view "owner/repo#60"
+gh issue view 60 -R owner/repo          # GitHub
+glab issue view 60 -R owner/repo        # GitLab
 
 # ❌ This won't work - everything after # is a comment!
 daf git open owner/repo#60
@@ -372,11 +373,14 @@ daf git create \
 ### Viewing Issues
 
 ```bash
-# View issue details (use quotes for issue keys with #)
-daf git view "owner/repo#123"
+# View issue details using GitHub CLI
+gh issue view 123 -R owner/repo
 
-# Or use session name (no quotes needed)
-daf git view owner-repo-123
+# View with comments
+gh issue view 123 -R owner/repo --comments
+
+# For GitLab, use glab instead:
+glab issue view 123 -R owner/repo
 ```
 
 ### Opening Sessions

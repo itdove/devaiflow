@@ -1744,34 +1744,6 @@ def git(ctx: click.Context) -> None:
     pass
 
 
-@git.command(name="view")
-@json_option
-@click.argument("issue_key", required=False)
-@click.option("--comments", is_flag=True, help="Show comments on the issue")
-@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_view(ctx: click.Context, issue_key: Optional[str], comments: bool, repository: Optional[str]) -> None:
-    """View a GitHub/GitLab issue in Claude-friendly format.
-
-    ISSUE_KEY is the issue key (#123 or owner/repo#123).
-    If not provided, auto-detects from current session.
-
-    This command fetches the issue from GitHub/GitLab and displays it in a format
-    optimized for Claude to read.
-
-    Use --comments to display all comments on the issue.
-
-    Examples:
-        daf git view           # Auto-detect from current session
-        daf git view 123       # View issue #123 in current repo
-        daf git view owner/repo#123  # View issue in specific repo
-        daf git view 123 --comments  # Include comments
-    """
-    from devflow.cli.commands.git_view_command import git_view
-
-    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    git_view(issue_key, comments, repository, output_json)
-
-
 @git.command(name="create")
 @json_option
 @click.argument("issue_type", required=False, default=None)

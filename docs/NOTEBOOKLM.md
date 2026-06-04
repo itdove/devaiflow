@@ -124,7 +124,7 @@ daf time <session>
 ```bash
 daf jira view <key>
 daf jira add-comment <key> "..."
-daf git view "owner/repo#123"
+gh issue view 123 -R owner/repo   # GitHub (or: glab issue view for GitLab)
 daf git add-comment "owner/repo#123" "..."
 ```
 

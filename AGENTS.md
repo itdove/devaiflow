@@ -244,7 +244,8 @@ For complete documentation, refer to the daf-workflow, daf-cli, and daf-jira-fie
 **Commands ALLOWED inside Claude Code** (read-only or specifically designed for use inside sessions):
 - Query commands: `daf active`, `daf status`, `daf list`, `daf info`, `daf summary`
 - JIRA operations: `daf jira view`, `daf jira create`, `daf jira update`, `daf jira add-comment` (API operations only)
-- GitHub/GitLab operations: `daf git view`, `daf git create`, `daf git update`, `daf git add-comment` (API operations only)
+- GitHub/GitLab operations: `daf git create`, `daf git update`, `daf git add-comment` (API operations only)
+- GitHub/GitLab viewing: Use `gh issue view` (GitHub) or `glab issue view` (GitLab) directly
 - Session notes: `daf note` (add notes), `daf notes` (view notes)
 - Configuration: `daf config show`, `daf context list`
 - Templates: `daf template list`, `daf template show`
@@ -1804,3 +1805,6 @@ When a new version is available, you'll see:
 - Auto-pause on inactivity (detect when Claude Code is idle)
 - Session archiving and cleanup
 - Export to various formats (PDF, HTML)
+
+
+When DAF_SESSION_NAME environment variable is set, immediately follow the daf-workflow skill instructions.

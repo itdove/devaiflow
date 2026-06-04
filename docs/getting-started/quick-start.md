@@ -389,7 +389,7 @@ daf status                                        # Sprint dashboard
 daf git new --goal "..."                             # Create issue with analysis
 daf git create --summary "..." --description "..."   # Create issue directly
 daf sync                                             # Sync assigned issues from all repos
-daf git view "owner/repo#123"                        # View issue details (quotes required)
+gh issue view 123 -R owner/repo                      # View GitHub issue (or: glab issue view for GitLab)
 daf git open "owner/repo#123"                        # Open issue in new session (quotes required)
 daf git update "owner/repo#123" --comment "..."      # Add comment to issue (quotes required)
 daf git add-comment "owner/repo#123" "..."           # Add comment (quotes required)

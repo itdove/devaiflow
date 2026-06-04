@@ -247,7 +247,7 @@ wait_for_prompt "Do you want to proceed?" 10
 sleep 1
 tmux send-keys -t "$SESSION_NAME" C-m
 
-if wait_for_prompt "Bash(daf git view" 30 true true; then
+if wait_for_prompt "Bash(gh issue view" 30 true true; then
     wait_for_prompt "Do you want to proceed?" 120
     sleep 1
     tmux send-keys -t "$SESSION_NAME" C-m
@@ -333,7 +333,7 @@ tmux send-keys -t "$SESSION_NAME" C-m
 wait_for_prompt "Enter source branch" 10
 tmux send-keys -t "$SESSION_NAME" C-m
 
-wait_for_prompt "daf git view itdove/devaiflow-demos" 120
+wait_for_prompt "gh issue view" 120
 sleep 1
 tmux send-keys -t "$SESSION_NAME" C-m
 
