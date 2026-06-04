@@ -973,17 +973,17 @@ class TestResetTerminalAfterTui:
         assert "\033[?1049l" in written
         assert "\033[0m" in written
         assert mock_run.call_count == 2
-        # First call: stty sane
+        # First call: stty sane — only stderr suppressed (stdin/stdout inherit terminal)
         stty_args = mock_run.call_args_list[0]
         assert stty_args[0][0] == ["stty", "sane"]
-        assert stty_args[1]["stdin"] == subprocess.DEVNULL
-        assert stty_args[1]["stdout"] == subprocess.DEVNULL
+        assert "stdin" not in stty_args[1]
+        assert "stdout" not in stty_args[1]
         assert stty_args[1]["stderr"] == subprocess.DEVNULL
-        # Second call: tput reset
+        # Second call: tput reset — only stderr suppressed (stdout delivers reset sequences)
         tput_args = mock_run.call_args_list[1]
         assert tput_args[0][0] == ["tput", "reset"]
-        assert tput_args[1]["stdin"] == subprocess.DEVNULL
-        assert tput_args[1]["stdout"] == subprocess.DEVNULL
+        assert "stdin" not in tput_args[1]
+        assert "stdout" not in tput_args[1]
         assert tput_args[1]["stderr"] == subprocess.DEVNULL
 
     @patch("subprocess.run", side_effect=OSError("command not found"))
