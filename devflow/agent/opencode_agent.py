@@ -66,6 +66,45 @@ class OpenCodeAgent(AgentInterface):
 
         self.opencode_dir = Path(opencode_dir)
 
+    # Trigger line appended to the project's AGENTS.md so OpenCode
+    # discovers the daf-workflow skill on startup without --prompt.
+    AGENTS_MD_TRIGGER = (
+        "When DAF_SESSION_NAME environment variable is set, "
+        "immediately follow the daf-workflow skill instructions."
+    )
+
+    def ensure_agents_md_trigger(self, project_path: str) -> bool:
+        """Ensure the project's AGENTS.md contains the daf-workflow trigger.
+
+        Checks if ``AGENTS.md`` in *project_path* already contains the trigger
+        line.  If the file exists but the line is missing, it is appended.  If
+        the file does not exist it is created with just the trigger line.
+
+        The operation is idempotent -- calling it multiple times on the same
+        project is safe and will not duplicate the trigger.
+
+        Args:
+            project_path: Absolute path to the project directory whose
+                ``AGENTS.md`` should be updated.
+
+        Returns:
+            ``True`` if the file was created or modified, ``False`` if the
+            trigger was already present.
+        """
+        agents_md = Path(project_path) / "AGENTS.md"
+
+        if agents_md.exists():
+            content = agents_md.read_text()
+            if self.AGENTS_MD_TRIGGER not in content:
+                with open(agents_md, "a") as f:
+                    f.write(f"\n\n{self.AGENTS_MD_TRIGGER}\n")
+                return True
+            return False
+
+        # File does not exist -- create it with the trigger line.
+        agents_md.write_text(f"{self.AGENTS_MD_TRIGGER}\n")
+        return True
+
     def launch_session(
         self,
         project_path: str,
@@ -108,8 +147,16 @@ class OpenCodeAgent(AgentInterface):
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
 
-        By default launches in interactive TUI mode with ``opencode --prompt``.
-        Use ``headless=True`` for non-interactive execution via ``opencode run``.
+        In **interactive** mode the prompt is NOT passed via ``--prompt``.
+        Instead, the project's ``AGENTS.md`` is updated with a daf-workflow
+        trigger (idempotent) so that OpenCode discovers the session context
+        on its own.  This preserves OpenCode's native permission system --
+        the LLM no longer interprets a ``--prompt`` flag as blanket
+        authorisation to modify files.
+
+        In **headless** mode (``headless=True``) the prompt is still passed
+        via ``opencode run <prompt>`` because there is no human present to
+        interact with permission dialogs.
 
         Args:
             project_path: Absolute path to project
@@ -134,10 +181,12 @@ class OpenCodeAgent(AgentInterface):
         final_env = env if env is not None else os.environ.copy()
 
         if headless:
+            # Non-interactive: prompt must be passed directly.
             cmd = ["opencode", "run", initial_prompt]
-        elif initial_prompt:
-            cmd = ["opencode", "--prompt", initial_prompt]
         else:
+            # Interactive: rely on AGENTS.md trigger + daf-workflow skill.
+            # Do NOT pass --prompt so OpenCode's permission system stays intact.
+            self.ensure_agents_md_trigger(project_path)
             cmd = ["opencode"]
 
         if session_id and session_id.startswith("ses"):
@@ -349,15 +398,17 @@ class OpenCodeAgent(AgentInterface):
         return "opencode"
 
     def supports_permission_prompts(self) -> bool:
-        """OpenCode auto-approves all tool calls without user confirmation.
+        """OpenCode supports permission prompts when launched without ``--prompt``.
 
-        Unlike Claude Code, OpenCode does not have a built-in permission system.
-        File edits and shell commands execute immediately without prompts.
+        When launched interactively (without ``--prompt``), OpenCode shows
+        permission prompts for file edits and shell commands, identical to
+        standalone usage.  The ``--prompt`` flag is only used in headless mode
+        where no human is present.
 
         Returns:
-            False — OpenCode has no permission prompt system.
+            True — OpenCode has a permission prompt system.
         """
-        return False
+        return True
 
     def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
         """Extract token usage statistics using ``opencode stats``.
