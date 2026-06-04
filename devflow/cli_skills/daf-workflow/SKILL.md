@@ -24,15 +24,17 @@ This shows: session name, goal, issue key, status, working directory, branch, wo
 
 ### 2. Read Issue Tracker Ticket
 
-If `daf info` shows an issue key:
+If `daf info` shows an issue key (e.g., `owner/repo#123` or `PROJ-456`), read the ticket using that key:
 
 ```bash
-# For GitHub/GitLab issues
-daf git view --comments
+# For GitHub/GitLab issues (use the issue key from daf info)
+daf git view <issue_key> --comments
 
-# For JIRA tickets
-daf jira view --comments
+# For JIRA tickets (use the issue key from daf info)
+daf jira view <issue_key> --comments
 ```
+
+Replace `<issue_key>` with the actual key shown in `daf info` output.
 
 ### 3. Read Context Files
 
@@ -65,7 +67,16 @@ Standard development session. Resume or start work on a task.
 2. Plan your work to address each criterion
 3. Make code changes, run tests, verify acceptance criteria
 4. Track progress with `daf note "Completed AC #1: ..."`
-5. Before exiting: update issue tracker to tick completed criteria
+5. Before exiting: update issue tracker to tick completed criteria:
+   ```bash
+   # JIRA (use issue key from daf info)
+   daf jira update <issue_key> --field acceptance_criteria="- [x] Done\n- [] Pending"
+   daf jira add-comment <issue_key> "Progress update"
+   
+   # GitHub/GitLab (use issue key from daf info)
+   daf git update <issue_key> --labels done
+   daf git add-comment <issue_key> "Progress update"
+   ```
 
 **Testing Requirements:**
 - Identify the project's testing framework from the codebase

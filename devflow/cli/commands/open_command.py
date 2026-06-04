@@ -1059,7 +1059,7 @@ def open_session(
                     project_paths=project_paths_dict,
                 )
             else:
-                initial_prompt = ""  # Skill + env vars provide context
+                initial_prompt = "Read your daf-workflow skill and follow the Session Initialization instructions."
 
             # Get agent backend from config
             from devflow.agent import create_agent_client

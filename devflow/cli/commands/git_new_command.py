@@ -686,7 +686,7 @@ def create_git_issue_session(
     if headless:
         initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, parent=parent, repository=repository)
     else:
-        initial_prompt = ""  # Skill + env vars provide context
+        initial_prompt = "Read your daf-workflow skill and follow the Session Initialization instructions."
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
