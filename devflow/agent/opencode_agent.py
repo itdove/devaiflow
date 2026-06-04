@@ -66,75 +66,6 @@ class OpenCodeAgent(AgentInterface):
 
         self.opencode_dir = Path(opencode_dir)
 
-    # Prominent trigger block prepended to the project's AGENTS.md so
-    # OpenCode discovers the daf-workflow skill on startup without --prompt.
-    # Must be at the TOP of the file so the LLM sees it first.
-    AGENTS_MD_TRIGGER = "\n".join(
-        [
-            "# DevAIFlow Session",
-            "",
-            "**IMPORTANT:** If the `DAF_SESSION_NAME` environment variable is set, you MUST:",
-            "1. Read and follow the **daf-workflow** skill instructions immediately",
-            "2. Run `daf info` to get session metadata",
-            "3. Read the issue tracker ticket with comments",
-            "4. Start working on the task described in the session goal",
-            "",
-            "Do NOT wait for user input — begin the session initialization workflow now.",
-        ]
-    )
-
-    # Legacy trigger text (pre-#433) — detected for migration.
-    _LEGACY_TRIGGER = (
-        "When DAF_SESSION_NAME environment variable is set, "
-        "immediately follow the daf-workflow skill instructions."
-    )
-
-    def ensure_agents_md_trigger(self, project_path: str) -> bool:
-        """Ensure the project's AGENTS.md contains the daf-workflow trigger.
-
-        Checks if ``AGENTS.md`` in *project_path* already contains the trigger
-        block.  If the file exists but the block is missing, it is **prepended**
-        at the top so the LLM sees it first.  If the file does not exist it is
-        created with just the trigger block.
-
-        When a legacy (pre-#433) single-line trigger is found, it is removed
-        and replaced by the new prominent block at the top of the file.
-
-        The operation is idempotent -- calling it multiple times on the same
-        project is safe and will not duplicate the trigger.
-
-        Args:
-            project_path: Absolute path to the project directory whose
-                ``AGENTS.md`` should be updated.
-
-        Returns:
-            ``True`` if the file was created or modified, ``False`` if the
-            trigger was already present.
-        """
-        agents_md = Path(project_path) / "AGENTS.md"
-
-        if agents_md.exists():
-            content = agents_md.read_text()
-
-            # Already has the new trigger block — nothing to do.
-            if self.AGENTS_MD_TRIGGER in content:
-                return False
-
-            # Remove legacy trigger if present.
-            if self._LEGACY_TRIGGER in content:
-                content = content.replace(f"\n\n{self._LEGACY_TRIGGER}\n", "")
-                content = content.replace(f"{self._LEGACY_TRIGGER}\n", "")
-                content = content.replace(self._LEGACY_TRIGGER, "")
-
-            # Prepend the new trigger block at the top.
-            content = content.lstrip("\n")
-            agents_md.write_text(f"{self.AGENTS_MD_TRIGGER}\n\n{content}")
-            return True
-
-        # File does not exist -- create it with the trigger block.
-        agents_md.write_text(f"{self.AGENTS_MD_TRIGGER}\n")
-        return True
-
     def launch_session(
         self,
         project_path: str,
@@ -177,16 +108,13 @@ class OpenCodeAgent(AgentInterface):
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
 
-        In **interactive** mode the prompt is NOT passed via ``--prompt``.
-        Instead, the project's ``AGENTS.md`` is updated with a daf-workflow
-        trigger (idempotent) so that OpenCode discovers the session context
-        on its own.  This preserves OpenCode's native permission system --
-        the LLM no longer interprets a ``--prompt`` flag as blanket
-        authorisation to modify files.
+        Uses the same ``--prompt`` approach as all other agent backends.
+        OpenCode's permission system (edit/bash prompts) is controlled by
+        the user's ``~/.config/opencode/opencode.json`` — not by whether
+        a prompt flag is present.
 
-        In **headless** mode (``headless=True``) the prompt is still passed
-        via ``opencode run <prompt>`` because there is no human present to
-        interact with permission dialogs.
+        In **headless** mode the prompt is passed via ``opencode run``
+        for non-interactive execution.
 
         Args:
             project_path: Absolute path to project
@@ -211,13 +139,11 @@ class OpenCodeAgent(AgentInterface):
         final_env = env if env is not None else os.environ.copy()
 
         if headless:
-            # Non-interactive: prompt must be passed directly.
             cmd = ["opencode", "run", initial_prompt]
         else:
-            # Interactive: rely on AGENTS.md trigger + daf-workflow skill.
-            # Do NOT pass --prompt so OpenCode's permission system stays intact.
-            self.ensure_agents_md_trigger(project_path)
             cmd = ["opencode"]
+            if initial_prompt:
+                cmd.extend(["--prompt", initial_prompt])
 
         if session_id and session_id.startswith("ses"):
             cmd.extend(["--session", session_id])
@@ -428,12 +354,10 @@ class OpenCodeAgent(AgentInterface):
         return "opencode"
 
     def supports_permission_prompts(self) -> bool:
-        """OpenCode supports permission prompts when launched without ``--prompt``.
+        """OpenCode supports permission prompts when configured.
 
-        When launched interactively (without ``--prompt``), OpenCode shows
-        permission prompts for file edits and shell commands, identical to
-        standalone usage.  The ``--prompt`` flag is only used in headless mode
-        where no human is present.
+        Permission prompts for file edits and shell commands are controlled
+        by the user's ``~/.config/opencode/opencode.json`` permission config.
 
         Returns:
             True — OpenCode has a permission prompt system.
