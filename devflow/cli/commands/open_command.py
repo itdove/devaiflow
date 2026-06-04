@@ -1091,6 +1091,14 @@ def open_session(
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
 
+            # Snapshot existing sessions before launch (for session ID capture)
+            opencode_sessions_before = set()
+            if agent_backend in ("opencode", "opencode-ai") and launch_dir:
+                try:
+                    opencode_sessions_before = agent.get_existing_sessions(launch_dir)
+                except Exception:
+                    pass
+
             try:
                 if active_conv and launch_dir:
                     # Launch agent with initial prompt
@@ -1110,6 +1118,17 @@ def open_session(
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] Claude session completed")
+
+                    # Capture real OpenCode session ID after first launch
+                    if agent_backend in ("opencode", "opencode-ai") and launch_dir and active_conv:
+                        try:
+                            opencode_sessions_after = agent.get_existing_sessions(launch_dir)
+                            new_sessions = opencode_sessions_after - opencode_sessions_before
+                            if new_sessions:
+                                real_session_id = new_sessions.pop()
+                                active_conv.ai_agent_session_id = real_session_id
+                        except Exception:
+                            pass
 
                     # Update session status to paused
                     session.status = "paused"
@@ -1208,6 +1227,23 @@ def open_session(
                     hierarchical_files = load_hierarchical_context_files(config)
                     if hierarchical_files:
                         cmd.extend(["--add-dir", str(cs_home)])
+            elif agent_backend in ("opencode", "opencode-ai"):
+                # OpenCode supports session resume via --session flag
+                if active_conv and active_conv.is_multi_project:
+                    oc_project_path = active_conv.workspace_path or workspace_path
+                else:
+                    oc_project_path = active_conv.project_path if active_conv else None
+
+                if oc_project_path:
+                    if active_conv.ai_agent_session_id and active_conv.ai_agent_session_id.startswith("ses"):
+                        process = agent.resume_session(
+                            session_id=active_conv.ai_agent_session_id,
+                            project_path=oc_project_path,
+                            env=env,
+                        )
+                    else:
+                        process = agent.launch_session(oc_project_path, env=env)
+                    cmd = None
             else:
                 # For other agent backends (GitHub Copilot, Cursor, Windsurf),
                 # launch a new session since they don't support resume
