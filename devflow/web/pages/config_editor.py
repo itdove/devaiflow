@@ -944,6 +944,53 @@ def _build_user_tab(config: Any) -> Dict[str, Any]:
 
 # -- Main page ----------------------------------------------------------------
 
+def _attach_dirty_tracking(
+    all_widgets: Dict[str, Dict[str, Any]],
+    state: Dict[str, Any],
+    mark_dirty_fn,
+    undo_buttons: List[Any],
+) -> None:
+    """Attach change listeners to all form widgets for dirty-state and undo tracking.
+
+    Each widget's value is snapshotted on attach. On change, the old value is
+    pushed onto ``state["undo_stack"]`` so it can be restored.
+
+    Args:
+        all_widgets: Dict mapping tab names to widget dicts.
+        state: Mutable dict with keys ``undo_stack`` (list) and ``suppressing`` (bool).
+        mark_dirty_fn: Callback invoked when any widget value changes.
+        undo_buttons: List of undo button refs to enable when history is non-empty.
+    """
+    for tab_widgets in all_widgets.values():
+        for key, widget in tab_widgets.items():
+            if key.startswith("_"):
+                continue
+            if not (hasattr(widget, "on") and hasattr(widget, "value")):
+                continue
+
+            val_holder = [widget.value]
+
+            def _make_handler(w, vh):
+                def _handler(*_args):
+                    if state.get("suppressing"):
+                        vh[0] = w.value
+                        return
+                    old_val = vh[0]
+                    new_val = w.value
+                    if old_val != new_val:
+                        state["undo_stack"].append((w, old_val, vh))
+                        vh[0] = new_val
+                        mark_dirty_fn()
+                        for btn in undo_buttons:
+                            btn.enable()
+                return _handler
+
+            try:
+                widget.on("update:model-value", _make_handler(widget, val_holder))
+            except Exception:
+                pass
+
+
 def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> None:
     """Create the configuration editor page with Simple or Advanced mode.
 
@@ -965,6 +1012,87 @@ def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> Non
 
     all_widgets: Dict[str, Dict[str, Any]] = {}
 
+    # -- Dirty state and undo tracking -----------------------------------------
+    _state: Dict[str, Any] = {"dirty": False, "undo_stack": [], "suppressing": False}
+    _save_buttons: List[Any] = []
+    _undo_buttons: List[Any] = []
+
+    def _mark_dirty(*_args) -> None:
+        if not _state["dirty"]:
+            _state["dirty"] = True
+            for btn in _save_buttons:
+                btn.classes(remove="bg-gray-600", add="bg-orange-600")
+
+    def _mark_clean() -> None:
+        _state["dirty"] = False
+        for btn in _save_buttons:
+            btn.classes(remove="bg-orange-600", add="bg-gray-600")
+
+    def _do_undo() -> None:
+        if not _state["undo_stack"]:
+            return
+        widget, old_val, vh = _state["undo_stack"].pop()
+        _state["suppressing"] = True
+        widget.value = old_val
+        vh[0] = old_val
+        _state["suppressing"] = False
+        if not _state["undo_stack"]:
+            for btn in _undo_buttons:
+                btn.disable()
+            _mark_clean()
+
+    # -- Shared save/preview callbacks -----------------------------------------
+
+    async def _do_preview() -> None:
+        _collect_values(config, all_widgets)
+        json_str = bridge.get_config_as_json(config)
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl"):
+            ui.label("Configuration Preview").classes("text-lg font-bold")
+            ui.code(json_str, language="json").classes("w-full max-h-96 overflow-auto")
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Close", on_click=dialog.close).props("flat")
+
+                def _confirm_save() -> None:
+                    ok = bridge.save_config(config)
+                    dialog.close()
+                    if ok:
+                        _state["undo_stack"].clear()
+                        for btn in _undo_buttons:
+                            btn.disable()
+                        _mark_clean()
+                        ui.notify("Configuration saved.", type="positive")
+                    else:
+                        ui.notify("Failed to save configuration.", type="negative")
+
+                ui.button("Confirm & Save", on_click=_confirm_save).classes("bg-green-600")
+        dialog.open()
+
+    async def _do_save() -> None:
+        _collect_values(config, all_widgets)
+        ok = bridge.save_config(config)
+        if ok:
+            _state["undo_stack"].clear()
+            for btn in _undo_buttons:
+                btn.disable()
+            _mark_clean()
+            ui.notify("Configuration saved.", type="positive")
+        else:
+            ui.notify("Failed to save configuration.", type="negative")
+
+    def _do_cancel() -> None:
+        target = "/config/advanced" if advanced else "/config"
+        ui.navigate.to(target)
+
+    def _create_action_buttons() -> None:
+        """Create Cancel + Undo + Preview + Save buttons."""
+        ui.button("Cancel", on_click=_do_cancel).props("flat color=red")
+        undo_btn = ui.button("Undo", on_click=_do_undo).props("flat")
+        undo_btn.disable()
+        _undo_buttons.append(undo_btn)
+        ui.button("Preview JSON", on_click=_do_preview).props("flat")
+        btn = ui.button("Save", on_click=_do_save).classes("bg-gray-600")
+        _save_buttons.append(btn)
+
     with ui.column().classes("w-full max-w-5xl mx-auto p-4 gap-4"):
         ui.link("<< Back to Dashboard", "/").classes("text-blue-400 hover:text-blue-300")
 
@@ -978,6 +1106,10 @@ def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> Non
             ui.link(toggle_text, toggle_target).classes(
                 "text-blue-400 hover:text-blue-300 text-sm"
             )
+
+        # -- Top action bar (visible without scrolling) ------------------------
+        with ui.row().classes("w-full justify-end gap-2"):
+            _create_action_buttons()
 
         if not advanced:
             # ---- Simple Mode: 8 topic-based tabs ----------------------------
@@ -1027,36 +1159,9 @@ def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> Non
                 with ui.tab_panel(tab_user):
                     all_widgets["user"] = _build_user_tab(config)
 
-        # Action buttons
+        # -- Bottom action bar -------------------------------------------------
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            _create_action_buttons()
 
-            async def _preview() -> None:
-                _collect_values(config, all_widgets)
-                json_str = bridge.get_config_as_json(config)
-                with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl"):
-                    ui.label("Configuration Preview").classes("text-lg font-bold")
-                    ui.code(json_str, language="json").classes("w-full max-h-96 overflow-auto")
-                    with ui.row().classes("w-full justify-end gap-2 mt-2"):
-                        ui.button("Close", on_click=dialog.close).props("flat")
-
-                        def _confirm_save() -> None:
-                            ok = bridge.save_config(config)
-                            dialog.close()
-                            if ok:
-                                ui.notify("Configuration saved.", type="positive")
-                            else:
-                                ui.notify("Failed to save configuration.", type="negative")
-
-                        ui.button("Confirm & Save", on_click=_confirm_save).classes("bg-green-600")
-                dialog.open()
-
-            async def _save() -> None:
-                _collect_values(config, all_widgets)
-                ok = bridge.save_config(config)
-                if ok:
-                    ui.notify("Configuration saved.", type="positive")
-                else:
-                    ui.notify("Failed to save configuration.", type="negative")
-
-            ui.button("Preview JSON", on_click=_preview).props("flat")
-            ui.button("Save", on_click=_save).classes("bg-blue-600")
+    # -- Attach dirty-state and undo change listeners to all form widgets ------
+    _attach_dirty_tracking(all_widgets, _state, _mark_dirty, _undo_buttons)
