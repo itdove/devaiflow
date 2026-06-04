@@ -1567,3 +1567,75 @@ class TestDataBridgeOrganizationConfig:
         result = bridge.get_organization_config()
 
         assert result is None
+
+
+# ============================================================================
+# Dirty Tracking / Undo Tests
+# ============================================================================
+
+
+class TestAttachDirtyTracking:
+    """Tests for _attach_dirty_tracking function."""
+
+    def test_import(self):
+        """Test that _attach_dirty_tracking is importable."""
+        from devflow.web.pages.config_editor import _attach_dirty_tracking
+
+        assert callable(_attach_dirty_tracking)
+
+    def test_skips_private_keys(self):
+        """Test that keys starting with '_' are skipped."""
+        from devflow.web.pages.config_editor import _attach_dirty_tracking
+
+        widget = Mock()
+        widget.value = "test"
+        all_widgets = {"tab": {"_private": widget, "public": Mock(spec=[])}}
+        state = {"undo_stack": [], "suppressing": False}
+
+        _attach_dirty_tracking(all_widgets, state, Mock(), [])
+
+        widget.on.assert_not_called()
+
+    def test_skips_widgets_without_value(self):
+        """Test that widgets without a 'value' attribute are skipped."""
+        from devflow.web.pages.config_editor import _attach_dirty_tracking
+
+        widget = Mock(spec=["on"])
+        all_widgets = {"tab": {"field": widget}}
+        state = {"undo_stack": [], "suppressing": False}
+
+        _attach_dirty_tracking(all_widgets, state, Mock(), [])
+
+        widget.on.assert_not_called()
+
+    def test_attaches_handler_to_widget_with_value(self):
+        """Test that handler is attached to widgets with on() and value."""
+        from devflow.web.pages.config_editor import _attach_dirty_tracking
+
+        widget = Mock()
+        widget.value = "initial"
+        all_widgets = {"tab": {"field": widget}}
+        state = {"undo_stack": [], "suppressing": False}
+
+        _attach_dirty_tracking(all_widgets, state, Mock(), [])
+
+        widget.on.assert_called_once()
+        assert widget.on.call_args[0][0] == "update:model-value"
+
+    def test_handler_exception_does_not_crash(self):
+        """Test that exceptions in widget.on() are silently caught."""
+        from devflow.web.pages.config_editor import _attach_dirty_tracking
+
+        widget = Mock()
+        widget.value = "initial"
+        widget.on.side_effect = RuntimeError("NiceGUI not available")
+        all_widgets = {"tab": {"field": widget}}
+        state = {"undo_stack": [], "suppressing": False}
+
+        _attach_dirty_tracking(all_widgets, state, Mock(), [])
+
+    def test_empty_widgets_dict(self):
+        """Test with empty widgets dict doesn't crash."""
+        from devflow.web.pages.config_editor import _attach_dirty_tracking
+
+        _attach_dirty_tracking({}, {"undo_stack": [], "suppressing": False}, Mock(), [])
