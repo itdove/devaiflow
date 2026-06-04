@@ -52,6 +52,11 @@ def restore_backup(backup_file: str, merge: bool = False, force: bool = False) -
         else:
             console.print("[dim]All sessions replaced[/dim]")
 
+        # Display conversation warnings if any
+        for warning in backup_manager.get_conversation_warnings():
+            console.print()
+            console.print(f"[yellow]⚠  {warning}[/yellow]")
+
     except Exception as e:
         console.print(f"[red]✗[/red] Restore failed: {e}")
         raise
