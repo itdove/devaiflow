@@ -52,6 +52,15 @@ def reset_terminal_after_tui() -> None:
         )
     except (OSError, FileNotFoundError):
         pass
+    try:
+        subprocess.run(
+            ["tput", "reset"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, FileNotFoundError):
+        pass
 
 
 def check_outside_ai_session() -> None:
