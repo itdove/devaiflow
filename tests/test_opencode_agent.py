@@ -76,16 +76,14 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt_interactive_no_prompt_flag(self, mock_popen, mock_require, tmp_path):
-        """Test interactive launch does NOT pass --prompt; uses AGENTS.md trigger (#430)."""
+    def test_launch_with_prompt_interactive_passes_prompt(self, mock_popen, mock_require, tmp_path):
+        """Test interactive launch passes --prompt flag (#436)."""
         agent = OpenCodeAgent()
         mock_process = Mock()
         mock_popen.return_value = mock_process
 
-        # Create a project directory with an existing AGENTS.md
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        (project_dir / "AGENTS.md").write_text("# Agent instructions\n")
 
         result = agent.launch_with_prompt(
             project_path=str(project_dir),
@@ -97,17 +95,13 @@ class TestOpenCodeAgentLaunch:
         call_args = mock_popen.call_args
         cmd = call_args[0][0]
         assert cmd[0] == "opencode"
-        assert "--prompt" not in cmd
-        assert "Fix the login bug" not in cmd
+        assert "--prompt" in cmd
+        assert "Fix the login bug" in cmd
         assert "--session" in cmd
         assert "ses_abc123" in cmd
         assert "run" not in cmd
         assert call_args[1]["cwd"] == str(project_dir)
         assert result == mock_process
-
-        # Verify AGENTS.md was updated with trigger
-        content = (project_dir / "AGENTS.md").read_text()
-        assert agent.AGENTS_MD_TRIGGER in content
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -150,8 +144,8 @@ class TestOpenCodeAgentLaunch:
         call_args = mock_popen.call_args
         cmd = call_args[0][0]
         assert "--dangerously-skip-permissions" in cmd
-        # Interactive mode: no --prompt (#430)
-        assert "--prompt" not in cmd
+        assert "--prompt" in cmd
+        assert "Fix bug" in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -192,8 +186,8 @@ class TestOpenCodeAgentLaunch:
         call_args = mock_popen.call_args
         cmd = call_args[0][0]
         assert "--session" not in cmd
-        # Interactive mode: no --prompt (#430)
-        assert "--prompt" not in cmd
+        assert "--prompt" in cmd
+        assert "Fix bug" in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -215,8 +209,8 @@ class TestOpenCodeAgentLaunch:
         cmd = call_args[0][0]
         assert "--session" in cmd
         assert "ses_real_opencode_id" in cmd
-        # Interactive mode: no --prompt (#430)
-        assert "--prompt" not in cmd
+        assert "--prompt" in cmd
+        assert "Fix bug" in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -241,7 +235,7 @@ class TestOpenCodeAgentLaunch:
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
     def test_launch_with_empty_prompt_no_prompt_flag(self, mock_popen, mock_require, tmp_path):
-        """Test interactive launch with empty prompt omits --prompt (#421, #430)."""
+        """Test interactive launch with empty prompt omits --prompt."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
@@ -302,8 +296,8 @@ class TestOpenCodeAgentLaunch:
         cmd = call_args[0][0]
         assert "--model" in cmd
         assert "anthropic/claude-sonnet" in cmd
-        # Interactive mode: no --prompt (#430)
-        assert "--prompt" not in cmd
+        assert "--prompt" in cmd
+        assert "Fix bug" in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -547,7 +541,7 @@ class TestOpenCodeAgentPermissions:
     """Test OpenCodeAgent permission prompt support."""
 
     def test_supports_permission_prompts_returns_true(self):
-        """OpenCode supports permission prompts when launched without --prompt (#430)."""
+        """OpenCode supports permission prompts when configured."""
         agent = OpenCodeAgent()
         assert agent.supports_permission_prompts() is True
 
@@ -556,186 +550,6 @@ class TestOpenCodeAgentPermissions:
         agent = OpenCodeAgent()
         assert agent.supports_permission_prompts() is True
         assert agent.supports_permission_prompts() is True
-
-
-class TestOpenCodeAgentAgentsMdTrigger:
-    """Test AGENTS.md trigger for daf-workflow skill (#430, #433)."""
-
-    def test_ensure_trigger_prepends_to_existing_agents_md(self, tmp_path):
-        """Test trigger is prepended to an existing AGENTS.md (#433)."""
-        agent = OpenCodeAgent()
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        agents_md = project_dir / "AGENTS.md"
-        agents_md.write_text("# Existing agent instructions\n\nSome content.\n")
-
-        result = agent.ensure_agents_md_trigger(str(project_dir))
-
-        assert result is True
-        content = agents_md.read_text()
-        assert "# Existing agent instructions" in content
-        assert "Some content." in content
-        assert agent.AGENTS_MD_TRIGGER in content
-        # Trigger must be at the TOP of the file
-        assert content.startswith(agent.AGENTS_MD_TRIGGER)
-
-    def test_ensure_trigger_creates_agents_md_if_missing(self, tmp_path):
-        """Test AGENTS.md is created with trigger when file does not exist."""
-        agent = OpenCodeAgent()
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-
-        result = agent.ensure_agents_md_trigger(str(project_dir))
-
-        assert result is True
-        agents_md = project_dir / "AGENTS.md"
-        assert agents_md.exists()
-        content = agents_md.read_text()
-        assert content == f"{agent.AGENTS_MD_TRIGGER}\n"
-
-    def test_ensure_trigger_idempotent(self, tmp_path):
-        """Test calling ensure_agents_md_trigger twice does not duplicate."""
-        agent = OpenCodeAgent()
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        (project_dir / "AGENTS.md").write_text("# Instructions\n")
-
-        # First call adds trigger
-        assert agent.ensure_agents_md_trigger(str(project_dir)) is True
-        content_after_first = (project_dir / "AGENTS.md").read_text()
-
-        # Second call is a no-op
-        assert agent.ensure_agents_md_trigger(str(project_dir)) is False
-        content_after_second = (project_dir / "AGENTS.md").read_text()
-
-        assert content_after_first == content_after_second
-        assert content_after_second.count(agent.AGENTS_MD_TRIGGER) == 1
-
-    def test_ensure_trigger_preserves_existing_content(self, tmp_path):
-        """Test existing AGENTS.md content is preserved below trigger (#433)."""
-        agent = OpenCodeAgent()
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        original = "# My Project\n\n## Guidelines\n\n- Follow PEP 8\n- Write tests\n"
-        (project_dir / "AGENTS.md").write_text(original)
-
-        agent.ensure_agents_md_trigger(str(project_dir))
-
-        content = (project_dir / "AGENTS.md").read_text()
-        # Trigger at top, existing content preserved below
-        assert content.startswith(agent.AGENTS_MD_TRIGGER)
-        assert original.strip() in content
-
-    def test_ensure_trigger_already_present(self, tmp_path):
-        """Test no modification when trigger block already exists."""
-        agent = OpenCodeAgent()
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        existing = f"{agent.AGENTS_MD_TRIGGER}\n\n# Instructions\n"
-        (project_dir / "AGENTS.md").write_text(existing)
-
-        result = agent.ensure_agents_md_trigger(str(project_dir))
-
-        assert result is False
-        assert (project_dir / "AGENTS.md").read_text() == existing
-
-    def test_ensure_trigger_migrates_legacy_trigger(self, tmp_path):
-        """Test legacy trigger at end is replaced with new block at top (#433)."""
-        agent = OpenCodeAgent()
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        agents_md = project_dir / "AGENTS.md"
-        legacy_content = (
-            "# My Project Instructions\n\n"
-            "Follow the coding standards.\n\n"
-            f"{agent._LEGACY_TRIGGER}\n"
-        )
-        agents_md.write_text(legacy_content)
-
-        result = agent.ensure_agents_md_trigger(str(project_dir))
-
-        assert result is True
-        content = agents_md.read_text()
-        # New trigger at the top
-        assert content.startswith(agent.AGENTS_MD_TRIGGER)
-        # Legacy trigger removed
-        assert agent._LEGACY_TRIGGER not in content
-        # Original content preserved
-        assert "# My Project Instructions" in content
-        assert "Follow the coding standards." in content
-
-    def test_ensure_trigger_migrates_legacy_trigger_appended_with_newlines(self, tmp_path):
-        """Test legacy trigger appended with \\n\\n prefix is cleaned up (#433)."""
-        agent = OpenCodeAgent()
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        agents_md = project_dir / "AGENTS.md"
-        # Simulate the old append behavior: original content + \n\n + trigger + \n
-        legacy_content = (
-            "# Instructions\n\nSome content.\n"
-            f"\n\n{agent._LEGACY_TRIGGER}\n"
-        )
-        agents_md.write_text(legacy_content)
-
-        result = agent.ensure_agents_md_trigger(str(project_dir))
-
-        assert result is True
-        content = agents_md.read_text()
-        assert content.startswith(agent.AGENTS_MD_TRIGGER)
-        assert agent._LEGACY_TRIGGER not in content
-        assert "# Instructions" in content
-        assert "Some content." in content
-
-    @patch("devflow.agent.opencode_agent.require_tool")
-    @patch("subprocess.Popen")
-    def test_launch_interactive_updates_agents_md(self, mock_popen, mock_require, tmp_path):
-        """Test interactive launch calls ensure_agents_md_trigger (#430)."""
-        agent = OpenCodeAgent()
-        mock_popen.return_value = Mock()
-
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-
-        agent.launch_with_prompt(
-            project_path=str(project_dir),
-            initial_prompt="Work on feature",
-            session_id="test-id",
-        )
-
-        # AGENTS.md should have been created with trigger
-        agents_md = project_dir / "AGENTS.md"
-        assert agents_md.exists()
-        assert agent.AGENTS_MD_TRIGGER in agents_md.read_text()
-
-        # Command should NOT have --prompt
-        cmd = mock_popen.call_args[0][0]
-        assert "--prompt" not in cmd
-
-    @patch("devflow.agent.opencode_agent.require_tool")
-    @patch("subprocess.Popen")
-    def test_launch_headless_does_not_update_agents_md(self, mock_popen, mock_require, tmp_path):
-        """Test headless launch does NOT modify AGENTS.md (#430)."""
-        agent = OpenCodeAgent()
-        mock_popen.return_value = Mock()
-
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-
-        agent.launch_with_prompt(
-            project_path=str(project_dir),
-            initial_prompt="Work on feature",
-            session_id="test-id",
-            headless=True,
-        )
-
-        # AGENTS.md should NOT have been created
-        agents_md = project_dir / "AGENTS.md"
-        assert not agents_md.exists()
-
-        # Command should have prompt via 'run'
-        cmd = mock_popen.call_args[0][0]
-        assert cmd[1] == "run"
-        assert "Work on feature" in cmd
 
 
 class TestOpenCodeAgentFactory:
