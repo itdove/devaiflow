@@ -683,7 +683,10 @@ def create_git_issue_session(
         workspace_path = get_workspace_path(config, session.workspace_name)
     elif config and config.repos and config.repos.workspaces:
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, parent=parent, repository=repository)
+    if headless:
+        initial_prompt = _build_issue_creation_prompt(issue_type, goal, config, name, project_path=project_path, workspace=workspace_path, parent=parent, repository=repository)
+    else:
+        initial_prompt = ""  # Skill + env vars provide context
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
@@ -695,6 +698,9 @@ def create_git_issue_session(
     # Set CS_SESSION_NAME environment variable
     env = os.environ.copy()
     env["CS_SESSION_NAME"] = name
+    env["DAF_SESSION_NAME"] = name
+    env["DAF_COMMAND"] = "git-new"
+    env["DEVAIFLOW_IN_SESSION"] = "1"
 
     # Set GCP Vertex AI region if configured
     if config and config.gcp_vertex_region:

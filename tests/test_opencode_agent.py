@@ -214,6 +214,43 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
+    def test_launch_with_empty_prompt_no_prompt_flag(self, mock_popen, mock_require):
+        """Test interactive launch with empty prompt omits --prompt (#421)."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="",
+            session_id="ses_abc123",
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert cmd == ["opencode", "--session", "ses_abc123"]
+        assert "--prompt" not in cmd
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_empty_prompt_no_session(self, mock_popen, mock_require):
+        """Test interactive launch with empty prompt and UUID session ID."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="",
+            session_id="29798353-1758-43a9-b95a-05bac425c3f3",
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert cmd == ["opencode"]
+        assert "--prompt" not in cmd
+        assert "--session" not in cmd
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
     def test_launch_with_prompt_and_model(self, mock_popen, mock_require):
         """Test launching OpenCode with model provider profile."""
         agent = OpenCodeAgent()

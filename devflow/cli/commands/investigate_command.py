@@ -653,13 +653,16 @@ def create_investigation_session(
     # Build initial prompt with investigation-only constraints
     # AAP-64886: Get workspace path from session instead of using default
     workspace = resolve_workspace_path(config, session.workspace_name)
-    initial_prompt = _build_investigation_prompt(
-        goal, parent, config, name,
-        project_path=project_path,
-        workspace=workspace,
-        issue_key=issue_key,
-        issue_details=issue_details
-    )
+    if headless:
+        initial_prompt = _build_investigation_prompt(
+            goal, parent, config, name,
+            project_path=project_path,
+            workspace=workspace,
+            issue_key=issue_key,
+            issue_details=issue_details
+        )
+    else:
+        initial_prompt = ""  # Skill + env vars provide context
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
@@ -682,6 +685,8 @@ def create_investigation_session(
 
     # Set additional DevAIFlow environment variables
     env["CS_SESSION_NAME"] = name
+    env["DAF_SESSION_NAME"] = name
+    env["DAF_COMMAND"] = "investigate"
     env["DEVAIFLOW_IN_SESSION"] = "1"
 
     # Set GCP Vertex AI region if configured (deprecated - use model_provider instead)
@@ -1092,14 +1097,17 @@ def _create_multi_project_investigation_session(
         return
 
     # Build initial prompt for multi-project investigation
-    initial_prompt = _build_multiproject_investigation_prompt(
-        goal=goal,
-        parent=parent,
-        config=config,
-        name=name,
-        project_paths=project_paths,
-        workspace=workspace_path,
-    )
+    if headless:
+        initial_prompt = _build_multiproject_investigation_prompt(
+            goal=goal,
+            parent=parent,
+            config=config,
+            name=name,
+            project_paths=project_paths,
+            workspace=workspace_path,
+        )
+    else:
+        initial_prompt = ""  # Skill + env vars provide context
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
@@ -1122,6 +1130,8 @@ def _create_multi_project_investigation_session(
 
     # Set additional DevAIFlow environment variables
     env["CS_SESSION_NAME"] = name
+    env["DAF_SESSION_NAME"] = name
+    env["DAF_COMMAND"] = "investigate"
     env["DEVAIFLOW_IN_SESSION"] = "1"
 
     # Set GCP Vertex AI region if configured (deprecated - use model_provider instead)

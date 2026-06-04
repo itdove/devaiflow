@@ -166,7 +166,9 @@ class ClaudeAgent(AgentInterface):
         if model_provider_profile and model_provider_profile.get("model_name"):
             cmd.extend(["--model", model_provider_profile["model_name"]])
 
-        cmd.extend(["--session-id", session_id, initial_prompt])
+        cmd.extend(["--session-id", session_id])
+        if initial_prompt:
+            cmd.append(initial_prompt)
 
         # Discover and add skills directories if not provided
         if skills_dirs is None:

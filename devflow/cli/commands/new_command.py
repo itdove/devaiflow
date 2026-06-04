@@ -829,10 +829,13 @@ def create_new_session(
         elif config and config.repos:
             workspace = config.repos.get_default_workspace_path()
 
-        initial_prompt = _generate_initial_prompt(
-            name, session.goal, issue_key, issue_title,
-            project_path=project_path, workspace=workspace
-        )
+        if headless:
+            initial_prompt = _generate_initial_prompt(
+                name, session.goal, issue_key, issue_title,
+                project_path=project_path, workspace=workspace
+            )
+        else:
+            initial_prompt = ""  # Skill + env vars provide context
 
         # Get agent backend from config
         from devflow.agent import create_agent_client
@@ -852,6 +855,9 @@ def create_new_session(
         env = os.environ.copy()
         env["DEVAIFLOW_IN_SESSION"] = "1"
         env["AI_AGENT_SESSION_ID"] = session_id
+        env["DAF_SESSION_NAME"] = name
+        env["CS_SESSION_NAME"] = name  # backward compat
+        env["DAF_COMMAND"] = "new"
 
         # Set GCP Vertex AI region if configured (deprecated - for backward compatibility)
         if config and config.gcp_vertex_region:

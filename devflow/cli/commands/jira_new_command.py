@@ -573,7 +573,10 @@ def create_jira_ticket_session(
     elif config and config.repos and config.repos.workspaces:
         # Fallback to default if session doesn't have workspace
         workspace_path = config.repos.get_default_workspace_path()
-    initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
+    if headless:
+        initial_prompt = _build_ticket_creation_prompt(issue_type, parent, goal, config, name, project_path=project_path, workspace=workspace_path, affects_versions=affects_versions)
+    else:
+        initial_prompt = ""  # Skill + env vars provide context
 
     # Note: daf-workflow skill is auto-loaded, no validation needed
     if not validate_daf_agents_md(session, config_loader):
@@ -586,6 +589,9 @@ def create_jira_ticket_session(
     # This is more reliable than depending on AI_AGENT_SESSION_ID which may not be exported
     env = os.environ.copy()
     env["CS_SESSION_NAME"] = name
+    env["DAF_SESSION_NAME"] = name
+    env["DAF_COMMAND"] = "jira-new"
+    env["DEVAIFLOW_IN_SESSION"] = "1"
 
     # Set GCP Vertex AI region if configured
     if config and config.gcp_vertex_region:

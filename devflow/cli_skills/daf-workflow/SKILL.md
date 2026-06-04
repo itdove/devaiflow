@@ -1,497 +1,221 @@
 ---
 name: daf-workflow
-description: Workflow guidance for development sessions, ticket creation, and multi-project work with DevAIFlow
+description: DevAIFlow session context loader. Activates when DAF_SESSION_NAME env var is set. Reads session metadata, issue tracker tickets, and context files to understand the current task. Provides per-command workflow guidance for daf open, daf new, daf git new, daf jira new, and daf investigate.
 user-invocable: false
 ---
 
-# DevAIFlow Workflow Guide
+# DevAIFlow Session Context
 
-This skill provides comprehensive workflow guidance for AI agents working within DevAIFlow (daf) sessions.
-
-**What is daf?** A session manager for AI coding assistants that organizes development work, tracks time, and integrates with issue trackers (JIRA, GitHub Issues, GitLab Issues).
+Check the `DAF_SESSION_NAME` environment variable. If set, this is a managed DevAIFlow session — follow the initialization steps below. If not set, skip to the **Standalone Workflow Guide** section at the bottom.
 
 ---
 
-## Quick Reference
+## Session Initialization
 
-**For command syntax:** See **daf-cli skill**
-**For JIRA field rules:** See **daf-jira-fields skill**
-**For JIRA templates:** See **ORGANIZATION.md** (if using JIRA)
-**For project standards:** See **AGENTS.md** and **CLAUDE.md**
+When `DAF_SESSION_NAME` is set, perform these steps **before doing any other work**:
+
+### 1. Read Session Metadata
+
+```bash
+daf info
+```
+
+This shows: session name, goal, issue key, status, working directory, branch, workspace, session type, and conversation history.
+
+### 2. Read Issue Tracker Ticket
+
+If `daf info` shows an issue key:
+
+```bash
+# For GitHub/GitLab issues
+daf git view --comments
+
+# For JIRA tickets
+daf jira view --comments
+```
+
+### 3. Read Context Files
+
+Read the hierarchical context files if they exist:
+- `~/.daf-sessions/ENTERPRISE.md` (enterprise-wide policies and standards)
+- `~/.daf-sessions/ORGANIZATION.md` (organization coding standards)
+- `~/.daf-sessions/TEAM.md` (team conventions and workflows)
+- `~/.daf-sessions/USER.md` (personal notes and preferences)
+
+### 4. Read Skill Files
+
+Check for additional skills loaded in this session:
+- Enterprise/organization/team/user skills in `~/.daf-sessions/.claude/skills/`
+- Project-level skills in the project's `.claude/skills/` directory
+
+Read any that are relevant to the session.
+
+### 5. Follow Command-Specific Workflow
+
+Check `DAF_COMMAND` environment variable and follow the matching section below.
 
 ---
 
-## Issue Tracker Integration
+## Development Sessions (DAF_COMMAND = open | new)
 
-DevAIFlow auto-detects your issue tracker based on git remote URLs and provides appropriate commands.
+Standard development session. Resume or start work on a task.
 
-### Auto-Detection
+**Workflow:**
+1. Read the issue tracker ticket and identify acceptance criteria
+2. Plan your work to address each criterion
+3. Make code changes, run tests, verify acceptance criteria
+4. Track progress with `daf note "Completed AC #1: ..."`
+5. Before exiting: update issue tracker to tick completed criteria
 
-DevAIFlow automatically detects your issue tracker:
+**Testing Requirements:**
+- Identify the project's testing framework from the codebase
+- Run the project's test suite after making code changes
+- Create tests for new methods before or during implementation
+- Fix all failing tests before marking tasks complete
 
-**GitHub Issues:**
-- Detected from: `github.com` in git remote URL
-- Commands: `daf git view`, `daf git create`, `daf git update`
-- Example: `git remote` → `https://github.com/user/repo.git` → Uses GitHub Issues
-
-**GitLab Issues:**
-- Detected from: `gitlab.com` or self-hosted GitLab in git remote URL
-- Commands: `daf git view`, `daf git create`, `daf git update`
-- Example: `git remote` → `https://gitlab.com/user/repo.git` → Uses GitLab Issues
-
-**JIRA:**
-- Detected from: `JIRA_URL` environment variable or config
-- Commands: `daf jira view`, `daf jira create`, `daf jira update`
-- Example: `JIRA_URL=https://jira.company.com` → Uses JIRA
-
-### Reading vs Creating/Updating Issues
-
-#### For Reading (Fast)
-
-**JIRA:** Use Atlassian MCP for fast reads
-```
-mcp__atlassian__getTeamworkGraphObject
-```
-
-**GitHub/GitLab:** Use `daf git view` command
-```bash
-daf git view owner/repo#123 --comments
-```
-
-**Advantages:**
-- Faster than CLI commands
-- Direct API access
-- Rich structured data
-
-#### For Creating/Updating (With Validation)
-
-**JIRA:** Use `daf jira` commands
-```bash
-daf jira create story --summary "..." --parent PROJ-1234
-daf jira update PROJ-12345 --field custom_field=value
-daf jira add-comment PROJ-12345 "Progress update"
-```
-
-**GitHub/GitLab:** Use `daf git` commands
-```bash
-daf git create bug --summary "..." --parent owner/repo#123
-daf git update owner/repo#456 --labels bug,priority-high
-daf git add-comment owner/repo#789 "Fixed in latest commit"
-```
-
-**Advantages:**
-- Field validation before API calls
-- Consistent interface across backends
-- Error handling with helpful messages
-
-### Field Mappings (JIRA Only)
-
-**CRITICAL:** Before creating/updating JIRA issues, understand field mappings.
-
-See **daf-jira-fields skill** for:
-- System fields vs custom fields
-- Required fields for each issue type
-- Allowed values for select fields
-- How defaults are applied
-
-**Quick discovery:**
-```bash
-daf config show --fields
-```
-
----
-
-## Understanding Multi-Project Sessions
-
-DevAIFlow supports multi-project sessions where a single session spans multiple related repositories.
-
-### Viewing Projects in Current Session
-
-```bash
-daf active
-```
-
-**Shows:**
-- Session name and type
-- Workspace path
-- Goal/description
-- Time tracked
-- Status
-- **All projects** in the session with git branches
-
-**Example output:**
-```
-╭────────────────────── ▶ Currently Active Conversation ───────────────────────╮
-│                                                                              │
-│  DAF Session: feature-x                                                      │
-│  Type: Multi-project (2 projects)                                            │
-│  Workspace: /Users/user/development                                          │
-│  Goal: Implement caching layer                                               │
-│  Time (this work session): 1h 23m                                            │
-│  Status: in_progress                                                         │
-│                                                                              │
-│  Projects in this session:                                                   │
-│    • backend-api (branch: feature-x)                                         │
-│    • frontend-app (branch: feature-x)                                        │
-│                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-```
-
-### Multi-Project Context
-
-**Key principles:**
-1. Each project has its own git repository and branch
-2. You're working in ONE project at a time (current working directory)
-3. AI agent has shared context across all projects
-4. All projects typically use the same branch name
-
-**Before making changes (development sessions only):**
-
-**For development sessions (daf open):**
-1. Run `daf active` to see which projects are in the session
-2. Verify your current working directory
-3. Understand how changes might affect other projects
-
-**For analysis-only sessions (daf jira new, daf git new, daf investigate):**
-- Running `daf active` is NOT necessary - you're only reading files
-- Focus on analyzing the codebase, not checking session state
-
----
-
-## Workflow: Standard Development Sessions
-
-For sessions opened via `daf open`:
-
-### 1. Session Start - Read Acceptance Criteria and Check Context
-
-**CRITICAL FIRST STEPS:**
+**Multi-project sessions:**
 - Run `daf active` to see which projects are in this session
-- Read the issue immediately to understand acceptance criteria
-- Plan your work to address each criterion
-- Track which criteria you'll address as you work
-
-**Why:** Acceptance criteria define what "done" means. Checking context ensures you know which repositories are involved.
-
-### 2. During Development
-
-**Focus on:**
-- Making code changes to implement the requested feature/fix
-- Verifying each acceptance criterion as you complete work
-- Testing that criteria are met (run tests, check implementation)
-- Tracking progress
-
-**Documenting Progress:**
-
-**Session notes (local):**
-```bash
-daf note "Completed API endpoint implementation"
-```
-
-**Issue tracker comments (team visibility):**
-```bash
-# JIRA
-daf jira add-comment PROJ-123 "Fixed authentication bug"
-
-# GitHub/GitLab
-daf git add-comment owner/repo#123 "Fixed authentication bug"
-```
+- Verify your current working directory before making changes
+- Each project has its own git repository and branch
 
 **Do NOT:**
-- ❌ Create git commits (handled by `daf complete`)
-- ❌ Create pull/merge requests (see **gh-cli** and **glab-cli skills**)
-- ❌ Run user-facing `daf` commands (new, open, complete, config, init, upgrade)
-
-**Why:** The user runs `daf complete` outside sessions to handle ALL git and PR/MR operations. Manual operations interfere with session tracking.
-
-### 3. Before Exiting Session
-
-**Final review:**
-- Review all acceptance criteria
-- Update issue tracker to tick off completed criteria
-- Document incomplete criteria and blockers
-
-**Why:** Ensures the issue tracker accurately reflects progress.
+- Create git commits (handled by `daf complete`)
+- Create pull/merge requests (handled by `daf complete`)
+- Run user-facing daf commands (new, open, complete, config, init, upgrade)
 
 ---
 
-## Choosing Your Issue Tracker
+## GitHub/GitLab Issue Creation (DAF_COMMAND = git-new)
 
-**Before creating tickets, determine which issue tracker to use.**
+Analysis-only session for creating a GitHub/GitLab issue.
 
-### Auto-Detection (Recommended)
+**CRITICAL CONSTRAINTS:**
+- DO NOT modify any code or create/checkout git branches
+- DO NOT make any file changes — only READ and ANALYZE
+- Focus on understanding the codebase to write a good issue
 
-DevAIFlow automatically detects your issue tracker from git remote URLs:
+**Workflow:**
+1. Analyze the codebase to understand the goal from `daf info`
+2. Read relevant files, search for patterns, understand architecture
+3. Create the issue using `daf git create`:
+   ```bash
+   daf git create {bug|story|task} \
+     --summary "..." \
+     --description "<your analysis>" \
+     --acceptance-criteria "..."
+   ```
+4. Include detailed description and acceptance criteria based on analysis
+
+Read the **daf-git skill** for correct command syntax.
+
+After creating the issue, the session is automatically renamed to `creation-<issue_number>`.
+
+---
+
+## JIRA Ticket Creation (DAF_COMMAND = jira-new)
+
+Analysis-only session for creating a JIRA ticket.
+
+**CRITICAL CONSTRAINTS:**
+- DO NOT modify any code or create/checkout git branches
+- DO NOT make any file changes — only READ and ANALYZE
+- Focus on understanding the codebase to write a good JIRA ticket
+
+**Workflow:**
+1. Analyze the codebase to understand the goal from `daf info`
+2. Read relevant files, search for patterns, understand architecture
+3. Check field defaults: `daf config show`
+4. Create the ticket using `daf jira create`:
+   ```bash
+   daf jira create {story|bug|task|epic|spike} \
+     --summary "..." \
+     --description "<your analysis in JIRA Wiki markup>" \
+     --field acceptance_criteria="- [] criterion 1\n- [] criterion 2"
+   ```
+5. Use JIRA Wiki markup (NOT Markdown) for description field
+6. Include acceptance criteria in checkbox format
+
+Read the **daf-jira skill** and **daf-jira-fields skill** for field rules and syntax.
+
+After creating the ticket, the session is automatically renamed to `creation-<ticket_key>`.
+
+---
+
+## Investigation (DAF_COMMAND = investigate)
+
+Read-only investigation and analysis session.
+
+**CRITICAL CONSTRAINTS:**
+- DO NOT modify any code or create/checkout git branches
+- DO NOT make any file changes — only READ and ANALYZE
+- Focus on understanding the codebase and documenting findings
+
+**Workflow:**
+1. Read the session goal from `daf info`
+2. Investigate the codebase: read files, search patterns, analyze architecture
+3. Analyze feasibility and identify implementation approaches
+4. Document findings and recommendations
+5. If you discover bugs or improvements, you MAY create tickets:
+   - JIRA: `daf jira create`
+   - GitHub/GitLab: `daf git create`
+
+**When investigation is complete:**
+- Provide a clear summary of findings
+- List key files and components involved
+- Suggest implementation approaches
+- Note concerns or blockers
+- The user saves findings with `daf note` or exports them
+
+---
+
+## Standalone Workflow Guide
+
+When `DAF_SESSION_NAME` is **not set**, you are running outside a managed DevAIFlow session. Use this reference for daf commands.
+
+### Issue Tracker Integration
+
+DevAIFlow auto-detects your issue tracker from git remote URLs:
 - `github.com` → GitHub Issues (`daf git` commands)
 - `gitlab.com` → GitLab Issues (`daf git` commands)
 - `JIRA_URL` env var → JIRA (`daf jira` commands)
 
-### User Confirmation Pattern
+### Command Quick Reference
 
-**If JIRA is configured (`JIRA_URL` is set), confirm with the user before creating tickets:**
-
-```
-I detected GitHub Issues from your git remote, but JIRA is also configured. Should I:
-1. Create a GitHub issue (recommended based on git remote)
-2. Create a JIRA ticket instead
-```
-
-**If JIRA is NOT configured:** Use auto-detected issue tracker from git remote (GitHub or GitLab) - no confirmation needed.
-
-**Why:** Users with both systems configured may prefer one over the other for specific workflows.
-
-### Command Equivalents
-
-Both issue trackers support the same workflows:
-
-| Action | JIRA Command | GitHub/GitLab Command |
-|--------|--------------|------------------------|
+| Action | JIRA | GitHub/GitLab |
+|--------|------|---------------|
 | Ticket creation session | `daf jira new` | `daf git new` |
 | Create ticket (no session) | `daf jira create` | `daf git create` |
 | View ticket | `daf jira view` | `daf git view` |
 | Update ticket | `daf jira update` | `daf git update` |
 | Add comment | `daf jira add-comment` | `daf git add-comment` |
 
----
+### Session Information
 
-## Workflow: Ticket Creation Sessions
-
-**Choose Your Issue Tracker:**
-- For JIRA: `daf jira new` (analysis-only sessions)
-- For GitHub/GitLab: `daf git new` (analysis-only sessions)
-
-**Before creating a ticket, determine which issue tracker to use:**
-1. DevAIFlow auto-detects from git remote URLs
-2. If JIRA is also configured, ask the user to confirm or override the detection
-3. Use the appropriate command based on their choice
-
-For sessions opened via `daf jira new` or `daf git new` (analysis-only sessions):
-
-**Purpose:** Analyze the codebase to create a well-informed issue
-
-**Context checking:**
-- `daf active` is NOT needed in analysis-only sessions
-- You're only reading files, not making changes
-
-**Constraints:**
-- ❌ DO NOT modify code or files
-- ❌ DO NOT run git commands
-- ✅ ONLY read files, search code, analyze architecture
-- ✅ Create issue when analysis is complete
-
-**Workflow:**
-1. Analyze the codebase to understand implementation
-2. Read relevant files, search patterns, understand architecture
-3. Create detailed issue based on analysis
-4. Include acceptance criteria based on discoveries
-
-**Creating the issue:**
-
-**JIRA:**
-```bash
-daf jira create {bug|story|task|epic|spike} \
-  --summary "..." \
-  --parent PROJ-1234 \
-  --description "..." \
-  --field acceptance_criteria="- [] criterion 1\n- [] criterion 2"
-```
-
-**GitHub/GitLab:**
-```bash
-daf git create {bug|story|task} \
-  --summary "..." \
-  --parent owner/repo#123 \
-  --description "..."
-```
-
-**Why:** These sessions are analysis-only. Git operations are skipped entirely.
-
----
-
-## Workflow: Investigation Sessions
-
-For sessions opened via `daf investigate` (analysis-only sessions for codebase exploration):
-
-**Purpose:** Analyze the codebase before committing to creating a ticket or starting implementation
-
-**Creating investigation sessions:**
-
-**From scratch (manual goal):**
-```bash
-daf investigate --goal "Research Redis caching options for subscription API"
-daf investigate --goal "Investigate timeout issue" --parent PROJ-59038
-```
-
-**From existing issue (auto-fetch details):**
-```bash
-# JIRA
-daf investigate PROJ-12345
-
-# GitHub/GitLab
-daf investigate owner/repo#123
-daf investigate #123
-```
-
-**How it works:**
-- When you provide an issue key, daf automatically:
-  - Fetches the issue details from the issue tracker
-  - Uses the issue summary as the investigation goal
-  - Includes issue description and link in the initial prompt
-  - Auto-generates session name (e.g., `investigate-PROJ-12345`)
-  - Stores issue key for tracking
-
-**Context checking:**
-- `daf active` is NOT needed in investigation sessions
-- You're only reading files, not making changes
-
-**Constraints:**
-- ❌ DO NOT modify code or files
-- ❌ DO NOT create git commits or checkout branches
-- ✅ ONLY read files, search code, analyze architecture
-- ✅ Document findings and recommendations
-- ✅ Create issue tracker tickets for discovered bugs/improvements (optional)
-
-**Workflow:**
-1. Analyze the codebase to understand the problem/feature
-2. Read relevant files, search for patterns, understand architecture
-3. Identify feasibility and implementation approaches
-4. Document findings and recommendations
-5. (Optional) Create tickets for discovered issues using `daf jira create` or `daf git create`
-
-**When analysis is complete:**
-- Provide a summary of findings
-- List key files and components involved
-- Suggest implementation approaches
-- Note any concerns or blockers
-- User saves findings with `daf note` or exports them
-
-**Overriding issue summary (optional):**
-```bash
-# Fetch issue details but use custom goal
-daf investigate PROJ-12345 --goal "Custom investigation focus"
-```
-
-**Why:** Investigation sessions provide a safe read-only environment to explore the codebase before committing to changes or ticket creation.
-
----
-
-## Command Usage Guidelines
-
-**See these skills for detailed documentation:**
-- **daf-cli skill** - Command syntax, flags, and examples
-- **gh-cli skill** - GitHub PR restrictions and workflow
-- **glab-cli skill** - GitLab MR restrictions and workflow
-
-**Key principle:**
-- Use `daf` commands for issue tracker operations and session tracking
-- Defer all git/PR/MR operations to the user (who runs `daf complete` outside sessions)
-
----
-
-## Session Information Commands
-
-**Check current session:**
 ```bash
 daf active                      # Show currently active conversation
-daf info [PROJ-12345|--latest]  # Session details
+daf info [SESSION|--latest]     # Session details
 daf status                      # Status dashboard
 daf list [--active]             # List all sessions
+daf notes                       # View session notes
 ```
 
-**View notes:**
-```bash
-daf notes                       # View all session notes
-```
+### Configuration
 
----
-
-## Configuration
-
-**View configuration:**
 ```bash
 daf config show                 # Merged configuration
-daf config show --fields        # YOUR issue tracker's custom fields (JIRA)
-```
-
-**Refresh JIRA fields:**
-```bash
+daf config show --fields        # Custom fields (JIRA)
 daf config refresh-jira-fields  # Refresh from JIRA API
 ```
 
----
+### Best Practices
 
-## Best Practices
+1. Always read acceptance criteria first — understand what "done" means
+2. Use issue tracker for team visibility — add comments for progress
+3. Use `daf note` for local implementation details
+4. Verify work meets acceptance criteria before exiting
+5. Run `daf active` before making changes in multi-project sessions
+6. Defer git commits and PR/MR creation to `daf complete`
 
-1. **Always read acceptance criteria first** - Understand what "done" means
-2. **Use issue tracker for visibility** - Add comments for team communication
-3. **Use session notes for details** - Track implementation decisions locally
-4. **Verify your work** - Test that acceptance criteria are actually met
-5. **Document blockers** - If stuck, document why in issue tracker
-6. **Check multi-project context** - Run `daf active` before making changes (development sessions only)
-7. **Use correct issue tracker commands** - Auto-detection uses git remote URL
-
----
-
-## Common Patterns
-
-### Working Across Multiple Repositories
-
-```bash
-# Check which projects are in this session
-daf active
-
-# Work in current repository
-# ... make changes ...
-
-# Add note about cross-repo impact
-daf note "Updated API contract in backend, frontend needs update"
-```
-
-### Updating Acceptance Criteria
-
-**JIRA (checkbox format):**
-```bash
-daf jira update PROJ-123 \
-  --field acceptance_criteria="- [x] Feature implemented\n- [x] Tests passing\n- [] Docs updated"
-```
-
-**GitHub/GitLab (task list in description):**
-```bash
-daf git update owner/repo#123 \
-  --description "...existing description...\n\n## Progress\n- [x] Feature implemented\n- [x] Tests passing\n- [ ] Docs updated"
-```
-
-### Checking Issue Status
-
-**JIRA (fast read with MCP):**
-```
-mcp__atlassian__getTeamworkGraphObject
-```
-
-**JIRA (CLI):**
-```bash
-daf jira view PROJ-123 --comments
-```
-
-**GitHub/GitLab:**
-```bash
-daf git view owner/repo#123 --comments
-```
-
----
-
-## Summary
-
-**Key Takeaways:**
-1. DevAIFlow auto-detects issue tracker from git remote
-2. Use MCP/`daf git view` for fast reads
-3. Use `daf jira`/`daf git` commands for creates/updates
-4. Standard sessions: focus on acceptance criteria
-5. Ticket creation sessions: analyze only, no code changes
-6. Multi-project development sessions: check `daf active` before changes
-7. Defer git/PR/MR operations to user (`daf complete`)
-
-**For More Information:**
-- Commands: **daf-cli skill**
-- JIRA fields: **daf-jira-fields skill**
-- Project standards: **AGENTS.md**, **CLAUDE.md**
-- JIRA templates: **ORGANIZATION.md**
+**For detailed command syntax:** See **daf-cli skill**
+**For JIRA field rules:** See **daf-jira-fields skill**
+**For project standards:** See **AGENTS.md** and **CLAUDE.md**
