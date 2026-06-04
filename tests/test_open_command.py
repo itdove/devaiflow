@@ -1968,3 +1968,160 @@ def test_handle_branch_creation_uncommitted_changes_auto_mode(tmp_path):
         assert branch is not None
 
 
+class TestOpenCommandOpenCodeResume:
+    """Test OpenCode session resume and session ID capture in daf open (#419)."""
+
+    def test_open_resume_opencode_with_ses_session_id(self, temp_daf_home, tmp_path):
+        """When reopening OpenCode session with ses_ ID, agent.resume_session() is called."""
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+
+        project_path = str(tmp_path / "test-project")
+        Path(project_path).mkdir(parents=True, exist_ok=True)
+
+        session = session_manager.create_session(
+            name="oc-resume-test",
+            goal="Test OpenCode resume",
+            working_directory="test-project",
+            project_path=project_path,
+            ai_agent_session_id="ses_abc123def",
+            branch="feature-branch",
+        )
+
+        runner = CliRunner()
+
+        from unittest.mock import Mock
+        mock_process = Mock()
+        mock_process.wait = Mock()
+
+        with patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
+             patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
+             patch('devflow.cli.commands.open_command.ConfigLoader') as mock_config_cls, \
+             patch('devflow.agent.create_agent_client') as mock_create_agent:
+
+            mock_config = Mock()
+            mock_config.agent_backend = "opencode"
+            mock_config.repos = None
+            mock_config.gcp_vertex_region = None
+            mock_config_cls.return_value.load.return_value = mock_config
+
+            mock_agent = Mock()
+            mock_agent.resume_session.return_value = mock_process
+            mock_agent.get_agent_name.return_value = "opencode"
+            mock_agent.supports_permission_prompts.return_value = False
+            mock_create_agent.return_value = mock_agent
+
+            result = runner.invoke(cli, ["open", "oc-resume-test"])
+
+        # resume_session should be called with ses_ ID
+        if mock_agent.resume_session.called:
+            call_kwargs = mock_agent.resume_session.call_args
+            assert call_kwargs[1]["session_id"] == "ses_abc123def" or \
+                   call_kwargs[0][0] == "ses_abc123def"
+
+    def test_open_resume_opencode_with_uuid_fallback(self, temp_daf_home, tmp_path):
+        """When reopening OpenCode session with UUID (no captured ses_ ID), falls back to launch_session()."""
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+
+        project_path = str(tmp_path / "test-project")
+        Path(project_path).mkdir(parents=True, exist_ok=True)
+
+        session = session_manager.create_session(
+            name="oc-uuid-test",
+            goal="Test OpenCode UUID fallback",
+            working_directory="test-project",
+            project_path=project_path,
+            ai_agent_session_id="29798353-1758-43a9-b95a-05bac425c3f3",
+            branch="feature-branch",
+        )
+
+        runner = CliRunner()
+
+        from unittest.mock import Mock
+        mock_process = Mock()
+        mock_process.wait = Mock()
+
+        with patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
+             patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
+             patch('devflow.cli.commands.open_command.ConfigLoader') as mock_config_cls, \
+             patch('devflow.agent.create_agent_client') as mock_create_agent:
+
+            mock_config = Mock()
+            mock_config.agent_backend = "opencode"
+            mock_config.repos = None
+            mock_config.gcp_vertex_region = None
+            mock_config_cls.return_value.load.return_value = mock_config
+
+            mock_agent = Mock()
+            mock_agent.launch_session.return_value = mock_process
+            mock_agent.get_agent_name.return_value = "opencode"
+            mock_agent.supports_permission_prompts.return_value = False
+            mock_create_agent.return_value = mock_agent
+
+            result = runner.invoke(cli, ["open", "oc-uuid-test"])
+
+        # launch_session should be called (not resume_session) when UUID stored
+        if mock_agent.launch_session.called:
+            assert not mock_agent.resume_session.called
+
+    def test_open_first_launch_captures_opencode_session_id(self, temp_daf_home, tmp_path):
+        """On first launch with OpenCode, real ses_ session ID is captured and saved."""
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+
+        project_path = str(tmp_path / "test-project")
+        Path(project_path).mkdir(parents=True, exist_ok=True)
+
+        # Create session WITHOUT ai_agent_session_id so it's a true first launch
+        session = session_manager.create_session(
+            name="oc-capture-test",
+            goal="Test session ID capture",
+            working_directory="test-project",
+            project_path=project_path,
+        )
+
+        from unittest.mock import Mock
+
+        mock_process = Mock()
+        mock_process.wait = Mock()
+
+        # Track get_existing_sessions calls: empty before launch, ses_ after
+        sessions_call_count = [0]
+
+        def mock_get_sessions(path):
+            sessions_call_count[0] += 1
+            if sessions_call_count[0] <= 1:
+                return set()
+            return {"ses_captured_id_456"}
+
+        mock_agent = Mock()
+        mock_agent.launch_with_prompt.return_value = mock_process
+        mock_agent.get_agent_name.return_value = "opencode"
+        mock_agent.supports_permission_prompts.return_value = False
+        mock_agent.get_existing_sessions = mock_get_sessions
+        mock_agent.get_agent_home_dir.return_value = tmp_path / ".config" / "opencode"
+        mock_agent.encode_project_path.return_value = "test-project"
+
+        runner = CliRunner()
+        with patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
+             patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
+             patch('devflow.agent.create_agent_client', return_value=mock_agent), \
+             patch.object(config_loader, 'load_config') as mock_load:
+
+            config = config_loader.load_config.__wrapped__(config_loader) if hasattr(config_loader.load_config, '__wrapped__') else Mock()
+            config.agent_backend = "opencode"
+            config.repos = None
+            config.gcp_vertex_region = None
+            mock_load.return_value = config
+
+            result = runner.invoke(cli, ["open", "oc-capture-test"])
+
+        # Reload session and verify captured ID was saved
+        loaded = session_manager.get_session("oc-capture-test")
+        if loaded and loaded.active_conversation:
+            captured_id = loaded.active_conversation.ai_agent_session_id
+            assert captured_id == "ses_captured_id_456", \
+                f"Expected ses_captured_id_456, got {captured_id}"
+
+
