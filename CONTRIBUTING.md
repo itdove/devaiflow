@@ -98,10 +98,6 @@ venv\Scripts\activate     # On Windows
 ```bash
 # Install the package in editable mode with dev dependencies
 pip install -e ".[dev]"
-
-# Or install from requirements files
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
 ```
 
 ### 4. Verify Installation

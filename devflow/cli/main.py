@@ -4020,3 +4020,132 @@ def release(version: str, approve: str, from_tag: str, dry_run: bool, auto_push:
     create_release(version, from_tag, dry_run, auto_push, force, skip_pr_fetch)
 
 
+@cli.group(invoke_without_command=True)
+@click.option("--port", default=0, type=int, help="Port to bind to (0 = auto-assign)")
+@click.option("--no-open", is_flag=True, help="Don't auto-open the browser")
+@click.option("--reload", is_flag=True, help="Enable auto-reload for development")
+@click.option("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
+@click.option("-b", "--background", is_flag=True, help="Run in the background (daemonize)")
+@click.pass_context
+def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: str, background: bool) -> None:
+    """Launch the web-based dashboard in a browser.
+
+    Opens a NiceGUI-based web interface for viewing and managing
+    DevAIFlow sessions, configuration, and issue tracker data.
+
+    \b
+    Examples:
+        daf dashboard                  # Auto port, auto-open browser
+        daf dashboard --port 9090      # Specific port
+        daf dashboard --no-open        # Don't open browser
+        daf dashboard --reload         # Dev mode with auto-reload
+        daf dashboard -b               # Run in background
+        daf dashboard stop             # Stop background dashboard
+    """
+    # If a subcommand was invoked (e.g. "stop"), let Click handle it
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from devflow.web import DashboardApp
+
+    # Check if already running
+    from devflow.web.app import get_dashboard_status
+    status = get_dashboard_status()
+    if status:
+        console.print(
+            f"[yellow]Dashboard already running[/yellow] (pid={status['pid']}, port={status['port']})"
+        )
+        console.print(f"  Open: [bold]http://127.0.0.1:{status['port']}[/bold]")
+        console.print("  Stop: [bold]daf dashboard stop[/bold]")
+        return
+
+    if background:
+        import shutil
+        import subprocess
+        import time
+        import webbrowser
+        from devflow.web.app import _write_pid, _read_port, _get_state_dir
+
+        # Find the daf binary -- prefer the same one the user invoked
+        daf_bin = shutil.which("daf")
+        if daf_bin is None:
+            # Fallback to python -m entry point
+            cmd = [sys.executable, "-m", "devflow.cli.main"]
+        else:
+            cmd = [daf_bin]
+
+        # Child always runs foreground with --no-open (parent opens browser)
+        cmd += ["dashboard", "--no-open", "--port", str(port), "--host", host]
+        if reload:
+            cmd.append("--reload")
+
+        # Log file for the background process (NiceGUI needs a valid fd)
+        log_path = _get_state_dir() / "dashboard.log"
+        log_fd = log_path.open("w")
+
+        # Spawn detached child
+        if sys.platform == "win32":
+            flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log_fd,
+                stderr=log_fd,
+                creationflags=flags,
+            )
+        else:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log_fd,
+                stderr=log_fd,
+                start_new_session=True,
+            )
+
+        # NOTE: Do NOT write PID here. The child writes its own PID inside
+        # DashboardApp.run(). If the parent writes first, the child's
+        # get_dashboard_status() check sees "already running" and exits.
+
+        # Wait for the child to write the port file (up to 10 seconds)
+        discovered_port = None
+        for _ in range(40):
+            time.sleep(0.25)
+            discovered_port = _read_port()
+            if discovered_port:
+                break
+
+        if discovered_port:
+            url = f"http://{host}:{discovered_port}"
+            console.print(
+                f"[green]✓[/green] Dashboard started in background (pid={proc.pid}, port={discovered_port})"
+            )
+            console.print(f"  Open: [bold]{url}[/bold]")
+            console.print("  Stop: [bold]daf dashboard stop[/bold]")
+            # Parent opens browser (unless --no-open was passed)
+            if not no_open:
+                webbrowser.open(url)
+        else:
+            console.print(f"[green]✓[/green] Dashboard starting in background (pid={proc.pid})")
+            console.print("  Stop: [bold]daf dashboard stop[/bold]")
+        return
+
+    app = DashboardApp()
+    app.run(host=host, port=port, show=not no_open, reload=reload)
+
+
+@dashboard.command()
+def stop() -> None:
+    """Stop a running background dashboard."""
+    from devflow.web.app import stop_dashboard, get_dashboard_status
+
+    status = get_dashboard_status()
+    if status is None:
+        console.print("[yellow]No running dashboard found.[/yellow]")
+        return
+
+    console.print(f"Stopping dashboard (pid={status['pid']}, port={status['port']})...")
+    ok = stop_dashboard()
+    if ok:
+        console.print("[green]✓[/green] Dashboard stopped.")
+    else:
+        console.print("[red]✗[/red] Failed to stop dashboard.")
+
+

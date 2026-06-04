@@ -4325,6 +4325,57 @@ rm -rf $DEVAIFLOW_HOME/mocks/
 
 ## Utility Commands
 
+### daf dashboard - Web Dashboard
+
+Launch a browser-based dashboard for viewing and managing sessions, configuration, and issue tracker data.
+
+```bash
+daf dashboard [OPTIONS]
+```
+
+**Options:**
+- `--port PORT` - Port to bind to (default: 0 = auto-assign)
+- `--no-open` - Don't auto-open the browser
+- `--reload` - Enable auto-reload for development
+- `--host HOST` - Host to bind to (default: 127.0.0.1)
+- `-b`, `--background` - Run in the background (daemonize)
+
+**Subcommands:**
+- `daf dashboard stop` - Stop a running background dashboard
+
+**Examples:**
+```bash
+# Launch with auto port and browser
+daf dashboard
+
+# Use specific port
+daf dashboard --port 9090
+
+# Don't open browser automatically
+daf dashboard --no-open
+
+# Development mode with auto-reload
+daf dashboard --reload
+
+# Run in background
+daf dashboard -b
+
+# Stop background dashboard
+daf dashboard stop
+```
+
+**Pages:**
+- **Dashboard** (`/`) - Session overview with status cards, filterable table
+- **Session Detail** (`/session/{name}`) - Full metadata, conversations, notes, time tracking
+- **Config Editor** (`/config`) - All 8 configuration tabs (mirrors TUI)
+- **Issues** (`/issues`) - Sessions linked to JIRA/GitHub/GitLab tickets
+- **Time** (`/time`) - Time tracking visualization with charts
+- **Workspaces** (`/workspaces`) - Workspace management with repo discovery
+
+**Requires:** `pip install devaiflow[web]` (NiceGUI optional dependency)
+
+See [Web Dashboard Guide](../guides/web-dashboard.md) for full documentation.
+
 ### daf init --check - Check Dependencies
 
 Verify that all required and optional external tools are installed and available.
