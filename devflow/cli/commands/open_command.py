@@ -1007,6 +1007,9 @@ def open_session(
         # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
         # AI_AGENT_SESSION_ID: Generic session ID (works with any AI agent)
         env["DEVAIFLOW_IN_SESSION"] = "1"
+        env["DAF_SESSION_NAME"] = session.name
+        env["CS_SESSION_NAME"] = session.name  # backward compat
+        env["DAF_COMMAND"] = "open"
         if active_conv and active_conv.ai_agent_session_id:
             env["AI_AGENT_SESSION_ID"] = active_conv.ai_agent_session_id
 
@@ -1041,19 +1044,22 @@ def open_session(
                     for repo_name, proj_info in active_conv.projects.items()
                 }
 
-            initial_prompt = _generate_initial_prompt(
-                name=session.name,
-                goal=session.goal,
-                issue_key=session.issue_key,
-                issue_title=session.issue_metadata.get("summary") if session.issue_metadata else None,
-                session_type=session.session_type,
-                current_project=current_project,
-                other_projects=other_projects,
-                project_path=active_conv.project_path if active_conv else None,
-                workspace=workspace,
-                is_multi_project=active_conv.is_multi_project if active_conv else False,
-                project_paths=project_paths_dict,
-            )
+            if headless:
+                initial_prompt = _generate_initial_prompt(
+                    name=session.name,
+                    goal=session.goal,
+                    issue_key=session.issue_key,
+                    issue_title=session.issue_metadata.get("summary") if session.issue_metadata else None,
+                    session_type=session.session_type,
+                    current_project=current_project,
+                    other_projects=other_projects,
+                    project_path=active_conv.project_path if active_conv else None,
+                    workspace=workspace,
+                    is_multi_project=active_conv.is_multi_project if active_conv else False,
+                    project_paths=project_paths_dict,
+                )
+            else:
+                initial_prompt = ""  # Skill + env vars provide context
 
             # Get agent backend from config
             from devflow.agent import create_agent_client

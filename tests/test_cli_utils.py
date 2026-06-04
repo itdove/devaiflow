@@ -11,6 +11,7 @@ import requests
 
 from devflow.cli.utils import (
     get_active_conversation,
+    get_active_session_name,
     get_session_with_prompt,
     display_session_header,
     add_jira_comment,
@@ -1002,3 +1003,40 @@ class TestResetTerminalAfterTui:
 
         assert fake_stdout.getvalue() == ""
         mock_run.assert_not_called()
+
+
+class TestGetActiveSessionName:
+    """Test get_active_session_name env var priority (#421)."""
+
+    def test_daf_session_name_preferred(self, monkeypatch):
+        """DAF_SESSION_NAME takes priority over CS_SESSION_NAME."""
+        monkeypatch.setenv("DAF_SESSION_NAME", "daf-session")
+        monkeypatch.setenv("CS_SESSION_NAME", "cs-session")
+        monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+        with patch("devflow.cli.utils.SessionManager") as mock_sm:
+            mock_sm.return_value.get_session.return_value = Mock(name="daf-session")
+            result = get_active_session_name()
+
+        assert result == "daf-session"
+
+    def test_cs_session_name_fallback(self, monkeypatch):
+        """CS_SESSION_NAME used when DAF_SESSION_NAME not set."""
+        monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+        monkeypatch.setenv("CS_SESSION_NAME", "cs-session")
+        monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+        with patch("devflow.cli.utils.SessionManager") as mock_sm:
+            mock_sm.return_value.get_session.return_value = Mock(name="cs-session")
+            result = get_active_session_name()
+
+        assert result == "cs-session"
+
+    def test_none_when_no_env_vars(self, monkeypatch):
+        """Returns None when no session env vars set."""
+        monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+        monkeypatch.delenv("CS_SESSION_NAME", raising=False)
+        monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+        result = get_active_session_name()
+        assert result is None

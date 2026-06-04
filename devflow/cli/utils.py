@@ -787,10 +787,10 @@ def serialize_sessions(sessions: list[Session]) -> list[Dict[str, Any]]:
 
 
 def get_active_session_name() -> Optional[str]:
-    """Get the active session name from the current Claude Code session.
+    """Get the active session name from the current AI agent session.
 
-    This function first checks CS_SESSION_NAME environment variable (set by daf jira new),
-    then falls back to searching for AI_AGENT_SESSION_ID. This allows daf jira create to
+    This function first checks DAF_SESSION_NAME environment variable, then falls back
+    to CS_SESSION_NAME (backward compat), then searches for AI_AGENT_SESSION_ID. This allows daf jira create to
     detect when it's being called from a ticket_creation session.
 
     Returns:
@@ -809,8 +809,8 @@ def get_active_session_name() -> Optional[str]:
 
     logger = logging.getLogger(__name__)
 
-    # First check for CS_SESSION_NAME (more reliable, set explicitly by daf jira new)
-    cs_session_name = os.environ.get("CS_SESSION_NAME")
+    # First check for DAF_SESSION_NAME (new unified name), then CS_SESSION_NAME (backward compat)
+    cs_session_name = os.environ.get("DAF_SESSION_NAME") or os.environ.get("CS_SESSION_NAME")
     if cs_session_name:
         logger.debug(f"CS_SESSION_NAME from environment: {cs_session_name}")
 

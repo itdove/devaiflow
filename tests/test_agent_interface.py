@@ -355,6 +355,26 @@ class TestClaudeAgentHeadless:
         assert "--print" not in cmd
         assert "--dangerously-skip-permissions" not in cmd
 
+    @patch("devflow.agent.claude_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_empty_prompt_omits_prompt_arg(self, mock_popen, mock_require_tool):
+        """Test that empty prompt is NOT appended to the command (#421)."""
+        agent = ClaudeAgent()
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path="/home/user/project",
+            initial_prompt="",
+            session_id="test-uuid",
+        )
+
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]
+        assert cmd[0] == "claude"
+        assert "--session-id" in cmd
+        assert "test-uuid" in cmd
+        assert "" not in cmd[cmd.index("test-uuid") + 1:]
+
 
 class TestAgentFactory:
     """Test create_agent_client factory function."""

@@ -135,8 +135,10 @@ class OpenCodeAgent(AgentInterface):
 
         if headless:
             cmd = ["opencode", "run", initial_prompt]
-        else:
+        elif initial_prompt:
             cmd = ["opencode", "--prompt", initial_prompt]
+        else:
+            cmd = ["opencode"]
 
         if session_id and session_id.startswith("ses"):
             cmd.extend(["--session", session_id])
