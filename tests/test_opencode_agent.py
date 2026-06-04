@@ -1,6 +1,7 @@
 """Tests for OpenCode agent implementation."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
@@ -75,14 +76,19 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt_interactive_default(self, mock_popen, mock_require):
-        """Test launching OpenCode with prompt uses --prompt in TUI mode."""
+    def test_launch_with_prompt_interactive_no_prompt_flag(self, mock_popen, mock_require, tmp_path):
+        """Test interactive launch does NOT pass --prompt; uses AGENTS.md trigger (#430)."""
         agent = OpenCodeAgent()
         mock_process = Mock()
         mock_popen.return_value = mock_process
 
+        # Create a project directory with an existing AGENTS.md
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        (project_dir / "AGENTS.md").write_text("# Agent instructions\n")
+
         result = agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="Fix the login bug",
             session_id="ses_abc123",
         )
@@ -91,13 +97,17 @@ class TestOpenCodeAgentLaunch:
         call_args = mock_popen.call_args
         cmd = call_args[0][0]
         assert cmd[0] == "opencode"
-        assert "--prompt" in cmd
-        assert "Fix the login bug" in cmd
+        assert "--prompt" not in cmd
+        assert "Fix the login bug" not in cmd
         assert "--session" in cmd
         assert "ses_abc123" in cmd
         assert "run" not in cmd
-        assert call_args[1]["cwd"] == "/home/user/project"
+        assert call_args[1]["cwd"] == str(project_dir)
         assert result == mock_process
+
+        # Verify AGENTS.md was updated with trigger
+        content = (project_dir / "AGENTS.md").read_text()
+        assert agent.AGENTS_MD_TRIGGER in content
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -122,13 +132,16 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt_auto_approve(self, mock_popen, mock_require):
+    def test_launch_with_prompt_auto_approve(self, mock_popen, mock_require, tmp_path):
         """Test launching OpenCode with auto-approve adds --dangerously-skip-permissions."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
         agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="Fix bug",
             session_id="test-id",
             auto_approve=True,
@@ -137,7 +150,8 @@ class TestOpenCodeAgentLaunch:
         call_args = mock_popen.call_args
         cmd = call_args[0][0]
         assert "--dangerously-skip-permissions" in cmd
-        assert "--prompt" in cmd
+        # Interactive mode: no --prompt (#430)
+        assert "--prompt" not in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -161,13 +175,16 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt_skips_uuid_session_id(self, mock_popen, mock_require):
+    def test_launch_with_prompt_skips_uuid_session_id(self, mock_popen, mock_require, tmp_path):
         """Test that DevAIFlow UUID session IDs are NOT passed to --session."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
         agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="Fix bug",
             session_id="29798353-1758-43a9-b95a-05bac425c3f3",
         )
@@ -175,17 +192,21 @@ class TestOpenCodeAgentLaunch:
         call_args = mock_popen.call_args
         cmd = call_args[0][0]
         assert "--session" not in cmd
-        assert "--prompt" in cmd
+        # Interactive mode: no --prompt (#430)
+        assert "--prompt" not in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt_passes_ses_prefixed_session_id(self, mock_popen, mock_require):
+    def test_launch_with_prompt_passes_ses_prefixed_session_id(self, mock_popen, mock_require, tmp_path):
         """Test that OpenCode session IDs (ses-prefixed) ARE passed to --session."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
         agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="Fix bug",
             session_id="ses_real_opencode_id",
         )
@@ -194,16 +215,21 @@ class TestOpenCodeAgentLaunch:
         cmd = call_args[0][0]
         assert "--session" in cmd
         assert "ses_real_opencode_id" in cmd
+        # Interactive mode: no --prompt (#430)
+        assert "--prompt" not in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt_empty_session_id(self, mock_popen, mock_require):
+    def test_launch_with_prompt_empty_session_id(self, mock_popen, mock_require, tmp_path):
         """Test that empty session ID does not add --session flag."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
         agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="Fix bug",
             session_id="",
         )
@@ -214,13 +240,16 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_empty_prompt_no_prompt_flag(self, mock_popen, mock_require):
-        """Test interactive launch with empty prompt omits --prompt (#421)."""
+    def test_launch_with_empty_prompt_no_prompt_flag(self, mock_popen, mock_require, tmp_path):
+        """Test interactive launch with empty prompt omits --prompt (#421, #430)."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
         agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="",
             session_id="ses_abc123",
         )
@@ -232,13 +261,16 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_empty_prompt_no_session(self, mock_popen, mock_require):
+    def test_launch_with_empty_prompt_no_session(self, mock_popen, mock_require, tmp_path):
         """Test interactive launch with empty prompt and UUID session ID."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
         agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="",
             session_id="29798353-1758-43a9-b95a-05bac425c3f3",
         )
@@ -251,13 +283,16 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
-    def test_launch_with_prompt_and_model(self, mock_popen, mock_require):
+    def test_launch_with_prompt_and_model(self, mock_popen, mock_require, tmp_path):
         """Test launching OpenCode with model provider profile."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
         agent.launch_with_prompt(
-            project_path="/home/user/project",
+            project_path=str(project_dir),
             initial_prompt="Fix bug",
             session_id="test-id",
             model_provider_profile={"model_name": "anthropic/claude-sonnet"},
@@ -267,6 +302,8 @@ class TestOpenCodeAgentLaunch:
         cmd = call_args[0][0]
         assert "--model" in cmd
         assert "anthropic/claude-sonnet" in cmd
+        # Interactive mode: no --prompt (#430)
+        assert "--prompt" not in cmd
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -509,16 +546,146 @@ class TestOpenCodeAgentCaptureSession:
 class TestOpenCodeAgentPermissions:
     """Test OpenCodeAgent permission prompt support."""
 
-    def test_supports_permission_prompts_returns_false(self):
-        """OpenCode does not support permission prompts."""
+    def test_supports_permission_prompts_returns_true(self):
+        """OpenCode supports permission prompts when launched without --prompt (#430)."""
         agent = OpenCodeAgent()
-        assert agent.supports_permission_prompts() is False
+        assert agent.supports_permission_prompts() is True
 
     def test_supports_permission_prompts_is_consistent(self):
         """Multiple calls return same value."""
         agent = OpenCodeAgent()
-        assert agent.supports_permission_prompts() is False
-        assert agent.supports_permission_prompts() is False
+        assert agent.supports_permission_prompts() is True
+        assert agent.supports_permission_prompts() is True
+
+
+class TestOpenCodeAgentAgentsMdTrigger:
+    """Test AGENTS.md trigger for daf-workflow skill (#430)."""
+
+    def test_ensure_trigger_appends_to_existing_agents_md(self, tmp_path):
+        """Test trigger is appended to an existing AGENTS.md."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        agents_md = project_dir / "AGENTS.md"
+        agents_md.write_text("# Existing agent instructions\n\nSome content.\n")
+
+        result = agent.ensure_agents_md_trigger(str(project_dir))
+
+        assert result is True
+        content = agents_md.read_text()
+        assert "# Existing agent instructions" in content
+        assert "Some content." in content
+        assert agent.AGENTS_MD_TRIGGER in content
+
+    def test_ensure_trigger_creates_agents_md_if_missing(self, tmp_path):
+        """Test AGENTS.md is created with trigger when file does not exist."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        result = agent.ensure_agents_md_trigger(str(project_dir))
+
+        assert result is True
+        agents_md = project_dir / "AGENTS.md"
+        assert agents_md.exists()
+        content = agents_md.read_text()
+        assert content == f"{agent.AGENTS_MD_TRIGGER}\n"
+
+    def test_ensure_trigger_idempotent(self, tmp_path):
+        """Test calling ensure_agents_md_trigger twice does not duplicate."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        (project_dir / "AGENTS.md").write_text("# Instructions\n")
+
+        # First call adds trigger
+        assert agent.ensure_agents_md_trigger(str(project_dir)) is True
+        content_after_first = (project_dir / "AGENTS.md").read_text()
+
+        # Second call is a no-op
+        assert agent.ensure_agents_md_trigger(str(project_dir)) is False
+        content_after_second = (project_dir / "AGENTS.md").read_text()
+
+        assert content_after_first == content_after_second
+        assert content_after_second.count(agent.AGENTS_MD_TRIGGER) == 1
+
+    def test_ensure_trigger_preserves_existing_content(self, tmp_path):
+        """Test existing AGENTS.md content is preserved when trigger is added."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        original = "# My Project\n\n## Guidelines\n\n- Follow PEP 8\n- Write tests\n"
+        (project_dir / "AGENTS.md").write_text(original)
+
+        agent.ensure_agents_md_trigger(str(project_dir))
+
+        content = (project_dir / "AGENTS.md").read_text()
+        assert content.startswith(original)
+        assert agent.AGENTS_MD_TRIGGER in content
+
+    def test_ensure_trigger_already_present(self, tmp_path):
+        """Test no modification when trigger line already exists."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        existing = f"# Instructions\n\n{agent.AGENTS_MD_TRIGGER}\n"
+        (project_dir / "AGENTS.md").write_text(existing)
+
+        result = agent.ensure_agents_md_trigger(str(project_dir))
+
+        assert result is False
+        assert (project_dir / "AGENTS.md").read_text() == existing
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_interactive_updates_agents_md(self, mock_popen, mock_require, tmp_path):
+        """Test interactive launch calls ensure_agents_md_trigger (#430)."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        agent.launch_with_prompt(
+            project_path=str(project_dir),
+            initial_prompt="Work on feature",
+            session_id="test-id",
+        )
+
+        # AGENTS.md should have been created with trigger
+        agents_md = project_dir / "AGENTS.md"
+        assert agents_md.exists()
+        assert agent.AGENTS_MD_TRIGGER in agents_md.read_text()
+
+        # Command should NOT have --prompt
+        cmd = mock_popen.call_args[0][0]
+        assert "--prompt" not in cmd
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_headless_does_not_update_agents_md(self, mock_popen, mock_require, tmp_path):
+        """Test headless launch does NOT modify AGENTS.md (#430)."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        agent.launch_with_prompt(
+            project_path=str(project_dir),
+            initial_prompt="Work on feature",
+            session_id="test-id",
+            headless=True,
+        )
+
+        # AGENTS.md should NOT have been created
+        agents_md = project_dir / "AGENTS.md"
+        assert not agents_md.exists()
+
+        # Command should have prompt via 'run'
+        cmd = mock_popen.call_args[0][0]
+        assert cmd[1] == "run"
+        assert "Work on feature" in cmd
 
 
 class TestOpenCodeAgentFactory:

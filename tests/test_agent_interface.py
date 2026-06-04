@@ -1768,7 +1768,7 @@ class TestSupportsPermissionPrompts:
         agent = CrushAgent()
         assert agent.supports_permission_prompts() is True
 
-    def test_opencode_does_not_support_permissions(self):
-        """OpenCode auto-approves all tool calls — returns False."""
+    def test_opencode_supports_permissions(self):
+        """OpenCode supports permissions when launched without --prompt (#430)."""
         agent = OpenCodeAgent()
-        assert agent.supports_permission_prompts() is False
+        assert agent.supports_permission_prompts() is True
