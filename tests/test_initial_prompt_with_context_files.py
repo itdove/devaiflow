@@ -394,7 +394,7 @@ def test_generate_initial_prompt_ticket_creation_no_unit_tests_even_if_enabled(t
 
 @pytest.mark.skip(reason="DAF_AGENTS.md removed - replaced by daf-workflow skill")
 def test_generate_initial_prompt_with_github_issue(temp_daf_home):
-    """Test generating initial prompt with GitHub issue key suggests daf git view."""
+    """Test generating initial prompt with GitHub issue key suggests gh issue view."""
     from devflow.config.loader import ConfigLoader
 
     # Create default config
@@ -413,8 +413,8 @@ def test_generate_initial_prompt_with_github_issue(temp_daf_home):
     # Verify goal line includes GitHub issue
     assert "owner/repo#123: Fix timeout in subscription endpoint" in prompt
 
-    # Verify GitHub command is suggested (NOT JIRA)
-    assert "daf git view owner/repo#123 --comments" in prompt
+    # Verify GitHub CLI command is suggested (NOT JIRA)
+    assert "gh issue view 123 -R owner/repo --comments" in prompt
     assert "daf jira view" not in prompt
 
     # Verify context files are included
@@ -443,8 +443,8 @@ def test_generate_initial_prompt_with_github_hash_format(temp_daf_home):
     # Verify goal line includes GitHub issue
     assert "#456: Implement caching layer" in prompt
 
-    # Verify GitHub command is suggested (NOT JIRA)
-    assert "daf git view #456 --comments" in prompt
+    # Verify GitHub CLI command is suggested (NOT JIRA)
+    assert "gh issue view 456 --comments" in prompt
     assert "daf jira view" not in prompt
 
 
@@ -470,4 +470,4 @@ def test_generate_initial_prompt_jira_still_uses_jira_view(temp_daf_home):
 
     # Verify JIRA command is suggested (NOT GitHub)
     assert "daf jira view AAP-12345 --comments" in prompt
-    assert "daf git view" not in prompt
+    assert "gh issue view" not in prompt

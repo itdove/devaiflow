@@ -211,7 +211,7 @@ def _create_mock_git_issue(
         console_print(f"[dim]Type: {issue_type}[/dim]")
     console_print(f"[dim]Status: open[/dim]")
     console_print()
-    console_print(f"[dim]View with: daf git view {full_issue_key}[/dim]")
+    console_print(f"[dim]View with: gh issue view {full_issue_key} (or glab issue view for GitLab)[/dim]")
     console_print(f"[dim]Reopen session with: daf open {new_name}[/dim]")
     console_print()
 

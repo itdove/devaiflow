@@ -418,7 +418,7 @@ def git_create(
 
         # Show next steps
         console.print("\n[cyan]Next steps:[/cyan]")
-        console.print(f"  View: daf git view {issue_key}")
+        console.print(f"  View: gh issue view {issue_key} (or glab issue view for GitLab)")
         console.print(f"  Open session: daf git open {issue_key}")
 
     except IssueTrackerValidationError as e:

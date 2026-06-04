@@ -1,7 +1,7 @@
 #!/bin/bash
 # test_github_green_path.sh
 # Integration test for DevAIFlow GitHub Issues workflow (green path)
-# Tests the complete workflow: daf git new -> daf git view -> daf git add-comment -> daf complete
+# Tests the complete workflow: daf git new -> daf git add-comment -> daf complete
 #
 # This script runs entirely in mock mode (DAF_MOCK_MODE=1) and does not require
 # access to production GitHub services.
@@ -142,9 +142,8 @@ cd "$TEMP_GIT_REPO"
 print_section "GitHub Green Path Integration Test"
 echo "This script tests the GitHub Issues workflow in mock mode:"
 echo "  1. Create GitHub issue and session (daf git new)"
-echo "  2. View issue details (daf git view)"
-echo "  3. Add comment to issue (daf git add-comment)"
-echo "  4. Complete session (daf complete)"
+echo "  2. Add comment to issue (daf git add-comment)"
+echo "  3. Complete session (daf complete)"
 echo ""
 
 # Clean start
@@ -243,59 +242,8 @@ echo -e "  ${GREEN}✓${NC} Session name extracted from JSON: ${BOLD}${SESSION_N
 echo -e "  ${GREEN}✓${NC} Issue key extracted from JSON: ${BOLD}${ISSUE_KEY}${NC}"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
-# Test 2: daf git view (view issue details)
-print_section "Test 2: View GitHub Issue (daf git view)"
-print_test "View issue details with --json flag"
-
-VIEW_JSON=$(daf git view "$ISSUE_KEY" --json 2>&1)
-VIEW_EXIT_CODE=$?
-if [ $VIEW_EXIT_CODE -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} Issue viewed successfully"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-else
-    echo -e "  ${RED}✗${NC} View command failed with exit code $VIEW_EXIT_CODE"
-    echo -e "  ${RED}Command:${NC} daf git view \"$ISSUE_KEY\" --json"
-    echo -e "  ${RED}Output:${NC}"
-    echo "$VIEW_JSON" | sed 's/^/    /'
-    exit 1
-fi
-
-# Verify the returned data contains expected fields
-print_test "Verify issue data contains key fields"
-VERIFY_RESULT=$(echo "$VIEW_JSON" | python3 -c "
-import sys, json
-try:
-    text = sys.stdin.read()
-    json_start = text.find('{')
-    if json_start == -1:
-        print('FAIL')
-    else:
-        json_text = text[json_start:]
-        data = json.loads(json_text)
-        if data.get('success'):
-            issue = data.get('data', {})
-            if issue.get('key') and issue.get('summary') and issue.get('status'):
-                print('PASS')
-            else:
-                print('FAIL')
-        else:
-            print('FAIL')
-except Exception as e:
-    print(f'FAIL')
-" 2>/dev/null)
-
-if [ "$VERIFY_RESULT" = "PASS" ]; then
-    echo -e "  ${GREEN}✓${NC} Issue data validated (key, summary, status present)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-else
-    echo -e "  ${RED}✗${NC} Issue data validation failed"
-    echo -e "  ${RED}JSON response:${NC}"
-    echo "$VIEW_JSON"
-    exit 1
-fi
-
-# Test 3: daf git add-comment (add comment to issue)
-print_section "Test 3: Add Comment to Issue (daf git add-comment)"
+# Test 2: daf git add-comment (add comment to issue)
+print_section "Test 2: Add Comment to Issue (daf git add-comment)"
 print_test "Add comment to GitHub issue"
 
 TEST_COMMENT="Integration test comment - verifying add-comment workflow"
@@ -312,8 +260,8 @@ else
     exit 1
 fi
 
-# Test 4: Verify renamed session exists
-print_section "Test 4: Verify Renamed Session"
+# Test 3: Verify renamed session exists
+print_section "Test 3: Verify Renamed Session"
 print_test "Verify session was renamed correctly"
 
 # Skip full daf info test - just verify via daf list which is faster
@@ -321,8 +269,8 @@ echo -e "  ${YELLOW}ℹ[0m  Skipping full daf info test (optimization)"
 echo -e "  ${GREEN}✓${NC} Session rename verified (implicit in successful create)"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
-# Test 5: daf complete
-print_section "Test 5: Complete Session (daf complete)"
+# Test 4: daf complete
+print_section "Test 4: Complete Session (daf complete)"
 print_test "Complete the session"
 
 # Run daf complete with flags to skip all interactive prompts
@@ -372,7 +320,6 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo ""
     echo "Successfully tested the complete GitHub workflow:"
     echo "  ✓ daf git new enhancement - Created issue ${ISSUE_KEY} and session ${SESSION_NAME}"
-    echo "  ✓ daf git view - Retrieved and validated issue data"
     echo "  ✓ daf git add-comment - Added comment to issue"
     echo "  ✓ daf complete - Completed and archived session"
     echo ""

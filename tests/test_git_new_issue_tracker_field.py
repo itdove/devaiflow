@@ -13,7 +13,7 @@ def test_git_new_sets_issue_tracker_field_before_issue_created(temp_daf_home, mo
 
     This is the fix for issue #72. Previously, sessions created by 'daf git new'
     would not have issue_tracker field set, causing the initial prompt to default
-    to 'daf jira view' instead of 'daf git view'.
+    to 'daf jira view' instead of 'gh issue view'.
 
     The fix ensures that session.issue_tracker is set to 'github' or 'gitlab' based
     on repository detection, even when issue_key is not yet set.
@@ -64,10 +64,10 @@ def test_git_new_sets_issue_tracker_field_before_issue_created(temp_daf_home, mo
     backend = get_issue_tracker_backend(session, config)
     assert backend == "github"
 
-    # Verify the initial prompt would use 'daf git view' (not 'daf jira view')
+    # Verify the initial prompt would use 'gh issue view' (not 'daf jira view')
     # Note: We can't test this directly without issue_key, but we can verify
     # that when backend detection is called with the session, it returns 'github'
-    # which would cause the prompt to use 'daf git view'
+    # which would cause the prompt to use 'gh issue view'
 
 
 def test_backend_detection_uses_session_issue_tracker_field():
@@ -118,12 +118,12 @@ def test_backend_detection_falls_back_to_issue_key_pattern():
     assert backend == "jira"
 
 
-def test_initial_prompt_uses_git_view_when_session_has_github_backend(temp_daf_home):
-    """Test that initial prompt uses 'daf git view' when session has issue_tracker='github'.
+def test_initial_prompt_uses_gh_issue_view_when_session_has_github_backend(temp_daf_home):
+    """Test that initial prompt uses 'gh issue view' when session has issue_tracker='github'.
 
     This verifies the fix for issue #72 - even without an issue_key set,
     if the session has issue_tracker='github', the prompt should suggest
-    'daf git view' instead of 'daf jira view'.
+    'gh issue view' instead of 'daf jira view'.
 
     However, the current implementation of _generate_initial_prompt requires
     issue_key to be set to include the view command. So this test documents
@@ -144,8 +144,8 @@ def test_initial_prompt_uses_git_view_when_session_has_github_backend(temp_daf_h
         issue_title="Fix timeout in API",
     )
 
-    # Verify GitHub command is suggested
-    assert "daf git view owner/repo#123 --comments" in prompt
+    # Verify GitHub CLI command is suggested
+    assert "gh issue view 123 -R owner/repo --comments" in prompt
     assert "daf jira view" not in prompt
 
 

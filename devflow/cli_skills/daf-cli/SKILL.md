@@ -20,7 +20,7 @@ user-invocable: false
 
 ### GitHub/GitLab Operations
 **See `daf-git` skill** for complete GitHub/GitLab documentation:
-- View issues: `daf git view`
+- View issues: `gh issue view` (GitHub) / `glab issue view` (GitLab)
 - Create issues: `daf git create`
 - Update issues: `daf git update`
 - Add comments: `daf git add-comment`

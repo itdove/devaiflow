@@ -1019,7 +1019,7 @@ Note: Running in non-interactive mode (CI/automation detected)
 3. **Disable interactive prompts explicitly:**
    ```bash
    export DAF_NO_PROMPT=1
-   daf git view owner/repo#123
+    gh issue view 123 -R owner/repo
    ```
 
 ## Conversation Issues

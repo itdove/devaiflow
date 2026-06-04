@@ -114,7 +114,7 @@ DevAIFlow automatically checks GitHub authentication **before** making API calls
 3. Is fine-grained token required?
 
 **When checks run:**
-- Before viewing GitHub issues (`daf git view`)
+- Before viewing GitHub issues (`gh issue view`)
 - Before creating GitHub issues (`daf git create`)
 - Before updating GitHub issues (`daf git update`)
 - Before any GitHub API operation

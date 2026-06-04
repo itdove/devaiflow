@@ -1,6 +1,6 @@
 ---
 name: daf-git
-description: GitHub/GitLab issue operations (view, create, update, comment) with Markdown syntax reference
+description: GitHub/GitLab issue operations (create, update, comment) with Markdown syntax reference
 user-invocable: true
 argument-hint: "[ISSUE-NUMBER|owner/repo#number]"
 ---
@@ -10,13 +10,16 @@ Automatically detects the platform from your git repository.
 
 ## Quick Start
 
-**View issue details:**
+**View issue details (use gh/glab CLI directly):**
 ```bash
-daf git view
-daf git view 123
-daf git view owner/repo#123 --comments
+# GitHub
+gh issue view 123
+gh issue view 123 --comments
+
+# GitLab
+glab issue view 123
+glab issue view 123 --comments
 ```
-Auto-detects current session or accepts explicit issue key.
 
 ## All Commands
 
@@ -53,30 +56,23 @@ daf git create task --summary "Implement auth" --parent "#123"
 daf git create enhancement --summary "Add caching" --parent "owner/repo#456"
 ```
 
-### daf git view
-View issue details in Claude-friendly format.
+### Viewing Issues
+
+Use the `gh` or `glab` CLI directly to view issues:
 
 ```bash
-# View current session's issue
-daf git view
+# GitHub
+gh issue view 123                          # View issue
+gh issue view 123 --comments              # Include comments
+gh issue view 123 -R owner/repo           # Cross-repo
 
-# View specific issue
-daf git view 123
-daf git view owner/repo#123
-
-# Include comments
-daf git view 123 --comments
+# GitLab
+glab issue view 123                        # View issue
+glab issue view 123 --comments            # Include comments
+glab issue view 123 -R owner/repo         # Cross-repo
 ```
 
-**Output shows:**
-- Issue number and title
-- State (open/closed)
-- Type, priority, points (from labels)
-- Assignees and milestone
-- Description
-- Acceptance criteria
-- Labels
-- Comments (with --comments flag)
+**Tip:** The issue key is available from `daf info` or `daf status`.
 
 ### daf git add-comment
 Add a comment to a GitHub/GitLab issue.
@@ -246,7 +242,7 @@ daf git new task --goal "Refactor auth module" --parent "#123"
 **Workflow: Working on existing issue**
 ```bash
 # 1. View issue details
-daf git view
+gh issue view 456 --comments    # or: glab issue view 456 --comments
 
 # 2. Add status comment
 daf git add-comment 456 "Started implementation"
@@ -297,9 +293,7 @@ Both platforms use `#` format for issues:
 
 ## Why Use This
 
-- ✅ Automatic authentication via CLI tools
-- ✅ Claude-friendly formatted output
-- ✅ Integrated with daf session workflow
+- ✅ Integrated with daf session workflow (create, update, comment)
 - ✅ Mock mode for testing
 - ✅ Consistent API across GitHub and GitLab
-- ✅ Better than raw `gh` or `glab` commands for AI workflows
+- ✅ View issues with `gh`/`glab` CLI directly (already installed)
