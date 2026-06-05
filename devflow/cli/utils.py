@@ -40,19 +40,13 @@ def reset_terminal_after_tui() -> None:
             return
         sys.stdout.write("\033[?1049l")  # exit alternate screen buffer
         sys.stdout.write("\033[0m")  # reset text attributes
+        sys.stdout.write("\033[?25h")  # ensure cursor is visible
         sys.stdout.flush()
     except (OSError, ValueError):
         pass
     try:
         subprocess.run(
             ["stty", "sane"],
-            stderr=subprocess.DEVNULL,
-        )
-    except (OSError, FileNotFoundError):
-        pass
-    try:
-        subprocess.run(
-            ["tput", "reset"],
             stderr=subprocess.DEVNULL,
         )
     except (OSError, FileNotFoundError):
