@@ -333,8 +333,9 @@ def cli(ctx: click.Context, non_interactive: bool, experimental: bool) -> None:
 @click.option("--session-index", type=int, help="Select existing session by index (for multi-session selection)")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+@click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, session_index: int, headless: bool, auto_approve: bool) -> None:
+def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, session_index: int, headless: bool, auto_approve: bool, agent: str) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -406,6 +407,11 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
     # Get output_json flag from context
     output_json = ctx.obj.get('output_json', False) if ctx.obj else False
 
+    # Validate --agent if provided
+    if agent:
+        from devflow.agent.factory import validate_agent_backend
+        agent = validate_agent_backend(agent)
+
     create_new_session(
         name,
         goal,
@@ -428,6 +434,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
         session_index=session_index,
         headless=headless,
         auto_approve=auto_approve,
+        agent=agent,
     )
 
 
@@ -450,8 +457,9 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--sync-strategy", type=click.Choice(['merge', 'rebase', 'skip'], case_sensitive=False), help="Strategy for syncing with upstream (merge/rebase/skip)")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+@click.option("--agent", default=None, help="AI agent backend to use (overrides session stored agent)")
 @json_option
-def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str, headless: bool, auto_approve: bool) -> None:
+def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str, headless: bool, auto_approve: bool, agent: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -529,6 +537,11 @@ def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str
         console.print("[dim]Example: daf open PROJ-123 -w primary --projects backend,frontend[/dim]")
         sys.exit(1)
 
+    # Validate --agent if provided
+    if agent:
+        from devflow.agent.factory import validate_agent_backend
+        agent = validate_agent_backend(agent)
+
     open_session(
         identifier,
         output_json=ctx.obj.get('output_json', False),
@@ -547,6 +560,7 @@ def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str
         sync_strategy=sync_strategy,
         headless=headless,
         auto_approve=auto_approve,
+        agent=agent,
     )
 
 
@@ -1636,7 +1650,8 @@ jira.add_command(create_jira_update_command())
 @click.option("--affects-versions", help="Affected version for bugs (required for bug type)")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str], headless: bool, auto_approve: bool) -> None:
+@click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str], headless: bool, auto_approve: bool, agent: str) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1704,7 +1719,12 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
                 affects_versions = prompt_for_affected_version(field_mapper)
         # else: affects_versions stays None (field is optional for this issue type)
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve)
+    # Validate --agent if provided
+    if agent:
+        from devflow.agent.factory import validate_agent_backend
+        agent = validate_agent_backend(agent)
+
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent)
 
 
 @jira.command(name="open")
@@ -1869,7 +1889,8 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str], head
 @click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
-def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, projects: str, temp_clone: bool, repository: Optional[str], headless: bool, auto_approve: bool) -> None:
+@click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
+def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, projects: str, temp_clone: bool, repository: Optional[str], headless: bool, auto_approve: bool, agent: str) -> None:
     """Create GitHub/GitLab issue with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1898,7 +1919,12 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve)
+    # Validate --agent if provided
+    if agent:
+        from devflow.agent.factory import validate_agent_backend
+        agent = validate_agent_backend(agent)
+
+    create_git_issue_session(goal, issue_type, name, path, branch, parent, workspace, repository, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent)
 
 
 @git.command(name="check-auth")
@@ -1932,7 +1958,8 @@ def git_check_auth(ctx: click.Context, repository: Optional[str]) -> None:
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
-def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str, headless: bool, auto_approve: bool) -> None:
+@click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
+def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str, headless: bool, auto_approve: bool, agent: str) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1961,10 +1988,15 @@ def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_fi
     from devflow.cli.commands.investigate_command import create_investigation_session
     from devflow.cli.utils import process_goal_options
 
+    # Validate --agent if provided
+    if agent:
+        from devflow.agent.factory import validate_agent_backend
+        agent = validate_agent_backend(agent)
+
     # If issue_key provided, fetch issue details and delegate to command
     if issue_key:
         from devflow.cli.commands.investigate_command import create_investigation_from_issue
-        create_investigation_from_issue(issue_key, goal, parent, name, path, workspace, model_profile, projects, temp_clone)
+        create_investigation_from_issue(issue_key, goal, parent, name, path, workspace, model_profile, projects, temp_clone, agent=agent)
         return
 
     # Prompt for goal if not provided
@@ -1974,7 +2006,7 @@ def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_fi
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    create_investigation_session(goal, parent, name, path, workspace, model_profile, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve)
+    create_investigation_session(goal, parent, name, path, workspace, model_profile, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent)
 
 
 @cli.group()

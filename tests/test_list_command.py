@@ -12,7 +12,7 @@ from devflow.session.manager import SessionManager
 
 def test_list_empty(temp_daf_home):
     """Test listing sessions when none exist."""
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -34,7 +34,7 @@ def test_list_single_session(temp_daf_home):
         issue_key="PROJ-12345",
     )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -69,7 +69,7 @@ def test_list_multiple_sessions(temp_daf_home):
         issue_key="PROJ-222",
     )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -105,7 +105,7 @@ def test_list_filter_by_status(temp_daf_home):
     session2.status = "complete"
     session_manager.update_session(session2)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--status", "complete"])
 
     assert result.exit_code == 0
@@ -136,7 +136,7 @@ def test_list_filter_by_working_directory(temp_daf_home):
         ai_agent_session_id="uuid-2",
     )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--working-directory", "backend-service"])
 
     assert result.exit_code == 0
@@ -166,7 +166,7 @@ def test_list_with_work_sessions(temp_daf_home):
     session.work_sessions = [WorkSession(start=start_time, end=end_time)]
     session_manager.update_session(session)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -187,7 +187,7 @@ def test_list_no_sessions_with_filters(temp_daf_home):
         ai_agent_session_id="uuid-1",
     )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--status", "complete"])
 
     assert result.exit_code == 0
@@ -211,7 +211,7 @@ def test_list_displays_status_colors(temp_daf_home):
     session.status = "in_progress"
     session_manager.update_session(session)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -234,7 +234,7 @@ def test_list_shows_session_summary(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -262,7 +262,7 @@ def test_list_with_jira_summary(temp_daf_home):
     session.issue_metadata["summary"] = "Implement backup feature"
     session_manager.update_session(session)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -289,7 +289,7 @@ def test_list_pagination_default_limit(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # In interactive mode, EOF will stop pagination after first page
     result = runner.invoke(cli, ["list"], input="")
 
@@ -316,7 +316,7 @@ def test_list_pagination_custom_limit(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # In interactive mode, EOF will stop pagination after first page
     result = runner.invoke(cli, ["list", "--limit", "5"], input="")
 
@@ -343,7 +343,7 @@ def test_list_pagination_specific_page(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--limit", "5", "--page", "2"])
 
     assert result.exit_code == 0
@@ -367,7 +367,7 @@ def test_list_pagination_last_page_partial(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--limit", "5", "--page", "3"])
 
     assert result.exit_code == 0
@@ -391,7 +391,7 @@ def test_list_pagination_page_out_of_range(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--limit", "5", "--page", "10"])
 
     assert result.exit_code == 0
@@ -415,7 +415,7 @@ def test_list_pagination_show_all_flag(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--all"])
 
     assert result.exit_code == 0
@@ -444,7 +444,7 @@ def test_list_pagination_with_filters(temp_daf_home):
             session.status = "complete"
             session_manager.update_session(session)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # In interactive mode, EOF will stop pagination after first page
     result = runner.invoke(cli, ["list", "--status", "complete", "--limit", "3"], input="")
 
@@ -471,7 +471,7 @@ def test_list_pagination_few_sessions_no_pagination_info(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -495,7 +495,7 @@ def test_list_pagination_invalid_page_number(temp_daf_home):
         ai_agent_session_id="uuid-1",
     )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--page", "0"])
 
     assert result.exit_code == 0
@@ -516,7 +516,7 @@ def test_list_pagination_invalid_limit(temp_daf_home):
         ai_agent_session_id="uuid-1",
     )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--limit", "0"])
 
     assert result.exit_code == 0
@@ -539,7 +539,7 @@ def test_list_pagination_navigation_hints(temp_daf_home):
         )
 
     # Test page 1 - should show "next page" hint
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--limit", "5", "--page", "1"])
     assert result.exit_code == 0
     assert "--page 2" in result.output  # Next page hint
@@ -574,7 +574,7 @@ def test_list_interactive_mode_first_page_quit(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # Simulate user pressing 'q' at the first prompt
     result = runner.invoke(cli, ["list"], input="q\n")
 
@@ -601,7 +601,7 @@ def test_list_interactive_mode_continue_to_next_page(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # Simulate user pressing Enter at the first prompt (continue to page 2)
     result = runner.invoke(cli, ["list"], input="\n")
 
@@ -628,7 +628,7 @@ def test_list_interactive_mode_multiple_pages(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # Simulate user pressing Enter twice to view all pages
     result = runner.invoke(cli, ["list", "--limit", "5"], input="\n\n")
 
@@ -657,7 +657,7 @@ def test_list_interactive_mode_quit_on_second_page(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # Simulate user pressing Enter once, then 'q'
     result = runner.invoke(cli, ["list", "--limit", "5"], input="\nq\n")
 
@@ -687,7 +687,7 @@ def test_list_interactive_mode_single_page_no_prompt(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list"])
 
     assert result.exit_code == 0
@@ -712,7 +712,7 @@ def test_list_non_interactive_mode_with_page_flag(temp_daf_home):
             ai_agent_session_id=f"uuid-{i}",
         )
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--page", "1"])
 
     assert result.exit_code == 0
@@ -744,7 +744,7 @@ def test_list_interactive_mode_with_filters(temp_daf_home):
             session.status = "complete"
             session_manager.update_session(session)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     # Filter by complete status, should get 5 sessions (2 pages with limit 3)
     result = runner.invoke(cli, ["list", "--status", "complete", "--limit", "3"], input="\n")
 
@@ -788,7 +788,7 @@ def test_list_last_activity_column(temp_daf_home):
         old_session.active_conversation.last_active = now - timedelta(days=3)
         session_manager.update_session(old_session)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--all"])
 
     assert result.exit_code == 0
@@ -838,7 +838,7 @@ def test_list_last_activity_multi_conversation(temp_daf_home):
 
     session_manager.update_session(session)
 
-    runner = CliRunner()
+    runner = CliRunner(env={"COLUMNS": "200"})
     result = runner.invoke(cli, ["list", "--all"])
 
     assert result.exit_code == 0

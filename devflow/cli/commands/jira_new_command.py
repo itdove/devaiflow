@@ -232,6 +232,7 @@ def create_jira_ticket_session(
     temp_clone: Optional[bool] = None,
     headless: bool = False,
     auto_approve: bool = False,
+    agent: Optional[str] = None,
 ) -> None:
     """Create a new session for issue tracker ticket creation.
 
@@ -480,7 +481,7 @@ def create_jira_ticket_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=branch,  # Use provided branch or None for no branch
-        agent_backend=config.agent_backend if config else "claude",
+        agent_backend=agent or (config.agent_backend if config else "claude"),
     )
 
     # Set session_type to "ticket_creation"
@@ -603,8 +604,8 @@ def create_jira_ticket_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = config.agent_backend if config else "claude"
-        agent = create_agent_client(agent_backend)
+        agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
         from devflow.utils.model_provider import get_active_profile as get_model_profile
@@ -621,10 +622,10 @@ def create_jira_ticket_session(
             workspace_path_for_skills = config.repos.get_default_workspace_path()
 
         # Warn if agent does not support permission prompts
-        if not agent.supports_permission_prompts():
+        if not agent_client.supports_permission_prompts():
             console_print(
                 "\n[bold yellow]⚠  Warning:[/bold yellow] [yellow]"
-                f"{agent.get_agent_name()} does not support permission prompts. "
+                f"{agent_client.get_agent_name()} does not support permission prompts. "
                 "This is a ticket-creation (analysis-only) session, but the agent "
                 "may still modify files without confirmation.[/yellow]"
             )
@@ -647,7 +648,7 @@ def create_jira_ticket_session(
         console_print()
 
         # Launch agent with initial prompt
-        process = agent.launch_with_prompt(
+        process = agent_client.launch_with_prompt(
             project_path=project_path,
             initial_prompt=initial_prompt,
             session_id=ai_agent_session_id,

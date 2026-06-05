@@ -19,6 +19,45 @@ from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
 
+# Canonical list of supported agent backend names (used for CLI validation)
+SUPPORTED_BACKENDS = [
+    "claude",
+    "ollama",
+    "ollama-claude",
+    "github-copilot",
+    "copilot",
+    "cursor",
+    "windsurf",
+    "aider",
+    "continue",
+    "crush",
+    "opencode",
+    "opencode-ai",
+]
+
+
+def validate_agent_backend(backend: str) -> str:
+    """Validate and normalize an agent backend name.
+
+    Args:
+        backend: Agent backend name to validate
+
+    Returns:
+        Lowercased backend name
+
+    Raises:
+        click.BadParameter: If backend is not supported
+    """
+    import click
+
+    normalized = backend.lower()
+    if normalized not in SUPPORTED_BACKENDS:
+        raise click.BadParameter(
+            f"Unsupported agent backend: '{backend}'. "
+            f"Supported: {', '.join(sorted(set(SUPPORTED_BACKENDS) - {'ollama-claude', 'copilot', 'opencode-ai'}))}"
+        )
+    return normalized
+
 
 def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = None) -> AgentInterface:
     """Create an agent client for the specified backend.

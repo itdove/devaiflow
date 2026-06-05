@@ -305,6 +305,7 @@ def create_new_session(
     session_index: Optional[int] = None,
     headless: bool = False,
     auto_approve: bool = False,
+    agent: Optional[str] = None,
 ) -> None:
     """Create a new session or add conversation to existing session.
 
@@ -775,7 +776,7 @@ def create_new_session(
             branch=branch,
             ai_agent_session_id=session_id,
             model_profile=model_profile,
-            agent_backend=config.agent_backend if config else "claude",
+            agent_backend=agent or (config.agent_backend if config else "claude"),
         )
 
         # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
@@ -824,7 +825,7 @@ def create_new_session(
 
     # Change to project directory and launch AI agent
     try:
-        _agent_backend = config.agent_backend if config else "claude"
+        _agent_backend = agent or (config.agent_backend if config else "claude")
         from devflow.agent import create_agent_client as _cac
         _agent_display_name = _cac(_agent_backend).get_agent_name().title()
         console.print(f"\n[cyan]Launching {_agent_display_name} in {project_path}...[/cyan]")
@@ -854,8 +855,8 @@ def create_new_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = config.agent_backend if config else "claude"
-        agent = create_agent_client(agent_backend)
+        agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
         from devflow.utils.model_provider import get_active_profile as get_model_profile
@@ -891,7 +892,7 @@ def create_new_session(
 
         # Launch agent with initial prompt
         try:
-            process = agent.launch_with_prompt(
+            process = agent_client.launch_with_prompt(
                 project_path=project_path,
                 initial_prompt=initial_prompt,
                 session_id=session_id,
