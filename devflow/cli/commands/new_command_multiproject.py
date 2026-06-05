@@ -374,6 +374,11 @@ def create_multi_project_session(
                 auto_approve=auto_approve,
             )
             process.wait()
+            if not headless:
+                from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
+                reset_terminal_after_tui()
+                if agent.uses_tui():
+                    clear_screen_after_tui()
         finally:
             if not is_cleanup_done():
                 console.print(f"\n[green]✓[/green] {agent_name} session completed")

@@ -55,6 +55,31 @@ def reset_terminal_after_tui() -> None:
         pass
 
 
+def clear_screen_after_tui() -> None:
+    """Scroll past TUI splash art so daf output prints on clean lines.
+
+    TUI agents (e.g. OpenCode, Crush) may leave exit splash art on the
+    screen that garbles subsequent CLI output. Instead of clearing the
+    screen (which destroys useful context), this scrolls the terminal
+    down by one screenful so the splash art moves into scrollback and
+    daf's post-session messages appear on clean lines.
+
+    Only call this for agents where ``agent.uses_tui()`` returns True.
+    Non-TUI agents (Claude Code, Aider) do not leave splash art.
+
+    Silently skipped in non-TTY environments (CI, tests, pipes).
+    """
+    try:
+        if not sys.stdout.isatty():
+            return
+        import shutil
+        rows = shutil.get_terminal_size().lines
+        sys.stdout.write("\n" * rows)
+        sys.stdout.flush()
+    except (OSError, ValueError):
+        pass
+
+
 def check_outside_ai_session() -> None:
     """Check if running inside an AI agent session and exit with error if so.
 

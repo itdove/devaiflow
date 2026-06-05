@@ -534,6 +534,10 @@ class FeatureManager:
             # Wait for agent to complete
             # Note: This blocks until user exits the agent
             process.wait()
+            from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
+            reset_terminal_after_tui()
+            if agent.uses_tui():
+                clear_screen_after_tui()
 
             # Parse agent's session to check verification results
             # Look for checked boxes [x] in the conversation

@@ -358,6 +358,18 @@ class CrushAgent(AgentInterface):
         """
         return self.crush_dir
 
+    def uses_tui(self) -> bool:
+        """Crush uses a full-screen TUI (Bubble Tea).
+
+        Crush renders a full-screen terminal interface using the alternate
+        screen buffer. On exit it may leave splash art that garbles subsequent
+        CLI output unless the screen is explicitly cleared.
+
+        Returns:
+            True
+        """
+        return True
+
     def get_agent_name(self) -> str:
         """Get the name of the agent backend.
 

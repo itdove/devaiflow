@@ -1776,6 +1776,55 @@ class TestSupportsPermissionPrompts:
         assert agent.supports_permission_prompts() is True
 
 
+class TestUsesTui:
+    """Test uses_tui() across all agent implementations (#461)."""
+
+    def test_opencode_uses_tui(self):
+        """OpenCode uses a full-screen TUI (Bubble Tea)."""
+        agent = OpenCodeAgent()
+        assert agent.uses_tui() is True
+
+    def test_crush_uses_tui(self):
+        """Crush uses a full-screen TUI (Bubble Tea)."""
+        agent = CrushAgent()
+        assert agent.uses_tui() is True
+
+    def test_claude_does_not_use_tui(self):
+        """Claude Code uses a standard terminal REPL, not a TUI."""
+        agent = ClaudeAgent()
+        assert agent.uses_tui() is False
+
+    def test_ollama_does_not_use_tui(self):
+        """OllamaClaude uses a standard terminal REPL."""
+        agent = OllamaClaudeAgent()
+        assert agent.uses_tui() is False
+
+    def test_aider_does_not_use_tui(self):
+        """Aider uses a standard terminal REPL."""
+        agent = AiderAgent()
+        assert agent.uses_tui() is False
+
+    def test_copilot_does_not_use_tui(self):
+        """GitHub Copilot is a GUI/IDE, not a TUI."""
+        agent = GitHubCopilotAgent()
+        assert agent.uses_tui() is False
+
+    def test_cursor_does_not_use_tui(self):
+        """Cursor is a GUI/IDE, not a TUI."""
+        agent = CursorAgent()
+        assert agent.uses_tui() is False
+
+    def test_windsurf_does_not_use_tui(self):
+        """Windsurf is a GUI/IDE, not a TUI."""
+        agent = WindsurfAgent()
+        assert agent.uses_tui() is False
+
+    def test_continue_does_not_use_tui(self):
+        """Continue is a GUI/IDE extension, not a TUI."""
+        agent = ContinueAgent()
+        assert agent.uses_tui() is False
+
+
 class TestGetAgentDisplayName:
     """Tests for get_agent_display_name helper function (#448)."""
 

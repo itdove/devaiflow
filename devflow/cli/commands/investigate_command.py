@@ -743,6 +743,11 @@ def create_investigation_session(
         )
         # Wait for the agent process to complete
         process.wait()
+        if not headless:
+            from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
+            reset_terminal_after_tui()
+            if agent_client.uses_tui():
+                clear_screen_after_tui()
 
         # Keep env reference for finally block
         _ = env
@@ -1192,6 +1197,11 @@ def _create_multi_project_investigation_session(
         )
         # Wait for the agent process to complete
         process.wait()
+        if not headless:
+            from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
+            reset_terminal_after_tui()
+            if agent_client.uses_tui():
+                clear_screen_after_tui()
 
         # Keep env reference for finally block
         _ = env
