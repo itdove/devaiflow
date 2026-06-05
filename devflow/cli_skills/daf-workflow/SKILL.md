@@ -55,7 +55,25 @@ Check for additional skills loaded in this session:
 
 Read any that are relevant to the session.
 
-### 5. Follow Command-Specific Workflow
+### 5. Sync Temp Directory (if applicable)
+
+If the session uses a temporary directory clone (`ticket_creation`, `investigation`, or issue creation sessions like `daf git new` / `daf jira new`), the cloned repo may be stale — it was cloned at session creation time and may not have the latest changes from the remote.
+
+**How to detect:** Check `daf info` output for:
+- Session type: `ticket_creation` or `investigation`
+- Project path containing `/tmp/` or `/var/folders/`
+- `DAF_COMMAND` is `git-new`, `jira-new`, or `investigate`
+
+**Before starting analysis**, pull the latest changes:
+```bash
+git fetch origin && git rebase origin/main
+```
+
+- If rebase succeeds, proceed with analysis on the latest code
+- If rebase has conflicts, inform the user — the temp directory can be safely deleted and re-cloned by reopening the session
+- This does NOT apply to development sessions (`daf new`, `daf open`) which use the real workspace and handle branch sync during `daf open`
+
+### 6. Follow Command-Specific Workflow
 
 Check `DAF_COMMAND` environment variable and follow the matching section below.
 
@@ -103,22 +121,25 @@ Standard development session. Resume or start work on a task.
 
 Analysis-only session for creating a GitHub/GitLab issue.
 
+**Temp directory session** — run `git fetch origin && git rebase origin/main` before analysis (see Step 5).
+
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
 - DO NOT make any file changes — only READ and ANALYZE
 - Focus on understanding the codebase to write a good issue
 
 **Workflow:**
-1. Analyze the codebase to understand the goal from `daf info`
-2. Read relevant files, search for patterns, understand architecture
-3. Create the issue using `daf git create`:
+1. Sync temp directory: `git fetch origin && git rebase origin/main`
+2. Analyze the codebase to understand the goal from `daf info`
+3. Read relevant files, search for patterns, understand architecture
+4. Create the issue using `daf git create`:
    ```bash
    daf git create {bug|story|task} \
      --summary "..." \
      --description "<your analysis>" \
      --acceptance-criteria "..."
    ```
-4. Include detailed description and acceptance criteria based on analysis
+5. Include detailed description and acceptance criteria based on analysis
 
 Read the **daf-git skill** for correct command syntax.
 
@@ -130,24 +151,27 @@ After creating the issue, the session is automatically renamed to `creation-<iss
 
 Analysis-only session for creating a JIRA ticket.
 
+**Temp directory session** — run `git fetch origin && git rebase origin/main` before analysis (see Step 5).
+
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
 - DO NOT make any file changes — only READ and ANALYZE
 - Focus on understanding the codebase to write a good JIRA ticket
 
 **Workflow:**
-1. Analyze the codebase to understand the goal from `daf info`
-2. Read relevant files, search for patterns, understand architecture
-3. Check field defaults: `daf config show`
-4. Create the ticket using `daf jira create`:
+1. Sync temp directory: `git fetch origin && git rebase origin/main`
+2. Analyze the codebase to understand the goal from `daf info`
+3. Read relevant files, search for patterns, understand architecture
+4. Check field defaults: `daf config show`
+5. Create the ticket using `daf jira create`:
    ```bash
    daf jira create {story|bug|task|epic|spike} \
      --summary "..." \
      --description "<your analysis in JIRA Wiki markup>" \
-     --field acceptance_criteria="- [] criterion 1\n- [] criterion 2"
+      --field acceptance_criteria="- [] criterion 1\n- [] criterion 2"
    ```
-5. Use JIRA Wiki markup (NOT Markdown) for description field
-6. Include acceptance criteria in checkbox format
+6. Use JIRA Wiki markup (NOT Markdown) for description field
+7. Include acceptance criteria in checkbox format
 
 Read the **daf-jira skill** and **daf-jira-fields skill** for field rules and syntax.
 
@@ -159,17 +183,20 @@ After creating the ticket, the session is automatically renamed to `creation-<ti
 
 Read-only investigation and analysis session.
 
+**Temp directory session** — run `git fetch origin && git rebase origin/main` before analysis (see Step 5).
+
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
 - DO NOT make any file changes — only READ and ANALYZE
 - Focus on understanding the codebase and documenting findings
 
 **Workflow:**
-1. Read the session goal from `daf info`
-2. Investigate the codebase: read files, search patterns, analyze architecture
-3. Analyze feasibility and identify implementation approaches
-4. Document findings and recommendations
-5. If you discover bugs or improvements, you MAY create tickets:
+1. Sync temp directory: `git fetch origin && git rebase origin/main`
+2. Read the session goal from `daf info`
+3. Investigate the codebase: read files, search patterns, analyze architecture
+4. Analyze feasibility and identify implementation approaches
+5. Document findings and recommendations
+6. If you discover bugs or improvements, you MAY create tickets:
    - JIRA: `daf jira create`
    - GitHub/GitLab: `daf git create`
 
