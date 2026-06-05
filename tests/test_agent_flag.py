@@ -10,6 +10,7 @@ Tests cover:
 - List command shows agent column
 """
 
+import os
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 
@@ -354,8 +355,10 @@ class TestInvalidAgentRejected:
 class TestListShowsAgent:
     """Tests that daf list shows agent_backend column."""
 
-    def test_list_shows_agent_column_header(self, temp_daf_home):
-        """daf list table includes Agent column header."""
+    def test_list_json_shows_agent_backend(self, temp_daf_home):
+        """daf list --json includes agent_backend in session data."""
+        import json
+
         config_loader = ConfigLoader()
         session_manager = SessionManager(config_loader)
         session_manager.create_session(
@@ -366,30 +369,19 @@ class TestListShowsAgent:
             agent_backend="opencode",
         )
 
-        runner = CliRunner(env={"COLUMNS": "200"})
-        result = runner.invoke(cli, ["list"])
+        runner = CliRunner()
+        result = runner.invoke(cli, ["list", "--json"])
         assert result.exit_code == 0
-        assert "Agent" in result.output
+        data = json.loads(result.output)
+        assert data["success"] is True
+        sessions = data["data"]["sessions"]
+        assert len(sessions) == 1
+        assert sessions[0]["agent_backend"] == "opencode"
 
-    def test_list_shows_agent_value(self, temp_daf_home):
-        """daf list shows the stored agent_backend value."""
-        config_loader = ConfigLoader()
-        session_manager = SessionManager(config_loader)
-        session_manager.create_session(
-            name="test-list-value",
-            goal="Test",
-            working_directory="test-dir",
-            project_path="/tmp/test",
-            agent_backend="opencode",
-        )
+    def test_list_json_agent_backend_none(self, temp_daf_home):
+        """daf list --json shows null agent_backend when not set."""
+        import json
 
-        runner = CliRunner(env={"COLUMNS": "200"})
-        result = runner.invoke(cli, ["list"])
-        assert result.exit_code == 0
-        assert "opencode" in result.output
-
-    def test_list_shows_dash_when_no_agent(self, temp_daf_home):
-        """daf list shows '-' when agent_backend is not set."""
         config_loader = ConfigLoader()
         session_manager = SessionManager(config_loader)
         session_manager.create_session(
@@ -399,13 +391,35 @@ class TestListShowsAgent:
             project_path="/tmp/test",
         )
 
-        runner = CliRunner(env={"COLUMNS": "200"})
+        runner = CliRunner()
+        result = runner.invoke(cli, ["list", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        sessions = data["data"]["sessions"]
+        assert len(sessions) == 1
+        assert sessions[0]["agent_backend"] is None
+
+    def test_list_table_has_agent_column(self, temp_daf_home, monkeypatch):
+        """daf list table includes Agent column header (wide terminal)."""
+        from devflow.cli.commands import list_command
+        list_command.console._width = 200
+        list_command.console._height = 24
+
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+        session_manager.create_session(
+            name="test-list-col",
+            goal="Test",
+            working_directory="test-dir",
+            project_path="/tmp/test",
+            agent_backend="opencode",
+        )
+
+        runner = CliRunner()
         result = runner.invoke(cli, ["list"])
         assert result.exit_code == 0
-        # The Agent column should show "-" for sessions without agent_backend
-        # We check that the table header exists and the session is listed
         assert "Agent" in result.output
-        assert "test-list-none" in result.output
+        assert "opencode" in result.output
 
 
 # ───────────────────────────────────────────────────────────────────────────────
