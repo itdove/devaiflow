@@ -355,7 +355,8 @@ Before creating the release branch, check for open Dependabot security alerts an
 7. [ ] Bump version to next dev cycle (X.Y+1.0-dev)
 8. [ ] Push main branch
 9. [ ] (Hotfix only) Cherry-pick fix to main
-10. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, update the cookbook and example config sources in the AI Guardian NotebookLM notebook using `source_add`
+10. [ ] Generate combined docs export — run the shell one-liner from AGENTS.md "Generating Combined Documentation for LLM Upload" section to create `docs/notebooklm-export.md`
+11. [ ] Update NotebookLM sources — upload `docs/notebooklm-export.md` via `source_add` (if the `notebooklm-mcp` MCP server is available)
 
 **If you are NOT authorized:**
 - ❌ DO NOT push the tag
