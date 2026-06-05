@@ -94,6 +94,7 @@ def create_multi_project_ticket_creation_session(
         project_path=None,
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
+        agent_backend=config.agent_backend if config else "claude",
     )
 
     # Set session_type to "ticket_creation"

@@ -557,55 +557,52 @@ def open_session(
     # Check if this is a first-time launch
     # This happens when:
     # 1. Sessions created via 'daf sync' (no ai_agent_session_id)
-    # 2. Session has a ai_agent_session_id but conversation file doesn't exist
+    # 2. Session has a ai_agent_session_id but the agent reports the session doesn't exist
     # Use conversation-based API
     active_conv = session.active_conversation
     is_first_launch = not (active_conv and active_conv.ai_agent_session_id)
 
+    # Resolve effective agent backend: session-stored > config > "claude" (backward compatible)
+    effective_agent_backend = session.agent_backend or (config.agent_backend if config else "claude")
+
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
-        # For ticket_creation and investigation sessions, check conversation file at stable location
-        # Stable location uses original_project_path for sessions with temp_directory
+        # Check if the session exists using the agent-aware check
+        # This handles both Claude (.jsonl file) and OpenCode (database query) correctly
         from devflow.agent import create_agent_client
-        agent_backend = config.agent_backend if config else "claude"
-        agent = create_agent_client(agent_backend)
-        capture = SessionCapture(agent=agent)
+        agent = create_agent_client(effective_agent_backend)
+        agent_name = agent.get_agent_name()
 
-        # Determine the correct location to check for conversation file
+        # Determine the correct project path to check for session existence
         if session.session_type in ("ticket_creation", "investigation") and active_conv and active_conv.original_project_path:
-            # Use stable location based on original_project_path
-            # This ensures we find the conversation even if temp directory was deleted
-            session_dir = capture.get_session_dir(active_conv.original_project_path)
-            console.print(f"[dim]Checking for conversation file at stable location ({session.session_type} session)...[/dim]")
+            check_path = active_conv.original_project_path
+            console.print(f"[dim]Checking for existing {agent_name} session at stable location ({session.session_type} session)...[/dim]")
         else:
-            # Use current project path for normal sessions
-            session_dir = capture.get_session_dir(active_conv.project_path)
-            console.print(f"[dim]Checking for conversation file...[/dim]")
+            check_path = active_conv.project_path
+            console.print(f"[dim]Checking for existing {agent_name} session...[/dim]")
 
-        conversation_file = session_dir / f"{active_conv.ai_agent_session_id}.jsonl"
-        conversation_exists = conversation_file.exists() and conversation_file.stat().st_size > 0
+        conversation_exists = agent.session_exists(active_conv.ai_agent_session_id, check_path)
         console.print(f"[dim]  {'found' if conversation_exists else 'not found'}[/dim]")
 
         if not conversation_exists:
             if session.session_type in ("ticket_creation", "investigation"):
-                # For ticket_creation and investigation sessions, no conversation at stable location means first launch
+                # For ticket_creation and investigation sessions, no session at stable location means first launch
                 # Don't generate new session ID yet - will check again after temp directory handling
-                console.print(f"[dim]No conversation at stable location - will verify after temp directory handling[/dim]")
+                console.print(f"[dim]No session at stable location - will verify after temp directory handling[/dim]")
             else:
-                # Normal sessions: missing conversation file means we need a new session ID
-                if conversation_file.exists():
-                    console.print(f"\n[yellow]⚠ Conversation file is empty or invalid[/yellow]")
-                else:
-                    console.print(f"\n[yellow]⚠ Conversation file not found for session {active_conv.ai_agent_session_id}[/yellow]")
-                console.print(f"[dim]This can happen if the session was interrupted or Claude Code failed to start.[/dim]")
+                # Normal sessions: missing session means we need a new session ID
+                console.print(f"\n[yellow]⚠ Session not found for {agent_name} session {active_conv.ai_agent_session_id}[/yellow]")
+                console.print(f"[dim]This can happen if the session was interrupted or {agent_name} failed to start.[/dim]")
                 console.print(f"[dim]Will create a new conversation with a new session ID.[/dim]")
                 is_first_launch = True
 
     if is_first_launch:
         console.print(f"\n[cyan]First-time launch for session: {session.name}[/cyan]")
         if not (active_conv and active_conv.ai_agent_session_id):
-            console.print(f"[dim]This session was synced from JIRA but hasn't been opened yet.[/dim]")
+            console.print(f"[dim]This session was synced but hasn't been opened yet.[/dim]")
 
-        # Generate a new Claude session ID for the active conversation
+        # Generate a new session ID for the active conversation
+        # For Claude-style agents (claude, ollama), use UUID format
+        # For other agents (opencode), use a placeholder that will be replaced after launch
         import uuid
         new_session_id = str(uuid.uuid4())
 
@@ -650,22 +647,19 @@ def open_session(
         # Refresh active_conv after temp directory handling
         active_conv = session.active_conversation
 
-        # After temp directory handling, verify if conversation file was restored
+        # After temp directory handling, verify if session was restored
         # If not, we need to treat this as a first launch
         if not is_first_launch and active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
             from devflow.agent import create_agent_client
-            agent_backend = config.agent_backend if config else "claude"
-            agent = create_agent_client(agent_backend)
-            capture = SessionCapture(agent=agent)
-            session_dir = capture.get_session_dir(active_conv.project_path)
-            conversation_file = session_dir / f"{active_conv.ai_agent_session_id}.jsonl"
+            agent = create_agent_client(effective_agent_backend)
+            agent_name = agent.get_agent_name()
 
-            conversation_exists = conversation_file.exists() and conversation_file.stat().st_size > 0
+            conversation_exists = agent.session_exists(active_conv.ai_agent_session_id, active_conv.project_path)
 
             if not conversation_exists:
-                # Conversation file was not restored - this means user quit the session early
+                # Session was not restored - this means user quit the session early
                 # before any conversation was created. Generate a new session ID.
-                console.print(f"\n[yellow]⚠ Conversation file was not restored (session was quit before any work was done)[/yellow]")
+                console.print(f"\n[yellow]⚠ {agent_name} session was not restored (session was quit before any work was done)[/yellow]")
                 console.print(f"[dim]Generating new session ID for fresh start[/dim]")
                 is_first_launch = True
 
@@ -961,11 +955,14 @@ def open_session(
     if not should_launch_claude_code(config=config, mock_mode=True):
         return
 
-    # Display launch/resume message
+    # Display launch/resume message using correct agent name
+    from devflow.agent import create_agent_client as _create_agent
+    _display_agent = _create_agent(effective_agent_backend)
+    _display_agent_name = _display_agent.get_agent_name().title()
     if is_first_launch:
-        console.print(f"\n[cyan]Launching Claude Code for the first time...[/cyan]")
+        console.print(f"\n[cyan]Launching {_display_agent_name} for the first time...[/cyan]")
     else:
-        console.print(f"\n[cyan]Resuming Claude Code session...[/cyan]")
+        console.print(f"\n[cyan]Resuming {_display_agent_name} session...[/cyan]")
 
     # Update session status and start work session
     session.status = "in_progress"
@@ -1082,8 +1079,8 @@ def open_session(
                 project_path = active_conv.project_path if active_conv else None
                 launch_dir = active_conv.project_path if active_conv else None
 
-            # Get agent backend from config
-            agent_backend = config.agent_backend if config else "claude"
+            # Use effective agent backend (session-stored > config > "claude")
+            agent_backend = effective_agent_backend
             agent = create_agent_client(agent_backend)
 
             # Warn if agent does not support permission prompts
@@ -1126,7 +1123,7 @@ def open_session(
                         reset_terminal_after_tui()
             finally:
                 if not is_cleanup_done():
-                    console.print(f"\n[green]✓[/green] Claude session completed")
+                    console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
                     # Capture real OpenCode session ID after first launch
                     if agent_backend in ("opencode", "opencode-ai") and launch_dir and active_conv:
@@ -1160,10 +1157,10 @@ def open_session(
                     _prompt_for_complete_on_exit(session, config)
         else:
             # Resume existing session
-            # Get agent backend from config
+            # Use effective agent backend (session-stored > config > "claude")
             from devflow.agent import create_agent_client
 
-            agent_backend = config.agent_backend if config else "claude"
+            agent_backend = effective_agent_backend
             agent = create_agent_client(agent_backend)
 
             # For Claude and Ollama agents, use resume with skills directories
@@ -1296,7 +1293,7 @@ def open_session(
                     from devflow.cli.utils import reset_terminal_after_tui
                     reset_terminal_after_tui()
                 if not is_cleanup_done():
-                    console.print(f"\n[green]✓[/green] Claude session completed")
+                    console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
                     # Update session status to paused
                     session.status = "paused"
@@ -1319,13 +1316,13 @@ def open_session(
                     _prompt_for_complete_on_exit(session, config)
 
     except Exception as e:
-        console.print(f"\n[red]Error launching Claude Code:[/red] {e}")
+        console.print(f"\n[red]Error launching {_display_agent_name}:[/red] {e}")
 
         # Update session status to paused on error
         session.status = "paused"
         session_manager.update_session(session)
 
-        # Auto-pause: End work session even if Claude launch failed
+        # Auto-pause: End work session even if agent launch failed
         try:
             session_manager.end_work_session(identifier)
         except Exception:
@@ -1333,9 +1330,19 @@ def open_session(
             pass
 
         if active_conv and active_conv.ai_agent_session_id:
-            console.print(f"\n[yellow]You can manually resume with:[/yellow]")
-            console.print(f"  cd {active_conv.project_path}")
-            console.print(f"  claude --resume {active_conv.ai_agent_session_id}")
+            # Show agent-specific manual resume instructions
+            if effective_agent_backend in ("opencode", "opencode-ai"):
+                console.print(f"\n[yellow]You can manually resume with:[/yellow]")
+                console.print(f"  cd {active_conv.project_path}")
+                console.print(f"  opencode --session {active_conv.ai_agent_session_id}")
+            elif effective_agent_backend in ("ollama", "ollama-claude"):
+                console.print(f"\n[yellow]You can manually resume with:[/yellow]")
+                console.print(f"  cd {active_conv.project_path}")
+                console.print(f"  ollama launch claude --resume {active_conv.ai_agent_session_id}")
+            else:
+                console.print(f"\n[yellow]You can manually resume with:[/yellow]")
+                console.print(f"  cd {active_conv.project_path}")
+                console.print(f"  claude --resume {active_conv.ai_agent_session_id}")
 
 
 def _check_and_warn_feature_orchestration(session, session_manager) -> bool:
@@ -3362,9 +3369,17 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
         return False
 
     # Get conversation file from stable location (based on original_project_path)
+    # Use session's stored agent_backend for correct path resolution
     from devflow.agent import create_agent_client
-    agent_backend = config.agent_backend if config else "claude"
-    agent = create_agent_client(agent_backend)
+    effective_backend = (session.agent_backend if hasattr(session, 'agent_backend') and session.agent_backend else None) or (config.agent_backend if config else "claude")
+    agent = create_agent_client(effective_backend)
+
+    # Conversation file copy only applies to file-based agents (claude, ollama)
+    # For agents that use databases (opencode), skip this operation
+    if effective_backend in ("opencode", "opencode-ai"):
+        console.print(f"[dim]Skipping conversation file copy ({agent.get_agent_name()} uses database storage)[/dim]")
+        return False
+
     capture = SessionCapture(agent=agent)
     stable_session_dir = capture.get_session_dir(conv.original_project_path)
     stable_conversation_file = stable_session_dir / f"{conv.ai_agent_session_id}.jsonl"
@@ -3422,8 +3437,14 @@ def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
     # Use resolved path to handle macOS /var -> /private/var canonicalization
     # SessionCapture now correctly encodes underscores as dashes
     from devflow.agent import create_agent_client
-    agent_backend = config.agent_backend if config else "claude"
-    agent = create_agent_client(agent_backend)
+    effective_backend = (session.agent_backend if hasattr(session, 'agent_backend') and session.agent_backend else None) or (config.agent_backend if config else "claude")
+    agent = create_agent_client(effective_backend)
+
+    # Conversation file copy only applies to file-based agents (claude, ollama)
+    if effective_backend in ("opencode", "opencode-ai"):
+        console.print(f"[dim]Skipping conversation file save ({agent.get_agent_name()} uses database storage)[/dim]")
+        return False
+
     capture = SessionCapture(agent=agent)
     temp_path_resolved = str(Path(temp_dir).resolve())
 

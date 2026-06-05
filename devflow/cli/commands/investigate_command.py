@@ -580,6 +580,7 @@ def create_investigation_session(
         project_path=project_path,
         branch=None,  # No branch for investigation sessions
         model_profile=model_profile,
+        agent_backend=config.agent_backend if config else "claude",
     )
 
     # Set session_type to "investigation"

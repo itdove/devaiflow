@@ -148,6 +148,7 @@ def git_open_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=None,  # Will be set when user starts working
+        agent_backend=config.agent_backend if config else "claude",
     )
 
     # Set session_type to "development"

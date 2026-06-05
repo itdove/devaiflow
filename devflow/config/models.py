@@ -894,6 +894,10 @@ class Session(BaseModel):
     # Model provider override (session-specific)
     model_profile: Optional[str] = None  # Override default model profile for this session (e.g., "vertex", "llama-cpp")
 
+    # Agent backend used to create this session (persisted for correct resume behavior)
+    # When None, falls back to config.agent_backend (backward compatible with existing sessions)
+    agent_backend: Optional[str] = None  # "claude" | "opencode" | "ollama" | "github-copilot" | etc.
+
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure
     issue_tracker: Optional[str] = "jira"  # "jira" | "github" | "gitlab" | etc. | None (use pattern detection)
