@@ -1535,6 +1535,36 @@ class TestDashboardCLIGroup:
         # Should not crash
         assert result.exit_code == 0
 
+    def test_already_running_opens_browser(self):
+        """Test that 'daf dashboard' opens browser when already running."""
+        from devflow.cli.main import cli
+
+        runner = CliRunner()
+        mock_status = {"pid": 12345, "port": 8080}
+
+        with patch("devflow.web.app.get_dashboard_status", return_value=mock_status):
+            with patch("devflow.cli.main.console"):
+                with patch("webbrowser.open") as mock_open:
+                    result = runner.invoke(cli, ["dashboard"])
+
+        assert result.exit_code == 0
+        mock_open.assert_called_once_with("http://127.0.0.1:8080")
+
+    def test_already_running_no_open_skips_browser(self):
+        """Test that 'daf dashboard --no-open' does not open browser when already running."""
+        from devflow.cli.main import cli
+
+        runner = CliRunner()
+        mock_status = {"pid": 12345, "port": 8080}
+
+        with patch("devflow.web.app.get_dashboard_status", return_value=mock_status):
+            with patch("devflow.cli.main.console"):
+                with patch("webbrowser.open") as mock_open:
+                    result = runner.invoke(cli, ["dashboard", "--no-open"])
+
+        assert result.exit_code == 0
+        mock_open.assert_not_called()
+
 
 # ============================================================================
 # DataBridge Organization Config Tests
