@@ -974,11 +974,12 @@ class TestResetTerminalAfterTui:
         assert "\033[0m" in written
         assert "\033[?25h" in written  # cursor visibility
         assert mock_run.call_count == 1
-        # Only call: stty sane — only stderr suppressed (stdin/stdout inherit terminal)
+        # Only call: stty sane — stdin/stdout explicitly passed so stty operates
+        # on the real terminal fd, not a redirected fd (#456)
         stty_args = mock_run.call_args_list[0]
         assert stty_args[0][0] == ["stty", "sane"]
-        assert "stdin" not in stty_args[1]
-        assert "stdout" not in stty_args[1]
+        assert "stdin" in stty_args[1], "stdin must be passed to stty sane"
+        assert "stdout" in stty_args[1], "stdout must be passed to stty sane"
         assert stty_args[1]["stderr"] == subprocess.DEVNULL
 
     @patch("subprocess.run", side_effect=OSError("command not found"))
