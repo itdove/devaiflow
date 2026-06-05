@@ -24,7 +24,7 @@ def upgrade_all(
     agents: Optional[List[str]] = None,
     level: str = 'global'
 ) -> None:
-    """Upgrade bundled Claude Code skills.
+    """Upgrade bundled AI agent skills.
 
     This command will:
     - Install slash commands (daf-*) to target directory

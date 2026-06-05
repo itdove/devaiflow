@@ -21,6 +21,7 @@ from devflow.jira import transition_on_start as jira_transition_on_start
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.github import transition_on_start as github_transition_on_start
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError
+from devflow.agent import get_agent_display_name
 from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.capture import SessionCapture
 from devflow.session.manager import SessionManager
@@ -473,7 +474,8 @@ def open_session(
             workspace=workspace_path,
         )
 
-        console.print(f"[green]✓[/green] Created new conversation with fresh Claude session")
+        agent_name = get_agent_display_name(agent or (session.agent_backend if session else None) or (config.agent_backend if config else None))
+        console.print(f"[green]✓[/green] Created new conversation with fresh {agent_name} session")
         console.print(f"[dim]New session ID: {new_conv.ai_agent_session_id}[/dim]")
 
         # Save session
@@ -565,6 +567,7 @@ def open_session(
 
     # Resolve effective agent backend: --agent flag > session-stored > config > "claude" (backward compatible)
     effective_agent_backend = agent or session.agent_backend or (config.agent_backend if config else "claude")
+    agent_name = get_agent_display_name(effective_agent_backend)
 
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
         # Check if the session exists using the agent-aware check
@@ -831,7 +834,7 @@ def open_session(
         console.print(f"💬 Messages: {message_count}")
     console.print(f"📅 Last active: {session.last_active.strftime('%Y-%m-%d %H:%M')}")
     if active_conv and active_conv.ai_agent_session_id:
-        console.print(f"🆔 Claude Session ID: {active_conv.ai_agent_session_id}")
+        console.print(f"🆔 {agent_name} Session ID: {active_conv.ai_agent_session_id}")
 
     # Feature orchestration awareness
     _display_feature_context(session)
@@ -894,8 +897,8 @@ def open_session(
 
         # Check for unresolved merge conflicts before continuing
         if GitUtils.has_merge_conflicts(Path(active_conv.project_path)):
-            _log_error("Merge conflicts detected before launching Claude Code")
-            _display_conflict_resolution_help(active_conv.project_path, session.name)
+            _log_error(f"Merge conflicts detected before launching {agent_name}")
+            _display_conflict_resolution_help(active_conv.project_path, session.name, agent_name=agent_name)
             return
 
     # Issue tracker auto-transition: New/To Do → In Progress
@@ -2404,7 +2407,7 @@ def _create_conversation_from_workspace_selection(
         session_manager.update_session(session)
         return True
 
-    # Generate a new Claude session ID for this conversation
+    # Generate a new session ID for this conversation
     new_session_id = str(uuid.uuid4())
 
     # Get workspace for portable paths
@@ -2430,9 +2433,10 @@ def _create_conversation_from_workspace_selection(
     # Save the session
     session_manager.update_session(session)
 
+    _agent_name = get_agent_display_name(getattr(session, 'agent_backend', None) or (config.agent_backend if config else None))
     console.print(f"[green]✓[/green] Created conversation for {repo_name}")
     console.print(f"[dim]Project path: {project_path}[/dim]")
-    console.print(f"[dim]Claude session ID: {new_session_id}[/dim]")
+    console.print(f"[dim]{_agent_name} session ID: {new_session_id}[/dim]")
 
     return True
 
@@ -2472,7 +2476,7 @@ def _create_conversation_for_path(
         console.print(f"[red]✗[/red] Path does not exist: {project_path}")
         return False
 
-    # Generate a new Claude session ID for this conversation
+    # Generate a new session ID for this conversation
     new_session_id = str(uuid.uuid4())
 
     # Get workspace for portable paths
@@ -2499,9 +2503,10 @@ def _create_conversation_for_path(
     # Save the session
     session_manager.update_session(session)
 
+    _agent_name = get_agent_display_name(getattr(session, 'agent_backend', None) or (config.agent_backend if config else None))
     console.print(f"[green]✓[/green] Created conversation for {repo_name}")
     console.print(f"[dim]Project path: {project_path}[/dim]")
-    console.print(f"[dim]Claude session ID: {new_session_id}[/dim]")
+    console.print(f"[dim]{_agent_name} session ID: {new_session_id}[/dim]")
 
     # Auto-create template if enabled
     from devflow.templates.manager import TemplateManager
@@ -2555,7 +2560,7 @@ def _create_conversation_for_current_directory(
     # Use current_dir as project_path
     project_path = str(current_dir.absolute())
 
-    # Generate a new Claude session ID for this conversation
+    # Generate a new session ID for this conversation
     new_session_id = str(uuid.uuid4())
 
     # Get workspace for portable paths
@@ -2582,9 +2587,10 @@ def _create_conversation_for_current_directory(
     # Save the session
     session_manager.update_session(session)
 
+    _agent_name = get_agent_display_name(getattr(session, 'agent_backend', None) or (config.agent_backend if config else None))
     console.print(f"[green]✓[/green] Created conversation for {repo_name}")
     console.print(f"[dim]Project path: {project_path}[/dim]")
-    console.print(f"[dim]Claude session ID: {new_session_id}[/dim]")
+    console.print(f"[dim]{_agent_name} session ID: {new_session_id}[/dim]")
 
     # Auto-create template if enabled
     from devflow.templates.manager import TemplateManager
@@ -3688,12 +3694,13 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
 
 
 
-def _display_conflict_resolution_help(project_path: str, session_name: str) -> None:
+def _display_conflict_resolution_help(project_path: str, session_name: str, agent_name: str = "Claude Code") -> None:
     """Display detailed help for resolving merge conflicts.
 
     Args:
         project_path: Path to the project repository
         session_name: Name of the session to resume after resolution
+        agent_name: Display name for the AI agent
     """
     repo_path = Path(project_path)
 
@@ -3701,7 +3708,7 @@ def _display_conflict_resolution_help(project_path: str, session_name: str) -> N
     console.print(f"[red]✗ MERGE CONFLICTS DETECTED[/red]")
     console.print(f"[red]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/red]")
     console.print()
-    console.print(f"[yellow]Cannot launch Claude Code with unresolved merge conflicts.[/yellow]")
+    console.print(f"[yellow]Cannot launch {agent_name} with unresolved merge conflicts.[/yellow]")
     console.print()
 
     # Get merge info

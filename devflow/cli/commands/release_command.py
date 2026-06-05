@@ -10,10 +10,12 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import require_outside_claude
 from devflow.release.permissions import check_release_permission
 from devflow.release.manager import ReleaseManager
 from devflow.release.version import Version
+from devflow.utils.model_provider import get_co_authored_by_line
 
 console = Console()
 
@@ -43,6 +45,14 @@ def create_release(
         check_outside_ai_session()
 
     repo_path = Path.cwd()
+
+    # Load config for agent-aware attribution
+    from devflow.config.loader import ConfigLoader
+    _config_loader = ConfigLoader()
+    _config = _config_loader.load_config()
+    _agent_backend = _config.agent_backend if _config else "claude"
+    _agent_display = get_agent_display_name(_agent_backend)
+    _co_authored_by = get_co_authored_by_line(_config)
 
     # Display header
     console.print()
@@ -198,9 +208,9 @@ Prepare for v{context.target_version} release:
 - Update version in {package_file}
 - Update CHANGELOG.md with release date
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with {_agent_display}
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{_co_authored_by}"""
 
     success, msg = manager.commit_changes(commit_msg, dry_run=dry_run)
     if not success:
@@ -231,9 +241,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
 Begin development cycle for next patch release.
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with {_agent_display}
 
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+{_co_authored_by}"""
             manager.commit_changes(commit_msg, dry_run=dry_run)
             console.print(f"[green]✓[/green] Release branch ready for development")
         except Exception as e:

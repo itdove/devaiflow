@@ -667,7 +667,7 @@ def test_complete_session_prompts_pr_with_committed_changes(temp_daf_home, tmp_p
         return False
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm)
-    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s: "Test commit")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s, agent_backend=None: "Test commit")
     monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
 
     # Complete the session
@@ -2823,7 +2823,7 @@ def test_generate_commit_message_with_git_diff(temp_daf_home, monkeypatch, tmp_p
     )
 
     # Mock the AI commit message generation
-    def mock_generate_from_diff(diff_content, status_summary):
+    def mock_generate_from_diff(diff_content, status_summary, agent_backend=None):
         return "Update test.txt with modified content"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message_from_diff", mock_generate_from_diff)
@@ -2935,7 +2935,7 @@ def test_generate_commit_message_logging(temp_daf_home, tmp_path, monkeypatch):
     )
 
     # Mock AI functions to simulate success
-    def mock_generate_from_diff(diff_content, status_summary):
+    def mock_generate_from_diff(diff_content, status_summary, agent_backend=None):
         return "Test commit message from diff"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message_from_diff", mock_generate_from_diff)
@@ -2994,7 +2994,7 @@ def test_generate_commit_message_multi_commit_scenario(temp_daf_home, tmp_path, 
     # Track calls to the diff generator
     diff_calls = []
 
-    def mock_generate_from_diff_first(diff_content, status_summary):
+    def mock_generate_from_diff_first(diff_content, status_summary, agent_backend=None):
         diff_calls.append(diff_content)
         # Verify first diff only contains changes A
         assert "changes A" in diff_content
@@ -3014,7 +3014,7 @@ def test_generate_commit_message_multi_commit_scenario(temp_daf_home, tmp_path, 
     # SECOND COMMIT: Make changes B (different from changes A)
     test_file.write_text("changes B\n")
 
-    def mock_generate_from_diff_second(diff_content, status_summary):
+    def mock_generate_from_diff_second(diff_content, status_summary, agent_backend=None):
         diff_calls.append(diff_content)
         # Verify second diff only contains changes B in test.txt
         # (log files may contain references to "changes A" but that's OK)
@@ -3494,7 +3494,7 @@ def test_complete_pushes_commits_after_committing_with_auto_config(temp_daf_home
     config_loader.save_config(config)
 
     # Mock commit message generation
-    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s: "Test commit")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s, agent_backend=None: "Test commit")
 
     # Mock all Confirm.ask calls (we're testing with auto_commit_on_complete=True, but there's still a confirm prompt)
     # The auto_commit_on_complete config bypasses the "Commit these changes?" prompt
@@ -3568,7 +3568,7 @@ def test_complete_pushes_commits_after_committing_with_prompt(temp_daf_home, tmp
     session_manager.end_work_session("push-prompt-test")
 
     # Mock commit message generation
-    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s: "Test commit")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s, agent_backend=None: "Test commit")
 
     # Mock Confirm.ask to return True for commit and push, False for everything else
     confirm_calls = []
@@ -3654,7 +3654,7 @@ def test_complete_skips_push_when_user_declines(temp_daf_home, tmp_path, monkeyp
     session_manager.end_work_session("skip-push-test")
 
     # Mock commit message generation
-    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s: "Test commit")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s, agent_backend=None: "Test commit")
 
     # Mock Confirm.ask to accept commit but decline push
     def mock_confirm(prompt, **kwargs):
@@ -3745,7 +3745,7 @@ def test_complete_no_duplicate_push_when_creating_pr(temp_daf_home, tmp_path, mo
     session_manager.end_work_session("no-dup-test")
 
     # Mock commit message generation
-    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s: "Test commit")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s, agent_backend=None: "Test commit")
 
     # Track push operations
     push_count = 0
@@ -3944,7 +3944,7 @@ def test_complete_prompts_pr_when_commit_made(temp_daf_home, tmp_path, monkeypat
         return False
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm_ask)
-    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s: "Test commit")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_commit_message", lambda s, agent_backend=None: "Test commit")
     monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
 
     # Complete the session

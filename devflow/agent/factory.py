@@ -35,6 +35,47 @@ SUPPORTED_BACKENDS = [
     "opencode-ai",
 ]
 
+# Human-readable display names for each backend (used in user-facing messages)
+AGENT_DISPLAY_NAMES = {
+    "claude": "Claude Code",
+    "ollama": "Ollama + Claude Code",
+    "ollama-claude": "Ollama + Claude Code",
+    "github-copilot": "GitHub Copilot",
+    "copilot": "GitHub Copilot",
+    "cursor": "Cursor",
+    "windsurf": "Windsurf",
+    "aider": "Aider",
+    "continue": "Continue",
+    "crush": "Crush",
+    "opencode": "OpenCode",
+    "opencode-ai": "OpenCode",
+}
+
+
+def get_agent_display_name(backend: Optional[str] = None) -> str:
+    """Get the human-readable display name for an agent backend.
+
+    Args:
+        backend: Agent backend identifier (e.g., "claude", "opencode").
+                 If None, defaults to "claude".
+
+    Returns:
+        Human-readable name (e.g., "Claude Code", "OpenCode")
+
+    Examples:
+        >>> get_agent_display_name("claude")
+        'Claude Code'
+        >>> get_agent_display_name("opencode")
+        'OpenCode'
+        >>> get_agent_display_name("github-copilot")
+        'GitHub Copilot'
+        >>> get_agent_display_name(None)
+        'Claude Code'
+    """
+    if backend is None:
+        backend = "claude"
+    return AGENT_DISPLAY_NAMES.get(backend.lower(), backend)
+
 
 def validate_agent_backend(backend: str) -> str:
     """Validate and normalize an agent backend name.

@@ -13,7 +13,7 @@ console = Console()
 
 
 def sessions_list(identifier: str, output_json: bool = False) -> None:
-    """List all Claude Code sessions (conversations) for a DevAIFlow session.
+    """List all AI agent sessions (conversations) for a DevAIFlow session.
 
     This command shows all conversations across all repositories, including
     both active and archived conversations.

@@ -12,14 +12,14 @@ from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, Jira
 console = Console()
 
 
-def format_ticket_for_claude(ticket_data: dict) -> str:
-    """Format issue tracker ticket data in a Claude-friendly text format.
+def format_ticket_for_agent(ticket_data: dict) -> str:
+    """Format issue tracker ticket data in an agent-friendly text format.
 
     Args:
         ticket_data: Dictionary with ticket data from JiraClient.get_ticket_detailed()
 
     Returns:
-        Formatted string suitable for Claude to read
+        Formatted string suitable for an AI agent to read
     """
     lines = []
 
@@ -91,8 +91,8 @@ def format_ticket_for_claude(ticket_data: dict) -> str:
     return "\n".join(lines)
 
 
-def format_changelog_for_claude(changelog: Dict) -> str:
-    """Format JIRA changelog data in a Claude-friendly text format.
+def format_changelog_for_agent(changelog: Dict) -> str:
+    """Format JIRA changelog data in an agent-friendly text format.
 
     Args:
         changelog: Changelog dict from JIRA API with 'histories' key
@@ -142,8 +142,8 @@ def format_changelog_for_claude(changelog: Dict) -> str:
     return "\n".join(lines)
 
 
-def format_child_issues_for_claude(children: List[Dict]) -> str:
-    """Format child issues in a Claude-friendly text format.
+def format_child_issues_for_agent(children: List[Dict]) -> str:
+    """Format child issues in an agent-friendly text format.
 
     Args:
         children: List of child issue dicts from JiraClient.get_child_issues()
@@ -176,8 +176,8 @@ def format_child_issues_for_claude(children: List[Dict]) -> str:
     return "\n".join(lines)
 
 
-def format_comments_for_claude(comments: List[Dict]) -> str:
-    """Format JIRA comments in a Claude-friendly text format.
+def format_comments_for_agent(comments: List[Dict]) -> str:
+    """Format JIRA comments in an agent-friendly text format.
 
     Args:
         comments: List of comment dicts from JiraClient.get_comments()
@@ -236,7 +236,7 @@ def format_comments_for_claude(comments: List[Dict]) -> str:
 
 
 def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: bool = False, show_comments: bool = False, output_json: bool = False) -> None:
-    """View a issue tracker ticket in Claude-friendly format.
+    """View an issue tracker ticket in agent-friendly format.
 
     Args:
         issue_key: issue tracker key (e.g., PROJ-12345)
@@ -390,24 +390,24 @@ def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: 
             )
             return
 
-        # Format and print in Claude-friendly format
-        formatted_output = format_ticket_for_claude(ticket_data)
+        # Format and print in agent-friendly format
+        formatted_output = format_ticket_for_agent(ticket_data)
         console.print(formatted_output)
 
         # Format and print child issues if requested
         if show_children and children_data is not None:
-            formatted_children = format_child_issues_for_claude(children_data)
+            formatted_children = format_child_issues_for_agent(children_data)
             console.print(formatted_children)
 
         # Format and print comments if requested
         if show_comments and ticket_data.get("comments"):
-            formatted_comments = format_comments_for_claude(ticket_data["comments"])
+            formatted_comments = format_comments_for_agent(ticket_data["comments"])
             if formatted_comments:
                 console.print(formatted_comments)
 
         # Format and print changelog if requested
         if show_history and ticket_data.get("changelog"):
-            formatted_history = format_changelog_for_claude(ticket_data["changelog"])
+            formatted_history = format_changelog_for_agent(ticket_data["changelog"])
             if formatted_history:
                 console.print(formatted_history)
 

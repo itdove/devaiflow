@@ -44,7 +44,7 @@ def list_context_files() -> None:
         console.print("\n[dim]No additional context files configured[/dim]")
 
     console.print()
-    console.print("[dim]Claude auto-detects which tool to use based on the path:[/dim]")
+    console.print("[dim]The AI agent auto-detects which tool to use based on the path:[/dim]")
     console.print("[dim]  - Local paths → Read tool[/dim]")
     console.print("[dim]  - HTTP/HTTPS URLs → WebFetch tool[/dim]")
     console.print()

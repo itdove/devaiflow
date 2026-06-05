@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional
 from rich.console import Console
 from rich.panel import Panel
 
-from devflow.agent import create_agent_client
+from devflow.agent import create_agent_client, get_agent_display_name
 from devflow.cli.utils import get_active_conversation, output_json as json_output, serialize_session
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -228,10 +228,13 @@ def show_active(output_json: bool = False) -> None:
         padding=(1, 2),
     )
 
+    agent_backend = config.agent_backend if config else "claude"
+    agent_name = get_agent_display_name(agent_backend)
+
     console.print()
     console.print(panel)
     console.print()
-    console.print("[dim]To pause: Exit Claude Code[/dim]")
+    console.print(f"[dim]To pause: Exit {agent_name}[/dim]")
     console.print(f"[dim]To switch: daf open {session.name} (and select different conversation)[/dim]")
     console.print()
 

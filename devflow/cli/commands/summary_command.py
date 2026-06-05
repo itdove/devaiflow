@@ -2,6 +2,7 @@
 
 from rich.console import Console
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import get_session_with_prompt, display_session_header
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -11,7 +12,7 @@ console = Console()
 
 
 def show_summary(identifier: str = None, detail: bool = False, ai_summary: bool = False, latest: bool = False) -> None:
-    """Display session summary without opening Claude Code.
+    """Display session summary without opening AI agent.
 
     Args:
         identifier: Session group name or issue key
@@ -158,7 +159,7 @@ def show_summary(identifier: str = None, detail: bool = False, ai_summary: bool 
         except Exception as e:
             console.print(f"\n[yellow]Warning: Could not generate session summary: {e}[/yellow]")
     else:
-        console.print("\n[yellow]No Claude session ID - session summary not available[/yellow]")
+        console.print("\n[yellow]No agent session ID - session summary not available[/yellow]")
 
     # Show recent notes if available
     session_dir = config_loader.get_session_dir(session.name)

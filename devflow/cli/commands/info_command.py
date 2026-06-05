@@ -13,8 +13,7 @@ from devflow.cli.utils import get_status_display, output_json as json_output, se
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 from devflow.config.models import Session, ConversationContext
-from devflow.utils.paths import get_claude_config_dir
-from devflow.agent import create_agent_client
+from devflow.agent import create_agent_client, get_agent_display_name
 
 console = Console()
 
@@ -22,7 +21,7 @@ console = Console()
 def session_info(
     identifier: Optional[str], uuid_only: bool, conversation_id: Optional[int], latest: bool = False, output_json: bool = False
 ) -> None:
-    """Show detailed session information including Claude Code UUIDs.
+    """Show detailed session information including AI agent session IDs.
 
     IDENTIFIER can be a session name, issue key, or omitted to show the most recent session.
 
@@ -148,6 +147,8 @@ def _output_json_session_info(
 
         # Add conversation file paths 
         if session.conversations:
+            config = config_loader.load_config()
+            _ab = config.agent_backend or "claude" if config else "claude"
             conversations_with_paths = []
             conv_number = 1
             for working_dir, conversation in session.conversations.items():
@@ -156,7 +157,7 @@ def _output_json_session_info(
                     conv_data = conv.model_dump(mode="json")
                     conv_data["conversation_number"] = conv_number
                     conv_data["working_directory"] = working_dir
-                    conv_data["conversation_file"] = _get_conversation_file_path(conv.project_path, conv.ai_agent_session_id)
+                    conv_data["conversation_file"] = _get_conversation_file_path(conv.project_path, conv.ai_agent_session_id, _ab)
                     # Check if this is the active conversation
                     is_active = (
                         session.active_conversation and
@@ -374,11 +375,19 @@ def _display_conversation(
 
     console.print(f"[bold]#{conv_number}{status_marker}[/bold]")
 
+    # Resolve agent display name for labels
+    try:
+        config = config_loader.load_config()
+        _agent_backend = config.agent_backend or "claude"
+    except Exception:
+        _agent_backend = "claude"
+    _agent_name = get_agent_display_name(_agent_backend)
+
     # Handle multi-project conversations differently
     if conv.is_multi_project and conv.projects:
         console.print(f"  [dim]Type:[/dim] Multi-project ({len(conv.projects)} projects)")
         console.print(f"  [dim]Workspace:[/dim] {conv.workspace_path}")
-        console.print(f"  [bold]Claude Session UUID:[/bold] [cyan]{conv.ai_agent_session_id}[/cyan]")
+        console.print(f"  [bold]{_agent_name} Session UUID:[/bold] [cyan]{conv.ai_agent_session_id}[/cyan]")
         console.print(f"\n  [bold]Projects:[/bold]")
         for proj_name, proj_info in conv.projects.items():
             console.print(f"    • [cyan]{proj_name}[/cyan]")
@@ -389,13 +398,13 @@ def _display_conversation(
         console.print(f"  [dim]Working Directory:[/dim] {working_dir}")
         console.print(f"  [dim]Project Path:[/dim] {conv.project_path}")
         console.print(f"  [dim]Branch:[/dim] {conv.branch}")
-        console.print(f"  [bold]Claude Session UUID:[/bold] [cyan]{conv.ai_agent_session_id}[/cyan]")
+        console.print(f"  [bold]{_agent_name} Session UUID:[/bold] [cyan]{conv.ai_agent_session_id}[/cyan]")
 
     # Get conversation file path
     # For multi-project sessions, use workspace_path; for single-project, use project_path
     path_for_conv_file = conv.workspace_path if conv.is_multi_project else conv.project_path
     if path_for_conv_file:
-        conv_file_path = _get_conversation_file_path(path_for_conv_file, conv.ai_agent_session_id)
+        conv_file_path = _get_conversation_file_path(path_for_conv_file, conv.ai_agent_session_id, _agent_backend)
         console.print(f"  [dim]Conversation File:[/dim] {conv_file_path}")
 
     # Display timestamps
@@ -486,32 +495,31 @@ def _display_token_usage(conv: ConversationContext, config_loader: ConfigLoader)
         pass
 
 
-def _get_conversation_file_path(project_path: str, ai_agent_session_id: str) -> str:
-    """Get the path to the Claude Code conversation file.
+def _get_conversation_file_path(
+    project_path: str, ai_agent_session_id: str, agent_backend: str = "claude"
+) -> str:
+    """Get the path to the AI agent conversation file.
+
+    Uses the agent interface to resolve the correct file path for the
+    configured backend.
 
     Args:
         project_path: Full path to the project
-        ai_agent_session_id: Claude session UUID
+        ai_agent_session_id: Agent session UUID
+        agent_backend: Agent backend identifier (e.g., "claude", "opencode")
 
     Returns:
-        Path to the conversation .jsonl file
+        Path to the conversation file (format depends on agent backend)
     """
-    # Claude Code encodes project paths for directory names
-    # Replace / with - AND replace _ with -
-    encoded_path = project_path.replace("/", "-").replace("_", "-")
-    if encoded_path.startswith("-"):
-        encoded_path = encoded_path[1:]
-
-    # Claude Code stores sessions in ~/.claude/projects/{encoded-path}/ (or $CLAUDE_CONFIG_DIR/projects/{encoded-path}/)
-    claude_dir = get_claude_config_dir() / "projects" / encoded_path
-    conv_file = claude_dir / f"{ai_agent_session_id}.jsonl"
-
-    # Check if file exists
-    if conv_file.exists():
-        return str(conv_file)
-    else:
-        # Return path with indicator that it doesn't exist
-        return f"{conv_file} [dim](not found)[/dim]"
+    try:
+        agent = create_agent_client(agent_backend)
+        conv_file = agent.get_session_file_path(ai_agent_session_id, project_path)
+        if conv_file.exists():
+            return str(conv_file)
+        else:
+            return f"{conv_file} [dim](not found)[/dim]"
+    except Exception:
+        return f"[dim](unable to resolve conversation file path)[/dim]"
 
 
 def _display_time_tracking(session: Session) -> None:

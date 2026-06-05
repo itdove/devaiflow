@@ -9,6 +9,7 @@ import urllib.request
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import add_jira_comment, get_session_with_prompt, get_status_display, is_non_interactive, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.exceptions import ToolNotFoundError
@@ -29,6 +30,64 @@ from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
 
 console = Console()
+
+# Mapping of agent backend names to their CLI binary commands (for subprocess calls)
+_AGENT_CLI_BINARIES = {
+    "claude": "claude",
+    "ollama": "claude",         # Ollama uses Claude Code CLI with custom env
+    "ollama-claude": "claude",  # Alias
+    "opencode": "opencode",
+    "opencode-ai": "opencode",  # Alias
+    "aider": "aider",
+}
+
+# Mapping of agent backend names to their project URLs (for "Generated with" attribution)
+_AGENT_URLS = {
+    "claude": "https://claude.ai/code",
+    "ollama": "https://claude.ai/code",
+    "ollama-claude": "https://claude.ai/code",
+    "opencode": "https://opencode.ai",
+    "opencode-ai": "https://opencode.ai",
+    "github-copilot": "https://github.com/features/copilot",
+    "copilot": "https://github.com/features/copilot",
+    "cursor": "https://cursor.com",
+    "windsurf": "https://codeium.com/windsurf",
+    "aider": "https://aider.chat",
+    "continue": "https://continue.dev",
+    "crush": "https://crush.ai",
+}
+
+
+def _get_agent_cli_binary(agent_backend: Optional[str] = None) -> str:
+    """Get the CLI binary name for an agent backend.
+
+    Args:
+        agent_backend: Agent backend identifier (e.g., "claude", "opencode").
+                       If None, defaults to "claude".
+
+    Returns:
+        CLI binary name (e.g., "claude", "opencode", "aider")
+    """
+    if agent_backend is None:
+        agent_backend = "claude"
+    return _AGENT_CLI_BINARIES.get(agent_backend.lower(), "claude")
+
+
+def _get_generated_with_line(agent_backend: Optional[str] = None) -> str:
+    """Build the 'Generated with' attribution line for commits and PRs.
+
+    Args:
+        agent_backend: Agent backend identifier (e.g., "claude", "opencode").
+                       If None, defaults to "claude".
+
+    Returns:
+        Attribution string like '🤖 Generated with [Claude Code](https://claude.ai/code)'
+    """
+    agent_name = get_agent_display_name(agent_backend)
+    url = _AGENT_URLS.get((agent_backend or "claude").lower(), "")
+    if url:
+        return f"🤖 Generated with [{agent_name}]({url})"
+    return f"🤖 Generated with {agent_name}"
 
 
 def _get_remote_aware_base_ref(working_dir: Path, base_branch: str) -> str:
@@ -186,6 +245,9 @@ def complete_session(
     # Load config for prompt settings
     config = config_loader.load_config()
 
+    # Resolve agent backend for agent-agnostic messaging
+    agent_backend = config.agent_backend if config else None
+
     # Get active conversation for accessing conversation-specific fields
     active_conv = session.active_conversation
 
@@ -331,9 +393,10 @@ def complete_session(
 
                     if commit_message_short:
                         co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                        generated_with = _get_generated_with_line(agent_backend)
                         full_message = f"""{commit_message_short}
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+{generated_with}
 
 {co_authored_by}"""
 
@@ -506,9 +569,10 @@ def complete_session(
 
                     if commit_message_short:
                         co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                        generated_with = _get_generated_with_line(agent_backend)
                         full_message = f"""{commit_message_short}
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+{generated_with}
 
 {co_authored_by}"""
 
@@ -645,7 +709,7 @@ def complete_session(
 
             if should_commit:
                 # Auto-generate commit message from session goal
-                auto_message = _generate_commit_message(session)
+                auto_message = _generate_commit_message(session, agent_backend=agent_backend)
 
                 # Display commit message and prompt for confirmation
                 commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
@@ -653,9 +717,10 @@ def complete_session(
                 if commit_message_short:
                     # Create commit with standard format
                     co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                    generated_with = _get_generated_with_line(agent_backend)
                     full_message = f"""{commit_message_short}
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+{generated_with}
 
 {co_authored_by}"""
                 else:
@@ -885,7 +950,7 @@ def complete_session(
             if should_add_summary:
                 _add_session_summary_to_issue(session, config, session.name, hours, minutes, config_loader)
         else:
-            console.print(f"[dim]Skipping {backend_name} summary - session has minimal activity (0h {minutes}m, no Claude interaction)[/dim]")
+            console.print(f"[dim]Skipping {backend_name} summary - session has minimal activity (0h {minutes}m, no AI agent interaction)[/dim]")
     else:
         console.print(f"[dim]Session has no issue key - skipping issue tracker summary[/dim]")
 
@@ -1373,9 +1438,10 @@ def _sync_branch_for_export(session, issue_key: str, config_loader, yes: bool = 
         else:
             # Create WIP commit
             co_authored_by = get_co_authored_by_line(config, session.model_profile)
+            generated_with = _get_generated_with_line(config.agent_backend if config else None)
             commit_message = f"""WIP: Session export for {issue_key}
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+{generated_with}
 
 {co_authored_by}"""
 
@@ -2911,7 +2977,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
                 jira_section = f"Jira Issue: {jira_url}/browse/{session.issue_key}\n\n"
 
         # Try to generate AI-powered summary from session and git data
-        summary_bullets = _generate_pr_summary_bullets(session, working_dir)
+        summary_bullets = _generate_pr_summary_bullets(session, working_dir, agent_backend=config.agent_backend if config else None)
 
         # If AI summary failed, fall back to session goal
         if not summary_bullets:
@@ -2921,6 +2987,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
 
         config = config_loader.load_config()
         co_authored_by = get_co_authored_by_line(config, session.model_profile)
+        generated_with = _get_generated_with_line(config.agent_backend if config else None)
         description = f"""{jira_section}{description_content}
 
 ## Test plan
@@ -2928,14 +2995,14 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
 - [ ] Test the modified functionality
 - [ ] Verify no regressions in related features
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+{generated_with}
 
 {co_authored_by}"""
 
     return description
 
 
-def _generate_pr_summary_bullets(session, working_dir: Path) -> Optional[str]:
+def _generate_pr_summary_bullets(session, working_dir: Path, agent_backend: Optional[str] = None) -> Optional[str]:
     """Generate bullet point summary for PR/MR description using AI.
 
     Analyzes both git commits and session conversation to create a meaningful summary.
@@ -2943,6 +3010,7 @@ def _generate_pr_summary_bullets(session, working_dir: Path) -> Optional[str]:
     Args:
         session: Session object
         working_dir: Working directory path for git analysis
+        agent_backend: Agent backend identifier (e.g., "claude", "opencode")
 
     Returns:
         Bullet point summary (markdown format) or None if generation fails
@@ -2988,7 +3056,7 @@ def _generate_pr_summary_bullets(session, working_dir: Path) -> Optional[str]:
 
         context = "\n\n".join(context_parts)
 
-        # Build prompt for Claude CLI
+        # Build prompt for agent CLI
         prompt = f"""Based on this pull request data, generate a concise summary in bullet point format.
 
 {context}
@@ -3001,9 +3069,10 @@ Generate a summary with 2-4 bullet points that:
 
 Format as markdown bullets. Return ONLY the bullet points, nothing else."""
 
-        # Try using Claude CLI for best quality
+        # Try using agent CLI for best quality
+        cli_binary = _get_agent_cli_binary(agent_backend)
         result = subprocess.run(
-            ["claude", "-p"],
+            [cli_binary, "-p"],
             input=prompt,
             capture_output=True,
             text=True,
@@ -3020,7 +3089,7 @@ Format as markdown bullets. Return ONLY the bullet points, nothing else."""
         return None
 
     except FileNotFoundError:
-        # Claude CLI not installed, try Anthropic API
+        # Agent CLI not installed, try Anthropic API
         return _generate_pr_summary_with_api(session, working_dir)
     except Exception as e:
         console.print(f"[dim]PR summary generation failed: {e}[/dim]")
@@ -3594,7 +3663,7 @@ def _prompt_for_commit_message(auto_message: str, config, commit_message: Option
         return commit_message_short
 
 
-def _generate_commit_message(session) -> str:
+def _generate_commit_message(session, agent_backend: Optional[str] = None) -> str:
     """Generate commit message from git diff instead of conversation history.
 
     This ensures commit messages describe only uncommitted changes being committed,
@@ -3602,6 +3671,7 @@ def _generate_commit_message(session) -> str:
 
     Args:
         session: Session object
+        agent_backend: Agent backend identifier (e.g., "claude", "opencode")
 
     Returns:
         Auto-generated commit message
@@ -3662,7 +3732,7 @@ def _generate_commit_message(session) -> str:
 
                     # Generate commit message from diff using AI
                     logger.debug("Generating commit message from git diff...")
-                    commit_message = _generate_commit_message_from_diff(diff_content, status_summary)
+                    commit_message = _generate_commit_message_from_diff(diff_content, status_summary, agent_backend=agent_backend)
 
                     if commit_message:
                         logger.info("Successfully generated AI commit message from git diff")
@@ -3704,16 +3774,19 @@ def _generate_commit_message(session) -> str:
     return message
 
 
-def _generate_commit_message_from_diff(diff_content: str, status_summary: str) -> Optional[str]:
-    """Generate commit message from git diff using Claude CLI.
+def _generate_commit_message_from_diff(diff_content: str, status_summary: str, agent_backend: Optional[str] = None) -> Optional[str]:
+    """Generate commit message from git diff using the AI agent CLI.
 
     Args:
         diff_content: Git diff output (both staged and unstaged changes)
         status_summary: Git status --short output
+        agent_backend: Agent backend identifier (e.g., "claude", "opencode")
 
     Returns:
         Generated commit message or None if generation fails
     """
+    cli_binary = _get_agent_cli_binary(agent_backend)
+
     try:
         # Truncate diff if it's too large (keep first 5000 chars for context)
         # This prevents token limits while still providing sufficient context
@@ -3721,7 +3794,7 @@ def _generate_commit_message_from_diff(diff_content: str, status_summary: str) -
         if len(diff_content) > 5000:
             truncated_diff += "\n\n... (diff truncated for analysis)"
 
-        # Build prompt for Claude CLI
+        # Build prompt for agent CLI
         prompt = f"""Based on this git diff, generate a commit message in conventional commit format.
 
 Git Status:
@@ -3739,9 +3812,9 @@ Generate a commit message with:
 
 Return ONLY the commit message."""
 
-        # Call Claude CLI
+        # Call agent CLI
         result = subprocess.run(
-            ["claude", "-p"],
+            [cli_binary, "-p"],
             input=prompt,
             capture_output=True,
             text=True,
@@ -3755,7 +3828,7 @@ Return ONLY the commit message."""
         return None
 
     except FileNotFoundError:
-        # Claude CLI not installed, try Anthropic API
+        # Agent CLI not installed, try Anthropic API
         return _generate_commit_message_from_diff_api(diff_content, status_summary)
     except Exception:
         return None
@@ -3820,15 +3893,19 @@ Return ONLY the commit message."""
         return None
 
 
-def _generate_commit_with_claude_cli(summary_data) -> Optional[str]:
-    """Generate commit message using Claude CLI.
+def _generate_commit_with_agent_cli(summary_data, agent_backend: Optional[str] = None) -> Optional[str]:
+    """Generate commit message using the AI agent's CLI.
 
     Args:
         summary_data: SessionSummary object from generate_session_summary
+        agent_backend: Agent backend identifier (e.g., "claude", "opencode")
 
     Returns:
         Generated commit message or None if CLI not available
     """
+    cli_binary = _get_agent_cli_binary(agent_backend)
+    agent_name = get_agent_display_name(agent_backend)
+
     try:
         # Check if there's actually any meaningful data
         has_file_changes = (summary_data.files_created or summary_data.files_modified)
@@ -3863,7 +3940,7 @@ def _generate_commit_with_claude_cli(summary_data) -> Optional[str]:
 
         context = "\n".join(context_parts)
 
-        # Build prompt for Claude CLI
+        # Build prompt for agent CLI
         prompt = f"""Based on this development session, generate a detailed git commit message following conventional commit format.
 
 {context}
@@ -3893,9 +3970,9 @@ Short descriptive title (max 72 chars)
 
 Return ONLY the commit message in this exact format, nothing else."""
 
-        # Call Claude CLI
+        # Call agent CLI
         result = subprocess.run(
-            ["claude", "-p"],
+            [cli_binary, "-p"],
             input=prompt,
             capture_output=True,
             text=True,
@@ -3904,16 +3981,16 @@ Return ONLY the commit message in this exact format, nothing else."""
 
         if result.returncode == 0:
             commit_text = strip_code_fences(result.stdout.strip())
-            console.print(f"[dim]Generated commit message using Claude CLI[/dim]")
+            console.print(f"[dim]Generated commit message using {agent_name} CLI[/dim]")
             return commit_text
 
         return None
 
     except FileNotFoundError:
-        # Claude CLI not installed
+        # Agent CLI not installed
         return None
     except Exception as e:
-        console.print(f"[dim]Claude CLI generation failed: {e}[/dim]")
+        console.print(f"[dim]{agent_name} CLI generation failed: {e}[/dim]")
         return None
 
 

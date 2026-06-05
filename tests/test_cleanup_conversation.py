@@ -117,10 +117,10 @@ def test_format_size():
 
 
 def test_find_conversation_file(tmp_path, monkeypatch):
-    """Test _find_conversation_file finds conversation in claude projects."""
+    """Test _find_conversation_file finds conversation in agent projects directory."""
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    # Create mock claude projects directory
+    # Create mock agent projects directory
     claude_dir = tmp_path / ".claude" / "projects" / "encoded-project-path"
     claude_dir.mkdir(parents=True)
 
@@ -129,7 +129,7 @@ def test_find_conversation_file(tmp_path, monkeypatch):
     conv_file = claude_dir / f"{session_id}.jsonl"
     conv_file.write_text('{"test": "data"}\n')
 
-    # Should find the file
+    # Should find the file (uses agent interface, defaults to claude backend)
     result = _find_conversation_file(session_id)
     assert result == conv_file
     assert result.exists()
@@ -166,10 +166,10 @@ def test_cleanup_conversation_session_not_found(temp_daf_home, monkeypatch, caps
 def test_cleanup_conversation_no_ai_agent_session_id(
     session_manager_with_session, monkeypatch, capsys
 ):
-    """Test cleanup_conversation when session has no Claude session ID."""
+    """Test cleanup_conversation when session has no agent session ID."""
     session_manager, session = session_manager_with_session
 
-    # Remove Claude session ID by clearing conversations
+    # Remove agent session ID by clearing conversations
     session.conversations = {}  # Clear conversations
     session_manager.update_session(session)
 
@@ -181,6 +181,6 @@ def test_cleanup_conversation_no_ai_agent_session_id(
     )
 
     captured = capsys.readouterr()
-    assert "has no Claude session ID" in captured.out
+    assert "has no agent session ID" in captured.out
 
 
