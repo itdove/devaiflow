@@ -735,3 +735,178 @@ def test_session_info_with_conversation_summary(temp_daf_home, capsys):
     captured = capsys.readouterr()
     assert "Summary:" in captured.out
     assert "This is a test summary" in captured.out
+
+
+def test_session_info_uses_daf_session_name_env_var(temp_daf_home, capsys, monkeypatch):
+    """Test that daf info (no args) uses DAF_SESSION_NAME env var inside agent session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create two sessions
+    session1 = session_manager.create_session(
+        name="old-session",
+        goal="Older session",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-old",
+    )
+    session1.last_active = datetime.now() - timedelta(hours=2)
+    session_manager.index.sessions["old-session"] = session1
+    session_manager._save_index()
+
+    session2 = session_manager.create_session(
+        name="recent-session",
+        goal="Most recent session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-recent",
+    )
+    session2.last_active = datetime.now()
+    session_manager.index.sessions["recent-session"] = session2
+    session_manager._save_index()
+
+    # Set DAF_SESSION_NAME to the OLD session
+    monkeypatch.setenv("DAF_SESSION_NAME", "old-session")
+
+    session_info(identifier=None, uuid_only=False, conversation_id=None)
+    captured = capsys.readouterr()
+
+    # Should show old-session (from env var), NOT recent-session
+    assert "old-session" in captured.out
+    assert "uuid-old" in captured.out
+
+
+def test_session_info_latest_overrides_daf_session_name(temp_daf_home, capsys, monkeypatch):
+    """Test that --latest flag overrides DAF_SESSION_NAME env var."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session1 = session_manager.create_session(
+        name="env-session",
+        goal="Session from env",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-env",
+    )
+    session1.last_active = datetime.now() - timedelta(hours=2)
+    session_manager.index.sessions["env-session"] = session1
+    session_manager._save_index()
+
+    session2 = session_manager.create_session(
+        name="latest-session",
+        goal="Most recent session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-latest",
+    )
+    session2.last_active = datetime.now()
+    session_manager.index.sessions["latest-session"] = session2
+    session_manager._save_index()
+
+    # Set DAF_SESSION_NAME to old session
+    monkeypatch.setenv("DAF_SESSION_NAME", "env-session")
+
+    # Use --latest flag - should override env var
+    session_info(identifier=None, uuid_only=False, conversation_id=None, latest=True)
+    captured = capsys.readouterr()
+
+    # Should show latest-session, NOT env-session
+    assert "latest-session" in captured.out
+    assert "uuid-latest" in captured.out
+
+
+def test_session_info_falls_back_without_daf_session_name(temp_daf_home, capsys, monkeypatch):
+    """Test that daf info (no args) falls back to most recent when DAF_SESSION_NAME not set."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session1 = session_manager.create_session(
+        name="old-session",
+        goal="Older session",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-old",
+    )
+    session1.last_active = datetime.now() - timedelta(hours=2)
+    session_manager.index.sessions["old-session"] = session1
+    session_manager._save_index()
+
+    session2 = session_manager.create_session(
+        name="recent-session",
+        goal="Most recent session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-recent",
+    )
+    session2.last_active = datetime.now()
+    session_manager.index.sessions["recent-session"] = session2
+    session_manager._save_index()
+
+    # Ensure DAF_SESSION_NAME is NOT set
+    monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CS_SESSION_NAME", raising=False)
+    monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+    session_info(identifier=None, uuid_only=False, conversation_id=None)
+    captured = capsys.readouterr()
+
+    # Should show most recent session
+    assert "recent-session" in captured.out
+    assert "uuid-recent" in captured.out
+
+
+def test_session_info_daf_session_name_not_found_falls_back(temp_daf_home, capsys, monkeypatch):
+    """Test that daf info falls back to most recent when DAF_SESSION_NAME refers to non-existent session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="existing-session",
+        goal="Existing session",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-existing",
+    )
+
+    # Set DAF_SESSION_NAME to a non-existent session
+    monkeypatch.setenv("DAF_SESSION_NAME", "non-existent-session")
+
+    session_info(identifier=None, uuid_only=False, conversation_id=None)
+    captured = capsys.readouterr()
+
+    # Should fall back to existing session (most recent)
+    assert "existing-session" in captured.out
+    assert "uuid-existing" in captured.out
+
+
+def test_session_info_explicit_identifier_overrides_daf_session_name(temp_daf_home, capsys, monkeypatch):
+    """Test that explicit identifier takes priority over DAF_SESSION_NAME."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session1 = session_manager.create_session(
+        name="env-session",
+        goal="Session from env",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-env",
+    )
+
+    session2 = session_manager.create_session(
+        name="explicit-session",
+        goal="Explicit session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-explicit",
+    )
+
+    # Set DAF_SESSION_NAME to one session
+    monkeypatch.setenv("DAF_SESSION_NAME", "env-session")
+
+    # But pass a different identifier explicitly
+    session_info(identifier="explicit-session", uuid_only=False, conversation_id=None)
+    captured = capsys.readouterr()
+
+    # Should show explicit-session, NOT env-session
+    assert "explicit-session" in captured.out
+    assert "uuid-explicit" in captured.out

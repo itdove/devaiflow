@@ -17,7 +17,7 @@ When `DAF_SESSION_NAME` is set, perform these steps **before doing any other wor
 ### 1. Read Session Metadata
 
 ```bash
-daf info
+daf info $DAF_SESSION_NAME
 ```
 
 This shows: session name, goal, issue key, status, working directory, branch, workspace, session type, and conversation history.

@@ -544,3 +544,155 @@ def test_add_note_message_only_outside_active_session_fails(temp_daf_home, monke
         add_note(identifier="My note message", note=None)
     assert exc_info.value.code == 1
     # Should show error that session "My note message" was not found
+
+
+def test_view_notes_uses_daf_session_name_env_var(temp_daf_home, monkeypatch, capsys):
+    """Test that daf notes (no args) uses DAF_SESSION_NAME env var inside agent session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    # Create two sessions with notes
+    session1 = session_manager.create_session(
+        name="env-session",
+        goal="Session from env",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-env",
+    )
+    session_manager.add_note("env-session", "Note for env session")
+
+    import time
+    time.sleep(0.05)
+
+    session2 = session_manager.create_session(
+        name="recent-session",
+        goal="Most recent session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-recent",
+    )
+    session_manager.add_note("recent-session", "Note for recent session")
+
+    # Set DAF_SESSION_NAME to the older session
+    monkeypatch.setenv("DAF_SESSION_NAME", "env-session")
+
+    view_notes(identifier=None, latest=False)
+    captured = capsys.readouterr()
+
+    # Should show notes for env-session (from env var), NOT recent-session
+    assert "Note for env session" in captured.out
+
+
+def test_view_notes_latest_overrides_daf_session_name(temp_daf_home, monkeypatch, capsys):
+    """Test that --latest flag overrides DAF_SESSION_NAME for view_notes."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session1 = session_manager.create_session(
+        name="env-session",
+        goal="Session from env",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-env",
+    )
+    session_manager.add_note("env-session", "Note for env session")
+
+    import time
+    time.sleep(0.05)
+
+    session2 = session_manager.create_session(
+        name="recent-session",
+        goal="Most recent session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-recent",
+    )
+    session_manager.add_note("recent-session", "Note for recent session")
+
+    # Set DAF_SESSION_NAME to older session
+    monkeypatch.setenv("DAF_SESSION_NAME", "env-session")
+
+    # Use --latest flag - should override env var
+    view_notes(identifier=None, latest=True)
+    captured = capsys.readouterr()
+
+    # Should show notes for recent-session (latest), NOT env-session
+    assert "Note for recent session" in captured.out
+
+
+def test_view_notes_falls_back_without_daf_session_name(temp_daf_home, monkeypatch, capsys):
+    """Test that daf notes falls back to most recent when DAF_SESSION_NAME not set."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session1 = session_manager.create_session(
+        name="old-session",
+        goal="Older session",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-old",
+    )
+    session_manager.add_note("old-session", "Note for old session")
+
+    import time
+    time.sleep(0.05)
+
+    session2 = session_manager.create_session(
+        name="recent-session",
+        goal="Most recent session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-recent",
+    )
+    session_manager.add_note("recent-session", "Note for recent session")
+
+    # Ensure DAF_SESSION_NAME is NOT set
+    monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CS_SESSION_NAME", raising=False)
+    monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+    view_notes(identifier=None, latest=False)
+    captured = capsys.readouterr()
+
+    # Should show notes for most recent session
+    assert "Note for recent session" in captured.out
+
+
+def test_add_note_uses_daf_session_name_env_var(temp_daf_home, monkeypatch, capsys):
+    """Test that daf note (no identifier, no active conversation) uses DAF_SESSION_NAME."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    import time
+
+    session1 = session_manager.create_session(
+        name="env-session",
+        goal="Session from env",
+        working_directory="dir1",
+        project_path="/path1",
+        ai_agent_session_id="uuid-env",
+    )
+
+    time.sleep(0.05)
+
+    session2 = session_manager.create_session(
+        name="recent-session",
+        goal="Most recent session",
+        working_directory="dir2",
+        project_path="/path2",
+        ai_agent_session_id="uuid-recent",
+    )
+
+    # Set DAF_SESSION_NAME to the older session
+    monkeypatch.setenv("DAF_SESSION_NAME", "env-session")
+    # Ensure not detected as active conversation
+    monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+    add_note(identifier=None, note="Note from agent session")
+
+    # Verify note was added to env-session (from env var), NOT recent-session
+    env_notes = config_loader.get_session_dir("env-session") / "notes.md"
+    recent_notes = config_loader.get_session_dir("recent-session") / "notes.md"
+    assert env_notes.exists()
+    assert not recent_notes.exists()
+    assert "Note from agent session" in env_notes.read_text()
