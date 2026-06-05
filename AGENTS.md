@@ -1048,6 +1048,38 @@ pip uninstall devaiflow
 pip install --upgrade devaiflow
 ```
 
+### Generating Combined Documentation for LLM Upload
+
+To generate a single combined markdown file for NotebookLM upload (or any LLM context), run this from the project root:
+
+```bash
+{
+  echo "# DevAIFlow — Combined Documentation"
+  echo ""
+  echo "Auto-generated combined export of all project documentation."
+  echo ""
+  for f in README.md $(find docs -name '*.md' -not -name 'notebooklm-export.md' | sort); do
+    echo ""
+    echo "# === $f ==="
+    echo ""
+    cat "$f"
+  done
+  echo ""
+  echo "# === CHANGELOG.md (recent) ==="
+  echo ""
+  awk '/^## \[[0-9]/{n++} n>2{exit} {print}' CHANGELOG.md
+  echo ""
+  echo "*(Earlier versions omitted — see CHANGELOG.md for full history)*"
+} > docs/notebooklm-export.md
+```
+
+This produces `docs/notebooklm-export.md` containing:
+- `README.md`
+- All `docs/*.md` files (excluding `notebooklm-export.md` itself)
+- Recent CHANGELOG (Unreleased + first 2 released versions)
+
+The file is listed in `.gitignore` since it is a generated artifact. Regenerate it during each release (see the release skill post-release checklist).
+
 ## Implementation Phases
 
 ### Phase 1: MVP (Core Functionality)
