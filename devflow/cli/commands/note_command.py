@@ -45,18 +45,27 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
             console.print(f"[dim]Using active session: {identifier}{issue_display}[/dim]")
         # else: not in active session, keep identifier as session name (old behavior)
 
-    # If no identifier or --latest flag, use most recent active session
-    if not identifier or latest:
-        all_sessions = session_manager.list_sessions()
-        if not all_sessions:
-            console.print("[red]No sessions found[/red]")
-            import sys
-            sys.exit(1)
+    # Priority: explicit identifier > DAF_SESSION_NAME env var > --latest > most recent
+    if not identifier:
+        if not latest:
+            # Check DAF_SESSION_NAME env var when no identifier given
+            from devflow.cli.utils import get_active_session_name
+            active_name = get_active_session_name()
+            if active_name:
+                identifier = active_name
 
-        # Use the name of the most recent session
-        identifier = all_sessions[0].name
-        issue_display = f" ({all_sessions[0].issue_key})" if all_sessions[0].issue_key else ""
-        console.print(f"[dim]Using session: {identifier}{issue_display}[/dim]")
+        if not identifier:
+            # Fall back to most recent session
+            all_sessions = session_manager.list_sessions()
+            if not all_sessions:
+                console.print("[red]No sessions found[/red]")
+                import sys
+                sys.exit(1)
+
+            # Use the name of the most recent session
+            identifier = all_sessions[0].name
+            issue_display = f" ({all_sessions[0].issue_key})" if all_sessions[0].issue_key else ""
+            console.print(f"[dim]Using session: {identifier}{issue_display}[/dim]")
 
     # Get session using common utility (handles multi-session selection)
     session = get_session_with_prompt(session_manager, identifier, error_if_not_found=False)
@@ -116,18 +125,27 @@ def view_notes(identifier: Optional[str] = None, latest: bool = False) -> None:
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
-    # If no identifier or --latest flag, use most recent active session
-    if not identifier or latest:
-        all_sessions = session_manager.list_sessions()
-        if not all_sessions:
-            console.print("[red]No sessions found[/red]")
-            import sys
-            sys.exit(1)
+    # Priority: explicit identifier > DAF_SESSION_NAME env var > --latest > most recent
+    if not identifier:
+        if not latest:
+            # Check DAF_SESSION_NAME env var when no identifier given
+            from devflow.cli.utils import get_active_session_name
+            active_name = get_active_session_name()
+            if active_name:
+                identifier = active_name
 
-        # Use the name of the most recent session
-        identifier = all_sessions[0].name
-        issue_display = f" ({all_sessions[0].issue_key})" if all_sessions[0].issue_key else ""
-        console.print(f"[dim]Viewing notes for: {identifier}{issue_display}[/dim]")
+        if not identifier:
+            # Fall back to most recent session
+            all_sessions = session_manager.list_sessions()
+            if not all_sessions:
+                console.print("[red]No sessions found[/red]")
+                import sys
+                sys.exit(1)
+
+            # Use the name of the most recent session
+            identifier = all_sessions[0].name
+            issue_display = f" ({all_sessions[0].issue_key})" if all_sessions[0].issue_key else ""
+            console.print(f"[dim]Viewing notes for: {identifier}{issue_display}[/dim]")
 
     # Get session using common utility (handles multi-session selection)
     session = get_session_with_prompt(session_manager, identifier)

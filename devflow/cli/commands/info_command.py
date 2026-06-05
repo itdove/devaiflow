@@ -38,8 +38,19 @@ def session_info(
     session_manager = SessionManager(config_loader)
 
     # Get session
-    if not identifier or latest:
-        # Get most recent session
+    # Priority: explicit identifier > DAF_SESSION_NAME env var > --latest > most recent
+    session = None
+    if identifier:
+        session = session_manager.get_session(identifier)
+    elif not latest:
+        # Check DAF_SESSION_NAME env var when no identifier given
+        from devflow.cli.utils import get_active_session_name
+        active_name = get_active_session_name()
+        if active_name:
+            session = session_manager.get_session(active_name)
+
+    # Fall back to most recent session if needed
+    if session is None and not identifier:
         sessions = session_manager.list_sessions()
         if not sessions:
             if output_json:
@@ -53,8 +64,6 @@ def session_info(
             import sys
             sys.exit(1)
         session = max(sessions, key=lambda s: s.last_active or s.created)
-    else:
-        session = session_manager.get_session(identifier)
 
     if not session:
         if output_json:
