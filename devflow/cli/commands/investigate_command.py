@@ -38,6 +38,7 @@ def create_investigation_from_issue(
     model_profile: Optional[str] = None,
     projects: Optional[str] = None,
     temp_clone: Optional[bool] = None,
+    agent: Optional[str] = None,
 ) -> None:
     """Create investigation session from an existing issue tracker ticket.
 
@@ -154,6 +155,7 @@ def create_investigation_from_issue(
         temp_clone=temp_clone,
         issue_key=issue_key,
         issue_details={"summary": issue_summary, "description": issue_description},
+        agent=agent,
     )
 
 
@@ -363,6 +365,7 @@ def create_investigation_session(
     issue_details: Optional[dict] = None,
     headless: bool = False,
     auto_approve: bool = False,
+    agent: Optional[str] = None,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
@@ -580,7 +583,7 @@ def create_investigation_session(
         project_path=project_path,
         branch=None,  # No branch for investigation sessions
         model_profile=model_profile,
-        agent_backend=config.agent_backend if config else "claude",
+        agent_backend=agent or (config.agent_backend if config else "claude"),
     )
 
     # Set session_type to "investigation"
@@ -699,8 +702,8 @@ def create_investigation_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = config.agent_backend if config else "claude"
-        agent = create_agent_client(agent_backend)
+        agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
         from devflow.utils.model_provider import get_active_profile as get_model_profile
@@ -721,7 +724,7 @@ def create_investigation_session(
         console_print()
 
         # Launch agent with initial prompt
-        process = agent.launch_with_prompt(
+        process = agent_client.launch_with_prompt(
             project_path=project_path,
             initial_prompt=initial_prompt,
             session_id=ai_agent_session_id,
@@ -1144,8 +1147,8 @@ def _create_multi_project_investigation_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = config.agent_backend if config else "claude"
-        agent = create_agent_client(agent_backend)
+        agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
         from devflow.utils.model_provider import get_active_profile as get_model_profile
@@ -1166,7 +1169,7 @@ def _create_multi_project_investigation_session(
         console_print()
 
         # Launch agent with initial prompt at workspace level
-        process = agent.launch_with_prompt(
+        process = agent_client.launch_with_prompt(
             project_path=workspace_path,  # Launch at workspace level
             initial_prompt=initial_prompt,
             session_id=ai_agent_session_id,

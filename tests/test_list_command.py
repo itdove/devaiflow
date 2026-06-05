@@ -1,5 +1,6 @@
 """Tests for daf list command."""
 
+import os
 from datetime import datetime, timedelta
 
 import pytest
@@ -8,6 +9,19 @@ from click.testing import CliRunner
 from devflow.cli.main import cli
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
+
+
+@pytest.fixture(autouse=True)
+def wide_terminal(monkeypatch):
+    """Force Rich Console to use 200-char width for all list command tests.
+
+    In CI (NO_COLOR=1, TERM=dumb), Rich Console hardcodes 80-char width
+    via is_dumb_terminal check. The only way to override is to set BOTH
+    _width AND _height, which bypasses the dumb terminal check entirely.
+    """
+    from devflow.cli.commands import list_command
+    list_command.console._width = 200
+    list_command.console._height = 24
 
 
 def test_list_empty(temp_daf_home):

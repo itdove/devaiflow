@@ -28,7 +28,7 @@ from devflow.agent.aider_agent import AiderAgent
 from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
-from devflow.agent.factory import create_agent_client
+from devflow.agent.factory import create_agent_client, SUPPORTED_BACKENDS, validate_agent_backend
 
 __all__ = [
     "AgentInterface",
@@ -42,4 +42,6 @@ __all__ = [
     "CrushAgent",
     "OpenCodeAgent",
     "create_agent_client",
+    "SUPPORTED_BACKENDS",
+    "validate_agent_backend",
 ]

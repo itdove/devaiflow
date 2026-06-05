@@ -128,6 +128,7 @@ def _display_page(
     table = Table(title="Your Sessions", show_header=True, header_style="bold magenta")
     table.add_column("Status")
     table.add_column("Name", style="bold", no_wrap=True)
+    table.add_column("Agent", style="dim")
     table.add_column("Workspace", style="cyan")
     table.add_column("Issue")
     table.add_column("Summary")
@@ -236,10 +237,14 @@ def _display_page(
                 else:
                     token_display = str(total_tokens)
 
+        # Agent display
+        agent_display = session.agent_backend or "-"
+
         # Add row
         table.add_row(
             status_display,
             name_display,
+            agent_display,
             workspace_display,
             issue_display,
             session.issue_metadata.get("summary") if session.issue_metadata else session.goal or "",

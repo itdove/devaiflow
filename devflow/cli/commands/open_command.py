@@ -239,6 +239,7 @@ def open_session(
     skip_feature_warning: bool = False,
     headless: bool = False,
     auto_approve: bool = False,
+    agent: Optional[str] = None,
 ) -> None:
     """Open/resume an existing session.
 
@@ -562,8 +563,8 @@ def open_session(
     active_conv = session.active_conversation
     is_first_launch = not (active_conv and active_conv.ai_agent_session_id)
 
-    # Resolve effective agent backend: session-stored > config > "claude" (backward compatible)
-    effective_agent_backend = session.agent_backend or (config.agent_backend if config else "claude")
+    # Resolve effective agent backend: --agent flag > session-stored > config > "claude" (backward compatible)
+    effective_agent_backend = agent or session.agent_backend or (config.agent_backend if config else "claude")
 
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
         # Check if the session exists using the agent-aware check
