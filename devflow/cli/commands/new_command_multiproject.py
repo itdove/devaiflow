@@ -255,6 +255,7 @@ def create_multi_project_session(
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
         model_profile=model_profile,
+        agent_backend=config.agent_backend if config else "claude",
     )
 
     # Add multi-project conversation (ONE conversation for all projects)

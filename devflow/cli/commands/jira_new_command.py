@@ -480,6 +480,7 @@ def create_jira_ticket_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=branch,  # Use provided branch or None for no branch
+        agent_backend=config.agent_backend if config else "claude",
     )
 
     # Set session_type to "ticket_creation"

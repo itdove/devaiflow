@@ -114,10 +114,10 @@ def test_reopen_ticket_creation_session_without_conversation_file(temp_daf_home,
             # Verify the command succeeded (no error exit code)
             assert result.exit_code == 0, f"Command failed with output:\n{result.output}"
 
-            # Verify the output indicates conversation file was not restored
+            # Verify the output indicates session was not restored
             # AND that a new session ID was generated for fresh start
-            assert "Conversation file was not restored" in result.output, \
-                f"Expected 'Conversation file was not restored' message. Got:\n{result.output}"
+            assert "session was not restored" in result.output, \
+                f"Expected 'session was not restored' message. Got:\n{result.output}"
             assert "Generating new session ID" in result.output, \
                 f"Expected 'Generating new session ID' message. Got:\n{result.output}"
 
@@ -303,12 +303,12 @@ def test_reopen_normal_session_without_conversation_file(temp_daf_home, mock_git
         assert result.exit_code == 0, f"Command failed with output:\n{result.output}"
 
         # For normal sessions (non-temp-directory sessions), the existing behavior should work:
-        # - Missing conversation file triggers "Conversation file not found" message
+        # - Missing session triggers "Session not found" message
         # - Session is treated as first launch
         # - New session ID is generated
-        assert "Conversation file not found" in result.output or "Will create a new conversation" in result.output or \
+        assert "Session not found" in result.output or "Will create a new conversation" in result.output or \
                "First-time launch" in result.output, \
-            f"Expected message about missing conversation for normal session. Got:\n{result.output}"
+            f"Expected message about missing session for normal session. Got:\n{result.output}"
 
         # The session ID handling for normal sessions is unchanged by PROJ-61092
         # This test just verifies we didn't break the existing behavior
@@ -697,8 +697,8 @@ def test_daf_jira_open_resumes_existing_conversation(temp_daf_home, mock_git_rep
             assert "Generating new session ID" not in result.output, \
                 f"Should not generate new session ID when conversation exists. Got:\n{result.output}"
 
-            # CRITICAL: Verify it found the conversation at stable location
-            assert "Checking for conversation file at stable location" in result.output, \
+            # CRITICAL: Verify it found the session at stable location
+            assert "session at stable location" in result.output, \
                 f"Expected to check stable location for ticket_creation session. Got:\n{result.output}"
             assert "found" in result.output.lower(), \
                 f"Expected to find conversation file. Got:\n{result.output}"

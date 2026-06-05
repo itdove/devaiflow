@@ -279,6 +279,9 @@ def _display_full_session_info(
     # AAP-63377: Display workspace
     if session.workspace_name:
         console.print(f"[bold]Workspace:[/bold] [cyan]{session.workspace_name}[/cyan]")
+    # Display agent backend if stored (issue #442)
+    if session.agent_backend:
+        console.print(f"[bold]Agent Backend:[/bold] [cyan]{session.agent_backend}[/cyan]")
     if session.goal:
         console.print(f"[bold]Goal:[/bold] {session.goal}")
     console.print()

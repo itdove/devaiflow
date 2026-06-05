@@ -125,6 +125,7 @@ def jira_open_session(issue_key: str, headless: bool = False, auto_approve: bool
         working_directory=working_directory,
         project_path=project_path,
         branch=None,  # No branch for ticket creation sessions
+        agent_backend=config.agent_backend if config else "claude",
     )
 
     # Set session_type to "ticket_creation"

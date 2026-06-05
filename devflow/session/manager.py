@@ -53,6 +53,7 @@ class SessionManager:
         ai_agent_session_id: Optional[str] = None,
         issue_key: Optional[str] = None,
         model_profile: Optional[str] = None,
+        agent_backend: Optional[str] = None,
     ) -> Session:
         """Create a new session.
 
@@ -65,6 +66,7 @@ class SessionManager:
             ai_agent_session_id: Claude Code session UUID
             issue_key: Optional issue tracker key
             model_profile: Optional model provider profile override (e.g., "vertex", "llama-cpp")
+            agent_backend: Optional AI agent backend used for this session (e.g., "claude", "opencode")
 
         Returns:
             Created Session object
@@ -76,6 +78,7 @@ class SessionManager:
             working_directory=working_directory,
             status="created",
             model_profile=model_profile,
+            agent_backend=agent_backend,
         )
 
         # Create initial conversation if we have the required info (NEW in PROJ-59791)

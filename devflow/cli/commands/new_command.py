@@ -775,6 +775,7 @@ def create_new_session(
             branch=branch,
             ai_agent_session_id=session_id,
             model_profile=model_profile,
+            agent_backend=config.agent_backend if config else "claude",
         )
 
         # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
@@ -821,9 +822,12 @@ def create_new_session(
             console.print(f"\n[dim]Start later with: daf open {name}[/dim]")
         return
 
-    # Change to project directory and launch Claude Code
+    # Change to project directory and launch AI agent
     try:
-        console.print(f"\n[cyan]Launching Claude Code in {project_path}...[/cyan]")
+        _agent_backend = config.agent_backend if config else "claude"
+        from devflow.agent import create_agent_client as _cac
+        _agent_display_name = _cac(_agent_backend).get_agent_name().title()
+        console.print(f"\n[cyan]Launching {_agent_display_name} in {project_path}...[/cyan]")
 
         # Update session status and start work session
         session.status = "in_progress"
@@ -923,13 +927,13 @@ def create_new_session(
                 _prompt_for_complete_on_exit(session, config)
 
     except Exception as e:
-        console.print(f"\n[red]Error launching Claude Code:[/red] {e}")
+        console.print(f"\n[red]Error launching {_agent_display_name}:[/red] {e}")
 
         # Update session status to paused on error
         session.status = "paused"
         session_manager.update_session(session)
 
-        # Auto-pause: End work session even if Claude launch failed
+        # Auto-pause: End work session even if agent launch failed
         try:
             session_manager.end_work_session(name)
         except Exception:

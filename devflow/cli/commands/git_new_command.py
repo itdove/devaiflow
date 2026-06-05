@@ -584,6 +584,7 @@ def create_git_issue_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=branch,
+        agent_backend=config.agent_backend if config else "claude",
     )
 
     # Set session_type to "ticket_creation"
