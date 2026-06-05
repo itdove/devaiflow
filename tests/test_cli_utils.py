@@ -19,6 +19,7 @@ from devflow.cli.utils import (
     resolve_goal_input,
     process_goal_options,
     reset_terminal_after_tui,
+    clear_screen_after_tui,
     _is_valid_file_or_url,
     _resolve_file_or_url,
     require_outside_claude,
@@ -1021,6 +1022,58 @@ class TestResetTerminalAfterTui:
 
         assert fake_stdout.getvalue() == ""
         mock_run.assert_not_called()
+
+
+class TestClearScreenAfterTui:
+    """Tests for clear_screen_after_tui (#461)."""
+
+    def test_scrolls_past_splash_art(self):
+        """Verify newlines are written to scroll past TUI splash art."""
+        import io
+        import sys
+
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: True
+        with patch.object(sys, "stdout", fake_stdout), \
+             patch("shutil.get_terminal_size", return_value=Mock(lines=24)):
+            clear_screen_after_tui()
+
+        written = fake_stdout.getvalue()
+        assert written == "\n" * 24, "Should write one newline per terminal row"
+
+    def test_skipped_when_not_tty(self):
+        """No output when stdout is not a TTY."""
+        import io
+        import sys
+
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: False
+        with patch.object(sys, "stdout", fake_stdout):
+            clear_screen_after_tui()
+
+        assert fake_stdout.getvalue() == ""
+
+    def test_silences_os_errors(self):
+        """OSError during write is silently caught."""
+        import sys
+
+        mock_stdout = Mock()
+        mock_stdout.isatty.return_value = True
+        mock_stdout.write.side_effect = OSError("broken pipe")
+        with patch.object(sys, "stdout", mock_stdout):
+            # Should not raise
+            clear_screen_after_tui()
+
+    def test_silences_value_errors(self):
+        """ValueError during write is silently caught."""
+        import sys
+
+        mock_stdout = Mock()
+        mock_stdout.isatty.return_value = True
+        mock_stdout.write.side_effect = ValueError("closed")
+        with patch.object(sys, "stdout", mock_stdout):
+            # Should not raise
+            clear_screen_after_tui()
 
 
 class TestGetActiveSessionName:

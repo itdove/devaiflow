@@ -215,6 +215,26 @@ class AgentInterface(ABC):
         """
         pass
 
+    def uses_tui(self) -> bool:
+        """Whether this agent uses a full-screen TUI (alternate screen buffer).
+
+        TUI agents (e.g. OpenCode, Crush) take over the entire terminal with a
+        full-screen interface built on frameworks like Bubble Tea. When they
+        exit, they may leave splash art or residual output on the screen that
+        garbles subsequent CLI output.
+
+        Non-TUI agents (e.g. Claude Code, Aider) use a standard terminal REPL
+        and do not leave splash art on exit.
+
+        GUI/IDE agents (e.g. Cursor, Windsurf) open a separate window and do
+        not interact with the terminal at all.
+
+        Returns:
+            True if the agent uses a full-screen TUI.
+            False otherwise (default).
+        """
+        return False
+
     def supports_permission_prompts(self) -> bool:
         """Whether this agent prompts the user before modifying files or running commands.
 

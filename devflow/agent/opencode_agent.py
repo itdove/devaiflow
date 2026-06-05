@@ -353,6 +353,18 @@ class OpenCodeAgent(AgentInterface):
         """
         return "opencode"
 
+    def uses_tui(self) -> bool:
+        """OpenCode uses a full-screen TUI (Bubble Tea).
+
+        OpenCode renders a full-screen terminal interface using the alternate
+        screen buffer. On exit it may leave splash art that garbles subsequent
+        CLI output unless the screen is explicitly cleared.
+
+        Returns:
+            True
+        """
+        return True
+
     def supports_permission_prompts(self) -> bool:
         """OpenCode supports permission prompts when configured.
 

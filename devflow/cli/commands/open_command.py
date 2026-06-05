@@ -1123,8 +1123,10 @@ def open_session(
                     )
                     process.wait()
                     if not headless:
-                        from devflow.cli.utils import reset_terminal_after_tui
+                        from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
                         reset_terminal_after_tui()
+                        if agent.uses_tui():
+                            clear_screen_after_tui()
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
@@ -1294,8 +1296,10 @@ def open_session(
                     process.wait()
             finally:
                 if not headless:
-                    from devflow.cli.utils import reset_terminal_after_tui
+                    from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
                     reset_terminal_after_tui()
+                    if agent.uses_tui():
+                        clear_screen_after_tui()
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
