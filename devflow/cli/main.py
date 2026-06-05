@@ -4056,11 +4056,15 @@ def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: 
     from devflow.web.app import get_dashboard_status
     status = get_dashboard_status()
     if status:
+        url = f"http://127.0.0.1:{status['port']}"
         console.print(
             f"[yellow]Dashboard already running[/yellow] (pid={status['pid']}, port={status['port']})"
         )
-        console.print(f"  Open: [bold]http://127.0.0.1:{status['port']}[/bold]")
+        console.print(f"  Open: [bold]{url}[/bold]")
         console.print("  Stop: [bold]daf dashboard stop[/bold]")
+        if not no_open:
+            import webbrowser
+            webbrowser.open(url)
         return
 
     if background:
