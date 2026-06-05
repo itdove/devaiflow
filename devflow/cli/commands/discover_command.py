@@ -3,6 +3,7 @@
 from rich.console import Console
 from rich.table import Table
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.discovery import SessionDiscovery
@@ -13,19 +14,21 @@ console = Console()
 
 @require_outside_claude
 def discover_sessions() -> None:
-    """Discover existing Claude Code sessions not managed by daf tool."""
+    """Discover existing AI agent sessions not managed by daf tool."""
     config_loader = ConfigLoader()
+    config = config_loader.load_config()
+    agent_name = get_agent_display_name(config.agent_backend if config else None)
     session_manager = SessionManager(config_loader)
     discovery = SessionDiscovery()
 
-    console.print("\n[bold]Discovering Claude Code sessions...[/bold]\n")
+    console.print(f"\n[bold]Discovering {agent_name} sessions...[/bold]\n")
 
     # Discover all Claude sessions
     discovered = discovery.discover_sessions()
 
     if not discovered:
-        console.print("[yellow]No Claude Code sessions found[/yellow]")
-        console.print("[dim]Claude sessions are stored in ~/.claude/projects/[/dim]")
+        console.print(f"[yellow]No {agent_name} sessions found[/yellow]")
+        console.print(f"[dim]{agent_name} sessions stored in its data directory[/dim]")
         return
 
     # Get list of UUIDs already managed by daf tool

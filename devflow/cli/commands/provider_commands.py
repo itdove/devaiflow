@@ -623,6 +623,6 @@ def test_profile(name: Optional[str] = None, output_json: bool = False) -> None:
 
         if not issues:
             console.print("\n[dim]Note: This command validates configuration only.[/dim]")
-            console.print("[dim]To test actual connectivity, use the profile with Claude Code.[/dim]")
+            console.print("[dim]To test actual connectivity, use the profile with your AI agent.[/dim]")
 
         console.print()

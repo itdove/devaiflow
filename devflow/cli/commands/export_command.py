@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from rich.console import Console
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.export.manager import ExportManager
@@ -238,10 +239,11 @@ def _sync_single_conversation_branch(
         # Generate WIP commit message
         identifier = issue_key if issue_key else session_name
         dir_label = f" ({working_dir_name})" if working_dir_name else ""
-        attribution = co_authored_by or "Co-Authored-By: Claude <noreply@anthropic.com>"
+        attribution = co_authored_by or get_co_authored_by_line()
+        agent_display = get_agent_display_name()
         commit_message = f"""WIP: Export for {identifier}{dir_label}
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with {agent_display}
 
 {attribution}"""
 

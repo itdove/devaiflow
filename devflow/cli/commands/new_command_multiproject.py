@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import (
     console_print,
     get_status_display,
@@ -327,9 +328,11 @@ def create_multi_project_session(
         project_paths=project_paths_dict,
     )
 
-    # Launch Claude Code at workspace level (not individual project)
+    # Launch AI agent at workspace level (not individual project)
+    agent_backend = config.agent_backend if config else "claude"
+    agent_name = get_agent_display_name(agent_backend)
     if should_launch_claude_code(config):
-        console.print("[cyan]Launching Claude Code at workspace level...[/cyan]\n")
+        console.print(f"[cyan]Launching {agent_name} at workspace level...[/cyan]\n")
 
         # Update session status and start work session
         session.status = "in_progress"
@@ -338,7 +341,6 @@ def create_multi_project_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = config.agent_backend if config else "claude"
         agent = create_agent_client(agent_backend)
 
         # Set environment variables for the AI agent process
@@ -374,13 +376,13 @@ def create_multi_project_session(
             process.wait()
         finally:
             if not is_cleanup_done():
-                console.print(f"\n[green]✓[/green] Claude session completed")
+                console.print(f"\n[green]✓[/green] {agent_name} session completed")
 
                 # Update session status to paused
                 session.status = "paused"
                 session_manager.update_session(session)
 
-                # Auto-pause: End work session when Claude Code closes
+                # Auto-pause: End work session when AI agent closes
                 session_manager.end_work_session(name)
 
                 console.print(f"[dim]Resume anytime with: daf open {name}[/dim]")
@@ -389,6 +391,6 @@ def create_multi_project_session(
                 from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
                 _prompt_for_complete_on_exit(session, config)
     else:
-        console.print(f"\n[dim]Claude Code launch disabled in config[/dim]")
+        console.print(f"\n[dim]{agent_name} launch disabled in config[/dim]")
         console.print(f"[dim]Session UUID: {session_id}[/dim]")
         console.print(f"\n[bold]To resume:[/bold] daf open {name}")

@@ -5,10 +5,10 @@ import pytest
 from devflow.jira.client import JiraClient
 from devflow.jira.exceptions import JiraNotFoundError
 from devflow.cli.commands.jira_view_command import (
-    format_ticket_for_claude,
-    format_changelog_for_claude,
-    format_child_issues_for_claude,
-    format_comments_for_claude,
+    format_ticket_for_agent,
+    format_changelog_for_agent,
+    format_child_issues_for_agent,
+    format_comments_for_agent,
     view_jira_ticket,
 )
 
@@ -24,7 +24,7 @@ def test_format_ticket_basic_fields():
         "assignee": "John Doe",
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Key: PROJ-12345" in result
     assert "Summary: Test ticket summary" in result
@@ -44,7 +44,7 @@ def test_format_ticket_with_description():
         "description": "This is a test bug description\nwith multiple lines",
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Description:" in result
     assert "This is a test bug description" in result
@@ -61,7 +61,7 @@ def test_format_ticket_with_acceptance_criteria():
         "acceptance_criteria": "- Criterion 1\n- Criterion 2\n- Criterion 3",
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Acceptance Criteria:" in result
     assert "- Criterion 1" in result
@@ -81,7 +81,7 @@ def test_format_ticket_with_sprint_and_points():
         "epic": "PROJ-10000",
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Sprint: Sprint 42" in result
     assert "Points: 5" in result
@@ -105,7 +105,7 @@ def test_format_ticket_complete_example():
         "acceptance_criteria": "- daf jira view command implemented using JiraClient\n- Command outputs issue tracker ticket in Claude-friendly format\n- Initial prompt updated to use daf jira view instead of curl\n- More reliable than curl with proper error handling\n- Consistent authentication handling via JiraClient",
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     # Verify all fields are present
     assert "Key: PROJ-59207" in result
@@ -133,7 +133,7 @@ def test_format_ticket_minimal_fields():
         "status": "New",
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     # Required fields should be present
     assert "Key: PROJ-12345" in result
@@ -330,7 +330,7 @@ def test_format_changelog_basic():
         ]
     }
 
-    result = format_changelog_for_claude(changelog)
+    result = format_changelog_for_agent(changelog)
 
     assert "Changelog/History:" in result
     assert "2025-12-05 20:13:45" in result
@@ -348,7 +348,7 @@ def test_format_changelog_empty():
         "histories": []
     }
 
-    result = format_changelog_for_claude(changelog)
+    result = format_changelog_for_agent(changelog)
 
     assert result == ""
 
@@ -378,7 +378,7 @@ def test_format_changelog_limits_to_15():
         "histories": histories
     }
 
-    result = format_changelog_for_claude(changelog)
+    result = format_changelog_for_agent(changelog)
 
     # Should only show last 15 entries (entries 5-19, which are days 6-20)
     assert "2025-12-06" in result  # Entry 5
@@ -419,7 +419,7 @@ def test_format_changelog_multiple_items():
         ]
     }
 
-    result = format_changelog_for_claude(changelog)
+    result = format_changelog_for_agent(changelog)
 
     assert "status: New → In Progress" in result
     assert "priority: Normal → Major" in result
@@ -749,7 +749,7 @@ def test_format_child_issues_basic():
         }
     ]
 
-    result = format_child_issues_for_claude(children)
+    result = format_child_issues_for_agent(children)
 
     assert "Child Issues:" in result
     assert "PROJ-12346 | Sub-task | In Progress | Implement API endpoint | Assignee: John Doe" in result
@@ -763,7 +763,7 @@ def test_format_child_issues_empty():
     """Test formatting empty child issues list."""
     children = []
 
-    result = format_child_issues_for_claude(children)
+    result = format_child_issues_for_agent(children)
 
     assert result == "\nNo child issues found"
 
@@ -1007,7 +1007,7 @@ def test_format_comments_basic():
         }
     ]
 
-    result = format_comments_for_claude(comments)
+    result = format_comments_for_agent(comments)
 
     assert "Comments:" in result
     assert "2025-12-05 20:13:45 | John Doe" in result
@@ -1032,7 +1032,7 @@ def test_format_comments_with_visibility():
         }
     ]
 
-    result = format_comments_for_claude(comments)
+    result = format_comments_for_agent(comments)
 
     assert "Comments:" in result
     assert "[Visibility: group=developers]" in result
@@ -1043,7 +1043,7 @@ def test_format_comments_empty():
     """Test formatting empty comments list."""
     comments = []
 
-    result = format_comments_for_claude(comments)
+    result = format_comments_for_agent(comments)
 
     assert result == ""
 
@@ -1236,7 +1236,7 @@ def test_format_ticket_with_url_fields():
         "documentation_url": "https://docs.example.com"
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Git Pull Requests:" in result
     assert "  - https://github.com/org/repo/pull/123" in result
@@ -1254,7 +1254,7 @@ def test_format_ticket_with_url_fields_list_format():
         "git_pull_request": ["https://github.com/org/repo/pull/123", "https://github.com/org/repo/pull/124"],
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Git Pull Requests:" in result
     assert "  - https://github.com/org/repo/pull/123" in result
@@ -1272,7 +1272,7 @@ def test_format_ticket_with_long_text_fields():
         "technical_details": long_text
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Technical Details:" in result
     assert long_text in result
@@ -1290,7 +1290,7 @@ def test_format_ticket_skips_empty_values():
         "valid_field": "Value"
     }
 
-    result = format_ticket_for_claude(ticket_data)
+    result = format_ticket_for_agent(ticket_data)
 
     assert "Empty Field:" not in result
     assert "None Field:" not in result
@@ -1315,7 +1315,7 @@ def test_format_changelog_missing_timestamp():
         ]
     }
 
-    result = format_changelog_for_claude(changelog)
+    result = format_changelog_for_agent(changelog)
 
     assert "Unknown time" in result
     assert "John Doe" in result
@@ -1339,7 +1339,7 @@ def test_format_changelog_invalid_timestamp():
         ]
     }
 
-    result = format_changelog_for_claude(changelog)
+    result = format_changelog_for_agent(changelog)
 
     # Should fallback to first 19 characters
     assert "invalid-timestamp" in result
@@ -1355,7 +1355,7 @@ def test_format_comments_missing_timestamp():
         }
     ]
 
-    result = format_comments_for_claude(comments)
+    result = format_comments_for_agent(comments)
 
     assert "Unknown time" in result
     assert "John Doe" in result
@@ -1372,7 +1372,7 @@ def test_format_comments_invalid_timestamp():
         }
     ]
 
-    result = format_comments_for_claude(comments)
+    result = format_comments_for_agent(comments)
 
     # Should fallback to first 19 characters
     assert "invalid-timestamp" in result

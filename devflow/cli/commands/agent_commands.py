@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Any
 from rich.console import Console
 from rich.table import Table
 
-from devflow.agent.factory import create_agent_client
+from devflow.agent.factory import create_agent_client, get_agent_display_name
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.utils.dependencies import check_tool_available, get_tool_version
@@ -26,7 +26,6 @@ console = Console()
 # Agent metadata mapping
 AGENT_METADATA: Dict[str, Dict[str, Any]] = {
     "claude": {
-        "name": "Claude Code",
         "description": "Anthropic's official Claude Code CLI",
         "cli_command": "claude",
         "install_url": "https://docs.claude.com/en/docs/claude-code/installation",
@@ -40,7 +39,6 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         },
     },
     "ollama": {
-        "name": "Ollama + Claude Code",
         "description": "Local models via Ollama with Claude Code interface",
         "cli_command": "ollama",
         "install_url": "https://ollama.ai/download",
@@ -55,7 +53,6 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         "notes": "Requires both 'ollama' and 'claude' CLI tools",
     },
     "github-copilot": {
-        "name": "GitHub Copilot",
         "description": "GitHub Copilot in VS Code",
         "cli_command": "code",
         "install_url": "https://code.visualstudio.com/",
@@ -70,7 +67,6 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         "notes": "Limited integration - experimental support only",
     },
     "cursor": {
-        "name": "Cursor",
         "description": "Cursor AI editor",
         "cli_command": "cursor",
         "install_url": "https://cursor.sh/",
@@ -85,7 +81,6 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         "notes": "Limited integration - experimental support only",
     },
     "windsurf": {
-        "name": "Windsurf",
         "description": "Windsurf (Codeium) editor",
         "cli_command": "windsurf",
         "install_url": "https://codeium.com/windsurf",
@@ -100,7 +95,6 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         "notes": "Limited integration - experimental support only",
     },
     "aider": {
-        "name": "Aider",
         "description": "AI pair programming in terminal",
         "cli_command": "aider",
         "install_url": "https://aider.chat/docs/install.html",
@@ -115,7 +109,6 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         "notes": "Git-first approach with chat history files",
     },
     "continue": {
-        "name": "Continue",
         "description": "VS Code extension for AI assistance",
         "cli_command": "code",
         "install_url": "https://continue.dev/docs/quickstart",
@@ -130,7 +123,6 @@ AGENT_METADATA: Dict[str, Dict[str, Any]] = {
         "notes": "VS Code extension - limited CLI integration",
     },
     "opencode": {
-        "name": "OpenCode",
         "description": "Open source terminal AI coding agent by Anomaly (multi-provider)",
         "cli_command": "opencode",
         "install_url": "https://opencode.ai",
@@ -205,7 +197,7 @@ def get_all_agents_status() -> Dict[str, Dict[str, Any]]:
         detection = detect_agent_installation(agent_key)
 
         status[agent_key] = {
-            "name": metadata["name"],
+            "name": get_agent_display_name(agent_key),
             "description": metadata["description"],
             "status": metadata["status"],
             "installed": detection["installed"],
@@ -331,18 +323,19 @@ def set_default_agent(agent_name: Optional[str] = None, output_json: bool = Fals
     detection = detect_agent_installation(agent_name)
     if not detection["installed"]:
         metadata = AGENT_METADATA[agent_name]
+        display_name = get_agent_display_name(agent_name)
         if output_json:
             json_output_func(
                 success=False,
                 error={
                     "code": "AGENT_NOT_INSTALLED",
-                    "message": f"Agent '{metadata['name']}' is not installed",
+                    "message": f"Agent '{display_name}' is not installed",
                     "install_url": metadata["install_url"],
                     "cli_command": metadata["cli_command"],
                 }
             )
         else:
-            console.print(f"[red]✗[/red] Agent '{metadata['name']}' is not installed")
+            console.print(f"[red]✗[/red] Agent '{display_name}' is not installed")
             console.print(f"[dim]Install from: {metadata['install_url']}[/dim]")
         return
 
@@ -390,11 +383,11 @@ def set_default_agent(agent_name: Optional[str] = None, output_json: bool = Fals
             success=True,
             data={
                 "agent": agent_name,
-                "agent_name": AGENT_METADATA[agent_name]["name"],
+                "agent_name": get_agent_display_name(agent_name),
             }
         )
     else:
-        console.print(f"[green]✓[/green] Default agent set to: {AGENT_METADATA[agent_name]['name']}")
+        console.print(f"[green]✓[/green] Default agent set to: {get_agent_display_name(agent_name)}")
 
 
 def test_agent(agent_name: Optional[str] = None, output_json: bool = False) -> None:
@@ -435,11 +428,12 @@ def test_agent(agent_name: Optional[str] = None, output_json: bool = False) -> N
 
     metadata = AGENT_METADATA[agent_name]
     detection = detect_agent_installation(agent_name)
+    display_name = get_agent_display_name(agent_name)
 
     # Test results
     results = {
         "agent": agent_name,
-        "agent_name": metadata["name"],
+        "agent_name": display_name,
         "installed": detection["installed"],
         "cli_path": detection["cli_path"],
         "version": detection["version"],
@@ -454,7 +448,7 @@ def test_agent(agent_name: Optional[str] = None, output_json: bool = False) -> N
         return
 
     # Display test results
-    console.print(f"[bold]Testing {metadata['name']}[/bold]\n")
+    console.print(f"[bold]Testing {display_name}[/bold]\n")
 
     # CLI availability
     if results["tests"]["cli_available"]:
@@ -476,9 +470,9 @@ def test_agent(agent_name: Optional[str] = None, output_json: bool = False) -> N
     # Overall status
     console.print()
     if all(results["tests"].values()):
-        console.print(f"[green]✓[/green] {metadata['name']} is ready to use")
+        console.print(f"[green]✓[/green] {display_name} is ready to use")
     else:
-        console.print(f"[red]✗[/red] {metadata['name']} is not ready")
+        console.print(f"[red]✗[/red] {display_name} is not ready")
 
 
 def show_agent_info(agent_name: Optional[str] = None, output_json: bool = False) -> None:
@@ -519,10 +513,11 @@ def show_agent_info(agent_name: Optional[str] = None, output_json: bool = False)
 
     metadata = AGENT_METADATA[agent_name]
     detection = detect_agent_installation(agent_name)
+    display_name = get_agent_display_name(agent_name)
 
     info = {
         "agent": agent_name,
-        "name": metadata["name"],
+        "name": display_name,
         "description": metadata["description"],
         "status": metadata["status"],
         "cli_command": metadata["cli_command"],
@@ -540,7 +535,7 @@ def show_agent_info(agent_name: Optional[str] = None, output_json: bool = False)
         return
 
     # Display information
-    console.print(f"[bold]{metadata['name']}[/bold]")
+    console.print(f"[bold]{display_name}[/bold]")
     console.print(f"{metadata['description']}\n")
 
     # Status

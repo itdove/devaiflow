@@ -3,6 +3,7 @@
 from rich.console import Console
 from rich.prompt import Prompt
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -12,11 +13,11 @@ console = Console()
 
 @require_outside_claude
 def update_session(identifier: str, ai_agent_session_id: str = None) -> None:
-    """Update session with Claude session ID.
+    """Update session with AI agent session ID.
 
     Args:
         identifier: Session group name or issue key
-        ai_agent_session_id: Claude session UUID (prompts if not provided)
+        ai_agent_session_id: AI agent session UUID (prompts if not provided)
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -40,8 +41,8 @@ def update_session(identifier: str, ai_agent_session_id: str = None) -> None:
 
     # Get session ID if not provided
     if not ai_agent_session_id:
-        console.print("\n[cyan]Tip: Run 'claude --resume' to see available sessions[/cyan]")
-        ai_agent_session_id = Prompt.ask("Enter Claude session ID")
+        console.print("\n[cyan]Tip: Check your AI agent for available sessions[/cyan]")
+        ai_agent_session_id = Prompt.ask("Enter agent session ID")
 
     if not ai_agent_session_id:
         console.print("[yellow]No session ID provided[/yellow]")
@@ -58,4 +59,6 @@ def update_session(identifier: str, ai_agent_session_id: str = None) -> None:
     session_manager.update_session(session)
 
     console.print(f"[green]✓[/green] Updated session '{session.name}'{issue_display}")
-    console.print(f"  Claude session ID: {ai_agent_session_id}")
+    config = config_loader.load_config()
+    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    console.print(f"  {agent_name} session ID: {ai_agent_session_id}")

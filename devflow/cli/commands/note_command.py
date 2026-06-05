@@ -73,12 +73,12 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
         console.print(f"[red]No session found for '{identifier}'[/red]")
         # Provide helpful guidance based on context
         if os.environ.get("AI_AGENT_SESSION_ID"):
-            console.print("[dim]Tip: When in a Claude Code session, use:[/dim]")
+            console.print(f"[dim]Tip: When in an AI agent session, use:[/dim]")
             console.print("[dim]  daf note \"your note text\"[/dim]")
         else:
             console.print("[dim]Usage:[/dim]")
             console.print("[dim]  daf note SESSION_ID \"note text\"          # Add note to specific session[/dim]")
-            console.print("[dim]  daf note \"note text\"                      # Add note to active session (when in Claude Code)[/dim]")
+            console.print("[dim]  daf note \"note text\"                      # Add note to active session[/dim]")
             console.print("[dim]  daf note --latest \"note text\"            # Add note to most recent session[/dim]")
         import sys
         sys.exit(1)

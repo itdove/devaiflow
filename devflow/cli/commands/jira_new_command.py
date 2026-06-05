@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
 from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
+from devflow.agent import get_agent_display_name
 from devflow.git.utils import GitUtils
 
 # Import unified utilities
@@ -539,8 +540,9 @@ def create_jira_ticket_session(
         return
 
     # Check if we should launch Claude Code
+    agent_name = get_agent_display_name(agent or (config.agent_backend if config else "claude"))
     if not should_launch_claude_code(config=config, mock_mode=False):
-        console_print("[yellow]⚠[/yellow] Session created but Claude Code not launched.")
+        console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
 
@@ -605,6 +607,7 @@ def create_jira_ticket_session(
         from devflow.agent import create_agent_client
 
         agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_name = get_agent_display_name(agent_backend)
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
@@ -667,7 +670,7 @@ def create_jira_ticket_session(
             reset_terminal_after_tui()
     finally:
         if not is_cleanup_done():
-            console_print(f"\n[green]✓[/green] Claude session completed")
+            console_print(f"\n[green]✓[/green] {agent_name} session completed")
 
             # Reload index from disk before checking for rename
             # This is critical because the child process (Claude) may have renamed the session
@@ -1110,8 +1113,9 @@ def _create_multi_project_jira_session(
     )
 
     # Check if we should launch Claude Code
+    agent_name = get_agent_display_name(config.agent_backend if config else "claude")
     if not should_launch_claude_code(config=config, mock_mode=False):
-        console_print("[yellow]⚠[/yellow] Session created but Claude Code not launched.")
+        console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
 

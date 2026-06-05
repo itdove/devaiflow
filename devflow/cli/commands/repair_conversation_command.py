@@ -1,4 +1,4 @@
-"""CLI command for repairing corrupted Claude Code conversation files."""
+"""CLI command for repairing corrupted AI agent conversation files."""
 
 from pathlib import Path
 from typing import Optional
@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -33,10 +34,10 @@ def repair_conversation(
     dry_run: bool,
     latest: bool = False,
 ) -> None:
-    """Repair corrupted Claude Code conversation files.
+    """Repair corrupted AI agent conversation files.
 
     Args:
-        identifier: Session name, issue key, or Claude session UUID
+        identifier: Session name, issue key, or agent session UUID
         conversation_id: Specific conversation ID to repair
         max_size: Maximum size for content truncation
         check_all: Check all sessions for corruption (dry run)
@@ -49,7 +50,8 @@ def repair_conversation(
 
     # Handle --check-all flag
     if check_all:
-        console.print("\n[bold]Scanning all Claude Code conversations for corruption...[/bold]\n")
+        agent_name = get_agent_display_name()
+        console.print(f"\n[bold]Scanning all {agent_name} conversations for corruption...[/bold]\n")
 
         corrupted_files = scan_all_conversations()
 
@@ -214,14 +216,14 @@ def repair_conversation(
             console.print("\nTry:")
             console.print("  - Checking the session name or issue key")
             console.print("  - Using 'daf list' to see available sessions")
-            console.print("  - Providing a valid Claude session UUID")
+            console.print("  - Providing a valid agent session UUID")
 
 
 def _repair_single_conversation(ai_agent_session_id: str, max_size: int, dry_run: bool) -> None:
     """Repair a single conversation by UUID.
 
     Args:
-        ai_agent_session_id: Claude Code session UUID
+        ai_agent_session_id: AI agent session UUID
         max_size: Maximum size for truncation
         dry_run: Report issues without making changes
     """

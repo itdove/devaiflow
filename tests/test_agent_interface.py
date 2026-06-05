@@ -18,6 +18,8 @@ from devflow.agent import (
     CrushAgent,
     OpenCodeAgent,
     create_agent_client,
+    get_agent_display_name,
+    AGENT_DISPLAY_NAMES,
 )
 from devflow.utils.dependencies import ToolNotFoundError
 
@@ -1772,3 +1774,68 @@ class TestSupportsPermissionPrompts:
         """OpenCode supports permissions when launched without --prompt (#430)."""
         agent = OpenCodeAgent()
         assert agent.supports_permission_prompts() is True
+
+
+class TestGetAgentDisplayName:
+    """Tests for get_agent_display_name helper function (#448)."""
+
+    def test_claude_display_name(self):
+        """Claude backend returns 'Claude Code' display name."""
+        assert get_agent_display_name("claude") == "Claude Code"
+
+    def test_opencode_display_name(self):
+        """OpenCode backend returns 'OpenCode' display name."""
+        assert get_agent_display_name("opencode") == "OpenCode"
+
+    def test_github_copilot_display_name(self):
+        """GitHub Copilot backend returns correct display name."""
+        assert get_agent_display_name("github-copilot") == "GitHub Copilot"
+
+    def test_copilot_alias_display_name(self):
+        """Copilot alias returns 'GitHub Copilot' display name."""
+        assert get_agent_display_name("copilot") == "GitHub Copilot"
+
+    def test_ollama_display_name(self):
+        """Ollama backend returns correct display name."""
+        assert get_agent_display_name("ollama") == "Ollama + Claude Code"
+
+    def test_cursor_display_name(self):
+        """Cursor backend returns 'Cursor' display name."""
+        assert get_agent_display_name("cursor") == "Cursor"
+
+    def test_windsurf_display_name(self):
+        """Windsurf backend returns 'Windsurf' display name."""
+        assert get_agent_display_name("windsurf") == "Windsurf"
+
+    def test_crush_display_name(self):
+        """Crush backend returns 'Crush' display name."""
+        assert get_agent_display_name("crush") == "Crush"
+
+    def test_aider_display_name(self):
+        """Aider backend returns 'Aider' display name."""
+        assert get_agent_display_name("aider") == "Aider"
+
+    def test_continue_display_name(self):
+        """Continue backend returns 'Continue' display name."""
+        assert get_agent_display_name("continue") == "Continue"
+
+    def test_none_defaults_to_claude(self):
+        """None backend defaults to Claude Code."""
+        assert get_agent_display_name(None) == "Claude Code"
+
+    def test_case_insensitive(self):
+        """Backend names are case-insensitive."""
+        assert get_agent_display_name("Claude") == "Claude Code"
+        assert get_agent_display_name("OPENCODE") == "OpenCode"
+
+    def test_unknown_backend_returns_raw_name(self):
+        """Unknown backend returns the raw backend string."""
+        assert get_agent_display_name("unknown-agent") == "unknown-agent"
+
+    def test_all_supported_backends_have_display_names(self):
+        """Every supported backend has a display name entry."""
+        from devflow.agent import SUPPORTED_BACKENDS
+        for backend in SUPPORTED_BACKENDS:
+            name = get_agent_display_name(backend)
+            assert name != backend or backend in ("cursor", "windsurf", "aider", "continue", "crush"), \
+                f"Backend '{backend}' should have a human-readable display name"

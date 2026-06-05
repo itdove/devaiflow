@@ -10,10 +10,11 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Confirm
 
+from devflow.agent import get_agent_display_name, create_agent_client
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
-from devflow.utils.paths import get_cs_home, get_claude_config_dir
+from devflow.utils.paths import get_cs_home
 from devflow.utils.time_parser import parse_duration
 
 console = Console()
@@ -30,7 +31,7 @@ def cleanup_conversation(
     restore_backup: Optional[str] = None,
     latest: bool = False,
 ) -> None:
-    """Clean up Claude Code conversation history to reduce context size.
+    """Clean up AI agent conversation history to reduce context size.
 
     Args:
         identifier: Session group name or issue tracker key (defaults to current session from env)
@@ -43,7 +44,9 @@ def cleanup_conversation(
         latest: If True, use the most recently active session
     """
     config_loader = ConfigLoader()
+    config = config_loader.load_config()
     session_manager = SessionManager(config_loader)
+    agent_name = get_agent_display_name(config.agent_backend if config else None)
 
     # Handle --latest flag
     if latest:
@@ -82,28 +85,28 @@ def cleanup_conversation(
     else:
         session = sessions[0]
 
-    # Get Claude session ID from active conversation (handles multi-conversation sessions)
+    # Get agent session ID from active conversation (handles multi-conversation sessions)
     # First try the active conversation, then fall back to deprecated field
     ai_agent_session_id = None
     if session.conversations:
-        # Get the active conversation's Claude session ID
+        # Get the active conversation's agent session ID
         active_conv = session.active_conversation
         if active_conv:
             ai_agent_session_id = active_conv.ai_agent_session_id
 
     if not ai_agent_session_id:
-        console.print(f"[red]Error: Session '{identifier}' has no Claude session ID[/red]")
+        console.print(f"[red]Error: Session '{identifier}' has no agent session ID[/red]")
         console.print("[dim]This session has not been opened yet. Run 'daf open {identifier}' first.[/dim]")
         return
 
     # Handle list_backups mode
     if list_backups:
-        _list_backups(ai_agent_session_id, session)
+        _list_backups(ai_agent_session_id, session, agent_name=agent_name)
         return
 
     # Handle restore_backup mode
     if restore_backup:
-        _restore_backup(ai_agent_session_id, restore_backup, session)
+        _restore_backup(ai_agent_session_id, restore_backup, session, agent_name=agent_name, config=config)
         return
 
     # Validate parameters
@@ -119,10 +122,14 @@ def cleanup_conversation(
         return
 
     # Find conversation file
-    conversation_file = _find_conversation_file(ai_agent_session_id)
+    project_path = None
+    active_conv = session.active_conversation
+    if active_conv:
+        project_path = active_conv.project_path
+    conversation_file = _find_conversation_file(ai_agent_session_id, config, project_path)
     if not conversation_file:
         console.print(f"[red]Error: Conversation file not found for session {ai_agent_session_id}[/red]")
-        console.print(f"[dim]Expected in: ~/.claude/projects/*/[/dim]")
+        console.print(f"[dim]Expected in: {agent_name} data directory[/dim]")
         return
 
     # Show session info
@@ -131,7 +138,7 @@ def cleanup_conversation(
         if session.issue_key:
             console.print(f"[bold]JIRA:[/bold] {session.issue_key}")
         console.print(f"[bold]Goal:[/bold] {session.goal}")
-    console.print(f"[bold]Claude Session ID:[/bold] {ai_agent_session_id}")
+    console.print(f"[bold]{agent_name} Session ID:[/bold] {ai_agent_session_id}")
     console.print(f"[bold]Conversation file:[/bold] {conversation_file}")
 
     # Create backup directory for this session
@@ -251,7 +258,7 @@ def cleanup_conversation(
         console.print("[green]Next step:[/green]")
         console.print(f"  daf open {session.name if session else identifier}")
         console.print()
-        console.print("[dim]Claude Code will load the cleaned conversation with reduced context.[/dim]")
+        console.print(f"[dim]{agent_name} will load the cleaned conversation with reduced context.[/dim]")
 
     except Exception as e:
         console.print(f"\n[red]Error writing cleaned conversation: {e}[/red]")
@@ -260,12 +267,12 @@ def cleanup_conversation(
         console.print("[green]✓[/green] Restored from backup")
 
 
-def _find_session_by_claude_id(session_manager: SessionManager, claude_id: str):
-    """Find a session by its Claude session ID.
+def _find_session_by_agent_id(session_manager: SessionManager, agent_id: str):
+    """Find a session by its agent session ID.
 
     Args:
         session_manager: SessionManager instance
-        claude_id: Claude session UUID
+        agent_id: Agent session UUID
 
     Returns:
         Session if found, None otherwise
@@ -273,30 +280,47 @@ def _find_session_by_claude_id(session_manager: SessionManager, claude_id: str):
     all_sessions = session_manager.list_sessions()
     for session in all_sessions:
         active_conv = session.active_conversation
-        if active_conv and active_conv.ai_agent_session_id == claude_id:
+        if active_conv and active_conv.ai_agent_session_id == agent_id:
             return session
     return None
 
 
-def _find_conversation_file(ai_agent_session_id: str) -> Optional[Path]:
-    """Find the conversation file for a Claude session.
+def _find_conversation_file(
+    ai_agent_session_id: str,
+    config=None,
+    project_path: Optional[str] = None,
+) -> Optional[Path]:
+    """Find the conversation file for an agent session.
+
+    Uses the agent interface to locate conversation files, supporting
+    any configured agent backend (Claude Code, GitHub Copilot, etc.).
 
     Args:
-        ai_agent_session_id: Claude session UUID
+        ai_agent_session_id: Agent session UUID
+        config: Config object (used to determine agent backend)
+        project_path: Optional project path to check first
 
     Returns:
         Path to conversation file if found, None otherwise
     """
-    claude_projects = get_claude_config_dir() / "projects"
-    if not claude_projects.exists():
-        return None
+    agent_backend = config.agent_backend if config else "claude"
+    agent = create_agent_client(agent_backend)
 
-    # Search all project directories for the conversation file
-    for project_dir in claude_projects.iterdir():
-        if project_dir.is_dir():
-            conv_file = project_dir / f"{ai_agent_session_id}.jsonl"
-            if conv_file.exists():
-                return conv_file
+    # If we have a project_path, try the direct path first
+    if project_path:
+        session_file = agent.get_session_file_path(ai_agent_session_id, project_path)
+        if session_file.exists():
+            return session_file
+
+    # Fall back to searching all project directories via the agent's data directory
+    # Use the agent's projects_dir if available, otherwise return None
+    projects_dir = getattr(agent, "projects_dir", None)
+    if projects_dir and projects_dir.exists():
+        for project_dir in projects_dir.iterdir():
+            if project_dir.is_dir():
+                conv_file = project_dir / f"{ai_agent_session_id}.jsonl"
+                if conv_file.exists():
+                    return conv_file
 
     return None
 
@@ -409,12 +433,13 @@ def _display_backup_summary(backup_dir: Path) -> None:
         pass
 
 
-def _list_backups(ai_agent_session_id: str, session) -> None:
+def _list_backups(ai_agent_session_id: str, session, agent_name: str = "Claude Code") -> None:
     """List all available backups for a session.
 
     Args:
-        ai_agent_session_id: Claude session UUID
+        ai_agent_session_id: Agent session UUID
         session: Session object
+        agent_name: Display name of the AI agent
     """
     backup_dir = get_cs_home() / "backups" / ai_agent_session_id
 
@@ -422,7 +447,7 @@ def _list_backups(ai_agent_session_id: str, session) -> None:
     console.print(f"\n[bold]Session:[/bold] {session.name}")
     if session.issue_key:
         console.print(f"[bold]JIRA:[/bold] {session.issue_key}")
-    console.print(f"[bold]Claude Session ID:[/bold] {ai_agent_session_id}")
+    console.print(f"[bold]{agent_name} Session ID:[/bold] {ai_agent_session_id}")
     console.print()
 
     if not backup_dir.exists():
@@ -472,26 +497,34 @@ def _list_backups(ai_agent_session_id: str, session) -> None:
     console.print(f"  daf cleanup-conversation {session.name if session else ai_agent_session_id} --restore-backup <timestamp>")
 
 
-def _restore_backup(ai_agent_session_id: str, timestamp: str, session) -> None:
+def _restore_backup(
+    ai_agent_session_id: str,
+    timestamp: str,
+    session,
+    agent_name: str = "Claude Code",
+    config=None,
+) -> None:
     """Restore conversation from a specific backup.
 
     Args:
-        ai_agent_session_id: Claude session UUID
+        ai_agent_session_id: Agent session UUID
         timestamp: Backup timestamp to restore
         session: Session object
+        agent_name: Display name of the AI agent
+        config: Config object (used to determine agent backend)
     """
-    # Check if running inside Claude Code
+    # Check if running inside an AI agent session
     if os.environ.get("AI_AGENT_SESSION_ID"):
-        console.print("[red]Error: Cannot restore backup while Claude Code is active[/red]")
+        console.print(f"[red]Error: Cannot restore backup while {agent_name} is active[/red]")
         console.print()
         console.print("[yellow]Why this fails:[/yellow]")
-        console.print("  Claude Code caches the conversation in memory and will")
+        console.print(f"  {agent_name} caches the conversation in memory and will")
         console.print("  overwrite the restore when it exits.")
         console.print()
         console.print("[green]To restore backup:[/green]")
-        console.print("  1. Exit Claude Code completely")
+        console.print(f"  1. Exit {agent_name} completely")
         console.print("  2. Run: daf cleanup-conversation <NAME-or-JIRA-KEY> --restore-backup <timestamp>")
-        console.print("  3. Reopen Claude Code with: daf open <NAME-or-JIRA-KEY>")
+        console.print(f"  3. Reopen {agent_name} with: daf open <NAME-or-JIRA-KEY>")
         return
 
     backup_dir = get_cs_home() / "backups" / ai_agent_session_id
@@ -501,7 +534,7 @@ def _restore_backup(ai_agent_session_id: str, timestamp: str, session) -> None:
     console.print(f"\n[bold]Session:[/bold] {session.name}")
     if session.issue_key:
         console.print(f"[bold]JIRA:[/bold] {session.issue_key}")
-    console.print(f"[bold]Claude Session ID:[/bold] {ai_agent_session_id}")
+    console.print(f"[bold]{agent_name} Session ID:[/bold] {ai_agent_session_id}")
     console.print()
 
     if not backup_file.exists():
@@ -512,10 +545,14 @@ def _restore_backup(ai_agent_session_id: str, timestamp: str, session) -> None:
         return
 
     # Find conversation file
-    conversation_file = _find_conversation_file(ai_agent_session_id)
+    project_path = None
+    active_conv = session.active_conversation if session else None
+    if active_conv:
+        project_path = active_conv.project_path
+    conversation_file = _find_conversation_file(ai_agent_session_id, config, project_path)
     if not conversation_file:
         console.print(f"[red]Error: Conversation file not found for session {ai_agent_session_id}[/red]")
-        console.print(f"[dim]Expected in: ~/.claude/projects/*/[/dim]")
+        console.print(f"[dim]Expected in: {agent_name} data directory[/dim]")
         return
 
     # Show backup info
@@ -555,7 +592,7 @@ def _restore_backup(ai_agent_session_id: str, timestamp: str, session) -> None:
         console.print("[green]Next step:[/green]")
         console.print(f"  daf open {session.name if session else ai_agent_session_id}")
         console.print()
-        console.print("[dim]Claude Code will load the restored conversation.[/dim]")
+        console.print(f"[dim]{agent_name} will load the restored conversation.[/dim]")
 
         # Cleanup old backups (keep last 5)
         _cleanup_old_backups(backup_dir, keep_count=5)

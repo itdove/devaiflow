@@ -6,6 +6,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import get_status_display, is_non_interactive, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.discovery import SessionDiscovery
@@ -16,10 +17,10 @@ console = Console()
 
 @require_outside_claude
 def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str = None, yes: bool = False) -> None:
-    """Import an existing Claude Code session into daf tool.
+    """Import an existing AI agent session into daf tool.
 
     Args:
-        uuid: Claude session UUID to import
+        uuid: AI agent session UUID to import
         issue_key: issue tracker key (will prompt if not provided)
         goal: Session goal (will prompt if not provided)
         path: Project path (skip path prompt if provided)
@@ -206,7 +207,9 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str
     console.print(f"📁 Working Directory: {working_directory}")
     console.print(f"📂 Path: {project_path}")
     console.print(f"💬 Messages: {session.active_conversation.message_count if session.active_conversation else 0}")
-    console.print(f"🆔 Claude Session ID: {uuid}")
+    config = config_loader.load_config()
+    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    console.print(f"🆔 {agent_name} Session ID: {uuid}")
     console.print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     console.print()
     console.print(f"[bold cyan]Resume with:[/bold cyan] daf open {issue_key}")

@@ -6,6 +6,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Confirm, IntPrompt
 
+from devflow.agent import get_agent_display_name
 from devflow.cli.utils import get_session_with_delete_all_option, get_status_display, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -25,6 +26,8 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
         latest: If True, delete the most recently active session
     """
     config_loader = ConfigLoader()
+    config = config_loader.load_config()
+    agent_name = get_agent_display_name(config.agent_backend if config else None)
     session_manager = SessionManager(config_loader)
 
     # Handle --all flag
@@ -77,7 +80,7 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
                 console.print(f"[yellow]→[/yellow] Kept session files at: {session_dir}")
 
         console.print(f"[green]✓[/green] All sessions in group '{session_name}' deleted")
-        console.print("[dim]Note: Claude Code session files are NOT deleted[/dim]")
+        console.print(f"[dim]Note: {agent_name} session files are NOT deleted[/dim]")
         return
 
     if not session:
@@ -97,7 +100,7 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
     # Show Claude session ID from active conversation
     active_conv = session.active_conversation
     if active_conv and active_conv.ai_agent_session_id:
-        console.print(f"  Claude Session: {active_conv.ai_agent_session_id}")
+        console.print(f"  {agent_name} Session: {active_conv.ai_agent_session_id}")
 
     # Confirm deletion
     if not force:
@@ -122,7 +125,7 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
             else:
                 console.print(f"[yellow]→[/yellow] Kept session files at: {session_dir}")
 
-    console.print("[dim]Note: Claude Code session files are NOT deleted[/dim]")
+    console.print(f"[dim]Note: {agent_name} session files are NOT deleted[/dim]")
 
 
 def _delete_all_sessions(session_manager: SessionManager, config_loader: ConfigLoader, force: bool, keep_metadata: bool = False) -> None:
@@ -134,6 +137,9 @@ def _delete_all_sessions(session_manager: SessionManager, config_loader: ConfigL
         force: Skip confirmation prompt
         keep_metadata: Keep session files (notes, metadata) on disk
     """
+    config = config_loader.load_config()
+    agent_name = get_agent_display_name(config.agent_backend if config else None)
+
     # Get all sessions
     all_sessions = session_manager.list_sessions()
 
@@ -187,5 +193,5 @@ def _delete_all_sessions(session_manager: SessionManager, config_loader: ConfigL
             console.print(f"[yellow]→[/yellow] Kept {kept_dirs} session directories at: {sessions_root}")
 
     console.print(f"[green]✓[/green] All {session_count} sessions deleted")
-    console.print("[dim]Note: Claude Code session files (~/.claude/projects/) are NOT deleted[/dim]")
+    console.print(f"[dim]Note: {agent_name} session files are NOT deleted[/dim]")
     console.print("[dim]Tip: Use 'daf init' to reinitialize if needed[/dim]")

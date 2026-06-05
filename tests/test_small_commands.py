@@ -375,7 +375,7 @@ def test_show_summary_with_identifier(monkeypatch, temp_daf_home):
 
                         # Verify warning about no session ID
                         print_calls = [str(call) for call in mock_console.print.call_args_list]
-                        assert any("No Claude session ID" in str(call) for call in print_calls)
+                        assert any("No agent session ID" in str(call) for call in print_calls)
 
 
 def test_show_summary_latest_flag(monkeypatch, temp_daf_home):

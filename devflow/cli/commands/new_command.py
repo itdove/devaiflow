@@ -21,6 +21,7 @@ from devflow.session.manager import SessionManager
 from devflow.suggestions import RepositorySuggester
 
 # Import unified utilities
+from devflow.agent import get_agent_display_name
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.cli.skills_discovery import discover_skills
 from devflow.utils.context_files import load_hierarchical_context_files
@@ -817,6 +818,10 @@ def create_new_session(
         jira_url = config.jira.url if config and config.jira else None
         _display_session_banner(name, session.goal, working_directory, branch, project_path, session_id, issue_key, jira_url)
 
+    # Resolve agent backend and display name
+    _agent_backend = agent or (config.agent_backend if config else "claude")
+    agent_name = get_agent_display_name(_agent_backend)
+
     # Check if we should launch Claude Code
     if not should_launch_claude_code(config=config, mock_mode=True):
         if not output_json:
@@ -825,9 +830,7 @@ def create_new_session(
 
     # Change to project directory and launch AI agent
     try:
-        _agent_backend = agent or (config.agent_backend if config else "claude")
-        from devflow.agent import create_agent_client as _cac
-        _agent_display_name = _cac(_agent_backend).get_agent_name().title()
+        _agent_display_name = agent_name
         console.print(f"\n[cyan]Launching {_agent_display_name} in {project_path}...[/cyan]")
 
         # Update session status and start work session
@@ -911,7 +914,7 @@ def create_new_session(
                 reset_terminal_after_tui()
         finally:
             if not is_cleanup_done():
-                console.print(f"\n[green]✓[/green] Claude session completed")
+                console.print(f"\n[green]✓[/green] {agent_name} session completed")
 
                 # Update session status to paused
                 session.status = "paused"
@@ -943,16 +946,7 @@ def create_new_session(
 
         console.print(f"\n[yellow]You can manually start with:[/yellow]")
         console.print(f"  cd {project_path}")
-        # AAP-XXXXX: Use selected workspace instead of default workspace
-        workspace = None
-        if selected_workspace_name and config and config.repos:
-            from devflow.cli.utils import get_workspace_path
-            workspace = get_workspace_path(config, selected_workspace_name)
-        elif config and config.repos:
-            workspace = config.repos.get_default_workspace_path()
-        initial_prompt = _generate_initial_prompt(name, session.goal, issue_key, issue_title,
-                                                   project_path=project_path, workspace=workspace)
-        console.print(f"  claude --session-id {session_id} \"{initial_prompt}\"")
+        console.print(f"  daf open {name}")
 
 
 def _suggest_and_select_repository(
@@ -1899,7 +1893,7 @@ def _display_session_banner(
     console.print(f"📂 Path: {project_path}")
     if branch:
         console.print(f"🌿 Branch: {branch}")
-    console.print(f"🆔 Claude Session ID: {ai_agent_session_id}")
+    console.print(f"🆔 Session ID: {ai_agent_session_id}")
     if issue_key and jira_url:
         console.print(f"🔗 JIRA: {jira_url}/browse/{issue_key}")
     console.print("━" * 60 + "\n")
