@@ -32,8 +32,15 @@ from devflow.agent.factory import (
     create_agent_client,
     SUPPORTED_BACKENDS,
     AGENT_DISPLAY_NAMES,
+    SELF_ID_BACKENDS,
+    PENDING_CAPTURE_PLACEHOLDER,
     get_agent_display_name,
     validate_agent_backend,
+    is_self_id_backend,
+    generate_agent_session_id,
+    is_pending_capture,
+    snapshot_agent_sessions,
+    capture_agent_session_id,
 )
 
 __all__ = [
@@ -50,6 +57,13 @@ __all__ = [
     "create_agent_client",
     "SUPPORTED_BACKENDS",
     "AGENT_DISPLAY_NAMES",
+    "SELF_ID_BACKENDS",
+    "PENDING_CAPTURE_PLACEHOLDER",
     "get_agent_display_name",
     "validate_agent_backend",
+    "is_self_id_backend",
+    "generate_agent_session_id",
+    "is_pending_capture",
+    "snapshot_agent_sessions",
+    "capture_agent_session_id",
 ]

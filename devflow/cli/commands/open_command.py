@@ -561,9 +561,16 @@ def open_session(
     # This happens when:
     # 1. Sessions created via 'daf sync' (no ai_agent_session_id)
     # 2. Session has a ai_agent_session_id but the agent reports the session doesn't exist
+    # 3. Session has a "pending-capture" placeholder (OpenCode ID not yet captured)
     # Use conversation-based API
+    from devflow.agent.factory import is_pending_capture
     active_conv = session.active_conversation
-    is_first_launch = not (active_conv and active_conv.ai_agent_session_id)
+    has_real_session_id = (
+        active_conv
+        and active_conv.ai_agent_session_id
+        and not is_pending_capture(active_conv.ai_agent_session_id)
+    )
+    is_first_launch = not has_real_session_id
 
     # Resolve effective agent backend: --agent flag > session-stored > config > "claude" (backward compatible)
     effective_agent_backend = agent or session.agent_backend or (config.agent_backend if config else "claude")
@@ -606,9 +613,9 @@ def open_session(
 
         # Generate a new session ID for the active conversation
         # For Claude-style agents (claude, ollama), use UUID format
-        # For other agents (opencode), use a placeholder that will be replaced after launch
-        import uuid
-        new_session_id = str(uuid.uuid4())
+        # For self-ID agents (opencode), use a placeholder that will be replaced after launch
+        from devflow.agent.factory import generate_agent_session_id
+        new_session_id = generate_agent_session_id(effective_agent_backend)
 
         # Update the active conversation with the new session ID
         if session.active_conversation:
@@ -667,9 +674,9 @@ def open_session(
                 console.print(f"[dim]Generating new session ID for fresh start[/dim]")
                 is_first_launch = True
 
-                # Generate new session ID
-                import uuid
-                new_session_id = str(uuid.uuid4())
+                # Generate new session ID (agent-aware: placeholder for self-ID backends)
+                from devflow.agent.factory import generate_agent_session_id
+                new_session_id = generate_agent_session_id(effective_agent_backend)
 
                 if session.active_conversation:
                     session.active_conversation.ai_agent_session_id = new_session_id
@@ -1098,13 +1105,9 @@ def open_session(
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
 
-            # Snapshot existing sessions before launch (for session ID capture)
-            opencode_sessions_before = set()
-            if agent_backend in ("opencode", "opencode-ai") and launch_dir:
-                try:
-                    opencode_sessions_before = agent.get_existing_sessions(launch_dir)
-                except Exception:
-                    pass
+            # Snapshot existing sessions before launch (for self-ID agent capture)
+            from devflow.agent.factory import snapshot_agent_sessions, capture_agent_session_id
+            sessions_before = snapshot_agent_sessions(agent, agent_backend, launch_dir)
 
             try:
                 if active_conv and launch_dir:
@@ -1131,16 +1134,10 @@ def open_session(
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
-                    # Capture real OpenCode session ID after first launch
-                    if agent_backend in ("opencode", "opencode-ai") and launch_dir and active_conv:
-                        try:
-                            opencode_sessions_after = agent.get_existing_sessions(launch_dir)
-                            new_sessions = opencode_sessions_after - opencode_sessions_before
-                            if new_sessions:
-                                real_session_id = new_sessions.pop()
-                                active_conv.ai_agent_session_id = real_session_id
-                        except Exception:
-                            pass
+                    # Capture real session ID for self-ID agents (e.g., OpenCode ses_ IDs)
+                    capture_agent_session_id(
+                        agent, agent_backend, launch_dir, active_conv, sessions_before
+                    )
 
                     # Update session status to paused
                     session.status = "paused"
@@ -1241,10 +1238,15 @@ def open_session(
                         cmd.extend(["--add-dir", str(cs_home)])
             elif agent_backend in ("opencode", "opencode-ai"):
                 # OpenCode supports session resume via --session flag
+                from devflow.agent.factory import snapshot_agent_sessions as _snap_resume
                 if active_conv and active_conv.is_multi_project:
                     oc_project_path = active_conv.workspace_path or workspace_path
                 else:
                     oc_project_path = active_conv.project_path if active_conv else None
+
+                # Track whether we need to capture a new session ID
+                _resume_needs_capture = False
+                _resume_sessions_before = set()
 
                 if oc_project_path:
                     if active_conv.ai_agent_session_id and active_conv.ai_agent_session_id.startswith("ses"):
@@ -1254,6 +1256,10 @@ def open_session(
                             env=env,
                         )
                     else:
+                        # Fallback: launch new session and capture ID
+                        # (should not normally happen with fixed is_first_launch logic)
+                        _resume_sessions_before = _snap_resume(agent, agent_backend, oc_project_path)
+                        _resume_needs_capture = True
                         process = agent.launch_session(oc_project_path, env=env)
                     cmd = None
             else:
@@ -1302,6 +1308,15 @@ def open_session(
                         clear_screen_after_tui()
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
+
+                    # Capture session ID for self-ID agents if launched via fallback path
+                    if '_resume_needs_capture' in dir() and _resume_needs_capture:
+                        from devflow.agent.factory import capture_agent_session_id as _cap_resume
+                        _cap_resume(
+                            agent, agent_backend,
+                            oc_project_path if 'oc_project_path' in dir() else None,
+                            active_conv, _resume_sessions_before,
+                        )
 
                     # Update session status to paused
                     session.status = "paused"
@@ -2411,8 +2426,10 @@ def _create_conversation_from_workspace_selection(
         session_manager.update_session(session)
         return True
 
-    # Generate a new session ID for this conversation
-    new_session_id = str(uuid.uuid4())
+    # Generate a new session ID for this conversation (agent-aware)
+    from devflow.agent.factory import generate_agent_session_id
+    _backend = session.agent_backend or "claude"
+    new_session_id = generate_agent_session_id(_backend)
 
     # Get workspace for portable paths
     workspace_path = config.repos.get_default_workspace_path() if config and config.repos else None
@@ -2480,8 +2497,10 @@ def _create_conversation_for_path(
         console.print(f"[red]✗[/red] Path does not exist: {project_path}")
         return False
 
-    # Generate a new session ID for this conversation
-    new_session_id = str(uuid.uuid4())
+    # Generate a new session ID for this conversation (agent-aware)
+    from devflow.agent.factory import generate_agent_session_id
+    _backend = session.agent_backend or "claude"
+    new_session_id = generate_agent_session_id(_backend)
 
     # Get workspace for portable paths
     config = config_loader.load_config()
@@ -2564,8 +2583,10 @@ def _create_conversation_for_current_directory(
     # Use current_dir as project_path
     project_path = str(current_dir.absolute())
 
-    # Generate a new session ID for this conversation
-    new_session_id = str(uuid.uuid4())
+    # Generate a new session ID for this conversation (agent-aware)
+    from devflow.agent.factory import generate_agent_session_id
+    _backend = session.agent_backend or "claude"
+    new_session_id = generate_agent_session_id(_backend)
 
     # Get workspace for portable paths
     config = config_loader.load_config()
@@ -2771,8 +2792,10 @@ def _create_multi_project_conversation_for_open(
             console.print(f"\n[cyan]ℹ Using updated branch name for remaining projects: {actual_branch}[/cyan]")
             shared_branch_name = actual_branch
 
-    # Create ONE shared session ID for all projects
-    session_id = str(uuid.uuid4())
+    # Create ONE shared session ID for all projects (agent-aware)
+    from devflow.agent.factory import generate_agent_session_id
+    _backend = session.agent_backend or "claude"
+    session_id = generate_agent_session_id(_backend)
 
     # Build projects_info dict for multi-project conversation
     projects_info = {}
@@ -2926,9 +2949,11 @@ def _prompt_for_working_directory(
         else:
             workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
+        from devflow.agent.factory import generate_agent_session_id
+        _backend = session.agent_backend or "claude"
         session.add_conversation(
             working_dir=project_path.name,
-            ai_agent_session_id=str(uuid.uuid4()),
+            ai_agent_session_id=generate_agent_session_id(_backend),
             project_path=str(project_path),
             branch="",  # Leave empty so branch creation logic can run
             workspace=workspace,
