@@ -1124,12 +1124,7 @@ def open_session(
                         headless=headless,
                         auto_approve=auto_approve
                     )
-                    process.wait()
-                    if not headless:
-                        from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
-                        reset_terminal_after_tui()
-                        if agent.uses_tui():
-                            clear_screen_after_tui()
+                    agent.wait_for_exit(process, headless)
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
@@ -1297,15 +1292,10 @@ def open_session(
                         cwd=launch_dir,
                         env=env,
                     )
+                    agent.cleanup_after_exit(headless)
                 elif not cmd and 'process' in locals():
-                    # For non-resumable agents, wait for the launched process
-                    process.wait()
+                    agent.wait_for_exit(process, headless)
             finally:
-                if not headless:
-                    from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
-                    reset_terminal_after_tui()
-                    if agent.uses_tui():
-                        clear_screen_after_tui()
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 

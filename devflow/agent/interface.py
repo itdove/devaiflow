@@ -235,6 +235,40 @@ class AgentInterface(ABC):
         """
         return False
 
+    def cleanup_after_exit(self, headless: bool = False) -> None:
+        """Clean up terminal immediately after the agent process exits.
+
+        This is the single place where terminal cleanup happens. It must
+        be called right after the agent subprocess ends — before any other
+        output is printed.
+
+        For TUI agents (OpenCode, Crush), this clears the screen so their
+        exit splash art does not garble daf's post-session messages.
+
+        Args:
+            headless: If True, skip terminal cleanup (no TTY interaction)
+        """
+        if headless:
+            return
+        from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
+        reset_terminal_after_tui()
+        if self.uses_tui():
+            clear_screen_after_tui()
+
+    def wait_for_exit(self, process: subprocess.Popen, headless: bool = False) -> None:
+        """Wait for the agent process to exit, then immediately clean up.
+
+        Convenience wrapper: calls ``process.wait()`` then
+        ``cleanup_after_exit()``. Use this instead of calling
+        ``process.wait()`` directly.
+
+        Args:
+            process: The subprocess.Popen handle for the agent
+            headless: If True, skip terminal cleanup (no TTY interaction)
+        """
+        process.wait()
+        self.cleanup_after_exit(headless)
+
     def supports_permission_prompts(self) -> bool:
         """Whether this agent prompts the user before modifying files or running commands.
 

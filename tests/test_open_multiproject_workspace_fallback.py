@@ -221,8 +221,8 @@ def test_open_multiproject_session_first_launch_with_none_workspace_path(temp_da
         # Verify agent.launch_with_prompt was called (Claude was launched)
         assert mock_agent.launch_with_prompt.called, "agent.launch_with_prompt should have been called"
 
-        # Verify process.wait was called
-        assert mock_process.wait.called, "process.wait should have been called"
+        # Verify agent.wait_for_exit was called (which calls process.wait internally)
+        assert mock_agent.wait_for_exit.called, "agent.wait_for_exit should have been called"
 
         # Verify the project_path parameter was set correctly (workspace_path)
         call_kwargs = mock_agent.launch_with_prompt.call_args[1]

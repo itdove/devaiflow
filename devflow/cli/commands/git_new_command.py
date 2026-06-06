@@ -776,13 +776,7 @@ def create_git_issue_session(
             headless=headless,
             auto_approve=auto_approve,
         )
-        # Wait for the agent process to complete
-        process.wait()
-        if not headless:
-            from devflow.cli.utils import reset_terminal_after_tui, clear_screen_after_tui
-            reset_terminal_after_tui()
-            if agent_client.uses_tui():
-                clear_screen_after_tui()
+        agent_client.wait_for_exit(process, headless)
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")

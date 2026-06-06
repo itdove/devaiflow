@@ -1027,19 +1027,19 @@ class TestResetTerminalAfterTui:
 class TestClearScreenAfterTui:
     """Tests for clear_screen_after_tui (#461)."""
 
-    def test_scrolls_past_splash_art(self):
-        """Verify newlines are written to scroll past TUI splash art."""
+    def test_moves_cursor_below_splash(self):
+        """Verify cursor moves to bottom of screen and starts new line."""
         import io
         import sys
 
         fake_stdout = io.StringIO()
         fake_stdout.isatty = lambda: True
-        with patch.object(sys, "stdout", fake_stdout), \
-             patch("shutil.get_terminal_size", return_value=Mock(lines=24)):
+        with patch.object(sys, "stdout", fake_stdout):
             clear_screen_after_tui()
 
         written = fake_stdout.getvalue()
-        assert written == "\n" * 24, "Should write one newline per terminal row"
+        assert "\033[999B" in written, "Should move cursor to bottom"
+        assert "\n" in written, "Should start a fresh line"
 
     def test_skipped_when_not_tty(self):
         """No output when stdout is not a TTY."""
