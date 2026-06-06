@@ -1825,6 +1825,55 @@ class TestUsesTui:
         assert agent.uses_tui() is False
 
 
+class TestWaitForExit:
+    """Test wait_for_exit() and cleanup_after_exit() (#461)."""
+
+    def test_wait_for_exit_calls_process_wait_then_cleanup(self):
+        """wait_for_exit() calls process.wait() then cleanup."""
+        agent = ClaudeAgent()
+        mock_process = Mock()
+        with patch.object(agent, "cleanup_after_exit") as mock_cleanup:
+            agent.wait_for_exit(mock_process, headless=False)
+        mock_process.wait.assert_called_once()
+        mock_cleanup.assert_called_once_with(False)
+
+    def test_wait_for_exit_headless_skips_cleanup(self):
+        """In headless mode, cleanup_after_exit is still called but returns early."""
+        agent = ClaudeAgent()
+        mock_process = Mock()
+        with patch.object(agent, "cleanup_after_exit") as mock_cleanup:
+            agent.wait_for_exit(mock_process, headless=True)
+        mock_process.wait.assert_called_once()
+        mock_cleanup.assert_called_once_with(True)
+
+    @patch("devflow.cli.utils.clear_screen_after_tui")
+    @patch("devflow.cli.utils.reset_terminal_after_tui")
+    def test_cleanup_tui_agent_clears_screen(self, mock_reset, mock_clear):
+        """TUI agents reset terminal AND clear screen."""
+        agent = OpenCodeAgent()
+        agent.cleanup_after_exit(headless=False)
+        mock_reset.assert_called_once()
+        mock_clear.assert_called_once()
+
+    @patch("devflow.cli.utils.clear_screen_after_tui")
+    @patch("devflow.cli.utils.reset_terminal_after_tui")
+    def test_cleanup_non_tui_agent_resets_but_no_clear(self, mock_reset, mock_clear):
+        """Non-TUI agents reset terminal but do NOT clear screen."""
+        agent = ClaudeAgent()
+        agent.cleanup_after_exit(headless=False)
+        mock_reset.assert_called_once()
+        mock_clear.assert_not_called()
+
+    @patch("devflow.cli.utils.clear_screen_after_tui")
+    @patch("devflow.cli.utils.reset_terminal_after_tui")
+    def test_cleanup_headless_does_nothing(self, mock_reset, mock_clear):
+        """Headless mode skips all terminal cleanup."""
+        agent = OpenCodeAgent()
+        agent.cleanup_after_exit(headless=True)
+        mock_reset.assert_not_called()
+        mock_clear.assert_not_called()
+
+
 class TestGetAgentDisplayName:
     """Tests for get_agent_display_name helper function (#448)."""
 
