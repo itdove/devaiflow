@@ -1,4 +1,29 @@
 {
-  // Claude Code permissions managed via .claude/settings.json — see daf init
-  // This overlay is a placeholder for future Claude-specific config
+  // DevAIFlow integration overlay for Claude Code
+  // Merged into .claude/settings.json by `daf setup`
+  "permissions": {
+    "allow": [
+      // DAF/DEVAIFLOW env var access (future-proof wildcards)
+      "Bash(echo \"${DAF_*)",
+      "Bash(echo \"${DEVAIFLOW_*)",
+      // All daf CLI commands (read-safe from agent perspective)
+      "Bash(daf active *)",
+      "Bash(daf info *)",
+      "Bash(daf * view *)",
+      // Issue tracker view-only commands
+      "Bash(gh * view *)",
+      "Bash(glab * view *)",
+      // Git read-only operations
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git fetch *)",
+      // Allow reading daf config, session metadata, skills
+      "Read(~/.config/devaiflow/**)"
+    ],
+    "deny": [
+      // Prevent accidental modification of daf config
+      "Edit(~/.config/devaiflow/**)"
+    ]
+  }
 }
