@@ -13,6 +13,7 @@ from devflow.cli.commands.setup_command import (
     deep_merge,
     resolve_target_path,
     setup_agent_config,
+    SUPPORTED_OVERLAY_BACKENDS,
 )
 
 
@@ -96,6 +97,28 @@ class TestDeepMerge:
         assert merged["permission"]["bash"]["my_cmd *"] == "allow"
         assert merged["permission"]["bash"]["daf info *"] == "allow"
 
+    def test_array_union_merge(self):
+        base = {"permissions": {"allow": ["Bash(pytest:*)", "Bash(daf info *)"]}}
+        overlay = {"permissions": {"allow": ["Bash(daf info *)", "Bash(gh * view *)"]}}
+        merged, added = deep_merge(base, overlay)
+        assert "Bash(gh * view *)" in merged["permissions"]["allow"]
+        assert merged["permissions"]["allow"].count("Bash(daf info *)") == 1
+        assert any("permissions.allow[]" in a for a in added)
+
+    def test_array_idempotent(self):
+        base = {"permissions": {"allow": ["Bash(daf info *)", "Bash(gh * view *)"]}}
+        overlay = {"permissions": {"allow": ["Bash(daf info *)", "Bash(gh * view *)"]}}
+        _, added = deep_merge(base, overlay)
+        assert added == []
+
+    def test_array_into_empty(self):
+        base = {"permissions": {"allow": [], "deny": []}}
+        overlay = {"permissions": {"allow": ["Bash(daf *)"], "deny": ["Edit(~/.config/devaiflow/**)"]}}
+        merged, added = deep_merge(base, overlay)
+        assert "Bash(daf *)" in merged["permissions"]["allow"]
+        assert "Edit(~/.config/devaiflow/**)" in merged["permissions"]["deny"]
+        assert len(added) == 2
+
 
 class TestResolveTargetPath:
     def test_opencode_project(self):
@@ -118,6 +141,22 @@ class TestResolveTargetPath:
         path = resolve_target_path("claude", "project")
         assert path.name == "settings.json"
         assert ".claude" in str(path)
+
+    def test_claude_local(self):
+        path = resolve_target_path("claude", "local")
+        assert path.name == "settings.local.json"
+        assert ".claude" in str(path)
+
+    def test_claude_global_default(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+            path = resolve_target_path("claude", "global")
+            assert path == Path.home() / ".claude" / "settings.json"
+
+    def test_claude_global_custom(self):
+        with patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "/custom/claude"}):
+            path = resolve_target_path("claude", "global")
+            assert path == Path("/custom/claude/settings.json")
 
 
 class TestLoadOverlay:
@@ -293,3 +332,110 @@ class TestSetupAgentConfig:
             exit_code = setup_agent_config(dry_run=False, scope="project")
 
         assert exit_code == 0
+
+    def test_claude_fresh_config(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "claude"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            exit_code = setup_agent_config(dry_run=False, scope="project")
+
+        assert exit_code == 0
+        target = tmp_path / ".claude" / "settings.json"
+        assert target.exists()
+        data = json.loads(target.read_text())
+        assert "permissions" in data
+        assert isinstance(data["permissions"]["allow"], list)
+        assert "Bash(daf info *)" in data["permissions"]["allow"]
+        assert "Read(~/.config/devaiflow/**)" in data["permissions"]["allow"]
+        assert "Edit(~/.config/devaiflow/**)" in data["permissions"]["deny"]
+
+    def test_claude_merge_existing(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        existing = {
+            "permissions": {
+                "allow": ["Bash(pytest:*)", "Bash(daf info *)"],
+                "deny": [],
+            }
+        }
+        (claude_dir / "settings.json").write_text(json.dumps(existing, indent=2))
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "claude"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            exit_code = setup_agent_config(dry_run=False, scope="project")
+
+        assert exit_code == 0
+        data = json.loads((claude_dir / "settings.json").read_text())
+        assert "Bash(pytest:*)" in data["permissions"]["allow"]
+        assert "Bash(daf info *)" in data["permissions"]["allow"]
+        assert "Bash(daf active *)" in data["permissions"]["allow"]
+        assert data["permissions"]["allow"].count("Bash(daf info *)") == 1
+
+    def test_claude_idempotent(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "claude"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            setup_agent_config(dry_run=False, scope="project")
+            first = (tmp_path / ".claude" / "settings.json").read_text()
+
+            setup_agent_config(dry_run=False, scope="project")
+            second = (tmp_path / ".claude" / "settings.json").read_text()
+
+        assert first == second
+
+    def test_claude_local_scope(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "claude"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            exit_code = setup_agent_config(dry_run=False, scope="local")
+
+        assert exit_code == 0
+        target = tmp_path / ".claude" / "settings.local.json"
+        assert target.exists()
+        data = json.loads(target.read_text())
+        assert "Bash(daf info *)" in data["permissions"]["allow"]
+
+    def test_claude_edit_deny(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "claude"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            setup_agent_config(dry_run=False, scope="project")
+
+        data = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+        assert "Edit(~/.config/devaiflow/**)" in data["permissions"]["deny"]
+
+    def test_all_agents(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "claude"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            exit_code = setup_agent_config(
+                dry_run=False, scope="project", all_agents=True
+            )
+
+        assert exit_code == 0
+        assert (tmp_path / ".claude" / "settings.json").exists()
+        assert (tmp_path / "opencode.json").exists()

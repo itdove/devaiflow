@@ -98,6 +98,16 @@ def _deep_merge_recursive(
             added.append(path)
         elif isinstance(value, dict) and isinstance(base[key], dict):
             _deep_merge_recursive(base[key], value, path, added)
+        elif isinstance(value, list) and isinstance(base[key], list):
+            for item in value:
+                if item not in base[key]:
+                    base[key].append(item)
+                    added.append(f"{path}[]")
+        elif isinstance(value, list) and isinstance(base[key], list):
+            for item in value:
+                if item not in base[key]:
+                    base[key].append(item)
+                    added.append(f"{path}[]")
 
 
 def resolve_target_path(backend: str, scope: str) -> Path:
@@ -124,26 +134,43 @@ def resolve_target_path(backend: str, scope: str) -> Path:
             if claude_dir:
                 return Path(claude_dir) / "settings.json"
             return Path.home() / ".claude" / "settings.json"
+        if scope == "local":
+            return Path.cwd() / ".claude" / "settings.local.json"
         return Path.cwd() / ".claude" / "settings.json"
 
     return Path.cwd() / f"{backend}.json"
 
 
+SUPPORTED_OVERLAY_BACKENDS = ["claude", "opencode"]
+
+
 def setup_agent_config(
     dry_run: bool = False,
     scope: str = "project",
+    all_agents: bool = False,
     output_json: bool = False,
 ) -> int:
     """Configure agent integration by merging overlay template into agent config.
 
     Args:
         dry_run: Preview changes without writing.
-        scope: 'project' or 'global'.
+        scope: 'project', 'local', or 'global'.
+        all_agents: Configure all supported agents at once.
         output_json: Output JSON format.
 
     Returns:
         Exit code: 0 on success, 1 on error.
     """
+    if all_agents:
+        worst = 0
+        for agent_backend in SUPPORTED_OVERLAY_BACKENDS:
+            result = _setup_single_backend(
+                agent_backend, dry_run=dry_run, scope=scope, output_json=output_json
+            )
+            if result > worst:
+                worst = result
+        return worst
+
     from devflow.config.loader import ConfigLoader
 
     try:
@@ -154,6 +181,18 @@ def setup_agent_config(
         backend = "claude"
 
     canonical = BACKEND_ALIASES.get(backend, backend)
+    return _setup_single_backend(
+        canonical, dry_run=dry_run, scope=scope, output_json=output_json
+    )
+
+
+def _setup_single_backend(
+    canonical: str,
+    dry_run: bool = False,
+    scope: str = "project",
+    output_json: bool = False,
+) -> int:
+    """Configure a single agent backend."""
     overlay = load_overlay(canonical)
 
     if overlay is None:
@@ -213,7 +252,7 @@ def setup_agent_config(
         return 0
 
     from devflow.agent.factory import AGENT_DISPLAY_NAMES
-    display_name = AGENT_DISPLAY_NAMES.get(backend, canonical)
+    display_name = AGENT_DISPLAY_NAMES.get(canonical, canonical)
     console.print(f"\n[bold]Setting up {display_name} integration[/bold]")
     console.print(f"  Backend: [cyan]{canonical}[/cyan]")
     console.print(f"  Scope:   [cyan]{scope}[/cyan]")

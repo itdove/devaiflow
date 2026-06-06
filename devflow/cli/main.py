@@ -3284,10 +3284,11 @@ def provider_test(ctx: click.Context, name: str) -> None:
 
 @cli.command()
 @click.option("--dry-run", is_flag=True, help="Preview changes without writing")
-@click.option("--scope", type=click.Choice(["project", "global"]), default="project",
-              help="Config scope: project-level (default) or global")
+@click.option("--scope", type=click.Choice(["project", "local", "global"]), default="project",
+              help="Config scope: project (default), local (gitignored), or global")
+@click.option("--all-agents", is_flag=True, help="Configure all supported agents at once")
 @json_option
-def setup(ctx: click.Context, dry_run: bool, scope: str) -> None:
+def setup(ctx: click.Context, dry_run: bool, scope: str, all_agents: bool) -> None:
     """Configure agent integration for the current backend.
 
     Merges a JSONC overlay template into the agent's config file,
@@ -3295,7 +3296,9 @@ def setup(ctx: click.Context, dry_run: bool, scope: str) -> None:
 
     Examples:
         daf setup                    # Apply overlay to project config
+        daf setup --scope local      # Apply to .claude/settings.local.json
         daf setup --scope global     # Apply to global agent config
+        daf setup --all-agents       # Configure all agents at once
         daf setup --dry-run          # Preview what would be added
         daf setup --json             # JSON output
     """
@@ -3305,6 +3308,7 @@ def setup(ctx: click.Context, dry_run: bool, scope: str) -> None:
     exit_code = setup_agent_config(
         dry_run=dry_run,
         scope=scope,
+        all_agents=all_agents,
         output_json=output_json,
     )
     raise SystemExit(exit_code)
