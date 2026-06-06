@@ -1,0 +1,35 @@
+{
+  // DevAIFlow integration overlay for OpenCode
+  // Merged into opencode.json by `daf setup`
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      // DAF/DEVAIFLOW env var access (future-proof wildcards)
+      "echo \"${DAF_*": "allow",
+      "echo \"${DEVAIFLOW_*": "allow",
+      // All daf CLI commands (read-safe from agent perspective)
+      "daf active *": "allow",
+      "daf info *": "allow",
+      "daf * view *": "allow",
+      // Issue tracker view-only commands
+      "gh * view *": "allow",
+      "glab * view *": "allow",
+      // Git read-only operations
+      "git status *": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git fetch *": "allow"
+    },
+    "external_directory": {
+      // Allow reading daf config, session metadata, skills
+      "~/.config/devaiflow/**": "allow"
+    },
+    "read": {
+      "~/.config/devaiflow/**": "allow"
+    },
+    "edit": {
+      // Prevent accidental modification of daf config
+      "~/.config/devaiflow/**": "deny"
+    }
+  }
+}

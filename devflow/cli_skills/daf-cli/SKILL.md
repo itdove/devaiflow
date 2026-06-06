@@ -37,6 +37,11 @@ user-invocable: false
 - **`daf-status` skill**: Progress dashboard
 - **`daf-list` skill**: List all sessions
 
+### Agent Setup
+- Configure agent permissions: `daf setup`
+- Preview changes: `daf setup --dry-run`
+- Global scope: `daf setup --scope global`
+
 ### Configuration
 **See `daf-config` skill** for configuration commands:
 - View config: `daf config show`
