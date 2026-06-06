@@ -74,27 +74,27 @@ class TestDeepMerge:
         assert added == []
 
     def test_nested_merge(self):
-        base = {"permission": {"bash": {"daf *": "allow"}}}
+        base = {"permission": {"bash": {"daf info *": "allow"}}}
         overlay = {
             "permission": {
-                "bash": {"daf *": "allow", "gh * view *": "allow"},
-                "read": {"~/.daf-sessions/**": "allow"},
+                "bash": {"daf info *": "allow", "gh * view *": "allow"},
+                "read": {"~/.config/devaiflow/**": "allow"},
             }
         }
         merged, added = deep_merge(base, overlay)
-        assert merged["permission"]["bash"]["daf *"] == "allow"
+        assert merged["permission"]["bash"]["daf info *"] == "allow"
         assert merged["permission"]["bash"]["gh * view *"] == "allow"
-        assert merged["permission"]["read"]["~/.daf-sessions/**"] == "allow"
+        assert merged["permission"]["read"]["~/.config/devaiflow/**"] == "allow"
         assert "permission.bash.gh * view *" in added
         assert "permission.read" in added
 
     def test_preserves_extra_keys_in_base(self):
         base = {"custom": "user_setting", "permission": {"bash": {"my_cmd *": "allow"}}}
-        overlay = {"permission": {"bash": {"daf *": "allow"}}}
+        overlay = {"permission": {"bash": {"daf info *": "allow"}}}
         merged, _ = deep_merge(base, overlay)
         assert merged["custom"] == "user_setting"
         assert merged["permission"]["bash"]["my_cmd *"] == "allow"
-        assert merged["permission"]["bash"]["daf *"] == "allow"
+        assert merged["permission"]["bash"]["daf info *"] == "allow"
 
 
 class TestResolveTargetPath:
@@ -126,7 +126,7 @@ class TestLoadOverlay:
         assert overlay is not None
         assert "permission" in overlay
         assert "bash" in overlay["permission"]
-        assert "daf *" in overlay["permission"]["bash"]
+        assert "daf info *" in overlay["permission"]["bash"]
 
     def test_load_claude_overlay(self):
         overlay = load_overlay("claude")
@@ -155,7 +155,7 @@ class TestSetupAgentConfig:
         assert target.exists()
         data = json.loads(target.read_text())
         assert "permission" in data
-        assert data["permission"]["bash"]["daf *"] == "allow"
+        assert data["permission"]["bash"]["daf info *"] == "allow"
 
     def test_opencode_merge_existing(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -180,7 +180,7 @@ class TestSetupAgentConfig:
         data = json.loads((tmp_path / "opencode.json").read_text())
         assert data["permission"]["bash"]["*"] == "ask"
         assert data["permission"]["bash"]["my_custom *"] == "allow"
-        assert data["permission"]["bash"]["daf *"] == "allow"
+        assert data["permission"]["bash"]["daf info *"] == "allow"
 
     def test_idempotent(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -282,7 +282,7 @@ class TestSetupAgentConfig:
             setup_agent_config(dry_run=False, scope="project")
 
         data = json.loads((tmp_path / "opencode.json").read_text())
-        assert data["permission"]["edit"]["~/.daf-sessions/**"] == "deny"
+        assert data["permission"]["edit"]["~/.config/devaiflow/**"] == "deny"
 
     def test_config_load_failure_defaults_to_claude(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
