@@ -3283,6 +3283,34 @@ def provider_test(ctx: click.Context, name: str) -> None:
 
 
 @cli.command()
+@click.option("--dry-run", is_flag=True, help="Preview changes without writing")
+@click.option("--scope", type=click.Choice(["project", "global"]), default="project",
+              help="Config scope: project-level (default) or global")
+@json_option
+def setup(ctx: click.Context, dry_run: bool, scope: str) -> None:
+    """Configure agent integration for the current backend.
+
+    Merges a JSONC overlay template into the agent's config file,
+    adding DevAIFlow permission rules without overwriting existing settings.
+
+    Examples:
+        daf setup                    # Apply overlay to project config
+        daf setup --scope global     # Apply to global agent config
+        daf setup --dry-run          # Preview what would be added
+        daf setup --json             # JSON output
+    """
+    from devflow.cli.commands.setup_command import setup_agent_config
+
+    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+    exit_code = setup_agent_config(
+        dry_run=dry_run,
+        scope=scope,
+        output_json=output_json,
+    )
+    raise SystemExit(exit_code)
+
+
+@cli.command()
 @click.option("--check", is_flag=True, help="Check external tool dependencies instead of initializing")
 @click.option("--refresh", is_flag=True, help="Refresh automatically discovered data (custom field mappings)")
 @click.option("--reset", is_flag=True, help="Re-prompt for all configuration values")
