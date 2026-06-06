@@ -5,10 +5,15 @@ based on configuration. It follows the same pattern as create_issue_tracker_clie
 from devflow/issue_tracker/__init__.py.
 """
 
+import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set
+
+from rich.console import Console
 
 from devflow.agent.interface import AgentInterface
+
+console = Console()
 from devflow.agent.claude_agent import ClaudeAgent
 from devflow.agent.github_copilot_agent import GitHubCopilotAgent
 from devflow.agent.cursor_agent import CursorAgent
@@ -50,6 +55,138 @@ AGENT_DISPLAY_NAMES = {
     "opencode": "OpenCode",
     "opencode-ai": "OpenCode",
 }
+
+
+# Backends that generate their own session IDs (not UUIDs)
+# These agents create session IDs during launch (e.g., ses_ prefix for OpenCode)
+# and need post-launch capture instead of pre-generated UUIDs
+SELF_ID_BACKENDS = ("opencode", "opencode-ai")
+
+# Placeholder value for agents that generate their own session IDs
+PENDING_CAPTURE_PLACEHOLDER = "pending-capture"
+
+
+def is_self_id_backend(backend: str) -> bool:
+    """Check if an agent backend generates its own session IDs.
+
+    Some agents (like OpenCode) generate their own session IDs during launch
+    (e.g., ``ses_...`` format). For these backends, we use a placeholder
+    instead of a pre-generated UUID and capture the real ID after launch.
+
+    Args:
+        backend: Agent backend identifier (e.g., "opencode", "claude")
+
+    Returns:
+        True if the backend generates its own session IDs
+    """
+    return backend.lower() in SELF_ID_BACKENDS
+
+
+def generate_agent_session_id(agent_backend: str) -> str:
+    """Generate a session ID appropriate for the agent backend.
+
+    For most agents (Claude, Copilot, etc.), returns a UUID4 string.
+    For agents that generate their own session IDs (OpenCode), returns
+    a placeholder that will be replaced after launch via capture logic.
+
+    Args:
+        agent_backend: Agent backend identifier
+
+    Returns:
+        UUID string or placeholder depending on backend
+
+    Examples:
+        >>> generate_agent_session_id("claude")  # Returns UUID like "4b0eea04-..."
+        >>> generate_agent_session_id("opencode")  # Returns "pending-capture"
+    """
+    if is_self_id_backend(agent_backend):
+        return PENDING_CAPTURE_PLACEHOLDER
+    return str(uuid.uuid4())
+
+
+def is_pending_capture(session_id: str) -> bool:
+    """Check if a session ID is the pending-capture placeholder.
+
+    Args:
+        session_id: Session ID to check
+
+    Returns:
+        True if the session ID is a pending-capture placeholder
+    """
+    return session_id == PENDING_CAPTURE_PLACEHOLDER
+
+
+def snapshot_agent_sessions(
+    agent: AgentInterface,
+    agent_backend: str,
+    launch_dir: str,
+) -> Set[str]:
+    """Take a snapshot of existing agent sessions before launch.
+
+    For agents that generate their own session IDs (like OpenCode), this
+    captures the set of existing sessions so we can detect newly created
+    sessions after launch by computing the set difference.
+
+    Args:
+        agent: Agent client instance
+        agent_backend: Agent backend identifier
+        launch_dir: Directory where the agent will be launched
+
+    Returns:
+        Set of existing session IDs (empty for non-self-ID backends)
+    """
+    if not is_self_id_backend(agent_backend) or not launch_dir:
+        return set()
+    try:
+        return agent.get_existing_sessions(launch_dir)
+    except Exception:
+        return set()
+
+
+def capture_agent_session_id(
+    agent: AgentInterface,
+    agent_backend: str,
+    launch_dir: str,
+    active_conv,
+    sessions_before: Set[str],
+) -> bool:
+    """Capture the real session ID after agent launch.
+
+    For agents that generate their own session IDs (like OpenCode), this
+    compares session lists before and after launch to find the new session.
+    Updates ``active_conv.ai_agent_session_id`` in place.
+
+    Args:
+        agent: Agent client instance
+        agent_backend: Agent backend identifier
+        launch_dir: Directory where the agent was launched
+        active_conv: Active conversation object to update
+        sessions_before: Session snapshot taken before launch
+
+    Returns:
+        True if a new session ID was captured and stored
+    """
+    if not is_self_id_backend(agent_backend) or not launch_dir or not active_conv:
+        return False
+    try:
+        sessions_after = agent.get_existing_sessions(launch_dir)
+        new_sessions = sessions_after - sessions_before
+        if new_sessions:
+            real_session_id = new_sessions.pop()
+            active_conv.ai_agent_session_id = real_session_id
+            console.print(f"[dim]Captured {agent.get_agent_name()} session ID: {real_session_id}[/dim]")
+            return True
+        else:
+            console.print(
+                f"[yellow]Warning: Could not capture {agent.get_agent_name()} session ID. "
+                f"Session will be captured on next open.[/yellow]"
+            )
+            return False
+    except Exception as e:
+        console.print(
+            f"[yellow]Warning: Failed to capture {agent.get_agent_name()} session ID: {e}[/yellow]"
+        )
+        return False
 
 
 def get_agent_display_name(backend: Optional[str] = None) -> str:

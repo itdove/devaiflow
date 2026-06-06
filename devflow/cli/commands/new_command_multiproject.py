@@ -232,8 +232,10 @@ def create_multi_project_session(
         sys.exit(1)
 
     # Create new session with multi-project conversation
-    # Use ONE shared session ID for all projects
-    session_id = str(uuid.uuid4())
+    # Use ONE shared session ID for all projects (agent-aware)
+    from devflow.agent.factory import generate_agent_session_id
+    _agent_backend_for_id = config.agent_backend if config else "claude"
+    session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
     projects_info = {}
@@ -357,6 +359,10 @@ def create_multi_project_session(
         from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
         setup_signal_handlers(session, session_manager, name, config)
 
+        # Snapshot existing sessions before launch (for self-ID agent capture)
+        from devflow.agent.factory import snapshot_agent_sessions, capture_agent_session_id
+        _sessions_before = snapshot_agent_sessions(agent, agent_backend, workspace_path)
+
         # Execute agent in the workspace directory with the environment
         try:
             import subprocess
@@ -382,6 +388,12 @@ def create_multi_project_session(
         finally:
             if not is_cleanup_done():
                 console.print(f"\n[green]✓[/green] {agent_name} session completed")
+
+                # Capture real session ID for self-ID agents (e.g., OpenCode ses_ IDs)
+                capture_agent_session_id(
+                    agent, agent_backend, workspace_path,
+                    session.active_conversation, _sessions_before,
+                )
 
                 # Update session status to paused
                 session.status = "paused"

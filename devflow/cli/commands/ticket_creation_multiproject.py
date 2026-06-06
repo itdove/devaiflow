@@ -59,8 +59,10 @@ def create_multi_project_ticket_creation_session(
     console.print(f"  [dim]Session type: {session_type} (no branches will be created)[/dim]")
     console.print()
 
-    # Create ONE shared session ID for all projects
-    session_id = str(uuid.uuid4())
+    # Create ONE shared session ID for all projects (agent-aware)
+    from devflow.agent.factory import generate_agent_session_id
+    _agent_backend_for_id = config.agent_backend if config else "claude"
+    session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
     # For ticket creation, we don't create branches - just use current branch

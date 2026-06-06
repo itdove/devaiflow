@@ -629,8 +629,10 @@ def create_new_session(
         else:
             branch = branch_result
 
-    # Generate session ID upfront
-    session_id = str(uuid.uuid4())
+    # Generate session ID upfront (agent-aware: placeholder for self-ID backends)
+    from devflow.agent.factory import generate_agent_session_id
+    _agent_backend_for_id = agent or (config.agent_backend if config else "claude")
+    session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build concatenated goal for storage
     # If issue tracker ticket, concatenate: "{ISSUE_KEY}: {JIRA_TITLE}" or "{ISSUE_KEY}: {goal}"
@@ -893,6 +895,10 @@ def create_new_session(
         # Set up signal handlers for cleanup (using unified utility)
         setup_signal_handlers(session, session_manager, name, config)
 
+        # Snapshot existing sessions before launch (for self-ID agent capture)
+        from devflow.agent.factory import snapshot_agent_sessions, capture_agent_session_id
+        _sessions_before = snapshot_agent_sessions(agent_client, agent_backend, project_path)
+
         # Launch agent with initial prompt
         try:
             process = agent_client.launch_with_prompt(
@@ -917,6 +923,12 @@ def create_new_session(
         finally:
             if not is_cleanup_done():
                 console.print(f"\n[green]✓[/green] {agent_name} session completed")
+
+                # Capture real session ID for self-ID agents (e.g., OpenCode ses_ IDs)
+                capture_agent_session_id(
+                    agent_client, agent_backend, project_path,
+                    session.active_conversation, _sessions_before,
+                )
 
                 # Update session status to paused
                 session.status = "paused"

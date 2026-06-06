@@ -546,8 +546,10 @@ def create_jira_ticket_session(
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
 
-    # Generate a new Claude session ID
-    ai_agent_session_id = str(uuid.uuid4())
+    # Generate a new agent session ID (agent-aware: placeholder for self-ID backends)
+    from devflow.agent.factory import generate_agent_session_id
+    _agent_backend_for_id = agent or (config.agent_backend if config else "claude")
+    ai_agent_session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Update session with Claude session ID
     # Get current branch from temp directory (or None if not a git repo)
@@ -650,6 +652,10 @@ def create_jira_ticket_session(
         console_print(f"[dim]  Working directory: {project_path}[/dim]")
         console_print()
 
+        # Snapshot existing sessions before launch (for self-ID agent capture)
+        from devflow.agent.factory import snapshot_agent_sessions, capture_agent_session_id
+        _sessions_before = snapshot_agent_sessions(agent_client, agent_backend, project_path)
+
         # Launch agent with initial prompt
         process = agent_client.launch_with_prompt(
             project_path=project_path,
@@ -673,6 +679,12 @@ def create_jira_ticket_session(
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")
+
+            # Capture real session ID for self-ID agents (e.g., OpenCode ses_ IDs)
+            capture_agent_session_id(
+                agent_client, agent_backend, project_path,
+                session.active_conversation, _sessions_before,
+            )
 
             # Reload index from disk before checking for rename
             # This is critical because the child process (Claude) may have renamed the session
