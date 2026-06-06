@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_state_home
 
 from .models import RepositorySuggestion, SuggestionHistory
 
@@ -60,7 +60,7 @@ class RepositorySuggester:
             history_file: Path to suggestion history file. Defaults to DEVAIFLOW_HOME/suggestions.json
         """
         if history_file is None:
-            history_file = get_cs_home() / "suggestions.json"
+            history_file = get_cs_state_home() / "suggestions.json"
 
         self.history_file = history_file
         self.history = self._load_history()

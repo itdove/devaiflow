@@ -36,6 +36,7 @@ In-depth guides for specific topics:
 - **[Hierarchical Skills](guides/hierarchical-skills.md)** - Custom Claude Code skills system
 - **[SSL Configuration](guides/ssl-configuration.md)** - SSL/TLS configuration for enterprise
 - **[Enterprise Model Provider Enforcement](guides/enterprise-model-provider-enforcement.md)** - Enforce model providers at enterprise level
+- **[XDG Directories](guides/xdg-directories.md)** - XDG Base Directory Specification support and migration
 
 ### 🎓 Tutorials
 Step-by-step tutorials for common tasks:

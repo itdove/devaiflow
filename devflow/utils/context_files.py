@@ -47,10 +47,10 @@ def load_hierarchical_context_files(config: Optional['Config'] = None) -> list[t
         DeprecationWarning,
         stacklevel=2
     )
-    from devflow.utils.paths import get_cs_home
+    from devflow.utils.paths import get_cs_config_home
 
     context_files = []
-    cs_home = get_cs_home()
+    cs_home = get_cs_config_home()
 
     # Backend context (JIRA backend specific)
     backend_path = cs_home / "backends" / "JIRA.md"

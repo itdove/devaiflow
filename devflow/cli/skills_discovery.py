@@ -81,8 +81,8 @@ def discover_skills(
     # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/ (organization-specific skills that extend generic ones)
     # These are numbered (01-enterprise, 02-organization, 03-team, 04-user) to guarantee order
     if include_levels is None or "hierarchical" in include_levels:
-        from devflow.utils.paths import get_cs_home
-        cs_home = get_cs_home()
+        from devflow.utils.paths import get_cs_config_home
+        cs_home = get_cs_config_home()
         hierarchical_skills_dir = cs_home / ".claude" / "skills"
         if hierarchical_skills_dir.exists():
             # Sort to ensure numbered order (01-, 02-, 03-, 04-)

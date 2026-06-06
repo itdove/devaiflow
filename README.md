@@ -491,8 +491,40 @@ See [Troubleshooting Guide](docs/guides/troubleshooting.md#githubd-authenticatio
 DevAIFlow supports the following environment variables for customization:
 
 ### DEVAIFLOW_HOME
-- **Purpose**: Customize where DevAIFlow stores session data and configuration
-- **Default**: `~/.daf-sessions`
+- **Purpose**: Override where DevAIFlow stores all data (unified mode)
+- **Default**: When not set, DevAIFlow follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/)
+
+**XDG Directory Layout** (new installs):
+
+| Category | XDG Variable | Default Path | Contents |
+|----------|-------------|--------------|----------|
+| Data | `XDG_DATA_HOME` | `~/.local/share/devaiflow` | sessions, backups, logs, features |
+| Config | `XDG_CONFIG_HOME` | `~/.config/devaiflow` | config.json, backends/, templates/, skills, context .md files |
+| State | `XDG_STATE_HOME` | `~/.local/state/devaiflow` | audit.log, cache, dashboard state |
+
+**Resolution priority**:
+  1. `DEVAIFLOW_HOME` env var → all files in one directory (highest priority)
+  2. `~/.daf-sessions` exists → all files in one directory (legacy compatibility)
+  3. XDG env vars → split across XDG directories
+  4. XDG defaults → split across `~/.local/share`, `~/.config`, `~/.local/state`
+
+- **Migration from legacy path**:
+  ```bash
+  mkdir -p ~/.local/share/devaiflow ~/.config/devaiflow ~/.local/state/devaiflow
+  # Move data
+  cp -a ~/.daf-sessions/sessions* ~/.local/share/devaiflow/
+  cp -a ~/.daf-sessions/backups ~/.daf-sessions/logs ~/.local/share/devaiflow/ 2>/dev/null
+  # Move config
+  cp -a ~/.daf-sessions/config.json ~/.daf-sessions/enterprise.json ~/.config/devaiflow/ 2>/dev/null
+  cp -a ~/.daf-sessions/organization.json ~/.daf-sessions/team.json ~/.config/devaiflow/ 2>/dev/null
+  cp -a ~/.daf-sessions/backends ~/.daf-sessions/templates ~/.config/devaiflow/ 2>/dev/null
+  cp -a ~/.daf-sessions/.claude ~/.daf-sessions/*.md ~/.config/devaiflow/ 2>/dev/null
+  # Move state
+  cp -a ~/.daf-sessions/audit.log ~/.daf-sessions/version_check_cache.json ~/.local/state/devaiflow/ 2>/dev/null
+  cp -a ~/.daf-sessions/suggestions.json ~/.daf-sessions/state ~/.local/state/devaiflow/ 2>/dev/null
+  # Remove legacy dir
+  rm -rf ~/.daf-sessions
+  ```
 - **Example**:
   ```bash
   export DEVAIFLOW_HOME="~/custom/devaiflow-data"

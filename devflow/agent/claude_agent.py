@@ -515,8 +515,8 @@ class ClaudeAgent(AgentInterface):
                 skills_dirs.append(str(workspace_skills))
 
         # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/
-        from devflow.utils.paths import get_cs_home
-        cs_home = get_cs_home()
+        from devflow.utils.paths import get_cs_config_home
+        cs_home = get_cs_config_home()
         hierarchical_skills = cs_home / ".claude" / "skills"
         if hierarchical_skills.exists():
             skills_dirs.append(str(hierarchical_skills))

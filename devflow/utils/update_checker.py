@@ -53,8 +53,8 @@ def _get_cache_file() -> Path:
         Path to cache file
     """
     # Use the same session home as devflow tool
-    from devflow.utils.paths import get_cs_home
-    cache_dir = get_cs_home()
+    from devflow.utils.paths import get_cs_state_home
+    cache_dir = get_cs_state_home()
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / "version_check_cache.json"

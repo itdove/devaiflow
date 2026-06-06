@@ -61,10 +61,10 @@ class JiraClient(IssueTrackerClient):
         if not self._jira_url:
             try:
                 from pathlib import Path
-                from devflow.utils.paths import get_cs_home
+                from devflow.utils.paths import get_cs_config_home
                 import json
 
-                backends_dir = get_cs_home() / "backends"
+                backends_dir = get_cs_config_home() / "backends"
                 jira_backend_config = backends_dir / "jira.json"
 
                 if jira_backend_config.exists():

@@ -187,8 +187,8 @@ def upgrade_all(
                 console.print(f"  Locations: ~/.agent/skills/ AND {project_path_obj}/.agent/skills/")
 
         if upgrade_hierarchical_skills:
-            from devflow.utils.paths import get_cs_home
-            hierarchical_skills_dir = get_cs_home() / ".claude" / "skills"
+            from devflow.utils.paths import get_cs_config_home
+            hierarchical_skills_dir = get_cs_config_home() / ".claude" / "skills"
             console.print(f"\n[dim]Hierarchical skills: {hierarchical_skills_dir}[/dim]")
 
 

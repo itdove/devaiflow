@@ -267,8 +267,8 @@ def create_backup(file_path: Path, backup_dir: Optional[Path] = None) -> Optiona
 
     # Default backup directory
     if backup_dir is None:
-        from devflow.utils.paths import get_cs_home
-        backup_dir = get_cs_home() / "backups"
+        from devflow.utils.paths import get_cs_config_home
+        backup_dir = get_cs_config_home() / "backups"
 
     backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -297,8 +297,8 @@ def list_backups(filename: Optional[str] = None, backup_dir: Optional[Path] = No
     """
     # Default backup directory
     if backup_dir is None:
-        from devflow.utils.paths import get_cs_home
-        backup_dir = get_cs_home() / "backups"
+        from devflow.utils.paths import get_cs_config_home
+        backup_dir = get_cs_config_home() / "backups"
 
     if not backup_dir.exists():
         return []
@@ -361,8 +361,8 @@ def restore_backup(backup_path: Path, target_path: Optional[Path] = None) -> Pat
         original_filename = parts[0]
 
         # Restore to config directory
-        from devflow.utils.paths import get_cs_home
-        target_path = get_cs_home() / original_filename
+        from devflow.utils.paths import get_cs_config_home
+        target_path = get_cs_config_home() / original_filename
 
     # Copy backup to target location
     shutil.copy2(backup_path, target_path)
@@ -886,10 +886,10 @@ def install_hierarchical_skills(
         - failed: Items that failed to install
     """
     import json
-    from devflow.utils.paths import get_cs_home
+    from devflow.utils.paths import get_cs_config_home
     from devflow.config.loader import ConfigLoader
 
-    cs_home = get_cs_home()
+    cs_home = get_cs_config_home()
     skills_install_dir = cs_home / ".claude" / "skills"
 
     # Define hierarchy order (order number, config file, level name)
@@ -1264,9 +1264,9 @@ def get_hierarchical_skill_statuses() -> dict:
         - "no_url": Config file exists but has no skill_url (for skills only)
         - "no_config": Config file doesn't exist (for skills only)
     """
-    from devflow.utils.paths import get_cs_home
+    from devflow.utils.paths import get_cs_config_home
 
-    cs_home = get_cs_home()
+    cs_home = get_cs_config_home()
     skills_dir = cs_home / ".claude" / "skills"
 
     hierarchy = [

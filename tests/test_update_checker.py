@@ -55,17 +55,18 @@ def test_parse_version_invalid():
 
 
 def test_get_cache_file_default(monkeypatch, tmp_path):
-    """Test cache file path with default location (backward compat or new install)."""
+    """Test cache file path with default XDG location (new install, no legacy dir)."""
     monkeypatch.delenv("CLAUDE_SESSION_HOME", raising=False)
     monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
     monkeypatch.delenv("CS_HOME", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
 
-    # Mock Path.home() to use tmp_path to avoid existing ~/.daf-sessions
+    # Mock Path.home() to use tmp_path — no legacy .daf-sessions dir exists
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
     cache_file = _get_cache_file()
-    # Should use .daf-sessions for new installations (when neither directory exists)
-    assert cache_file == tmp_path / ".daf-sessions" / "version_check_cache.json"
+    # New installs use XDG state path
+    assert cache_file == tmp_path / ".local" / "state" / "devaiflow" / "version_check_cache.json"
 
 
 def test_get_cache_file_custom_home(monkeypatch, tmp_path):

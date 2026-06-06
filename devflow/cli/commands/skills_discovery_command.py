@@ -11,7 +11,7 @@ from rich.table import Table
 from rich.panel import Panel
 
 from devflow.config.loader import ConfigLoader
-from devflow.utils.paths import get_claude_config_dir, get_cs_home
+from devflow.utils.paths import get_claude_config_dir, get_cs_config_home
 
 console = Console()
 
@@ -88,7 +88,7 @@ def _discover_all_skills(workspace_path: Optional[str] = None) -> Dict[str, List
             skills_by_level["workspace"] = _discover_skills_in_dir(workspace_skills_dir, "workspace")
 
     # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/
-    cs_home = get_cs_home()
+    cs_home = get_cs_config_home()
     hierarchical_skills_dir = cs_home / ".claude" / "skills"
     if hierarchical_skills_dir.exists():
         skills_by_level["hierarchical"] = _discover_skills_in_dir(hierarchical_skills_dir, "hierarchical")
@@ -255,7 +255,7 @@ def _list_skills_table(skills_by_level: Dict[str, List[Dict]]) -> None:
     level_display = {
         "user": f"User-level ({get_claude_config_dir() / 'skills'}):",
         "workspace": "Workspace-level (<workspace>/.claude/skills/):",
-        "hierarchical": f"Hierarchical ({get_cs_home() / '.claude/skills'}):",
+        "hierarchical": f"Hierarchical ({get_cs_config_home() / '.claude/skills'}):",
         "project": "Project-level (<project>/.claude/skills/):"
     }
 

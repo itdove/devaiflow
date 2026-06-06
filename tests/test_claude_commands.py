@@ -544,7 +544,7 @@ def test_build_claude_command_skills_load_order(temp_user_home, monkeypatch):
     hierarchical_skills.mkdir(parents=True)
 
     with patch('devflow.utils.claude_commands.Path.home', return_value=temp_user_home):
-        with patch('devflow.utils.paths.get_cs_home', return_value=cs_home):
+        with patch('devflow.utils.paths.get_cs_config_home', return_value=cs_home):
             cmd = build_claude_command(
                 session_id="test-session",
                 initial_prompt="Test",
@@ -584,7 +584,7 @@ def test_build_claude_command_with_config_hierarchical_files(temp_user_home, mon
     cs_home = temp_user_home / "daf-home"
     cs_home.mkdir(parents=True)
 
-    with patch('devflow.utils.paths.get_cs_home', return_value=cs_home):
+    with patch('devflow.utils.paths.get_cs_config_home', return_value=cs_home):
         with patch('devflow.utils.context_files.load_hierarchical_context_files', return_value=["ENTERPRISE.md"]):
             cmd = build_claude_command(
                 session_id="test-session",
@@ -600,8 +600,8 @@ def test_build_claude_command_no_duplicate_dirs(temp_user_home):
     """Test that duplicate directories are not added."""
     from unittest.mock import patch, MagicMock
 
-    # Mock get_cs_home to return same as user home
-    with patch('devflow.utils.paths.get_cs_home', return_value=temp_user_home):
+    # Mock get_cs_config_home to return same as user home
+    with patch('devflow.utils.paths.get_cs_config_home', return_value=temp_user_home):
         with patch('devflow.utils.context_files.load_hierarchical_context_files', return_value=["file.md"]):
             cmd = build_claude_command(
                 session_id="test-session",

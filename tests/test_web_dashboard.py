@@ -488,7 +488,7 @@ class TestPortFileManagement:
         """Test writing port to state file."""
         from devflow.web.app import _write_port, _get_port_file
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_port(12345)
             port_file = _get_port_file()
             assert port_file.exists()
@@ -498,7 +498,7 @@ class TestPortFileManagement:
         """Test cleanup removes port file."""
         from devflow.web.app import _write_port, _cleanup_port_file
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_port(12345)
             _cleanup_port_file()
             port_file = tmp_path / "state" / "dashboard.port"
@@ -508,7 +508,7 @@ class TestPortFileManagement:
         """Test cleanup doesn't fail when port file doesn't exist."""
         from devflow.web.app import _cleanup_port_file
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             # Should not raise
             _cleanup_port_file()
 
@@ -516,7 +516,7 @@ class TestPortFileManagement:
         """Test that _write_port creates the state directory if missing."""
         from devflow.web.app import _write_port
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_port(9999)
             state_dir = tmp_path / "state"
             assert state_dir.is_dir()
@@ -1360,7 +1360,7 @@ class TestPidFileManagement:
         """Test writing and reading PID file."""
         from devflow.web.app import _write_pid, _read_pid
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_pid(12345)
             result = _read_pid()
             assert result == 12345
@@ -1369,7 +1369,7 @@ class TestPidFileManagement:
         """Test reading PID when file doesn't exist."""
         from devflow.web.app import _read_pid
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             result = _read_pid()
             assert result is None
 
@@ -1377,7 +1377,7 @@ class TestPidFileManagement:
         """Test reading port from state file."""
         from devflow.web.app import _write_port, _read_port
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_port(54321)
             result = _read_port()
             assert result == 54321
@@ -1386,7 +1386,7 @@ class TestPidFileManagement:
         """Test reading port when file doesn't exist."""
         from devflow.web.app import _read_port
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             result = _read_port()
             assert result is None
 
@@ -1394,7 +1394,7 @@ class TestPidFileManagement:
         """Test cleanup removes both port and PID files."""
         from devflow.web.app import _write_port, _write_pid, _cleanup_state_files
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_port(8080)
             _write_pid(99999)
 
@@ -1424,7 +1424,7 @@ class TestPidFileManagement:
         """Test status when no dashboard is running."""
         from devflow.web.app import get_dashboard_status
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             result = get_dashboard_status()
             assert result is None
 
@@ -1432,7 +1432,7 @@ class TestPidFileManagement:
         """Test status with stale PID file (process not running)."""
         from devflow.web.app import get_dashboard_status, _write_pid, _write_port
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_pid(4_000_000)  # non-existent process
             _write_port(8080)
             result = get_dashboard_status()
@@ -1442,7 +1442,7 @@ class TestPidFileManagement:
         """Test status when a real process is running (use our own PID)."""
         from devflow.web.app import get_dashboard_status, _write_pid, _write_port
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_pid(os.getpid())  # our own process
             _write_port(9090)
             result = get_dashboard_status()
@@ -1454,7 +1454,7 @@ class TestPidFileManagement:
         """Test stop when nothing is running."""
         from devflow.web.app import stop_dashboard
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             result = stop_dashboard()
             assert result is False
 
@@ -1462,7 +1462,7 @@ class TestPidFileManagement:
         """Test stop with stale PID file cleans up state files."""
         from devflow.web.app import stop_dashboard, _write_pid, _write_port
 
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             _write_pid(4_000_000)
             _write_port(8080)
             result = stop_dashboard()
@@ -1528,7 +1528,7 @@ class TestDashboardCLIGroup:
         from devflow.cli.main import cli
 
         runner = CliRunner()
-        with patch("devflow.web.app.get_cs_home", return_value=tmp_path):
+        with patch("devflow.web.app.get_cs_state_home", return_value=tmp_path):
             with patch("devflow.cli.main.console"):
                 result = runner.invoke(cli, ["dashboard", "stop"])
 

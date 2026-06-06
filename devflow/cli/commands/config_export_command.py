@@ -7,7 +7,7 @@ from rich.console import Console
 
 from devflow.cli.utils import require_outside_claude
 from devflow.config.exporter import ConfigExporter
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_config_home
 
 console = Console()
 
@@ -23,7 +23,7 @@ def export_config(
         output: Output file path (default: ~/config-export.tar.gz)
         force: Skip confirmation prompts
     """
-    config_dir = get_cs_home()
+    config_dir = get_cs_config_home()
     exporter = ConfigExporter(config_dir)
 
     output_path = Path(output) if output else None

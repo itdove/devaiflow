@@ -122,7 +122,7 @@ def test_discover_skills_in_dir_empty(tmp_path):
 def test_discover_all_skills_user_level(monkeypatch, mock_skill_dir):
     """Test discovering skills at user level."""
     with patch('devflow.cli.commands.skills_discovery_command.get_claude_config_dir', return_value=mock_skill_dir.parent):
-        with patch('devflow.cli.commands.skills_discovery_command.get_cs_home', return_value=Path("/nonexistent")):
+        with patch('devflow.cli.commands.skills_discovery_command.get_cs_config_home', return_value=Path("/nonexistent")):
             # Rename mock_skill_dir to match expected user skills path
             user_skills = mock_skill_dir.parent / "skills"
             if mock_skill_dir != user_skills:
@@ -177,7 +177,7 @@ def test_list_skills_table_output(monkeypatch, mock_skill_dir):
 
     with patch('devflow.cli.commands.skills_discovery_command.console') as mock_console:
         with patch('devflow.cli.commands.skills_discovery_command.get_claude_config_dir', return_value=mock_skill_dir.parent):
-            with patch('devflow.cli.commands.skills_discovery_command.get_cs_home', return_value=Path("/nonexistent")):
+            with patch('devflow.cli.commands.skills_discovery_command.get_cs_config_home', return_value=Path("/nonexistent")):
                 _list_skills_table(skills_by_level)
 
                 # Verify console.print was called (table was displayed)
