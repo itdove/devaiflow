@@ -352,11 +352,6 @@ wait_for_prompt "Do you want to proceed?" 120
 sleep 1
 tmux send-keys -t "$SESSION_NAME" C-m
 
-wait_for_prompt "daf git add-comment" 120
-wait_for_prompt "Do you want to proceed?" 120
-sleep 1
-tmux send-keys -t "$SESSION_NAME" C-m
-
 sleep 5
 tmux send-keys -t "$SESSION_NAME" "exit" C-m
 

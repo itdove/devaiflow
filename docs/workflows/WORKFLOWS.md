@@ -176,7 +176,7 @@ daf open owner-repo-123
 
 # Step 4: Work and track progress (exit Claude first)
 daf note owner-repo-123 "Completed login endpoint"
-daf git add-comment "owner/repo#123" "Implementation ready for review"
+gh issue comment 123 --body "Implementation ready for review"
 
 # Step 5: Complete session
 daf complete owner-repo-123

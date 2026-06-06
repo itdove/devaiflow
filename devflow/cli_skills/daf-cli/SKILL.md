@@ -23,7 +23,7 @@ user-invocable: false
 - View issues: `gh issue view` (GitHub) / `glab issue view` (GitLab)
 - Create issues: `daf git create`
 - Update issues: `daf git update`
-- Add comments: `daf git add-comment`
+- Add comments: `gh issue comment` / `glab issue note`
 - **CRITICAL**: GitHub/GitLab use Markdown syntax (see daf-git skill)
 
 ### Session Notes
