@@ -14,7 +14,7 @@ import webbrowser
 from pathlib import Path
 from typing import Optional
 
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_state_home
 from devflow.web.utils.data_bridge import DataBridge
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def _get_state_dir() -> Path:
     """Get the dashboard state directory, creating it if needed."""
-    state_dir = get_cs_home() / "state"
+    state_dir = get_cs_state_home() / "state"
     state_dir.mkdir(parents=True, exist_ok=True)
     return state_dir
 

@@ -505,7 +505,7 @@ class TestAuditLogging:
         audit_logger.handlers.clear()
 
         # Set up audit log in temp directory
-        with patch("devflow.utils.audit_log.get_cs_home", return_value=tmp_path):
+        with patch("devflow.utils.audit_log.get_cs_state_home", return_value=tmp_path):
             log_model_provider_usage(
                 event_type="session_created",
                 session_name="TEST-123",
@@ -549,7 +549,7 @@ class TestAuditLogging:
         audit_logger.handlers.clear()
 
         # Test with enterprise enforcement
-        with patch("devflow.utils.audit_log.get_cs_home", return_value=tmp_path):
+        with patch("devflow.utils.audit_log.get_cs_state_home", return_value=tmp_path):
             log_model_provider_usage(
                 event_type="session_created",
                 session_name="TEST-456",

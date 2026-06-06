@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 from pydantic import ValidationError
 from rich.console import Console
 
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_home, get_cs_config_home
 
 from .models import Config, SessionIndex
 
@@ -24,15 +24,20 @@ class ConfigLoader:
         """Initialize the config loader.
 
         Args:
-            config_dir: Directory for config files. Defaults to DEVAIFLOW_HOME or ~/.daf-sessions
+            config_dir: Directory for config files. When None, uses XDG paths:
+                config files → get_cs_config_home(), session data → get_cs_home().
+                When explicit, all paths use the given directory (test compat).
         """
         if config_dir is None:
-            config_dir = get_cs_home()
-        self.config_dir = config_dir
-        self.config_file = config_dir / "config.json"
-        self.sessions_file = config_dir / "sessions.json"
-        self.sessions_dir = config_dir / "sessions"
-        self.session_home = config_dir  # Alias for compatibility
+            self.config_dir = get_cs_config_home()
+            session_home = get_cs_home()
+        else:
+            self.config_dir = config_dir
+            session_home = config_dir
+        self.config_file = self.config_dir / "config.json"
+        self.sessions_file = session_home / "sessions.json"
+        self.sessions_dir = session_home / "sessions"
+        self.session_home = session_home
 
         # Ensure directories exist
         self.config_dir.mkdir(parents=True, exist_ok=True)

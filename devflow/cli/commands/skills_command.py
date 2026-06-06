@@ -791,9 +791,9 @@ def _list_config_backups() -> None:
 def _restore_config_backup(backup_filename: str) -> None:
     """Restore a config file from backup."""
     from devflow.utils.hierarchical_skills import restore_backup, list_backups
-    from devflow.utils.paths import get_cs_home
+    from devflow.utils.paths import get_cs_config_home
 
-    cs_home = get_cs_home()
+    cs_home = get_cs_config_home()
     backup_dir = cs_home / "backups"
     backup_path = backup_dir / backup_filename
 

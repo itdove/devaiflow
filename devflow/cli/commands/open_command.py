@@ -1225,12 +1225,12 @@ def open_session(
 
                 # Add DEVAIFLOW_HOME to allowed paths if hierarchical context files exist
                 # This allows Claude Code to read ENTERPRISE.md, ORGANIZATION.md, TEAM.md, USER.md
-                from devflow.utils.paths import get_cs_home
-                cs_home = get_cs_home()
-                if cs_home.exists():
+                from devflow.utils.paths import get_cs_config_home
+                cs_config = get_cs_config_home()
+                if cs_config.exists():
                     hierarchical_files = load_hierarchical_context_files(config)
                     if hierarchical_files:
-                        cmd.extend(["--add-dir", str(cs_home)])
+                        cmd.extend(["--add-dir", str(cs_config)])
             elif agent_backend in ("opencode", "opencode-ai"):
                 # OpenCode supports session resume via --session flag
                 from devflow.agent.factory import snapshot_agent_sessions as _snap_resume

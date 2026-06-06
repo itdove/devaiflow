@@ -6,7 +6,7 @@ from typing import Optional
 
 from devflow.config.loader import ConfigLoader
 from devflow.templates.models import NameExtractionConfig, SessionTemplate, TemplateConfig, TemplateIndex
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_config_home
 
 
 class TemplateManager:
@@ -18,7 +18,7 @@ class TemplateManager:
         Args:
             cs_home: Path to DevAIFlow home directory (defaults to DEVAIFLOW_HOME or ~/.daf-sessions)
         """
-        self.cs_home = cs_home or get_cs_home()
+        self.cs_home = cs_home or get_cs_config_home()
         self.templates_dir = self.cs_home / "templates"
         self.templates_file = self.cs_home / "templates.json"
 

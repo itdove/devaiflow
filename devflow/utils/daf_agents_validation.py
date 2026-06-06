@@ -252,8 +252,8 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
 
     if is_temp_session:
         # Check DEVAIFLOW_HOME first (centralized location)
-        from devflow.utils.paths import get_cs_home
-        cs_home = get_cs_home()
+        from devflow.utils.paths import get_cs_config_home
+        cs_home = get_cs_config_home()
         daf_agents_home = cs_home / "DAF_AGENTS.md"
 
         if daf_agents_home.exists():
@@ -289,8 +289,8 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
     # (Claude launches from workspace root for multi-project sessions)
     if active_conv and active_conv.is_multi_project:
         # Check DEVAIFLOW_HOME first (centralized location)
-        from devflow.utils.paths import get_cs_home
-        cs_home = get_cs_home()
+        from devflow.utils.paths import get_cs_config_home
+        cs_home = get_cs_config_home()
         daf_agents_home = cs_home / "DAF_AGENTS.md"
 
         if daf_agents_home.exists():
@@ -330,8 +330,8 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
         return False
 
     # Check DEVAIFLOW_HOME first (centralized location, recommended)
-    from devflow.utils.paths import get_cs_home
-    cs_home = get_cs_home()
+    from devflow.utils.paths import get_cs_config_home
+    cs_home = get_cs_config_home()
     daf_agents_home = cs_home / "DAF_AGENTS.md"
 
     if daf_agents_home.exists():

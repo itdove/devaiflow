@@ -6,7 +6,7 @@ from rich.console import Console
 
 from devflow.cli.utils import require_outside_claude
 from devflow.config.importer import ConfigImporter
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_config_home
 
 console = Console()
 
@@ -36,7 +36,7 @@ def import_config(
         console.print(f"[red]✗[/red] Export file not found: {export_path}")
         return
 
-    config_dir = get_cs_home()
+    config_dir = get_cs_config_home()
     importer = ConfigImporter(config_dir)
 
     try:

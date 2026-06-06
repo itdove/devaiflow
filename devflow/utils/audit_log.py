@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Any
 
-from devflow.utils.paths import get_cs_home
+from devflow.utils.paths import get_cs_state_home
 
 # Configure audit logger with separate handler
 audit_logger = logging.getLogger("devaiflow.audit")
@@ -24,8 +24,8 @@ def _get_audit_log_path() -> Path:
     Returns:
         Path to audit.log in DEVAIFLOW_HOME
     """
-    cs_home = get_cs_home()
-    return cs_home / "audit.log"
+    state_home = get_cs_state_home()
+    return state_home / "audit.log"
 
 
 def _ensure_audit_log_handler():
