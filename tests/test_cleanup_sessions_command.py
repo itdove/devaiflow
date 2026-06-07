@@ -1,4 +1,4 @@
-"""Tests for daf cleanup-sessions command."""
+"""Tests for daf maintenance cleanup-sessions command."""
 
 import pytest
 from datetime import datetime

@@ -1,4 +1,4 @@
-"""Implementation of 'daf cleanup-conversation' command."""
+"""Implementation of 'daf maintenance cleanup-conversation' command."""
 
 import json
 import os
@@ -63,9 +63,9 @@ def cleanup_conversation(
     # Determine which session to cleanup
     if not identifier:
         console.print("[red]Error: Session name or issue key required[/red]")
-        console.print("[dim]Usage: daf cleanup-conversation <NAME-or-JIRA-KEY> --older-than 8h[/dim]")
-        console.print("[dim]Example: daf cleanup-conversation PROJ-12345 --older-than 8h[/dim]")
-        console.print("[dim]Or use: daf cleanup-conversation --latest --older-than 8h[/dim]")
+        console.print("[dim]Usage: daf maintenance cleanup-conversation <NAME-or-JIRA-KEY> --older-than 8h[/dim]")
+        console.print("[dim]Example: daf maintenance cleanup-conversation PROJ-12345 --older-than 8h[/dim]")
+        console.print("[dim]Or use: daf maintenance cleanup-conversation --latest --older-than 8h[/dim]")
         return
 
     # Get session by identifier (handles multi-conversation sessions)
@@ -113,8 +113,8 @@ def cleanup_conversation(
     if not older_than and not keep_last:
         console.print("[red]Error: Must specify either --older-than or --keep-last[/red]")
         console.print("[dim]Examples:[/dim]")
-        console.print("[dim]  daf cleanup-conversation --older-than 2h[/dim]")
-        console.print("[dim]  daf cleanup-conversation --keep-last 50[/dim]")
+        console.print("[dim]  daf maintenance cleanup-conversation --older-than 2h[/dim]")
+        console.print("[dim]  daf maintenance cleanup-conversation --keep-last 50[/dim]")
         return
 
     if older_than and keep_last:
@@ -494,7 +494,7 @@ def _list_backups(ai_agent_session_id: str, session, agent_name: str = "Claude C
     console.print(f"[dim]Location: {backup_dir.relative_to(Path.home())}[/dim]")
     console.print()
     console.print("[bold]To restore a backup:[/bold]")
-    console.print(f"  daf cleanup-conversation {session.name if session else ai_agent_session_id} --restore-backup <timestamp>")
+    console.print(f"  daf maintenance cleanup-conversation {session.name if session else ai_agent_session_id} --restore-backup <timestamp>")
 
 
 def _restore_backup(
@@ -523,7 +523,7 @@ def _restore_backup(
         console.print()
         console.print("[green]To restore backup:[/green]")
         console.print(f"  1. Exit {agent_name} completely")
-        console.print("  2. Run: daf cleanup-conversation <NAME-or-JIRA-KEY> --restore-backup <timestamp>")
+        console.print("  2. Run: daf maintenance cleanup-conversation <NAME-or-JIRA-KEY> --restore-backup <timestamp>")
         console.print(f"  3. Reopen {agent_name} with: daf open <NAME-or-JIRA-KEY>")
         return
 
@@ -541,7 +541,7 @@ def _restore_backup(
         console.print(f"[red]Error: Backup not found: {timestamp}[/red]")
         console.print()
         console.print("[dim]List available backups with:[/dim]")
-        console.print(f"  daf cleanup-conversation {session.name if session else ai_agent_session_id} --list-backups")
+        console.print(f"  daf maintenance cleanup-conversation {session.name if session else ai_agent_session_id} --list-backups")
         return
 
     # Find conversation file

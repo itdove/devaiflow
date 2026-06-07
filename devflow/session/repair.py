@@ -170,7 +170,7 @@ def truncate_content(content: any, max_size: int = 10000) -> Tuple[any, bool]:
     """
     if isinstance(content, str):
         if len(content) > max_size:
-            return content[:max_size] + f"\n\n[TRUNCATED: {len(content) - max_size} chars removed by daf repair-conversation]", True
+            return content[:max_size] + f"\n\n[TRUNCATED: {len(content) - max_size} chars removed by daf maintenance repair-conversation]", True
         return content, False
 
     elif isinstance(content, dict):

@@ -42,7 +42,7 @@ def test_import_session_not_found(temp_daf_home, monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert "Session nonexistent-uuid not found" in captured.out
-    assert "daf discover" in captured.out
+    assert "daf maintenance discover" in captured.out
 
 
 def test_import_session_already_managed(temp_daf_home, monkeypatch, capsys, mock_discovered_session):

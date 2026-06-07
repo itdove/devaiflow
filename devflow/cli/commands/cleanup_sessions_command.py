@@ -1,4 +1,4 @@
-"""Implementation of 'daf cleanup-sessions' command."""
+"""Implementation of 'daf maintenance cleanup-sessions' command."""
 
 from pathlib import Path
 from typing import List, Tuple

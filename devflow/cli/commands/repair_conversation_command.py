@@ -147,12 +147,12 @@ def repair_conversation(
     if not identifier:
         console.print("[red]✗[/red] Please provide a session identifier, UUID, or use --check-all/--all/--latest")
         console.print("\nExamples:")
-        console.print("  daf repair-conversation PROJ-60039")
-        console.print("  daf repair-conversation --latest")
-        console.print("  daf repair-conversation my-session")
-        console.print("  daf repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d")
-        console.print("  daf repair-conversation --check-all")
-        console.print("  daf repair-conversation --all")
+        console.print("  daf maintenance repair-conversation PROJ-60039")
+        console.print("  daf maintenance repair-conversation --latest")
+        console.print("  daf maintenance repair-conversation my-session")
+        console.print("  daf maintenance repair-conversation f545206f-480f-4c2d-8823-c6643f0e693d")
+        console.print("  daf maintenance repair-conversation --check-all")
+        console.print("  daf maintenance repair-conversation --all")
         return
 
     # Try to find session by name or issue key first

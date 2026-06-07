@@ -4740,33 +4740,7 @@ daf open --edit broken-session
 
 ---
 
-### daf completion - Shell Auto-Completion
-
-Install shell auto-completion for daf command.
-
-```bash
-daf completion [SHELL]
-```
-
-**Supported shells:** bash, zsh, fish
-
-**Examples:**
-```bash
-# Auto-detect shell
-daf completion
-
-# Specific shell
-daf completion bash
-daf completion zsh
-daf completion fish
-```
-
-**Features:**
-- Auto-complete session names and JIRA keys
-- Auto-complete working directories, sprints, tags
-- File path completion for exports/imports
-
-See [Installation Guide](../getting-started/installation.md) for setup instructions.
+> **Removed in v3.0:** `daf completion` has been removed. Shell completion is now automatically offered during `daf init`. See [Installation Guide](../getting-started/installation.md) for manual setup instructions.
 
 ---
 
@@ -5589,8 +5563,7 @@ daf complete PROJ-12345      # Finish work
 ### Setup Commands (One-Time)
 
 ```bash
-daf init                    # Initialize config
-daf completion              # Setup auto-completion
+daf init                    # Initialize config (includes auto-completion setup)
 ```
 
 ### Maintenance (As Needed)
@@ -5655,9 +5628,12 @@ daf backup                  # Backup everything
 | `daf template` | Manage templates | No |
 | `daf open --edit` | Interactive metadata editor | No |
 | `daf update` | CLI metadata updates | No |
-| `daf completion` | Auto-completion (hidden) | No |
-| `daf check` | Check dependencies (hidden) | No |
-| `daf edit` | Metadata editor (hidden, use daf open --edit) | No |
+| `daf init --check` | Check dependencies | No |
+| `daf maintenance cleanup-conversation` | Fix 413 errors | No |
+| `daf maintenance cleanup-sessions` | Fix orphaned sessions | No |
+| `daf maintenance rebuild-index` | Rebuild session index | No |
+| `daf maintenance repair-conversation` | Repair corrupted conversations | No |
+| `daf maintenance discover` | Find unmanaged sessions | No |
 
 ## Next Steps
 

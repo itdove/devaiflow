@@ -1,4 +1,4 @@
-"""Implementation of 'daf check' command."""
+"""Implementation of 'daf init --check' command."""
 
 import json
 import sys
