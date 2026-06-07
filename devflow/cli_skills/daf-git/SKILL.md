@@ -1,6 +1,6 @@
 ---
 name: daf-git
-description: GitHub/GitLab issue operations (create, update, comment) with Markdown syntax reference
+description: GitHub/GitLab issue operations (create, update) with Markdown syntax reference and gh/glab CLI guide
 user-invocable: true
 argument-hint: "[ISSUE-NUMBER|owner/repo#number]"
 ---
@@ -74,17 +74,17 @@ glab issue view 123 -R owner/repo         # Cross-repo
 
 **Tip:** The issue key is available from `daf info` or `daf status`.
 
-### daf git add-comment
-Add a comment to a GitHub/GitLab issue.
+### Adding Comments
+
+Use the `gh` or `glab` CLI directly to add comments:
 
 ```bash
-# Add comment (note: comment is positional, not a flag)
-daf git add-comment 123 "Work in progress"
-daf git add-comment "#123" "Merged PR #45"
-daf git add-comment owner/repo#123 "Ready for review"
-```
+# GitHub
+gh issue comment 123 --body "Work in progress"
 
-**Important:** The comment text is a positional argument, not `--comment`.
+# GitLab
+glab issue note 123 -m "Work in progress"
+```
 
 ### daf git update
 Update issue fields.
@@ -111,7 +111,7 @@ daf git update 123 --parent "owner/repo#789"
 
 **CRITICAL:** GitHub and GitLab issues use **Markdown syntax**, NOT JIRA Wiki markup.
 
-When using `daf git create`, `daf git add-comment`, or `daf git update` commands, all text fields (descriptions, comments) **MUST** use standard **Markdown** formatting.
+When using `daf git create` or `daf git update` commands, all text fields (descriptions, comments) **MUST** use standard **Markdown** formatting.
 
 ### Syntax Reference
 
@@ -133,7 +133,6 @@ When using `daf git create`, `daf git add-comment`, or `daf git update` commands
 
 **Use Markdown for GitHub/GitLab operations:**
 - `daf git create` - Creating GitHub/GitLab issues
-- `daf git add-comment` - Adding comments to issues
 - `daf git update` - Updating issue descriptions
 - Pull request descriptions and comments
 
@@ -381,8 +380,9 @@ Both platforms use `#` format for issues:
 # 1. View issue details
 gh issue view 456 --comments    # or: glab issue view 456 --comments
 
-# 2. Add status comment
-daf git add-comment 456 "Started implementation"
+# 2. Add status comment (use gh/glab directly)
+gh issue comment 456 --body "Started implementation"    # GitHub
+glab issue note 456 -m "Started implementation"         # GitLab
 
 # 3. Work on implementation...
 ```

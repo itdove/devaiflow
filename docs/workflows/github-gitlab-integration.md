@@ -174,7 +174,7 @@ daf open owner-repo-60
 daf note owner-repo-60 "Implemented authentication module"
 
 # 5. Add comment to GitHub issue
-daf git add-comment "owner/repo#60" "Ready for review"
+gh issue comment 60 --body "Ready for review"  # or: glab issue note 60 -m "Ready for review"
 
 # 6. Complete the session
 daf complete owner-repo-60
@@ -396,11 +396,8 @@ daf git open "owner/repo#60"
 ### Adding Comments
 
 ```bash
-# Add comment to issue (requires quotes around issue key)
-daf git add-comment "owner/repo#60" "Comment text here"
-
-# Alternative command name
-daf git update "owner/repo#60" --comment "Comment text"
+# Add comment to issue
+gh issue comment 60 --body "Comment text here"  # or: glab issue note 60 -m "Comment text here"
 ```
 
 ### Syncing Issues

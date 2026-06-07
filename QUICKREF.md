@@ -86,7 +86,7 @@ daf notes <session>                         # View all notes
 daf jira view <key>                         # View JIRA ticket
 daf jira add-comment <key> "Update"         # Add JIRA comment
 gh issue view 123                            # View GitHub issue (use gh/glab CLI directly)
-daf git add-comment "owner/repo#123" "..."  # Add GitHub comment (quotes required!)
+gh issue comment 123 --body "..."                   # Add GitHub comment
 
 # Session info
 daf summary <session>                       # View session summary

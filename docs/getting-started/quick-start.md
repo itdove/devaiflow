@@ -195,7 +195,7 @@ daf note <session-name> "Completed feature X"
 
 # Add note AND sync to JIRA/GitHub
 daf note PROJ-12345 "Ready for review" --jira           # JIRA
-daf git add-comment "owner/repo#60" "Ready for review"  # GitHub (needs quotes)
+gh issue comment 60 --body "Ready for review"    # GitHub
 ```
 
 ### Complete and Close
@@ -392,7 +392,7 @@ daf sync                                             # Sync assigned issues from
 gh issue view 123 -R owner/repo                      # View GitHub issue (or: glab issue view for GitLab)
 daf git open "owner/repo#123"                        # Open issue in new session (quotes required)
 daf git update "owner/repo#123" --comment "..."      # Add comment to issue (quotes required)
-daf git add-comment "owner/repo#123" "..."           # Add comment (quotes required)
+gh issue comment 123 --body "..."                    # Add comment
 ```
 
 ### Utilities
@@ -425,7 +425,7 @@ The `#` character starts comments in bash, so always quote issue keys:
 Good:
 ```bash
 daf git open "owner/repo#60"
-daf git add-comment "owner/repo#60" "Fixed bug"
+gh issue comment 60 --body "Fixed bug"
 ```
 
 Bad:

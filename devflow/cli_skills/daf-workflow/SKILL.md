@@ -96,7 +96,7 @@ Standard development session. Resume or start work on a task.
    
    # GitHub/GitLab (use issue key from daf info)
    daf git update <issue_key> --labels done
-   daf git add-comment <issue_key> "Progress update"
+   gh issue comment <number> --body "Progress update"  # or: glab issue note <number> -m "Progress update"
    ```
 
 **Testing Requirements:**
@@ -228,7 +228,7 @@ DevAIFlow auto-detects your issue tracker from git remote URLs:
 | Create ticket (no session) | `daf jira create` | `daf git create` |
 | View ticket | `daf jira view` | `gh issue view` / `glab issue view` |
 | Update ticket | `daf jira update` | `daf git update` |
-| Add comment | `daf jira add-comment` | `daf git add-comment` |
+| Add comment | `daf jira add-comment` | `gh issue comment` / `glab issue note` |
 
 ### Session Information
 

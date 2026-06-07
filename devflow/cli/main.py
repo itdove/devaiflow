@@ -1830,25 +1830,6 @@ def git_update(ctx: click.Context, issue_key: str, state: Optional[str], title: 
     git_update(issue_key, state, title, description, labels, assignee, milestone, parent, repository, output_json)
 
 
-@git.command(name="add-comment")
-@json_option
-@click.argument("issue_key")
-@click.argument("comment")
-@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-def git_add_comment(ctx: click.Context, issue_key: str, comment: str, repository: Optional[str]) -> None:
-    """Add a comment to a GitHub/GitLab issue.
-
-    ISSUE_KEY is the issue key (#123 or owner/repo#123).
-
-    Examples:
-        daf git add-comment 123 "Work in progress"
-        daf git add-comment owner/repo#123 "Fixed the issue"
-    """
-    from devflow.cli.commands.git_add_comment_command import git_add_comment
-
-    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    git_add_comment(issue_key, comment, repository, output_json)
-
 
 @git.command(name="open")
 @json_option

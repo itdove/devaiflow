@@ -273,11 +273,11 @@ JIRA Board                   ▼
 - **GitHub Issues:**
   - **Reads:** Issue title, description, labels
   - **Writes:** Status updates, labels, comments
-  - **When:** On `daf sync`, `daf git open`, `daf git add-comment`, `daf complete`
+  - **When:** On `daf sync`, `daf git open`, `gh issue comment`, `daf complete`
 - **GitLab Issues:**
   - **Reads:** Issue title, description, labels
   - **Writes:** Status updates, labels, comments
-  - **When:** On `daf sync`, `daf git open`, `daf git add-comment`, `daf complete`
+  - **When:** On `daf sync`, `daf git open`, `glab issue note`, `daf complete`
 - **JIRA:**
   - **Reads:** Ticket summary, description, acceptance criteria
   - **Writes:** Status transitions, comments, time logs

@@ -1,7 +1,7 @@
 #!/bin/bash
 # test_github_green_path.sh
 # Integration test for DevAIFlow GitHub Issues workflow (green path)
-# Tests the complete workflow: daf git new -> daf git add-comment -> daf complete
+# Tests the complete workflow: daf git new -> daf complete
 #
 # This script runs entirely in mock mode (DAF_MOCK_MODE=1) and does not require
 # access to production GitHub services.
@@ -142,8 +142,7 @@ cd "$TEMP_GIT_REPO"
 print_section "GitHub Green Path Integration Test"
 echo "This script tests the GitHub Issues workflow in mock mode:"
 echo "  1. Create GitHub issue and session (daf git new)"
-echo "  2. Add comment to issue (daf git add-comment)"
-echo "  3. Complete session (daf complete)"
+echo "  2. Complete session (daf complete)"
 echo ""
 
 # Clean start
@@ -242,25 +241,7 @@ echo -e "  ${GREEN}✓${NC} Session name extracted from JSON: ${BOLD}${SESSION_N
 echo -e "  ${GREEN}✓${NC} Issue key extracted from JSON: ${BOLD}${ISSUE_KEY}${NC}"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
-# Test 2: daf git add-comment (add comment to issue)
-print_section "Test 2: Add Comment to Issue (daf git add-comment)"
-print_test "Add comment to GitHub issue"
-
-TEST_COMMENT="Integration test comment - verifying add-comment workflow"
-COMMENT_JSON=$(daf git add-comment "$ISSUE_KEY" "$TEST_COMMENT" --json 2>&1)
-COMMENT_EXIT_CODE=$?
-if [ $COMMENT_EXIT_CODE -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} Comment added successfully"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-else
-    echo -e "  ${RED}✗${NC} Add comment command failed with exit code $COMMENT_EXIT_CODE"
-    echo -e "  ${RED}Command:${NC} daf git add-comment \"$ISSUE_KEY\" \"$TEST_COMMENT\" --json"
-    echo -e "  ${RED}Output:${NC}"
-    echo "$COMMENT_JSON" | sed 's/^/    /'
-    exit 1
-fi
-
-# Test 3: Verify renamed session exists
+# Test 2: Verify renamed session exists
 print_section "Test 3: Verify Renamed Session"
 print_test "Verify session was renamed correctly"
 
@@ -320,7 +301,6 @@ if [ $TESTS_PASSED -eq $TESTS_TOTAL ]; then
     echo ""
     echo "Successfully tested the complete GitHub workflow:"
     echo "  ✓ daf git new enhancement - Created issue ${ISSUE_KEY} and session ${SESSION_NAME}"
-    echo "  ✓ daf git add-comment - Added comment to issue"
     echo "  ✓ daf complete - Completed and archived session"
     echo ""
     exit 0

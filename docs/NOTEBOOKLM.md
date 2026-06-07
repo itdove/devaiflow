@@ -125,7 +125,7 @@ daf time <session>
 daf jira view <key>
 daf jira add-comment <key> "..."
 gh issue view 123 -R owner/repo   # GitHub (or: glab issue view for GitLab)
-daf git add-comment "owner/repo#123" "..."
+gh issue comment 123 --body "..."
 ```
 
 ### Maintenance
