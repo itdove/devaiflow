@@ -9,11 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Optional, Set
 
-from rich.console import Console
-
 from devflow.agent.interface import AgentInterface
-
-console = Console()
 from devflow.agent.claude_agent import ClaudeAgent
 from devflow.agent.github_copilot_agent import GitHubCopilotAgent
 from devflow.agent.cursor_agent import CursorAgent
@@ -168,6 +164,8 @@ def capture_agent_session_id(
     """
     if not is_self_id_backend(agent_backend) or not launch_dir or not active_conv:
         return False
+    from rich.console import Console
+    console = Console()
     try:
         sessions_after = agent.get_existing_sessions(launch_dir)
         new_sessions = sessions_after - sessions_before

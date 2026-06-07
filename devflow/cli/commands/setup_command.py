@@ -103,11 +103,6 @@ def _deep_merge_recursive(
                 if item not in base[key]:
                     base[key].append(item)
                     added.append(f"{path}[]")
-        elif isinstance(value, list) and isinstance(base[key], list):
-            for item in value:
-                if item not in base[key]:
-                    base[key].append(item)
-                    added.append(f"{path}[]")
 
 
 def resolve_target_path(backend: str, scope: str) -> Path:

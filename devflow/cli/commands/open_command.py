@@ -967,9 +967,8 @@ def open_session(
         return
 
     # Display launch/resume message using correct agent name
-    from devflow.agent import create_agent_client as _create_agent
-    _display_agent = _create_agent(effective_agent_backend)
-    _display_agent_name = _display_agent.get_agent_name().title()
+    from devflow.agent.factory import get_agent_display_name as _get_display_name
+    _display_agent_name = _get_display_name(effective_agent_backend)
     if is_first_launch:
         console.print(f"\n[cyan]Launching {_display_agent_name} for the first time...[/cyan]")
     else:
@@ -1161,6 +1160,11 @@ def open_session(
             agent_backend = effective_agent_backend
             agent = create_agent_client(agent_backend)
 
+            # Initialize self-ID capture state (used by OpenCode resume path)
+            _resume_needs_capture = False
+            _resume_sessions_before = set()
+            oc_project_path = None
+
             # For Claude and Ollama agents, use resume with skills directories
             # Other agents may not support resume in the same way
             if agent_backend in ("claude", "ollama", "ollama-claude"):
@@ -1300,11 +1304,11 @@ def open_session(
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
                     # Capture session ID for self-ID agents if launched via fallback path
-                    if '_resume_needs_capture' in dir() and _resume_needs_capture:
+                    if _resume_needs_capture:
                         from devflow.agent.factory import capture_agent_session_id as _cap_resume
                         _cap_resume(
                             agent, agent_backend,
-                            oc_project_path if 'oc_project_path' in dir() else None,
+                            oc_project_path,
                             active_conv, _resume_sessions_before,
                         )
 
