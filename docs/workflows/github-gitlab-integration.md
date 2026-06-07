@@ -144,11 +144,13 @@ daf git new --goal "Add user authentication to API"
 
 ```bash
 # After analysis, create the issue:
-daf git create \
-  --summary "Add two-factor authentication support" \
-  --description "Analyzed the codebase and found..." \
-  --acceptance-criteria "User can enable 2FA" \
-  --acceptance-criteria "Supports TOTP apps like Google Authenticator"
+gh issue create \
+  --title "Add two-factor authentication support" \
+  --body "Analyzed the codebase and found...
+
+## Acceptance Criteria
+- [ ] User can enable 2FA
+- [ ] Supports TOTP apps like Google Authenticator"
 ```
 
 **Result:**
@@ -185,9 +187,10 @@ daf complete owner-repo-60
 Skip analysis and create issues directly:
 
 ```bash
-daf git create bug \
-  --summary "Fix login button styling" \
-  --description "Button is misaligned on mobile devices" \
+gh issue create \
+  --title "Fix login button styling" \
+  --body "Button is misaligned on mobile devices" \
+  --label "bug" \
   --assignee yourusername
 ```
 
@@ -281,11 +284,12 @@ Or in `config.json`:
 DevAIFlow supports acceptance criteria as GitHub issue checkboxes:
 
 ```bash
-daf git create \
-  --summary "Add user profile page" \
-  --acceptance-criteria "User can view their profile" \
-  --acceptance-criteria "User can edit their name and email" \
-  --acceptance-criteria "Changes are saved to database"
+gh issue create \
+  --title "Add user profile page" \
+  --body "## Acceptance Criteria
+- [ ] User can view their profile
+- [ ] User can edit their name and email
+- [ ] Changes are saved to database"
 ```
 
 **Result in GitHub:**
@@ -356,18 +360,20 @@ This ensures uniqueness even if you have the same `owner/repo` on multiple GitHu
 daf git new --goal "Description of what you want to build"
 
 # Create directly
-daf git create bug \
-  --summary "Issue title" \
-  --description "Detailed description" \
+gh issue create \
+  --title "Issue title" \
+  --body "Detailed description" \
+  --label "bug" \
   --assignee username \
-  --labels "priority: high,backend"
+  --label "priority: high" --label "backend"
 
 # Create with acceptance criteria
-daf git create \
-  --summary "Add feature X" \
-  --acceptance-criteria "Criterion 1" \
-  --acceptance-criteria "Criterion 2" \
-  --acceptance-criteria "Criterion 3"
+gh issue create \
+  --title "Add feature X" \
+  --body "## Acceptance Criteria
+- [ ] Criterion 1
+- [ ] Criterion 2
+- [ ] Criterion 3"
 ```
 
 ### Viewing Issues
@@ -660,10 +666,10 @@ Don't clutter with unnecessary labels:
 
 ```bash
 # ❌ Too many labels
-daf git create --summary "Fix bug" --labels "bug,priority: high,points: 3,status: todo,backend,frontend,database"
+gh issue create --title "Fix bug" --label "bug" --label "priority: high" --label "points: 3" --label "status: todo" --label "backend" --label "frontend" --label "database"
 
 # ✅ Minimal essential labels
-daf git create bug --summary "Fix bug"
+gh issue create --title "Fix bug" --label "bug"
 ```
 
 ### 5. Configure Default Labels
@@ -759,7 +765,7 @@ glab auth login
 
 # Commands work the same
 daf git new --goal "Add feature"
-daf git create --summary "Fix bug"
+gh issue create --title "Fix bug"
 daf sync
 ```
 

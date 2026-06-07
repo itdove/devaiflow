@@ -101,7 +101,7 @@ daf status
 daf jira new <type> --parent <key> --goal "..."
 daf git new --goal "..."
 daf jira create <type> --summary "..." --parent <key>
-daf git create --summary "..."
+gh issue create --title "..."
 ```
 
 ### Sync
