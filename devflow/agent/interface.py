@@ -282,6 +282,60 @@ class AgentInterface(ABC):
         """
         return True
 
+    def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
+        """Get the CLI command a user would type to manually resume this session.
+
+        The returned string is the resume command only (no 'cd' prefix).
+
+        Args:
+            session_id: Session UUID or identifier
+            project_path: Absolute path to project
+
+        Returns:
+            Shell command string, e.g. "claude --resume <id>"
+        """
+        return f"claude --resume {session_id}"
+
+    def generate_text(self, prompt: str, timeout: int = 30) -> Optional[str]:
+        """Generate text by piping a prompt through the agent's CLI.
+
+        Args:
+            prompt: Text prompt to send
+            timeout: Maximum seconds to wait
+
+        Returns:
+            Generated text (stripped), or None on any failure
+        """
+        try:
+            from devflow.agent.factory import get_agent_cli_binary
+            cli_binary = get_agent_cli_binary(self.get_agent_name())
+            result = subprocess.run(
+                [cli_binary, "-p"],
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0:
+                text = result.stdout.strip()
+                if text:
+                    return text
+            return None
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            return None
+
+    def uses_file_based_sessions(self) -> bool:
+        """Whether this agent stores sessions as files (e.g. .jsonl).
+
+        File-based agents need conversation files copied between directories
+        for temp-directory workflows. Database-backed agents (OpenCode, Crush)
+        skip this.
+
+        Returns:
+            True if file-based (default), False if database-backed.
+        """
+        return True
+
     @abstractmethod
     def extract_token_usage(self, session_id: str, project_path: str) -> Optional[Dict[str, Any]]:
         """Extract token usage statistics from a session.

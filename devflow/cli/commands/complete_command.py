@@ -11,7 +11,6 @@ from rich.prompt import Confirm, Prompt
 
 from devflow.agent import get_agent_display_name
 from devflow.agent.factory import (
-    get_agent_cli_binary as _get_agent_cli_binary,
     get_generated_with_line as _get_generated_with_line,
     resolve_agent_backend,
 )
@@ -3016,27 +3015,16 @@ Generate a summary with 2-4 bullet points that:
 Format as markdown bullets. Return ONLY the bullet points, nothing else."""
 
         # Try using agent CLI for best quality
-        cli_binary = _get_agent_cli_binary(agent_backend)
-        result = subprocess.run(
-            [cli_binary, "-p"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        from devflow.agent import create_agent_client
+        agent = create_agent_client(agent_backend or "claude")
+        summary = agent.generate_text(prompt, timeout=30)
+        if summary:
+            console.print("[dim]Generated PR summary using AI[/dim]")
+            return summary
 
-        if result.returncode == 0:
-            summary = result.stdout.strip()
-            # Clean up any extra formatting
-            if summary:
-                console.print("[dim]Generated PR summary using AI[/dim]")
-                return summary
-
-        return None
-
-    except FileNotFoundError:
-        # Agent CLI not installed, try Anthropic API
+        # Agent CLI not available or failed, try Anthropic API
         return _generate_pr_summary_with_api(session, working_dir)
+
     except Exception as e:
         console.print(f"[dim]PR summary generation failed: {e}[/dim]")
         return None
@@ -3731,16 +3719,12 @@ def _generate_commit_message_from_diff(diff_content: str, status_summary: str, a
     Returns:
         Generated commit message or None if generation fails
     """
-    cli_binary = _get_agent_cli_binary(agent_backend)
-
     try:
         # Truncate diff if it's too large (keep first 5000 chars for context)
-        # This prevents token limits while still providing sufficient context
         truncated_diff = diff_content[:5000]
         if len(diff_content) > 5000:
             truncated_diff += "\n\n... (diff truncated for analysis)"
 
-        # Build prompt for agent CLI
         prompt = f"""Based on this git diff, generate a commit message in conventional commit format.
 
 Git Status:
@@ -3758,24 +3742,15 @@ Generate a commit message with:
 
 Return ONLY the commit message."""
 
-        # Call agent CLI
-        result = subprocess.run(
-            [cli_binary, "-p"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        from devflow.agent import create_agent_client
+        agent = create_agent_client(agent_backend or "claude")
+        result = agent.generate_text(prompt, timeout=30)
+        if result:
+            return strip_code_fences(result)
 
-        if result.returncode == 0:
-            commit_text = strip_code_fences(result.stdout.strip())
-            return commit_text
-
-        return None
-
-    except FileNotFoundError:
-        # Agent CLI not installed, try Anthropic API
+        # Agent CLI not available or failed, try Anthropic API
         return _generate_commit_message_from_diff_api(diff_content, status_summary)
+
     except Exception:
         return None
 
@@ -3849,21 +3824,17 @@ def _generate_commit_with_agent_cli(summary_data, agent_backend: Optional[str] =
     Returns:
         Generated commit message or None if CLI not available
     """
-    cli_binary = _get_agent_cli_binary(agent_backend)
     agent_name = get_agent_display_name(agent_backend)
 
     try:
-        # Check if there's actually any meaningful data
         has_file_changes = (summary_data.files_created or summary_data.files_modified)
         has_tool_activity = bool(summary_data.tool_call_stats)
 
         if not has_file_changes and not has_tool_activity:
             return None
 
-        # Combine files created and modified
         files_changed = list(summary_data.files_created) + list(summary_data.files_modified)
 
-        # Build context for AI
         context_parts = []
 
         if files_changed:
@@ -3886,7 +3857,6 @@ def _generate_commit_with_agent_cli(summary_data, agent_backend: Optional[str] =
 
         context = "\n".join(context_parts)
 
-        # Build prompt for agent CLI
         prompt = f"""Based on this development session, generate a detailed git commit message following conventional commit format.
 
 {context}
@@ -3916,25 +3886,16 @@ Short descriptive title (max 72 chars)
 
 Return ONLY the commit message in this exact format, nothing else."""
 
-        # Call agent CLI
-        result = subprocess.run(
-            [cli_binary, "-p"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode == 0:
-            commit_text = strip_code_fences(result.stdout.strip())
+        from devflow.agent import create_agent_client
+        agent = create_agent_client(agent_backend or "claude")
+        result = agent.generate_text(prompt, timeout=30)
+        if result:
+            commit_text = strip_code_fences(result)
             console.print(f"[dim]Generated commit message using {agent_name} CLI[/dim]")
             return commit_text
 
         return None
 
-    except FileNotFoundError:
-        # Agent CLI not installed
-        return None
     except Exception as e:
         console.print(f"[dim]{agent_name} CLI generation failed: {e}[/dim]")
         return None
