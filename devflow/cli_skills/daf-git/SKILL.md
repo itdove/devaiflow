@@ -188,11 +188,11 @@ When you see: "forbids access via a personal access token (classic)":
 
 **Pre-flight auth check:**
 ```bash
-# Auto-detect repository from git remote
-daf git check-auth
+# GitHub
+gh auth status
 
-# Or specify repository explicitly
-daf git check-auth owner/repo
+# GitLab
+glab auth status
 ```
 
 ### PR Creation (daf complete pattern)
