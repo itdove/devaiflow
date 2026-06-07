@@ -217,6 +217,52 @@ def capture_agent_session_id(
         return False
 
 
+def launch_and_capture(
+    agent: AgentInterface,
+    agent_backend: str,
+    project_path: str,
+    active_conversation,
+    *,
+    initial_prompt: str,
+    session_id: str,
+    model_provider_profile=None,
+    workspace_path: str = None,
+    config=None,
+    env: dict = None,
+    headless: bool = False,
+    auto_approve: bool = False,
+) -> None:
+    """Snapshot sessions, launch agent, wait for exit, capture session ID.
+
+    Wraps the standard agent launch lifecycle used by all daf commands:
+    snapshot existing sessions, launch via ``launch_with_prompt``, wait
+    for exit, then capture any newly created session ID.
+
+    Callers should wrap this in their own try/finally for command-specific
+    post-exit cleanup (updating session status, ending work sessions, etc.).
+    """
+    sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
+    try:
+        process = agent.launch_with_prompt(
+            project_path=project_path,
+            initial_prompt=initial_prompt,
+            session_id=session_id,
+            model_provider_profile=model_provider_profile,
+            skills_dirs=None,
+            workspace_path=workspace_path,
+            config=config,
+            env=env,
+            headless=headless,
+            auto_approve=auto_approve,
+        )
+        agent.wait_for_exit(process, headless)
+    finally:
+        capture_agent_session_id(
+            agent, agent_backend, project_path,
+            active_conversation, sessions_before,
+        )
+
+
 def get_agent_display_name(backend: Optional[str] = None) -> str:
     """Get the human-readable display name for an agent backend.
 

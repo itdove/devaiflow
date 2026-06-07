@@ -41,6 +41,7 @@ from devflow.agent.factory import (
     is_pending_capture,
     snapshot_agent_sessions,
     capture_agent_session_id,
+    launch_and_capture,
 )
 
 __all__ = [
@@ -66,4 +67,5 @@ __all__ = [
     "is_pending_capture",
     "snapshot_agent_sessions",
     "capture_agent_session_id",
+    "launch_and_capture",
 ]
