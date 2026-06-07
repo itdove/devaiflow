@@ -816,7 +816,7 @@ Some GitHub organizations (like `ansible-automation-platform`) have security pol
 
 3. **Verify authentication:**
    ```bash
-   daf git check-auth owner/repo
+   gh auth status
    ```
    This will verify that authentication is working and you have access to the repository.
 
@@ -846,7 +846,6 @@ Some GitHub organizations (like `ansible-automation-platform`) have security pol
 3. **Verify authentication:**
    ```bash
    gh auth status
-   daf git check-auth owner/repo
    ```
 
 ### GitHub Authentication - Insufficient Permissions
@@ -878,7 +877,7 @@ Some GitHub organizations (like `ansible-automation-platform`) have security pol
 1. **Verify repository name is correct:**
    ```bash
    # Format should be: owner/repo
-   daf git check-auth ansible-saas/devaiflow
+   gh api repos/ansible-saas/devaiflow
    ```
 
 2. **Check if you're authenticated to the correct GitHub account:**
@@ -930,42 +929,17 @@ Some GitHub organizations (like `ansible-automation-platform`) have security pol
 
 **Best Practice:**
 
-Use the `daf git check-auth` command to verify authentication before starting work:
+Use `gh auth status` or `glab auth status` to verify authentication before starting work:
 
 ```bash
-# Auto-detect repository from git remote
-daf git check-auth
+# GitHub
+gh auth status
 
-# Or specify repository explicitly
-daf git check-auth owner/repo
-```
+# Check access to a specific repo
+gh api repos/owner/repo --jq '.full_name'
 
-**Example Output (Success):**
-```
-Checking GitHub authentication for: owner/repo
-
-✓ GitHub authentication: OK
-✓ Repository access: OK
-
-Account: username
-Token: gho_xxxxxxxxxxxx
-scopes: repo, workflow
-```
-
-**Example Output (Failure):**
-```
-Checking GitHub authentication for: ansible-automation-platform/repo
-
-✗ GitHub authentication: FAILED
-✗ Error type: fine_grained_required
-✗ Error message: Repository requires fine-grained token
-
-⚠  This repository requires a fine-grained personal access token.
-
-Solution:
-  1. Create fine-grained token: https://github.com/settings/personal-access-tokens/new
-  2. Grant access to: ansible-automation-platform/repo
-  3. Authenticate: gh auth login
+# GitLab
+glab auth status
 ```
 
 **When to Use:**
