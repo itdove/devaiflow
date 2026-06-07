@@ -6,7 +6,13 @@ user-invocable: true
 
 # DevAIFlow Session Context
 
-Check the `DAF_SESSION_NAME` environment variable. If set, this is a managed DevAIFlow session — follow the initialization steps below. If not set, skip to the **Standalone Workflow Guide** section at the bottom.
+Run this command to check the session environment:
+
+```bash
+echo "DAF_SESSION_NAME=$DAF_SESSION_NAME" "DAF_COMMAND=$DAF_COMMAND"
+```
+
+If `DAF_SESSION_NAME` is set (non-empty), this is a managed DevAIFlow session — follow the initialization steps below. If empty, skip to the **Standalone Workflow Guide** section at the bottom.
 
 ---
 
@@ -77,7 +83,7 @@ git fetch origin && git rebase origin/main
 
 ### 6. Follow Command-Specific Workflow
 
-Check `DAF_COMMAND` environment variable and follow the matching section below.
+Use the `DAF_COMMAND` value from the output above and follow the matching section below.
 
 ---
 

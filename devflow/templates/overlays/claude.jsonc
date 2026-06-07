@@ -3,9 +3,8 @@
   // Merged into .claude/settings.json by `daf setup`
   "permissions": {
     "allow": [
-      // DAF/DEVAIFLOW env var access (future-proof wildcards)
-      "Bash(echo \"${DAF_*)",
-      "Bash(echo \"${DEVAIFLOW_*)",
+      // DAF env var check (exact command from daf-workflow skill)
+      "Bash(echo \"DAF_SESSION_NAME=$DAF_SESSION_NAME\" \"DAF_COMMAND=$DAF_COMMAND\")",
       // All daf CLI commands (read-safe from agent perspective)
       "Bash(daf active *)",
       "Bash(daf info *)",

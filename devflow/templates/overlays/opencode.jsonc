@@ -4,9 +4,8 @@
   "$schema": "https://opencode.ai/config.json",
   "permission": {
     "bash": {
-      // DAF/DEVAIFLOW env var access (future-proof wildcards)
-      "echo \"${DAF_*": "allow",
-      "echo \"${DEVAIFLOW_*": "allow",
+      // DAF env var check (exact command from daf-workflow skill)
+      "echo \"DAF_SESSION_NAME=$DAF_SESSION_NAME\" \"DAF_COMMAND=$DAF_COMMAND\"": "allow",
       // All daf CLI commands (read-safe from agent perspective)
       "daf active *": "allow",
       "daf info *": "allow",
