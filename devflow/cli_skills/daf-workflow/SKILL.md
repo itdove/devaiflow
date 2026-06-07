@@ -41,16 +41,18 @@ Replace `<number>` or `<issue_key>` with the actual value shown in `daf info` ou
 
 ### 3. Read Context Files
 
-Read the hierarchical context files if they exist:
-- `~/.daf-sessions/ENTERPRISE.md` (enterprise-wide policies and standards)
-- `~/.daf-sessions/ORGANIZATION.md` (organization coding standards)
-- `~/.daf-sessions/TEAM.md` (team conventions and workflows)
-- `~/.daf-sessions/USER.md` (personal notes and preferences)
+First, discover the DevAIFlow config directory by running `daf config show` and noting the parent directory of `config.json` from the "Configuration Files" section.
+
+Then read the hierarchical context files if they exist in that directory:
+- `ENTERPRISE.md` (enterprise-wide policies and standards)
+- `ORGANIZATION.md` (organization coding standards)
+- `TEAM.md` (team conventions and workflows)
+- `USER.md` (personal notes and preferences)
 
 ### 4. Read Skill Files
 
 Check for additional skills loaded in this session:
-- Enterprise/organization/team/user skills in `~/.daf-sessions/.claude/skills/`
+- Enterprise/organization/team/user skills in `<config_dir>/.claude/skills/` (where `<config_dir>` is the directory discovered from `daf config show`)
 - Project-level skills in the project's `.claude/skills/` directory
 
 Read any that are relevant to the session.
