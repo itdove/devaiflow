@@ -15,127 +15,17 @@ from typing import Dict, List, Optional, Any
 from rich.console import Console
 from rich.table import Table
 
-from devflow.agent.factory import create_agent_client, get_agent_display_name, resolve_agent_backend
+from devflow.agent.factory import (
+    AGENT_REGISTRY as AGENT_METADATA,
+    create_agent_client,
+    get_agent_display_name,
+    resolve_agent_backend,
+)
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.utils.dependencies import check_tool_available, get_tool_version
 
 console = Console()
-
-
-# Agent metadata mapping
-AGENT_METADATA: Dict[str, Dict[str, Any]] = {
-    "claude": {
-        "description": "Anthropic's official Claude Code CLI",
-        "cli_command": "claude",
-        "install_url": "https://docs.claude.com/en/docs/claude-code/installation",
-        "status": "fully-tested",
-        "features": {
-            "session_management": True,
-            "conversation_export": True,
-            "message_counting": True,
-            "resume_support": True,
-            "skills_support": True,
-        },
-    },
-    "ollama": {
-        "description": "Local models via Ollama with Claude Code interface",
-        "cli_command": "ollama",
-        "install_url": "https://ollama.ai/download",
-        "status": "fully-tested",
-        "features": {
-            "session_management": True,
-            "conversation_export": True,
-            "message_counting": True,
-            "resume_support": True,
-            "skills_support": True,
-        },
-        "notes": "Requires both 'ollama' and 'claude' CLI tools",
-    },
-    "github-copilot": {
-        "description": "GitHub Copilot in VS Code",
-        "cli_command": "code",
-        "install_url": "https://code.visualstudio.com/",
-        "status": "experimental",
-        "features": {
-            "session_management": False,
-            "conversation_export": False,
-            "message_counting": False,
-            "resume_support": False,
-            "skills_support": False,
-        },
-        "notes": "Limited integration - experimental support only",
-    },
-    "cursor": {
-        "description": "Cursor AI editor",
-        "cli_command": "cursor",
-        "install_url": "https://cursor.sh/",
-        "status": "experimental",
-        "features": {
-            "session_management": False,
-            "conversation_export": False,
-            "message_counting": False,
-            "resume_support": False,
-            "skills_support": False,
-        },
-        "notes": "Limited integration - experimental support only",
-    },
-    "windsurf": {
-        "description": "Windsurf (Codeium) editor",
-        "cli_command": "windsurf",
-        "install_url": "https://codeium.com/windsurf",
-        "status": "experimental",
-        "features": {
-            "session_management": False,
-            "conversation_export": False,
-            "message_counting": False,
-            "resume_support": False,
-            "skills_support": False,
-        },
-        "notes": "Limited integration - experimental support only",
-    },
-    "aider": {
-        "description": "AI pair programming in terminal",
-        "cli_command": "aider",
-        "install_url": "https://aider.chat/docs/install.html",
-        "status": "experimental",
-        "features": {
-            "session_management": False,
-            "conversation_export": False,
-            "message_counting": False,
-            "resume_support": False,
-            "skills_support": False,
-        },
-        "notes": "Git-first approach with chat history files",
-    },
-    "continue": {
-        "description": "VS Code extension for AI assistance",
-        "cli_command": "code",
-        "install_url": "https://continue.dev/docs/quickstart",
-        "status": "experimental",
-        "features": {
-            "session_management": False,
-            "conversation_export": False,
-            "message_counting": False,
-            "resume_support": False,
-            "skills_support": False,
-        },
-        "notes": "VS Code extension - limited CLI integration",
-    },
-    "opencode": {
-        "description": "Open source terminal AI coding agent by Anomaly (multi-provider)",
-        "cli_command": "opencode",
-        "install_url": "https://opencode.ai",
-        "status": "experimental",
-        "features": {
-            "session_management": True,
-            "conversation_export": True,
-            "message_counting": True,
-            "resume_support": True,
-            "skills_support": False,
-        },
-    },
-}
 
 
 def detect_agent_installation(agent_key: str) -> Dict[str, Any]:

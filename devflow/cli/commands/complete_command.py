@@ -10,7 +10,11 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
 from devflow.agent import get_agent_display_name
-from devflow.agent.factory import resolve_agent_backend
+from devflow.agent.factory import (
+    get_agent_cli_binary as _get_agent_cli_binary,
+    get_generated_with_line as _get_generated_with_line,
+    resolve_agent_backend,
+)
 from devflow.cli.utils import add_jira_comment, get_session_with_prompt, get_status_display, is_non_interactive, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.exceptions import ToolNotFoundError
@@ -31,65 +35,6 @@ from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
 
 console = Console()
-
-# Mapping of agent backend names to their CLI binary commands (for subprocess calls)
-_AGENT_CLI_BINARIES = {
-    "claude": "claude",
-    "ollama": "claude",         # Ollama uses Claude Code CLI with custom env
-    "ollama-claude": "claude",  # Alias
-    "opencode": "opencode",
-    "opencode-ai": "opencode",  # Alias
-    "aider": "aider",
-}
-
-# Mapping of agent backend names to their project URLs (for "Generated with" attribution)
-_AGENT_URLS = {
-    "claude": "https://claude.ai/code",
-    "ollama": "https://claude.ai/code",
-    "ollama-claude": "https://claude.ai/code",
-    "opencode": "https://opencode.ai",
-    "opencode-ai": "https://opencode.ai",
-    "github-copilot": "https://github.com/features/copilot",
-    "copilot": "https://github.com/features/copilot",
-    "cursor": "https://cursor.com",
-    "windsurf": "https://codeium.com/windsurf",
-    "aider": "https://aider.chat",
-    "continue": "https://continue.dev",
-    "crush": "https://crush.ai",
-}
-
-
-def _get_agent_cli_binary(agent_backend: Optional[str] = None) -> str:
-    """Get the CLI binary name for an agent backend.
-
-    Args:
-        agent_backend: Agent backend identifier (e.g., "claude", "opencode").
-                       If None, defaults to "claude".
-
-    Returns:
-        CLI binary name (e.g., "claude", "opencode", "aider")
-    """
-    if agent_backend is None:
-        agent_backend = "claude"
-    return _AGENT_CLI_BINARIES.get(agent_backend.lower(), "claude")
-
-
-def _get_generated_with_line(agent_backend: Optional[str] = None) -> str:
-    """Build the 'Generated with' attribution line for commits and PRs.
-
-    Args:
-        agent_backend: Agent backend identifier (e.g., "claude", "opencode").
-                       If None, defaults to "claude".
-
-    Returns:
-        Attribution string like '🤖 Generated with [Claude Code](https://claude.ai/code)'
-    """
-    agent_name = get_agent_display_name(agent_backend)
-    url = _AGENT_URLS.get((agent_backend or "claude").lower(), "")
-    if url:
-        return f"🤖 Generated with [{agent_name}]({url})"
-    return f"🤖 Generated with {agent_name}"
-
 
 def _get_remote_aware_base_ref(working_dir: Path, base_branch: str) -> str:
     """Fetch origin and return remote ref for accurate diff comparison.
