@@ -59,9 +59,9 @@ def import_config(
         else:
             console.print("\n[dim]Replaced existing configuration[/dim]")
 
-        # Suggest running daf upgrade to install skills
+        # Suggest running daf skills to install skills
         console.print("\n[cyan]→ Next: Install skills and hierarchical config[/cyan]")
-        console.print("  [bold]daf upgrade[/bold]")
+        console.print("  [bold]daf skills[/bold]")
         console.print("  [dim](Installs organization skills and updates field mappings)[/dim]")
 
     except ValueError as e:

@@ -187,7 +187,7 @@ def add_workspace(name: str, path: str, set_default: bool = False) -> None:
     success, error = ensure_workspace_skills_and_commands(str(expanded_path), quiet=False)
     if not success:
         console.print(f"[yellow]⚠[/yellow] {error}")
-        console.print(f"[dim]You can manually install later with: daf upgrade[/dim]")
+        console.print(f"[dim]You can manually install later with: daf skills[/dim]")
 
 
 @require_outside_claude
@@ -363,7 +363,7 @@ def set_default_workspace(name: str) -> None:
     success, error = ensure_workspace_skills_and_commands(workspace.path, quiet=False)
     if not success:
         console.print(f"[yellow]⚠[/yellow] {error}")
-        console.print(f"[dim]You can manually install later with: daf upgrade[/dim]")
+        console.print(f"[dim]You can manually install later with: daf skills[/dim]")
 
 
 @require_outside_claude

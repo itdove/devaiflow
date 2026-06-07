@@ -21,7 +21,7 @@
 #   2. Install DevAIFlow in fresh Python venv from source
 #   3. Programmatically create config with auto_close_on_complete and auto_create_pr_on_complete
 #   4. Authenticate with GitHub using GITHUB_TOKEN
-#   5. Run daf upgrade to install skills
+#   5. Run daf skills to install skills
 #   6. Create a GitHub issue using daf git create
 #   7. Sync issue with daf sync (creates session)
 #   8. Configure git to use gh CLI for authentication
@@ -93,7 +93,7 @@ echo "This script tests the complete installation workflow with auto features:"
 echo "  1. Clone DevAIFlow from GitHub"
 echo "  2. Install DevAIFlow from source in fresh venv"
 echo "  3. Create config with auto_close_on_complete and auto_create_pr_on_complete"
-echo "  4. Run daf upgrade to install skills"
+echo "  4. Run daf skills to install skills"
 echo "  5. Create GitHub issue and sync"
 echo "  6. Configure git authentication (gh CLI)"
 echo "  7. Create feature branch (matching session)"
@@ -418,13 +418,13 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Test 5: Run daf upgrade
-print_section "Test 5: Run daf upgrade to Install Skills"
-print_test "Run daf upgrade"
+# Test 5: Run daf skills
+print_section "Test 5: Run daf skills to Install Skills"
+print_test "Run daf skills"
 
-# Run daf upgrade (may output some warnings, that's OK)
-daf upgrade > /dev/null 2>&1 || true
-echo -e "  ${GREEN}✓${NC} daf upgrade completed"
+# Run daf skills (may output some warnings, that's OK)
+daf skills > /dev/null 2>&1 || true
+echo -e "  ${GREEN}✓${NC} daf skills completed"
 TESTS_PASSED=$((TESTS_PASSED + 1))
 
 print_test "Verify skills were installed"
@@ -977,7 +977,7 @@ if [ $TESTS_FAILED -eq 0 ]; then
     echo "  ✓ Cloned DevAIFlow from GitHub"
     echo "  ✓ Installed DevAIFlow from source in fresh venv"
     echo "  ✓ Created config with auto_close_on_complete=true and auto_create_pr_on_complete=true"
-    echo "  ✓ Ran daf upgrade to install skills"
+    echo "  ✓ Ran daf skills to install skills"
     echo "  ✓ Created GitHub issue ${ISSUE_KEY}"
     echo "  ✓ Synced and opened session ${SESSION_NAME}"
     echo "  ✓ Made code changes and committed them"

@@ -805,7 +805,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("\n[bold]=== Hierarchical Configuration ===[/bold]\n")
     console.print("[dim]Optional: URL to organization-wide config files (ENTERPRISE.md, ORGANIZATION.md, etc.)[/dim]")
     console.print("[dim]This enables automatic distribution of organization policies and AI agent skills.[/dim]")
-    console.print("[dim]After setting this, run 'daf upgrade' to download config files and skills.[/dim]")
+    console.print("[dim]After setting this, run 'daf skills' to download config files and skills.[/dim]")
     console.print("[dim]Can be set later via 'daf config edit --advanced' in the Organization tab.[/dim]\n")
     console.print("Examples:")
     console.print("  - file:///company/shared/devaiflow/configs")

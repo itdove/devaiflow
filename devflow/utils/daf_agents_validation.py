@@ -148,7 +148,7 @@ def _check_and_upgrade_daf_agents(installed_file: Path, location: str) -> bool:
         should_delete = True
         if not mock_mode:
             console.print(f"\n[bold]Delete old DAF_AGENTS.md file?[/bold]")
-            console.print(f"[dim]This file is no longer used. Run 'daf upgrade' to install daf-workflow skill.[/dim]")
+            console.print(f"[dim]This file is no longer used. Run 'daf skills' to install daf-workflow skill.[/dim]")
             from rich.prompt import Confirm
             should_delete = Confirm.ask("Delete old file?", default=True)
         else:
@@ -158,7 +158,7 @@ def _check_and_upgrade_daf_agents(installed_file: Path, location: str) -> bool:
             try:
                 installed_file.unlink()
                 console.print(f"[green]✓ Deleted old DAF_AGENTS.md from {location}[/green]")
-                console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+                console.print(f"[dim]  Run 'daf skills' to ensure daf-workflow skill is installed[/dim]")
                 return True
             except Exception as e:
                 console.print(f"[yellow]⚠ Could not delete {installed_file}: {e}[/yellow]")
@@ -282,7 +282,7 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
 
         # Not found - DAF_AGENTS.md has been replaced by daf-workflow skill
         console.print(f"\n[dim]ℹ Using daf-workflow skill for workflow guidance[/dim]")
-        console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+        console.print(f"[dim]  Run 'daf skills' to ensure daf-workflow skill is installed[/dim]")
         return True
 
     # Multi-project session: check DEVAIFLOW_HOME first, then workspace
@@ -317,7 +317,7 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
 
             # Not found - DAF_AGENTS.md has been replaced by daf-workflow skill
             console.print(f"\n[dim]ℹ Using daf-workflow skill for workflow guidance (multi-project)[/dim]")
-            console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+            console.print(f"[dim]  Run 'daf skills' to ensure daf-workflow skill is installed[/dim]")
             return True
 
         # No workspace path in multi-project session
@@ -376,5 +376,5 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
 
     # Not found - DAF_AGENTS.md has been replaced by daf-workflow skill
     console.print(f"\n[dim]ℹ Using daf-workflow skill for workflow guidance[/dim]")
-    console.print(f"[dim]  Run 'daf upgrade' to ensure daf-workflow skill is installed[/dim]")
+    console.print(f"[dim]  Run 'daf skills' to ensure daf-workflow skill is installed[/dim]")
     return True
