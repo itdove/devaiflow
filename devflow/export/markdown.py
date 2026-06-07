@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from devflow.agent import create_agent_client
+from devflow.agent.factory import resolve_agent_backend
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
 from devflow.session.summary import find_conversation_file, generate_session_summary, generate_prose_summary
@@ -319,7 +320,7 @@ class MarkdownExporter:
         prose = generate_prose_summary(
             summary,
             mode=mode,
-            agent_backend=config.agent_backend if config else None
+            agent_backend=resolve_agent_backend(config=config)
         )
 
         lines = [prose]
@@ -404,7 +405,7 @@ class MarkdownExporter:
             try:
                 # Get agent backend from config
                 config = self.config_loader.load_config()
-                agent_backend = config.agent_backend or "claude"
+                agent_backend = resolve_agent_backend(config=config)
                 agent_client = create_agent_client(agent_backend)
             except Exception:
                 pass  # Ignore errors creating agent client

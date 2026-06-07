@@ -22,6 +22,7 @@ from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, Jira
 from devflow.github import transition_on_start as github_transition_on_start
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.capture import SessionCapture
 from devflow.session.manager import SessionManager
@@ -474,7 +475,7 @@ def open_session(
             workspace=workspace_path,
         )
 
-        agent_name = get_agent_display_name(agent or (session.agent_backend if session else None) or (config.agent_backend if config else None))
+        agent_name = get_agent_display_name(resolve_agent_backend(cli_override=agent, session=session, config=config))
         console.print(f"[green]✓[/green] Created new conversation with fresh {agent_name} session")
         console.print(f"[dim]New session ID: {new_conv.ai_agent_session_id}[/dim]")
 
@@ -573,7 +574,7 @@ def open_session(
     is_first_launch = not has_real_session_id
 
     # Resolve effective agent backend: --agent flag > session-stored > config > "claude" (backward compatible)
-    effective_agent_backend = agent or session.agent_backend or (config.agent_backend if config else "claude")
+    effective_agent_backend = resolve_agent_backend(cli_override=agent, session=session, config=config)
     agent_name = get_agent_display_name(effective_agent_backend)
 
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
@@ -2422,7 +2423,7 @@ def _create_conversation_from_workspace_selection(
 
     # Generate a new session ID for this conversation (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _backend = session.agent_backend or "claude"
+    _backend = resolve_agent_backend(session=session)
     new_session_id = generate_agent_session_id(_backend)
 
     # Get workspace for portable paths
@@ -2448,7 +2449,7 @@ def _create_conversation_from_workspace_selection(
     # Save the session
     session_manager.update_session(session)
 
-    _agent_name = get_agent_display_name(getattr(session, 'agent_backend', None) or (config.agent_backend if config else None))
+    _agent_name = get_agent_display_name(resolve_agent_backend(session=session, config=config))
     console.print(f"[green]✓[/green] Created conversation for {repo_name}")
     console.print(f"[dim]Project path: {project_path}[/dim]")
     console.print(f"[dim]{_agent_name} session ID: {new_session_id}[/dim]")
@@ -2493,7 +2494,7 @@ def _create_conversation_for_path(
 
     # Generate a new session ID for this conversation (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _backend = session.agent_backend or "claude"
+    _backend = resolve_agent_backend(session=session)
     new_session_id = generate_agent_session_id(_backend)
 
     # Get workspace for portable paths
@@ -2520,7 +2521,7 @@ def _create_conversation_for_path(
     # Save the session
     session_manager.update_session(session)
 
-    _agent_name = get_agent_display_name(getattr(session, 'agent_backend', None) or (config.agent_backend if config else None))
+    _agent_name = get_agent_display_name(resolve_agent_backend(session=session, config=config))
     console.print(f"[green]✓[/green] Created conversation for {repo_name}")
     console.print(f"[dim]Project path: {project_path}[/dim]")
     console.print(f"[dim]{_agent_name} session ID: {new_session_id}[/dim]")
@@ -2579,7 +2580,7 @@ def _create_conversation_for_current_directory(
 
     # Generate a new session ID for this conversation (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _backend = session.agent_backend or "claude"
+    _backend = resolve_agent_backend(session=session)
     new_session_id = generate_agent_session_id(_backend)
 
     # Get workspace for portable paths
@@ -2606,7 +2607,7 @@ def _create_conversation_for_current_directory(
     # Save the session
     session_manager.update_session(session)
 
-    _agent_name = get_agent_display_name(getattr(session, 'agent_backend', None) or (config.agent_backend if config else None))
+    _agent_name = get_agent_display_name(resolve_agent_backend(session=session, config=config))
     console.print(f"[green]✓[/green] Created conversation for {repo_name}")
     console.print(f"[dim]Project path: {project_path}[/dim]")
     console.print(f"[dim]{_agent_name} session ID: {new_session_id}[/dim]")
@@ -2788,7 +2789,7 @@ def _create_multi_project_conversation_for_open(
 
     # Create ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _backend = session.agent_backend or "claude"
+    _backend = resolve_agent_backend(session=session)
     session_id = generate_agent_session_id(_backend)
 
     # Build projects_info dict for multi-project conversation
@@ -2944,7 +2945,7 @@ def _prompt_for_working_directory(
             workspace = config.repos.get_default_workspace_path() if config and config.repos else None
 
         from devflow.agent.factory import generate_agent_session_id
-        _backend = session.agent_backend or "claude"
+        _backend = resolve_agent_backend(session=session)
         session.add_conversation(
             working_dir=project_path.name,
             ai_agent_session_id=generate_agent_session_id(_backend),
@@ -3401,7 +3402,7 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
     # Get conversation file from stable location (based on original_project_path)
     # Use session's stored agent_backend for correct path resolution
     from devflow.agent import create_agent_client
-    effective_backend = (session.agent_backend if hasattr(session, 'agent_backend') and session.agent_backend else None) or (config.agent_backend if config else "claude")
+    effective_backend = resolve_agent_backend(session=session, config=config)
     agent = create_agent_client(effective_backend)
 
     # Conversation file copy only applies to file-based agents (claude, ollama)
@@ -3467,7 +3468,7 @@ def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
     # Use resolved path to handle macOS /var -> /private/var canonicalization
     # SessionCapture now correctly encodes underscores as dashes
     from devflow.agent import create_agent_client
-    effective_backend = (session.agent_backend if hasattr(session, 'agent_backend') and session.agent_backend else None) or (config.agent_backend if config else "claude")
+    effective_backend = resolve_agent_backend(session=session, config=config)
     agent = create_agent_client(effective_backend)
 
     # Conversation file copy only applies to file-based agents (claude, ollama)

@@ -14,6 +14,7 @@ from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 from devflow.config.models import Session, ConversationContext
 from devflow.agent import create_agent_client, get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 
 console = Console()
 
@@ -148,7 +149,7 @@ def _output_json_session_info(
         # Add conversation file paths 
         if session.conversations:
             config = config_loader.load_config()
-            _ab = config.agent_backend or "claude" if config else "claude"
+            _ab = resolve_agent_backend(config=config)
             conversations_with_paths = []
             conv_number = 1
             for working_dir, conversation in session.conversations.items():
@@ -378,7 +379,7 @@ def _display_conversation(
     # Resolve agent display name for labels
     try:
         config = config_loader.load_config()
-        _agent_backend = config.agent_backend or "claude"
+        _agent_backend = resolve_agent_backend(config=config)
     except Exception:
         _agent_backend = "claude"
     _agent_name = get_agent_display_name(_agent_backend)
@@ -440,7 +441,7 @@ def _display_token_usage(conv: ConversationContext, config_loader: ConfigLoader)
     try:
         # Create agent client
         config = config_loader.load_config()
-        agent_backend = config.agent_backend or "claude"
+        agent_backend = resolve_agent_backend(config=config)
         agent = create_agent_client(agent_backend)
 
         # Extract token usage

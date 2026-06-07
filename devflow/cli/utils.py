@@ -14,6 +14,7 @@ import requests
 from rich.console import Console
 from rich.prompt import Confirm, IntPrompt
 
+from devflow.agent.factory import resolve_agent_backend
 from devflow.config.models import Config, ConversationContext, Session
 from devflow.jira import JiraClient
 from devflow.session.manager import SessionManager
@@ -1004,7 +1005,7 @@ def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool =
         # Check auto_launch_agent first (new field)
         if config.prompts.auto_launch_agent is not None:
             should_launch = config.prompts.auto_launch_agent
-            agent_name = getattr(config, 'agent_backend', 'claude').capitalize()
+            agent_name = resolve_agent_backend(config=config).capitalize()
             if should_launch:
                 console_print(f"[dim]Automatically launching {agent_name} (configured in prompts)[/dim]")
             else:

@@ -630,8 +630,8 @@ def create_new_session(
             branch = branch_result
 
     # Generate session ID upfront (agent-aware: placeholder for self-ID backends)
-    from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = agent or (config.agent_backend if config else "claude")
+    from devflow.agent.factory import generate_agent_session_id, resolve_agent_backend
+    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build concatenated goal for storage
@@ -779,7 +779,7 @@ def create_new_session(
             branch=branch,
             ai_agent_session_id=session_id,
             model_profile=model_profile,
-            agent_backend=agent or (config.agent_backend if config else "claude"),
+            agent_backend=resolve_agent_backend(cli_override=agent, config=config),
         )
 
         # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
@@ -821,7 +821,7 @@ def create_new_session(
         _display_session_banner(name, session.goal, working_directory, branch, project_path, session_id, issue_key, jira_url)
 
     # Resolve agent backend and display name
-    _agent_backend = agent or (config.agent_backend if config else "claude")
+    _agent_backend = resolve_agent_backend(cli_override=agent, config=config)
     agent_name = get_agent_display_name(_agent_backend)
 
     # Check if we should launch Claude Code
@@ -860,7 +860,7 @@ def create_new_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_backend = resolve_agent_backend(cli_override=agent, config=config)
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured

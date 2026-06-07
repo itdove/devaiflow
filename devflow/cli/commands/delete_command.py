@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.prompt import Confirm, IntPrompt
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import get_session_with_delete_all_option, get_status_display, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -27,7 +28,7 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
     """
     config_loader = ConfigLoader()
     config = config_loader.load_config()
-    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
     session_manager = SessionManager(config_loader)
 
     # Handle --all flag
@@ -138,7 +139,7 @@ def _delete_all_sessions(session_manager: SessionManager, config_loader: ConfigL
         keep_metadata: Keep session files (notes, metadata) on disk
     """
     config = config_loader.load_config()
-    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
 
     # Get all sessions
     all_sessions = session_manager.list_sessions()

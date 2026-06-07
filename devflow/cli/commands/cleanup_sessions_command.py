@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import get_status_display, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.capture import SessionCapture
@@ -32,7 +33,7 @@ def cleanup_sessions(dry_run: bool = False, force: bool = False) -> None:
     config = config_loader.load_config()
 
     from devflow.agent import create_agent_client
-    agent_backend = config.agent_backend if config else "claude"
+    agent_backend = resolve_agent_backend(config=config)
     agent = create_agent_client(agent_backend)
     capture = SessionCapture(agent=agent)
 

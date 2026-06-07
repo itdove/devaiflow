@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from devflow.agent.factory import resolve_agent_backend
 from devflow.archive.base import ArchiveManagerBase
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
@@ -35,7 +36,7 @@ class BackupManager(ArchiveManagerBase):
         """
         try:
             config = self.config_loader.load_config()
-            return config.agent_backend if config else "claude"
+            return resolve_agent_backend(config=config)
         except Exception:
             return "claude"
 

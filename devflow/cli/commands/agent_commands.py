@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Any
 from rich.console import Console
 from rich.table import Table
 
-from devflow.agent.factory import create_agent_client, get_agent_display_name
+from devflow.agent.factory import create_agent_client, get_agent_display_name, resolve_agent_backend
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.utils.dependencies import check_tool_available, get_tool_version
@@ -225,7 +225,7 @@ def list_agents(output_json: bool = False) -> None:
     config_loader = ConfigLoader()
     try:
         config = config_loader.load_config()
-        default_agent = config.agent_backend if config else "claude"
+        default_agent = resolve_agent_backend(config=config)
     except Exception:
         default_agent = "claude"
 
@@ -405,7 +405,7 @@ def test_agent(agent_name: Optional[str] = None, output_json: bool = False) -> N
         config_loader = ConfigLoader()
         try:
             config = config_loader.load_config()
-            agent_name = config.agent_backend if config else "claude"
+            agent_name = resolve_agent_backend(config=config)
         except Exception:
             agent_name = "claude"
 
@@ -490,7 +490,7 @@ def show_agent_info(agent_name: Optional[str] = None, output_json: bool = False)
         config_loader = ConfigLoader()
         try:
             config = config_loader.load_config()
-            agent_name = config.agent_backend if config else "claude"
+            agent_name = resolve_agent_backend(config=config)
         except Exception:
             agent_name = "claude"
 

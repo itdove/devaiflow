@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import (
     console_print,
     get_status_display,
@@ -234,7 +235,7 @@ def create_multi_project_session(
     # Create new session with multi-project conversation
     # Use ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = config.agent_backend if config else "claude"
+    _agent_backend_for_id = resolve_agent_backend(config=config)
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
@@ -258,7 +259,7 @@ def create_multi_project_session(
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
         model_profile=model_profile,
-        agent_backend=config.agent_backend if config else "claude",
+        agent_backend=resolve_agent_backend(config=config),
     )
 
     # Add multi-project conversation (ONE conversation for all projects)
@@ -331,7 +332,7 @@ def create_multi_project_session(
     )
 
     # Launch AI agent at workspace level (not individual project)
-    agent_backend = config.agent_backend if config else "claude"
+    agent_backend = resolve_agent_backend(config=config)
     agent_name = get_agent_display_name(agent_backend)
     if should_launch_claude_code(config):
         console.print(f"[cyan]Launching {agent_name} at workspace level...[/cyan]\n")
