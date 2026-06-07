@@ -136,16 +136,16 @@ def _generate_initial_prompt(
         prompt += f"\nAlso read the issue tracker ticket with comments:\n"
         if backend == "github":
             # Use gh/glab CLI directly for GitHub/GitLab issues
-            import re as _re
-            _num_match = _re.search(r'(\d+)$', issue_key)
-            _issue_number = _num_match.group(1) if _num_match else issue_key
             _is_gitlab = config and hasattr(config, 'issue_tracker_backend') and config.issue_tracker_backend == "gitlab"
             _cli_tool = "glab" if _is_gitlab else "gh"
-            _repo_match = _re.match(r'^([^#]+)#\d+$', issue_key)
-            if _repo_match:
-                prompt += f"{_cli_tool} issue view {_issue_number} -R {_repo_match.group(1)} --comments\n"
+            if '#' in issue_key:
+                _repo, _issue_number = issue_key.rsplit('#', 1)
+                if _repo:
+                    prompt += f"{_cli_tool} issue view {_issue_number} -R {_repo} --comments\n"
+                else:
+                    prompt += f"{_cli_tool} issue view {_issue_number} --comments\n"
             else:
-                prompt += f"{_cli_tool} issue view {_issue_number} --comments\n"
+                prompt += f"{_cli_tool} issue view {issue_key} --comments\n"
         else:
             # JIRA or other backends
             prompt += f"daf jira view {issue_key} --comments\n"

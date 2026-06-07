@@ -267,23 +267,6 @@ def cleanup_conversation(
         console.print("[green]✓[/green] Restored from backup")
 
 
-def _find_session_by_agent_id(session_manager: SessionManager, agent_id: str):
-    """Find a session by its agent session ID.
-
-    Args:
-        session_manager: SessionManager instance
-        agent_id: Agent session UUID
-
-    Returns:
-        Session if found, None otherwise
-    """
-    all_sessions = session_manager.list_sessions()
-    for session in all_sessions:
-        active_conv = session.active_conversation
-        if active_conv and active_conv.ai_agent_session_id == agent_id:
-            return session
-    return None
-
 
 def _find_conversation_file(
     ai_agent_session_id: str,
