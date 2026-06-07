@@ -895,34 +895,24 @@ def create_new_session(
         # Set up signal handlers for cleanup (using unified utility)
         setup_signal_handlers(session, session_manager, name, config)
 
-        # Snapshot existing sessions before launch (for self-ID agent capture)
-        from devflow.agent.factory import snapshot_agent_sessions, capture_agent_session_id
-        _sessions_before = snapshot_agent_sessions(agent_client, agent_backend, project_path)
-
-        # Launch agent with initial prompt
+        # Launch agent with snapshot/capture lifecycle
+        from devflow.agent.factory import launch_and_capture
         try:
-            process = agent_client.launch_with_prompt(
-                project_path=project_path,
+            launch_and_capture(
+                agent_client, agent_backend, project_path,
+                session.active_conversation,
                 initial_prompt=initial_prompt,
                 session_id=session_id,
                 model_provider_profile=model_profile,
-                skills_dirs=None,  # Will be auto-discovered
                 workspace_path=workspace_path,
                 config=config,
                 env=env,
                 headless=headless,
-                auto_approve=auto_approve
+                auto_approve=auto_approve,
             )
-            agent_client.wait_for_exit(process, headless)
         finally:
             if not is_cleanup_done():
                 console.print(f"\n[green]✓[/green] {agent_name} session completed")
-
-                # Capture real session ID for self-ID agents (e.g., OpenCode ses_ IDs)
-                capture_agent_session_id(
-                    agent_client, agent_backend, project_path,
-                    session.active_conversation, _sessions_before,
-                )
 
                 # Update session status to paused
                 session.status = "paused"

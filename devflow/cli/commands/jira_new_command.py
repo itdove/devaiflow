@@ -653,33 +653,23 @@ def create_jira_ticket_session(
         console_print(f"[dim]  Working directory: {project_path}[/dim]")
         console_print()
 
-        # Snapshot existing sessions before launch (for self-ID agent capture)
-        from devflow.agent.factory import snapshot_agent_sessions, capture_agent_session_id
-        _sessions_before = snapshot_agent_sessions(agent_client, agent_backend, project_path)
-
-        # Launch agent with initial prompt
-        process = agent_client.launch_with_prompt(
-            project_path=project_path,
+        # Launch agent with snapshot/capture lifecycle
+        from devflow.agent.factory import launch_and_capture
+        launch_and_capture(
+            agent_client, agent_backend, project_path,
+            session.active_conversation,
             initial_prompt=initial_prompt,
             session_id=ai_agent_session_id,
             model_provider_profile=model_profile,
-            skills_dirs=None,  # Will be auto-discovered
             workspace_path=workspace_path_for_skills,
             config=config,
             env=env,
             headless=headless,
             auto_approve=auto_approve,
         )
-        agent_client.wait_for_exit(process, headless)
     finally:
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")
-
-            # Capture real session ID for self-ID agents (e.g., OpenCode ses_ IDs)
-            capture_agent_session_id(
-                agent_client, agent_backend, project_path,
-                session.active_conversation, _sessions_before,
-            )
 
             # Reload index from disk before checking for rename
             # This is critical because the child process (Claude) may have renamed the session

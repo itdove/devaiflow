@@ -1105,34 +1105,24 @@ def open_session(
             # Set terminal window/tab title before launching Claude Code
             _set_terminal_title(session)
 
-            # Snapshot existing sessions before launch (for self-ID agent capture)
-            from devflow.agent.factory import snapshot_agent_sessions, capture_agent_session_id
-            sessions_before = snapshot_agent_sessions(agent, agent_backend, launch_dir)
-
+            # Launch agent with snapshot/capture lifecycle
+            from devflow.agent.factory import launch_and_capture
             try:
                 if active_conv and launch_dir:
-                    # Launch agent with initial prompt
-                    process = agent.launch_with_prompt(
-                        project_path=project_path,
+                    launch_and_capture(
+                        agent, agent_backend, launch_dir, active_conv,
                         initial_prompt=initial_prompt,
                         session_id=active_conv.ai_agent_session_id,
                         model_provider_profile=model_provider_profile,
-                        skills_dirs=None,  # Will be auto-discovered
                         workspace_path=workspace_path_for_cmd,
                         config=config,
                         env=env,
                         headless=headless,
-                        auto_approve=auto_approve
+                        auto_approve=auto_approve,
                     )
-                    agent.wait_for_exit(process, headless)
             finally:
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
-
-                    # Capture real session ID for self-ID agents (e.g., OpenCode ses_ IDs)
-                    capture_agent_session_id(
-                        agent, agent_backend, launch_dir, active_conv, sessions_before
-                    )
 
                     # Update session status to paused
                     session.status = "paused"
