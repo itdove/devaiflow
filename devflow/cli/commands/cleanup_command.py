@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from devflow.agent import get_agent_display_name, create_agent_client
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -46,7 +47,7 @@ def cleanup_conversation(
     config_loader = ConfigLoader()
     config = config_loader.load_config()
     session_manager = SessionManager(config_loader)
-    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
 
     # Handle --latest flag
     if latest:
@@ -286,7 +287,7 @@ def _find_conversation_file(
     Returns:
         Path to conversation file if found, None otherwise
     """
-    agent_backend = config.agent_backend if config else "claude"
+    agent_backend = resolve_agent_backend(config=config)
     agent = create_agent_client(agent_backend)
 
     # If we have a project_path, try the direct path first

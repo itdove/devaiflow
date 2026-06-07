@@ -62,6 +62,36 @@ SELF_ID_BACKENDS = ("opencode", "opencode-ai")
 PENDING_CAPTURE_PLACEHOLDER = "pending-capture"
 
 
+def resolve_agent_backend(
+    cli_override: Optional[str] = None,
+    session=None,
+    config=None,
+) -> str:
+    """Resolve the effective agent backend from the fallback chain.
+
+    Priority: cli_override > session.agent_backend > config.agent_backend > "claude"
+
+    Args:
+        cli_override: Explicit backend from CLI ``--agent`` flag.
+        session: Session object with an ``agent_backend`` attribute.
+        config: Config object with an ``agent_backend`` attribute.
+
+    Returns:
+        Resolved backend identifier, never ``None``.
+    """
+    if cli_override:
+        return cli_override
+    if session:
+        backend = getattr(session, "agent_backend", None)
+        if backend:
+            return backend
+    if config:
+        backend = getattr(config, "agent_backend", None)
+        if backend:
+            return backend
+    return "claude"
+
+
 def is_self_id_backend(backend: str) -> bool:
     """Check if an agent backend generates its own session IDs.
 

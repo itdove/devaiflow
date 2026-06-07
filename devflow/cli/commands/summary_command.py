@@ -3,6 +3,7 @@
 from rich.console import Console
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import get_session_with_prompt, display_session_header
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -111,7 +112,7 @@ def show_summary(identifier: str = None, detail: bool = False, ai_summary: bool 
                     prose = generate_prose_summary(
                         summary,
                         mode=summary_mode,
-                        agent_backend=config.agent_backend if config else None
+                        agent_backend=resolve_agent_backend(config=config)
                     )
 
                     # Show indicator if using AI

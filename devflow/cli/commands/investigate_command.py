@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
 from devflow.git.utils import GitUtils
 from devflow.utils.backend_detection import detect_backend_from_key
@@ -584,7 +585,7 @@ def create_investigation_session(
         project_path=project_path,
         branch=None,  # No branch for investigation sessions
         model_profile=model_profile,
-        agent_backend=agent or (config.agent_backend if config else "claude"),
+        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
     )
 
     # Set session_type to "investigation"
@@ -628,7 +629,7 @@ def create_investigation_session(
         return
 
     # Resolve agent display name for user-facing messages
-    agent_backend = agent or (config.agent_backend if config else "claude")
+    agent_backend = resolve_agent_backend(cli_override=agent, config=config)
     agent_name = get_agent_display_name(agent_backend)
 
     # Check if we should launch Claude Code
@@ -708,7 +709,7 @@ def create_investigation_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_backend = resolve_agent_backend(cli_override=agent, config=config)
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
@@ -1110,7 +1111,7 @@ def _create_multi_project_investigation_session(
     session_manager.update_session(session)
 
     # Resolve agent display name for user-facing messages
-    agent_backend = config.agent_backend if config else "claude"
+    agent_backend = resolve_agent_backend(config=config)
     agent_name = get_agent_display_name(agent_backend)
 
     # Check if we should launch the AI agent
@@ -1166,7 +1167,7 @@ def _create_multi_project_investigation_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        _agent_backend = config.agent_backend if config else "claude"
+        _agent_backend = resolve_agent_backend(config=config)
         agent_client = create_agent_client(_agent_backend)
 
         # Get model provider profile if configured

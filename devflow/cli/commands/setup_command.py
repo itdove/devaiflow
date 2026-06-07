@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from rich.console import Console
 from rich.table import Table
 
+from devflow.agent.factory import resolve_agent_backend
+
 console = Console()
 
 BACKEND_ALIASES = {
@@ -171,7 +173,7 @@ def setup_agent_config(
     try:
         config_loader = ConfigLoader()
         config = config_loader.load_config(validate=False)
-        backend = config.agent_backend or "claude"
+        backend = resolve_agent_backend(config=config)
     except Exception:
         backend = "claude"
 

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 from rich.console import Console
 
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import console_print, require_outside_claude, is_json_mode, output_json
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -125,7 +126,7 @@ def jira_open_session(issue_key: str, headless: bool = False, auto_approve: bool
         working_directory=working_directory,
         project_path=project_path,
         branch=None,  # No branch for ticket creation sessions
-        agent_backend=config.agent_backend if config else "claude",
+        agent_backend=resolve_agent_backend(config=config),
     )
 
     # Set session_type to "ticket_creation"

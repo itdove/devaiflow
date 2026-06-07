@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.table import Table
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.discovery import SessionDiscovery
@@ -17,7 +18,7 @@ def discover_sessions() -> None:
     """Discover existing AI agent sessions not managed by daf tool."""
     config_loader = ConfigLoader()
     config = config_loader.load_config()
-    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
     session_manager = SessionManager(config_loader)
     discovery = SessionDiscovery()
 

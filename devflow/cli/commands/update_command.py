@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.prompt import Prompt
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -60,5 +61,5 @@ def update_session(identifier: str, ai_agent_session_id: str = None) -> None:
 
     console.print(f"[green]✓[/green] Updated session '{session.name}'{issue_display}")
     config = config_loader.load_config()
-    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
     console.print(f"  {agent_name} session ID: {ai_agent_session_id}")

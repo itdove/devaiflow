@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from devflow.agent import create_agent_client, get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import get_active_conversation, output_json as json_output, serialize_session
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -109,7 +110,7 @@ def show_active(output_json: bool = False) -> None:
         # Get token usage if available
         token_usage = None
         if conversation.project_path and conversation.ai_agent_session_id:
-            agent_backend = config.agent_backend if config else "claude"
+            agent_backend = resolve_agent_backend(config=config)
             token_usage = _get_token_usage(
                 conversation.ai_agent_session_id,
                 conversation.project_path,
@@ -161,7 +162,7 @@ def show_active(output_json: bool = False) -> None:
     # Get token usage for display
     token_usage_display = None
     if conversation.project_path and conversation.ai_agent_session_id:
-        agent_backend = config.agent_backend if config else "claude"
+        agent_backend = resolve_agent_backend(config=config)
         token_usage_display = _get_token_usage(
             conversation.ai_agent_session_id,
             conversation.project_path,
@@ -228,7 +229,7 @@ def show_active(output_json: bool = False) -> None:
         padding=(1, 2),
     )
 
-    agent_backend = config.agent_backend if config else "claude"
+    agent_backend = resolve_agent_backend(config=config)
     agent_name = get_agent_display_name(agent_backend)
 
     console.print()

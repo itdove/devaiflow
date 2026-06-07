@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import get_status_display, is_non_interactive, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.discovery import SessionDiscovery
@@ -208,7 +209,7 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str
     console.print(f"📂 Path: {project_path}")
     console.print(f"💬 Messages: {session.active_conversation.message_count if session.active_conversation else 0}")
     config = config_loader.load_config()
-    agent_name = get_agent_display_name(config.agent_backend if config else None)
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
     console.print(f"🆔 {agent_name} Session ID: {uuid}")
     console.print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     console.print()

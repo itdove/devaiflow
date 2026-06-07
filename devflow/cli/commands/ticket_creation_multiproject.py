@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from rich.console import Console
 
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import console_print
 from devflow.git.utils import GitUtils
 from devflow.session.manager import SessionManager
@@ -61,7 +62,7 @@ def create_multi_project_ticket_creation_session(
 
     # Create ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = config.agent_backend if config else "claude"
+    _agent_backend_for_id = resolve_agent_backend(config=config)
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
@@ -96,7 +97,7 @@ def create_multi_project_ticket_creation_session(
         project_path=None,
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
-        agent_backend=config.agent_backend if config else "claude",
+        agent_backend=resolve_agent_backend(config=config),
     )
 
     # Set session_type to "ticket_creation"

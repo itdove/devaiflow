@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from devflow.agent import create_agent_client
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import get_active_conversation, get_status_display, output_json as json_output, serialize_session, serialize_sessions
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -122,7 +123,7 @@ def _display_page(
         active_session_name = active_session.name
 
     # Get agent backend for token extraction
-    agent_backend = config.agent_backend if config else "claude"
+    agent_backend = resolve_agent_backend(config=config)
 
     # Create table
     table = Table(title="Your Sessions", show_header=True, header_style="bold magenta")
@@ -420,7 +421,7 @@ def list_sessions(
 
         # Get agent backend for token extraction
         config = config_loader.load_config()
-        agent_backend = config.agent_backend if config else "claude"
+        agent_backend = resolve_agent_backend(config=config)
 
         # Output JSON with token usage data
         json_output(

@@ -12,6 +12,7 @@ from rich.prompt import Prompt, Confirm
 
 from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.git.utils import GitUtils
 
 # Import unified utilities
@@ -482,7 +483,7 @@ def create_jira_ticket_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=branch,  # Use provided branch or None for no branch
-        agent_backend=agent or (config.agent_backend if config else "claude"),
+        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
     )
 
     # Set session_type to "ticket_creation"
@@ -540,7 +541,7 @@ def create_jira_ticket_session(
         return
 
     # Check if we should launch Claude Code
-    agent_name = get_agent_display_name(agent or (config.agent_backend if config else "claude"))
+    agent_name = get_agent_display_name(resolve_agent_backend(cli_override=agent, config=config))
     if not should_launch_claude_code(config=config, mock_mode=False):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
@@ -548,7 +549,7 @@ def create_jira_ticket_session(
 
     # Generate a new agent session ID (agent-aware: placeholder for self-ID backends)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = agent or (config.agent_backend if config else "claude")
+    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
     ai_agent_session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Update session with Claude session ID
@@ -608,7 +609,7 @@ def create_jira_ticket_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = agent or (config.agent_backend if config else "claude")
+        agent_backend = resolve_agent_backend(cli_override=agent, config=config)
         agent_name = get_agent_display_name(agent_backend)
         agent_client = create_agent_client(agent_backend)
 
@@ -1121,7 +1122,7 @@ def _create_multi_project_jira_session(
     )
 
     # Check if we should launch Claude Code
-    agent_name = get_agent_display_name(config.agent_backend if config else "claude")
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
     if not should_launch_claude_code(config=config, mock_mode=False):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
