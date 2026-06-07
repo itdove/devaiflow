@@ -94,11 +94,13 @@ daf git new --goal "Add two-factor authentication"
 #    - "What tests already exist for authentication?"
 
 # 3. Claude creates the issue using:
-daf git create \
-  --summary "Add two-factor authentication support" \
-  --description "..." \
-  --acceptance-criteria "User can enable 2FA" \
-  --acceptance-criteria "Supports TOTP apps like Google Authenticator"
+gh issue create \
+  --title "Add two-factor authentication support" \
+  --body "...
+
+## Acceptance Criteria
+- User can enable 2FA
+- Supports TOTP apps like Google Authenticator"
 
 # 4. Complete the analysis session
 daf complete <session-name>
@@ -387,7 +389,7 @@ daf status                                        # Sprint dashboard
 **GitHub/GitLab:**
 ```bash
 daf git new --goal "..."                             # Create issue with analysis
-daf git create --summary "..." --description "..."   # Create issue directly
+gh issue create --title "..." --body "..."    # Create issue directly
 daf sync                                             # Sync assigned issues from all repos
 gh issue view 123 -R owner/repo                      # View GitHub issue (or: glab issue view for GitLab)
 daf git open "owner/repo#123"                        # Open issue in new session (quotes required)

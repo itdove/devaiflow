@@ -906,28 +906,6 @@ def _build_issue_creation_prompt(
 
     prompt_parts.append("")
 
-    # Build example command
-    example_cmd_parts = ["daf git create"]
-    if issue_type:
-        example_cmd_parts.append(issue_type)
-    example_cmd_parts.append('--summary "..."')
-
-    # Add parent if specified
-    if parent:
-        example_cmd_parts.append(f'--parent "{parent}"')
-
-    # Add repository if specified
-    if repository:
-        example_cmd_parts.append(f'--repository {repository}')
-
-    # Add optional fields based on issue type
-    example_cmd_parts.append('--description "<your analysis here>"')
-
-    # Add acceptance criteria
-    example_cmd_parts.append('--acceptance-criteria "..."')
-
-    example_command = " \\\n  ".join(example_cmd_parts)
-
     prompt_parts.extend([
         "⚠️  IMPORTANT CONSTRAINTS:",
         "   • This is an ANALYSIS-ONLY session for GitHub/GitLab issue creation",
@@ -938,15 +916,16 @@ def _build_issue_creation_prompt(
         "Your task:",
         f"1. Analyze the codebase to understand how to implement: {goal}",
         "2. Read relevant files, search for patterns, understand the architecture",
-        f"3. Create the GitHub/GitLab issue{' (' + issue_type + ')' if issue_type else ''} using 'daf git create' (this session uses GitHub/GitLab backend)",
+        f"3. Create the GitHub/GitLab issue{' (' + issue_type + ')' if issue_type else ''} using `gh issue create` (GitHub) or `glab issue create` (GitLab)",
         "4. Include detailed description and acceptance criteria based on your analysis",
+        "5. After creating the issue, link it to this session: `daf link <issue_url>`",
         "",
     ])
 
     prompt_parts.extend([
-        "⚠️  CRITICAL: Read the daf-git skill to understand the correct command syntax for creating GitHub/GitLab issues.",
+        "⚠️  CRITICAL: Read the daf-git skill to understand how to create issues with gh/glab CLI and link them with daf link.",
         "",
-        "After you create the issue, the session will be automatically renamed to 'creation-<issue_number>'",
+        "After you create and link the issue, the session will be automatically renamed to 'creation-<issue_number>'",
         "for easy identification. Users can reopen with: daf open creation-<issue_number>",
         "",
         "Remember: This is READ-ONLY analysis. Do not modify any files.",
@@ -1025,20 +1004,6 @@ def _build_multiproject_issue_creation_prompt(
     projects_list = "\n".join([f"  • {name}" for name in project_names])
     target_repo_name = Path(target_repo_path).name
 
-    # Build example command
-    example_cmd_parts = ["daf git create"]
-    if issue_type:
-        example_cmd_parts.append(issue_type)
-    example_cmd_parts.extend([
-        '--summary "..."',
-        '--description "..."',
-    ])
-    if parent:
-        example_cmd_parts.append(f'--parent "{parent}"')
-    example_cmd_parts.append('--acceptance-criteria "..." --acceptance-criteria "..."')
-
-    example_command = " \\\n  ".join(example_cmd_parts)
-
     prompt_parts = [
         f"Work on daf session: {name}",
         "",
@@ -1065,11 +1030,12 @@ def _build_multiproject_issue_creation_prompt(
         "   • Potential impact areas in each project",
         "2. Identify what needs to be implemented/fixed across all projects",
         "3. Determine clear, testable acceptance criteria considering all projects",
-        f"4. Create the GitHub/GitLab issue in {target_repo_name} with your cross-project analysis",
+        f"4. Create the GitHub/GitLab issue in {target_repo_name} using `gh issue create` (GitHub) or `glab issue create` (GitLab)",
+        "5. Link the issue to this session: `daf link <issue_url>`",
         "",
-        "⚠️  CRITICAL: Read the daf-git skill to understand the correct command syntax for creating GitHub/GitLab issues.",
+        "⚠️  CRITICAL: Read the daf-git skill to understand how to create issues with gh/glab CLI and link them with daf link.",
         "",
-        "After you create the issue, the session will be automatically renamed to 'creation-<issue_number>'",
+        "After you create and link the issue, the session will be automatically renamed to 'creation-<issue_number>'",
         "for easy identification. Users can reopen with: daf open creation-<issue_number>",
         "",
         f"Remember: This is READ-ONLY analysis across {len(project_paths)} projects. Do not modify any files.",

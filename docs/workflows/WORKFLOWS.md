@@ -82,9 +82,9 @@ daf git new --goal "Add two-factor authentication to API"
 # Step 2: Claude analyzes codebase (same as JIRA workflow)
 
 # Step 3: Create informed issue
-daf git create \
-  --summary "Add two-factor authentication support" \
-  --description "## Overview
+gh issue create \
+  --title "Add two-factor authentication support" \
+  --body "## Overview
 
 Implement TOTP-based 2FA for user accounts.
 
@@ -106,7 +106,7 @@ Implement TOTP-based 2FA for user accounts.
 - [ ] End-to-end: User can login with TOTP
 - [ ] End-to-end: User can use backup codes
 " \
-  --labels "enhancement,backend"
+  --label "enhancement,backend"
 
 # Step 4: Complete analysis, open issue to implement
 daf complete <session-name>
@@ -440,7 +440,7 @@ daf open PROJ-123
 ## Workflow Decision Tree
 
 **Starting new work?**
-- Known implementation → `daf jira create` / `daf git create`
+- Known implementation → `daf jira create` / `gh issue create` / `glab issue create`
 - Need analysis → `daf jira new` / `daf git new` ✅
 
 **Working on assigned tickets?**

@@ -1764,44 +1764,6 @@ def git(ctx: click.Context) -> None:
     pass
 
 
-@git.command(name="create")
-@json_option
-@click.argument("issue_type", required=False, default=None)
-@click.option("--summary", required=True, help="Issue summary/title")
-@click.option("--description", help="Issue description")
-@click.option("--priority", type=click.Choice(["low", "medium", "high", "critical"], case_sensitive=False), help="Priority (uses labels)")
-@click.option("--points", type=int, help="Story points (uses labels)")
-@click.option("--labels", help="Additional labels (comma-separated)")
-@click.option("--assignee", help="Assign to username")
-@click.option("--milestone", help="Milestone name or number")
-@click.option("--parent", help="Parent issue key (owner/repo#123 or #123)")
-@click.option("--repository", help="Repository in owner/repo format (optional, will auto-detect)")
-@click.option("--acceptance-criteria", multiple=True, help="Acceptance criteria (can be used multiple times)")
-def git_create(ctx: click.Context, issue_type: Optional[str], summary: str, description: Optional[str], priority: Optional[str], points: Optional[int], labels: Optional[str], assignee: Optional[str], milestone: Optional[str], parent: Optional[str], repository: Optional[str], acceptance_criteria: tuple) -> None:
-    """Create a new GitHub/GitLab issue.
-
-    Creates an issue with convention-based labels for type, priority, and points.
-
-    ISSUE_TYPE is optional positional argument (bug, enhancement, task, spike, epic).
-    Valid types are configurable in enterprise.json and organization.json.
-
-    Examples:
-        daf git create enhancement --summary "Add feature X"
-        daf git create bug --summary "Fix bug" --priority high --points 5
-        daf git create task --summary "Task" --assignee username --milestone v1.0
-        daf git create --summary "No type label"
-        daf git create enhancement --summary "Feature" \\
-            --acceptance-criteria "Tests pass" \\
-            --acceptance-criteria "Docs updated"
-        daf git create task --summary "Implement auth" --parent "#123"
-        daf git create task --summary "Add validation" --parent "owner/repo#456"
-    """
-    from devflow.cli.commands.git_create_command import git_create
-
-    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    git_create(summary, issue_type, description, priority, points, labels, assignee, milestone, parent, repository, acceptance_criteria, output_json)
-
-
 @git.command(name="update")
 @json_option
 @click.argument("issue_key")

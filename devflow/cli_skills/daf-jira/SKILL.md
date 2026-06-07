@@ -192,4 +192,4 @@ daf jira create bug --description "h3. Bug Description
 - `daf jira add-comment` - Adding JIRA comments
 - `daf jira update` - Updating JIRA descriptions
 
-**Note:** For GitHub/GitLab operations (`daf git create`, `daf git update`), use Markdown syntax instead. See **daf-git skill** for complete Markdown syntax reference.
+**Note:** For GitHub/GitLab operations (`gh issue create`, `glab issue create`, `daf git update`), use Markdown syntax instead. See **daf-git skill** for complete Markdown syntax reference.

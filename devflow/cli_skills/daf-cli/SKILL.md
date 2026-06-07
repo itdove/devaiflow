@@ -21,7 +21,7 @@ user-invocable: false
 ### GitHub/GitLab Operations
 **See `daf-git` skill** for complete GitHub/GitLab documentation:
 - View issues: `gh issue view` (GitHub) / `glab issue view` (GitLab)
-- Create issues: `daf git create`
+- Create issues: `gh issue create` / `glab issue create` + `daf link`
 - Update issues: `daf git update`
 - Add comments: `gh issue comment` / `glab issue note`
 - **CRITICAL**: GitHub/GitLab use Markdown syntax (see daf-git skill)

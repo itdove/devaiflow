@@ -1,6 +1,6 @@
 ---
 name: daf-git
-description: GitHub/GitLab issue operations (create, update) with Markdown syntax reference and gh/glab CLI guide
+description: GitHub/GitLab issue operations (update, link) with Markdown syntax reference and gh/glab CLI guide
 user-invocable: true
 argument-hint: "[ISSUE-NUMBER|owner/repo#number]"
 ---
@@ -23,37 +23,20 @@ glab issue view 123 --comments
 
 ## All Commands
 
-### daf git create
-Create a new GitHub/GitLab issue (standalone, without session).
+### Creating Issues
 
-**Syntax:** `daf git create [TYPE] --summary "..."`
-
-TYPE is an optional positional argument.
+Use `gh` or `glab` CLI directly to create issues, then link to your session:
 
 ```bash
-# Basic issue creation (note: type is positional argument)
-daf git create enhancement --summary "Add caching"
+# GitHub
+gh issue create --title "Add caching" --body "Description here"
+# Then link to session:
+daf link <issue_url>
 
-# With description
-daf git create bug --summary "Fix bug" --description "Details here"
-
-# With labels, assignee, milestone
-daf git create enhancement --summary "New feature" \
-  --labels "backend,api" \
-  --assignee username \
-  --milestone "v1.2.0"
-
-# With acceptance criteria
-daf git create enhancement --summary "Auth feature" \
-  --acceptance-criteria "OAuth works" \
-  --acceptance-criteria "Tests pass"
-
-# Without type (no type label added)
-daf git create --summary "General issue"
-
-# With parent issue
-daf git create task --summary "Implement auth" --parent "#123"
-daf git create enhancement --summary "Add caching" --parent "owner/repo#456"
+# GitLab
+glab issue create --title "Add caching" --description "Description here"
+# Then link to session:
+daf link <issue_url>
 ```
 
 ### Viewing Issues
@@ -111,7 +94,7 @@ daf git update 123 --parent "owner/repo#789"
 
 **CRITICAL:** GitHub and GitLab issues use **Markdown syntax**, NOT JIRA Wiki markup.
 
-When using `daf git create` or `daf git update` commands, all text fields (descriptions, comments) **MUST** use standard **Markdown** formatting.
+When creating or updating GitHub/GitLab issues, all text fields (descriptions, comments) **MUST** use standard **Markdown** formatting.
 
 ### Syntax Reference
 
@@ -132,8 +115,8 @@ When using `daf git create` or `daf git update` commands, all text fields (descr
 ### When to Use Each Syntax
 
 **Use Markdown for GitHub/GitLab operations:**
-- `daf git create` - Creating GitHub/GitLab issues
-- `daf git update` - Updating issue descriptions
+- `gh issue create` / `glab issue create` - Creating GitHub/GitLab issues
+- `daf git update` / `gh issue edit` - Updating issue descriptions
 - Pull request descriptions and comments
 
 **Use JIRA Wiki markup for JIRA operations:**
@@ -156,7 +139,7 @@ daf git new task --goal "Refactor auth module" --parent "#123"
 - DO NOT modify code or files
 - DO NOT run git commands
 - ONLY read files, search code, analyze architecture
-- Create issue when analysis is complete using `daf git create`
+- Create issue when analysis is complete using `gh issue create` / `glab issue create`, then link with `daf link`
 
 **See also:** daf-workflow skill for complete ticket creation workflow.
 
@@ -389,7 +372,9 @@ glab issue note 456 -m "Started implementation"         # GitLab
 
 **Create issue without session:**
 ```bash
-daf git create task --summary "Refactor auth module" \
-  --assignee teammate \
-  --labels "refactor,backend"
+# GitHub
+gh issue create --title "Refactor auth module" --assignee teammate --label "refactor,backend"
+
+# GitLab
+glab issue create --title "Refactor auth module" --assignee teammate --label "refactor,backend"
 ```

@@ -132,14 +132,16 @@ Analysis-only session for creating a GitHub/GitLab issue.
 1. Sync temp directory: `git fetch origin && git rebase origin/main`
 2. Analyze the codebase to understand the goal from `daf info`
 3. Read relevant files, search for patterns, understand architecture
-4. Create the issue using `daf git create`:
+4. Create the issue using `gh issue create` (GitHub) or `glab issue create` (GitLab):
    ```bash
-   daf git create {bug|story|task} \
-     --summary "..." \
-     --description "<your analysis>" \
-     --acceptance-criteria "..."
+   # GitHub
+   gh issue create --title "..." --body "<your analysis>"
+
+   # GitLab
+   glab issue create --title "..." --description "<your analysis>"
    ```
-5. Include detailed description and acceptance criteria based on analysis
+5. Link the issue to this session: `daf link <issue_url>`
+6. Include detailed description and acceptance criteria based on analysis
 
 Read the **daf-git skill** for correct command syntax.
 
@@ -198,7 +200,7 @@ Read-only investigation and analysis session.
 5. Document findings and recommendations
 6. If you discover bugs or improvements, you MAY create tickets:
    - JIRA: `daf jira create`
-   - GitHub/GitLab: `daf git create`
+   - GitHub/GitLab: `gh issue create` / `glab issue create` + `daf link`
 
 **When investigation is complete:**
 - Provide a clear summary of findings
@@ -225,7 +227,7 @@ DevAIFlow auto-detects your issue tracker from git remote URLs:
 | Action | JIRA | GitHub/GitLab |
 |--------|------|---------------|
 | Ticket creation session | `daf jira new` | `daf git new` |
-| Create ticket (no session) | `daf jira create` | `daf git create` |
+| Create ticket (no session) | `daf jira create` | `gh issue create` / `glab issue create` |
 | View ticket | `daf jira view` | `gh issue view` / `glab issue view` |
 | Update ticket | `daf jira update` | `daf git update` |
 | Add comment | `daf jira add-comment` | `gh issue comment` / `glab issue note` |

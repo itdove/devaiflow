@@ -25,7 +25,7 @@ daf git new --goal "..."                          # GitHub/GitLab
 
 # Create directly (without analysis)
 daf jira create <type> --summary "..." --parent <key>  # JIRA
-daf git create --summary "..." --description "..."     # GitHub/GitLab
+gh issue create --title "..." --body "..."             # GitHub
 ```
 
 ## Syncing Tickets/Issues
