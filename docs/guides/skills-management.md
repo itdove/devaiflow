@@ -276,14 +276,14 @@ daf skills --dry-run
 
 ### Installing Hierarchical Skills
 
-Organization-specific skills are installed via `daf upgrade`:
+Organization-specific skills are installed via `daf skills`:
 
 ```bash
 # Download and install hierarchical skills from configured source
-daf upgrade
+daf skills
 
 # Dry-run to preview changes
-daf upgrade --dry-run
+daf skills --dry-run
 ```
 
 **Configuration:**

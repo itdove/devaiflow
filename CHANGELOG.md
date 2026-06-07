@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING: Remove deprecated `daf upgrade` command** (#296)
+  - Use `daf skills` instead, which provides the same functionality with additional features
+  - All internal references updated from `daf upgrade` to `daf skills`
+
 ## [2.2.0] - 2026-05-31
 
 ### Added

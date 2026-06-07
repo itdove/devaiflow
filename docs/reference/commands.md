@@ -5112,20 +5112,6 @@ You can create your own custom skills by adding skill directories to `~/.claude/
 
 **Note:** Skills are only loaded when Claude Code sessions start. Changes to skills require restarting the session (closing and reopening with `daf open`) to take effect - they are NOT hot-reloaded on `--resume`.
 
-**Deprecated Command:**
-
-⚠️ **`daf upgrade` is deprecated** and will be removed in version 3.0. Use `daf skills` instead.
-
-The `daf upgrade` command still works for backward compatibility but shows a deprecation warning. All functionality has been moved to `daf skills` with additional features:
-- Install specific skills by name: `daf skills daf-help`
-- Uninstall skills: `daf skills --uninstall`
-- List available and installed skills: `daf skills --list --available`
-
-**Migration:**
-- `daf upgrade` → `daf skills`
-- `daf upgrade --agent cursor` → `daf skills --agent cursor`
-- `daf upgrade --all-agents` → `daf skills --all-agents`
-
 ---
 
 ## Experimental Features

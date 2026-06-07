@@ -4,7 +4,7 @@ This module provides functionality to install and upgrade the bundled skills
 that ship with DevAIFlow.
 
 Skills (including slash commands) are installed/upgraded to <workspace>/.claude/skills/
-via the daf upgrade command or through the TUI upgrade button.
+via the daf skills command or through the TUI upgrade button.
 
 Note: As of Claude Code 2.1.3, slash commands and skills have been unified into
 a single system. All slash commands are now skills with SKILL.md files.
