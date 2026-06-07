@@ -3,11 +3,15 @@
 This module provides a factory function for creating the appropriate agent client
 based on configuration. It follows the same pattern as create_issue_tracker_client
 from devflow/issue_tracker/__init__.py.
+
+The ``AGENT_REGISTRY`` dict is the single source of truth for all backend
+metadata.  Derived constants (``SUPPORTED_BACKENDS``, ``AGENT_DISPLAY_NAMES``,
+``SELF_ID_BACKENDS``) are computed from it for backward compatibility.
 """
 
 import uuid
 from pathlib import Path
-from typing import Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from devflow.agent.interface import AgentInterface
 from devflow.agent.claude_agent import ClaudeAgent
@@ -20,46 +24,269 @@ from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
 
-# Canonical list of supported agent backend names (used for CLI validation)
-SUPPORTED_BACKENDS = [
-    "claude",
-    "ollama",
-    "ollama-claude",
-    "github-copilot",
-    "copilot",
-    "cursor",
-    "windsurf",
-    "aider",
-    "continue",
-    "crush",
-    "opencode",
-    "opencode-ai",
-]
+# ---------------------------------------------------------------------------
+# Unified agent metadata registry
+# ---------------------------------------------------------------------------
+# Every supported backend has exactly one entry here.  Aliases (e.g.
+# "copilot" -> "github-copilot") live in AGENT_ALIASES below.
+#
+# Fields:
+#   display_name  – human-readable name shown in messages/tables
+#   description   – one-line agent description
+#   cli_binary    – executable used for subprocess AI operations
+#   cli_command   – executable checked for install detection
+#   project_url   – agent project URL (for "Generated with" attribution)
+#   install_url   – installation docs URL
+#   status        – "fully-tested" or "experimental"
+#   self_id       – True if the agent generates its own session IDs
+#   features      – capability flags
+#   notes         – (optional) extra context
+# ---------------------------------------------------------------------------
 
-# Human-readable display names for each backend (used in user-facing messages)
-AGENT_DISPLAY_NAMES = {
-    "claude": "Claude Code",
-    "ollama": "Ollama + Claude Code",
-    "ollama-claude": "Ollama + Claude Code",
-    "github-copilot": "GitHub Copilot",
-    "copilot": "GitHub Copilot",
-    "cursor": "Cursor",
-    "windsurf": "Windsurf",
-    "aider": "Aider",
-    "continue": "Continue",
-    "crush": "Crush",
-    "opencode": "OpenCode",
-    "opencode-ai": "OpenCode",
+AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "claude": {
+        "display_name": "Claude Code",
+        "description": "Anthropic's official Claude Code CLI",
+        "cli_binary": "claude",
+        "cli_command": "claude",
+        "project_url": "https://claude.ai/code",
+        "install_url": "https://docs.claude.com/en/docs/claude-code/installation",
+        "status": "fully-tested",
+        "self_id": False,
+        "features": {
+            "session_management": True,
+            "conversation_export": True,
+            "message_counting": True,
+            "resume_support": True,
+            "skills_support": True,
+        },
+    },
+    "ollama": {
+        "display_name": "Ollama + Claude Code",
+        "description": "Local models via Ollama with Claude Code interface",
+        "cli_binary": "claude",
+        "cli_command": "ollama",
+        "project_url": "https://claude.ai/code",
+        "install_url": "https://ollama.ai/download",
+        "status": "fully-tested",
+        "self_id": False,
+        "features": {
+            "session_management": True,
+            "conversation_export": True,
+            "message_counting": True,
+            "resume_support": True,
+            "skills_support": True,
+        },
+        "notes": "Requires both 'ollama' and 'claude' CLI tools",
+    },
+    "github-copilot": {
+        "display_name": "GitHub Copilot",
+        "description": "GitHub Copilot in VS Code",
+        "cli_binary": "claude",
+        "cli_command": "code",
+        "project_url": "https://github.com/features/copilot",
+        "install_url": "https://code.visualstudio.com/",
+        "status": "experimental",
+        "self_id": False,
+        "features": {
+            "session_management": False,
+            "conversation_export": False,
+            "message_counting": False,
+            "resume_support": False,
+            "skills_support": False,
+        },
+        "notes": "Limited integration - experimental support only",
+    },
+    "cursor": {
+        "display_name": "Cursor",
+        "description": "Cursor AI editor",
+        "cli_binary": "claude",
+        "cli_command": "cursor",
+        "project_url": "https://cursor.com",
+        "install_url": "https://cursor.sh/",
+        "status": "experimental",
+        "self_id": False,
+        "features": {
+            "session_management": False,
+            "conversation_export": False,
+            "message_counting": False,
+            "resume_support": False,
+            "skills_support": False,
+        },
+        "notes": "Limited integration - experimental support only",
+    },
+    "windsurf": {
+        "display_name": "Windsurf",
+        "description": "Windsurf (Codeium) editor",
+        "cli_binary": "claude",
+        "cli_command": "windsurf",
+        "project_url": "https://codeium.com/windsurf",
+        "install_url": "https://codeium.com/windsurf",
+        "status": "experimental",
+        "self_id": False,
+        "features": {
+            "session_management": False,
+            "conversation_export": False,
+            "message_counting": False,
+            "resume_support": False,
+            "skills_support": False,
+        },
+        "notes": "Limited integration - experimental support only",
+    },
+    "aider": {
+        "display_name": "Aider",
+        "description": "AI pair programming in terminal",
+        "cli_binary": "aider",
+        "cli_command": "aider",
+        "project_url": "https://aider.chat",
+        "install_url": "https://aider.chat/docs/install.html",
+        "status": "experimental",
+        "self_id": False,
+        "features": {
+            "session_management": False,
+            "conversation_export": False,
+            "message_counting": False,
+            "resume_support": False,
+            "skills_support": False,
+        },
+        "notes": "Git-first approach with chat history files",
+    },
+    "continue": {
+        "display_name": "Continue",
+        "description": "VS Code extension for AI assistance",
+        "cli_binary": "claude",
+        "cli_command": "code",
+        "project_url": "https://continue.dev",
+        "install_url": "https://continue.dev/docs/quickstart",
+        "status": "experimental",
+        "self_id": False,
+        "features": {
+            "session_management": False,
+            "conversation_export": False,
+            "message_counting": False,
+            "resume_support": False,
+            "skills_support": False,
+        },
+        "notes": "VS Code extension - limited CLI integration",
+    },
+    "crush": {
+        "display_name": "Crush",
+        "description": "Crush AI coding assistant",
+        "cli_binary": "claude",
+        "cli_command": "crush",
+        "project_url": "https://crush.ai",
+        "install_url": "https://crush.ai",
+        "status": "experimental",
+        "self_id": False,
+        "features": {
+            "session_management": False,
+            "conversation_export": False,
+            "message_counting": False,
+            "resume_support": False,
+            "skills_support": False,
+        },
+        "notes": "Limited integration - experimental support only",
+    },
+    "opencode": {
+        "display_name": "OpenCode",
+        "description": "Open source terminal AI coding agent by Anomaly (multi-provider)",
+        "cli_binary": "opencode",
+        "cli_command": "opencode",
+        "project_url": "https://opencode.ai",
+        "install_url": "https://opencode.ai",
+        "status": "experimental",
+        "self_id": True,
+        "features": {
+            "session_management": True,
+            "conversation_export": True,
+            "message_counting": True,
+            "resume_support": True,
+            "skills_support": False,
+        },
+    },
 }
 
+AGENT_ALIASES: Dict[str, str] = {
+    "ollama-claude": "ollama",
+    "copilot": "github-copilot",
+    "opencode-ai": "opencode",
+}
 
-# Backends that generate their own session IDs (not UUIDs)
-# These agents create session IDs during launch (e.g., ses_ prefix for OpenCode)
-# and need post-launch capture instead of pre-generated UUIDs
-SELF_ID_BACKENDS = ("opencode", "opencode-ai")
+# ---------------------------------------------------------------------------
+# Derived constants (backward-compatible)
+# ---------------------------------------------------------------------------
 
-# Placeholder value for agents that generate their own session IDs
+SUPPORTED_BACKENDS: List[str] = list(AGENT_REGISTRY) + list(AGENT_ALIASES)
+
+AGENT_DISPLAY_NAMES: Dict[str, str] = {
+    name: entry["display_name"] for name, entry in AGENT_REGISTRY.items()
+}
+for _alias, _canonical in AGENT_ALIASES.items():
+    AGENT_DISPLAY_NAMES[_alias] = AGENT_REGISTRY[_canonical]["display_name"]
+
+SELF_ID_BACKENDS: tuple = tuple(
+    name for name, entry in AGENT_REGISTRY.items() if entry.get("self_id")
+) + tuple(
+    alias for alias, canonical in AGENT_ALIASES.items()
+    if AGENT_REGISTRY[canonical].get("self_id")
+)
+
 PENDING_CAPTURE_PLACEHOLDER = "pending-capture"
+
+
+def _resolve_alias(backend: str) -> str:
+    """Resolve an alias to its canonical backend name."""
+    return AGENT_ALIASES.get(backend.lower(), backend.lower())
+
+
+def get_agent_metadata(backend: str) -> Dict[str, Any]:
+    """Get the full metadata dict for a backend, resolving aliases.
+
+    Returns an empty dict for unknown backends.
+    """
+    return AGENT_REGISTRY.get(_resolve_alias(backend), {})
+
+
+def get_agent_cli_binary(backend: Optional[str] = None) -> str:
+    """Get the CLI binary name used for subprocess AI operations.
+
+    Args:
+        backend: Agent backend identifier. Defaults to "claude".
+
+    Returns:
+        CLI binary name (e.g., "claude", "opencode", "aider")
+    """
+    meta = get_agent_metadata(backend or "claude")
+    return meta.get("cli_binary", "claude")
+
+
+def get_agent_project_url(backend: Optional[str] = None) -> str:
+    """Get the project URL for a backend (used in attribution).
+
+    Args:
+        backend: Agent backend identifier. Defaults to "claude".
+
+    Returns:
+        Project URL string, or empty string if unknown.
+    """
+    meta = get_agent_metadata(backend or "claude")
+    return meta.get("project_url", "")
+
+
+def get_generated_with_line(backend: Optional[str] = None) -> str:
+    """Build the 'Generated with' attribution line for commits and PRs.
+
+    Args:
+        backend: Agent backend identifier. Defaults to "claude".
+
+    Returns:
+        Attribution string like '🤖 Generated with [Claude Code](https://claude.ai/code)'
+    """
+    agent_name = get_agent_display_name(backend)
+    url = get_agent_project_url(backend)
+    if url:
+        return f"🤖 Generated with [{agent_name}]({url})"
+    return f"🤖 Generated with {agent_name}"
 
 
 def resolve_agent_backend(
@@ -306,7 +533,7 @@ def validate_agent_backend(backend: str) -> str:
     if normalized not in SUPPORTED_BACKENDS:
         raise click.BadParameter(
             f"Unsupported agent backend: '{backend}'. "
-            f"Supported: {', '.join(sorted(set(SUPPORTED_BACKENDS) - {'ollama-claude', 'copilot', 'opencode-ai'}))}"
+            f"Supported: {', '.join(sorted(set(SUPPORTED_BACKENDS) - set(AGENT_ALIASES)))}"
         )
     return normalized
 
