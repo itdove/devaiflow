@@ -1,4 +1,4 @@
-"""Tests for daf repair-conversation command."""
+"""Tests for daf maintenance repair-conversation command."""
 
 import pytest
 from pathlib import Path

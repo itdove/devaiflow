@@ -42,7 +42,7 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str
 
     if not session_to_import:
         console.print(f"[red]Session {uuid} not found[/red]")
-        console.print("[dim]Use 'daf discover' to see available sessions[/dim]")
+        console.print("[dim]Use 'daf maintenance discover' to see available sessions[/dim]")
         return
 
     # Check if already managed

@@ -681,10 +681,10 @@ def session_set_workspace(session_name: str, workspace_name: str) -> None:
 # ============================================================================
 
 
-@cli.group(hidden=True)
+@cli.group()
 @json_option
 def maintenance(ctx: click.Context) -> None:
-    """Maintenance and repair commands (hidden utilities)."""
+    """Maintenance and repair commands."""
     pass
 
 
@@ -1072,27 +1072,6 @@ def info_cmd(ctx: click.Context, identifier: str, uuid_only: bool, conversation_
     session_info(identifier, uuid_only, conversation_id, latest=latest, output_json=ctx.obj.get('output_json', False))
 
 
-@cli.command(hidden=True)
-@click.argument("identifier", required=True, shell_complete=complete_session_identifiers)
-def edit(identifier: str) -> None:
-    """[Hidden] Edit session metadata interactively via TUI.
-
-    Use 'daf open <identifier> --edit' instead.
-
-    IDENTIFIER can be a session name or issue key.
-
-    \b
-    Examples:
-        daf edit PROJ-60989          # Edit by issue key (old)
-        daf open PROJ-60989 --edit   # Edit by issue key (new)
-        daf edit my-session          # Edit by session name (old)
-        daf open my-session --edit   # Edit by session name (new)
-    """
-    from devflow.ui.session_editor_tui import run_session_editor_tui
-
-    run_session_editor_tui(identifier)
-
-
 @cli.command()
 @json_option
 def status(ctx: click.Context) -> None:
@@ -1302,18 +1281,6 @@ def import_cmd(ctx: click.Context, export_file: str, merge: bool, force: bool) -
     import_sessions(export_file, merge=merge, force=force)
 
 
-@cli.command(hidden=True)
-@json_option
-def discover(ctx: click.Context) -> None:
-    """[Hidden] Discover existing Claude Code sessions not managed by daf tool.
-
-    Use 'daf maintenance discover' instead.
-    """
-    from devflow.cli.commands.discover_command import discover_sessions
-
-    discover_sessions()
-
-
 @cli.command(name="import-session")
 @click.argument("uuid")
 @click.option("--jira", help="issue tracker key (will prompt if not provided)")
@@ -1328,7 +1295,7 @@ def import_session_cmd(ctx: click.Context, uuid: str, jira: str, goal: str, goal
     This registers a Claude Code session (created manually with 'claude --session-id')
     with daf tool so you can manage it using daf commands.
 
-    Use 'daf discover' to find available session UUIDs on your machine.
+    Use 'daf maintenance discover' to find available session UUIDs on your machine.
 
     Note: This is different from 'daf import', which imports sessions from export files.
     """
@@ -1371,189 +1338,6 @@ def unlink(ctx: click.Context, name: str, force: bool) -> None:
     from devflow.cli.commands.link_command import unlink_jira
 
     unlink_jira(name, force)
-
-
-@cli.command(name="cleanup-sessions", hidden=True)
-@click.option("--dry-run", is_flag=True, help="Show what would be cleaned without actually cleaning")
-@click.option("--force", is_flag=True, help="Skip confirmation prompt")
-@json_option
-def cleanup_sessions_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
-    """[Hidden] Find and fix orphaned sessions (sessions with missing conversation files).
-
-    Use 'daf maintenance cleanup-sessions' instead.
-
-    Scans all sessions and identifies ones where the conversation file no longer exists.
-    This can happen when:
-    - Session was interrupted during creation
-    - Claude Code crashed before creating the conversation file
-    - Conversation files were manually deleted
-
-    \b
-    What it does:
-        - Scans all sessions for orphaned ai_agent_session_ids
-        - Clears the orphaned IDs from session metadata
-        - Next 'daf open' will generate fresh UUIDs
-
-    \b
-    Examples:
-        daf cleanup-sessions --dry-run    # Preview what would be cleaned
-        daf cleanup-sessions              # Clean with confirmation
-        daf cleanup-sessions --force      # Clean without confirmation
-    """
-    from devflow.cli.commands.cleanup_sessions_command import cleanup_sessions
-
-    cleanup_sessions(dry_run=dry_run, force=force)
-
-
-@cli.command(name="rebuild-index", hidden=True)
-@click.option("--dry-run", is_flag=True, help="Show what would be rebuilt without actually rebuilding")
-@click.option("--force", is_flag=True, help="Skip confirmation prompt")
-@json_option
-def rebuild_index_cmd(ctx: click.Context, dry_run: bool, force: bool) -> None:
-    """[Hidden] Rebuild sessions.json index from session directories.
-
-    Use 'daf maintenance rebuild-index' instead.
-
-    Scans all session directories and rebuilds the sessions.json index file
-    from their metadata.json files. This is useful when:
-    - The sessions.json file was corrupted or deleted
-    - Sessions exist but don't appear in 'daf list'
-    - The index got out of sync with actual session data
-
-    \b
-    What it does:
-        - Scans all session directories
-        - Reads metadata.json from each directory
-        - Rebuilds sessions.json with all valid sessions
-        - Creates backup of existing sessions.json
-
-    \b
-    Examples:
-        daf rebuild-index --dry-run    # Preview what would be rebuilt
-        daf rebuild-index              # Rebuild with confirmation
-        daf rebuild-index --force      # Rebuild without confirmation
-    """
-    from devflow.cli.commands.rebuild_index_command import rebuild_index
-
-    rebuild_index(dry_run=dry_run, force=force)
-
-
-@cli.command(name="repair-conversation", hidden=True)
-@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
-@click.option("--conversation-id", type=int, help="Repair specific conversation by number (1, 2, 3...)")
-@click.option("--max-size", type=int, default=10000, help="Maximum size for content truncation (default: 10000 chars)")
-@click.option("--check-all", is_flag=True, help="Check all sessions for corruption (dry run)")
-@click.option("--all", "repair_all", is_flag=True, help="Repair all corrupted sessions found")
-@click.option("--dry-run", is_flag=True, help="Report issues without making changes")
-@click.option("--latest", is_flag=True, help="Use the most recently active session")
-@json_option
-def repair_conversation_cmd(ctx: click.Context, identifier: str, conversation_id: int, max_size: int, check_all: bool, repair_all: bool, dry_run: bool, latest: bool) -> None:
-    """[Hidden] Repair corrupted Claude Code conversation files.
-
-    Use 'daf maintenance repair-conversation' instead.
-
-    IDENTIFIER can be a session name, issue key, or Claude Code UUID.
-    If not provided or --latest is specified, uses the most recently active session.
-
-    This tool repairs corrupted .jsonl conversation files by:
-    - Detecting and fixing invalid JSON lines
-    - Removing invalid Unicode surrogate pairs
-    - Truncating oversized tool results
-    - Creating automatic backups before repair
-
-    \b
-    Examples:
-        daf repair-conversation PROJ-60039                    # Repair by issue key
-        daf repair-conversation --latest                     # Repair most recent session
-        daf repair-conversation my-session                   # Repair by session name
-        daf repair-conversation f545206f-480f-4c2d-8823      # Repair by UUID
-        daf repair-conversation PROJ-60039 --conversation-id 1  # Repair specific conversation
-        daf repair-conversation --check-all                  # Scan for corruption (dry run)
-        daf repair-conversation --all                        # Repair all corrupted sessions
-        daf repair-conversation PROJ-60039 --max-size 15000   # Custom truncation size
-        daf repair-conversation PROJ-60039 --dry-run          # Preview changes
-
-    \b
-    Identifier types:
-        - Session name (e.g., 'implement-backup-feature')
-        - issue key (e.g., 'PROJ-60039')
-        - Claude UUID (e.g., 'f545206f-480f-4c2d-8823-c6643f0e693d')
-
-    \b
-    Repair actions:
-        - Automatically creates .jsonl.backup-TIMESTAMP before repair
-        - Truncates large tool results to configurable size
-        - Removes invalid Unicode surrogate pairs
-        - Validates repaired file is valid JSON
-        - Reports what was fixed (line numbers, truncation stats)
-
-    \b
-    Note: You'll need to restart Claude Code after repair for changes to take effect.
-    """
-    from devflow.cli.commands.repair_conversation_command import repair_conversation
-
-    repair_conversation(
-        identifier=identifier,
-        conversation_id=conversation_id,
-        max_size=max_size,
-        check_all=check_all,
-        repair_all=repair_all,
-        dry_run=dry_run,
-        latest=latest,
-    )
-
-
-@cli.command(name="cleanup-conversation", hidden=True)
-@click.argument("identifier", required=False, shell_complete=complete_session_identifiers)
-@click.option("--older-than", help="Remove messages older than duration (e.g., '2h', '1d', '30m')")
-@click.option("--keep-last", type=int, help="Keep only the last N messages")
-@click.option("--dry-run", is_flag=True, help="Show what would be removed without actually removing")
-@click.option("--force", is_flag=True, help="Skip confirmation prompt")
-@click.option("--list-backups", is_flag=True, help="List available backups for this session")
-@click.option("--restore-backup", help="Restore from a specific backup (timestamp)")
-@click.option("--latest", is_flag=True, help="Use the most recently active session")
-@json_option
-def cleanup_conversation_cmd(ctx: click.Context, identifier: str, older_than: str, keep_last: int, dry_run: bool, force: bool, list_backups: bool, restore_backup: str, latest: bool) -> None:
-    """[Hidden] Clean up Claude Code conversation history to reduce context size.
-
-    Use 'daf maintenance cleanup-conversation' instead.
-
-    IDENTIFIER can be either a session group name or issue tracker key.
-    If not provided or --latest is specified, uses the most recently active session.
-
-    This is useful when you hit the 413 "Prompt is too long" error during long sessions.
-    The command removes old messages from the conversation file while keeping recent context.
-
-    \b
-    Examples:
-        daf cleanup-conversation PROJ-12345 --older-than 2h        # Remove messages older than 2 hours
-        daf cleanup-conversation --latest --older-than 2h         # Clean most recent session
-        daf cleanup-conversation PROJ-12345 --keep-last 50         # Keep only last 50 messages
-        daf cleanup-conversation my-session --older-than 1d --dry-run  # Preview changes
-        daf cleanup-conversation PROJ-12345 --older-than 8h --force  # Skip confirmation
-
-    \b
-    Backup management:
-        daf cleanup-conversation PROJ-12345 --list-backups              # List all backups
-        daf cleanup-conversation PROJ-12345 --restore-backup 20251120-163147  # Restore from backup
-
-    \b
-    A backup is automatically created before cleanup (stored in $DEVAIFLOW_HOME/backups/).
-    Old backups are automatically cleaned up (keeping last 5 by default).
-    You'll need to restart Claude Code to see the effect (conversation is cached).
-    """
-    from devflow.cli.commands.cleanup_command import cleanup_conversation
-
-    cleanup_conversation(
-        identifier,
-        older_than=older_than,
-        keep_last=keep_last,
-        dry_run=dry_run,
-        force=force,
-        list_backups=list_backups,
-        restore_backup=restore_backup,
-        latest=latest,
-    )
 
 
 @cli.group()
@@ -3617,113 +3401,6 @@ def _get_config_changes(old_config, new_config) -> list:
             changes.append(f"Keyword '{keyword}' mapping changed")
 
     return changes
-
-
-@cli.command(hidden=True)
-@json_option
-def check(ctx: click.Context) -> None:
-    """[Hidden] Check external tool dependencies.
-
-    Use 'daf init --check' instead.
-
-    Verifies that all required and optional external tools are installed
-    and available in PATH. Displays version information for available tools
-    and installation URLs for missing tools.
-
-    \b
-    Required dependencies:
-      - git: Version control operations
-      - claude: Claude Code CLI for session launching
-
-    \b
-    Optional dependencies:
-      - gh: GitHub CLI for PR creation
-      - glab: GitLab CLI for MR creation
-      - pytest: Python testing framework
-
-    \b
-    Examples:
-      daf check              # Check all dependencies
-      daf check --json       # JSON output for automation
-
-    \b
-    Exit codes:
-      0: All required dependencies available
-      1: One or more required dependencies missing
-    """
-    from devflow.cli.commands.check_command import check_dependencies
-
-    output_json = ctx.obj.get('output_json', False) if ctx.obj else False
-    exit_code = check_dependencies(output_json=output_json)
-    raise SystemExit(exit_code)
-
-
-@cli.command(hidden=True)
-@json_option
-@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False), required=False)
-def completion(ctx: click.Context, shell: str) -> None:
-    """[Hidden] Install shell completion for daf command.
-
-    Shell completion is now automatically offered during 'daf init'.
-    This command remains available for manual setup if needed.
-
-    SHELL can be bash, zsh, or fish. If not specified, auto-detects your shell.
-
-    Installation instructions:
-
-    Bash:
-      Add to ~/.bashrc:
-      eval "$(_DAF_COMPLETE=bash_source daf)"
-
-    Zsh:
-      Add to ~/.zshrc:
-      eval "$(_DAF_COMPLETE=zsh_source daf)"
-
-    Fish:
-      Save to ~/.config/fish/completions/daf.fish:
-      _DAF_COMPLETE=fish_source daf > ~/.config/fish/completions/daf.fish
-
-    See COMPLETION.md for detailed instructions.
-    """
-    import os
-
-    # Auto-detect shell if not specified
-    if not shell:
-        shell_env = os.environ.get("SHELL", "")
-        if "bash" in shell_env:
-            shell = "bash"
-        elif "zsh" in shell_env:
-            shell = "zsh"
-        elif "fish" in shell_env:
-            shell = "fish"
-        else:
-            console.print("[red]Could not auto-detect shell. Please specify: daf completion [bash|zsh|fish][/red]")
-            return
-
-    shell = shell.lower()
-
-    if shell == "bash":
-        console.print("[bold]Bash Completion Setup[/bold]\n")
-        console.print("Add the following line to your ~/.bashrc:\n")
-        console.print('  [cyan]eval "$(_DAF_COMPLETE=bash_source daf)"[/cyan]\n')
-        console.print("Then reload your shell:")
-        console.print("  [cyan]source ~/.bashrc[/cyan]\n")
-
-    elif shell == "zsh":
-        console.print("[bold]Zsh Completion Setup[/bold]\n")
-        console.print("Add the following line to your ~/.zshrc:\n")
-        console.print('  [cyan]eval "$(_DAF_COMPLETE=zsh_source daf)"[/cyan]\n')
-        console.print("Then reload your shell:")
-        console.print("  [cyan]source ~/.zshrc[/cyan]\n")
-
-    elif shell == "fish":
-        console.print("[bold]Fish Completion Setup[/bold]\n")
-        console.print("Run the following command:\n")
-        console.print('  [cyan]_DAF_COMPLETE=fish_source daf > ~/.config/fish/completions/daf.fish[/cyan]\n')
-        console.print("Then reload:")
-        console.print("  [cyan]source ~/.config/fish/config.fish[/cyan]\n")
-
-    console.print("[dim]See COMPLETION.md for more details and troubleshooting.[/dim]")
 
 
 @cli.command(name="purge-mock-data", hidden=True)

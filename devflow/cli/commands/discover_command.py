@@ -1,4 +1,4 @@
-"""Implementation of 'daf discover' command."""
+"""Implementation of 'daf maintenance discover' command."""
 
 from rich.console import Console
 from rich.table import Table

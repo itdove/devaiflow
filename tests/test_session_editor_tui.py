@@ -504,7 +504,7 @@ def test_add_conversation_screen_edit_mode():
 def test_session_editor_tui_with_active_time_tracking(tmp_path, mock_session_manager, mock_config_loader):
     """Test SessionEditorTUI can open sessions with time_tracking_state='active'.
 
-    Regression test for PROJ-61017: daf edit crashes with InvalidSelectValueError
+    Regression test for PROJ-61017: daf open --edit crashes with InvalidSelectValueError
     when session has time_tracking_state='active'.
     """
     # Create a session with active time tracking state

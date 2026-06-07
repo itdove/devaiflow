@@ -1,4 +1,4 @@
-"""Implementation of 'daf rebuild-index' command."""
+"""Implementation of 'daf maintenance rebuild-index' command."""
 
 import json
 from datetime import datetime

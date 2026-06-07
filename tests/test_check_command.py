@@ -1,4 +1,4 @@
-"""Tests for daf check command."""
+"""Tests for daf init --check command."""
 
 import json
 import pytest
