@@ -149,7 +149,7 @@ def _output_json_session_info(
         # Add conversation file paths 
         if session.conversations:
             config = config_loader.load_config()
-            _ab = resolve_agent_backend(config=config)
+            _ab = resolve_agent_backend(config=config, session=session)
             conversations_with_paths = []
             conv_number = 1
             for working_dir, conversation in session.conversations.items():
@@ -379,7 +379,7 @@ def _display_conversation(
     # Resolve agent display name for labels
     try:
         config = config_loader.load_config()
-        _agent_backend = resolve_agent_backend(config=config)
+        _agent_backend = resolve_agent_backend(config=config, session=session)
     except Exception:
         _agent_backend = "claude"
     _agent_name = get_agent_display_name(_agent_backend)
@@ -417,7 +417,7 @@ def _display_conversation(
         console.print(f"  [dim]Messages:[/dim] {conv.message_count}")
 
     # Display token usage if available
-    _display_token_usage(conv, config_loader)
+    _display_token_usage(conv, config_loader, session=session)
 
     # Display summary if available
     if conv.summary:
@@ -428,12 +428,13 @@ def _display_conversation(
         console.print(f"  [dim]PRs:[/dim] {', '.join(conv.prs)}")
 
 
-def _display_token_usage(conv: ConversationContext, config_loader: ConfigLoader) -> None:
+def _display_token_usage(conv: ConversationContext, config_loader: ConfigLoader, session: Optional[Session] = None) -> None:
     """Display token usage statistics for a conversation.
 
     Args:
         conv: ConversationContext object
         config_loader: ConfigLoader instance
+        session: Optional Session object for resolving agent backend
     """
     if not conv.project_path or not conv.ai_agent_session_id:
         return
@@ -441,7 +442,7 @@ def _display_token_usage(conv: ConversationContext, config_loader: ConfigLoader)
     try:
         # Create agent client
         config = config_loader.load_config()
-        agent_backend = resolve_agent_backend(config=config)
+        agent_backend = resolve_agent_backend(config=config, session=session)
         agent = create_agent_client(agent_backend)
 
         # Extract token usage
