@@ -12,7 +12,9 @@ from devflow.cli.commands.setup_command import (
     load_overlay,
     deep_merge,
     resolve_target_path,
+    resolve_ai_guardian_config_path,
     setup_agent_config,
+    _setup_ai_guardian,
     SUPPORTED_OVERLAY_BACKENDS,
 )
 
@@ -166,10 +168,23 @@ class TestLoadOverlay:
         assert "permission" in overlay
         assert "bash" in overlay["permission"]
         assert "daf info *" in overlay["permission"]["bash"]
+        assert "daf config show *" in overlay["permission"]["bash"]
+        assert "daf note *" in overlay["permission"]["bash"]
+        assert "daf list *" in overlay["permission"]["bash"]
+        assert "daf status *" in overlay["permission"]["bash"]
+        assert "daf jira view *" in overlay["permission"]["bash"]
+        assert "gh issue view *" in overlay["permission"]["bash"]
 
     def test_load_claude_overlay(self):
         overlay = load_overlay("claude")
         assert overlay is not None
+        allow = overlay["permissions"]["allow"]
+        assert "Bash(daf config show *)" in allow
+        assert "Bash(daf note *)" in allow
+        assert "Bash(daf list *)" in allow
+        assert "Bash(daf status *)" in allow
+        assert "Bash(daf jira view *)" in allow
+        assert "Bash(gh issue view *)" in allow
 
     def test_load_nonexistent_overlay(self):
         overlay = load_overlay("nonexistent-backend")
@@ -439,3 +454,159 @@ class TestSetupAgentConfig:
         assert exit_code == 0
         assert (tmp_path / ".claude" / "settings.json").exists()
         assert (tmp_path / "opencode.json").exists()
+
+    def test_global_scope_triggers_ai_guardian(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        guardian_dir = tmp_path / "guardian_config"
+        guardian_dir.mkdir()
+        guardian_file = guardian_dir / "ai-guardian.json"
+        guardian_file.write_text(json.dumps({"secret_scanning": {}}, indent=2))
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(guardian_dir))
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg_config"))
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "opencode"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            exit_code = setup_agent_config(dry_run=False, scope="global")
+
+        assert exit_code == 0
+        data = json.loads(guardian_file.read_text())
+        assert "DAF_SESSION_NAME=" in data["secret_scanning"]["allowlist_patterns"]
+        assert "DAF_COMMAND=" in data["secret_scanning"]["allowlist_patterns"]
+        assert "DAF_SESSION_NAME=" in data["secret_redaction"]["allowlist_patterns"]
+
+    def test_project_scope_skips_ai_guardian(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        guardian_dir = tmp_path / "guardian_config"
+        guardian_dir.mkdir()
+        guardian_file = guardian_dir / "ai-guardian.json"
+        guardian_file.write_text(json.dumps({"secret_scanning": {}}, indent=2))
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(guardian_dir))
+
+        with patch("devflow.config.loader.ConfigLoader") as mock_loader:
+            mock_config = MagicMock()
+            mock_config.agent_backend = "opencode"
+            mock_loader.return_value.load_config.return_value = mock_config
+
+            setup_agent_config(dry_run=False, scope="project")
+
+        data = json.loads(guardian_file.read_text())
+        assert "allowlist_patterns" not in data.get("secret_scanning", {})
+
+
+class TestResolveAiGuardianConfigPath:
+    def test_default_path(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AI_GUARDIAN_CONFIG_DIR", None)
+            os.environ.pop("XDG_CONFIG_HOME", None)
+            path = resolve_ai_guardian_config_path()
+            assert path == Path.home() / ".config" / "ai-guardian" / "ai-guardian.json"
+
+    def test_xdg_config_home(self):
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": "/custom/config"}):
+            os.environ.pop("AI_GUARDIAN_CONFIG_DIR", None)
+            path = resolve_ai_guardian_config_path()
+            assert path == Path("/custom/config/ai-guardian/ai-guardian.json")
+
+    def test_explicit_env_var(self):
+        with patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": "/explicit/guardian"}):
+            path = resolve_ai_guardian_config_path()
+            assert path == Path("/explicit/guardian/ai-guardian.json")
+
+    def test_explicit_overrides_xdg(self):
+        with patch.dict(os.environ, {
+            "AI_GUARDIAN_CONFIG_DIR": "/explicit/guardian",
+            "XDG_CONFIG_HOME": "/custom/config",
+        }):
+            path = resolve_ai_guardian_config_path()
+            assert path == Path("/explicit/guardian/ai-guardian.json")
+
+
+class TestSetupAiGuardian:
+    def test_no_config_skips(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "nonexistent"))
+        rc = _setup_ai_guardian(dry_run=False)
+        assert rc == 0
+
+    def test_fresh_config_adds_patterns(self, tmp_path, monkeypatch):
+        config_dir = tmp_path / "guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        config_file.write_text(json.dumps({}, indent=2))
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(config_dir))
+
+        rc = _setup_ai_guardian(dry_run=False)
+        assert rc == 0
+        data = json.loads(config_file.read_text())
+        assert "DAF_SESSION_NAME=" in data["secret_scanning"]["allowlist_patterns"]
+        assert "DAF_COMMAND=" in data["secret_scanning"]["allowlist_patterns"]
+        assert "DAF_SESSION_NAME=" in data["secret_redaction"]["allowlist_patterns"]
+        assert "DAF_COMMAND=" in data["secret_redaction"]["allowlist_patterns"]
+
+    def test_existing_config_merges(self, tmp_path, monkeypatch):
+        config_dir = tmp_path / "guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        existing = {
+            "secret_scanning": {
+                "allowlist_patterns": ["EXISTING_PATTERN="],
+            },
+            "prompt_injection": {"enabled": True},
+        }
+        config_file.write_text(json.dumps(existing, indent=2))
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(config_dir))
+
+        rc = _setup_ai_guardian(dry_run=False)
+        assert rc == 0
+        data = json.loads(config_file.read_text())
+        patterns = data["secret_scanning"]["allowlist_patterns"]
+        assert "EXISTING_PATTERN=" in patterns
+        assert "DAF_SESSION_NAME=" in patterns
+        assert "DAF_COMMAND=" in patterns
+        assert data["prompt_injection"]["enabled"] is True
+
+    def test_idempotent(self, tmp_path, monkeypatch):
+        config_dir = tmp_path / "guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        config_file.write_text(json.dumps({}, indent=2))
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(config_dir))
+
+        _setup_ai_guardian(dry_run=False)
+        first = config_file.read_text()
+        _setup_ai_guardian(dry_run=False)
+        second = config_file.read_text()
+        assert first == second
+
+    def test_dry_run_no_write(self, tmp_path, monkeypatch):
+        config_dir = tmp_path / "guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        config_file.write_text(json.dumps({}, indent=2))
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(config_dir))
+
+        rc = _setup_ai_guardian(dry_run=True)
+        assert rc == 0
+        data = json.loads(config_file.read_text())
+        assert data == {}
+
+    def test_preserves_other_keys(self, tmp_path, monkeypatch):
+        config_dir = tmp_path / "guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        existing = {
+            "scan_pii": True,
+            "directory_rules": ["/private"],
+            "secret_scanning": {"enabled": True},
+        }
+        config_file.write_text(json.dumps(existing, indent=2))
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(config_dir))
+
+        _setup_ai_guardian(dry_run=False)
+        data = json.loads(config_file.read_text())
+        assert data["scan_pii"] is True
+        assert data["directory_rules"] == ["/private"]
+        assert data["secret_scanning"]["enabled"] is True
+        assert "DAF_SESSION_NAME=" in data["secret_scanning"]["allowlist_patterns"]

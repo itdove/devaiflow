@@ -140,6 +140,32 @@ def resolve_target_path(backend: str, scope: str) -> Path:
 
 SUPPORTED_OVERLAY_BACKENDS = ["claude", "opencode"]
 
+AI_GUARDIAN_OVERLAY = {
+    "secret_scanning": {
+        "allowlist_patterns": ["DAF_SESSION_NAME=", "DAF_COMMAND="],
+    },
+    "secret_redaction": {
+        "allowlist_patterns": ["DAF_SESSION_NAME=", "DAF_COMMAND="],
+    },
+}
+
+
+def resolve_ai_guardian_config_path() -> Path:
+    """Resolve ai-guardian global config path using XDG priority chain.
+
+    Priority:
+        1. $AI_GUARDIAN_CONFIG_DIR/ai-guardian.json
+        2. $XDG_CONFIG_HOME/ai-guardian/ai-guardian.json
+        3. ~/.config/ai-guardian/ai-guardian.json
+    """
+    explicit = os.environ.get("AI_GUARDIAN_CONFIG_DIR")
+    if explicit:
+        return Path(explicit) / "ai-guardian.json"
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "ai-guardian" / "ai-guardian.json"
+    return Path.home() / ".config" / "ai-guardian" / "ai-guardian.json"
+
 
 def setup_agent_config(
     dry_run: bool = False,
@@ -166,21 +192,28 @@ def setup_agent_config(
             )
             if result > worst:
                 worst = result
-        return worst
+        exit_code = worst
+    else:
+        from devflow.config.loader import ConfigLoader
 
-    from devflow.config.loader import ConfigLoader
+        try:
+            config_loader = ConfigLoader()
+            config = config_loader.load_config(validate=False)
+            backend = resolve_agent_backend(config=config)
+        except Exception:
+            backend = "claude"
 
-    try:
-        config_loader = ConfigLoader()
-        config = config_loader.load_config(validate=False)
-        backend = resolve_agent_backend(config=config)
-    except Exception:
-        backend = "claude"
+        canonical = BACKEND_ALIASES.get(backend, backend)
+        exit_code = _setup_single_backend(
+            canonical, dry_run=dry_run, scope=scope, output_json=output_json
+        )
 
-    canonical = BACKEND_ALIASES.get(backend, backend)
-    return _setup_single_backend(
-        canonical, dry_run=dry_run, scope=scope, output_json=output_json
-    )
+    if scope == "global":
+        rc = _setup_ai_guardian(dry_run=dry_run, output_json=output_json)
+        if rc > exit_code:
+            exit_code = rc
+
+    return exit_code
 
 
 def _setup_single_backend(
@@ -306,3 +339,69 @@ def _write_config(path: Path, data: Dict[str, Any]) -> bool:
     except OSError as e:
         console.print(f"[red]Failed to write {path}: {e}[/red]")
         return False
+
+
+def _setup_ai_guardian(
+    dry_run: bool = False,
+    output_json: bool = False,
+) -> int:
+    """Add DAF env var allowlist patterns to ai-guardian config if present."""
+    config_path = resolve_ai_guardian_config_path()
+
+    if not config_path.exists():
+        return 0
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        if output_json:
+            print(json.dumps({
+                "success": False,
+                "error": f"Failed to read {config_path}: {e}",
+            }, indent=2))
+        else:
+            console.print(f"[red]Failed to read {config_path}: {e}[/red]")
+        return 1
+
+    merged, added = deep_merge(existing, AI_GUARDIAN_OVERLAY)
+
+    if output_json:
+        print(json.dumps({
+            "success": True,
+            "backend": "ai-guardian",
+            "target": str(config_path),
+            "scope": "global",
+            "dry_run": dry_run,
+            "added": added,
+            "skipped": _count_skipped(AI_GUARDIAN_OVERLAY, added),
+        }, indent=2))
+        if not dry_run and added:
+            _write_config(config_path, merged)
+        return 0
+
+    console.print(f"\n[bold]Setting up ai-guardian integration[/bold]")
+    console.print(f"  Target:  [cyan]{config_path}[/cyan]")
+
+    if not added:
+        console.print("\n[green]DAF allowlist patterns already present. Nothing to do.[/green]")
+        return 0
+
+    table = Table(title="Allowlist patterns to add", show_header=True, header_style="bold")
+    table.add_column("Path", style="cyan")
+    table.add_column("Status", width=10)
+
+    for path in added:
+        table.add_row(path, "[green]+ add[/green]")
+
+    console.print()
+    console.print(table)
+
+    if dry_run:
+        console.print("\n[yellow]Dry run — no changes written.[/yellow]")
+        return 0
+
+    if _write_config(config_path, merged):
+        console.print(f"\n[green]Wrote {len(added)} pattern(s) to {config_path}[/green]")
+        return 0
+
+    return 1
