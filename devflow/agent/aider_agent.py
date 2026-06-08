@@ -332,4 +332,4 @@ class AiderAgent(AgentInterface):
         return None
 
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
-        return f"aider --chat-history-file {self.chat_history_dir / f'{session_id}_chat.txt'}"
+        return f'aider --chat-history-file "{self.chat_history_dir / f"{session_id}_chat.txt"}"'

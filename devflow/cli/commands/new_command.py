@@ -480,6 +480,7 @@ def create_new_session(
             non_interactive=non_interactive,
             headless=headless,
             auto_approve=auto_approve,
+            agent=agent,
         )
         return
 
@@ -540,6 +541,7 @@ def create_new_session(
                         non_interactive=non_interactive,
                         headless=headless,
                         auto_approve=auto_approve,
+                        agent=agent,
                     )
                     return
                 elif selected_paths:

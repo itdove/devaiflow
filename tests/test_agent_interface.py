@@ -1950,7 +1950,7 @@ class TestGetManualResumeCommand:
     def test_ollama_resume_command(self):
         agent = OllamaClaudeAgent()
         cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
-        assert cmd == "ollama launch claude --resume sess-123"
+        assert cmd == "claude --resume sess-123"
 
     def test_opencode_resume_command(self):
         agent = OpenCodeAgent()
@@ -1971,22 +1971,22 @@ class TestGetManualResumeCommand:
     def test_cursor_resume_command(self):
         agent = CursorAgent()
         cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
-        assert cmd == "cursor /home/user/project"
+        assert cmd == 'cursor "/home/user/project"'
 
     def test_windsurf_resume_command(self):
         agent = WindsurfAgent()
         cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
-        assert cmd == "windsurf /home/user/project"
+        assert cmd == 'windsurf "/home/user/project"'
 
     def test_copilot_resume_command(self):
         agent = GitHubCopilotAgent()
         cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
-        assert cmd == "code /home/user/project"
+        assert cmd == 'code "/home/user/project"'
 
     def test_continue_resume_command(self):
         agent = ContinueAgent()
         cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
-        assert cmd == "code /home/user/project"
+        assert cmd == 'code "/home/user/project"'
 
 
 class TestGenerateText:

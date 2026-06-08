@@ -992,7 +992,7 @@ def _save_organization_config(jira_project: Optional[str], hierarchical_config_s
     import json
 
     config_loader = ConfigLoader()
-    org_config_path = config_loader.session_home / "organization.json"
+    org_config_path = config_loader.config_dir / "organization.json"
 
     # Load existing organization config if it exists
     if org_config_path.exists():

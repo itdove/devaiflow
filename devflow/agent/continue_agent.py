@@ -316,4 +316,4 @@ class ContinueAgent(AgentInterface):
         return None
 
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
-        return f"code {project_path}"
+        return f'code "{project_path}"'

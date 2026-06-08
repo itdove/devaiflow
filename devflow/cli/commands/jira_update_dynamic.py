@@ -31,7 +31,7 @@ def get_editable_fields_for_command() -> Dict[str, Dict[str, Any]]:
         # Try loading from backends/jira.json
         from pathlib import Path
         import json
-        backends_dir = config_loader.session_home / "backends"
+        backends_dir = config_loader.config_dir / "backends"
         jira_file = backends_dir / "jira.json"
         if jira_file.exists():
             with open(jira_file) as f:

@@ -3230,7 +3230,7 @@ def _setup_shell_completion_if_desired() -> None:
     else:
         # Can't detect shell, show manual instructions
         console.print("\n[bold cyan]Optional: Set Up Shell Completion[/bold cyan]")
-        console.print("Run [cyan]daf completion[/cyan] to set up command auto-completion")
+        console.print("See Click docs for manual shell completion setup")
         return
 
     # Check if completion is already set up
@@ -3248,7 +3248,7 @@ def _setup_shell_completion_if_desired() -> None:
     # Ask if user wants to set up completion
     console.print(f"\n[bold cyan]Optional: Set Up {shell.capitalize()} Shell Completion[/bold cyan]")
     if not Confirm.ask(f"Add command auto-completion to {shell_file}?", default=True):
-        console.print(f"[dim]Skipped. Run [cyan]daf completion[/cyan] later to set up manually[/dim]")
+        console.print(f"[dim]Skipped. Re-run [cyan]daf init[/cyan] later to set up manually[/dim]")
         return
 
     try:
@@ -3272,7 +3272,7 @@ def _setup_shell_completion_if_desired() -> None:
                 console.print("[dim]Restart your fish shell or run: source ~/.config/fish/config.fish[/dim]")
             else:
                 console.print(f"[yellow]Could not generate fish completion[/yellow]")
-                console.print(f"[dim]Run [cyan]daf completion fish[/cyan] for manual setup instructions[/dim]")
+                console.print(f"[dim]Re-run [cyan]daf init[/cyan] to try again[/dim]")
         else:
             # For bash/zsh, append to config file
             with open(shell_file, "a") as f:
@@ -3282,7 +3282,7 @@ def _setup_shell_completion_if_desired() -> None:
 
     except Exception as e:
         console.print(f"[yellow]Could not set up completion automatically: {e}[/yellow]")
-        console.print(f"[dim]Run [cyan]daf completion[/cyan] for manual setup instructions[/dim]")
+        console.print(f"[dim]Re-run [cyan]daf init[/cyan] to try again[/dim]")
 
 
 def _validate_jira_url(url: str) -> bool:

@@ -472,9 +472,6 @@ Some organizations (like `ansible-automation-platform`) require fine-grained per
 ```bash
 # Check authentication status
 gh auth status
-
-# Or use daf built-in check
-daf git check-auth owner/repo
 ```
 
 **Pre-flight authentication checks:**
