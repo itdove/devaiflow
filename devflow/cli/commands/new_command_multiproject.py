@@ -47,6 +47,7 @@ def create_multi_project_session(
     non_interactive: bool = False,
     headless: bool = False,
     auto_approve: bool = False,
+    agent: Optional[str] = None,
 ) -> None:
     """Create a multi-project session with conversations for multiple repositories.
 
@@ -71,6 +72,7 @@ def create_multi_project_session(
         allow_uncommitted: Allow uncommitted changes when switching branches
         sync_upstream: Sync with upstream before creating branch (None = prompt)
         non_interactive: Running in non-interactive mode
+        agent: AI agent backend override (e.g., "claude", "opencode")
     """
     from devflow.cli.commands.new_command import (
         _generate_initial_prompt,
@@ -235,7 +237,7 @@ def create_multi_project_session(
     # Create new session with multi-project conversation
     # Use ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = resolve_agent_backend(config=config)
+    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
@@ -259,7 +261,7 @@ def create_multi_project_session(
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
         model_profile=model_profile,
-        agent_backend=resolve_agent_backend(config=config),
+        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
     )
 
     # Add multi-project conversation (ONE conversation for all projects)
@@ -332,7 +334,7 @@ def create_multi_project_session(
     )
 
     # Launch AI agent at workspace level (not individual project)
-    agent_backend = resolve_agent_backend(config=config)
+    agent_backend = resolve_agent_backend(cli_override=agent, config=config)
     agent_name = get_agent_display_name(agent_backend)
     if should_launch_claude_code(config):
         console.print(f"[cyan]Launching {agent_name} at workspace level...[/cyan]\n")

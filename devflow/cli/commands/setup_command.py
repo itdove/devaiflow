@@ -59,6 +59,8 @@ def load_overlay(backend: str) -> Optional[Dict[str, Any]]:
     Returns:
         Parsed overlay dict, or None if no overlay exists.
     """
+    if "/" in backend or "\\" in backend or ".." in backend:
+        return None
     overlays_dir = Path(__file__).parent.parent.parent / "templates" / "overlays"
     overlay_path = overlays_dir / f"{backend}.jsonc"
 
@@ -135,6 +137,8 @@ def resolve_target_path(backend: str, scope: str) -> Path:
             return Path.cwd() / ".claude" / "settings.local.json"
         return Path.cwd() / ".claude" / "settings.json"
 
+    if "/" in backend or "\\" in backend or ".." in backend:
+        raise ValueError(f"Invalid backend name: {backend}")
     return Path.cwd() / f"{backend}.json"
 
 
@@ -281,8 +285,8 @@ def _setup_single_backend(
             _write_config(target_path, merged)
         return 0
 
-    from devflow.agent.factory import AGENT_DISPLAY_NAMES
-    display_name = AGENT_DISPLAY_NAMES.get(canonical, canonical)
+    from devflow.agent.factory import get_agent_display_name
+    display_name = get_agent_display_name(canonical)
     console.print(f"\n[bold]Setting up {display_name} integration[/bold]")
     console.print(f"  Backend: [cyan]{canonical}[/cyan]")
     console.print(f"  Scope:   [cyan]{scope}[/cyan]")

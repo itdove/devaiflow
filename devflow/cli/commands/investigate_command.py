@@ -201,6 +201,7 @@ def _select_from_workspace_repos(
     goal: str,
     parent: Optional[str],
     model_profile: Optional[str],
+    agent: Optional[str] = None,
 ):
     """Select project(s) from workspace repositories.
 
@@ -268,13 +269,14 @@ def _select_from_workspace_repos(
             workspace=workspace_flag,
             selected_workspace_name=selected_workspace_name,
             model_profile=model_profile,
+            agent=agent,
         )
         return ("multi_project_handled",)
 
     return (project_paths_result[0], selected_workspace_name)
 
 
-def _prompt_investigation_location(config, config_loader, name, goal, parent, model_profile):
+def _prompt_investigation_location(config, config_loader, name, goal, parent, model_profile, agent=None):
     """Prompt user for investigation location when no path/workspace specified.
 
     Presents 4 options:
@@ -339,7 +341,7 @@ def _prompt_investigation_location(config, config_loader, name, goal, parent, mo
 
     elif choice == "4":
         result = _select_from_workspace_repos(
-            config, config_loader, None, name, goal, parent, model_profile,
+            config, config_loader, None, name, goal, parent, model_profile, agent=agent,
         )
         if result is None:
             return None
@@ -479,6 +481,7 @@ def create_investigation_session(
             workspace=workspace,
             selected_workspace_name=selected_workspace_name,
             model_profile=model_profile,
+            agent=agent,
         )
     elif path is not None:
         # Use provided path
@@ -493,7 +496,7 @@ def create_investigation_session(
     elif workspace:
         # --workspace provided without --projects: go to workspace repo selection
         result = _select_from_workspace_repos(
-            config, config_loader, workspace, name, goal, parent, model_profile,
+            config, config_loader, workspace, name, goal, parent, model_profile, agent=agent,
         )
         if result is None:
             sys.exit(1)
@@ -503,7 +506,7 @@ def create_investigation_session(
     else:
         # No --path, --projects, or --workspace: ask user where to work
         result = _prompt_investigation_location(
-            config, config_loader, name, goal, parent, model_profile,
+            config, config_loader, name, goal, parent, model_profile, agent=agent,
         )
         if result is None:
             if is_json_mode():
@@ -1040,6 +1043,7 @@ def _create_multi_project_investigation_session(
     workspace: Optional[str],
     selected_workspace_name: str,
     model_profile: Optional[str] = None,
+    agent: Optional[str] = None,
 ) -> None:
     """Create a multi-project investigation session (Issue #182).
 
@@ -1053,6 +1057,7 @@ def _create_multi_project_investigation_session(
         workspace: Workspace flag
         selected_workspace_name: Selected workspace name
         model_profile: Optional model provider profile
+        agent: AI agent backend override (e.g., "claude", "opencode")
     """
     from devflow.cli.commands.ticket_creation_multiproject import create_multi_project_ticket_creation_session
     from devflow.cli.utils import get_workspace_path, resolve_workspace_path
@@ -1085,6 +1090,7 @@ def _create_multi_project_investigation_session(
         workspace_path=workspace_path,
         selected_workspace_name=selected_workspace_name,
         session_type="investigation",  # Use investigation session type
+        agent=agent,
     )
 
     # Set model profile if provided

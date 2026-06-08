@@ -427,7 +427,13 @@ def capture_agent_session_id(
         sessions_after = agent.get_existing_sessions(launch_dir)
         new_sessions = sessions_after - sessions_before
         if new_sessions:
-            real_session_id = new_sessions.pop()
+            if len(new_sessions) > 1:
+                console.print(
+                    f"[yellow]Warning: Multiple new {agent.get_agent_name()} sessions detected "
+                    f"({len(new_sessions)}). Using most recent. "
+                    f"Session will be verified on next open.[/yellow]"
+                )
+            real_session_id = sorted(new_sessions)[-1]
             active_conv.ai_agent_session_id = real_session_id
             console.print(f"[dim]Captured {agent.get_agent_name()} session ID: {real_session_id}[/dim]")
             return True

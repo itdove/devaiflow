@@ -291,4 +291,4 @@ class WindsurfAgent(AgentInterface):
         return None
 
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
-        return f"windsurf {project_path}"
+        return f'windsurf "{project_path}"'

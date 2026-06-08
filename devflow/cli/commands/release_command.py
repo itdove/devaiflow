@@ -50,7 +50,8 @@ def create_release(
     from devflow.config.loader import ConfigLoader
     _config_loader = ConfigLoader()
     _config = _config_loader.load_config()
-    _agent_backend = _config.agent_backend if _config else "claude"
+    from devflow.agent.factory import resolve_agent_backend, get_generated_with_line
+    _agent_backend = resolve_agent_backend(config=_config)
     _agent_display = get_agent_display_name(_agent_backend)
     _co_authored_by = get_co_authored_by_line(_config)
 
@@ -208,7 +209,7 @@ Prepare for v{context.target_version} release:
 - Update version in {package_file}
 - Update CHANGELOG.md with release date
 
-🤖 Generated with {_agent_display}
+{get_generated_with_line(_agent_backend)}
 
 {_co_authored_by}"""
 
@@ -241,7 +242,7 @@ Prepare for v{context.target_version} release:
 
 Begin development cycle for next patch release.
 
-🤖 Generated with {_agent_display}
+{get_generated_with_line(_agent_backend)}
 
 {_co_authored_by}"""
             manager.commit_changes(commit_msg, dry_run=dry_run)

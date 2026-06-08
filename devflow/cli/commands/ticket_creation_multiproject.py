@@ -25,6 +25,7 @@ def create_multi_project_ticket_creation_session(
     selected_workspace_name: str,
     session_type: str = "ticket_creation",
     issue_type: Optional[str] = None,
+    agent: Optional[str] = None,
 ) -> tuple[object, str]:
     """Create a multi-project ticket creation session (analysis-only, no branches).
 
@@ -41,6 +42,7 @@ def create_multi_project_ticket_creation_session(
         selected_workspace_name: Selected workspace name
         session_type: Session type ("ticket_creation" for both jira/git new)
         issue_type: Optional issue type (for git new)
+        agent: AI agent backend override (e.g., "claude", "opencode")
 
     Returns:
         Tuple of (session, ai_agent_session_id)
@@ -62,7 +64,7 @@ def create_multi_project_ticket_creation_session(
 
     # Create ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = resolve_agent_backend(config=config)
+    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
@@ -97,7 +99,7 @@ def create_multi_project_ticket_creation_session(
         project_path=None,
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
-        agent_backend=resolve_agent_backend(config=config),
+        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
     )
 
     # Set session_type to "ticket_creation"
