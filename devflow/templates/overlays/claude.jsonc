@@ -8,7 +8,7 @@
       // All daf CLI commands (read-safe from agent perspective)
       "Bash(daf active *)",
       "Bash(daf info *)",
-      "Bash(daf config show *)",
+      "Bash(daf config show*)",
       "Bash(daf note *)",
       "Bash(daf list *)",
       "Bash(daf status *)",

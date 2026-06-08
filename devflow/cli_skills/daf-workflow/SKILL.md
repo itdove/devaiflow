@@ -1,6 +1,6 @@
 ---
 name: daf-workflow
-description: DevAIFlow session context loader. Activates when DAF_SESSION_NAME env var is set. Reads session metadata, issue tracker tickets, and context files to understand the current task. Provides per-command workflow guidance for daf open, daf new, daf git new, daf jira new, and daf investigate.
+description: DevAIFlow session context loader — reads session metadata, issue tracker tickets, and context files. Auto-activates when DAF_SESSION_NAME is set. Also useful when asked about current task, session status, or workflow steps for daf open, daf new, daf git new, daf jira new, and daf investigate.
 user-invocable: true
 ---
 
@@ -49,18 +49,18 @@ Replace `<number>` or `<issue_key>` with the actual value shown in `daf info` ou
 
 ### 3. Read Context Files
 
-First, discover the DevAIFlow config directory by running `daf config show` and noting the parent directory of `config.json` from the "Configuration Files" section.
+First, discover the DevAIFlow config directory by running `daf config show` and noting the parent directory of `config.json` from the "Configuration Files" section (e.g., `/home/user/.config/devaiflow/`). Call this `CONFIG_DIR`.
 
-Then read the hierarchical context files if they exist in that directory:
-- `ENTERPRISE.md` (enterprise-wide policies and standards)
-- `ORGANIZATION.md` (organization coding standards)
-- `TEAM.md` (team conventions and workflows)
-- `USER.md` (personal notes and preferences)
+Then read the hierarchical context files if they exist in `CONFIG_DIR`:
+- `CONFIG_DIR/ENTERPRISE.md` (enterprise-wide policies and standards)
+- `CONFIG_DIR/ORGANIZATION.md` (organization coding standards)
+- `CONFIG_DIR/TEAM.md` (team conventions and workflows)
+- `CONFIG_DIR/USER.md` (personal notes and preferences)
 
 ### 4. Read Skill Files
 
-Check for additional skills loaded in this session:
-- Enterprise/organization/team/user skills in `<config_dir>/.claude/skills/` (where `<config_dir>` is the directory discovered from `daf config show`)
+Using the same `CONFIG_DIR` from Step 3, check for additional skills:
+- `CONFIG_DIR/.claude/skills/` (enterprise/organization/team/user skills)
 - Project-level skills in the project's `.claude/skills/` directory
 
 Read any that are relevant to the session.
@@ -74,9 +74,10 @@ If the session uses a temporary directory clone (`ticket_creation`, `investigati
 - Project path containing `/tmp/` or `/var/folders/`
 - `DAF_COMMAND` is `git-new`, `jira-new`, or `investigate`
 
-**Before starting analysis**, pull the latest changes:
+**Before starting analysis**, pull the latest changes (detect the default branch dynamically — do not assume `main`):
 ```bash
-git fetch origin && git rebase origin/main
+git fetch origin
+git rebase "origin/$(git remote show origin | awk '/HEAD branch/{print $NF}')"
 ```
 
 - If rebase succeeds, proceed with analysis on the latest code
@@ -120,6 +121,8 @@ Standard development session. Resume or start work on a task.
 - Verify your current working directory before making changes
 - Each project has its own git repository and branch
 
+**When work is complete**, inform the user that all acceptance criteria are met and the session is ready for completion. The user runs `daf complete` outside this session to commit, create PR/MR, and close.
+
 **Do NOT:**
 - Create git commits (handled by `daf complete`)
 - Create pull/merge requests (handled by `daf complete`)
@@ -131,7 +134,7 @@ Standard development session. Resume or start work on a task.
 
 Analysis-only session for creating a GitHub/GitLab issue.
 
-**Temp directory session** — run `git fetch origin && git rebase origin/main` before analysis (see Step 5).
+**Temp directory session** — sync before analysis (see Step 5).
 
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
@@ -139,7 +142,7 @@ Analysis-only session for creating a GitHub/GitLab issue.
 - Focus on understanding the codebase to write a good issue
 
 **Workflow:**
-1. Sync temp directory: `git fetch origin && git rebase origin/main`
+1. Sync temp directory (see Step 5)
 2. Analyze the codebase to understand the goal from `daf info`
 3. Read relevant files, search for patterns, understand architecture
 4. Create the issue using `gh issue create` (GitHub) or `glab issue create` (GitLab):
@@ -163,7 +166,7 @@ After creating the issue, the session is automatically renamed to `creation-<iss
 
 Analysis-only session for creating a JIRA ticket.
 
-**Temp directory session** — run `git fetch origin && git rebase origin/main` before analysis (see Step 5).
+**Temp directory session** — sync before analysis (see Step 5).
 
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
@@ -171,7 +174,7 @@ Analysis-only session for creating a JIRA ticket.
 - Focus on understanding the codebase to write a good JIRA ticket
 
 **Workflow:**
-1. Sync temp directory: `git fetch origin && git rebase origin/main`
+1. Sync temp directory (see Step 5)
 2. Analyze the codebase to understand the goal from `daf info`
 3. Read relevant files, search for patterns, understand architecture
 4. Check field defaults: `daf config show`
@@ -195,7 +198,7 @@ After creating the ticket, the session is automatically renamed to `creation-<ti
 
 Read-only investigation and analysis session.
 
-**Temp directory session** — run `git fetch origin && git rebase origin/main` before analysis (see Step 5).
+**Temp directory session** — sync before analysis (see Step 5).
 
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
@@ -203,7 +206,7 @@ Read-only investigation and analysis session.
 - Focus on understanding the codebase and documenting findings
 
 **Workflow:**
-1. Sync temp directory: `git fetch origin && git rebase origin/main`
+1. Sync temp directory (see Step 5)
 2. Read the session goal from `daf info`
 3. Investigate the codebase: read files, search patterns, analyze architecture
 4. Analyze feasibility and identify implementation approaches
