@@ -12,6 +12,8 @@ Run this command to check the session environment:
 echo "DAF_SESSION_NAME=$DAF_SESSION_NAME" "DAF_COMMAND=$DAF_COMMAND"
 ```
 
+**Important:** Use this command exactly as written — the text must match the agent's permission pattern. Do not rephrase or restructure.
+
 If `DAF_SESSION_NAME` is set (non-empty), this is a managed DevAIFlow session — follow the initialization steps below. If empty, skip to the **Standalone Workflow Guide** section at the bottom.
 
 ---

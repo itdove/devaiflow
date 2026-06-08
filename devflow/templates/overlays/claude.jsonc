@@ -8,8 +8,14 @@
       // All daf CLI commands (read-safe from agent perspective)
       "Bash(daf active *)",
       "Bash(daf info *)",
+      "Bash(daf config show *)",
+      "Bash(daf note *)",
+      "Bash(daf list *)",
+      "Bash(daf status *)",
+      "Bash(daf jira view *)",
       "Bash(daf * view *)",
       // Issue tracker view-only commands
+      "Bash(gh issue view *)",
       "Bash(gh * view *)",
       "Bash(glab * view *)",
       // Git read-only operations

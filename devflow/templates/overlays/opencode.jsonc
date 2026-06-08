@@ -9,8 +9,14 @@
       // All daf CLI commands (read-safe from agent perspective)
       "daf active *": "allow",
       "daf info *": "allow",
+      "daf config show *": "allow",
+      "daf note *": "allow",
+      "daf list *": "allow",
+      "daf status *": "allow",
+      "daf jira view *": "allow",
       "daf * view *": "allow",
       // Issue tracker view-only commands
+      "gh issue view *": "allow",
       "gh * view *": "allow",
       "glab * view *": "allow",
       // Git read-only operations
