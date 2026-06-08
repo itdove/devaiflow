@@ -168,7 +168,7 @@ class TestLoadOverlay:
         assert "permission" in overlay
         assert "bash" in overlay["permission"]
         assert "daf info *" in overlay["permission"]["bash"]
-        assert "daf config show *" in overlay["permission"]["bash"]
+        assert "daf config show*" in overlay["permission"]["bash"]
         assert "daf note *" in overlay["permission"]["bash"]
         assert "daf list *" in overlay["permission"]["bash"]
         assert "daf status *" in overlay["permission"]["bash"]
@@ -179,7 +179,7 @@ class TestLoadOverlay:
         overlay = load_overlay("claude")
         assert overlay is not None
         allow = overlay["permissions"]["allow"]
-        assert "Bash(daf config show *)" in allow
+        assert "Bash(daf config show*)" in allow
         assert "Bash(daf note *)" in allow
         assert "Bash(daf list *)" in allow
         assert "Bash(daf status *)" in allow
