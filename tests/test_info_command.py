@@ -910,3 +910,88 @@ def test_session_info_explicit_identifier_overrides_daf_session_name(temp_daf_ho
     # Should show explicit-session, NOT env-session
     assert "explicit-session" in captured.out
     assert "uuid-explicit" in captured.out
+
+
+def test_session_info_displays_correct_backend_for_claude_session(temp_daf_home, capsys):
+    """Test that daf info shows 'Claude Code' label for Claude sessions, not OpenCode.
+
+    Regression test for issue #496: resolve_agent_backend() was called without
+    the session parameter, falling back to config default instead of session's
+    actual agent_backend.
+    """
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="claude-session",
+        goal="Claude Code work",
+        working_directory="project",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-claude-123",
+    )
+    session.agent_backend = "claude"
+    session_manager.update_session(session)
+
+    session_info(identifier="claude-session", uuid_only=False, conversation_id=None)
+    captured = capsys.readouterr()
+
+    assert "Claude Code Session UUID" in captured.out
+    assert "OpenCode Session UUID" not in captured.out
+
+
+def test_session_info_displays_correct_backend_for_opencode_session(temp_daf_home, capsys):
+    """Test that daf info shows 'OpenCode' label for OpenCode sessions.
+
+    Regression test for issue #496.
+    """
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="opencode-session",
+        goal="OpenCode work",
+        working_directory="project",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-opencode-456",
+    )
+    session.agent_backend = "opencode"
+    session_manager.update_session(session)
+
+    session_info(identifier="opencode-session", uuid_only=False, conversation_id=None)
+    captured = capsys.readouterr()
+
+    assert "OpenCode Session UUID" in captured.out
+    assert "Claude Code Session UUID" not in captured.out
+
+
+def test_session_info_json_uses_session_backend(temp_daf_home, capsys):
+    """Test that JSON output uses session's agent_backend, not config default.
+
+    Regression test for issue #496.
+    """
+    import json
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="json-backend-test",
+        goal="Backend in JSON",
+        working_directory="dir1",
+        project_path="/path/to/project",
+        ai_agent_session_id="uuid-json-backend",
+    )
+    session.agent_backend = "opencode"
+    session_manager.update_session(session)
+
+    session_info(identifier="json-backend-test", uuid_only=False, conversation_id=None, latest=False, output_json=True)
+
+    captured = capsys.readouterr()
+    output = json.loads(captured.out)
+
+    assert output["success"] is True
+    conversations = output["data"]["session"].get("conversations_detail", [])
+    assert len(conversations) > 0
+    for conv in conversations:
+        conv_file = conv.get("conversation_file", "")
+        assert "opencode" in conv_file.lower() or ".db" in conv_file.lower()
