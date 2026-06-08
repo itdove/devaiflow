@@ -9,7 +9,7 @@
       // All daf CLI commands (read-safe from agent perspective)
       "daf active *": "allow",
       "daf info *": "allow",
-      "daf config show *": "allow",
+      "daf config show*": "allow",
       "daf note *": "allow",
       "daf list *": "allow",
       "daf status *": "allow",
