@@ -429,3 +429,9 @@ class OpenCodeAgent(AgentInterface):
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             pass
         return self.opencode_dir
+
+    def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
+        return f"opencode --session {session_id}"
+
+    def uses_file_based_sessions(self) -> bool:
+        return False

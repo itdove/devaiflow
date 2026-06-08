@@ -391,3 +391,9 @@ class CrushAgent(AgentInterface):
         TODO: Implement token tracking if Crush SQLite database stores usage data
         """
         return None
+
+    def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
+        return f"crush --session {session_id}"
+
+    def uses_file_based_sessions(self) -> bool:
+        return False

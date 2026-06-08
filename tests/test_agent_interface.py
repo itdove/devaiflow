@@ -1937,3 +1937,156 @@ class TestGetAgentDisplayName:
             name = get_agent_display_name(backend)
             assert name != backend or backend in ("cursor", "windsurf", "aider", "continue", "crush"), \
                 f"Backend '{backend}' should have a human-readable display name"
+
+
+class TestGetManualResumeCommand:
+    """Test get_manual_resume_command() across all agent implementations (#486)."""
+
+    def test_claude_resume_command(self):
+        agent = ClaudeAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert cmd == "claude --resume sess-123"
+
+    def test_ollama_resume_command(self):
+        agent = OllamaClaudeAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert cmd == "ollama launch claude --resume sess-123"
+
+    def test_opencode_resume_command(self):
+        agent = OpenCodeAgent()
+        cmd = agent.get_manual_resume_command("ses_abc", "/home/user/project")
+        assert cmd == "opencode --session ses_abc"
+
+    def test_crush_resume_command(self):
+        agent = CrushAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert cmd == "crush --session sess-123"
+
+    def test_aider_resume_command(self):
+        agent = AiderAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert "aider --chat-history-file" in cmd
+        assert "sess-123" in cmd
+
+    def test_cursor_resume_command(self):
+        agent = CursorAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert cmd == "cursor /home/user/project"
+
+    def test_windsurf_resume_command(self):
+        agent = WindsurfAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert cmd == "windsurf /home/user/project"
+
+    def test_copilot_resume_command(self):
+        agent = GitHubCopilotAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert cmd == "code /home/user/project"
+
+    def test_continue_resume_command(self):
+        agent = ContinueAgent()
+        cmd = agent.get_manual_resume_command("sess-123", "/home/user/project")
+        assert cmd == "code /home/user/project"
+
+
+class TestGenerateText:
+    """Test generate_text() on AgentInterface (#486)."""
+
+    @patch("subprocess.run")
+    def test_claude_generate_text_success(self, mock_run):
+        mock_run.return_value = Mock(returncode=0, stdout="Generated text\n")
+        agent = ClaudeAgent()
+        result = agent.generate_text("test prompt")
+        assert result == "Generated text"
+        mock_run.assert_called_once_with(
+            ["claude", "-p"],
+            input="test prompt",
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    @patch("subprocess.run")
+    def test_generate_text_returns_none_on_failure(self, mock_run):
+        mock_run.return_value = Mock(returncode=1, stdout="")
+        agent = ClaudeAgent()
+        result = agent.generate_text("test prompt")
+        assert result is None
+
+    @patch("subprocess.run")
+    def test_generate_text_returns_none_on_empty_output(self, mock_run):
+        mock_run.return_value = Mock(returncode=0, stdout="   \n")
+        agent = ClaudeAgent()
+        result = agent.generate_text("test prompt")
+        assert result is None
+
+    @patch("subprocess.run", side_effect=FileNotFoundError)
+    def test_generate_text_returns_none_when_cli_missing(self, mock_run):
+        agent = ClaudeAgent()
+        result = agent.generate_text("test prompt")
+        assert result is None
+
+    @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=30))
+    def test_generate_text_returns_none_on_timeout(self, mock_run):
+        agent = ClaudeAgent()
+        result = agent.generate_text("test prompt")
+        assert result is None
+
+    @patch("subprocess.run")
+    def test_generate_text_custom_timeout(self, mock_run):
+        mock_run.return_value = Mock(returncode=0, stdout="result\n")
+        agent = ClaudeAgent()
+        result = agent.generate_text("prompt", timeout=60)
+        assert result == "result"
+        mock_run.assert_called_once_with(
+            ["claude", "-p"],
+            input="prompt",
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+    @patch("subprocess.run")
+    def test_opencode_generate_text_uses_opencode_binary(self, mock_run):
+        mock_run.return_value = Mock(returncode=0, stdout="opencode result\n")
+        agent = OpenCodeAgent()
+        result = agent.generate_text("test prompt")
+        assert result == "opencode result"
+        mock_run.assert_called_once_with(
+            ["opencode", "-p"],
+            input="test prompt",
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+
+class TestUsesFileBasedSessions:
+    """Test uses_file_based_sessions() across all agent implementations (#486)."""
+
+    def test_claude_uses_file_sessions(self):
+        assert ClaudeAgent().uses_file_based_sessions() is True
+
+    def test_ollama_uses_file_sessions(self):
+        assert OllamaClaudeAgent().uses_file_based_sessions() is True
+
+    def test_opencode_uses_database_sessions(self):
+        assert OpenCodeAgent().uses_file_based_sessions() is False
+
+    def test_crush_uses_database_sessions(self):
+        assert CrushAgent().uses_file_based_sessions() is False
+
+    def test_aider_uses_file_sessions(self):
+        assert AiderAgent().uses_file_based_sessions() is True
+
+    def test_cursor_uses_file_sessions(self):
+        assert CursorAgent().uses_file_based_sessions() is True
+
+    def test_windsurf_uses_file_sessions(self):
+        assert WindsurfAgent().uses_file_based_sessions() is True
+
+    def test_copilot_uses_file_sessions(self):
+        assert GitHubCopilotAgent().uses_file_based_sessions() is True
+
+    def test_continue_uses_file_sessions(self):
+        assert ContinueAgent().uses_file_based_sessions() is True

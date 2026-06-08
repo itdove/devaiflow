@@ -461,3 +461,6 @@ class OllamaClaudeAgent(AgentInterface):
         # Priority 3: Let Ollama use its default
         # (from ~/.ollama/config.json or Ollama's built-in default)
         return None
+
+    def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
+        return f"ollama launch claude --resume {session_id}"

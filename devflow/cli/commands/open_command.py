@@ -1339,18 +1339,10 @@ def open_session(
 
         if active_conv and active_conv.ai_agent_session_id:
             # Show agent-specific manual resume instructions
-            if effective_agent_backend in ("opencode", "opencode-ai"):
-                console.print(f"\n[yellow]You can manually resume with:[/yellow]")
-                console.print(f"  cd {active_conv.project_path}")
-                console.print(f"  opencode --session {active_conv.ai_agent_session_id}")
-            elif effective_agent_backend in ("ollama", "ollama-claude"):
-                console.print(f"\n[yellow]You can manually resume with:[/yellow]")
-                console.print(f"  cd {active_conv.project_path}")
-                console.print(f"  ollama launch claude --resume {active_conv.ai_agent_session_id}")
-            else:
-                console.print(f"\n[yellow]You can manually resume with:[/yellow]")
-                console.print(f"  cd {active_conv.project_path}")
-                console.print(f"  claude --resume {active_conv.ai_agent_session_id}")
+            resume_cmd = agent.get_manual_resume_command(active_conv.ai_agent_session_id, active_conv.project_path)
+            console.print(f"\n[yellow]You can manually resume with:[/yellow]")
+            console.print(f"  cd {active_conv.project_path}")
+            console.print(f"  {resume_cmd}")
 
 
 def _check_and_warn_feature_orchestration(session, session_manager) -> bool:
@@ -3395,9 +3387,7 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
     effective_backend = resolve_agent_backend(session=session, config=config)
     agent = create_agent_client(effective_backend)
 
-    # Conversation file copy only applies to file-based agents (claude, ollama)
-    # For agents that use databases (opencode), skip this operation
-    if effective_backend in ("opencode", "opencode-ai"):
+    if not agent.uses_file_based_sessions():
         console.print(f"[dim]Skipping conversation file copy ({agent.get_agent_name()} uses database storage)[/dim]")
         return False
 
@@ -3461,8 +3451,7 @@ def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
     effective_backend = resolve_agent_backend(session=session, config=config)
     agent = create_agent_client(effective_backend)
 
-    # Conversation file copy only applies to file-based agents (claude, ollama)
-    if effective_backend in ("opencode", "opencode-ai"):
+    if not agent.uses_file_based_sessions():
         console.print(f"[dim]Skipping conversation file save ({agent.get_agent_name()} uses database storage)[/dim]")
         return False
 
