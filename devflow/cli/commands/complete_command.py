@@ -191,7 +191,7 @@ def complete_session(
     config = config_loader.load_config()
 
     # Resolve agent backend for agent-agnostic messaging
-    agent_backend = resolve_agent_backend(config=config)
+    agent_backend = resolve_agent_backend(config=config, session=session)
 
     # Get active conversation for accessing conversation-specific fields
     active_conv = session.active_conversation
@@ -1202,7 +1202,7 @@ def _add_session_summary_to_jira(issue_key: str, session_name: str, session, hou
                 prose_summary = generate_prose_summary(
                     summary_data,
                     mode="ai",
-                    agent_backend=resolve_agent_backend(config=config)
+                    agent_backend=resolve_agent_backend(config=config, session=session)
                 )
                 if prose_summary:
                     # Add newlines before and after for better formatting
@@ -1279,7 +1279,7 @@ def _add_session_summary_to_github(issue_key: str, session_name: str, session, h
                 prose_summary = generate_prose_summary(
                     summary_data,
                     mode="ai",
-                    agent_backend=resolve_agent_backend(config=config)
+                    agent_backend=resolve_agent_backend(config=config, session=session)
                 )
                 if prose_summary:
                     prose_summary = f"\n\n{prose_summary}\n"
@@ -1383,7 +1383,7 @@ def _sync_branch_for_export(session, issue_key: str, config_loader, yes: bool = 
         else:
             # Create WIP commit
             co_authored_by = get_co_authored_by_line(config, session.model_profile)
-            generated_with = _get_generated_with_line(resolve_agent_backend(config=config))
+            generated_with = _get_generated_with_line(resolve_agent_backend(config=config, session=session))
             commit_message = f"""WIP: Session export for {issue_key}
 
 {generated_with}
@@ -2922,7 +2922,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
                 jira_section = f"Jira Issue: {jira_url}/browse/{session.issue_key}\n\n"
 
         # Try to generate AI-powered summary from session and git data
-        summary_bullets = _generate_pr_summary_bullets(session, working_dir, agent_backend=resolve_agent_backend(config=config))
+        summary_bullets = _generate_pr_summary_bullets(session, working_dir, agent_backend=resolve_agent_backend(config=config, session=session))
 
         # If AI summary failed, fall back to session goal
         if not summary_bullets:
@@ -2932,7 +2932,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
 
         config = config_loader.load_config()
         co_authored_by = get_co_authored_by_line(config, session.model_profile)
-        generated_with = _get_generated_with_line(resolve_agent_backend(config=config))
+        generated_with = _get_generated_with_line(resolve_agent_backend(config=config, session=session))
         description = f"""{jira_section}{description_content}
 
 ## Test plan
