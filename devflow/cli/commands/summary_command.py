@@ -112,7 +112,7 @@ def show_summary(identifier: str = None, detail: bool = False, ai_summary: bool 
                     prose = generate_prose_summary(
                         summary,
                         mode=summary_mode,
-                        agent_backend=resolve_agent_backend(config=config)
+                        agent_backend=resolve_agent_backend(config=config, session=session)
                     )
 
                     # Show indicator if using AI

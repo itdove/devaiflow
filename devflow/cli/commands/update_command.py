@@ -61,5 +61,5 @@ def update_session(identifier: str, ai_agent_session_id: str = None) -> None:
 
     console.print(f"[green]✓[/green] Updated session '{session.name}'{issue_display}")
     config = config_loader.load_config()
-    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config, session=session))
     console.print(f"  {agent_name} session ID: {ai_agent_session_id}")
