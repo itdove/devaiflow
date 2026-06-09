@@ -1351,8 +1351,8 @@ def test_has_unpushed_commits_with_unpushed_commits(tmp_path):
     # Get current branch
     current_branch = GitUtils.get_current_branch(tmp_path)
 
-    # Create a bare repo to act as remote
-    remote_path = tmp_path.parent / "remote"
+    # Create a bare repo to act as remote (use unique name to avoid test pollution)
+    remote_path = tmp_path / "remote.git"
     subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
 
     # Add remote and push
@@ -1389,8 +1389,8 @@ def test_has_unpushed_commits_up_to_date(tmp_path):
     # Get current branch
     current_branch = GitUtils.get_current_branch(tmp_path)
 
-    # Create a bare repo to act as remote
-    remote_path = tmp_path.parent / "remote"
+    # Create a bare repo to act as remote (use unique name to avoid test pollution)
+    remote_path = tmp_path / "remote.git"
     subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
 
     # Add remote and push
@@ -1401,6 +1401,91 @@ def test_has_unpushed_commits_up_to_date(tmp_path):
     result = GitUtils.has_unpushed_commits(tmp_path, current_branch)
 
     assert result is False
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_has_unpushed_commits_stale_remote_ref(tmp_path):
+    """Test has_unpushed_commits detects commits when remote tracking ref is stale.
+
+    Reproduces #503: branch previously pushed and merged, remote deletes it,
+    but local origin/{branch} ref is still cached. New commits on the reused
+    branch name should still be detected.
+    """
+    # Initialize repo with a default branch
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    default_branch = GitUtils.get_current_branch(tmp_path)
+
+    # Create bare remote and push default branch
+    remote_path = tmp_path.parent / "remote_stale"
+    subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "push", "-u", "origin", default_branch], cwd=tmp_path, capture_output=True)
+
+    # Create and push a feature branch (simulating first session)
+    subprocess.run(["git", "checkout", "-b", "feature-503"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "feature.txt").write_text("feature work")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Feature work"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "push", "-u", "origin", "feature-503"], cwd=tmp_path, capture_output=True)
+
+    # Simulate GitHub auto-delete: remove branch from remote but keep local tracking ref
+    subprocess.run(
+        ["git", "push", "origin", "--delete", "feature-503"],
+        cwd=tmp_path, capture_output=True,
+    )
+    # Local origin/feature-503 ref is now stale
+
+    # Make a new commit on the local branch (simulating second session)
+    (tmp_path / "feature2.txt").write_text("new feature work")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "New feature work"], cwd=tmp_path, capture_output=True)
+
+    # Should return True — new commit ahead of default branch
+    result = GitUtils.has_unpushed_commits(tmp_path, "feature-503")
+    assert result is True
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_has_unpushed_commits_fresh_branch_no_remote_ref(tmp_path):
+    """Test has_unpushed_commits works for fresh branches with no remote ref."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    default_branch = GitUtils.get_current_branch(tmp_path)
+
+    # Create bare remote and push default branch
+    remote_path = tmp_path.parent / "remote_fresh"
+    subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "push", "-u", "origin", default_branch], cwd=tmp_path, capture_output=True)
+
+    # Create a fresh feature branch (never pushed)
+    subprocess.run(["git", "checkout", "-b", "fresh-branch"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "new.txt").write_text("new work")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "New work"], cwd=tmp_path, capture_output=True)
+
+    # Should return True — commits ahead of default branch
+    result = GitUtils.has_unpushed_commits(tmp_path, "fresh-branch")
+    assert result is True
 
 
 def test_list_remote_branches_with_mock(monkeypatch, tmp_path):
