@@ -577,41 +577,40 @@ class GitUtils:
 
     @staticmethod
     def has_unpushed_commits(path: Path, branch_name: str) -> bool:
-        """Check if a branch has local commits that haven't been pushed to remote.
+        """Check if a branch has commits ahead of the default branch on remote.
+
+        Compares against origin/{default_branch} rather than origin/{branch_name}
+        to avoid false negatives from stale remote tracking refs (e.g., when a
+        branch was previously pushed, merged, and deleted on remote but the
+        local ref origin/{branch} is still cached).
 
         Args:
             path: Repository path
             branch_name: Branch name to check
 
         Returns:
-            True if there are unpushed commits, False otherwise
+            True if there are commits ahead of the remote default branch
         """
         try:
-            # First check if the branch exists on remote
-            if not GitUtils.is_branch_pushed(path, branch_name):
-                # If branch doesn't exist on remote and we have commits, they're unpushed
-                # Check if we have any commits on this branch
-                result = subprocess.run(
-                    ["git", "rev-parse", "--verify", branch_name],
-                    cwd=path,
-                    capture_output=True,
-                    timeout=5,
-                )
-                return result.returncode == 0  # True if branch exists locally
-
-            # Branch exists on remote, check for unpushed commits
-            # Use git log to count commits ahead of remote
+            default_branch = GitUtils.get_default_branch(path) or "main"
             result = subprocess.run(
-                ["git", "log", f"origin/{branch_name}..{branch_name}", "--oneline"],
+                ["git", "log", f"origin/{default_branch}..{branch_name}", "--oneline"],
                 cwd=path,
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
             if result.returncode == 0:
-                # Output is non-empty if there are unpushed commits
                 return bool(result.stdout.strip())
-            return False
+
+            # Fallback: origin/{default_branch} unavailable (no remote configured)
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", branch_name],
+                cwd=path,
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
