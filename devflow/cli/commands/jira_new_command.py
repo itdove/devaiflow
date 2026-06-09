@@ -1112,7 +1112,7 @@ def _create_multi_project_jira_session(
     )
 
     # Check if we should launch Claude Code
-    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config, session=session))
     if not should_launch_claude_code(config=config, mock_mode=False):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")

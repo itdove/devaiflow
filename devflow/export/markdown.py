@@ -320,7 +320,7 @@ class MarkdownExporter:
         prose = generate_prose_summary(
             summary,
             mode=mode,
-            agent_backend=resolve_agent_backend(config=config)
+            agent_backend=resolve_agent_backend(config=config, session=session)
         )
 
         lines = [prose]
@@ -405,7 +405,7 @@ class MarkdownExporter:
             try:
                 # Get agent backend from config
                 config = self.config_loader.load_config()
-                agent_backend = resolve_agent_backend(config=config)
+                agent_backend = resolve_agent_backend(config=config, session=session)
                 agent_client = create_agent_client(agent_backend)
             except Exception:
                 pass  # Ignore errors creating agent client

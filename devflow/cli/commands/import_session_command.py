@@ -209,7 +209,7 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str
     console.print(f"📂 Path: {project_path}")
     console.print(f"💬 Messages: {session.active_conversation.message_count if session.active_conversation else 0}")
     config = config_loader.load_config()
-    agent_name = get_agent_display_name(resolve_agent_backend(config=config))
+    agent_name = get_agent_display_name(resolve_agent_backend(config=config, session=session))
     console.print(f"🆔 {agent_name} Session ID: {uuid}")
     console.print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     console.print()

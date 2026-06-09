@@ -1104,7 +1104,7 @@ def _create_multi_project_investigation_session(
     session_manager.update_session(session)
 
     # Resolve agent display name for user-facing messages
-    agent_backend = resolve_agent_backend(config=config)
+    agent_backend = resolve_agent_backend(config=config, session=session)
     agent_name = get_agent_display_name(agent_backend)
 
     # Check if we should launch the AI agent
@@ -1160,7 +1160,7 @@ def _create_multi_project_investigation_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        _agent_backend = resolve_agent_backend(config=config)
+        _agent_backend = resolve_agent_backend(config=config, session=session)
         agent_client = create_agent_client(_agent_backend)
 
         # Get model provider profile if configured
