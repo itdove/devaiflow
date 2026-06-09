@@ -4385,3 +4385,53 @@ def test_complete_session_passes_session_to_resolve_agent_backend(temp_daf_home,
         assert call["session"] is not None, (
             f"Call #{i+1} to resolve_agent_backend passed session=None"
         )
+
+
+def test_complete_resolves_session_agent_over_config_default(temp_daf_home, monkeypatch, capsys):
+    """Verify resolve_agent_backend returns session's agent when it differs from config.
+
+    Regression test for issue #504: when session.agent_backend="claude" but
+    config.agent_backend="opencode", complete_command must use "claude".
+    """
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="agent-override-test",
+        goal="Test session agent overrides config",
+        working_directory="test-dir",
+        project_path="/test",
+        ai_agent_session_id="uuid-override-1",
+    )
+    session.agent_backend = "claude"
+    session_manager.update_session(session)
+
+    session_manager.start_work_session("agent-override-test")
+    session_manager.end_work_session("agent-override-test")
+
+    resolved_backends = []
+
+    def tracking_resolve(**kwargs):
+        config_obj = kwargs.get("config")
+        if config_obj is not None:
+            config_obj.agent_backend = "opencode"
+        result = resolve_agent_backend(**kwargs)
+        resolved_backends.append(result)
+        return result
+
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.resolve_agent_backend",
+        tracking_resolve,
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.Confirm.ask",
+        lambda *args, **kwargs: False,
+    )
+
+    complete_session("agent-override-test")
+
+    assert len(resolved_backends) > 0, "resolve_agent_backend should have been called"
+    for i, backend in enumerate(resolved_backends):
+        assert backend == "claude", (
+            f"Call #{i+1} returned '{backend}' instead of session agent 'claude'"
+        )
