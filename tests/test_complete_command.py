@@ -11,6 +11,7 @@ from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 from devflow.jira.exceptions import JiraApiError, JiraNotFoundError, JiraValidationError
 from devflow.git.utils import GitUtils
+from devflow.agent.factory import resolve_agent_backend
 
 
 def test_complete_session_basic(temp_daf_home, monkeypatch, capsys):
@@ -4330,3 +4331,57 @@ def test_complete_session_fetch_origin_called_before_diff(temp_daf_home, tmp_pat
         fetch_idx = call_order.index("fetch_origin")
         changed_idx = call_order.index("get_changed_files")
         assert fetch_idx < changed_idx, "fetch_origin must be called before get_changed_files"
+
+
+def test_complete_session_passes_session_to_resolve_agent_backend(temp_daf_home, monkeypatch, capsys):
+    """Test that resolve_agent_backend receives the session object.
+
+    Regression test for issue #499: resolve_agent_backend() was called with
+    only config=config, missing session=session. This caused the backend to
+    fall back to the config default (e.g., "opencode") instead of using the
+    session's actual agent_backend (e.g., "claude").
+    """
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="backend-test",
+        goal="Test backend resolution",
+        working_directory="test-dir",
+        project_path="/test",
+        ai_agent_session_id="uuid-backend-1",
+    )
+    session.agent_backend = "claude"
+    session_manager.update_session(session)
+
+    session_manager.start_work_session("backend-test")
+    session_manager.end_work_session("backend-test")
+
+    # Track all calls to resolve_agent_backend
+    calls = []
+    original_resolve = resolve_agent_backend
+
+    def tracking_resolve(**kwargs):
+        calls.append(kwargs)
+        return original_resolve(**kwargs)
+
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.resolve_agent_backend",
+        tracking_resolve,
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.Confirm.ask",
+        lambda *args, **kwargs: False,
+    )
+
+    complete_session("backend-test")
+
+    # Every call must include session parameter
+    assert len(calls) > 0, "resolve_agent_backend should have been called"
+    for i, call in enumerate(calls):
+        assert "session" in call, (
+            f"Call #{i+1} to resolve_agent_backend missing session parameter: {call}"
+        )
+        assert call["session"] is not None, (
+            f"Call #{i+1} to resolve_agent_backend passed session=None"
+        )
