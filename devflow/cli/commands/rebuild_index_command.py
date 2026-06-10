@@ -91,6 +91,7 @@ def rebuild_index(dry_run: bool = False, force: bool = False) -> None:
                 "conversations": conversations,
                 "working_directory": metadata.get("working_directory"),
                 "workspace_name": metadata.get("workspace_name"),
+                "agent_backend": metadata.get("agent_backend"),
                 "issue_tracker": metadata.get("issue_tracker", "jira"),
                 "issue_key": metadata.get("issue_key"),
                 "issue_updated": metadata.get("issue_updated"),
