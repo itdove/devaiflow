@@ -577,6 +577,11 @@ def open_session(
     effective_agent_backend = resolve_agent_backend(cli_override=agent, session=session, config=config)
     agent_name = get_agent_display_name(effective_agent_backend)
 
+    # Persist agent_backend to session if it changed (e.g., user reopened with --agent flag)
+    if effective_agent_backend != session.agent_backend:
+        session.agent_backend = effective_agent_backend
+        session_manager.update_session(session)
+
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
         # Check if the session exists using the agent-aware check
         # This handles both Claude (.jsonl file) and OpenCode (database query) correctly

@@ -150,6 +150,92 @@ class TestSessionManagerCreateWithAgentBackend:
         assert loaded_session is not None
         assert loaded_session.agent_backend == "opencode"
 
+    def test_agent_backend_persisted_in_metadata_json_file(self, tmp_path):
+        """Test that agent_backend is written to metadata.json on disk (issue #507)."""
+        from devflow.session.manager import SessionManager
+        from devflow.config.loader import ConfigLoader
+
+        config_dir = tmp_path / ".daf-sessions"
+        config_dir.mkdir()
+
+        config_loader = ConfigLoader(config_dir=config_dir)
+        session_manager = SessionManager(config_loader=config_loader)
+
+        session_manager.create_session(
+            name="test-persist",
+            goal="test goal",
+            agent_backend="opencode",
+        )
+
+        # Read the actual metadata.json file from disk
+        metadata_file = config_dir / "sessions" / "test-persist" / "metadata.json"
+        assert metadata_file.exists()
+
+        with open(metadata_file) as f:
+            metadata = json.load(f)
+
+        assert "agent_backend" in metadata
+        assert metadata["agent_backend"] == "opencode"
+
+    def test_metadata_without_agent_backend_loads_gracefully(self, tmp_path):
+        """Test backward compat: metadata.json without agent_backend defaults to None."""
+        from devflow.session.manager import SessionManager
+        from devflow.config.loader import ConfigLoader
+
+        config_dir = tmp_path / ".daf-sessions"
+        config_dir.mkdir()
+
+        config_loader = ConfigLoader(config_dir=config_dir)
+        session_manager = SessionManager(config_loader=config_loader)
+
+        # Create session normally, then strip agent_backend from metadata.json
+        session_manager.create_session(
+            name="test-compat",
+            goal="test goal",
+            agent_backend="claude",
+        )
+
+        metadata_file = config_dir / "sessions" / "test-compat" / "metadata.json"
+        with open(metadata_file) as f:
+            metadata = json.load(f)
+
+        del metadata["agent_backend"]
+
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f)
+
+        # Rebuild session from metadata — should not error, agent_backend should be None
+        session = Session(**metadata)
+        assert session.agent_backend is None
+
+    def test_update_session_persists_changed_agent_backend(self, tmp_path):
+        """Test that updating agent_backend and calling update_session persists to disk."""
+        from devflow.session.manager import SessionManager
+        from devflow.config.loader import ConfigLoader
+
+        config_dir = tmp_path / ".daf-sessions"
+        config_dir.mkdir()
+
+        config_loader = ConfigLoader(config_dir=config_dir)
+        session_manager = SessionManager(config_loader=config_loader)
+
+        session = session_manager.create_session(
+            name="test-reopen",
+            goal="test goal",
+            agent_backend="claude",
+        )
+
+        # Simulate reopening with --agent opencode
+        session.agent_backend = "opencode"
+        session_manager.update_session(session)
+
+        # Verify metadata.json on disk reflects the change
+        metadata_file = config_dir / "sessions" / "test-reopen" / "metadata.json"
+        with open(metadata_file) as f:
+            metadata = json.load(f)
+
+        assert metadata["agent_backend"] == "opencode"
+
 
 class TestEffectiveAgentBackendResolution:
     """Test the resolution logic: session.agent_backend > config.agent_backend > 'claude'."""

@@ -166,6 +166,8 @@ class FileBackend(StorageBackend):
             "branch": branch,
             "status": session.status,
             "conversation_count": len(session.conversations),
+            # Agent backend used to create/reopen this session
+            "agent_backend": session.agent_backend,
             # Store full conversations structure for reliable rebuilds
             "conversations": conversations_dict,
         }
