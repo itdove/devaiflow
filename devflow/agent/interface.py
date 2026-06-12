@@ -11,10 +11,13 @@ It provides a common interface for operations like:
 Following the IssueTrackerClient pattern from devflow/issue_tracker/interface.py.
 """
 
+import logging
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional, Set, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 class AgentInterface(ABC):
@@ -316,12 +319,27 @@ class AgentInterface(ABC):
                 text=True,
                 timeout=timeout,
             )
-            if result.returncode == 0:
-                text = result.stdout.strip()
-                if text:
-                    return text
+            if result.returncode != 0:
+                stderr_snippet = (result.stderr or "").strip()[:200]
+                logger.warning(
+                    "Agent CLI failed (exit %d): %s",
+                    result.returncode,
+                    stderr_snippet or "(no stderr)",
+                )
+                return None
+            text = result.stdout.strip()
+            if not text:
+                logger.warning("Agent CLI returned empty output")
+                return None
+            return text
+        except FileNotFoundError as e:
+            logger.warning("Agent CLI binary not found: %s", e)
             return None
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        except subprocess.TimeoutExpired:
+            logger.warning("Agent CLI timed out after %ds", timeout)
+            return None
+        except Exception as e:
+            logger.warning("Agent CLI unexpected error: %s: %s", type(e).__name__, e)
             return None
 
     def uses_file_based_sessions(self) -> bool:

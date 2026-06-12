@@ -3624,19 +3624,26 @@ def _generate_commit_message(session, agent_backend: Optional[str] = None) -> st
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / "complete.log"
 
-            # Create logger
-            logger = logging.getLogger("devflow.complete")
-            logger.setLevel(logging.DEBUG)
+            # Create logger under devflow namespace so child loggers
+            # (e.g. devflow.agent.interface) also write to complete.log
+            parent_logger = logging.getLogger("devflow")
+            parent_logger.setLevel(logging.DEBUG)
 
-            # Remove existing handlers to avoid duplicates
-            logger.handlers.clear()
+            # Remove existing file handlers to avoid duplicates
+            parent_logger.handlers = [
+                h for h in parent_logger.handlers
+                if not isinstance(h, logging.FileHandler)
+            ]
 
             # Add file handler
             fh = logging.FileHandler(log_file)
             fh.setLevel(logging.DEBUG)
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             fh.setFormatter(formatter)
-            logger.addHandler(fh)
+            parent_logger.addHandler(fh)
+
+            logger = logging.getLogger("devflow.complete")
+            logger.setLevel(logging.DEBUG)
 
             console.print("[dim]Analyzing git diff to generate commit message...[/dim]")
             logger.info(f"Starting commit message generation for session: {session.name}")

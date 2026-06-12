@@ -1,5 +1,6 @@
 """Tests for agent interface abstraction."""
 
+import logging
 import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch, ANY
@@ -2008,10 +2009,20 @@ class TestGenerateText:
 
     @patch("subprocess.run")
     def test_generate_text_returns_none_on_failure(self, mock_run):
-        mock_run.return_value = Mock(returncode=1, stdout="")
+        mock_run.return_value = Mock(returncode=1, stdout="", stderr="error msg")
         agent = ClaudeAgent()
         result = agent.generate_text("test prompt")
         assert result is None
+
+    @patch("subprocess.run")
+    def test_generate_text_logs_stderr_on_failure(self, mock_run, caplog):
+        mock_run.return_value = Mock(returncode=1, stdout="", stderr="rate limit exceeded")
+        agent = ClaudeAgent()
+        with caplog.at_level(logging.WARNING, logger="devflow.agent.interface"):
+            result = agent.generate_text("test prompt")
+        assert result is None
+        assert "exit 1" in caplog.text
+        assert "rate limit exceeded" in caplog.text
 
     @patch("subprocess.run")
     def test_generate_text_returns_none_on_empty_output(self, mock_run):
@@ -2020,17 +2031,51 @@ class TestGenerateText:
         result = agent.generate_text("test prompt")
         assert result is None
 
-    @patch("subprocess.run", side_effect=FileNotFoundError)
+    @patch("subprocess.run")
+    def test_generate_text_logs_empty_output(self, mock_run, caplog):
+        mock_run.return_value = Mock(returncode=0, stdout="   \n")
+        agent = ClaudeAgent()
+        with caplog.at_level(logging.WARNING, logger="devflow.agent.interface"):
+            result = agent.generate_text("test prompt")
+        assert result is None
+        assert "empty output" in caplog.text
+
+    @patch("subprocess.run", side_effect=FileNotFoundError("claude not found"))
     def test_generate_text_returns_none_when_cli_missing(self, mock_run):
         agent = ClaudeAgent()
         result = agent.generate_text("test prompt")
         assert result is None
+
+    @patch("subprocess.run", side_effect=FileNotFoundError("claude not found"))
+    def test_generate_text_logs_missing_binary(self, mock_run, caplog):
+        agent = ClaudeAgent()
+        with caplog.at_level(logging.WARNING, logger="devflow.agent.interface"):
+            result = agent.generate_text("test prompt")
+        assert result is None
+        assert "not found" in caplog.text
 
     @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=30))
     def test_generate_text_returns_none_on_timeout(self, mock_run):
         agent = ClaudeAgent()
         result = agent.generate_text("test prompt")
         assert result is None
+
+    @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=30))
+    def test_generate_text_logs_timeout(self, mock_run, caplog):
+        agent = ClaudeAgent()
+        with caplog.at_level(logging.WARNING, logger="devflow.agent.interface"):
+            result = agent.generate_text("test prompt")
+        assert result is None
+        assert "timed out" in caplog.text
+
+    @patch("subprocess.run", side_effect=OSError("unexpected"))
+    def test_generate_text_logs_unexpected_error(self, mock_run, caplog):
+        agent = ClaudeAgent()
+        with caplog.at_level(logging.WARNING, logger="devflow.agent.interface"):
+            result = agent.generate_text("test prompt")
+        assert result is None
+        assert "OSError" in caplog.text
+        assert "unexpected" in caplog.text
 
     @patch("subprocess.run")
     def test_generate_text_custom_timeout(self, mock_run):
