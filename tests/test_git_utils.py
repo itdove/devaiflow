@@ -457,6 +457,30 @@ def test_branch_exists_with_real_git(tmp_path):
     shutil.which("git") is None,
     reason="git not available"
 )
+def test_branch_exists_not_fooled_by_sha_prefix(tmp_path):
+    """Test that branch_exists does not match commit SHA prefixes (#511)."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path, capture_output=True, text=True,
+    )
+    full_sha = result.stdout.strip()
+    sha_prefix = full_sha[:4]
+
+    assert GitUtils.branch_exists(tmp_path, sha_prefix) is False
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
 def test_create_and_checkout_branch(tmp_path):
     """Test creating and checking out branches."""
     # Initialize a git repo
