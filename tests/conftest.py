@@ -211,6 +211,9 @@ def temp_daf_home(tmp_path, monkeypatch):
     daf_home = tmp_path / ".daf-sessions"
     daf_home.mkdir()
 
+    # Use DEVAIFLOW_HOME to ensure this directory is used as the home (#510)
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(daf_home))
+
     # Create backends directory with minimal valid jira.json
     backends_dir = daf_home / "backends"
     backends_dir.mkdir()
@@ -322,6 +325,9 @@ def temp_daf_home_no_patches(tmp_path, monkeypatch):
 
     daf_home = tmp_path / ".daf-sessions"
     daf_home.mkdir()
+
+    # Use DEVAIFLOW_HOME to ensure this directory is used as the home (#510)
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(daf_home))
 
     # Create backends directory with minimal valid jira.json
     backends_dir = daf_home / "backends"

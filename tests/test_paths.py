@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from devflow.utils.paths import (
+    _is_valid_legacy_home,
+    _is_unified_mode,
     get_cs_home,
     get_cs_config_home,
     get_cs_state_home,
@@ -28,13 +30,14 @@ def test_get_cs_home_default_xdg(monkeypatch, tmp_path):
 
 
 def test_get_cs_home_legacy_compat(monkeypatch, tmp_path):
-    """Test get_cs_home uses legacy ~/.daf-sessions when it exists."""
+    """Test get_cs_home uses legacy ~/.daf-sessions when it has config files."""
     monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     legacy_dir = tmp_path / ".daf-sessions"
     legacy_dir.mkdir()
+    (legacy_dir / "config.json").write_text("{}")
 
     result = get_cs_home()
 
@@ -49,6 +52,7 @@ def test_get_cs_home_legacy_overrides_xdg(monkeypatch, tmp_path):
 
     legacy_dir = tmp_path / ".daf-sessions"
     legacy_dir.mkdir()
+    (legacy_dir / "config.json").write_text("{}")
 
     result = get_cs_home()
 
@@ -99,8 +103,10 @@ def test_get_cs_home_devaiflow_home_overrides_all(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    # Create legacy dir — should still be ignored
-    (tmp_path / ".daf-sessions").mkdir()
+    # Create valid legacy dir — should still be ignored when DEVAIFLOW_HOME is set
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "config.json").write_text("{}")
 
     result = get_cs_home()
 
@@ -205,11 +211,13 @@ def test_get_cs_config_home_unified_with_devaiflow_home(monkeypatch, tmp_path):
 
 
 def test_get_cs_config_home_unified_with_legacy(monkeypatch, tmp_path):
-    """Test get_cs_config_home returns same as get_cs_home when legacy dir exists."""
+    """Test get_cs_config_home returns same as get_cs_home when legacy dir has config."""
     monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    (tmp_path / ".daf-sessions").mkdir()
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "config.json").write_text("{}")
 
     assert get_cs_config_home() == get_cs_home()
 
@@ -263,11 +271,13 @@ def test_get_cs_state_home_unified_with_devaiflow_home(monkeypatch, tmp_path):
 
 
 def test_get_cs_state_home_unified_with_legacy(monkeypatch, tmp_path):
-    """Test get_cs_state_home returns same as get_cs_home when legacy dir exists."""
+    """Test get_cs_state_home returns same as get_cs_home when legacy dir has config."""
     monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    (tmp_path / ".daf-sessions").mkdir()
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "config.json").write_text("{}")
 
     assert get_cs_state_home() == get_cs_home()
 
@@ -424,3 +434,83 @@ def test_get_claude_config_dir_different_from_devaiflow_home(monkeypatch, tmp_pa
     assert claude_result != devaiflow_result
     assert claude_result == claude_path
     assert devaiflow_result == devaiflow_path
+
+
+# Tests for _is_valid_legacy_home() and stale legacy directory (#510)
+
+
+def test_is_valid_legacy_home_empty_dir(tmp_path):
+    """Empty directory is not a valid legacy home."""
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    assert _is_valid_legacy_home(legacy) is False
+
+
+def test_is_valid_legacy_home_sessions_subdir_only(tmp_path):
+    """Directory with only sessions/ subdir is not valid (stale dashboard scenario)."""
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "sessions").mkdir()
+    assert _is_valid_legacy_home(legacy) is False
+
+
+def test_is_valid_legacy_home_with_config_json(tmp_path):
+    """Directory with config.json is a valid legacy home."""
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "config.json").write_text("{}")
+    assert _is_valid_legacy_home(legacy) is True
+
+
+def test_is_valid_legacy_home_with_sessions_json(tmp_path):
+    """Directory with sessions.json is a valid legacy home."""
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "sessions.json").write_text("{}")
+    assert _is_valid_legacy_home(legacy) is True
+
+
+def test_stale_legacy_does_not_poison_config_resolution(monkeypatch, tmp_path):
+    """Issue #510: Stale dashboard creating ~/.daf-sessions must not poison XDG resolution."""
+    monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    # Simulate stale dashboard creating empty dirs
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "sessions").mkdir()
+    (legacy / "state").mkdir()
+
+    # All paths should use XDG, not the stale legacy dir
+    assert get_cs_home() == tmp_path / ".local" / "share" / "devaiflow"
+    assert get_cs_config_home() == tmp_path / ".config" / "devaiflow"
+    assert get_cs_state_home() == tmp_path / ".local" / "state" / "devaiflow"
+    assert _is_unified_mode() is False
+
+
+def test_unified_mode_with_devaiflow_home_env(monkeypatch, tmp_path):
+    """DEVAIFLOW_HOME env var always triggers unified mode."""
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(tmp_path / "custom"))
+    assert _is_unified_mode() is True
+
+
+def test_unified_mode_with_valid_legacy_home(monkeypatch, tmp_path):
+    """Valid legacy home with config.json triggers unified mode."""
+    monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "config.json").write_text("{}")
+    assert _is_unified_mode() is True
+
+
+def test_unified_mode_not_triggered_by_empty_legacy(monkeypatch, tmp_path):
+    """Empty legacy directory does not trigger unified mode."""
+    monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    assert _is_unified_mode() is False

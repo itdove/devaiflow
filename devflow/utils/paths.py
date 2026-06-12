@@ -4,12 +4,23 @@ import os
 from pathlib import Path
 
 
+def _is_valid_legacy_home(path: Path) -> bool:
+    """Check if a legacy ~/.daf-sessions directory is a genuine installation.
+
+    An empty ~/.daf-sessions/ (or one with only sessions/) can be created
+    accidentally by stale processes (e.g., an old dashboard). Only treat it
+    as a valid legacy home if it contains config files that indicate a real
+    installation.
+    """
+    return (path / "config.json").exists() or (path / "sessions.json").exists()
+
+
 def get_cs_home() -> Path:
     """Get the DevAIFlow home directory.
 
     Resolution priority:
         1. DEVAIFLOW_HOME env var (explicit override, highest priority)
-        2. ~/.daf-sessions exists (legacy compatibility, no silent data loss)
+        2. ~/.daf-sessions with config files (legacy compatibility)
         3. XDG_DATA_HOME/devaiflow (XDG Base Directory Specification)
         4. ~/.local/share/devaiflow (XDG default)
 
@@ -46,9 +57,9 @@ def get_cs_home() -> Path:
     if devaiflow_home:
         return Path(devaiflow_home).expanduser().resolve()
 
-    # 2. Legacy path exists (migration compat — don't silently move data)
+    # 2. Legacy path with valid config (migration compat — don't silently move data)
     legacy_path = Path.home() / ".daf-sessions"
-    if legacy_path.exists():
+    if legacy_path.exists() and _is_valid_legacy_home(legacy_path):
         return legacy_path
 
     # 3. XDG compliant
@@ -64,9 +75,13 @@ def _is_unified_mode() -> bool:
     """Check if DevAIFlow should use a single unified directory.
 
     Returns True when DEVAIFLOW_HOME is set or the legacy ~/.daf-sessions
-    directory exists. In unified mode, all XDG functions return the same path.
+    directory contains valid config files. An empty ~/.daf-sessions/ created
+    by a stale process does not trigger unified mode.
     """
-    return bool(os.getenv("DEVAIFLOW_HOME")) or (Path.home() / ".daf-sessions").exists()
+    if bool(os.getenv("DEVAIFLOW_HOME")):
+        return True
+    legacy_path = Path.home() / ".daf-sessions"
+    return legacy_path.exists() and _is_valid_legacy_home(legacy_path)
 
 
 def get_cs_config_home() -> Path:
