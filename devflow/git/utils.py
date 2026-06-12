@@ -124,7 +124,7 @@ class GitUtils:
             # Priority 3: Check common branch names locally
             for branch in ["main", "master", "develop"]:
                 result = subprocess.run(
-                    ["git", "rev-parse", "--verify", branch],
+                    ["git", "rev-parse", "--verify", f"refs/heads/{branch}"],
                     cwd=path,
                     capture_output=True,
                     timeout=5,
@@ -149,7 +149,7 @@ class GitUtils:
         """
         try:
             result = subprocess.run(
-                ["git", "rev-parse", "--verify", branch_name],
+                ["git", "rev-parse", "--verify", f"refs/heads/{branch_name}"],
                 cwd=path,
                 capture_output=True,
                 timeout=5,
@@ -605,7 +605,7 @@ class GitUtils:
 
             # Fallback: origin/{default_branch} unavailable (no remote configured)
             result = subprocess.run(
-                ["git", "rev-parse", "--verify", branch_name],
+                ["git", "rev-parse", "--verify", f"refs/heads/{branch_name}"],
                 cwd=path,
                 capture_output=True,
                 timeout=5,
