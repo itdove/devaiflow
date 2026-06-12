@@ -2027,7 +2027,8 @@ def _show_sync_filters(config, output_json: bool) -> None:
 @click.option("--fields", is_flag=True, help="Show available JIRA custom fields from field_mappings")
 @click.option("--prompts", is_flag=True, help="Show prompt configuration settings")
 @click.option("--sync-filters", is_flag=True, help="Show sync filter configuration for 'daf sync'")
-def config_show(ctx: click.Context, format: str, validate: bool, fields: bool, prompts: bool, sync_filters: bool) -> None:
+@click.option("--paths", "show_paths", is_flag=True, help="Show config, data, and state directory paths (machine-readable)")
+def config_show(ctx: click.Context, format: str, validate: bool, fields: bool, prompts: bool, sync_filters: bool, show_paths: bool) -> None:
     """Show current configuration.
 
     By default, shows merged configuration from all config files.
@@ -2038,14 +2039,33 @@ def config_show(ctx: click.Context, format: str, validate: bool, fields: bool, p
         daf config show --fields           # Show available JIRA fields
         daf config show --prompts          # Show prompt settings
         daf config show --sync-filters     # Show sync filter configuration
+        daf config show --paths            # Show directory paths (for scripting)
         daf config show --format split     # Show split config files
         daf config show --validate         # Validate configuration
         daf config show --json             # Show as JSON
     """
     from devflow.config.loader import ConfigLoader
     from devflow.config.validator import ConfigValidator
+    from devflow.utils.paths import get_cs_config_home, get_cs_home, get_cs_state_home
     from pathlib import Path
     import json
+
+    if show_paths:
+        output_json = ctx.obj.get('output_json', False) if ctx.obj else False
+        config_dir = get_cs_config_home()
+        data_dir = get_cs_home()
+        state_dir = get_cs_state_home()
+        if output_json:
+            click.echo(json.dumps({
+                "config_dir": str(config_dir),
+                "data_dir": str(data_dir),
+                "state_dir": str(state_dir),
+            }))
+        else:
+            click.echo(f"config_dir={config_dir}")
+            click.echo(f"data_dir={data_dir}")
+            click.echo(f"state_dir={state_dir}")
+        return
 
     # Check for mutually exclusive flags
     specialized_flags = sum([fields, prompts, sync_filters])

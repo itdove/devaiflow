@@ -49,7 +49,11 @@ Replace `<number>` or `<issue_key>` with the actual value shown in `daf info` ou
 
 ### 3. Read Context Files
 
-First, discover the DevAIFlow config directory by running `daf config show` and noting the parent directory of `config.json` from the "Configuration Files" section (e.g., `/home/user/.config/devaiflow/`). Call this `CONFIG_DIR`.
+First, discover the DevAIFlow config directory:
+
+```bash
+CONFIG_DIR=$(daf config show --paths | grep config_dir | cut -d= -f2)
+```
 
 Then read the hierarchical context files if they exist in `CONFIG_DIR`:
 - `CONFIG_DIR/ENTERPRISE.md` (enterprise-wide policies and standards)
@@ -259,6 +263,7 @@ daf notes                       # View session notes
 
 ```bash
 daf config show                 # Merged configuration
+daf config show --paths         # Config, data, state directory paths
 daf config show --fields        # Custom fields (JIRA)
 daf config refresh-jira-fields  # Refresh from JIRA API
 ```
