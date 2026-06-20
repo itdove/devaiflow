@@ -29,14 +29,59 @@ Use `gh` or `glab` CLI directly to create issues, then link to your session:
 
 ```bash
 # GitHub
-gh issue create --title "Add caching" --body "Description here"
+gh issue create --title "Add caching" --body "Description here" --label "enhancement"
 # Then link to session:
 daf link <issue_url>
 
 # GitLab
-glab issue create --title "Add caching" --description "Description here"
+glab issue create --title "Add caching" --description "Description here" --label "enhancement"
 # Then link to session:
 daf link <issue_url>
+```
+
+### Issue Body Templates
+
+When creating issues with `daf git new`, templates are automatically injected into the prompt.
+Templates come from (in priority order):
+1. **Config templates** - `github_issue_templates` in organization.json/team.json
+2. **Repo templates** - `.github/ISSUE_TEMPLATE/` (GitHub) or `.gitlab/issue_templates/` (GitLab)
+3. **Built-in defaults** - Standard templates for bug, enhancement, task, epic
+
+**Example structured issue body (bug):**
+
+```markdown
+## Bug Description
+
+**What happened:**
+API returns 500 when pagination limit exceeds 100
+
+**Expected behavior:**
+API should return 400 with validation error
+
+**Steps to reproduce:**
+1. Call GET /api/items?limit=200
+2. Observe 500 Internal Server Error
+
+## Environment
+- Version: v2.3.1
+- OS: Linux
+
+## Acceptance Criteria
+- [ ] Bug is fixed
+- [ ] Regression test added
+- [ ] No new issues introduced
+```
+
+**Configuring custom templates** in organization.json or team.json:
+
+```json
+{
+  "github_issue_templates": {
+    "bug": "## Bug Report\n\n**Symptoms:**\n...",
+    "enhancement": "## Feature Request\n\n**Problem:**\n...",
+    "task": "## Task\n\n**Objective:**\n..."
+  }
+}
 ```
 
 ### Viewing Issues
@@ -127,13 +172,17 @@ When creating or updating GitHub/GitLab issues, all text fields (descriptions, c
 Create analysis-only sessions for creating GitHub/GitLab issues:
 
 ```bash
-# Create ticket creation session
+# Create ticket creation session (templates auto-injected into prompt)
 daf git new enhancement --goal "Add caching layer"
 daf git new bug --goal "Fix timeout in API"
 daf git new task --goal "Refactor auth module" --parent "#123"
 ```
 
 **Purpose:** Analyze the codebase to create a well-informed issue
+
+**Template injection:** The prompt automatically includes issue body templates from config,
+repo `.github/ISSUE_TEMPLATE/` directory, or built-in defaults. Use them to structure
+well-formed issues with acceptance criteria.
 
 **Constraints:**
 - DO NOT modify code or files

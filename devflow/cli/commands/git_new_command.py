@@ -24,6 +24,45 @@ from devflow.utils.daf_agents_validation import validate_daf_agents_md
 
 console = Console()
 
+DEFAULT_GITHUB_ISSUE_TEMPLATES = {
+    "bug": (
+        "## Bug Description\n\n"
+        "**What happened:**\n<describe the bug>\n\n"
+        "**Expected behavior:**\n<what should happen>\n\n"
+        "**Steps to reproduce:**\n1. <step 1>\n2. <step 2>\n\n"
+        "## Environment\n- Version:\n- OS:\n\n"
+        "## Acceptance Criteria\n"
+        "- [ ] Bug is fixed\n"
+        "- [ ] Regression test added\n"
+        "- [ ] No new issues introduced"
+    ),
+    "enhancement": (
+        "## Summary\n\n<brief description of the enhancement>\n\n"
+        "## Motivation\n\n<why is this needed?>\n\n"
+        "## Proposed Solution\n\n<high-level approach>\n\n"
+        "## Acceptance Criteria\n"
+        "- [ ] Feature implemented\n"
+        "- [ ] Tests added\n"
+        "- [ ] Documentation updated"
+    ),
+    "task": (
+        "## Summary\n\n<brief description of the task>\n\n"
+        "## Details\n\n<implementation details>\n\n"
+        "## Acceptance Criteria\n"
+        "- [ ] Task completed\n"
+        "- [ ] Tests pass\n"
+        "- [ ] Code reviewed"
+    ),
+    "epic": (
+        "## Epic Summary\n\n<brief description of the epic>\n\n"
+        "## Goals\n- <goal 1>\n- <goal 2>\n\n"
+        "## Scope\n### In scope\n- <item>\n\n### Out of scope\n- <item>\n\n"
+        "## Success Criteria\n"
+        "- [ ] <criterion 1>\n"
+        "- [ ] <criterion 2>"
+    ),
+}
+
 
 def slugify_goal(goal: str) -> str:
     """Convert a goal string into a valid session name slug.
@@ -897,6 +936,81 @@ def _build_issue_creation_prompt(
 
     prompt_parts.append("")
 
+    # --- Issue Templates ---
+    # Priority: config templates > repo templates > default templates
+    templates = None
+    template_source = None
+
+    if config and hasattr(config, "github") and config.github and config.github.issue_templates:
+        templates = config.github.issue_templates
+        template_source = "configuration (organization/team config)"
+
+    repo_template_dir = None
+    if project_path:
+        for candidate in (".github/ISSUE_TEMPLATE", ".gitlab/issue_templates"):
+            candidate_path = os.path.join(project_path, candidate)
+            if os.path.isdir(candidate_path):
+                repo_template_dir = candidate_path
+                break
+
+    if not templates:
+        templates = DEFAULT_GITHUB_ISSUE_TEMPLATES
+        template_source = "built-in defaults"
+
+    if repo_template_dir:
+        prompt_parts.extend([
+            f"Repository issue templates found at: {repo_template_dir}",
+            "   Read the templates in that directory and use the appropriate one for this issue type.",
+            "",
+        ])
+
+    if templates and issue_type:
+        matched_template = None
+        for key, value in templates.items():
+            if key.lower() == issue_type.lower():
+                matched_template = value
+                break
+        if matched_template:
+            prompt_parts.extend([
+                f"Issue body template ({template_source}):",
+                "Use this template as the structure for the issue body, filling in details from your analysis:",
+                "```",
+                matched_template,
+                "```",
+                "",
+            ])
+    elif templates:
+        available = ", ".join(templates.keys())
+        prompt_parts.extend([
+            f"Available issue templates ({template_source}): {available}",
+            "Use the most appropriate template structure for this issue.",
+            "",
+        ])
+
+    # --- Example CLI commands ---
+    label_parts = []
+    if issue_type:
+        label_parts.append(issue_type)
+    if config and hasattr(config, "github") and config.github and config.github.default_labels:
+        label_parts.extend(config.github.default_labels)
+
+    label_flag = f' --label "{",".join(label_parts)}"' if label_parts else ""
+    prompt_parts.extend([
+        "Example commands:",
+        f'  GitHub: gh issue create --title "..." --body "<your analysis>"{label_flag}',
+        f'  GitLab: glab issue create --title "..." --description "<your analysis>"{label_flag}',
+        "",
+    ])
+
+    # --- Configured defaults ---
+    defaults_parts = []
+    if config and hasattr(config, "github") and config.github:
+        if config.github.default_labels:
+            defaults_parts.append(f"default labels: {', '.join(config.github.default_labels)}")
+        if config.github.repository:
+            defaults_parts.append(f"repository: {config.github.repository}")
+    defaults_str = "; ".join(defaults_parts) if defaults_parts else "no defaults configured"
+
     prompt_parts.extend([
         "⚠️  IMPORTANT CONSTRAINTS:",
         "   • This is an ANALYSIS-ONLY session for GitHub/GitLab issue creation",
@@ -909,7 +1023,8 @@ def _build_issue_creation_prompt(
         "2. Read relevant files, search for patterns, understand the architecture",
         f"3. Create the GitHub/GitLab issue{' (' + issue_type + ')' if issue_type else ''} using `gh issue create` (GitHub) or `glab issue create` (GitLab)",
         "4. Include detailed description and acceptance criteria based on your analysis",
-        "5. After creating the issue, link it to this session: `daf link <issue_url>`",
+        f"5. Configured defaults: {defaults_str}",
+        "6. After creating the issue, link it to this session: `daf link <issue_url>`",
         "",
     ])
 

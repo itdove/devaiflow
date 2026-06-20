@@ -242,7 +242,7 @@ wait_for_prompt "Yes, I trust this folder" 30
 tmux send-keys -t "$SESSION_NAME" C-m
 
 # Wait for authorization to create ticket
-wait_for_prompt "Bash(daf git create" 360
+wait_for_prompt "Bash(gh issue create" 360
 wait_for_prompt "Do you want to proceed?" 10
 sleep 1
 tmux send-keys -t "$SESSION_NAME" C-m
