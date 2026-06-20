@@ -22,7 +22,7 @@
 #   3. Programmatically create config with auto_close_on_complete and auto_create_pr_on_complete
 #   4. Authenticate with GitHub using GITHUB_TOKEN
 #   5. Run daf skills to install skills
-#   6. Create a GitHub issue using daf git create
+#   6. Create a GitHub issue using gh CLI
 #   7. Sync issue with daf sync (creates session)
 #   8. Configure git to use gh CLI for authentication
 #   9. Create feature branch manually (matching session name)
@@ -483,7 +483,7 @@ fi
 
 # Test 7: Create GitHub issue
 print_section "Test 7: Create GitHub Issue"
-print_test "Create test issue using daf git create"
+print_test "Create test issue using gh CLI"
 
 # Change to test repository for git operations
 cd "$TEMP_GIT_REPO"
@@ -492,11 +492,11 @@ cd "$TEMP_GIT_REPO"
 TEST_TIMESTAMP=$(date +%s)
 ISSUE_SUMMARY="[AUTO-TEST] Installation workflow test - $TEST_TIMESTAMP"
 
-# Create issue and capture JSON output
-CREATE_OUTPUT=$(daf git create task \
-    --summary "$ISSUE_SUMMARY" \
-    --description "This is an automated test of the installation workflow with auto_close_on_complete. Test ID: $TEST_TIMESTAMP" \
-    --json 2>&1)
+# Create issue using gh CLI directly (daf git create was removed in PR #474)
+CREATE_OUTPUT=$(gh issue create \
+    --title "$ISSUE_SUMMARY" \
+    --body "This is an automated test of the installation workflow with auto_close_on_complete. Test ID: $TEST_TIMESTAMP" \
+    --label "task" 2>&1)
 
 CREATE_EXIT_CODE=$?
 if [ $CREATE_EXIT_CODE -eq 0 ]; then
@@ -509,25 +509,18 @@ else
     exit 1
 fi
 
-# Extract issue key from JSON
+# Extract issue number from gh output (URL like https://github.com/owner/repo/issues/123)
 print_test "Extract issue key from creation response"
 ISSUE_KEY=$(echo "$CREATE_OUTPUT" | python3 -c "
-import sys, json
+import sys, re
 try:
-    text = sys.stdin.read()
-    json_start = text.find('{')
-    if json_start == -1:
-        print('ERROR')
+    text = sys.stdin.read().strip()
+    # gh issue create outputs the issue URL
+    match = re.search(r'https://github\.com/([^/]+/[^/]+)/issues/(\d+)', text)
+    if match:
+        print(f'{match.group(1)}#{match.group(2)}')
     else:
-        json_text = text[json_start:]
-        data = json.loads(json_text)
-        if data.get('success'):
-            issue_data = data.get('data', {})
-            # Try 'issue_key' first (new format), then 'key' (old format)
-            key = issue_data.get('issue_key', '') or issue_data.get('key', '')
-            print(key)
-        else:
-            print('ERROR')
+        print('ERROR')
 except Exception as e:
     print('ERROR')
 " 2>/dev/null)
