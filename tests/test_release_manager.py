@@ -10,6 +10,77 @@ from devflow.release.manager import ReleaseManager
 from devflow.release.version import Version
 
 
+class TestDefaultBranchDetection:
+    """Test that ReleaseManager detects the default branch at init."""
+
+    @patch("devflow.release.manager.GitUtils.get_default_branch")
+    def test_uses_detected_default_branch(self, mock_get_default):
+        mock_get_default.return_value = "master"
+        manager = ReleaseManager(Path("/test/repo"))
+        assert manager.default_branch == "master"
+
+    @patch("devflow.release.manager.GitUtils.get_default_branch")
+    def test_falls_back_to_main_when_detection_returns_none(self, mock_get_default):
+        mock_get_default.return_value = None
+        manager = ReleaseManager(Path("/test/repo"))
+        assert manager.default_branch == "main"
+
+    @patch("devflow.release.manager.GitUtils.get_default_branch")
+    def test_uses_develop_branch(self, mock_get_default):
+        mock_get_default.return_value = "develop"
+        manager = ReleaseManager(Path("/test/repo"))
+        assert manager.default_branch == "develop"
+
+    @patch("devflow.release.manager.GitUtils.get_default_branch")
+    @patch.object(ReleaseManager, "get_current_branch")
+    def test_merge_to_main_and_bump_dry_run_uses_detected_branch(self, mock_branch, mock_get_default):
+        mock_get_default.return_value = "master"
+        manager = ReleaseManager(Path("/test/repo"))
+        mock_branch.return_value = "release/1.0"
+
+        success, msg = manager.merge_to_main_and_bump(
+            "release/1.0", Version(1, 0, 0), dry_run=True
+        )
+
+        assert success is True
+        assert "master" in msg
+        assert "main" not in msg
+
+    @patch("devflow.release.manager.GitUtils.get_default_branch")
+    @patch("subprocess.run")
+    @patch.object(ReleaseManager, "get_current_branch")
+    @patch.object(ReleaseManager, "checkout_branch")
+    @patch.object(ReleaseManager, "update_version_files")
+    @patch.object(ReleaseManager, "commit_changes")
+    def test_merge_to_main_and_bump_uses_detected_branch_for_git_ops(
+        self, mock_commit, mock_update_version, mock_checkout, mock_branch,
+        mock_subprocess, mock_get_default
+    ):
+        mock_get_default.return_value = "master"
+        manager = ReleaseManager(Path("/test/repo"))
+        mock_branch.return_value = "release/1.0"
+        mock_checkout.return_value = (True, "ok")
+        mock_commit.return_value = (True, "ok")
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        success, msg = manager.merge_to_main_and_bump(
+            "release/1.0", Version(1, 0, 0), dry_run=False
+        )
+
+        assert success is True
+        assert "master" in msg
+
+        mock_checkout.assert_any_call("master")
+
+        pull_calls = [c for c in mock_subprocess.call_args_list
+                      if "pull" in str(c) and "master" in str(c)]
+        assert len(pull_calls) > 0, "Expected git pull with 'master'"
+
+        push_calls = [c for c in mock_subprocess.call_args_list
+                      if "push" in str(c) and "master" in str(c)]
+        assert len(push_calls) > 0, "Expected git push with 'master'"
+
+
 class TestCommitAnalysis:
     """Test commit analysis functionality."""
 

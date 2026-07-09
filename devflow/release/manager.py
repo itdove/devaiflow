@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, List, Tuple, Dict
 from dataclasses import dataclass
 
+from devflow.git.utils import GitUtils
 from devflow.release.version import Version, detect_release_type, get_next_dev_version
 
 
@@ -44,6 +45,7 @@ class ReleaseManager:
         self.setup_file = repo_path / "setup.py"
         self.changelog_file = repo_path / "CHANGELOG.md"
         self._package_file_name: Optional[str] = None
+        self.default_branch = GitUtils.get_default_branch(repo_path) or "main"
 
     @property
     def package_file_name(self) -> str:
@@ -1282,20 +1284,20 @@ class ReleaseManager:
         """
         if dry_run:
             next_minor_dev = version.bump_minor().with_dev()
-            return True, f"Would merge {release_branch} to main and bump to {next_minor_dev}"
+            return True, f"Would merge {release_branch} to {self.default_branch} and bump to {next_minor_dev}"
 
         try:
             # Save current branch to return to it later
             current_branch = self.get_current_branch()
 
-            # Checkout main
-            success, msg = self.checkout_branch("main")
+            # Checkout default branch
+            success, msg = self.checkout_branch(self.default_branch)
             if not success:
-                return False, f"Failed to checkout main: {msg}"
+                return False, f"Failed to checkout {self.default_branch}: {msg}"
 
-            # Pull latest main
+            # Pull latest default branch
             result = subprocess.run(
-                ["git", "pull", "origin", "main"],
+                ["git", "pull", "origin", self.default_branch],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -1305,12 +1307,12 @@ class ReleaseManager:
             if result.returncode != 0:
                 # Restore original branch
                 self.checkout_branch(current_branch)
-                return False, f"Failed to pull main: {result.stderr}"
+                return False, f"Failed to pull {self.default_branch}: {result.stderr}"
 
             # Merge release branch with --no-ff
             result = subprocess.run(
                 ["git", "merge", release_branch, "--no-ff", "-m",
-                 f"Merge branch '{release_branch}' into main\n\nRelease v{version}\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>"],
+                 f"Merge branch '{release_branch}' into {self.default_branch}\n\nRelease v{version}\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>"],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -1366,9 +1368,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
                 self.checkout_branch(current_branch)
                 return False, f"Failed to bump version: {e}"
 
-            # Push main
+            # Push default branch
             result = subprocess.run(
-                ["git", "push", "origin", "main"],
+                ["git", "push", "origin", self.default_branch],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -1378,18 +1380,18 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
             if result.returncode != 0:
                 # Restore original branch
                 self.checkout_branch(current_branch)
-                return False, f"Failed to push main: {result.stderr}"
+                return False, f"Failed to push {self.default_branch}: {result.stderr}"
 
             # Restore original branch
             self.checkout_branch(current_branch)
 
-            return True, f"Merged {release_branch} to main and bumped to {next_minor_dev}"
+            return True, f"Merged {release_branch} to {self.default_branch} and bumped to {next_minor_dev}"
 
         except Exception as e:
             # Try to restore original branch
             try:
                 current_branch = self.get_current_branch()
-                if current_branch and current_branch != "main":
+                if current_branch and current_branch != self.default_branch:
                     self.checkout_branch(current_branch)
             except Exception:
                 pass
