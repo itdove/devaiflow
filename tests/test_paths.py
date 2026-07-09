@@ -9,6 +9,7 @@ from devflow.utils.paths import (
     _is_valid_legacy_home,
     _is_unified_mode,
     get_cs_home,
+    get_cs_cache_home,
     get_cs_config_home,
     get_cs_state_home,
     is_mock_mode,
@@ -282,33 +283,84 @@ def test_get_cs_state_home_unified_with_legacy(monkeypatch, tmp_path):
     assert get_cs_state_home() == get_cs_home()
 
 
-def test_all_three_unified_when_devaiflow_home(monkeypatch, tmp_path):
-    """Test all three functions return same path in unified mode."""
+def test_get_cs_cache_home_xdg_default(monkeypatch, tmp_path):
+    """Test get_cs_cache_home returns XDG default for new installs."""
+    monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = get_cs_cache_home()
+
+    assert result == tmp_path / ".cache" / "devaiflow"
+
+
+def test_get_cs_cache_home_xdg_env(monkeypatch, tmp_path):
+    """Test get_cs_cache_home uses XDG_CACHE_HOME when set."""
+    monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    xdg_cache = tmp_path / "custom-cache"
+    monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = get_cs_cache_home()
+
+    assert result == xdg_cache / "devaiflow"
+
+
+def test_get_cs_cache_home_unified_with_devaiflow_home(monkeypatch, tmp_path):
+    """Test get_cs_cache_home returns same as get_cs_home when DEVAIFLOW_HOME set."""
+    custom = tmp_path / "unified"
+    monkeypatch.setenv("DEVAIFLOW_HOME", str(custom))
+
+    assert get_cs_cache_home() == get_cs_home()
+
+
+def test_get_cs_cache_home_unified_with_legacy(monkeypatch, tmp_path):
+    """Test get_cs_cache_home returns same as get_cs_home when legacy dir has config."""
+    monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    legacy = tmp_path / ".daf-sessions"
+    legacy.mkdir()
+    (legacy / "config.json").write_text("{}")
+
+    assert get_cs_cache_home() == get_cs_home()
+
+
+def test_all_four_unified_when_devaiflow_home(monkeypatch, tmp_path):
+    """Test all four functions return same path in unified mode."""
     custom = tmp_path / "unified"
     monkeypatch.setenv("DEVAIFLOW_HOME", str(custom))
 
     home = get_cs_home()
     config = get_cs_config_home()
     state = get_cs_state_home()
+    cache = get_cs_cache_home()
 
-    assert home == config == state
+    assert home == config == state == cache
 
 
-def test_all_three_split_for_new_install(monkeypatch, tmp_path):
-    """Test all three functions return different paths for new installs."""
+def test_all_four_split_for_new_install(monkeypatch, tmp_path):
+    """Test all four functions return different paths for new installs."""
     monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     home = get_cs_home()
     config = get_cs_config_home()
     state = get_cs_state_home()
+    cache = get_cs_cache_home()
 
     assert home != config
     assert home != state
+    assert home != cache
     assert config != state
+    assert config != cache
+    assert state != cache
 
 
 # Tests for is_mock_mode()

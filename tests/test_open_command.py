@@ -1478,7 +1478,7 @@ def test_temp_directory_conversation_file_persistence(temp_daf_home, monkeypatch
 
     # Mock tempfile.mkdtemp to return a predictable path
     new_temp_dir = tmp_path / "new-temp-dir"
-    def mock_mkdtemp(prefix=""):
+    def mock_mkdtemp(prefix="", dir=None):
         new_temp_dir.mkdir(exist_ok=True)
         return str(new_temp_dir)
 
@@ -1601,7 +1601,7 @@ def test_temp_directory_conversation_file_persistence_when_temp_dir_deleted(temp
 
     # Mock tempfile.mkdtemp to return a predictable path
     new_temp_dir = tmp_path / "new-temp-dir"
-    def mock_mkdtemp(prefix=""):
+    def mock_mkdtemp(prefix="", dir=None):
         new_temp_dir.mkdir(exist_ok=True)
         return str(new_temp_dir)
 

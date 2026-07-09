@@ -17,7 +17,27 @@ from rich.prompt import Confirm, Prompt
 
 from devflow.cli.utils import console_print, is_json_mode
 from devflow.git.utils import GitUtils
-from devflow.utils.paths import is_mock_mode
+from devflow.utils.paths import get_cs_cache_home, is_mock_mode
+
+
+def get_clone_base_dir(config=None) -> Path:
+    """Get base directory for session clones.
+
+    Resolution priority:
+        1. config.clone_dir (explicit override from config hierarchy)
+        2. $XDG_CACHE_HOME/devaiflow/clones (XDG cache)
+        3. ~/.cache/devaiflow/clones (default)
+
+    Args:
+        config: Optional Config object with clone_dir field
+
+    Returns:
+        Path to the base directory for session clones
+    """
+    if config and getattr(config, "clone_dir", None):
+        return Path(config.clone_dir).expanduser().resolve()
+
+    return get_cs_cache_home() / "clones"
 
 
 def extract_repo_name(url: str) -> str:
@@ -68,7 +88,9 @@ def create_empty_temp_directory(prefix: str = "daf-investigation-") -> Optional[
         Path to the created temporary directory, or None on failure
     """
     try:
-        temp_dir = tempfile.mkdtemp(prefix=prefix)
+        base = get_clone_base_dir()
+        base.mkdir(parents=True, exist_ok=True)
+        temp_dir = tempfile.mkdtemp(prefix=prefix, dir=str(base))
         console_print(f"[dim]Created empty temporary directory: {temp_dir}[/dim]")
         return temp_dir
     except Exception as e:
@@ -104,7 +126,9 @@ def _create_nested_temp_directory(remote_url: str) -> Optional[tuple[str, str]]:
     repo_name = extract_repo_name(remote_url)
 
     try:
-        session_dir = tempfile.mkdtemp(prefix="daf-session-")
+        base = get_clone_base_dir()
+        base.mkdir(parents=True, exist_ok=True)
+        session_dir = tempfile.mkdtemp(prefix="daf-session-", dir=str(base))
         clone_dir = os.path.join(session_dir, repo_name)
         os.makedirs(clone_dir, exist_ok=True)
         console_print(f"[dim]Created temporary directory: {clone_dir}[/dim]")
@@ -367,7 +391,12 @@ def cleanup_temp_directory(temp_dir: Optional[str]) -> None:
         parent = temp_path.parent
         parent_name = parent.name
 
-        if parent_name.startswith("daf-session-") and parent.parent == Path(tempfile.gettempdir()).resolve():
+        clone_base = get_clone_base_dir().resolve()
+        system_temp = Path(tempfile.gettempdir()).resolve()
+
+        if parent_name.startswith("daf-session-") and (
+            parent.parent == system_temp or parent.parent == clone_base
+        ):
             # Nested structure: clean up the parent session directory
             console_print(f"[dim]Cleaning up temporary directory: {parent}[/dim]")
             shutil.rmtree(str(parent))

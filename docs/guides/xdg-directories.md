@@ -9,6 +9,7 @@ DevAIFlow follows the [XDG Base Directory Specification](https://specifications.
 | Data | `XDG_DATA_HOME` | `~/.local/share/devaiflow` | Sessions, backups, logs, features |
 | Config | `XDG_CONFIG_HOME` | `~/.config/devaiflow` | config.json, backends/, templates/, skills, context .md files |
 | State | `XDG_STATE_HOME` | `~/.local/state/devaiflow` | audit.log, cache, dashboard state, suggestions |
+| Cache | `XDG_CACHE_HOME` | `~/.cache/devaiflow` | Session clones (`clones/`), reproducible cached artifacts |
 
 ## Resolution Priority
 
@@ -31,7 +32,7 @@ If you have an existing `~/.daf-sessions` directory and want to adopt XDG layout
 
 ```bash
 # Create XDG directories
-mkdir -p ~/.local/share/devaiflow ~/.config/devaiflow ~/.local/state/devaiflow
+mkdir -p ~/.local/share/devaiflow ~/.config/devaiflow ~/.local/state/devaiflow ~/.cache/devaiflow
 
 # DATA — sessions, backups, logs, features, mocks
 cp -a ~/.daf-sessions/sessions ~/.daf-sessions/sessions.json ~/.local/share/devaiflow/ 2>/dev/null
@@ -80,18 +81,28 @@ export XDG_CONFIG_HOME="~/dotfiles/.config"
 
 # Store state on fast local storage
 export XDG_STATE_HOME="/tmp/state"
+
+# Store cache (session clones) on a fast drive
+export XDG_CACHE_HOME="/mnt/fast/.cache"
 ```
 
 DevAIFlow appends `/devaiflow` to each XDG path automatically.
 
 ## API Reference
 
-Three functions in `devflow.utils.paths`:
+Four functions in `devflow.utils.paths`:
 
 | Function | Returns | Used for |
 |----------|---------|----------|
 | `get_cs_home()` | Data directory | Sessions, backups, logs |
 | `get_cs_config_home()` | Config directory | Configuration files, skills, templates |
 | `get_cs_state_home()` | State directory | Audit logs, caches, runtime state |
+| `get_cs_cache_home()` | Cache directory | Session clones, reproducible artifacts |
 
-In unified mode (legacy or `DEVAIFLOW_HOME`), all three return the same path.
+In unified mode (legacy or `DEVAIFLOW_HOME`), all four return the same path.
+
+Additionally, `devflow.utils.temp_directory` provides:
+
+| Function | Returns | Used for |
+|----------|---------|----------|
+| `get_clone_base_dir(config)` | Clone base directory | `get_cs_cache_home() / "clones"`, or `config.clone_dir` override |
