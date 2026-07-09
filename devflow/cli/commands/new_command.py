@@ -1161,7 +1161,11 @@ def _show_branch_suggestions(path: Path, attempted_branch: str) -> None:
 
 
 def _prompt_for_source_branch(path: Path, default_base: str) -> Optional[str]:
-    """Prompt user for source branch with validation.
+    """Prompt user for source branch with numbered list selection.
+
+    Shows available remote branches as a numbered list (same UX as
+    target branch selection in daf complete). Falls back to text
+    input if branches cannot be fetched.
 
     Args:
         path: Repository path
@@ -1170,30 +1174,66 @@ def _prompt_for_source_branch(path: Path, default_base: str) -> Optional[str]:
     Returns:
         Source branch name if valid, None if user cancelled
     """
-    from rich.prompt import IntPrompt
+    branches = GitUtils.list_remote_branches(path, "origin")
 
-    console.print("\nCreate branch from which base?")
-    console.print(f"[dim]Default: {default_base}[/dim]")
+    if not branches:
+        return _prompt_for_source_branch_text(path, default_base)
+
+    console.print("\n[cyan]Create branch from which base?[/cyan]")
+    console.print("\n[bold]Available branches:[/bold]")
+
+    default_choice = "1"
+    for i, branch in enumerate(branches, 1):
+        if branch == default_base:
+            console.print(f"  {i}. {branch} [green](default)[/green]")
+            default_choice = str(i)
+        else:
+            console.print(f"  {i}. {branch}")
+
+    custom_option = len(branches) + 1
+    cancel_option = len(branches) + 2
+    console.print(f"  {custom_option}. Enter custom branch name")
+    console.print(f"  {cancel_option}. Cancel")
+
+    numeric_choices = [str(i) for i in range(1, cancel_option + 1)]
+    choice = Prompt.ask("Select option", choices=numeric_choices, default=default_choice)
+    choice_num = int(choice)
+
+    if choice_num == cancel_option:
+        return None
+    elif choice_num == custom_option:
+        return _prompt_for_source_branch_text(path, default_base)
+    else:
+        selected = branches[choice_num - 1]
+        console.print(f"[green]✓[/green] Using branch '{selected}'")
+        return selected
+
+
+def _prompt_for_source_branch_text(path: Path, default_base: str) -> Optional[str]:
+    """Text-input fallback for source branch selection.
+
+    Args:
+        path: Repository path
+        default_base: Default source branch suggestion
+
+    Returns:
+        Source branch name if valid, None if user cancelled
+    """
+    console.print(f"\n[dim]Default: {default_base}[/dim]")
     console.print(f"[dim]Or enter any branch name (e.g., upstream/develop, origin/feature/api)[/dim]")
 
     while True:
         source_branch = Prompt.ask("Enter source branch", default=default_base)
 
-        # Allow cancel
         if source_branch.lower() in ['cancel', 'q']:
             return None
 
-        # Validate branch exists
         if GitUtils.branch_exists(path, source_branch):
             console.print(f"[green]✓[/green] Branch '{source_branch}' exists")
             return source_branch
         else:
             console.print(f"[red]✗[/red] Branch '{source_branch}' does not exist")
-
-            # Show helpful suggestions
             _show_branch_suggestions(path, source_branch)
-
-            # Ask again
             console.print("[dim]Please try again or type 'cancel' to quit[/dim]")
 
 
