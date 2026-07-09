@@ -239,9 +239,15 @@ def complete_session(
     session.status = "complete"
     session_manager.update_session(session)
 
-    # Clean up temporary directory if present (for ticket_creation sessions)
+    # Clean up temporary directory if present (for ticket_creation sessions and auto-clones)
     if session.active_conversation and session.active_conversation.temp_directory:
-        _cleanup_temp_directory(session.active_conversation.temp_directory)
+        should_cleanup = True
+        if config and hasattr(config, 'concurrency') and not config.concurrency.cleanup_on_complete:
+            should_cleanup = False
+            console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
+            console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
+        if should_cleanup:
+            _cleanup_temp_directory(session.active_conversation.temp_directory)
 
     issue_display = f" ({session.issue_key})" if session.issue_key else ""
     console.print(f"[green]✓[/green] Session '{session.name}'{issue_display} marked as complete")

@@ -597,8 +597,14 @@ def create_new_session(
 
     # Check for concurrent active sessions in the same project BEFORE any git operations
     # AAP-63377: Pass workspace_name to enable workspace-aware concurrent session checking
-    if not check_concurrent_session(session_manager, project_path, name, selected_workspace_name, action="create"):
+    # #518: Enhanced with concurrency modes (strict/analyze/permissive) and auto-clone support
+    concurrency_result = check_concurrent_session(session_manager, project_path, name, selected_workspace_name, action="create", config=config)
+    if not concurrency_result.safe_to_proceed:
         return
+    auto_clone_original_path = None
+    if concurrency_result.clone_path:
+        auto_clone_original_path = concurrency_result.original_path
+        project_path = concurrency_result.clone_path
 
     # Initialize source_branch_for_base (used later for setting base_branch)
     source_branch_for_base = None
@@ -793,6 +799,12 @@ def create_new_session(
         if selected_workspace_name:
             session.workspace_name = selected_workspace_name
             session_manager.update_session(session)
+
+    # Store auto-clone metadata if session was created via concurrency auto-clone
+    if auto_clone_original_path and session and session.active_conversation:
+        session.active_conversation.temp_directory = concurrency_result.clone_path
+        session.active_conversation.original_project_path = auto_clone_original_path
+        session_manager.update_session(session)
 
     # Populate JIRA metadata if available
     if issue_metadata_dict:

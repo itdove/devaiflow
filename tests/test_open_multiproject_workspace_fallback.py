@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from devflow.cli.utils import ConcurrencyCheckResult
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Conversation, ConversationContext, ProjectInfo, WorkspaceDefinition
 from devflow.session.manager import SessionManager
@@ -102,7 +103,7 @@ def test_open_multiproject_session_with_none_workspace_path(temp_daf_home, tmp_p
     with patch('subprocess.run', mock_subprocess_run), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=True), \
          patch('devflow.cli.commands.open_command._display_session_summary'), \
-         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch('devflow.cli.commands.open_command._validate_context_files', return_value=True):
 
         # Import and call open_session
@@ -208,7 +209,7 @@ def test_open_multiproject_session_first_launch_with_none_workspace_path(temp_da
     with patch('devflow.agent.create_agent_client', return_value=mock_agent), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=True), \
          patch('devflow.cli.commands.open_command._display_session_summary'), \
-         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch('devflow.cli.commands.open_command._validate_context_files', return_value=True), \
          patch('devflow.cli.commands.open_command._generate_initial_prompt', return_value="Test prompt"):
 

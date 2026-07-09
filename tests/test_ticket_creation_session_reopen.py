@@ -16,6 +16,7 @@ import pytest
 from click.testing import CliRunner
 
 from devflow.cli.main import cli
+from devflow.cli.utils import ConcurrencyCheckResult
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 
@@ -106,7 +107,7 @@ def test_reopen_ticket_creation_session_without_conversation_file(temp_daf_home,
              patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
              patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None):
 
             result = runner.invoke(cli, ["open", "test-ticket-session-abc123"])
@@ -207,7 +208,7 @@ def test_reopen_ticket_creation_session_with_conversation_file(temp_daf_home, mo
              patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
              patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None):
 
             # Mock clone to preserve conversation file location
@@ -294,7 +295,7 @@ def test_reopen_normal_session_without_conversation_file(temp_daf_home, mock_git
          patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
          patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None):
 
         result = runner.invoke(cli, ["open", "normal-session"])
@@ -370,7 +371,7 @@ def test_mock_mode_skips_temp_directory_prompt(temp_daf_home, mock_git_repo, mon
          patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
          patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
          patch('rich.prompt.Confirm.ask') as mock_prompt:
 
@@ -459,7 +460,7 @@ def test_reopen_ticket_creation_session_never_prompts_for_branch(temp_daf_home, 
              patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
              patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
              patch('devflow.cli.commands.new_command._handle_branch_creation') as mock_branch_creation:
 
@@ -546,7 +547,7 @@ def test_reopen_ticket_creation_session_skips_jira_transition(temp_daf_home, moc
          patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
          patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
          patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+         patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
          patch('devflow.jira.JiraClient') as mock_jira_client_class:
 
@@ -664,7 +665,7 @@ def test_daf_jira_open_resumes_existing_conversation(temp_daf_home, mock_git_rep
              patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
              patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None):
 
             # Mock validate_jira_ticket to return ticket data (simulating ticket exists)

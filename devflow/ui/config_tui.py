@@ -2421,6 +2421,41 @@ class ConfigTUI(App):
                 help_text="Track time spent on work sessions",
             )
 
+            yield Static("[bold]Concurrent Sessions[/bold]", classes="subsection-title")
+            yield Static(
+                "Control behavior when another session is already active in the same project and workspace",
+                classes="section-help",
+            )
+
+            yield ConfigSelect(
+                "Conflict Detection Mode",
+                "concurrency.mode",
+                choices=[
+                    ("Strict (block concurrent sessions)", "strict"),
+                    ("Analyze (check file overlap, suggest clone)", "analyze"),
+                    ("Permissive (always offer clone)", "permissive"),
+                ],
+                value=self.config.concurrency.mode,
+                help_text="How to handle concurrent session conflicts. 'strict' blocks (current behavior), "
+                          "'analyze' checks for file overlap before offering a clone, "
+                          "'permissive' always offers to clone.",
+                allow_blank=False,
+            )
+
+            yield ConfigInput(
+                "Auto-Clone Path (optional)",
+                "concurrency.auto_clone_path",
+                value=self.config.concurrency.auto_clone_path or "",
+                help_text="Override directory for auto-clones (default: ~/.cache/devaiflow/clones/)",
+            )
+
+            yield ConfigCheckbox(
+                "Cleanup on Complete",
+                "concurrency.cleanup_on_complete",
+                value=self.config.concurrency.cleanup_on_complete,
+                help_text="Automatically remove auto-cloned directories when session completes",
+            )
+
     def _compose_advanced_tab(self) -> ComposeResult:
         """Compose advanced configuration tab content."""
         with VerticalScroll():
@@ -3248,6 +3283,24 @@ class ConfigTUI(App):
 
             except Exception as e:
                 self.notify(f"Error collecting prompts values: {e}", severity="error")
+
+        # Concurrency settings (only in Simple mode)
+        if not self.advanced_mode:
+            try:
+                concurrency_mode = self.query_one(key_to_id("select", "concurrency.mode"), Select).value
+                if isinstance(concurrency_mode, str):
+                    self.config.concurrency.mode = concurrency_mode
+
+                clone_path = self.query_one(key_to_id("input", "concurrency.auto_clone_path"), Input).value.strip()
+                self.config.concurrency.auto_clone_path = clone_path if clone_path else None
+
+                self.config.concurrency.cleanup_on_complete = self.query_one(
+                    key_to_id("checkbox", "concurrency.cleanup_on_complete"), Checkbox
+                ).value
+            except NoMatches:
+                pass
+            except Exception as e:
+                self.notify(f"Error collecting concurrency values: {e}", severity="error")
 
         # AI Agent configuration settings (only in Simple mode)
         if not self.advanced_mode:

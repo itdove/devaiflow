@@ -165,6 +165,7 @@ class EnterpriseConfig(BaseModel):
     jira_issue_templates: Optional[Dict[str, str]] = None  # Default issue templates for different issue types (e.g., {"Bug": "...", "Story": "...", "Task": "...", "Epic": "...", "Spike": "..."})
     github_issue_types: Optional[List[str]] = None  # Allowed GitHub/GitLab issue types (e.g., ["bug", "enhancement", "task", "spike", "epic", "story"])
     model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration enforced by enterprise (can enforce alternative model providers)
+    concurrency_mode: Optional[str] = None  # Enforce concurrency mode: "strict" | "analyze" | "permissive"
 
 
 class OrganizationConfig(BaseModel):
@@ -217,6 +218,7 @@ class TeamConfig(BaseModel):
 
     # GitHub-specific fields
     github_default_labels: List[str] = Field(default_factory=list)  # Team-level default labels for GitHub issues
+    concurrency_mode: Optional[str] = None  # Team-level concurrency mode override: "strict" | "analyze" | "permissive"
     github_issue_templates: Optional[Dict[str, str]] = None  # Team-specific GitHub issue template overrides (e.g., {"Bug": "...", "Story": "..."})
 
     # Model provider configuration
@@ -365,6 +367,22 @@ class TimeTrackingConfig(BaseModel):
     auto_start: bool = True
     auto_pause_after: Optional[str] = "30m"
     reminder_interval: Optional[str] = "2h"
+
+
+class ConcurrencyConfig(BaseModel):
+    """Concurrent session conflict detection configuration."""
+
+    mode: str = "strict"  # "strict" | "analyze" | "permissive"
+    auto_clone_path: Optional[str] = None  # Override clone base dir (default: XDG cache)
+    cleanup_on_complete: bool = True  # Auto-cleanup auto-clones on daf complete
+
+    @field_validator('mode')
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        valid_modes = ['strict', 'analyze', 'permissive']
+        if v not in valid_modes:
+            raise ValueError(f"concurrency.mode must be one of {valid_modes}, got '{v}'")
+        return v
 
 
 class SessionSummaryConfig(BaseModel):
@@ -545,6 +563,7 @@ class UserConfig(BaseModel):
     model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration (user-level profiles)
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration
     clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
+    concurrency: ConcurrencyConfig = Field(default_factory=ConcurrencyConfig)  # Concurrent session conflict detection
 
 
 class Config(BaseModel):
@@ -583,6 +602,7 @@ class Config(BaseModel):
     model_provider: ModelProviderConfig = Field(default_factory=ModelProviderConfig)  # Model provider configuration (merged from enterprise/org/team/user)
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration (user-level)
     clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
+    concurrency: ConcurrencyConfig = Field(default_factory=ConcurrencyConfig)  # Concurrent session conflict detection (merged from enterprise/team/user)
 
 
     class Config:

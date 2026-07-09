@@ -214,6 +214,45 @@ Or resume the existing session if that's what you intended:
 daf open session-name
 ```
 
+### Smart Conflict Detection (Concurrency Modes)
+
+Instead of always blocking, DevAIFlow can analyze whether two sessions would actually conflict and offer to auto-clone the project when it's safe. Configure via `concurrency.mode` in your config:
+
+| Mode | Behavior |
+|------|----------|
+| `strict` | Hard block (default, current behavior) |
+| `analyze` | Check file overlap, suggest auto-clone if safe, warn if overlap |
+| `permissive` | Always offer to auto-clone, skip analysis |
+
+**Example — analyze mode with no conflict:**
+```
+$ daf open issue-456
+⚠ Active session detected: issue-123 (branch: issue-123-fix-auth)
+
+🔍 Analyzing potential conflicts... (concurrency.mode: analyze)
+   Active session has no file changes yet.
+
+✅ No conflict detected — safe for concurrent work.
+
+Clone project to ~/.cache/devaiflow/clones/... and start session? [Y/n]
+```
+
+**Configuration:**
+```yaml
+# In config.json (user config)
+{
+  "concurrency": {
+    "mode": "analyze",           # strict | analyze | permissive
+    "auto_clone_path": null,     # override clone directory (default: XDG cache)
+    "cleanup_on_complete": true  # remove auto-clone on daf complete
+  }
+}
+```
+
+**Auto-clones vs Workspaces:** Auto-clones are ephemeral — created automatically on conflict detection, stored in `~/.cache/devaiflow/clones/`, and cleaned up on `daf complete`. Workspaces are persistent, user-managed directories for long-lived parallel development. Auto-clones do not appear in `daf workspace list`.
+
+**Config hierarchy:** Enterprise can enforce `strict` mode via `enterprise.json` (`concurrency_mode: "strict"`) to prevent teams from using more permissive modes.
+
 ## Working Across Multiple Repositories
 
 **Recommended: Use Multi-Project Sessions with Shared Context (New!)**

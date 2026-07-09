@@ -4,6 +4,7 @@ import functools
 import json
 import os
 import sys
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -888,18 +889,102 @@ def get_active_session_name() -> Optional[str]:
     return None
 
 
+@dataclass
+class ConcurrencyCheckResult:
+    """Result of concurrent session conflict check."""
+
+    safe_to_proceed: bool
+    clone_path: Optional[str] = None
+    original_path: Optional[str] = None
+    active_session: Optional[Session] = None
+
+
+def _analyze_file_overlap(
+    project_path: str,
+    active_session: Session,
+) -> Tuple[List[str], List[str]]:
+    """Analyze files changed by the active session's branch.
+
+    Returns:
+        Tuple of (active_session_changed_files, []) — second list reserved
+        for future overlap detection with predicted new session files.
+    """
+    from devflow.git.utils import GitUtils
+
+    active_conv = active_session.active_conversation
+    if not active_conv or not active_conv.branch:
+        return ([], [])
+
+    try:
+        changed_files = GitUtils.get_changed_files(
+            Path(project_path),
+            base_branch=active_conv.base_branch,
+            current_branch=active_conv.branch,
+        )
+        return (changed_files, [])
+    except Exception:
+        return ([], [])
+
+
+def _offer_and_create_auto_clone(
+    project_path: str,
+    config: Optional[Config] = None,
+    default_accept: bool = True,
+) -> Optional[Tuple[str, str]]:
+    """Offer to create an auto-clone for concurrent work.
+
+    Args:
+        project_path: Path to the original project
+        config: Config for reading auto_clone_path override
+        default_accept: Default for the Y/n prompt (True=Y/n, False=y/N)
+
+    Returns:
+        Tuple of (clone_path, original_path) if clone created, None if declined.
+    """
+    from devflow.utils.temp_directory import clone_to_temp_directory, get_clone_base_dir
+
+    clone_base = get_clone_base_dir(config)
+
+    if config and config.concurrency.auto_clone_path:
+        clone_base = Path(config.concurrency.auto_clone_path)
+
+    console.print(f"\n[cyan]Clone project to[/cyan] {clone_base / '...'} [cyan]and start session?[/cyan]", end=" ")
+
+    prompt_default = "Y/n" if default_accept else "y/N"
+    console.print(f"[dim][{prompt_default}][/dim]", end=" ")
+
+    accepted = Confirm.ask("", default=default_accept)
+    if not accepted:
+        return None
+
+    result = clone_to_temp_directory(Path(project_path))
+    if result:
+        clone_path, original_path = result
+        console.print(f"[green]✓[/green] Cloned to: {clone_path}")
+        return (clone_path, original_path)
+
+    console.print("[red]Failed to create auto-clone[/red]")
+    return None
+
+
 def check_concurrent_session(
     session_manager: SessionManager,
     project_path: str,
     current_session_name: str,
     workspace_name: Optional[str] = None,
-    action: str = "create"
-) -> bool:
+    action: str = "create",
+    config: Optional[Config] = None,
+) -> ConcurrencyCheckResult:
     """Check for concurrent active sessions in the same project and workspace.
 
     AAP-63377: Updated to use (project_path, workspace_name) tuple for checking.
     This allows concurrent sessions on the same project in different workspaces
     while preventing branch switching conflicts within the same workspace.
+
+    Supports three concurrency modes (configurable via concurrency.mode):
+    - strict: Hard block (default, backward compatible)
+    - analyze: Run file overlap analysis, suggest auto-clone
+    - permissive: Skip analysis, always offer auto-clone
 
     Args:
         session_manager: SessionManager instance
@@ -907,30 +992,26 @@ def check_concurrent_session(
         current_session_name: Name of the session being created/opened
         workspace_name: Optional workspace name for the session (AAP-63377)
         action: Action being performed ("create" or "open") - used in error message
+        config: Optional Config for reading concurrency settings
 
     Returns:
-        True if no conflicts (safe to proceed), False if another session is active
-
-    Examples:
-        >>> # Different workspaces - both allowed
-        >>> check_concurrent_session(mgr, "/path/to/repo", "session-a", "feat-caching")
-        True
-        >>> check_concurrent_session(mgr, "/path/to/repo", "session-b", "product-a")
-        True
-
-        >>> # Same workspace - second blocked
-        >>> check_concurrent_session(mgr, "/path/to/repo", "session-a", "feat-caching")
-        True
-        >>> check_concurrent_session(mgr, "/path/to/repo", "session-b", "feat-caching")
-        False
+        ConcurrencyCheckResult with safe_to_proceed, optional clone_path, and active_session
     """
     active_session = session_manager.get_active_session_for_project(
         project_path,
         workspace_name=workspace_name
     )
 
-    if active_session and active_session.name != current_session_name:
-        workspace_info = f" in workspace '{workspace_name}'" if workspace_name else ""
+    if not active_session or active_session.name == current_session_name:
+        return ConcurrencyCheckResult(safe_to_proceed=True)
+
+    mode = "strict"
+    if config and hasattr(config, 'concurrency'):
+        mode = config.concurrency.mode
+
+    workspace_info = f" in workspace '{workspace_name}'" if workspace_name else ""
+
+    if mode == "strict":
         console.print(f"\n[red]Error: Cannot {action} session - another session is already active in this project{workspace_info}[/red]")
         console.print(f"\n[yellow]Active session:[/yellow] {active_session.name}")
         if active_session.workspace_name:
@@ -955,9 +1036,60 @@ def check_concurrent_session(
         console.print(f"     [bold]daf open {active_session.name}[/bold]")
 
         console.print(f"\n[dim]Learn more: docs/guides/session-management.md#concurrent-sessions-faq[/dim]")
-        return False
+        return ConcurrencyCheckResult(safe_to_proceed=False, active_session=active_session)
 
-    return True
+    if mode == "analyze":
+        console.print(f"\n[yellow]⚠ Active session detected:[/yellow] {active_session.name}", end="")
+        active_conv = active_session.active_conversation
+        if active_conv and active_conv.branch:
+            console.print(f" (branch: {active_conv.branch})")
+        else:
+            console.print()
+
+        console.print(f"\n[cyan]🔍 Analyzing potential conflicts...[/cyan] (concurrency.mode: analyze)")
+
+        changed_files, _ = _analyze_file_overlap(project_path, active_session)
+
+        if changed_files:
+            console.print(f"   Active session modified: [bold]{', '.join(changed_files[:10])}[/bold]")
+            if len(changed_files) > 10:
+                console.print(f"   [dim]... and {len(changed_files) - 10} more files[/dim]")
+            console.print(f"\n[yellow]⚠️  Potential conflict — active session has modified {len(changed_files)} file(s).[/yellow]")
+            console.print(f"[dim]Conflicts can be resolved during merge.[/dim]")
+            clone_result = _offer_and_create_auto_clone(project_path, config, default_accept=False)
+        else:
+            console.print(f"   Active session has no file changes yet.")
+            console.print(f"\n[green]✅ No conflict detected — safe for concurrent work.[/green]")
+            clone_result = _offer_and_create_auto_clone(project_path, config, default_accept=True)
+
+        if clone_result:
+            return ConcurrencyCheckResult(
+                safe_to_proceed=True,
+                clone_path=clone_result[0],
+                original_path=clone_result[1],
+                active_session=active_session,
+            )
+        return ConcurrencyCheckResult(safe_to_proceed=False, active_session=active_session)
+
+    if mode == "permissive":
+        console.print(f"\n[yellow]⚠ Active session detected:[/yellow] {active_session.name}", end="")
+        active_conv = active_session.active_conversation
+        if active_conv and active_conv.branch:
+            console.print(f" (branch: {active_conv.branch})")
+        else:
+            console.print()
+
+        clone_result = _offer_and_create_auto_clone(project_path, config, default_accept=True)
+        if clone_result:
+            return ConcurrencyCheckResult(
+                safe_to_proceed=True,
+                clone_path=clone_result[0],
+                original_path=clone_result[1],
+                active_session=active_session,
+            )
+        return ConcurrencyCheckResult(safe_to_proceed=False, active_session=active_session)
+
+    return ConcurrencyCheckResult(safe_to_proceed=False, active_session=active_session)
 
 
 def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool = False) -> bool:
