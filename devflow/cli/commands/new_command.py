@@ -1809,7 +1809,7 @@ def _handle_branch_creation(
 
         # Always pull latest if it's a local branch (even if already on it)
         # This ensures new branch is created from latest commits
-        if '/' not in source_branch:  # Local branch
+        if GitUtils.branch_exists(path, source_branch):  # Local branch
             msg = f"Pulling latest {source_branch}..."
             if project_name:
                 msg = f"[{project_name}] {msg}"

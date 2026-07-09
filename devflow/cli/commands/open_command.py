@@ -892,7 +892,7 @@ def open_session(
             return
 
         # Check if branch is behind base branch and offer to sync
-        base_branch = active_conv.base_branch if active_conv and active_conv.base_branch else "main"
+        base_branch = active_conv.base_branch if active_conv and active_conv.base_branch else (GitUtils.get_default_branch(Path(active_conv.project_path)) or "main")
         sync_successful = _check_and_sync_with_base_branch(
             active_conv.project_path,
             active_conv.branch,
