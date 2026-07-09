@@ -11,6 +11,7 @@ from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import get_session_with_delete_all_option, get_status_display, require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
+from devflow.utils.temp_directory import cleanup_temp_directory
 
 console = Console()
 
@@ -69,6 +70,12 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
                 console.print("[dim]Cancelled[/dim]")
                 return
 
+        # Clean up clone directories for all sessions in group
+        for s in sessions:
+            for conv in (s.conversations or []):
+                if getattr(conv, "temp_directory", None):
+                    cleanup_temp_directory(conv.temp_directory)
+
         session_manager.delete_session(identifier)
 
         # Delete session directory by default unless --keep-metadata is specified
@@ -108,6 +115,11 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
         if not Confirm.ask(f"\n[yellow]Delete session '{session.name}'?[/yellow]", default=False):
             console.print("[dim]Cancelled[/dim]")
             return
+
+    # Clean up clone directories
+    for conv in (session.conversations or []):
+        if getattr(conv, "temp_directory", None):
+            cleanup_temp_directory(conv.temp_directory)
 
     # Delete specific session
     session_manager.delete_session(identifier)
@@ -170,6 +182,12 @@ def _delete_all_sessions(session_manager: SessionManager, config_loader: ConfigL
         if not Confirm.ask(f"[red bold]Delete ALL {session_count} sessions?[/red bold]", default=False):
             console.print("[dim]Cancelled[/dim]")
             return
+
+    # Clean up clone directories for all sessions
+    for s in all_sessions:
+        for conv in (s.conversations or []):
+            if getattr(conv, "temp_directory", None):
+                cleanup_temp_directory(conv.temp_directory)
 
     # Delete all session groups from index
     for group_name in session_groups:

@@ -3523,7 +3523,12 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
             try:
                 # Check if nested structure: clean parent session dir
                 old_parent = old_temp_path.parent
-                if old_parent.name.startswith("daf-session-") and old_parent.parent == Path(tempfile.gettempdir()):
+                from devflow.utils.temp_directory import get_clone_base_dir
+                clone_base = get_clone_base_dir().resolve()
+                system_temp = Path(tempfile.gettempdir())
+                if old_parent.name.startswith("daf-session-") and (
+                    old_parent.parent == system_temp or old_parent.parent == clone_base
+                ):
                     shutil.rmtree(str(old_parent))
                 else:
                     shutil.rmtree(conv.temp_directory)
@@ -3548,11 +3553,13 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
         console.print(f"[cyan]Re-cloning repository to get latest version from main branch...[/cyan]")
         console.print(f"[dim]Remote URL: {remote_url}[/dim]")
 
-        from devflow.utils.temp_directory import extract_repo_name
+        from devflow.utils.temp_directory import extract_repo_name, get_clone_base_dir
         repo_name = extract_repo_name(remote_url)
 
         try:
-            new_session_dir = tempfile.mkdtemp(prefix="daf-session-")
+            clone_base = get_clone_base_dir()
+            clone_base.mkdir(parents=True, exist_ok=True)
+            new_session_dir = tempfile.mkdtemp(prefix="daf-session-", dir=str(clone_base))
             new_clone_dir = os.path.join(new_session_dir, repo_name)
             os.makedirs(new_clone_dir, exist_ok=True)
             console.print(f"[dim]Created new temporary directory: {new_clone_dir}[/dim]")
@@ -3649,11 +3656,13 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
         console.print(f"[dim]Remote URL: {remote_url}[/dim]")
 
         # Create nested temp directory with repo name
-        from devflow.utils.temp_directory import extract_repo_name
+        from devflow.utils.temp_directory import extract_repo_name, get_clone_base_dir
         repo_name = extract_repo_name(remote_url)
 
         try:
-            session_dir = tempfile.mkdtemp(prefix="daf-session-")
+            clone_base = get_clone_base_dir()
+            clone_base.mkdir(parents=True, exist_ok=True)
+            session_dir = tempfile.mkdtemp(prefix="daf-session-", dir=str(clone_base))
             clone_dir = os.path.join(session_dir, repo_name)
             os.makedirs(clone_dir, exist_ok=True)
             console.print(f"[dim]Created temporary directory: {clone_dir}[/dim]")

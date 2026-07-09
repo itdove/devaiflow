@@ -136,6 +136,39 @@ def get_cs_state_home() -> Path:
     return Path.home() / ".local" / "state" / "devaiflow"
 
 
+def get_cs_cache_home() -> Path:
+    """Get the DevAIFlow cache directory.
+
+    In unified mode (DEVAIFLOW_HOME set or legacy ~/.daf-sessions exists),
+    returns the same path as get_cs_home() for backward compatibility.
+
+    In XDG mode (new installs):
+        1. XDG_CACHE_HOME/devaiflow (if XDG_CACHE_HOME is set)
+        2. ~/.cache/devaiflow (XDG default)
+
+    On Windows (non-unified, no XDG_CACHE_HOME):
+        %LOCALAPPDATA%/devaiflow/cache
+
+    Stores: session clones (clones/), other reproducible cached artifacts.
+
+    Returns:
+        Path to DevAIFlow cache directory
+    """
+    if _is_unified_mode():
+        return get_cs_home()
+
+    xdg_cache = os.getenv("XDG_CACHE_HOME")
+    if xdg_cache:
+        return Path(xdg_cache).expanduser().resolve() / "devaiflow"
+
+    if os.name == "nt":
+        local_app = os.getenv("LOCALAPPDATA")
+        if local_app:
+            return Path(local_app) / "devaiflow" / "cache"
+
+    return Path.home() / ".cache" / "devaiflow"
+
+
 def get_claude_config_dir() -> Path:
     """Get Claude Code config directory, respecting CLAUDE_CONFIG_DIR.
 

@@ -1295,6 +1295,18 @@
     },
     "agent": {
       "$ref": "#/$defs/AgentConfig"
+    },
+    "clone_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Clone Dir"
     }
   },
   "required": [

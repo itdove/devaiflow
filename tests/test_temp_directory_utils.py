@@ -19,6 +19,7 @@ from devflow.utils.temp_directory import (
     clone_to_temp_directory,
     cleanup_temp_directory,
     extract_repo_name,
+    get_clone_base_dir,
     _prompt_for_branch_selection,
     _create_nested_temp_directory,
 )
@@ -64,6 +65,64 @@ def non_git_dir(tmp_path):
     non_git_path = tmp_path / "non-git-dir"
     non_git_path.mkdir()
     return non_git_path
+
+
+class TestGetCloneBaseDir:
+    """Test the get_clone_base_dir function."""
+
+    def test_default_xdg_cache(self, monkeypatch, tmp_path):
+        """Test default path uses XDG cache."""
+        monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        result = get_clone_base_dir()
+        assert result == tmp_path / ".cache" / "devaiflow" / "clones"
+
+    def test_xdg_cache_home_env(self, monkeypatch, tmp_path):
+        """Test XDG_CACHE_HOME env var is respected."""
+        monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        xdg_cache = tmp_path / "custom-cache"
+        monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        result = get_clone_base_dir()
+        assert result == xdg_cache / "devaiflow" / "clones"
+
+    def test_config_override(self, tmp_path):
+        """Test config.clone_dir overrides XDG."""
+        clone_path = tmp_path / "my-clones"
+
+        class FakeConfig:
+            clone_dir = str(clone_path)
+
+        result = get_clone_base_dir(config=FakeConfig())
+        assert result == clone_path.resolve()
+
+    def test_config_none_falls_through(self, monkeypatch, tmp_path):
+        """Test None config uses XDG."""
+        monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        result = get_clone_base_dir(config=None)
+        assert result == tmp_path / ".cache" / "devaiflow" / "clones"
+
+    def test_config_clone_dir_none_falls_through(self, monkeypatch, tmp_path):
+        """Test config with clone_dir=None uses XDG."""
+        monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        class FakeConfig:
+            clone_dir = None
+
+        result = get_clone_base_dir(config=FakeConfig())
+        assert result == tmp_path / ".cache" / "devaiflow" / "clones"
 
 
 class TestExtractRepoName:
@@ -115,7 +174,13 @@ class TestExtractRepoName:
 class TestCreateNestedTempDirectory:
     """Test the _create_nested_temp_directory helper."""
 
-    def test_creates_nested_structure(self):
+    def test_creates_nested_structure(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        xdg_cache = tmp_path / "cache"
+        monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
         result = _create_nested_temp_directory("https://github.com/user/my-repo.git")
         assert result is not None
         session_dir, clone_dir = result
@@ -125,10 +190,18 @@ class TestCreateNestedTempDirectory:
             assert os.path.exists(clone_dir)
             assert clone_dir == os.path.join(session_dir, "my-repo")
             assert os.path.basename(session_dir).startswith("daf-session-")
+            # Verify created under XDG cache, not system temp
+            assert str(xdg_cache) in session_dir
         finally:
             shutil.rmtree(session_dir, ignore_errors=True)
 
-    def test_clone_dir_ends_with_repo_name(self):
+    def test_clone_dir_ends_with_repo_name(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        xdg_cache = tmp_path / "cache"
+        monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
         result = _create_nested_temp_directory("git@github.com:org/ai-guardian.git")
         assert result is not None
         session_dir, clone_dir = result
@@ -139,9 +212,11 @@ class TestCreateNestedTempDirectory:
             shutil.rmtree(session_dir, ignore_errors=True)
 
     def test_handles_creation_failure(self):
-        with patch("tempfile.mkdtemp", side_effect=Exception("Permission denied")):
-            result = _create_nested_temp_directory("https://github.com/user/repo.git")
-            assert result is None
+        with patch("devflow.utils.temp_directory.get_clone_base_dir") as mock_base:
+            mock_base.return_value = Path("/tmp/test-clone-base")
+            with patch("tempfile.mkdtemp", side_effect=Exception("Permission denied")):
+                result = _create_nested_temp_directory("https://github.com/user/repo.git")
+                assert result is None
 
 
 class TestShouldCloneToTemp:
@@ -301,9 +376,32 @@ class TestCleanupTempDirectory:
         cleanup_temp_directory(str(temp_dir))
         assert not temp_dir.exists()
 
-    def test_removes_nested_structure_parent(self):
-        """Test cleanup of nested temp directory removes parent session dir."""
+    def test_removes_nested_structure_parent_system_temp(self):
+        """Test cleanup of nested temp directory in system temp removes parent session dir."""
         session_dir = tempfile.mkdtemp(prefix="daf-session-")
+        clone_dir = os.path.join(session_dir, "my-repo")
+        os.makedirs(clone_dir)
+        Path(os.path.join(clone_dir, "file.txt")).write_text("test")
+
+        assert os.path.exists(clone_dir)
+        assert os.path.exists(session_dir)
+
+        cleanup_temp_directory(clone_dir)
+
+        assert not os.path.exists(session_dir)
+        assert not os.path.exists(clone_dir)
+
+    def test_removes_nested_structure_parent_xdg_cache(self, monkeypatch, tmp_path):
+        """Test cleanup of nested temp directory in XDG cache removes parent session dir."""
+        monkeypatch.delenv("DEVAIFLOW_HOME", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        xdg_cache = tmp_path / "cache"
+        monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        clone_base = xdg_cache / "devaiflow" / "clones"
+        clone_base.mkdir(parents=True)
+        session_dir = tempfile.mkdtemp(prefix="daf-session-", dir=str(clone_base))
         clone_dir = os.path.join(session_dir, "my-repo")
         os.makedirs(clone_dir)
         Path(os.path.join(clone_dir, "file.txt")).write_text("test")

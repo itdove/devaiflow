@@ -544,6 +544,7 @@ class UserConfig(BaseModel):
     jira_affected_version: Optional[str] = None  # User's current affected version for bug creation (e.g., "v1.0.0")
     model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration (user-level profiles)
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration
+    clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
 
 
 class Config(BaseModel):
@@ -581,6 +582,7 @@ class Config(BaseModel):
     update_checker_timeout: int = 10  # Timeout in seconds for update check requests (default: 10)
     model_provider: ModelProviderConfig = Field(default_factory=ModelProviderConfig)  # Model provider configuration (merged from enterprise/org/team/user)
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration (user-level)
+    clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
 
 
     class Config:
