@@ -239,3 +239,75 @@ def test_handle_branch_creation_works_for_daf_open(tmp_path):
 
         # Verify Prompt.ask was called for branch name and source branch
         assert mock_prompt.call_count == 2
+
+
+def test_branch_with_slash_detected_as_local(tmp_path):
+    """Test that local branches with '/' in name (e.g., dev/1.14.0) trigger git pull."""
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    subprocess.run(["git", "checkout", "-b", "dev/1.14.0"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "dev.txt").write_text("dev branch")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Dev commit"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "checkout", "main"], cwd=tmp_path, capture_output=True)
+
+    mock_config = Mock()
+    mock_config.prompts = Mock()
+    mock_config.prompts.default_branch_strategy = None
+
+    with patch.object(GitUtils, 'generate_branch_name', return_value='issue-123-fix'), \
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)) as mock_pull, \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)):
+
+        result = _handle_branch_creation(
+            str(tmp_path),
+            "ISSUE-123",
+            "fix something",
+            auto_from_default=True,
+            config=mock_config,
+            source_branch="dev/1.14.0",
+        )
+
+        assert isinstance(result, tuple)
+        assert result[1] == "dev/1.14.0"
+        mock_pull.assert_called_once()
+
+
+def test_remote_ref_skips_pull(tmp_path):
+    """Test that remote refs like origin/main skip git pull."""
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+
+    (tmp_path / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    mock_config = Mock()
+    mock_config.prompts = Mock()
+    mock_config.prompts.default_branch_strategy = None
+
+    with patch.object(GitUtils, 'generate_branch_name', return_value='issue-456-fix'), \
+         patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
+         patch.object(GitUtils, 'pull_current_branch', return_value=(True, None)) as mock_pull, \
+         patch.object(GitUtils, 'checkout_branch', return_value=(True, None)), \
+         patch.object(GitUtils, 'create_branch', return_value=(True, None)):
+
+        result = _handle_branch_creation(
+            str(tmp_path),
+            "ISSUE-456",
+            "fix something",
+            auto_from_default=True,
+            config=mock_config,
+            source_branch="origin/main",
+        )
+
+        assert isinstance(result, tuple)
+        mock_pull.assert_not_called()

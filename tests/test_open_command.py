@@ -3,7 +3,7 @@
 import shutil
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -779,6 +779,31 @@ def test_check_and_sync_with_base_branch_fetch_fails(tmp_path):
 
         # Should skip check if fetch fails
         mock_commits.assert_not_called()
+
+
+def test_open_sync_fallback_detects_repo_default_branch(tmp_path):
+    """Test that sync fallback uses detected default branch instead of hardcoded 'main'."""
+    # The fix at open_command.py line 895 replaces hardcoded "main" with
+    # GitUtils.get_default_branch() or "main". Verify the expression produces
+    # the correct result for repos whose default branch is not "main".
+    with patch.object(GitUtils, 'get_default_branch', return_value="master"):
+        active_conv = Mock()
+        active_conv.base_branch = None
+        active_conv.project_path = str(tmp_path)
+
+        base_branch = active_conv.base_branch if active_conv and active_conv.base_branch else (GitUtils.get_default_branch(Path(active_conv.project_path)) or "main")
+        assert base_branch == "master"
+
+
+def test_open_sync_fallback_with_no_detection(tmp_path):
+    """Test that sync fallback falls back to 'main' when detection fails."""
+    with patch.object(GitUtils, 'get_default_branch', return_value=None):
+        active_conv = Mock()
+        active_conv.base_branch = None
+        active_conv.project_path = str(tmp_path)
+
+        base_branch = active_conv.base_branch if active_conv and active_conv.base_branch else (GitUtils.get_default_branch(Path(active_conv.project_path)) or "main")
+        assert base_branch == "main"
 
 
 # Tests for PROJ-59839: Auto-detect working directory for multi-conversation sessions

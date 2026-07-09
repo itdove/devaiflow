@@ -1749,7 +1749,7 @@ def _get_pr_for_branch(working_dir: Path, branch_name: str) -> Optional[dict]:
     return None
 
 
-def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None, current_branch: Optional[str] = None) -> Optional[str]:
+def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None, current_branch: Optional[str] = None, base_branch: Optional[str] = None) -> Optional[str]:
     """Prompt user to select target branch for PR/MR.
 
     Args:
@@ -1757,12 +1757,15 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         config: Config object
         upstream_info: Upstream repository info if fork (optional)
         current_branch: Current branch name to filter out (cannot PR to same branch)
+        base_branch: Session's stored base branch (preferred over repo default)
 
     Returns:
         Selected branch name or None if skip/error
     """
-    # In non-interactive mode, auto-select default branch
+    # In non-interactive mode, auto-select base branch or default branch
     if is_non_interactive():
+        if base_branch:
+            return base_branch
         default_branch = GitUtils.get_default_branch(working_dir)
         if default_branch:
             return default_branch
@@ -1775,11 +1778,11 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
             # Explicitly disabled - skip branch selection (backward compatible)
             return None
         elif auto_select is True:
-            # Auto-select default branch without prompting
-            default_branch = GitUtils.get_default_branch(working_dir)
-            if default_branch:
-                console.print(f"[dim]Automatically using default branch: {default_branch} (configured in prompts)[/dim]")
-                return default_branch
+            # Auto-select base branch or default branch without prompting
+            target = base_branch or GitUtils.get_default_branch(working_dir)
+            if target:
+                console.print(f"[dim]Automatically using target branch: {target} (configured in prompts)[/dim]")
+                return target
 
     # Determine which remotes to query
     if upstream_info:
@@ -1829,8 +1832,9 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         console.print("[dim]Continuing without target branch selection[/dim]")
         return None
 
-    # Get default branch to highlight it
+    # Get default branch to highlight it; prefer session base_branch
     default_branch = GitUtils.get_default_branch(working_dir)
+    preferred_default = base_branch or default_branch
 
     # Show branch selection prompt
     if len(remote_branches) > 1:
@@ -1844,7 +1848,7 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     console.print("\n[bold]Available branches:[/bold]")
     for i, branch_display in enumerate(branches, 1):
         remote, actual_branch = branch_to_remote[branch_display]
-        if actual_branch == default_branch:
+        if actual_branch == preferred_default:
             console.print(f"{i}. {branch_display} [green](default)[/green]")
         else:
             console.print(f"{i}. {branch_display}")
@@ -1857,13 +1861,13 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     from rich.prompt import Prompt
     numeric_choices = [str(i) for i in range(1, skip_option_number + 1)]
 
-    # Find default choice number (default branch if available, otherwise first branch)
+    # Find default choice number (preferred default if available, otherwise first branch)
     default_choice = "1"
-    if default_branch:
-        # Find the display name that corresponds to the default branch
+    if preferred_default:
+        # Find the display name that corresponds to the preferred default branch
         for i, branch_display in enumerate(branches, 1):
             remote, actual_branch = branch_to_remote[branch_display]
-            if actual_branch == default_branch:
+            if actual_branch == preferred_default:
                 default_choice = str(i)
                 break
 
@@ -2337,7 +2341,8 @@ def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False
     upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=False)
 
     # Select target branch (respects auto_select_target_branch configuration)
-    target_branch = _select_target_branch(working_dir, config, upstream_info, current_branch)
+    session_base_branch = _get_base_branch(active_conv, working_dir)
+    target_branch = _select_target_branch(working_dir, config, upstream_info, current_branch, base_branch=session_base_branch)
 
     # Create PR/MR with retry logic
     console.print(f"\n[cyan]Creating {repo_type.upper()} PR/MR...[/cyan]")

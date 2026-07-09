@@ -778,3 +778,95 @@ def test_select_target_branch_origin_only_no_prefix(monkeypatch, tmp_path, clean
     assert result is not None
     # When only origin exists, branches should not have "origin/" prefix
     assert result in ["develop", "feature-a"]
+
+
+def test_select_target_branch_non_interactive_uses_base_branch(monkeypatch, tmp_path):
+    """Test non-interactive mode prefers base_branch over detected default."""
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: True)
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    config = _create_minimal_config_mock()
+    result = _select_target_branch(tmp_path, config, base_branch="develop")
+
+    assert result == "develop"
+
+
+def test_select_target_branch_non_interactive_falls_back_without_base_branch(monkeypatch, tmp_path):
+    """Test non-interactive mode falls back to detected default when no base_branch."""
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: True)
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    config = _create_minimal_config_mock()
+    result = _select_target_branch(tmp_path, config, base_branch=None)
+
+    assert result == "main"
+
+
+def test_select_target_branch_auto_select_uses_base_branch(monkeypatch, tmp_path):
+    """Test auto_select_target_branch=True prefers base_branch over detected default."""
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=True)
+    )
+    result = _select_target_branch(tmp_path, config, base_branch="staging")
+
+    assert result == "staging"
+
+
+def test_select_target_branch_auto_select_falls_back_without_base_branch(monkeypatch, tmp_path):
+    """Test auto_select_target_branch=True falls back to detected default when no base_branch."""
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=True)
+    )
+    result = _select_target_branch(tmp_path, config, base_branch=None)
+
+    assert result == "main"
+
+
+def test_select_target_branch_interactive_defaults_to_base_branch(monkeypatch, tmp_path, clean_ci_env):
+    """Test interactive mode uses base_branch as default selection."""
+    def mock_list_remote_branches(path, remote):
+        return ["main", "develop", "staging"]
+
+    def mock_get_default_branch(path):
+        return "main"
+
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
+
+    captured_default = {}
+
+    def mock_prompt_ask(prompt_text, choices, default):
+        captured_default["value"] = default
+        return default
+
+    monkeypatch.setattr("rich.prompt.Prompt.ask", mock_prompt_ask)
+
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_select_target_branch=None)
+    )
+
+    result = _select_target_branch(tmp_path, config, upstream_info=None, current_branch="feature-x", base_branch="develop")
+
+    # The default choice should correspond to "develop", not "main"
+    # develop is at index 2 in the branch list (main=1, develop=2, staging=3)
+    assert captured_default["value"] == "2"
+    assert result == "develop"
