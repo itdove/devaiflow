@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Smart concurrent session conflict detection with auto-clone** (#518)
+  - Three configurable concurrency modes: `strict` (default, backward compatible), `analyze` (file overlap detection), `permissive` (always offer clone)
+  - Auto-clone to XDG cache when concurrent work is safe — ephemeral clones cleaned up on `daf complete`
+  - Config hierarchy enforcement: enterprise can lock down to `strict` mode
+  - TUI integration in Session Workflow tab
+  - Auto-clones are separate from the workspace system (invisible to `daf workspace list`)
+
 ### Removed
 - **BREAKING: Remove deprecated `daf upgrade` command** (#296)
   - Use `daf skills` instead, which provides the same functionality with additional features

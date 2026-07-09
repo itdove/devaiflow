@@ -756,6 +756,21 @@ class ConfigLoader:
             or "claude"  # Default to claude if not set anywhere
         )
 
+        # Merge concurrency mode with priority: Enterprise > Team > User > default
+        from .models import ConcurrencyConfig
+        concurrency_mode = (
+            enterprise_config.concurrency_mode
+            or team_config.concurrency_mode
+            or (user_config.concurrency.mode if hasattr(user_config, 'concurrency') else None)
+            or "strict"
+        )
+        user_concurrency = user_config.concurrency if hasattr(user_config, 'concurrency') else ConcurrencyConfig()
+        merged_concurrency = ConcurrencyConfig(
+            mode=concurrency_mode,
+            auto_clone_path=user_concurrency.auto_clone_path,
+            cleanup_on_complete=user_concurrency.cleanup_on_complete,
+        )
+
         # Merge model_provider with priority: Enterprise > Organization > Team > User
         # Enterprise can enforce model provider for compliance/cost control (company-wide)
         # Organization can enforce model provider if enterprise hasn't (project-specific budgets)
@@ -788,6 +803,7 @@ class ConfigLoader:
             model_provider=model_provider,  # Merged from user/team/org/enterprise hierarchy (user takes priority)
             gcp_vertex_region=user_config.gcp_vertex_region,
             update_checker_timeout=user_config.update_checker_timeout,
+            concurrency=merged_concurrency,  # Merged from enterprise/team/user hierarchy
         )
 
         # Auto-migrate hierarchical_config_source from organization.json to config.json
@@ -943,6 +959,7 @@ class ConfigLoader:
             gcp_vertex_region=config.gcp_vertex_region,
             update_checker_timeout=config.update_checker_timeout,
             jira_affected_version=config.jira.affected_version,
+            concurrency=config.concurrency,
         )
 
         # Save user config (config.json)

@@ -690,12 +690,36 @@ def open_session(
                 session_manager.update_session(session)
                 console.print(f"[dim]Generated new session ID: {new_session_id}[/dim]")
 
+    # Re-clone if this session's auto-clone directory was deleted (#518)
+    if active_conv and active_conv.temp_directory and not Path(active_conv.temp_directory).exists():
+        if active_conv.original_project_path:
+            console.print(f"[yellow]⚠ Auto-clone directory was deleted, re-cloning...[/yellow]")
+            from devflow.utils.temp_directory import clone_to_temp_directory
+            re_clone_result = clone_to_temp_directory(Path(active_conv.original_project_path))
+            if re_clone_result:
+                active_conv.temp_directory = re_clone_result[0]
+                active_conv.project_path = re_clone_result[0]
+                session_manager.update_session(session)
+                console.print(f"[green]✓[/green] Re-cloned to: {re_clone_result[0]}")
+            else:
+                console.print(f"[red]Failed to re-clone. Using original path.[/red]")
+                active_conv.project_path = active_conv.original_project_path
+                active_conv.temp_directory = None
+                session_manager.update_session(session)
+
     # Check for concurrent active sessions in the same project BEFORE any git operations
     # This prevents branch switching before warning user about concurrent sessions
     # AAP-63377: Pass workspace_name to enable workspace-aware concurrent session checking
+    # #518: Enhanced with concurrency modes (strict/analyze/permissive) and auto-clone support
     if active_conv and active_conv.project_path:
-        if not check_concurrent_session(session_manager, active_conv.project_path, session.name, selected_workspace_name, action="open"):
+        concurrency_result = check_concurrent_session(session_manager, active_conv.project_path, session.name, selected_workspace_name, action="open", config=config)
+        if not concurrency_result.safe_to_proceed:
             return
+        if concurrency_result.clone_path:
+            active_conv.temp_directory = concurrency_result.clone_path
+            active_conv.original_project_path = active_conv.project_path
+            active_conv.project_path = concurrency_result.clone_path
+            session_manager.update_session(session)
 
     # Feature orchestration: Create story-specific branch from feature branch
     # Each story gets its own branch, all merge back to the feature branch

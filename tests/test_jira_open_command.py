@@ -15,6 +15,7 @@ import pytest
 from click.testing import CliRunner
 
 from devflow.cli.main import cli
+from devflow.cli.utils import ConcurrencyCheckResult
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 
@@ -261,7 +262,7 @@ def test_jira_open_existing_session_delegates_to_daf_open(temp_daf_home, mock_gi
     runner = CliRunner()
 
     with patch("devflow.cli.commands.open_command.should_launch_claude_code", return_value=False), \
-         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=True), \
+         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch("pathlib.Path.cwd", return_value=mock_git_repo):
         result = runner.invoke(cli, ["jira", "open", "PROJ-88888"], catch_exceptions=False)
 
@@ -371,7 +372,7 @@ def test_jira_open_does_not_transition_ticket_status(temp_daf_home, mock_git_rep
 
     with patch("devflow.jira.JiraClient", return_value=mock_jira_instance), \
          patch("devflow.cli.commands.open_command.should_launch_claude_code", return_value=False), \
-         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=True), \
+         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch("devflow.cli.commands.open_command.jira_transition_on_start") as mock_transition, \
          patch("pathlib.Path.cwd", return_value=mock_git_repo):
 
@@ -491,7 +492,7 @@ def test_jira_open_reuses_conversation_on_reopen(temp_daf_home, mock_git_repo):
          patch("devflow.utils.temp_directory.GitUtils.get_current_branch", return_value="main"), \
          patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True), \
          patch("devflow.cli.commands.open_command.should_launch_claude_code", return_value=False), \
-         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=True):
+         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=ConcurrencyCheckResult(safe_to_proceed=True)):
 
         # Setup JIRA mock (not needed since session exists, but keep for completeness)
         mock_validate.return_value = mock_ticket
@@ -584,7 +585,7 @@ def test_jira_open_reopens_completed_ticket_creation_session(temp_daf_home, mock
 
     # Try to open the completed session via `daf jira open PROJ-55555`
     with patch("devflow.cli.commands.open_command.should_launch_claude_code", return_value=False), \
-         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=True), \
+         patch("devflow.cli.commands.open_command.check_concurrent_session", return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
          patch("pathlib.Path.cwd", return_value=mock_git_repo):
         result = runner.invoke(cli, ["jira", "open", "PROJ-55555"], catch_exceptions=False)
 
@@ -656,7 +657,7 @@ def test_jira_open_new_session_sets_branch_none(temp_daf_home, mock_git_repo):
              patch('devflow.cli.commands.open_command.GitUtils.fetch_origin', return_value=(True, None)), \
              patch('devflow.cli.commands.open_command.GitUtils.commits_behind', return_value=0), \
              patch('devflow.cli.commands.open_command.should_launch_claude_code', return_value=False), \
-             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=True), \
+             patch('devflow.cli.commands.open_command.check_concurrent_session', return_value=ConcurrencyCheckResult(safe_to_proceed=True)), \
              patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
              patch('devflow.cli.commands.new_command._handle_branch_creation') as mock_branch_creation:
 

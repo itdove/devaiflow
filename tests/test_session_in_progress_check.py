@@ -228,11 +228,11 @@ def test_check_concurrent_session_util_function(temp_daf_home, mock_git_repo):
 
     # Test: Check should fail when trying to create session B in same project
     result = check_concurrent_session(manager, str(mock_git_repo), "session-b", action="create")
-    assert result is False, "Should return False when another session is active"
+    assert result.safe_to_proceed is False, "Should return safe_to_proceed=False when another session is active"
 
     # Test: Check should succeed when trying to resume session A itself
     result = check_concurrent_session(manager, str(mock_git_repo), "session-a", action="open")
-    assert result is True, "Should return True when checking the same session"
+    assert result.safe_to_proceed is True, "Should return safe_to_proceed=True when checking the same session"
 
     # Test: Complete session A
     session_a.status = "complete"
@@ -240,7 +240,7 @@ def test_check_concurrent_session_util_function(temp_daf_home, mock_git_repo):
 
     # Test: Check should succeed when no active sessions exist
     result = check_concurrent_session(manager, str(mock_git_repo), "session-b", action="create")
-    assert result is True, "Should return True when no active sessions exist"
+    assert result.safe_to_proceed is True, "Should return safe_to_proceed=True when no active sessions exist"
 
 
 def test_daf_new_allows_same_session_in_different_project(temp_daf_home, mock_git_repo, tmp_path):

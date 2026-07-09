@@ -24,6 +24,35 @@
       "title": "AgentConfig",
       "type": "object"
     },
+    "ConcurrencyConfig": {
+      "description": "Concurrent session conflict detection configuration.",
+      "properties": {
+        "mode": {
+          "default": "strict",
+          "title": "Mode",
+          "type": "string"
+        },
+        "auto_clone_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Clone Path"
+        },
+        "cleanup_on_complete": {
+          "default": true,
+          "title": "Cleanup On Complete",
+          "type": "boolean"
+        }
+      },
+      "title": "ConcurrencyConfig",
+      "type": "object"
+    },
     "ContextFile": {
       "description": "Configuration for a single context file to include in initial prompts.",
       "properties": {
@@ -1307,6 +1336,9 @@
       ],
       "default": null,
       "title": "Clone Dir"
+    },
+    "concurrency": {
+      "$ref": "#/$defs/ConcurrencyConfig"
     }
   },
   "required": [
