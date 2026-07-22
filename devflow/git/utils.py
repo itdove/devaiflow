@@ -1428,6 +1428,25 @@ class GitUtils:
             return []
 
     @staticmethod
+    def has_upstream_remote(path: Path) -> bool:
+        """Quick local check: does a remote named 'upstream' exist?
+
+        No network calls — just checks local git config.
+        Used to decide whether to prefetch branches from multiple remotes.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "upstream"],
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    @staticmethod
     def get_fork_upstream_info(path: Path, prompt_for_remote: bool = False) -> Optional[dict]:
         """Get upstream repository information for a fork.
 
