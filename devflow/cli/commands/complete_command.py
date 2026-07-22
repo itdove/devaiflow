@@ -1,6 +1,8 @@
 """Implementation of 'daf complete' command."""
 
 import subprocess
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -238,6 +240,19 @@ def complete_session(
     # Branch check passed - now mark session as complete
     session.status = "complete"
     session_manager.update_session(session)
+
+    # Start async prefetch of remote branches for PR target selection.
+    # Runs in background while commit/push prompts happen — by the time
+    # the user reaches branch selection, results are typically ready.
+    branch_prefetch = None
+    if (not no_pr
+            and session.session_type == "development"
+            and active_conv and active_conv.project_path and active_conv.branch
+            and not (active_conv.is_multi_project and active_conv.projects)
+            and len(session.conversations) <= 1):
+        prefetch_dir = Path(active_conv.project_path)
+        if GitUtils.is_git_repository(prefetch_dir):
+            branch_prefetch = _start_branch_prefetch(prefetch_dir)
 
     # Clean up temporary directory if present (for ticket_creation sessions and auto-clones)
     if session.active_conversation and session.active_conversation.temp_directory:
@@ -811,7 +826,7 @@ def complete_session(
                             should_create_pr = Confirm.ask("Create a new PR/MR?", default=True)
 
                         if should_create_pr:
-                            pr_url = _create_pr_mr(session, working_dir, session_manager, yes=yes, pr_template_url=pr_template_url, no_retry=no_retry)
+                            pr_url = _create_pr_mr(session, working_dir, session_manager, yes=yes, pr_template_url=pr_template_url, no_retry=no_retry, branch_prefetch=branch_prefetch)
 
                             # Update issue tracker ticket with PR URL if created successfully
                             if pr_url and session.issue_key:
@@ -855,7 +870,7 @@ def complete_session(
                             should_create_pr = Confirm.ask("Create a PR/MR now?", default=True)
 
                         if should_create_pr:
-                            pr_url = _create_pr_mr(session, working_dir, session_manager, yes=yes, pr_template_url=pr_template_url, no_retry=no_retry)
+                            pr_url = _create_pr_mr(session, working_dir, session_manager, yes=yes, pr_template_url=pr_template_url, no_retry=no_retry, branch_prefetch=branch_prefetch)
 
                             # Update issue tracker ticket with PR URL if created successfully
                             if pr_url and session.issue_key:
@@ -1755,7 +1770,79 @@ def _get_pr_for_branch(working_dir: Path, branch_name: str) -> Optional[dict]:
     return None
 
 
-def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None, current_branch: Optional[str] = None, base_branch: Optional[str] = None) -> Optional[str]:
+@dataclass
+class BranchPrefetchResult:
+    """Holds prefetched remote branch data for PR target branch selection."""
+    remote_branches: Dict[str, List[str]] = field(default_factory=dict)
+    upstream_info: Optional[dict] = None
+    completed: bool = False
+
+
+class BranchPrefetch:
+    """Lazy prefetch handle. Call resolve() to block until results ready."""
+
+    def __init__(
+        self,
+        origin_future: Future,
+        upstream_future: Optional[Future],
+        fork_future: Optional[Future],
+        executor: ThreadPoolExecutor,
+    ):
+        self._origin_future = origin_future
+        self._upstream_future = upstream_future
+        self._fork_future = fork_future
+        self._executor = executor
+
+    def resolve(self, timeout: float = 15.0) -> BranchPrefetchResult:
+        """Block until all prefetch tasks complete (or timeout)."""
+        result = BranchPrefetchResult()
+        try:
+            origin = self._origin_future.result(timeout=timeout)
+            if origin:
+                result.remote_branches["origin"] = origin
+        except Exception:
+            pass
+
+        if self._upstream_future:
+            try:
+                upstream = self._upstream_future.result(timeout=timeout)
+                if upstream:
+                    result.remote_branches["upstream"] = upstream
+            except Exception:
+                pass
+
+        if self._fork_future:
+            try:
+                result.upstream_info = self._fork_future.result(timeout=timeout)
+            except Exception:
+                pass
+
+        result.completed = True
+        self._executor.shutdown(wait=False)
+        return result
+
+
+def _start_branch_prefetch(working_dir: Path) -> BranchPrefetch:
+    """Start async prefetch of remote branches for PR target selection.
+
+    Launches background threads to fetch branch lists from origin
+    (and upstream if detected locally). Returns a BranchPrefetch handle
+    whose resolve() method blocks until results are ready.
+    """
+    executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="branch-prefetch")
+
+    origin_future = executor.submit(GitUtils.list_remote_branches, working_dir, "origin")
+
+    upstream_future = None
+    fork_future = None
+    if GitUtils.has_upstream_remote(working_dir):
+        upstream_future = executor.submit(GitUtils.list_remote_branches, working_dir, "upstream")
+        fork_future = executor.submit(GitUtils.get_fork_upstream_info, working_dir, False)
+
+    return BranchPrefetch(origin_future, upstream_future, fork_future, executor)
+
+
+def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None, current_branch: Optional[str] = None, base_branch: Optional[str] = None, prefetched_branches: Optional[Dict[str, List[str]]] = None) -> Optional[str]:
     """Prompt user to select target branch for PR/MR.
 
     Args:
@@ -1764,6 +1851,8 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         upstream_info: Upstream repository info if fork (optional)
         current_branch: Current branch name to filter out (cannot PR to same branch)
         base_branch: Session's stored base branch (preferred over repo default)
+        prefetched_branches: Pre-resolved remote branch data from async prefetch.
+            When provided, skips synchronous git ls-remote calls.
 
     Returns:
         Selected branch name or None if skip/error
@@ -1781,24 +1870,33 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     if config and config.prompts:
         auto_select = config.prompts.auto_select_target_branch
         if auto_select is False:
-            # Explicitly disabled - skip branch selection (backward compatible)
             return None
         elif auto_select is True:
-            # Auto-select base branch or default branch without prompting
             target = base_branch or GitUtils.get_default_branch(working_dir)
             if target:
                 console.print(f"[dim]Automatically using target branch: {target} (configured in prompts)[/dim]")
                 return target
 
     # Determine which remotes to query
-    if upstream_info:
-        # Fork scenario: fetch from both upstream and origin
+    if prefetched_branches is not None:
+        remote_branches = dict(prefetched_branches)
+
+        # If fork detected but upstream remote has non-standard name not in prefetch,
+        # fall back to sync fetch for that specific remote
+        if upstream_info:
+            upstream_url = upstream_info.get('upstream_url')
+            if upstream_url:
+                upstream_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
+                if upstream_remote and upstream_remote not in remote_branches:
+                    upstream_branches = GitUtils.list_remote_branches(working_dir, upstream_remote)
+                    if upstream_branches:
+                        remote_branches[upstream_remote] = upstream_branches
+    elif upstream_info:
         upstream_url = upstream_info.get('upstream_url')
         upstream_remote = None
         if upstream_url:
             upstream_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
 
-        # Fetch branches from both remotes
         remote_branches = {}
         if upstream_remote:
             upstream_branches = GitUtils.list_remote_branches(working_dir, upstream_remote)
@@ -1809,7 +1907,6 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         if origin_branches:
             remote_branches["origin"] = origin_branches
     else:
-        # Non-fork scenario: only fetch from origin
         origin_branches = GitUtils.list_remote_branches(working_dir, "origin")
         remote_branches = {"origin": origin_branches} if origin_branches else {}
 
@@ -2277,7 +2374,7 @@ def _create_pr_mr_for_conversation(session, conversation, working_dir: Path, ses
     return pr_url
 
 
-def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False, pr_template_url: Optional[str] = None, no_retry: bool = False) -> Optional[str]:
+def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False, pr_template_url: Optional[str] = None, no_retry: bool = False, branch_prefetch: Optional["BranchPrefetch"] = None) -> Optional[str]:
     """Create PR or MR based on repository type.
 
     Args:
@@ -2287,6 +2384,7 @@ def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False
         yes: Skip all confirmation prompts
         pr_template_url: PR/MR template URL
         no_retry: Don't retry on failure
+        branch_prefetch: Async prefetch handle for remote branches and fork info
 
     Returns:
         PR/MR URL if successful, None otherwise
@@ -2344,11 +2442,17 @@ def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False
     title = _generate_pr_title(session, working_dir)
 
     # Detect if this is a fork (needed for both branch selection and PR/MR creation)
-    upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=False)
+    prefetched_branches = None
+    if branch_prefetch is not None:
+        prefetch_result = branch_prefetch.resolve(timeout=15.0)
+        upstream_info = prefetch_result.upstream_info
+        prefetched_branches = prefetch_result.remote_branches
+    else:
+        upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=False)
 
     # Select target branch (respects auto_select_target_branch configuration)
     session_base_branch = _get_base_branch(active_conv, working_dir)
-    target_branch = _select_target_branch(working_dir, config, upstream_info, current_branch, base_branch=session_base_branch)
+    target_branch = _select_target_branch(working_dir, config, upstream_info, current_branch, base_branch=session_base_branch, prefetched_branches=prefetched_branches)
 
     # Create PR/MR with retry logic
     console.print(f"\n[cyan]Creating {repo_type.upper()} PR/MR...[/cyan]")
