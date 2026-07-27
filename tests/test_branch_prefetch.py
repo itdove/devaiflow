@@ -208,6 +208,8 @@ class TestSelectTargetBranchPrefetch:
 
     def test_prefetch_miss_falls_back_to_sync(self, monkeypatch):
         """When prefetched_branches is None, list_remote_branches should be called."""
+        monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
+
         call_count = {"n": 0}
 
         def mock_list(path, remote):
