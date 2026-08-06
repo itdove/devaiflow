@@ -4,6 +4,7 @@ This module provides a Python interface to the JIRA REST API.
 All JIRA operations are performed via the REST API.
 """
 
+import base64
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -44,6 +45,7 @@ class JiraClient(IssueTrackerClient):
         self._jira_url = None
         self._jira_token = None
         self._jira_auth_type = None
+        self._jira_username = None
         self._field_cache = None  # Cache for field ID to name mapping
         self._comment_visibility_type = None  # Default visibility type (from config)
         self._comment_visibility_value = None  # Default visibility value (from config)
@@ -56,6 +58,7 @@ class JiraClient(IssueTrackerClient):
         self._jira_url = os.getenv("JIRA_URL")
         self._jira_token = os.getenv("JIRA_API_TOKEN")
         self._jira_auth_type = os.getenv("JIRA_AUTH_TYPE", "bearer").lower()
+        self._jira_username = os.getenv("JIRA_USERNAME")
 
         # If URL not in env, try backends/jira.json first (primary source)
         if not self._jira_url:
@@ -121,9 +124,16 @@ class JiraClient(IssueTrackerClient):
         if self._jira_auth_type == "bearer":
             return f"Bearer {self._jira_token}"
         elif self._jira_auth_type == "basic":
-            return f"Basic {self._jira_token}"
+            if not self._jira_username:
+                raise JiraAuthError(
+                    "JIRA_USERNAME not set in environment. "
+                    "Basic auth requires: export JIRA_USERNAME=your_email"
+                )
+            credentials = base64.b64encode(
+                f"{self._jira_username}:{self._jira_token}".encode()
+            ).decode()
+            return f"Basic {credentials}"
         else:
-            # Default to bearer for unknown auth types
             return f"Bearer {self._jira_token}"
 
     def _is_token_expired(self, response: requests.Response) -> bool:
