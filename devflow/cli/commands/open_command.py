@@ -3429,7 +3429,19 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
 
     if not stable_conversation_file.exists():
         console.print(f"[dim]Conversation file not found at stable location[/dim]")
-        return False
+        if conv.temp_directory:
+            old_temp_resolved = str(Path(conv.temp_directory).resolve())
+            old_temp_session_dir = capture.get_session_dir(old_temp_resolved)
+            old_temp_file = old_temp_session_dir / f"{conv.ai_agent_session_id}.jsonl"
+            if old_temp_file.exists():
+                console.print(f"[dim]Found conversation in previous temp dir's Claude data[/dim]")
+                stable_session_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(old_temp_file, stable_conversation_file)
+                console.print(f"[dim]Recovered to stable location[/dim]")
+            else:
+                return False
+        else:
+            return False
 
     # Copy to temp directory location
     # IMPORTANT: Use the actual resolved path that Claude Code will see
