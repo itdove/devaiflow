@@ -23,6 +23,7 @@ def mock_env_basic(monkeypatch):
     monkeypatch.setenv("JIRA_API_TOKEN", "test-basic-token")
     monkeypatch.setenv("JIRA_AUTH_TYPE", "basic")
     monkeypatch.setenv("JIRA_URL", "https://test.jira.com")
+    monkeypatch.setenv("JIRA_USERNAME", "testuser@example.com")
 
 
 @pytest.fixture
@@ -43,11 +44,14 @@ def test_get_auth_header_bearer(mock_env_bearer):
 
 
 def test_get_auth_header_basic(mock_env_basic):
-    """Test that basic auth type generates correct header."""
+    """Test that basic auth type generates base64-encoded username:token header."""
     client = JiraClient()
     auth_header = client._get_auth_header()
 
-    assert auth_header == "Basic test-basic-token"
+    import base64
+
+    expected = base64.b64encode(b"testuser@example.com:test-basic-token").decode()
+    assert auth_header == f"Basic {expected}"
 
 
 def test_get_auth_header_default_to_bearer(mock_env_no_auth_type):
@@ -82,8 +86,8 @@ def test_api_request_uses_bearer_auth(mock_env_bearer):
             "fields": {
                 "summary": "Test",
                 "status": {"name": "New"},
-                "issuetype": {"name": "Story"}
-            }
+                "issuetype": {"name": "Story"},
+            },
         }
         mock_request.return_value = mock_response
 
@@ -110,8 +114,8 @@ def test_api_request_uses_basic_auth(mock_env_basic):
             "fields": {
                 "summary": "Test",
                 "status": {"name": "New"},
-                "issuetype": {"name": "Story"}
-            }
+                "issuetype": {"name": "Story"},
+            },
         }
         mock_request.return_value = mock_response
 
@@ -122,7 +126,10 @@ def test_api_request_uses_basic_auth(mock_env_basic):
         assert mock_request.called
         call_kwargs = mock_request.call_args[1]
         assert "headers" in call_kwargs
-        assert call_kwargs["headers"]["Authorization"] == "Basic test-basic-token"
+        import base64
+
+        expected = base64.b64encode(b"testuser@example.com:test-basic-token").decode()
+        assert call_kwargs["headers"]["Authorization"] == f"Basic {expected}"
 
 
 def test_get_ticket_uses_auth_header(mock_env_bearer):
@@ -138,8 +145,8 @@ def test_get_ticket_uses_auth_header(mock_env_bearer):
             "fields": {
                 "summary": "Test ticket",
                 "status": {"name": "New"},
-                "issuetype": {"name": "Story"}
-            }
+                "issuetype": {"name": "Story"},
+            },
         }
         mock_request.return_value = mock_response
 
@@ -179,6 +186,19 @@ def test_attach_file_uses_auth_header(mock_env_bearer, tmp_path):
         call_kwargs = mock_post.call_args[1]
         assert "headers" in call_kwargs
         assert call_kwargs["headers"]["Authorization"] == "Bearer test-token-123"
+
+
+def test_get_auth_header_basic_missing_username(monkeypatch):
+    """Test that basic auth raises error when JIRA_USERNAME not set."""
+    monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+    monkeypatch.setenv("JIRA_AUTH_TYPE", "basic")
+    monkeypatch.setenv("JIRA_URL", "https://test.jira.com")
+    monkeypatch.delenv("JIRA_USERNAME", raising=False)
+
+    client = JiraClient()
+
+    with pytest.raises(JiraAuthError, match="JIRA_USERNAME not set"):
+        client._get_auth_header()
 
 
 def test_auth_type_case_insensitive(monkeypatch):

@@ -71,9 +71,9 @@ class JiraClient(IssueTrackerClient):
                 jira_backend_config = backends_dir / "jira.json"
 
                 if jira_backend_config.exists():
-                    with open(jira_backend_config, 'r') as f:
+                    with open(jira_backend_config, "r") as f:
                         backend_config = json.load(f)
-                        self._jira_url = backend_config.get('url')
+                        self._jira_url = backend_config.get("url")
             except:
                 pass
 
@@ -81,9 +81,9 @@ class JiraClient(IssueTrackerClient):
         if not self._jira_url:
             try:
                 config_path = os.path.expanduser("~/.config/.jira/.config.yml")
-                with open(config_path, 'r') as f:
+                with open(config_path, "r") as f:
                     jira_config = yaml.safe_load(f)
-                    self._jira_url = jira_config.get('server')
+                    self._jira_url = jira_config.get("server")
             except:
                 pass
 
@@ -94,14 +94,19 @@ class JiraClient(IssueTrackerClient):
         # Load comment visibility settings from daf config
         try:
             from devflow.config.loader import ConfigLoader
+
             config_loader = ConfigLoader()
             if config_loader.config_file.exists():
                 config = config_loader.load_config()
                 if config and config.jira:
                     if config.jira.comment_visibility_type:
-                        self._comment_visibility_type = config.jira.comment_visibility_type
+                        self._comment_visibility_type = (
+                            config.jira.comment_visibility_type
+                        )
                     if config.jira.comment_visibility_value:
-                        self._comment_visibility_value = config.jira.comment_visibility_value
+                        self._comment_visibility_value = (
+                            config.jira.comment_visibility_value
+                        )
         except Exception:
             # If config loading fails, use defaults
             pass
@@ -156,14 +161,20 @@ class JiraClient(IssueTrackerClient):
             error_messages = response_data.get("errorMessages", [])
             for msg in error_messages:
                 msg_lower = str(msg).lower()
-                if any(indicator in msg_lower for indicator in ["expired", "expiration", "token has expired"]):
+                if any(
+                    indicator in msg_lower
+                    for indicator in ["expired", "expiration", "token has expired"]
+                ):
                     return True
 
             # Check errors dict for expiration indicators
             errors = response_data.get("errors", {})
             for error_msg in errors.values():
                 msg_lower = str(error_msg).lower()
-                if any(indicator in msg_lower for indicator in ["expired", "expiration", "token has expired"]):
+                if any(
+                    indicator in msg_lower
+                    for indicator in ["expired", "expiration", "token has expired"]
+                ):
                     return True
 
         except Exception:
@@ -174,14 +185,19 @@ class JiraClient(IssueTrackerClient):
         # Check response text for expiration indicators
         try:
             response_text = response.text.lower()
-            if any(indicator in response_text for indicator in ["expired", "expiration", "token has expired"]):
+            if any(
+                indicator in response_text
+                for indicator in ["expired", "expiration", "token has expired"]
+            ):
                 return True
         except Exception:
             pass
 
         return False
 
-    def _raise_auth_error(self, message: str, response: requests.Response = None) -> None:
+    def _raise_auth_error(
+        self, message: str, response: requests.Response = None
+    ) -> None:
         """Raise JiraAuthError with token expiration detection.
 
         Args:
@@ -202,14 +218,11 @@ class JiraClient(IssueTrackerClient):
             message,
             token_expired=token_expired,
             jira_url=self._jira_url,
-            status_code=status_code
+            status_code=status_code,
         )
 
     def _add_custom_fields_to_payload(
-        self,
-        payload: Dict,
-        custom_fields: Dict[str, any],
-        field_mapper
+        self, payload: Dict, custom_fields: Dict[str, any], field_mapper
     ) -> None:
         """Add custom fields to JIRA API payload with proper formatting.
 
@@ -229,7 +242,9 @@ class JiraClient(IssueTrackerClient):
             field_id = field_mapper.get_field_id(field_name)
             if field_id:
                 field_info = field_mapper.get_field_info(field_name) or {}
-                formatted_value = build_field_value(field_info, str(field_value), field_mapper)
+                formatted_value = build_field_value(
+                    field_info, str(field_value), field_mapper
+                )
                 payload["fields"][field_id] = formatted_value
 
     def _get_field_name(self, field_id: str) -> str:
@@ -292,7 +307,11 @@ class JiraClient(IssueTrackerClient):
 
         # ADF (Atlassian Document Format) - JIRA Cloud rich text format
         # Detect by type=string but value is dict with "type" and "content" keys
-        if field_type == "string" and isinstance(field_value, dict) and "type" in field_value:
+        if (
+            field_type == "string"
+            and isinstance(field_value, dict)
+            and "type" in field_value
+        ):
             return self._convert_adf_to_text(field_value)
 
         # User fields (assignee, reporter, etc.) - extract displayName
@@ -300,7 +319,12 @@ class JiraClient(IssueTrackerClient):
             return field_value.get("displayName")
 
         # Object fields (status, issuetype, priority, etc.) - extract name
-        elif field_type in ("status", "issuetype", "priority", "securitylevel") and isinstance(field_value, dict):
+        elif field_type in (
+            "status",
+            "issuetype",
+            "priority",
+            "securitylevel",
+        ) and isinstance(field_value, dict):
             return field_value.get("name")
 
         # Number fields - convert to int
@@ -312,7 +336,11 @@ class JiraClient(IssueTrackerClient):
 
         # Sprint fields - parse Greenhopper format
         # Detect by schema containing "sprint" keyword
-        elif "sprint" in str(field_schema).lower() and isinstance(field_value, list) and len(field_value) > 0:
+        elif (
+            "sprint" in str(field_schema).lower()
+            and isinstance(field_value, list)
+            and len(field_value) > 0
+        ):
             sprint_str = field_value[0]
             if isinstance(sprint_str, str) and "name=" in sprint_str:
                 # Extract name from Greenhopper sprint string format
@@ -359,7 +387,9 @@ class JiraClient(IssueTrackerClient):
         extract_text(adf_content)
         return " ".join(text_parts)
 
-    def _search_api_request(self, jql: str, max_results: int, fields_list: list) -> requests.Response:
+    def _search_api_request(
+        self, jql: str, max_results: int, fields_list: list
+    ) -> requests.Response:
         """Make a JQL search API request with automatic v2/v3 detection.
 
         Cloud JIRA deprecated /rest/api/2/search (returns HTTP 410).
@@ -388,8 +418,8 @@ class JiraClient(IssueTrackerClient):
                     params={
                         "jql": jql,
                         "maxResults": max_results,
-                        "fields": ",".join(fields_list)
-                    }
+                        "fields": ",".join(fields_list),
+                    },
                 )
 
                 # If we get HTTP 410 (Gone) or HTTP 414 (URI Too Long), switch to v3
@@ -414,8 +444,8 @@ class JiraClient(IssueTrackerClient):
                 json={
                     "jql": jql,
                     "maxResults": max_results,
-                    "fields": fields_list  # API v3 expects array, not comma-separated string
-                }
+                    "fields": fields_list,  # API v3 expects array, not comma-separated string
+                },
             )
             return response
 
@@ -426,8 +456,8 @@ class JiraClient(IssueTrackerClient):
             params={
                 "jql": jql,
                 "maxResults": max_results,
-                "fields": ",".join(fields_list)
-            }
+                "fields": ",".join(fields_list),
+            },
         )
 
     def _api_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
@@ -448,17 +478,19 @@ class JiraClient(IssueTrackerClient):
         if not self._jira_url:
             raise JiraAuthError(
                 "JIRA URL not configured. Please run 'daf init' or set the JIRA_URL environment variable.",
-                status_code=401
+                status_code=401,
             )
         url = f"{self._jira_url}{endpoint}"
-        headers = kwargs.pop('headers', {})
-        headers.update({
-            "Authorization": self._get_auth_header(),
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        })
+        headers = kwargs.pop("headers", {})
+        headers.update(
+            {
+                "Authorization": self._get_auth_header(),
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        )
 
-        timeout = kwargs.pop('timeout', self.timeout)
+        timeout = kwargs.pop("timeout", self.timeout)
 
         # Debug: Log API request details (only if DEVAIFLOW_DEBUG=1 and not in JSON output mode)
         import os
@@ -480,13 +512,13 @@ class JiraClient(IssueTrackerClient):
             console.print(f"[dim]{method} {url}[/dim]")
 
             # Log payload if present
-            if 'json' in kwargs:
+            if "json" in kwargs:
                 logger.debug(f"Payload: {json.dumps(kwargs['json'], indent=2)}")
                 console.print("[dim]Payload:[/dim]")
                 console.print(f"[dim]{json.dumps(kwargs['json'], indent=2)}[/dim]")
 
             # Log query params if present
-            if 'params' in kwargs:
+            if "params" in kwargs:
                 logger.debug(f"Params: {kwargs['params']}")
                 console.print(f"[dim]Params: {kwargs['params']}[/dim]")
 
@@ -494,6 +526,7 @@ class JiraClient(IssueTrackerClient):
 
         try:
             from devflow.utils.ssl_helper import get_ssl_verify_setting
+
             ssl_verify = get_ssl_verify_setting()
 
             response = requests.request(
@@ -502,7 +535,7 @@ class JiraClient(IssueTrackerClient):
                 headers=headers,
                 timeout=timeout,
                 verify=ssl_verify,
-                **kwargs
+                **kwargs,
             )
 
             # Debug: Log response (only if DEVAIFLOW_DEBUG=1 and not in JSON output mode)
@@ -516,11 +549,15 @@ class JiraClient(IssueTrackerClient):
                         response_json = response.json()
                         logger.debug(f"Response: {json.dumps(response_json, indent=2)}")
                         console.print(f"[dim]Response:[/dim]")
-                        console.print(f"[dim]{json.dumps(response_json, indent=2)}[/dim]\n")
+                        console.print(
+                            f"[dim]{json.dumps(response_json, indent=2)}[/dim]\n"
+                        )
                     except Exception:
                         # Not JSON or too large
                         logger.debug(f"Response text: {response.text[:500]}")
-                        console.print(f"[dim]Response (first 500 chars): {response.text[:500]}[/dim]\n")
+                        console.print(
+                            f"[dim]Response (first 500 chars): {response.text[:500]}[/dim]\n"
+                        )
 
             return response
         except requests.exceptions.RequestException as e:
@@ -544,27 +581,24 @@ class JiraClient(IssueTrackerClient):
             JiraConnectionError: If connection fails
         """
         try:
-            response = self._api_request(
-                "GET",
-                f"/rest/api/2/issue/{issue_key}"
-            )
+            response = self._api_request("GET", f"/rest/api/2/issue/{issue_key}")
 
             if response.status_code == 404:
                 raise JiraNotFoundError(
                     f"issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed for issue tracker ticket {issue_key}",
-                    response
+                    response,
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
                     f"Failed to fetch issue tracker ticket {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
             data = response.json()
@@ -575,7 +609,11 @@ class JiraClient(IssueTrackerClient):
                 "type": fields.get("issuetype", {}).get("name"),
                 "status": fields.get("status", {}).get("name"),
                 "summary": fields.get("summary"),
-                "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
+                "assignee": (
+                    fields.get("assignee", {}).get("displayName")
+                    if fields.get("assignee")
+                    else None
+                ),
             }
 
             # Extract ALL custom fields generically from field_mappings
@@ -637,32 +675,28 @@ class JiraClient(IssueTrackerClient):
         if not public:
             payload["visibility"] = {
                 "type": self._comment_visibility_type,
-                "value": self._comment_visibility_value
+                "value": self._comment_visibility_value,
             }
 
         response = self._api_request(
-            "POST",
-            f"/rest/api/2/issue/{issue_key}/comment",
-            json=payload,
-            timeout=30
+            "POST", f"/rest/api/2/issue/{issue_key}/comment", json=payload, timeout=30
         )
 
         if response.status_code == 404:
             raise JiraNotFoundError(
                 f"Cannot add comment: issue tracker ticket {issue_key} not found",
                 resource_type="issue",
-                resource_id=issue_key
+                resource_id=issue_key,
             )
         elif response.status_code == 401 or response.status_code == 403:
             self._raise_auth_error(
-                f"Authentication failed when adding comment to {issue_key}",
-                response
+                f"Authentication failed when adding comment to {issue_key}", response
             )
         elif response.status_code != 201:
             raise JiraApiError(
                 f"Failed to add comment to {issue_key}",
                 status_code=response.status_code,
-                response_text=response.text
+                response_text=response.text,
             )
 
     def get_comments(self, issue_key: str) -> List[Dict]:
@@ -687,26 +721,25 @@ class JiraClient(IssueTrackerClient):
         """
         try:
             response = self._api_request(
-                "GET",
-                f"/rest/api/2/issue/{issue_key}/comment"
+                "GET", f"/rest/api/2/issue/{issue_key}/comment"
             )
 
             if response.status_code == 404:
                 raise JiraNotFoundError(
                     f"Cannot fetch comments: issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed when fetching comments for {issue_key}",
-                    response
+                    response,
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
                     f"Failed to fetch comments for {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
             data = response.json()
@@ -753,21 +786,17 @@ class JiraClient(IssueTrackerClient):
             JiraConnectionError: If connection fails
         """
         try:
-            response = self._api_request(
-                "GET",
-                "/rest/api/2/myself"
-            )
+            response = self._api_request("GET", "/rest/api/2/myself")
 
             if response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
-                    "Authentication failed when getting current user info",
-                    response
+                    "Authentication failed when getting current user info", response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
                     "Failed to get current user info",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
             data = response.json()
@@ -785,7 +814,9 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to get current user info: {e}")
 
-    def resolve_assignee_for_comparison(self, assignee_filter: Optional[str]) -> Optional[str]:
+    def resolve_assignee_for_comparison(
+        self, assignee_filter: Optional[str]
+    ) -> Optional[str]:
         """Resolve assignee filter value to a comparable string.
 
         For JIRA, 'currentUser()' needs to be resolved to the actual user's displayName
@@ -819,7 +850,9 @@ class JiraClient(IssueTrackerClient):
             # Return as-is for explicit usernames
             return assignee_filter
 
-    def is_assigned_to(self, child_assignee: Optional[str], assignee_filter: Optional[str]) -> bool:
+    def is_assigned_to(
+        self, child_assignee: Optional[str], assignee_filter: Optional[str]
+    ) -> bool:
         """Check if a child issue is assigned to the filtered user.
 
         Handles JIRA's 'currentUser()' resolution and provides consistent
@@ -870,26 +903,25 @@ class JiraClient(IssueTrackerClient):
         try:
             # First, get available transitions for this ticket
             response = self._api_request(
-                "GET",
-                f"/rest/api/2/issue/{issue_key}/transitions"
+                "GET", f"/rest/api/2/issue/{issue_key}/transitions"
             )
 
             if response.status_code == 404:
                 raise JiraNotFoundError(
                     f"Cannot transition: issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed when getting transitions for {issue_key}",
-                    response
+                    response,
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
                     f"Failed to get transitions for {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
             transitions = response.json().get("transitions", [])
@@ -910,20 +942,14 @@ class JiraClient(IssueTrackerClient):
                     f"Status '{status}' not available for {issue_key}. "
                     f"Available transitions: {', '.join(available)}",
                     resource_type="transition",
-                    resource_id=status
+                    resource_id=status,
                 )
 
             # Perform the transition
-            payload = {
-                "transition": {
-                    "id": transition_id
-                }
-            }
+            payload = {"transition": {"id": transition_id}}
 
             response = self._api_request(
-                "POST",
-                f"/rest/api/2/issue/{issue_key}/transitions",
-                json=payload
+                "POST", f"/rest/api/2/issue/{issue_key}/transitions", json=payload
             )
 
             if response.status_code == 204:
@@ -932,12 +958,11 @@ class JiraClient(IssueTrackerClient):
                 raise JiraNotFoundError(
                     f"Cannot transition: issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
-                    f"Authentication failed when transitioning {issue_key}",
-                    response
+                    f"Authentication failed when transitioning {issue_key}", response
                 )
             elif response.status_code == 400:
                 # Parse the error response to extract field information
@@ -955,7 +980,7 @@ class JiraClient(IssueTrackerClient):
                     raise JiraValidationError(
                         f"Transition to '{status}' failed for {issue_key}: missing required fields",
                         field_errors=readable_field_errors,
-                        error_messages=error_messages
+                        error_messages=error_messages,
                     )
 
                 except JiraValidationError:
@@ -966,16 +991,22 @@ class JiraClient(IssueTrackerClient):
                     raise JiraApiError(
                         f"Transition to '{status}' failed for {issue_key}",
                         status_code=response.status_code,
-                        response_text=response.text
+                        response_text=response.text,
                     )
             else:
                 raise JiraApiError(
                     f"Transition to '{status}' failed for {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
-        except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
+        except (
+            JiraNotFoundError,
+            JiraAuthError,
+            JiraApiError,
+            JiraValidationError,
+            JiraConnectionError,
+        ):
             # Re-raise JIRA-specific exceptions
             raise
         except Exception as e:
@@ -1001,13 +1032,14 @@ class JiraClient(IssueTrackerClient):
             # For file uploads, we need different headers (no Content-Type, let requests set it)
             headers = {
                 "Authorization": self._get_auth_header(),
-                "X-Atlassian-Token": "no-check"  # Required for attachments
+                "X-Atlassian-Token": "no-check",  # Required for attachments
             }
 
-            with open(file_path, 'rb') as f:
-                files = {'file': f}
+            with open(file_path, "rb") as f:
+                files = {"file": f}
                 try:
                     from devflow.utils.ssl_helper import get_ssl_verify_setting
+
                     ssl_verify = get_ssl_verify_setting()
 
                     response = requests.post(
@@ -1015,7 +1047,7 @@ class JiraClient(IssueTrackerClient):
                         headers=headers,
                         files=files,
                         timeout=60,  # Longer timeout for file uploads
-                        verify=ssl_verify
+                        verify=ssl_verify,
                     )
                 except requests.exceptions.RequestException as e:
                     raise JiraConnectionError(f"JIRA API request failed: {e}")
@@ -1026,25 +1058,25 @@ class JiraClient(IssueTrackerClient):
                 raise JiraNotFoundError(
                     f"Cannot attach file: issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed when attaching file to {issue_key}",
-                    response
+                    response,
                 )
             else:
                 raise JiraApiError(
                     f"Failed to attach file to {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
         except FileNotFoundError:
             raise JiraNotFoundError(
                 f"File not found: {file_path}",
                 resource_type="file",
-                resource_id=file_path
+                resource_id=file_path,
             )
         except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError):
             # Re-raise JIRA-specific exceptions
@@ -1053,7 +1085,13 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to attach file {file_path} to {issue_key}: {e}")
 
-    def get_ticket_detailed(self, issue_key: str, field_mappings: Optional[Dict] = None, include_changelog: bool = False, include_comments: bool = False) -> Dict:
+    def get_ticket_detailed(
+        self,
+        issue_key: str,
+        field_mappings: Optional[Dict] = None,
+        include_changelog: bool = False,
+        include_comments: bool = False,
+    ) -> Dict:
         """Fetch a issue tracker ticket with full details including description.
 
         Args:
@@ -1080,27 +1118,24 @@ class JiraClient(IssueTrackerClient):
             if include_changelog:
                 endpoint += "?expand=changelog"
 
-            response = self._api_request(
-                "GET",
-                endpoint
-            )
+            response = self._api_request("GET", endpoint)
 
             if response.status_code == 404:
                 raise JiraNotFoundError(
                     f"issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed for issue tracker ticket {issue_key}",
-                    response
+                    response,
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
                     f"Failed to fetch issue tracker ticket {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
             data = response.json()
@@ -1117,9 +1152,21 @@ class JiraClient(IssueTrackerClient):
                 "status": fields.get("status", {}).get("name"),
                 "summary": fields.get("summary"),
                 "description": description,
-                "priority": fields.get("priority", {}).get("name") if fields.get("priority") else None,
-                "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
-                "reporter": fields.get("reporter", {}).get("displayName") if fields.get("reporter") else None,
+                "priority": (
+                    fields.get("priority", {}).get("name")
+                    if fields.get("priority")
+                    else None
+                ),
+                "assignee": (
+                    fields.get("assignee", {}).get("displayName")
+                    if fields.get("assignee")
+                    else None
+                ),
+                "reporter": (
+                    fields.get("reporter", {}).get("displayName")
+                    if fields.get("reporter")
+                    else None
+                ),
             }
 
             # Extract ALL custom fields generically from field_mappings
@@ -1211,7 +1258,7 @@ class JiraClient(IssueTrackerClient):
             if status_list:
                 # Multiple statuses - use IN clause
                 statuses_str = ", ".join([f'"{s}"' for s in status_list])
-                jql_parts.append(f'status IN ({statuses_str})')
+                jql_parts.append(f"status IN ({statuses_str})")
             elif status:
                 # Single status - legacy support
                 jql_parts.append(f'status = "{status}"')
@@ -1257,26 +1304,29 @@ class JiraClient(IssueTrackerClient):
 
             # Use all fields from config - covers standard fields (status, issuetype, etc) and custom fields
             fields_list_parts = ["created", "updated"]
-            fields_list_parts.extend([field_info.get("id") for field_info in field_mappings.values() if field_info.get("id")])
+            fields_list_parts.extend(
+                [
+                    field_info.get("id")
+                    for field_info in field_mappings.values()
+                    if field_info.get("id")
+                ]
+            )
 
             # Make API request with automatic v2/v3 detection
             # (Cloud JIRA requires v3, self-hosted uses v2)
             response = self._search_api_request(
-                jql=jql,
-                max_results=100,
-                fields_list=fields_list_parts
+                jql=jql, max_results=100, fields_list=fields_list_parts
             )
 
             if response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
-                    "Authentication failed when listing tickets",
-                    response
+                    "Authentication failed when listing tickets", response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
                     "Failed to list tickets",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
             data = response.json()
@@ -1284,7 +1334,7 @@ class JiraClient(IssueTrackerClient):
 
             tickets = []
             for issue in issues:
-                issue_key= issue.get("key")
+                issue_key = issue.get("key")
                 fields = issue.get("fields", {})
 
                 ticket_data = {
@@ -1292,8 +1342,14 @@ class JiraClient(IssueTrackerClient):
                     "type": fields.get("issuetype", {}).get("name"),
                     "status": fields.get("status", {}).get("name"),
                     "summary": fields.get("summary"),
-                    "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
-                    "updated": issue.get("updated"),  # Timestamp from issue root (ISO format)
+                    "assignee": (
+                        fields.get("assignee", {}).get("displayName")
+                        if fields.get("assignee")
+                        else None
+                    ),
+                    "updated": issue.get(
+                        "updated"
+                    ),  # Timestamp from issue root (ISO format)
                 }
 
                 # Extract ALL custom fields generically from field_mappings
@@ -1308,7 +1364,9 @@ class JiraClient(IssueTrackerClient):
                             continue
 
                         # Apply type-based transformations using helper method
-                        field_value = self._transform_field_value(field_value, field_info)
+                        field_value = self._transform_field_value(
+                            field_value, field_info
+                        )
 
                         # Store field value under its normalized name
                         ticket_data[field_name] = field_value
@@ -1366,7 +1424,9 @@ class JiraClient(IssueTrackerClient):
 
         return blocks, blocked_by
 
-    def get_blocking_relationships(self, issue_keys: List[str]) -> Dict[str, Dict[str, List[str]]]:
+    def get_blocking_relationships(
+        self, issue_keys: List[str]
+    ) -> Dict[str, Dict[str, List[str]]]:
         """Fetch blocking relationships for multiple issues.
 
         Args:
@@ -1388,8 +1448,7 @@ class JiraClient(IssueTrackerClient):
             try:
                 # Fetch issue with issuelinks field
                 response = self._api_request(
-                    "GET",
-                    f"/rest/api/2/issue/{issue_key}?fields=issuelinks"
+                    "GET", f"/rest/api/2/issue/{issue_key}?fields=issuelinks"
                 )
 
                 if response.status_code != 200:
@@ -1450,11 +1509,12 @@ class JiraClient(IssueTrackerClient):
         try:
             # Build JQL query to find child issues
             # JIRA JQL uses display field names, not field IDs or normalized names
-            jql_parts = [f'parent = {parent_key}']
+            jql_parts = [f"parent = {parent_key}"]
 
             # Add JQL clauses for all parent fields configured in parent_field_mapping
             try:
                 from devflow.config.loader import ConfigLoader
+
                 config_loader = ConfigLoader()
                 config = config_loader.load_config()
 
@@ -1493,26 +1553,27 @@ class JiraClient(IssueTrackerClient):
                 )
 
             # Use all fields from config - covers standard fields (status, issuetype, etc) and custom fields
-            fields_list_parts = [field_info.get("id") for field_info in field_mappings.values() if field_info.get("id")]
+            fields_list_parts = [
+                field_info.get("id")
+                for field_info in field_mappings.values()
+                if field_info.get("id")
+            ]
 
             # Make API request with automatic v2/v3 detection
             # (Cloud JIRA requires v3, self-hosted uses v2)
             response = self._search_api_request(
-                jql=jql,
-                max_results=100,
-                fields_list=fields_list_parts
+                jql=jql, max_results=100, fields_list=fields_list_parts
             )
 
             if response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
-                    "Authentication failed when fetching child issues",
-                    response
+                    "Authentication failed when fetching child issues", response
                 )
             elif response.status_code != 200:
                 raise JiraApiError(
                     f"Failed to fetch child issues for {parent_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
             data = response.json()
@@ -1520,7 +1581,7 @@ class JiraClient(IssueTrackerClient):
 
             children = []
             for issue in issues:
-                issue_key= issue.get("key")
+                issue_key = issue.get("key")
                 fields = issue.get("fields", {})
 
                 child_data = {
@@ -1528,7 +1589,11 @@ class JiraClient(IssueTrackerClient):
                     "type": fields.get("issuetype", {}).get("name"),
                     "status": fields.get("status", {}).get("name"),
                     "summary": fields.get("summary"),
-                    "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
+                    "assignee": (
+                        fields.get("assignee", {}).get("displayName")
+                        if fields.get("assignee")
+                        else None
+                    ),
                 }
 
                 # Extract custom fields from field_mappings (e.g., sprint, story_points)
@@ -1544,14 +1609,18 @@ class JiraClient(IssueTrackerClient):
                             continue
 
                         # Apply type-based transformations using helper method
-                        field_value = self._transform_field_value(field_value, field_info)
+                        field_value = self._transform_field_value(
+                            field_value, field_info
+                        )
 
                         # Store field value under its normalized name from field_mappings
                         child_data[field_name] = field_value
 
                 # Parse issue links if requested
                 if include_links:
-                    blocks, blocked_by = self._parse_issue_links(fields.get("issuelinks", []))
+                    blocks, blocked_by = self._parse_issue_links(
+                        fields.get("issuelinks", [])
+                    )
                     child_data["blocks"] = blocks
                     child_data["blocked_by"] = blocked_by
 
@@ -1584,16 +1653,10 @@ class JiraClient(IssueTrackerClient):
             JiraConnectionError: If connection fails
         """
         try:
-            payload = {
-                "fields": {
-                    field_name: value
-                }
-            }
+            payload = {"fields": {field_name: value}}
 
             response = self._api_request(
-                "PUT",
-                f"/rest/api/2/issue/{issue_key}",
-                json=payload
+                "PUT", f"/rest/api/2/issue/{issue_key}", json=payload
             )
 
             if response.status_code == 204:
@@ -1602,12 +1665,12 @@ class JiraClient(IssueTrackerClient):
                 raise JiraNotFoundError(
                     f"Cannot update field: issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed when updating field in {issue_key}",
-                    response
+                    response,
                 )
             elif response.status_code == 400:
                 # Parse validation errors
@@ -1619,7 +1682,7 @@ class JiraClient(IssueTrackerClient):
                     raise JiraValidationError(
                         f"Field update failed for {issue_key}",
                         field_errors=field_errors,
-                        error_messages=error_messages
+                        error_messages=error_messages,
                     )
                 except JiraValidationError:
                     raise
@@ -1627,21 +1690,29 @@ class JiraClient(IssueTrackerClient):
                     raise JiraApiError(
                         f"Field update failed for {issue_key}",
                         status_code=response.status_code,
-                        response_text=response.text
+                        response_text=response.text,
                     )
             else:
                 raise JiraApiError(
                     f"Field update failed for {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
-        except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
+        except (
+            JiraNotFoundError,
+            JiraAuthError,
+            JiraApiError,
+            JiraValidationError,
+            JiraConnectionError,
+        ):
             # Re-raise JIRA-specific exceptions
             raise
         except Exception as e:
             # Wrap unexpected errors
-            raise JiraApiError(f"Failed to update field {field_name} in {issue_key}: {e}")
+            raise JiraApiError(
+                f"Failed to update field {field_name} in {issue_key}: {e}"
+            )
 
     def update_issue(self, issue_key: str, payload: Dict) -> None:
         """Update a JIRA issue with multiple fields.
@@ -1660,9 +1731,7 @@ class JiraClient(IssueTrackerClient):
         """
         try:
             response = self._api_request(
-                "PUT",
-                f"/rest/api/2/issue/{issue_key}",
-                json=payload
+                "PUT", f"/rest/api/2/issue/{issue_key}", json=payload
             )
 
             if response.status_code == 204:
@@ -1671,12 +1740,11 @@ class JiraClient(IssueTrackerClient):
                 raise JiraNotFoundError(
                     f"Cannot update issue: issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
-                    f"Authentication failed when updating {issue_key}",
-                    response
+                    f"Authentication failed when updating {issue_key}", response
                 )
             elif response.status_code == 400:
                 # Parse error response for detailed error messages
@@ -1694,7 +1762,7 @@ class JiraClient(IssueTrackerClient):
                     raise JiraValidationError(
                         f"Update failed for {issue_key}",
                         field_errors=readable_field_errors,
-                        error_messages=error_messages
+                        error_messages=error_messages,
                     )
 
                 except JiraValidationError:
@@ -1703,23 +1771,31 @@ class JiraClient(IssueTrackerClient):
                     raise JiraApiError(
                         f"Update failed for {issue_key}",
                         status_code=response.status_code,
-                        response_text=response.text
+                        response_text=response.text,
                     )
             else:
                 raise JiraApiError(
                     f"Update failed for {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
-        except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
+        except (
+            JiraNotFoundError,
+            JiraAuthError,
+            JiraApiError,
+            JiraValidationError,
+            JiraConnectionError,
+        ):
             # Re-raise JIRA-specific exceptions
             raise
         except Exception as e:
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to update issue {issue_key}: {e}")
 
-    def get_ticket_pr_links(self, issue_key: str, field_mappings: Optional[Dict] = None) -> str:
+    def get_ticket_pr_links(
+        self, issue_key: str, field_mappings: Optional[Dict] = None
+    ) -> str:
         """Get current PR/MR links from issue tracker ticket.
 
         Args:
@@ -1757,25 +1833,23 @@ class JiraClient(IssueTrackerClient):
                     raise JiraNotFoundError(
                         f"git_pull_request field not available for {issue_key}",
                         resource_type="field",
-                        resource_id="git_pull_request"
+                        resource_id="git_pull_request",
                     )
 
             response = self._api_request(
-                "GET",
-                f"/rest/api/2/issue/{issue_key}",
-                params={"fields": git_pr_field}
+                "GET", f"/rest/api/2/issue/{issue_key}", params={"fields": git_pr_field}
             )
 
             if response.status_code == 404:
                 raise JiraNotFoundError(
                     f"issue tracker ticket {issue_key} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed when getting PR links for {issue_key}",
-                    response
+                    response,
                 )
             elif response.status_code == 200:
                 data = response.json()
@@ -1784,14 +1858,14 @@ class JiraClient(IssueTrackerClient):
                 # Handle multiurl fields that return lists
                 if isinstance(field_value, list):
                     # Convert list of URLs to comma-separated string
-                    return ','.join(field_value) if field_value else ""
+                    return ",".join(field_value) if field_value else ""
 
                 return field_value if field_value else ""
             else:
                 raise JiraApiError(
                     f"Failed to get PR links for {issue_key}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
         except (JiraNotFoundError, JiraAuthError, JiraApiError, JiraConnectionError):
@@ -1814,6 +1888,7 @@ class JiraClient(IssueTrackerClient):
         """
         try:
             from devflow.config.loader import ConfigLoader
+
             config_loader = ConfigLoader()
             config = config_loader.load_config()
 
@@ -1851,7 +1926,7 @@ class JiraClient(IssueTrackerClient):
         parent: Optional[str] = None,
         components: Optional[List[str]] = None,
         required_custom_fields: Optional[dict] = None,
-        **custom_fields
+        **custom_fields,
     ) -> str:
         """Generic method to create a JIRA issue of any type.
 
@@ -1925,7 +2000,9 @@ class JiraClient(IssueTrackerClient):
         }
 
         # Add required custom fields generically
-        self._add_custom_fields_to_payload(payload, required_custom_fields, field_mapper)
+        self._add_custom_fields_to_payload(
+            payload, required_custom_fields, field_mapper
+        )
 
         # Set required fields based on field_mappings metadata
         self._set_required_fields(payload, issue_type, field_mapper)
@@ -1940,11 +2017,7 @@ class JiraClient(IssueTrackerClient):
                 payload["fields"][field_id] = field_value
 
         try:
-            response = self._api_request(
-                "POST",
-                "/rest/api/2/issue",
-                json=payload
-            )
+            response = self._api_request("POST", "/rest/api/2/issue", json=payload)
 
             if response.status_code == 201:
                 data = response.json()
@@ -1952,7 +2025,7 @@ class JiraClient(IssueTrackerClient):
             elif response.status_code == 401 or response.status_code == 403:
                 self._raise_auth_error(
                     f"Authentication failed when creating {issue_type.lower()}",
-                    response
+                    response,
                 )
             elif response.status_code == 400:
                 # Parse validation errors
@@ -1964,7 +2037,7 @@ class JiraClient(IssueTrackerClient):
                     raise JiraValidationError(
                         f"Failed to create {issue_type.lower()}",
                         field_errors=field_errors,
-                        error_messages=error_messages
+                        error_messages=error_messages,
                     )
                 except JiraValidationError:
                     raise
@@ -1972,13 +2045,13 @@ class JiraClient(IssueTrackerClient):
                     raise JiraApiError(
                         f"Failed to create {issue_type.lower()}",
                         status_code=response.status_code,
-                        response_text=response.text
+                        response_text=response.text,
                     )
             else:
                 raise JiraApiError(
                     f"Failed to create {issue_type.lower()}",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
 
         except (JiraAuthError, JiraApiError, JiraValidationError, JiraConnectionError):
@@ -1988,12 +2061,8 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to create {issue_type.lower()}: {e}")
 
-
     def _set_required_fields(
-        self,
-        payload: Dict,
-        issue_type: str,
-        field_mapper
+        self, payload: Dict, issue_type: str, field_mapper
     ) -> None:
         """Set required fields for the issue type if not already provided.
 
@@ -2029,7 +2098,11 @@ class JiraClient(IssueTrackerClient):
             # Some fields like "versions" are only available for Bug, not Story/Task/Epic
             available_for = field_info.get("available_for", [])
             # '*' wildcard means available for all issue types
-            if available_for and "*" not in available_for and jira_issue_type not in available_for:
+            if (
+                available_for
+                and "*" not in available_for
+                and jira_issue_type not in available_for
+            ):
                 continue
 
             # Get field ID
@@ -2038,7 +2111,13 @@ class JiraClient(IssueTrackerClient):
                 continue
 
             # Fields that should never be set during CREATE (auto-set by JIRA)
-            CREATE_READONLY_FIELDS = {"reporter", "created", "updated", "creator", "assignee"}
+            CREATE_READONLY_FIELDS = {
+                "reporter",
+                "created",
+                "updated",
+                "creator",
+                "assignee",
+            }
             if field_id in CREATE_READONLY_FIELDS:
                 continue
 
@@ -2050,8 +2129,17 @@ class JiraClient(IssueTrackerClient):
             # Setting them to empty arrays breaks GitLab Component Sync and other integrations
             # that require at least one version when components are specified
             VERSION_FIELD_IDS = {"versions", "fixVersions", "affectsVersions"}
-            VERSION_FIELD_NAMES = {"affects_version/s", "fix_version/s", "versions", "fixversions", "affectsversions"}
-            if field_id in VERSION_FIELD_IDS or field_name.lower().replace("_", "") in VERSION_FIELD_NAMES:
+            VERSION_FIELD_NAMES = {
+                "affects_version/s",
+                "fix_version/s",
+                "versions",
+                "fixversions",
+                "affectsversions",
+            }
+            if (
+                field_id in VERSION_FIELD_IDS
+                or field_name.lower().replace("_", "") in VERSION_FIELD_NAMES
+            ):
                 continue
 
             # Set a default placeholder value based on field type
@@ -2095,14 +2183,13 @@ class JiraClient(IssueTrackerClient):
 
         if response.status_code == 401 or response.status_code == 403:
             self._raise_auth_error(
-                "Authentication failed when fetching issue link types",
-                response
+                "Authentication failed when fetching issue link types", response
             )
         elif response.status_code != 200:
             raise JiraApiError(
                 "Failed to fetch issue link types",
                 status_code=response.status_code,
-                response_text=response.text
+                response_text=response.text,
             )
 
         data = response.json()
@@ -2113,7 +2200,7 @@ class JiraClient(IssueTrackerClient):
         issue_key: str,
         link_to_issue_key: str,
         link_type_description: str,
-        comment: Optional[str] = None
+        comment: Optional[str] = None,
     ) -> None:
         """Link two JIRA issues together.
 
@@ -2163,16 +2250,14 @@ class JiraClient(IssueTrackerClient):
                 f"Invalid linked issue type: '{link_type_description}'",
                 error_messages=[
                     f"Available types: {', '.join(sorted(set(available)))}"
-                ]
+                ],
             )
 
         # 3. Build payload with correct inward/outward placement
         # NOTE: JIRA's API is counterintuitive:
         # - For "A blocks B" (outward relationship): inwardIssue=A, outwardIssue=B
         # - For "A is blocked by B" (inward relationship): outwardIssue=A, inwardIssue=B
-        payload = {
-            "type": {"name": link_type_name}
-        }
+        payload = {"type": {"name": link_type_name}}
 
         if is_outward:
             # Outward relationship (e.g., "blocks")
@@ -2195,7 +2280,7 @@ class JiraClient(IssueTrackerClient):
             raise JiraNotFoundError(
                 f"Issue not found when creating link",
                 resource_type="issue",
-                resource_id=f"{issue_key} or {link_to_issue_key}"
+                resource_id=f"{issue_key} or {link_to_issue_key}",
             )
         elif response.status_code == 400:
             # Parse field errors from response
@@ -2206,22 +2291,21 @@ class JiraClient(IssueTrackerClient):
                 raise JiraValidationError(
                     "Validation failed when creating issue link",
                     field_errors=field_errors,
-                    error_messages=error_messages
+                    error_messages=error_messages,
                 )
             except (ValueError, KeyError):
                 raise JiraApiError(
                     "Failed to create issue link",
                     status_code=response.status_code,
-                    response_text=response.text
+                    response_text=response.text,
                 )
         elif response.status_code == 401 or response.status_code == 403:
             self._raise_auth_error(
-                "Authentication failed when creating issue link",
-                response
+                "Authentication failed when creating issue link", response
             )
         elif response.status_code != 201:
             raise JiraApiError(
                 "Failed to create issue link",
                 status_code=response.status_code,
-                response_text=response.text
+                response_text=response.text,
             )
