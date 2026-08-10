@@ -920,6 +920,10 @@ class Session(BaseModel):
     # When None, falls back to config.agent_backend (backward compatible with existing sessions)
     agent_backend: Optional[str] = None  # "claude" | "opencode" | "ollama" | "github-copilot" | etc.
 
+    # Actual model ID used for this session (e.g., "claude-opus-4-6", "claude-sonnet-5", "Qwen3-Coder-25B")
+    # Distinct from model_profile (the profile name) — this is the specific model identifier
+    model_id: Optional[str] = None
+
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure
     issue_tracker: Optional[str] = "jira"  # "jira" | "github" | "gitlab" | etc. | None (use pattern detection)

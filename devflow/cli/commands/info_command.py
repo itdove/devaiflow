@@ -293,6 +293,8 @@ def _display_full_session_info(
     # Display agent backend if stored (issue #442)
     if session.agent_backend:
         console.print(f"[bold]Agent Backend:[/bold] [cyan]{session.agent_backend}[/cyan]")
+    if session.model_id:
+        console.print(f"[bold]Model ID:[/bold] [cyan]{session.model_id}[/cyan]")
     if session.goal:
         console.print(f"[bold]Goal:[/bold] {session.goal}")
     console.print()
