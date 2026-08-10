@@ -68,13 +68,17 @@ class ClaudeAgent(AgentInterface):
 
         # Audit log: Track model provider usage when launching session
         if session_name:
+            import os as _os
             from devflow.utils.audit_log import log_model_provider_usage
+            _profile_model_name = model_provider_profile.get("model_name") if model_provider_profile else None
+            _model_id = _os.environ.get("CLAUDE_MODEL") or _profile_model_name
             log_model_provider_usage(
                 event_type="session_launched",
                 session_name=session_name,
                 profile_name=profile_name,
                 enforcement_source=enforcement_source,
-                model_name=model_provider_profile.get("model_name") if model_provider_profile else None,
+                model_name=_profile_model_name,
+                model_id=_model_id,
                 base_url=model_provider_profile.get("base_url") if model_provider_profile else None,
                 use_vertex=model_provider_profile.get("use_vertex", False) if model_provider_profile else False,
                 vertex_region=model_provider_profile.get("vertex_region") if model_provider_profile else None,
@@ -136,13 +140,17 @@ class ClaudeAgent(AgentInterface):
 
         # Audit log: Track model provider usage when launching session
         if session_name:
+            import os as _os
             from devflow.utils.audit_log import log_model_provider_usage
+            _profile_model_name = model_provider_profile.get("model_name") if model_provider_profile else None
+            _model_id = _os.environ.get("CLAUDE_MODEL") or _profile_model_name
             log_model_provider_usage(
                 event_type="session_launched",
                 session_name=session_name,
                 profile_name=profile_name,
                 enforcement_source=enforcement_source,
-                model_name=model_provider_profile.get("model_name") if model_provider_profile else None,
+                model_name=_profile_model_name,
+                model_id=_model_id,
                 base_url=model_provider_profile.get("base_url") if model_provider_profile else None,
                 use_vertex=model_provider_profile.get("use_vertex", False) if model_provider_profile else False,
                 vertex_region=model_provider_profile.get("vertex_region") if model_provider_profile else None,

@@ -778,6 +778,10 @@ def create_new_session(
 
     # Create session if we didn't add to an existing one
     if session is None:
+        from devflow.utils.model_provider import get_active_profile, get_model_name_from_profile
+        import os as _os
+        _resolved_profile = get_active_profile(config, override_profile_name=model_profile)
+        _model_id = _os.environ.get("CLAUDE_MODEL") or get_model_name_from_profile(_resolved_profile)
         session = session_manager.create_session(
             name=name,
             issue_key=issue_key,
@@ -788,6 +792,7 @@ def create_new_session(
             ai_agent_session_id=session_id,
             model_profile=model_profile,
             agent_backend=resolve_agent_backend(cli_override=agent, config=config),
+            model_id=_model_id,
         )
 
         # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)

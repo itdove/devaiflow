@@ -57,6 +57,7 @@ def log_model_provider_usage(
     profile_name: Optional[str] = None,
     enforcement_source: Optional[str] = None,
     model_name: Optional[str] = None,
+    model_id: Optional[str] = None,
     base_url: Optional[str] = None,
     use_vertex: bool = False,
     vertex_region: Optional[str] = None,
@@ -72,7 +73,8 @@ def log_model_provider_usage(
         session_name: Name of the session
         profile_name: Name of the model provider profile being used
         enforcement_source: Source of enforcement ("enterprise", "team", or None)
-        model_name: Model name being used
+        model_name: Model name from profile configuration
+        model_id: Actual model ID being used (e.g., "claude-opus-4-6")
         base_url: API base URL being used
         use_vertex: Whether Vertex AI is being used
         vertex_region: Vertex AI region (if applicable)
@@ -92,6 +94,7 @@ def log_model_provider_usage(
         "profile_name": profile_name,
         "enforcement_source": enforcement_source,
         "model_name": model_name,
+        "model_id": model_id,
         "base_url": base_url,
         "use_vertex": use_vertex,
     }
