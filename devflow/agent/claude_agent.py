@@ -357,8 +357,7 @@ class ClaudeAgent(AgentInterface):
     def encode_project_path(self, project_path: str) -> str:
         """Encode project path the same way Claude Code does.
 
-        Claude Code replaces / with - in paths (keeps the leading -)
-        and also replaces _ with -.
+        Claude Code replaces /, _, and . with - in paths (keeps the leading -).
 
         Resolves known symlinks (e.g., /var -> /private/var on macOS) to match
         how Claude Code encodes paths when it launches.
@@ -390,9 +389,8 @@ class ClaudeAgent(AgentInterface):
                 target = tmp_path.resolve()
                 resolved_path = str(target / project_path[5:])  # Skip "/tmp/"
 
-        # Claude Code replaces / with - in paths (keeps the leading -)
-        # AND also replaces _ with -
-        encoded = resolved_path.replace("/", "-").replace("_", "-")
+        # Claude Code replaces /, _, and . with - in paths
+        encoded = resolved_path.replace("/", "-").replace("_", "-").replace(".", "-")
         return encoded
 
     def get_agent_home_dir(self) -> Path:

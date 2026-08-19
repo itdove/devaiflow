@@ -379,8 +379,7 @@ class OllamaClaudeAgent(AgentInterface):
     def encode_project_path(self, project_path: str) -> str:
         """Encode project path the same way Claude Code does.
 
-        Claude Code replaces / with - in paths (keeps the leading -)
-        and also replaces _ with -.
+        Claude Code replaces /, _, and . with - in paths (keeps the leading -).
 
         Args:
             project_path: Absolute path to project
@@ -388,8 +387,8 @@ class OllamaClaudeAgent(AgentInterface):
         Returns:
             Encoded path string
         """
-        # Same encoding as Claude Code
-        encoded = project_path.replace("/", "-").replace("_", "-")
+        # Same encoding as Claude Code (/, _, and . replaced with -)
+        encoded = project_path.replace("/", "-").replace("_", "-").replace(".", "-")
         return encoded
 
     def get_agent_home_dir(self) -> Path:

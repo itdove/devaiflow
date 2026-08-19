@@ -3392,7 +3392,7 @@ def _cleanup_temp_directory_on_exit(temp_dir: Optional[str]) -> None:
     cleanup_temp_directory(temp_dir)
 
 
-def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
+def _copy_conversation_to_temp(session, temp_dir: str, config=None, old_temp_dir: str = None) -> bool:
     """Copy conversation file from stable location to temp directory.
 
     For ticket_creation sessions, we store conversation files using the original_project_path
@@ -3402,6 +3402,7 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
         session: Session object
         temp_dir: Temporary directory path
         config: Optional Config object for agent backend selection
+        old_temp_dir: Previous temp directory path for fallback lookup
 
     Returns:
         True if conversation was copied, False otherwise
@@ -3434,8 +3435,9 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None) -> bool:
 
     if not stable_conversation_file.exists():
         console.print(f"[dim]Conversation file not found at stable location[/dim]")
-        if conv.temp_directory:
-            old_temp_resolved = str(Path(conv.temp_directory).resolve())
+        fallback_temp = old_temp_dir or conv.temp_directory
+        if fallback_temp:
+            old_temp_resolved = str(Path(fallback_temp).resolve())
             old_temp_session_dir = capture.get_session_dir(old_temp_resolved)
             old_temp_file = old_temp_session_dir / f"{conv.ai_agent_session_id}.jsonl"
             if old_temp_file.exists():
@@ -3550,6 +3552,7 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
 
     # Case 1: Session was previously created with temp_directory
     if conv.temp_directory:
+        old_temp_directory = conv.temp_directory
         console.print(f"\n[cyan]This session was created with a temporary directory[/cyan]")
         console.print(f"[dim]Previous temp directory: {conv.temp_directory}[/dim]")
 
@@ -3650,7 +3653,7 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
 
         # Restore conversation file from stable location to new temp directory
         # This uses original_project_path as stable identifier
-        if _copy_conversation_to_temp(session, new_clone_dir, config):
+        if _copy_conversation_to_temp(session, new_clone_dir, config, old_temp_dir=old_temp_directory):
             console.print(f"[green]✓[/green] Restored conversation history from stable storage")
         else:
             console.print(f"[dim]No previous conversation to restore (this may be first launch)[/dim]")
