@@ -309,7 +309,7 @@ def _prompt_investigation_location(config, config_loader, name, goal, parent, mo
     cwd = os.getcwd()
     console_print("\nWhere would you like to run this investigation?\n")
     console_print(f"  1. Current directory ({cwd})")
-    console_print("  2. Empty temporary directory (auto-cleaned on session exit)")
+    console_print("  2. Temporary directory (clone project if git repo, auto-cleaned on exit)")
     console_print("  3. Specify a custom path")
     console_print("  4. Select from workspace repositories")
     console_print()
@@ -321,14 +321,28 @@ def _prompt_investigation_location(config, config_loader, name, goal, parent, mo
         return (cwd, None, None, None)
 
     elif choice == "2":
-        from devflow.utils.temp_directory import create_empty_temp_directory
-        temp_dir = create_empty_temp_directory()
-        if temp_dir:
-            console_print(f"[green]✓[/green] Created temporary directory: {temp_dir}")
-            return (temp_dir, None, temp_dir, None)
+        from devflow.utils.temp_directory import (
+            clone_to_temp_directory,
+            create_empty_temp_directory,
+            should_clone_to_temp,
+        )
+        if should_clone_to_temp(Path(cwd)):
+            temp_result = clone_to_temp_directory(Path(cwd))
+            if temp_result:
+                clone_dir, original_path = temp_result
+                console_print(f"[green]✓[/green] Cloned project to temporary directory: {clone_dir}")
+                return (clone_dir, None, clone_dir, original_path)
+            else:
+                console_print("[red]✗[/red] Failed to clone project to temporary directory")
+                return None
         else:
-            console_print("[red]✗[/red] Failed to create temporary directory")
-            return None
+            temp_dir = create_empty_temp_directory()
+            if temp_dir:
+                console_print(f"[green]✓[/green] Created temporary directory: {temp_dir}")
+                return (temp_dir, None, temp_dir, None)
+            else:
+                console_print("[red]✗[/red] Failed to create temporary directory")
+                return None
 
     elif choice == "3":
         custom_path = Prompt.ask("Enter path")
@@ -522,13 +536,16 @@ def create_investigation_session(
             return
         project_path, selected_workspace_name, loc_temp_directory, loc_original_path = result
 
-    # For empty temp directories (no project), use session name as working_directory
+    # For temp directories: use original repo name if cloned, session name if empty
     temp_directory = None
     original_project_path = None
     if loc_temp_directory:
         temp_directory = loc_temp_directory
         original_project_path = loc_original_path
-        working_directory = name
+        if original_project_path:
+            working_directory = Path(original_project_path).name
+        else:
+            working_directory = name
     else:
         working_directory = Path(project_path).name
     mock_mode = is_mock_mode()
