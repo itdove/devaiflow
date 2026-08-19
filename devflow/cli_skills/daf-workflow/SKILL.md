@@ -157,8 +157,7 @@ Analysis-only session for creating a GitHub/GitLab issue.
    # GitLab
    glab issue create --title "..." --description "<your analysis>"
    ```
-5. Link the issue to this session: `daf link <issue_url>`
-6. Include detailed description and acceptance criteria based on analysis
+5. Include detailed description and acceptance criteria based on analysis
 
 Read the **daf-git skill** for correct command syntax.
 
@@ -217,7 +216,7 @@ Read-only investigation and analysis session.
 5. Document findings and recommendations
 6. If you discover bugs or improvements, you MAY create tickets:
    - JIRA: `daf jira create`
-   - GitHub/GitLab: `gh issue create` / `glab issue create` + `daf link`
+   - GitHub/GitLab: `gh issue create` / `glab issue create`
 
 **When investigation is complete:**
 - Provide a clear summary of findings
