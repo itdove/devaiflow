@@ -3310,7 +3310,7 @@ def _generate_pr_summary_with_api(session, working_dir: Path) -> Optional[str]:
         # Call Anthropic API
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=500,
             messages=[{
                 "role": "user",
@@ -3917,7 +3917,7 @@ def _generate_commit_message_from_diff_api(diff_content: str, status_summary: st
         client = anthropic.Anthropic(api_key=api_key)
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=500,
             messages=[{
                 "role": "user",
@@ -4097,7 +4097,7 @@ def _generate_commit_from_summary(summary_data) -> Optional[str]:
 
         # Request commit message from Claude
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=500,
             messages=[{
                 "role": "user",

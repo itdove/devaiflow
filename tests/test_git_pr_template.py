@@ -274,7 +274,7 @@ Assisted-by: Claude
                 # Verify -p flag is used
                 call_args = mock_run.call_args
                 cmd = call_args[0][0] if call_args[0] else call_args.kwargs.get('args', [])
-                assert cmd == ["claude", "-p"], f"Expected ['claude', '-p'], got {cmd}"
+                assert cmd == ["claude", "-p", "--model", "claude-haiku-4-5-20251001"], f"Expected haiku model flag, got {cmd}"
 
     def test_session_without_issue_key(self, sample_template, git_context, tmp_path, monkeypatch):
         """Test template filling when session has no issue key."""

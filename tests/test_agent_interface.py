@@ -2006,7 +2006,7 @@ class TestGenerateText:
         result = agent.generate_text("test prompt")
         assert result == "Generated text"
         mock_run.assert_called_once_with(
-            ["claude", "-p"],
+            ["claude", "-p", "--model", "claude-haiku-4-5-20251001"],
             input="test prompt",
             capture_output=True,
             text=True,
@@ -2090,7 +2090,7 @@ class TestGenerateText:
         result = agent.generate_text("prompt", timeout=60)
         assert result == "result"
         mock_run.assert_called_once_with(
-            ["claude", "-p"],
+            ["claude", "-p", "--model", "claude-haiku-4-5-20251001"],
             input="prompt",
             capture_output=True,
             text=True,
@@ -2104,7 +2104,7 @@ class TestGenerateText:
         result = agent.generate_text("test prompt")
         assert result == "opencode result"
         mock_run.assert_called_once_with(
-            ["opencode", "-p"],
+            ["opencode", "-p", "--model", "claude-haiku-4-5-20251001"],
             input="test prompt",
             capture_output=True,
             text=True,
