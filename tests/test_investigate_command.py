@@ -1048,8 +1048,8 @@ class TestOptionalProjectSelection:
         assert ws_name is None
         assert temp_dir is None
 
-    def test_prompt_investigation_location_temp_directory(self, temp_daf_home, monkeypatch):
-        """Test _prompt_investigation_location option 2 (empty temp directory)."""
+    def test_prompt_investigation_location_temp_directory_git_repo(self, temp_daf_home, monkeypatch):
+        """Test _prompt_investigation_location option 2 clones when CWD is a git repo."""
         monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
 
         config_loader = ConfigLoader()
@@ -1057,8 +1057,35 @@ class TestOptionalProjectSelection:
         config_loader.save_config(config)
 
         with patch("devflow.cli.commands.investigate_command.Prompt") as mock_prompt, \
+             patch("devflow.utils.temp_directory.should_clone_to_temp") as mock_should, \
+             patch("devflow.utils.temp_directory.clone_to_temp_directory") as mock_clone:
+            mock_prompt.ask.return_value = "2"
+            mock_should.return_value = True
+            mock_clone.return_value = ("/tmp/daf-session-abc/myrepo", "/home/user/myrepo")
+
+            result = _prompt_investigation_location(
+                config, config_loader, "test-session", "Test goal", None, None,
+            )
+
+        assert result is not None
+        project_path, ws_name, temp_dir, orig_path = result
+        assert project_path == "/tmp/daf-session-abc/myrepo"
+        assert temp_dir == "/tmp/daf-session-abc/myrepo"
+        assert orig_path == "/home/user/myrepo"
+
+    def test_prompt_investigation_location_temp_directory_no_git(self, temp_daf_home, monkeypatch):
+        """Test _prompt_investigation_location option 2 creates empty dir when CWD is not a git repo."""
+        monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        with patch("devflow.cli.commands.investigate_command.Prompt") as mock_prompt, \
+             patch("devflow.utils.temp_directory.should_clone_to_temp") as mock_should, \
              patch("devflow.utils.temp_directory.create_empty_temp_directory") as mock_create:
             mock_prompt.ask.return_value = "2"
+            mock_should.return_value = False
             mock_create.return_value = "/tmp/daf-investigation-test123"
 
             result = _prompt_investigation_location(
