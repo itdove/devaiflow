@@ -4435,3 +4435,137 @@ def test_complete_resolves_session_agent_over_config_default(temp_daf_home, monk
         assert backend == "claude", (
             f"Call #{i+1} returned '{backend}' instead of session agent 'claude'"
         )
+
+
+class TestPrDescriptionBackendDetection:
+    """Tests for issue #541: built-in template must use backend detection."""
+
+    def test_builtin_template_github_session_no_jira_url(self, temp_daf_home, tmp_path, monkeypatch):
+        """GitHub session should show 'GitHub Issue:' not 'Jira Issue:' in built-in template."""
+        from devflow.cli.commands.complete_command import _generate_pr_description
+        from devflow.config.models import Session
+        from devflow.config.loader import ConfigLoader
+        from datetime import datetime
+
+        session = Session(
+            name="github-test",
+            goal="Fix login bug",
+            issue_key="owner/repo#42",
+            created=datetime.now(),
+            last_active=datetime.now(),
+        )
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        mock_config = Mock()
+        mock_config.jira = Mock()
+        mock_config.jira.url = "https://jira.example.com"
+        mock_config.pr_template_url = None
+        mock_config.model_provider_profile = None
+        mock_loader = Mock()
+        mock_loader.load_config.return_value = mock_config
+        mock_loader.config_file.exists.return_value = True
+
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command._try_discover_org_template",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command._try_discover_repo_template",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command._generate_pr_summary_bullets",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.get_co_authored_by_line",
+            lambda *a, **kw: "Co-Authored-By: Claude",
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.resolve_agent_backend",
+            lambda *a, **kw: "claude",
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.is_non_interactive",
+            lambda: True,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.GitUtils.get_commit_log",
+            lambda *a, **kw: "fix: login bug",
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.GitUtils.get_changed_files",
+            lambda *a, **kw: ["login.py"],
+        )
+
+        desc = _generate_pr_description(session, tmp_path, mock_loader)
+
+        assert "GitHub Issue: owner/repo#42" in desc
+        assert "Jira Issue:" not in desc
+        assert "jira.example.com" not in desc
+
+    def test_builtin_template_jira_session_still_works(self, temp_daf_home, tmp_path, monkeypatch):
+        """JIRA session should still produce 'Jira Issue:' link — no regression."""
+        from devflow.cli.commands.complete_command import _generate_pr_description
+        from devflow.config.models import Session
+        from devflow.config.loader import ConfigLoader
+        from datetime import datetime
+
+        session = Session(
+            name="jira-test",
+            goal="Fix auth bug",
+            issue_key="PROJ-999",
+            created=datetime.now(),
+            last_active=datetime.now(),
+        )
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        mock_config = Mock()
+        mock_config.jira = Mock()
+        mock_config.jira.url = "https://jira.example.com"
+        mock_config.pr_template_url = None
+        mock_config.model_provider_profile = None
+        mock_loader = Mock()
+        mock_loader.load_config.return_value = mock_config
+        mock_loader.config_file.exists.return_value = True
+
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command._try_discover_org_template",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command._try_discover_repo_template",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command._generate_pr_summary_bullets",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.get_co_authored_by_line",
+            lambda *a, **kw: "Co-Authored-By: Claude",
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.resolve_agent_backend",
+            lambda *a, **kw: "claude",
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.is_non_interactive",
+            lambda: True,
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.GitUtils.get_commit_log",
+            lambda *a, **kw: "fix: auth bug",
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.complete_command.GitUtils.get_changed_files",
+            lambda *a, **kw: ["auth.py"],
+        )
+
+        desc = _generate_pr_description(session, tmp_path, mock_loader)
+
+        assert "Jira Issue: https://jira.example.com/browse/PROJ-999" in desc
