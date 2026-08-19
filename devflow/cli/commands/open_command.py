@@ -1148,6 +1148,7 @@ def open_session(
                         env=env,
                         headless=headless,
                         auto_approve=auto_approve,
+                        display_name=session.name,
                     )
             finally:
                 if not is_cleanup_done():
@@ -1191,6 +1192,10 @@ def open_session(
                 # Build resume command with --model flag if using alternative provider
                 agent_cmd = "ollama" if agent_backend in ("ollama", "ollama-claude") else "claude"
                 base_cmd = [agent_cmd]
+
+                # Add session display name
+                if agent_cmd == "claude":
+                    base_cmd.extend(["--name", session.name])
 
                 # Add model flag for alternative providers
                 if model_provider_profile and model_provider_profile.get("model_name"):

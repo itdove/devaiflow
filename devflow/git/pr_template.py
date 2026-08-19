@@ -15,7 +15,8 @@ def fill_pr_template_with_ai(
     template_content: str,
     session,
     working_dir: Path,
-    git_context: dict
+    git_context: dict,
+    display_name: Optional[str] = None,
 ) -> str:
     """Fill PR/MR template using AI to understand and populate fields.
 
@@ -119,8 +120,11 @@ Generate the filled PR/MR description now:"""
 
     try:
         # Try Claude CLI first (faster, better)
+        cmd = ["claude", "-p"]
+        if display_name:
+            cmd.extend(["--name", display_name])
         result = subprocess.run(
-            ["claude", "-p"],
+            cmd,
             input=prompt,
             capture_output=True,
             text=True,

@@ -45,6 +45,7 @@ class ClaudeAgent(AgentInterface):
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
+        display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch a new Claude Code session in a project directory.
 
@@ -90,6 +91,9 @@ class ClaudeAgent(AgentInterface):
         # Build environment and command based on profile
         final_env, cmd = self._build_env_and_cmd(model_provider_profile, base_env=env)
 
+        if display_name:
+            cmd.extend(["--name", display_name])
+
         return subprocess.Popen(
             cmd,
             cwd=project_path,
@@ -112,6 +116,7 @@ class ClaudeAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code with initial prompt (for new sessions).
 
@@ -163,8 +168,11 @@ class ClaudeAgent(AgentInterface):
         final_env, base_cmd = self._build_env_and_cmd(model_provider_profile, base_env=env)
 
         # Build full command with session ID and prompt
-        # Format: claude [--print] [--dangerously-skip-permissions] [--model model] --session-id <uuid> "<prompt>" --add-dir ...
+        # Format: claude [--name name] [--print] [--dangerously-skip-permissions] [--model model] --session-id <uuid> "<prompt>" --add-dir ...
         cmd = ["claude"]
+
+        if display_name:
+            cmd.extend(["--name", display_name])
 
         if headless:
             cmd.append("--print")
@@ -205,6 +213,7 @@ class ClaudeAgent(AgentInterface):
         project_path: str,
         model_provider_profile: Optional[Dict[str, any]] = None,
         env: Optional[Dict[str, str]] = None,
+        display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Resume an existing Claude Code session.
 
@@ -224,7 +233,10 @@ class ClaudeAgent(AgentInterface):
 
         # Build environment (command is always claude --resume for resume)
         final_env, _ = self._build_env_and_cmd(model_provider_profile, base_env=env)
-        cmd = ["claude", "--resume", session_id]
+        cmd = ["claude"]
+        if display_name:
+            cmd.extend(["--name", display_name])
+        cmd.extend(["--resume", session_id])
 
         return subprocess.Popen(
             cmd,

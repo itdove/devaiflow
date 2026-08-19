@@ -17,46 +17,28 @@ class TestSlugifyGoal:
     def test_simple_goal(self):
         """Test slugifying a simple goal."""
         result = slugify_goal("Research caching options")
-        # Format: "research-caching-options-{6-hex-chars}"
-        assert result.startswith("research-caching-options-")
-        # Check that suffix is hex
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
-        assert all(c in "0123456789abcdef" for c in suffix)
+        assert result == "research-caching-options"
 
     def test_goal_with_special_chars(self):
         """Test slugifying goal with special characters."""
         result = slugify_goal("Investigate: timeout in API")
-        assert result.startswith("investigate-timeout-in-api-")
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
-        assert all(c in "0123456789abcdef" for c in suffix)
+        assert result == "investigate-timeout-in-api"
 
     def test_long_goal(self):
         """Test slugifying a long goal (should be truncated)."""
         long_goal = "A very long investigation goal that exceeds the maximum allowed length for session names"
         result = slugify_goal(long_goal)
-        # Total length is limited to 50 chars (43 base + 1 hyphen + 6 hex)
-        assert len(result) == 50
+        assert len(result) <= 50
         assert not result.endswith("-")
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
-        assert all(c in "0123456789abcdef" for c in suffix)
 
-    def test_unique_names_for_identical_goals(self):
-        """Test that identical goals produce unique session names."""
-        goal = "Test identical goal"
-        result1 = slugify_goal(goal)
-        result2 = slugify_goal(goal)
+    def test_collision_adds_numeric_suffix(self):
+        """Test that collisions add numeric suffix."""
+        from unittest.mock import MagicMock
+        mock_sm = MagicMock()
+        mock_sm.get_session.side_effect = lambda name: MagicMock() if name == "test-goal" else None
 
-        # Both should start with same base
-        assert result1.startswith("test-identical-goal-")
-        assert result2.startswith("test-identical-goal-")
-
-        # But should have different suffixes (random)
-        suffix1 = result1.split("-")[-1]
-        suffix2 = result2.split("-")[-1]
-        assert suffix1 != suffix2
+        result = slugify_goal("Test goal", session_manager=mock_sm)
+        assert result == "test-goal-1"
 
 
 class TestInvestigateCommand:
