@@ -3037,9 +3037,15 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
         console.print("[dim]Using default built-in template[/dim]")
         jira_section = ""
         if session.issue_key:
-            jira_url = config.jira.url if config and config.jira else None
-            if jira_url:
-                jira_section = f"Jira Issue: {jira_url}/browse/{session.issue_key}\n\n"
+            backend = get_issue_tracker_backend(session, config)
+            if backend == "jira":
+                jira_url = config.jira.url if config and config.jira else None
+                if jira_url:
+                    jira_section = f"Jira Issue: {jira_url}/browse/{session.issue_key}\n\n"
+            elif backend == "github":
+                jira_section = f"GitHub Issue: {session.issue_key}\n\n"
+            elif backend == "gitlab":
+                jira_section = f"GitLab Issue: {session.issue_key}\n\n"
 
         # Try to generate AI-powered summary from session and git data
         summary_bullets = _generate_pr_summary_bullets(session, working_dir, agent_backend=resolve_agent_backend(config=config, session=session), display_name=display_name)

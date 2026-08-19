@@ -7,6 +7,7 @@ from typing import Optional
 from rich.console import Console
 from devflow.config.loader import ConfigLoader
 from devflow.utils import strip_code_fences
+from devflow.utils.backend_detection import get_issue_tracker_backend
 
 console = Console()
 
@@ -47,7 +48,7 @@ def fill_pr_template_with_ai(
     jira_url = config.jira.url if config and config.jira else None
 
     # Detect issue tracker backend
-    issue_tracker = getattr(session, 'issue_tracker', None) or "jira"
+    issue_tracker = get_issue_tracker_backend(session)
 
     # Session context — build issue URL based on backend
     if session.issue_key:
@@ -219,7 +220,7 @@ def _fill_template_fallback(template_content: str, session, git_context: dict, j
         jira_url = config.jira.url if config and config.jira else None
 
     # Detect issue tracker backend
-    issue_tracker = getattr(session, 'issue_tracker', None) or "jira"
+    issue_tracker = get_issue_tracker_backend(session)
 
     filled = template_content
 

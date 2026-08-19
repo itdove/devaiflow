@@ -654,3 +654,99 @@ More content
 
             assert "https://jira.example.com/browse/PROJ-12345" in result
             assert "//browse" not in result
+
+
+class TestBackendDetectionInTemplates:
+    """Tests for issue #541: PR templates must use get_issue_tracker_backend()
+    instead of defaulting to 'jira' when session.issue_tracker is None."""
+
+    def test_ai_filling_github_session_no_jira_label(self, sample_template, git_context, tmp_path, monkeypatch):
+        """GitHub session should produce 'GitHub Issue:' context, not 'JIRA Issue:'."""
+        monkeypatch.chdir(tmp_path)
+
+        session = Mock()
+        session.issue_key = "owner/repo#42"
+        session.issue_tracker = None  # not set — triggers the bug
+        session.goal = "Fix login page"
+        conversation = Mock()
+        conversation.branch = "fix/login"
+        session.active_conversation = conversation
+
+        captured_prompt = {}
+
+        def fake_run(cmd, **kwargs):
+            captured_prompt['input'] = kwargs.get('input', '')
+            result = Mock()
+            result.returncode = 0
+            result.stdout = "## Description\nFixed login page\n"
+            return result
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_cls:
+            mock_config = Mock()
+            mock_config.jira.url = "https://jira.example.com"
+            loader = Mock()
+            loader.config_file.exists.return_value = True
+            loader.load_config.return_value = mock_config
+            mock_cls.return_value = loader
+
+            with patch('devflow.git.pr_template.subprocess.run', side_effect=fake_run):
+                fill_pr_template_with_ai(sample_template, session, tmp_path, git_context)
+
+        prompt_text = captured_prompt['input']
+        assert "GitHub Issue: owner/repo#42" in prompt_text
+        assert "JIRA Issue:" not in prompt_text
+
+    def test_fallback_filling_github_session_no_jira_url(self):
+        """Fallback for GitHub session should not inject JIRA URL."""
+        session = Mock()
+        session.issue_key = "owner/repo#99"
+        session.issue_tracker = None
+        session.goal = "Add dark mode"
+
+        template = """## Description\n<!-- desc -->\nJira Issue: <PROJ-NNNN>\n"""
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_cls:
+            mock_config = Mock()
+            mock_config.jira.url = "https://jira.example.com"
+            loader = Mock()
+            loader.config_file.exists.return_value = True
+            loader.load_config.return_value = mock_config
+            mock_cls.return_value = loader
+
+            result = _fill_template_fallback(template, session, {})
+
+        assert "https://github.com/owner/repo/issues/99" in result
+        assert "jira.example.com/browse/" not in result
+
+    def test_fallback_filling_jira_session_still_works(self):
+        """JIRA sessions should still get JIRA URL — no regression."""
+        session = Mock()
+        session.issue_key = "PROJ-12345"
+        session.issue_tracker = "jira"
+        session.goal = "Fix bug"
+
+        template = """Jira Issue: <PROJ-NNNN>"""
+
+        result = _fill_template_fallback(
+            template, session, {},
+            jira_url="https://jira.example.com"
+        )
+
+        assert "https://jira.example.com/browse/PROJ-12345" in result
+
+    def test_fallback_filling_github_session_with_explicit_tracker(self):
+        """Explicit issue_tracker='github' should work same as pattern-detected."""
+        session = Mock()
+        session.issue_key = "owner/repo#77"
+        session.issue_tracker = "github"
+        session.goal = "Add feature"
+
+        template = """Jira Issue: <PROJ-NNNN>"""
+
+        result = _fill_template_fallback(
+            template, session, {},
+            jira_url="https://jira.example.com"
+        )
+
+        assert "https://github.com/owner/repo/issues/77" in result
+        assert "jira.example.com" not in result

@@ -926,7 +926,7 @@ class Session(BaseModel):
 
     # Issue tracker abstraction
     # Replaces JIRA-specific fields with tracker-agnostic structure
-    issue_tracker: Optional[str] = "jira"  # "jira" | "github" | "gitlab" | etc. | None (use pattern detection)
+    issue_tracker: Optional[str] = None  # "jira" | "github" | "gitlab" | etc. | None (use pattern detection)
     issue_key: Optional[str] = None  # Tracker issue identifier (e.g., "PROJ-12345", "org/repo#123")
     issue_updated: Optional[str] = None  # ISO timestamp of last issue update (for sync)
     issue_metadata: Dict[str, Any] = Field(default_factory=dict)  # Tracker-specific metadata
