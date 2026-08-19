@@ -299,12 +299,13 @@ class AgentInterface(ABC):
         """
         return f"claude --resume {session_id}"
 
-    def generate_text(self, prompt: str, timeout: int = 30) -> Optional[str]:
+    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None) -> Optional[str]:
         """Generate text by piping a prompt through the agent's CLI.
 
         Args:
             prompt: Text prompt to send
             timeout: Maximum seconds to wait
+            display_name: Display name for the Claude session (--name flag)
 
         Returns:
             Generated text (stripped), or None on any failure
@@ -312,8 +313,11 @@ class AgentInterface(ABC):
         try:
             from devflow.agent.factory import get_agent_cli_binary
             cli_binary = get_agent_cli_binary(self.get_agent_name())
+            cmd = [cli_binary, "-p"]
+            if display_name:
+                cmd.extend(["--name", display_name])
             result = subprocess.run(
-                [cli_binary, "-p"],
+                cmd,
                 input=prompt,
                 capture_output=True,
                 text=True,

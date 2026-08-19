@@ -38,77 +38,53 @@ class TestSlugifyGoal:
     def test_simple_goal(self):
         """Test slugifying a simple goal."""
         result = slugify_goal("Add retry logic")
-        # After PROJ-60782, slugify_goal adds a 6-character random suffix
-        # Format: "add-retry-logic-{6-hex-chars}"
-        assert result.startswith("add-retry-logic-")
-        # Check total length (15 base chars + 1 hyphen + 6 hex chars = 22)
-        # "add-retry-logic" = 15 chars, "-" = 1 char, "abc123" = 6 chars
-        assert len(result) == 22
-        # Check that suffix is hex
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
-        assert all(c in "0123456789abcdef" for c in suffix)
+        assert result == "add-retry-logic"
 
     def test_goal_with_special_chars(self):
         """Test slugifying goal with special characters."""
         result = slugify_goal("Fix bug: timeout in API")
-        # After PROJ-60782, includes random suffix
-        assert result.startswith("fix-bug-timeout-in-api-")
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
-        assert all(c in "0123456789abcdef" for c in suffix)
+        assert result == "fix-bug-timeout-in-api"
 
     def test_long_goal(self):
         """Test slugifying a long goal (should be truncated)."""
         long_goal = "A very long goal that exceeds the maximum allowed length for session names"
         result = slugify_goal(long_goal)
-        # After PROJ-60782, total length is limited to 50 chars (43 base + 1 hyphen + 6 hex)
-        assert len(result) == 50
-        assert not result.endswith("-")  # Should end cleanly without trailing hyphen
-        # Verify suffix is present
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
-        assert all(c in "0123456789abcdef" for c in suffix)
+        assert len(result) <= 50
+        assert not result.endswith("-")
 
     def test_goal_with_multiple_spaces(self):
         """Test slugifying goal with multiple spaces."""
         result = slugify_goal("Add    retry    logic")
-        assert result.startswith("add-retry-logic-")
-        # Verify no double hyphens in the main slug (before suffix)
-        main_slug = "-".join(result.split("-")[:-1])
-        assert "--" not in main_slug
+        assert result == "add-retry-logic"
+        assert "--" not in result
 
     def test_goal_with_leading_trailing_spaces(self):
         """Test slugifying goal with leading/trailing spaces."""
         result = slugify_goal("  Add retry logic  ")
-        assert result.startswith("add-retry-logic-")
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
+        assert result == "add-retry-logic"
 
-    def test_unique_names_for_identical_goals(self):
-        """Test that identical goals produce unique session names (PROJ-60782)."""
-        goal = "Test identical goal"
-        result1 = slugify_goal(goal)
-        result2 = slugify_goal(goal)
+    def test_collision_adds_numeric_suffix(self):
+        """Test that collisions add numeric suffix instead of random hex."""
+        from unittest.mock import MagicMock
+        mock_sm = MagicMock()
+        mock_sm.get_session.side_effect = lambda name: MagicMock() if name == "test-goal" else None
 
-        # Both should start with same base
-        assert result1.startswith("test-identical-goal-")
-        assert result2.startswith("test-identical-goal-")
+        result = slugify_goal("Test goal", session_manager=mock_sm)
+        assert result == "test-goal-1"
 
-        # But should have different suffixes (random)
-        suffix1 = result1.split("-")[-1]
-        suffix2 = result2.split("-")[-1]
-        assert suffix1 != suffix2, "Identical goals should produce different random suffixes"
+    def test_no_suffix_without_collision(self):
+        """Test that no suffix is added when no collision exists."""
+        from unittest.mock import MagicMock
+        mock_sm = MagicMock()
+        mock_sm.get_session.return_value = None
 
-    def test_suffix_is_lowercase_hex(self):
-        """Test that suffix is always lowercase hexadecimal."""
+        result = slugify_goal("Test goal", session_manager=mock_sm)
+        assert result == "test-goal"
+
+    def test_no_suffix_without_session_manager(self):
+        """Test that no collision check happens without session_manager."""
         result = slugify_goal("Test goal")
-        suffix = result.split("-")[-1]
-        assert len(suffix) == 6
-        # Verify all characters are valid lowercase hex (0-9, a-f)
-        assert all(c in "0123456789abcdef" for c in suffix)
-        # Verify no uppercase letters are present (A-F)
-        assert not any(c in "ABCDEF" for c in suffix)
+        assert result == "test-goal"
 
 
 class TestCreateJiraTicketSession:
@@ -185,7 +161,7 @@ class TestCreateJiraTicketSession:
 
         assert session is not None, "Session not found"
         # Session name should be slugified version of goal with random suffix
-        assert session.name.startswith("add-retry-logic-to-subscription-api-"), f"Session name should start with 'add-retry-logic-to-subscription-api-', got {session.name}"
+        assert session.name == "add-retry-logic-to-subscription-api", f"Session name should be 'add-retry-logic-to-subscription-api', got {session.name}"
         assert session.session_type == "ticket_creation"
         assert "Create JIRA story under PROJ-59038" in session.goal
 

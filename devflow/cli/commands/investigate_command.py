@@ -161,17 +161,17 @@ def create_investigation_from_issue(
     )
 
 
-def slugify_goal(goal: str) -> str:
+def slugify_goal(goal: str, session_manager=None) -> str:
     """Convert a goal string into a valid session name slug.
 
     Args:
         goal: The goal/description text
+        session_manager: SessionManager instance for collision detection (optional)
 
     Returns:
-        Slugified name suitable for session identifier with random suffix
+        Slugified name suitable for session identifier, with numeric suffix if needed
     """
     import re
-    import secrets
 
     # Convert to lowercase
     slug = goal.lower()
@@ -182,13 +182,17 @@ def slugify_goal(goal: str) -> str:
     # Remove leading/trailing hyphens
     slug = slug.strip('-')
 
-    # Limit length to 43 chars to leave room for random suffix
-    if len(slug) > 43:
-        slug = slug[:43].rstrip('-')
+    # Limit length to 50 chars
+    if len(slug) > 50:
+        slug = slug[:50].rstrip('-')
 
-    # Add 6-character random suffix to prevent collisions
-    random_suffix = secrets.token_hex(3)
-    slug = f"{slug}-{random_suffix}"
+    # Check for collisions and add numeric suffix if needed
+    if session_manager:
+        base_slug = slug
+        counter = 1
+        while session_manager.get_session(slug) is not None:
+            slug = f"{base_slug}-{counter}"
+            counter += 1
 
     return slug
 
@@ -403,6 +407,8 @@ def create_investigation_session(
             output_json(success=False, error={"message": "No configuration found", "code": "NO_CONFIG"})
         sys.exit(1)
 
+    session_manager = SessionManager(config_loader=config_loader)
+
     # Validate parent ticket if provided (for tracking purposes)
     from devflow.utils import is_mock_mode
     if parent and not is_mock_mode():
@@ -435,7 +441,7 @@ def create_investigation_session(
 
     # Auto-generate session name from goal if not provided
     if not name:
-        name = slugify_goal(goal)
+        name = slugify_goal(goal, session_manager=session_manager)
         console_print(f"[dim]Auto-generated session name: {name}[/dim]")
 
     # Determine project path
@@ -579,8 +585,6 @@ def create_investigation_session(
         full_goal = f"Investigate: {goal}"
 
     # Create session with session_type="investigation"
-    session_manager = SessionManager(config_loader=config_loader)
-
     session = session_manager.create_session(
         name=name,
         goal=full_goal,
@@ -746,6 +750,7 @@ def create_investigation_session(
             env=env,
             headless=headless,
             auto_approve=auto_approve,
+            display_name=session.name,
         )
     finally:
         if not is_cleanup_done():
@@ -1194,6 +1199,7 @@ def _create_multi_project_investigation_session(
             env=env,
             headless=headless,
             auto_approve=auto_approve,
+            display_name=session.name,
         )
     finally:
         if not is_cleanup_done():

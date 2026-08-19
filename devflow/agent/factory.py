@@ -464,6 +464,7 @@ def launch_and_capture(
     env: dict = None,
     headless: bool = False,
     auto_approve: bool = False,
+    display_name: str = None,
 ) -> None:
     """Snapshot sessions, launch agent, wait for exit, capture session ID.
 
@@ -487,6 +488,7 @@ def launch_and_capture(
             env=env,
             headless=headless,
             auto_approve=auto_approve,
+            display_name=display_name,
         )
         agent.wait_for_exit(process, headless)
     finally:

@@ -928,6 +928,7 @@ def create_new_session(
                 env=env,
                 headless=headless,
                 auto_approve=auto_approve,
+                display_name=session.name,
             )
         finally:
             if not is_cleanup_done():

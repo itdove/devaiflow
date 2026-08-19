@@ -675,7 +675,7 @@ def complete_session(
 
             if should_commit:
                 # Auto-generate commit message from session goal
-                auto_message = _generate_commit_message(session, agent_backend=agent_backend)
+                auto_message = _generate_commit_message(session, agent_backend=agent_backend, display_name=f"{session.name}_commit")
 
                 # Display commit message and prompt for confirmation
                 commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
@@ -2129,7 +2129,8 @@ def _create_story_prs(session, feature, config_loader) -> List[str]:
                 # This applies templates, AI filling, and AI summaries
                 pr_title = f"{session.issue_key}: {session.goal}" if session.issue_key and session.goal else session.name
                 pr_description = _generate_pr_description(
-                    session, working_dir, config_loader, target_branch=feature_branch
+                    session, working_dir, config_loader, target_branch=feature_branch,
+                    display_name=f"{session.name}_{'mr' if repo_type == 'gitlab' else 'pr'}",
                 )
 
                 # Add feature context footer
@@ -2221,7 +2222,8 @@ def _create_story_prs(session, feature, config_loader) -> List[str]:
             # This applies templates, AI filling, and AI summaries
             pr_title = f"{session.issue_key}: {session.goal}" if session.issue_key and session.goal else session.name
             pr_description = _generate_pr_description(
-                session, working_dir, config_loader, target_branch=feature_branch
+                session, working_dir, config_loader, target_branch=feature_branch,
+                display_name=f"{session.name}_{'mr' if repo_type == 'gitlab' else 'pr'}",
             )
 
             # Add feature context footer
@@ -2294,7 +2296,7 @@ def _create_pr_mr_for_project(session, proj_info, working_dir: Path, session_man
             return None
 
     # Generate PR/MR description
-    description = _generate_pr_description(session, working_dir, session_manager.config_loader)
+    description = _generate_pr_description(session, working_dir, session_manager.config_loader, display_name=f"{session.name}_{'mr' if repo_type == 'gitlab' else 'pr'}")
 
     # Generate PR/MR title
     title = _generate_pr_title(session, working_dir)
@@ -2353,7 +2355,7 @@ def _create_pr_mr_for_conversation(session, conversation, working_dir: Path, ses
             return None
 
     # Generate PR/MR description
-    description = _generate_pr_description(session, working_dir, session_manager.config_loader)
+    description = _generate_pr_description(session, working_dir, session_manager.config_loader, display_name=f"{session.name}_{'mr' if repo_type == 'gitlab' else 'pr'}")
 
     # Generate PR/MR title
     title = _generate_pr_title(session, working_dir)
@@ -2436,7 +2438,8 @@ def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False
         console.print(f"[dim]Branch '{current_branch}' is up to date with remote[/dim]")
 
     # Generate PR/MR description from session data
-    description = _generate_pr_description(session, working_dir, session_manager.config_loader, pr_template_url=pr_template_url)
+    pr_display_name = f"{session.name}_{'mr' if repo_type == 'gitlab' else 'pr'}"
+    description = _generate_pr_description(session, working_dir, session_manager.config_loader, pr_template_url=pr_template_url, display_name=pr_display_name)
 
     # Generate PR/MR title from session and git data
     title = _generate_pr_title(session, working_dir)
@@ -2809,7 +2812,7 @@ def _fetch_pr_template(template_url: str) -> Optional[str]:
         return None
 
 
-def _fill_pr_template(template_content: str, session, working_dir: Path, git_context: dict) -> str:
+def _fill_pr_template(template_content: str, session, working_dir: Path, git_context: dict, display_name: Optional[str] = None) -> str:
     """Fill in PR/MR template using AI to understand and populate all fields.
 
     This is a wrapper around the AI-powered template filling module that replaces
@@ -2820,12 +2823,13 @@ def _fill_pr_template(template_content: str, session, working_dir: Path, git_con
         session: Session object
         working_dir: Working directory path
         git_context: Dictionary with git information (commits, files, branches)
+        display_name: Display name for Claude sessions (--name flag)
 
     Returns:
         AI-filled template ready for PR/MR creation
     """
     # Use AI-powered template filling
-    return fill_pr_template_with_ai(template_content, session, working_dir, git_context)
+    return fill_pr_template_with_ai(template_content, session, working_dir, git_context, display_name=display_name)
 
 
 def _try_discover_repo_template(working_dir: Path) -> Optional[str]:
@@ -2925,7 +2929,7 @@ def _try_discover_org_template(working_dir: Path) -> Optional[str]:
     return None
 
 
-def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLoader, target_branch: Optional[str] = None, pr_template_url: Optional[str] = None) -> str:
+def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLoader, target_branch: Optional[str] = None, pr_template_url: Optional[str] = None, display_name: Optional[str] = None) -> str:
     """Generate PR/MR description from session data using AI analysis and template.
 
     Args:
@@ -2934,6 +2938,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
         config_loader: ConfigLoader instance to get template URL from config
         target_branch: Optional target branch (for story PRs targeting feature branch instead of main)
         pr_template_url: CLI-provided template URL (overrides config)
+        display_name: Display name for Claude sessions (--name flag)
 
     Returns:
         Formatted PR/MR description with AI-generated summary
@@ -3026,7 +3031,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
                 console.print("[cyan]Using user-configured template[/cyan]")
 
         # Use AI-powered template filling
-        description = _fill_pr_template(template_content, session, working_dir, git_context)
+        description = _fill_pr_template(template_content, session, working_dir, git_context, display_name=display_name)
     else:
         # Fallback to built-in template
         console.print("[dim]Using default built-in template[/dim]")
@@ -3037,7 +3042,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
                 jira_section = f"Jira Issue: {jira_url}/browse/{session.issue_key}\n\n"
 
         # Try to generate AI-powered summary from session and git data
-        summary_bullets = _generate_pr_summary_bullets(session, working_dir, agent_backend=resolve_agent_backend(config=config, session=session))
+        summary_bullets = _generate_pr_summary_bullets(session, working_dir, agent_backend=resolve_agent_backend(config=config, session=session), display_name=display_name)
 
         # If AI summary failed, fall back to session goal
         if not summary_bullets:
@@ -3062,7 +3067,7 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
     return description
 
 
-def _generate_pr_summary_bullets(session, working_dir: Path, agent_backend: Optional[str] = None) -> Optional[str]:
+def _generate_pr_summary_bullets(session, working_dir: Path, agent_backend: Optional[str] = None, display_name: Optional[str] = None) -> Optional[str]:
     """Generate bullet point summary for PR/MR description using AI.
 
     Analyzes both git commits and session conversation to create a meaningful summary.
@@ -3071,6 +3076,7 @@ def _generate_pr_summary_bullets(session, working_dir: Path, agent_backend: Opti
         session: Session object
         working_dir: Working directory path for git analysis
         agent_backend: Agent backend identifier (e.g., "claude", "opencode")
+        display_name: Display name for Claude sessions (--name flag)
 
     Returns:
         Bullet point summary (markdown format) or None if generation fails
@@ -3132,7 +3138,7 @@ Format as markdown bullets. Return ONLY the bullet points, nothing else."""
         # Try using agent CLI for best quality
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
-        summary = agent.generate_text(prompt, timeout=30)
+        summary = agent.generate_text(prompt, timeout=30, display_name=display_name)
         if summary:
             console.print("[dim]Generated PR summary using AI[/dim]")
             return summary
@@ -3712,7 +3718,7 @@ def _prompt_for_commit_message(auto_message: str, config, commit_message: Option
         return commit_message_short
 
 
-def _generate_commit_message(session, agent_backend: Optional[str] = None) -> str:
+def _generate_commit_message(session, agent_backend: Optional[str] = None, display_name: Optional[str] = None) -> str:
     """Generate commit message from git diff instead of conversation history.
 
     This ensures commit messages describe only uncommitted changes being committed,
@@ -3721,6 +3727,7 @@ def _generate_commit_message(session, agent_backend: Optional[str] = None) -> st
     Args:
         session: Session object
         agent_backend: Agent backend identifier (e.g., "claude", "opencode")
+        display_name: Display name for the Claude session (--name flag)
 
     Returns:
         Auto-generated commit message
@@ -3788,7 +3795,7 @@ def _generate_commit_message(session, agent_backend: Optional[str] = None) -> st
 
                     # Generate commit message from diff using AI
                     logger.debug("Generating commit message from git diff...")
-                    commit_message = _generate_commit_message_from_diff(diff_content, status_summary, agent_backend=agent_backend)
+                    commit_message = _generate_commit_message_from_diff(diff_content, status_summary, agent_backend=agent_backend, display_name=display_name)
 
                     if commit_message:
                         logger.info("Successfully generated AI commit message from git diff")
@@ -3830,13 +3837,14 @@ def _generate_commit_message(session, agent_backend: Optional[str] = None) -> st
     return message
 
 
-def _generate_commit_message_from_diff(diff_content: str, status_summary: str, agent_backend: Optional[str] = None) -> Optional[str]:
+def _generate_commit_message_from_diff(diff_content: str, status_summary: str, agent_backend: Optional[str] = None, display_name: Optional[str] = None) -> Optional[str]:
     """Generate commit message from git diff using the AI agent CLI.
 
     Args:
         diff_content: Git diff output (both staged and unstaged changes)
         status_summary: Git status --short output
         agent_backend: Agent backend identifier (e.g., "claude", "opencode")
+        display_name: Display name for the Claude session (--name flag)
 
     Returns:
         Generated commit message or None if generation fails
@@ -3866,7 +3874,7 @@ Return ONLY the commit message."""
 
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
-        result = agent.generate_text(prompt, timeout=30)
+        result = agent.generate_text(prompt, timeout=30, display_name=display_name)
         if result:
             return strip_code_fences(result)
 
@@ -3936,12 +3944,13 @@ Return ONLY the commit message."""
         return None
 
 
-def _generate_commit_with_agent_cli(summary_data, agent_backend: Optional[str] = None) -> Optional[str]:
+def _generate_commit_with_agent_cli(summary_data, agent_backend: Optional[str] = None, display_name: Optional[str] = None) -> Optional[str]:
     """Generate commit message using the AI agent's CLI.
 
     Args:
         summary_data: SessionSummary object from generate_session_summary
         agent_backend: Agent backend identifier (e.g., "claude", "opencode")
+        display_name: Display name for the Claude session (--name flag)
 
     Returns:
         Generated commit message or None if CLI not available
@@ -4010,7 +4019,7 @@ Return ONLY the commit message in this exact format, nothing else."""
 
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
-        result = agent.generate_text(prompt, timeout=30)
+        result = agent.generate_text(prompt, timeout=30, display_name=display_name)
         if result:
             commit_text = strip_code_fences(result)
             console.print(f"[dim]Generated commit message using {agent_name} CLI[/dim]")
