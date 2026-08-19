@@ -82,7 +82,7 @@ class TestClaudeAgent:
         assert agent.get_agent_home_dir() == custom_dir
 
     def test_encode_project_path(self):
-        """Test encode_project_path replaces / and _ with -."""
+        """Test encode_project_path replaces /, _, and . with -."""
         agent = ClaudeAgent()
 
         # Test / replacement
@@ -91,8 +91,14 @@ class TestClaudeAgent:
         # Test _ replacement
         assert agent.encode_project_path("/home/my_project") == "-home-my-project"
 
-        # Test both
+        # Test both / and _
         assert agent.encode_project_path("/home/user/my_project") == "-home-user-my-project"
+
+        # Test . replacement (dot-prefixed directories like .cache, .config)
+        assert agent.encode_project_path("/Users/user/.cache/devaiflow/clones/repo") == "-Users-user--cache-devaiflow-clones-repo"
+
+        # Test combined /, _, and .
+        assert agent.encode_project_path("/Users/user/.config/my_app/v1.0") == "-Users-user--config-my-app-v1-0"
 
     @patch("devflow.agent.claude_agent.require_tool")
     @patch("subprocess.Popen")
