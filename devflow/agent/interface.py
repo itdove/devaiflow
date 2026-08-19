@@ -313,7 +313,7 @@ class AgentInterface(ABC):
         try:
             from devflow.agent.factory import get_agent_cli_binary
             cli_binary = get_agent_cli_binary(self.get_agent_name())
-            cmd = [cli_binary, "-p"]
+            cmd = [cli_binary, "-p", "--model", "claude-haiku-4-5-20251001"]
             if display_name:
                 cmd.extend(["--name", display_name])
             result = subprocess.run(

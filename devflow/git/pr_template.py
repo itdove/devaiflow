@@ -121,7 +121,7 @@ Generate the filled PR/MR description now:"""
 
     try:
         # Try Claude CLI first (faster, better)
-        cmd = ["claude", "-p"]
+        cmd = ["claude", "-p", "--model", "claude-haiku-4-5-20251001"]
         if display_name:
             cmd.extend(["--name", display_name])
         result = subprocess.run(
@@ -173,7 +173,7 @@ def _fill_template_with_api(prompt: str) -> str:
         client = anthropic.Anthropic(api_key=api_key)
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=2000,
             messages=[{
                 "role": "user",
