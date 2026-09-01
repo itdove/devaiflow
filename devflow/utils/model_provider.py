@@ -135,6 +135,25 @@ def build_env_from_profile(profile: Optional[Dict[str, Any]], base_env: Optional
     return env
 
 
+def apply_model_override(profile: Optional[Dict[str, Any]], model: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Apply a --model CLI override to a resolved profile.
+
+    Args:
+        profile: Resolved model provider profile (may be None)
+        model: Model name from --model flag (may be None)
+
+    Returns:
+        Profile with model_name overridden, a synthetic profile, or None
+    """
+    if not model:
+        return profile
+    if profile is None:
+        return {"model_name": model}
+    profile = dict(profile)
+    profile["model_name"] = model
+    return profile
+
+
 def get_model_name_from_profile(profile: Optional[Dict[str, Any]]) -> Optional[str]:
     """Get the model name from a profile.
 

@@ -307,6 +307,7 @@ def create_new_session(
     headless: bool = False,
     auto_approve: bool = False,
     agent: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> None:
     """Create a new session or add conversation to existing session.
 
@@ -778,10 +779,11 @@ def create_new_session(
 
     # Create session if we didn't add to an existing one
     if session is None:
-        from devflow.utils.model_provider import get_active_profile, get_model_name_from_profile
+        from devflow.utils.model_provider import get_active_profile, get_model_name_from_profile, apply_model_override
         import os as _os
         _resolved_profile = get_active_profile(config, override_profile_name=model_profile)
-        _model_id = _os.environ.get("CLAUDE_MODEL") or get_model_name_from_profile(_resolved_profile)
+        _resolved_profile = apply_model_override(_resolved_profile, model)
+        _model_id = model or _os.environ.get("CLAUDE_MODEL") or get_model_name_from_profile(_resolved_profile)
         session = session_manager.create_session(
             name=name,
             issue_key=issue_key,
@@ -883,10 +885,11 @@ def create_new_session(
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
-        from devflow.utils.model_provider import get_active_profile as get_model_profile
+        from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override
         model_profile = None
         if config and config.model_provider:
             model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+        model_profile = apply_model_override(model_profile, model)
 
         # Set environment variables for the AI agent process
         # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
