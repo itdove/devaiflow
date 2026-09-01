@@ -237,6 +237,8 @@ def create_jira_ticket_session(
     headless: bool = False,
     auto_approve: bool = False,
     agent: Optional[str] = None,
+    model_profile: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> None:
     """Create a new session for issue tracker ticket creation.
 
@@ -486,6 +488,7 @@ def create_jira_ticket_session(
         project_path=project_path,
         branch=branch,  # Use provided branch or None for no branch
         agent_backend=resolve_agent_backend(cli_override=agent, config=config),
+        model_profile=model_profile,
     )
 
     # Set session_type to "ticket_creation"
@@ -616,10 +619,11 @@ def create_jira_ticket_session(
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
-        from devflow.utils.model_provider import get_active_profile as get_model_profile
+        from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override
         model_profile = None
         if config and config.model_provider:
             model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+        model_profile = apply_model_override(model_profile, model)
 
         # AAP-64886: Get workspace path from session instead of using default
         workspace_path_for_skills = None

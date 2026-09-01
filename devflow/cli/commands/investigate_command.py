@@ -41,6 +41,7 @@ def create_investigation_from_issue(
     projects: Optional[str] = None,
     temp_clone: Optional[bool] = None,
     agent: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> None:
     """Create investigation session from an existing issue tracker ticket.
 
@@ -158,6 +159,7 @@ def create_investigation_from_issue(
         issue_key=issue_key,
         issue_details={"summary": issue_summary, "description": issue_description},
         agent=agent,
+        model=model,
     )
 
 
@@ -206,6 +208,7 @@ def _select_from_workspace_repos(
     parent: Optional[str],
     model_profile: Optional[str],
     agent: Optional[str] = None,
+    model: Optional[str] = None,
 ):
     """Select project(s) from workspace repositories.
 
@@ -274,13 +277,14 @@ def _select_from_workspace_repos(
             selected_workspace_name=selected_workspace_name,
             model_profile=model_profile,
             agent=agent,
+            model=model,
         )
         return ("multi_project_handled",)
 
     return (project_paths_result[0], selected_workspace_name)
 
 
-def _prompt_investigation_location(config, config_loader, name, goal, parent, model_profile, agent=None):
+def _prompt_investigation_location(config, config_loader, name, goal, parent, model_profile, agent=None, model=None):
     """Prompt user for investigation location when no path/workspace specified.
 
     Presents 4 options:
@@ -359,7 +363,7 @@ def _prompt_investigation_location(config, config_loader, name, goal, parent, mo
 
     elif choice == "4":
         result = _select_from_workspace_repos(
-            config, config_loader, None, name, goal, parent, model_profile, agent=agent,
+            config, config_loader, None, name, goal, parent, model_profile, agent=agent, model=model,
         )
         if result is None:
             return None
@@ -388,6 +392,7 @@ def create_investigation_session(
     headless: bool = False,
     auto_approve: bool = False,
     agent: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
@@ -502,6 +507,7 @@ def create_investigation_session(
             selected_workspace_name=selected_workspace_name,
             model_profile=model_profile,
             agent=agent,
+            model=model,
         )
     elif path is not None:
         # Use provided path
@@ -516,7 +522,7 @@ def create_investigation_session(
     elif workspace:
         # --workspace provided without --projects: go to workspace repo selection
         result = _select_from_workspace_repos(
-            config, config_loader, workspace, name, goal, parent, model_profile, agent=agent,
+            config, config_loader, workspace, name, goal, parent, model_profile, agent=agent, model=model,
         )
         if result is None:
             sys.exit(1)
@@ -526,7 +532,7 @@ def create_investigation_session(
     else:
         # No --path, --projects, or --workspace: ask user where to work
         result = _prompt_investigation_location(
-            config, config_loader, name, goal, parent, model_profile, agent=agent,
+            config, config_loader, name, goal, parent, model_profile, agent=agent, model=model,
         )
         if result is None:
             if is_json_mode():
@@ -707,8 +713,9 @@ def create_investigation_session(
     setup_signal_handlers(session, session_manager, name, config)
 
     # Get active model provider profile
-    from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
+    from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name, apply_model_override
     model_provider_profile = get_active_profile(config, override_profile_name=session.model_profile) if config else None
+    model_provider_profile = apply_model_override(model_provider_profile, model)
 
     # Display which model provider is being used
     if model_provider_profile:
@@ -737,10 +744,11 @@ def create_investigation_session(
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
-        from devflow.utils.model_provider import get_active_profile as get_model_profile
+        from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override as _apply_model_override
         model_profile = None
         if config and config.model_provider:
             model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+        model_profile = _apply_model_override(model_profile, model)
 
         # AAP-64886: Get workspace path from session instead of using default
         workspace_path = resolve_workspace_path(config, session.workspace_name)
@@ -1066,6 +1074,7 @@ def _create_multi_project_investigation_session(
     selected_workspace_name: str,
     model_profile: Optional[str] = None,
     agent: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> None:
     """Create a multi-project investigation session (Issue #182).
 
@@ -1156,8 +1165,9 @@ def _create_multi_project_investigation_session(
     setup_signal_handlers(session, session_manager, name, config)
 
     # Get active model provider profile
-    from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
+    from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name, apply_model_override
     model_provider_profile = get_active_profile(config, override_profile_name=session.model_profile) if config else None
+    model_provider_profile = apply_model_override(model_provider_profile, model)
 
     # Display which model provider is being used
     if model_provider_profile:
@@ -1186,10 +1196,11 @@ def _create_multi_project_investigation_session(
         agent_client = create_agent_client(_agent_backend)
 
         # Get model provider profile if configured
-        from devflow.utils.model_provider import get_active_profile as get_model_profile
+        from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override as _apply_model_override2
         model_profile = None
         if config and config.model_provider:
             model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+        model_profile = _apply_model_override2(model_profile, model)
 
         # Use workspace path as the primary directory
         workspace_resolved = resolve_workspace_path(config, session.workspace_name)

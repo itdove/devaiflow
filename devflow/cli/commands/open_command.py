@@ -231,6 +231,7 @@ def open_session(
     new_conversation: bool = False,
     conversation_id: Optional[str] = None,
     model_profile: Optional[str] = None,
+    model: Optional[str] = None,
     create_branch: Optional[bool] = None,
     source_branch: Optional[str] = None,
     on_branch_exists: Optional[str] = None,
@@ -1030,7 +1031,9 @@ def open_session(
             session_manager.update_session(session)
 
         # Get active model provider profile
+        from devflow.utils.model_provider import apply_model_override
         model_provider_profile = get_active_profile(config, override_profile_name=effective_profile_name) if config else None
+        model_provider_profile = apply_model_override(model_provider_profile, model)
 
         # Display which model provider is being used
         if model_provider_profile:
