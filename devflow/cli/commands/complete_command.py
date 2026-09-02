@@ -348,7 +348,7 @@ def complete_session(
                     commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
 
                     if commit_message_short:
-                        co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                        co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=agent_backend, model_id=session.model_id)
                         generated_with = _get_generated_with_line(agent_backend)
                         full_message = f"""{commit_message_short}
 
@@ -524,7 +524,7 @@ def complete_session(
                     commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
 
                     if commit_message_short:
-                        co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                        co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=agent_backend, model_id=session.model_id)
                         generated_with = _get_generated_with_line(agent_backend)
                         full_message = f"""{commit_message_short}
 
@@ -672,7 +672,7 @@ def complete_session(
 
                 if commit_message_short:
                     # Create commit with standard format
-                    co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                    co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=agent_backend, model_id=session.model_id)
                     generated_with = _get_generated_with_line(agent_backend)
                     full_message = f"""{commit_message_short}
 
@@ -1403,8 +1403,9 @@ def _sync_branch_for_export(session, issue_key: str, config_loader, yes: bool = 
             console.print(f"[dim]Skipping commit - changes will not be included in export[/dim]")
         else:
             # Create WIP commit
-            co_authored_by = get_co_authored_by_line(config, session.model_profile)
-            generated_with = _get_generated_with_line(resolve_agent_backend(config=config, session=session))
+            _export_backend = resolve_agent_backend(config=config, session=session)
+            co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=_export_backend, model_id=session.model_id)
+            generated_with = _get_generated_with_line(_export_backend)
             commit_message = f"""WIP: Session export for {issue_key}
 
 {generated_with}
@@ -3057,8 +3058,9 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
             description_content = f"## Summary\n{summary_bullets}\n"
 
         config = config_loader.load_config()
-        co_authored_by = get_co_authored_by_line(config, session.model_profile)
-        generated_with = _get_generated_with_line(resolve_agent_backend(config=config, session=session))
+        _pr_backend = resolve_agent_backend(config=config, session=session)
+        co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=_pr_backend, model_id=session.model_id)
+        generated_with = _get_generated_with_line(_pr_backend)
         description = f"""{jira_section}{description_content}
 
 ## Test plan
