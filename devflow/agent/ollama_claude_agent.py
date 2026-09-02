@@ -133,6 +133,7 @@ class OllamaClaudeAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        **kwargs,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with initial prompt (for new sessions).
 

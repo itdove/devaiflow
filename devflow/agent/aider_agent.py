@@ -99,6 +99,7 @@ class AiderAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        **kwargs,
     ) -> subprocess.Popen:
         """Launch Aider with initial prompt.
 

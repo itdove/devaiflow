@@ -59,6 +59,7 @@ class AgentInterface(ABC):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        **kwargs,
     ) -> subprocess.Popen:
         """Launch agent with initial prompt (for new sessions).
 

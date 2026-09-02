@@ -1263,9 +1263,9 @@ def open_session(
                     hierarchical_files = load_hierarchical_context_files(config)
                     if hierarchical_files:
                         cmd.extend(["--add-dir", str(cs_config)])
-            elif agent_backend in ("opencode", "opencode-ai"):
-                # OpenCode supports session resume via --session flag
-                from devflow.agent.factory import snapshot_agent_sessions as _snap_resume
+            elif agent_backend in ("opencode", "opencode-ai", "codex"):
+                # OpenCode/Codex support session resume
+                from devflow.agent.factory import snapshot_agent_sessions as _snap_resume, is_self_id_backend
                 if active_conv and active_conv.is_multi_project:
                     oc_project_path = active_conv.workspace_path or workspace_path
                 else:
@@ -1276,15 +1276,15 @@ def open_session(
                 _resume_sessions_before = set()
 
                 if oc_project_path:
-                    if active_conv.ai_agent_session_id and active_conv.ai_agent_session_id.startswith("ses"):
+                    sid = active_conv.ai_agent_session_id
+                    if sid and sid != "pending-capture" and not sid.startswith("pending"):
                         process = agent.resume_session(
-                            session_id=active_conv.ai_agent_session_id,
+                            session_id=sid,
                             project_path=oc_project_path,
                             env=env,
                         )
                     else:
                         # Fallback: launch new session and capture ID
-                        # (should not normally happen with fixed is_first_launch logic)
                         _resume_sessions_before = _snap_resume(agent, agent_backend, oc_project_path)
                         _resume_needs_capture = True
                         process = agent.launch_session(oc_project_path, env=env)
