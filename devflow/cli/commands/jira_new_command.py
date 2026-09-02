@@ -673,6 +673,7 @@ def create_jira_ticket_session(
             headless=headless,
             auto_approve=auto_approve,
             display_name=session.name,
+            session=session,
         )
     finally:
         if not is_cleanup_done():

@@ -483,6 +483,7 @@ def launch_and_capture(
     headless: bool = False,
     auto_approve: bool = False,
     display_name: str = None,
+    session=None,
 ) -> None:
     """Snapshot sessions, launch agent, wait for exit, capture session ID.
 
@@ -514,6 +515,14 @@ def launch_and_capture(
             agent, agent_backend, project_path,
             active_conversation, sessions_before,
         )
+        if session and active_conversation and is_self_id_backend(agent_backend):
+            sid = active_conversation.ai_agent_session_id
+            if sid and sid != "pending-capture" and not session.model_id:
+                detected_model = agent.get_session_model_id(sid, project_path)
+                if detected_model:
+                    from rich.console import Console as _Console
+                    _Console().print(f"[dim]Detected model: {detected_model}[/dim]")
+                    session.model_id = detected_model
 
 
 def get_agent_display_name(backend: Optional[str] = None) -> str:

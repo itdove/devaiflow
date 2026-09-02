@@ -286,6 +286,21 @@ class AgentInterface(ABC):
         """
         return True
 
+    def get_session_model_id(self, session_id: str, project_path: str) -> Optional[str]:
+        """Get the model identifier used by a session.
+
+        Agents that track model info can override this to return the model
+        used in a specific session (e.g., "gpt-5.6-sol", "llama/Qwen3.5-9B").
+
+        Args:
+            session_id: Session UUID or identifier
+            project_path: Absolute path to project
+
+        Returns:
+            Model identifier string, or None if unknown
+        """
+        return None
+
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
         """Get the CLI command a user would type to manually resume this session.
 

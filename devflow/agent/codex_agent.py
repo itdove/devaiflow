@@ -426,6 +426,25 @@ class CodexAgent(AgentInterface):
         except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError):
             return None
 
+    def get_session_model_id(self, session_id: str, project_path: str) -> Optional[str]:
+        """Get model from Codex rollout JSONL session_meta."""
+        from pathlib import Path as _Path
+        sessions_dir = self.codex_dir / "sessions"
+        if not sessions_dir.exists():
+            return None
+        try:
+            for rollout in sorted(sessions_dir.rglob(f"*{session_id}*.jsonl")):
+                with open(rollout) as f:
+                    first_line = json.loads(f.readline())
+                    if first_line.get("type") == "session_meta":
+                        provenance = (first_line.get("payload", {})
+                                      .get("base_instructions", {})
+                                      .get("provenance", {}))
+                        return provenance.get("model")
+        except Exception:
+            pass
+        return None
+
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
         return f"codex resume {session_id}"
 
