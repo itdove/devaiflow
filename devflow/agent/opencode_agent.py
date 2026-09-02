@@ -105,6 +105,7 @@ class OpenCodeAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        **kwargs,
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
 

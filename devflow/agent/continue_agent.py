@@ -102,6 +102,7 @@ class ContinueAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        **kwargs,
     ) -> subprocess.Popen:
         """Launch VS Code with Continue extension.
 

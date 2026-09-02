@@ -204,6 +204,24 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "skills_support": False,
         },
     },
+    "codex": {
+        "display_name": "Codex",
+        "description": "OpenAI Codex CLI coding assistant",
+        "cli_binary": "codex",
+        "cli_command": "codex",
+        "project_url": "https://github.com/openai/codex",
+        "install_url": "https://github.com/openai/codex",
+        "status": "experimental",
+        "self_id": True,
+        "features": {
+            "session_management": True,
+            "conversation_export": True,
+            "message_counting": True,
+            "resume_support": True,
+            "skills_support": False,
+        },
+        "notes": "Requires 'codex' CLI tool from OpenAI",
+    },
 }
 
 AGENT_ALIASES: Dict[str, str] = {
@@ -550,7 +568,7 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
     """Create an agent client for the specified backend.
 
     Args:
-        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode")
+        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "codex")
         agent_home: Optional custom home directory for the agent
 
     Returns:
@@ -633,8 +651,11 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         return CrushAgent(crush_dir=agent_home)
     elif backend in ("opencode", "opencode-ai"):
         return OpenCodeAgent(opencode_dir=agent_home)
+    elif backend == "codex":
+        from devflow.agent.codex_agent import CodexAgent
+        return CodexAgent(codex_dir=agent_home)
     else:
         raise ValueError(
             f"Unsupported agent backend: {backend}. "
-            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf, aider, continue, crush, opencode"
+            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf, aider, continue, crush, opencode, codex"
         )

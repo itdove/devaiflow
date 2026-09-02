@@ -116,6 +116,7 @@ class CodexAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        **kwargs,
     ) -> subprocess.Popen:
         """Launch Codex with initial prompt.
 
@@ -156,9 +157,6 @@ class CodexAgent(AgentInterface):
             model_name = model_provider_profile.get("model_name")
             if model_name:
                 cmd.extend(["--model", model_name])
-
-        if workspace_path:
-            cmd.extend(["--cd", workspace_path])
 
         if skills_dirs:
             for skill_dir in skills_dirs:
@@ -260,59 +258,53 @@ class CodexAgent(AgentInterface):
         return self.codex_dir
 
     def session_exists(self, session_id: str, project_path: str) -> bool:
-        """Check if a session exists by querying Codex CLI.
+        """Check if a session exists in the Codex thread history database.
 
         Args:
-            session_id: Session UUID
-            project_path: Absolute path to project
+            session_id: Session thread ID
+            project_path: Absolute path to project (unused — Codex sessions are global)
 
         Returns:
             True if session exists
         """
-        try:
-            # Codex stores sessions globally, not per-project
-            result = subprocess.run(
-                ["codex", "agents", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                return False
-
-            data = json.loads(result.stdout)
-            if isinstance(data, list):
-                return any(s.get("id") == session_id for s in data)
+        import sqlite3 as _sqlite3
+        db_path = self.codex_dir / "thread_history_1.sqlite"
+        if not db_path.exists():
             return False
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError):
+        try:
+            conn = _sqlite3.connect(str(db_path), timeout=5)
+            cursor = conn.execute(
+                "SELECT 1 FROM thread_turns WHERE thread_id = ? LIMIT 1",
+                (session_id,),
+            )
+            exists = cursor.fetchone() is not None
+            conn.close()
+            return exists
+        except Exception:
             return False
 
     def get_existing_sessions(self, project_path: str) -> Set[str]:
         """Get set of existing session IDs from Codex.
 
-        Parses ``codex agents --json`` output.
+        Queries the Codex thread_history SQLite database for thread IDs.
 
         Args:
-            project_path: Absolute path to project (passed as cwd)
+            project_path: Absolute path to project (unused — Codex sessions are global)
 
         Returns:
-            Set of session UUIDs
+            Set of session thread IDs
         """
-        try:
-            result = subprocess.run(
-                ["codex", "agents", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                return set()
-
-            data = json.loads(result.stdout)
-            if isinstance(data, list):
-                return {s.get("id", "") for s in data if s.get("id")}
+        import sqlite3 as _sqlite3
+        db_path = self.codex_dir / "thread_history_1.sqlite"
+        if not db_path.exists():
             return set()
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError):
+        try:
+            conn = _sqlite3.connect(str(db_path), timeout=5)
+            cursor = conn.execute("SELECT DISTINCT thread_id FROM thread_turns")
+            result = {row[0] for row in cursor.fetchall()}
+            conn.close()
+            return result
+        except Exception:
             return set()
 
     def get_session_message_count(self, session_id: str, project_path: str) -> int:
