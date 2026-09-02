@@ -1170,12 +1170,12 @@ def open_session(
                     if session.active_conversation and session.active_conversation.temp_directory:
                         _copy_conversation_from_temp(session, session.active_conversation.temp_directory, config)
 
-                    # Clean up temporary directory if present (for ticket_creation sessions)
+                    # Check if we should run 'daf complete' on exit (BEFORE temp dir cleanup)
+                    _prompt_for_complete_on_exit(session, config)
+
+                    # Clean up temporary directory AFTER daf complete has had a chance to commit/push
                     if session.active_conversation and session.active_conversation.temp_directory:
                         _cleanup_temp_directory_on_exit(session.active_conversation.temp_directory)
-
-                    # Check if we should run 'daf complete' on exit
-                    _prompt_for_complete_on_exit(session, config)
         else:
             # Resume existing session
             # Use effective agent backend (session-stored > config > "claude")
@@ -1353,12 +1353,12 @@ def open_session(
                     if session.active_conversation and session.active_conversation.temp_directory:
                         _copy_conversation_from_temp(session, session.active_conversation.temp_directory, config)
 
-                    # Clean up temporary directory if present (for ticket_creation sessions)
+                    # Check if we should run 'daf complete' on exit (BEFORE temp dir cleanup)
+                    _prompt_for_complete_on_exit(session, config)
+
+                    # Clean up temporary directory AFTER daf complete has had a chance to commit/push
                     if session.active_conversation and session.active_conversation.temp_directory:
                         _cleanup_temp_directory_on_exit(session.active_conversation.temp_directory)
-
-                    # Check if we should run 'daf complete' on exit
-                    _prompt_for_complete_on_exit(session, config)
 
     except Exception as e:
         console.print(f"\n[red]Error launching {_display_agent_name}:[/red] {e}")

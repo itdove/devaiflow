@@ -254,16 +254,6 @@ def complete_session(
         if GitUtils.is_git_repository(prefetch_dir):
             branch_prefetch = _start_branch_prefetch(prefetch_dir)
 
-    # Clean up temporary directory if present (for ticket_creation sessions and auto-clones)
-    if session.active_conversation and session.active_conversation.temp_directory:
-        should_cleanup = True
-        if config and hasattr(config, 'concurrency') and not config.concurrency.cleanup_on_complete:
-            should_cleanup = False
-            console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
-            console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
-        if should_cleanup:
-            _cleanup_temp_directory(session.active_conversation.temp_directory)
-
     issue_display = f" ({session.issue_key})" if session.issue_key else ""
     console.print(f"[green]✓[/green] Session '{session.name}'{issue_display} marked as complete")
 
@@ -957,6 +947,16 @@ def complete_session(
 
         # Save updated session (status may have changed)
         session_manager.update_session(session)
+
+    # Clean up temporary directory AFTER all commit/push/PR operations
+    if session.active_conversation and session.active_conversation.temp_directory:
+        should_cleanup = True
+        if config and hasattr(config, 'concurrency') and not config.concurrency.cleanup_on_complete:
+            should_cleanup = False
+            console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
+            console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
+        if should_cleanup:
+            _cleanup_temp_directory(session.active_conversation.temp_directory)
 
 
 def _handle_feature_completion(
