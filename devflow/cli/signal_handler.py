@@ -122,22 +122,19 @@ def _cleanup_on_signal(signum, frame):
                 from devflow.cli.commands.open_command import _copy_conversation_from_temp
                 _copy_conversation_from_temp(session_to_update, session_to_update.active_conversation.temp_directory)
 
-            # Clean up temporary directory if present
+            # Call the complete prompt BEFORE cleaning up temp directory
+            # so daf complete can commit and push changes from the clone
+            from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
+            _prompt_for_complete_on_exit(session_to_update, _cleanup_config)
+
+            # Clean up temporary directory AFTER daf complete
             if session_to_update.active_conversation and session_to_update.active_conversation.temp_directory:
                 try:
                     from devflow.utils.temp_directory import cleanup_temp_directory
                     cleanup_temp_directory(session_to_update.active_conversation.temp_directory)
                 except ImportError:
-                    # Fallback for older code that might not have temp_directory module
                     from devflow.cli.commands.open_command import _cleanup_temp_directory_on_exit
                     _cleanup_temp_directory_on_exit(session_to_update.active_conversation.temp_directory)
-
-            # Call the complete prompt
-            # IMPORTANT: Do NOT wrap this in a broad exception handler
-            # KeyboardInterrupt and EOFError should propagate to allow proper cleanup
-            # Any exceptions from _prompt_for_complete_on_exit are already handled inside that function
-            from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
-            _prompt_for_complete_on_exit(session_to_update, _cleanup_config)
 
             # Mark cleanup as done so finally block doesn't repeat it
             _cleanup_done = True

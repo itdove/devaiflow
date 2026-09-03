@@ -260,15 +260,30 @@ def get_model_attribution_name(config, model_profile_override: Optional[str] = N
     return model_name
 
 
-def get_co_authored_by_line(config=None, model_profile_override: Optional[str] = None) -> str:
+def get_co_authored_by_line(config=None, model_profile_override: Optional[str] = None, agent_backend: Optional[str] = None, model_id: Optional[str] = None) -> str:
     """Build the Co-Authored-By attribution line for commit messages.
 
     Args:
         config: Merged configuration object (optional)
         model_profile_override: Optional profile name from session.model_profile
+        agent_backend: Agent backend identifier (e.g., "claude", "codex", "opencode")
+        model_id: Optional model identifier from session.model_id (fallback for model name)
 
     Returns:
-        Full attribution string, e.g., "Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+        Full attribution string, e.g., "Co-Authored-By: Codex (gpt-5.6-sol) <noreply@openai.com>"
     """
+    _AGENT_ATTRIBUTION = {
+        "codex": ("Codex", "noreply@openai.com"),
+        "opencode": ("OpenCode", "noreply@opencode.ai"),
+        "aider": ("Aider", "noreply@aider.chat"),
+    }
+
+    if agent_backend and agent_backend in _AGENT_ATTRIBUTION:
+        default_name, email = _AGENT_ATTRIBUTION[agent_backend]
+        profile = get_active_profile(config, override_profile_name=model_profile_override) if config else None
+        model_name = get_model_name_from_profile(profile) or model_id
+        name = f"{default_name} ({model_name})" if model_name else default_name
+        return f"Co-Authored-By: {name} <{email}>"
+
     name = get_model_attribution_name(config, model_profile_override) if config else "Claude"
     return f"Co-Authored-By: {name} <noreply@anthropic.com>"

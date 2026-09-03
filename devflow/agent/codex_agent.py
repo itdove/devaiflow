@@ -426,6 +426,51 @@ class CodexAgent(AgentInterface):
         except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError):
             return None
 
+    def get_session_model_id(self, session_id: str, project_path: str) -> Optional[str]:
+        """Get model from Codex rollout JSONL session_meta."""
+        from pathlib import Path as _Path
+        sessions_dir = self.codex_dir / "sessions"
+        if not sessions_dir.exists():
+            return None
+        try:
+            for rollout in sorted(sessions_dir.rglob(f"*{session_id}*.jsonl")):
+                with open(rollout) as f:
+                    first_line = json.loads(f.readline())
+                    if first_line.get("type") == "session_meta":
+                        provenance = (first_line.get("payload", {})
+                                      .get("base_instructions", {})
+                                      .get("provenance", {}))
+                        return provenance.get("model")
+        except Exception:
+            pass
+        return None
+
+    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None) -> Optional[str]:
+        """Generate text using codex exec (non-interactive mode)."""
+        try:
+            cmd = ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", prompt]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+
+            # Fallback to default model if luna not available
+            result = subprocess.run(
+                ["codex", "exec", prompt],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            return None
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
         return f"codex resume {session_id}"
 

@@ -431,6 +431,39 @@ class OpenCodeAgent(AgentInterface):
             pass
         return self.opencode_dir
 
+    def get_session_model_id(self, session_id: str, project_path: str) -> Optional[str]:
+        """Get model from OpenCode session database."""
+        import sqlite3 as _sqlite3
+        db_path = Path.home() / ".local" / "share" / "opencode" / "opencode.db"
+        if not db_path.exists():
+            return None
+        try:
+            conn = _sqlite3.connect(str(db_path), timeout=5)
+            cursor = conn.execute("SELECT model FROM session WHERE id = ?", (session_id,))
+            row = cursor.fetchone()
+            conn.close()
+            if row and row[0]:
+                model_data = json.loads(row[0])
+                return model_data.get("id")
+        except Exception:
+            pass
+        return None
+
+    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None) -> Optional[str]:
+        """Generate text using opencode run (non-interactive mode)."""
+        try:
+            result = subprocess.run(
+                ["opencode", "run", "-q", prompt],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            return None
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
         return f"opencode --session {session_id}"
 

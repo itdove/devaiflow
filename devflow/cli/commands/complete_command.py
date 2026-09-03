@@ -254,16 +254,6 @@ def complete_session(
         if GitUtils.is_git_repository(prefetch_dir):
             branch_prefetch = _start_branch_prefetch(prefetch_dir)
 
-    # Clean up temporary directory if present (for ticket_creation sessions and auto-clones)
-    if session.active_conversation and session.active_conversation.temp_directory:
-        should_cleanup = True
-        if config and hasattr(config, 'concurrency') and not config.concurrency.cleanup_on_complete:
-            should_cleanup = False
-            console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
-            console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
-        if should_cleanup:
-            _cleanup_temp_directory(session.active_conversation.temp_directory)
-
     issue_display = f" ({session.issue_key})" if session.issue_key else ""
     console.print(f"[green]✓[/green] Session '{session.name}'{issue_display} marked as complete")
 
@@ -358,7 +348,7 @@ def complete_session(
                     commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
 
                     if commit_message_short:
-                        co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                        co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=agent_backend, model_id=session.model_id)
                         generated_with = _get_generated_with_line(agent_backend)
                         full_message = f"""{commit_message_short}
 
@@ -534,7 +524,7 @@ def complete_session(
                     commit_message_short = _prompt_for_commit_message(auto_message, config, commit_message=commit_message)
 
                     if commit_message_short:
-                        co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                        co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=agent_backend, model_id=session.model_id)
                         generated_with = _get_generated_with_line(agent_backend)
                         full_message = f"""{commit_message_short}
 
@@ -682,7 +672,7 @@ def complete_session(
 
                 if commit_message_short:
                     # Create commit with standard format
-                    co_authored_by = get_co_authored_by_line(config, session.model_profile)
+                    co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=agent_backend, model_id=session.model_id)
                     generated_with = _get_generated_with_line(agent_backend)
                     full_message = f"""{commit_message_short}
 
@@ -957,6 +947,16 @@ def complete_session(
 
         # Save updated session (status may have changed)
         session_manager.update_session(session)
+
+    # Clean up temporary directory AFTER all commit/push/PR operations
+    if session.active_conversation and session.active_conversation.temp_directory:
+        should_cleanup = True
+        if config and hasattr(config, 'concurrency') and not config.concurrency.cleanup_on_complete:
+            should_cleanup = False
+            console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
+            console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
+        if should_cleanup:
+            _cleanup_temp_directory(session.active_conversation.temp_directory)
 
 
 def _handle_feature_completion(
@@ -1403,8 +1403,9 @@ def _sync_branch_for_export(session, issue_key: str, config_loader, yes: bool = 
             console.print(f"[dim]Skipping commit - changes will not be included in export[/dim]")
         else:
             # Create WIP commit
-            co_authored_by = get_co_authored_by_line(config, session.model_profile)
-            generated_with = _get_generated_with_line(resolve_agent_backend(config=config, session=session))
+            _export_backend = resolve_agent_backend(config=config, session=session)
+            co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=_export_backend, model_id=session.model_id)
+            generated_with = _get_generated_with_line(_export_backend)
             commit_message = f"""WIP: Session export for {issue_key}
 
 {generated_with}
@@ -3057,8 +3058,9 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
             description_content = f"## Summary\n{summary_bullets}\n"
 
         config = config_loader.load_config()
-        co_authored_by = get_co_authored_by_line(config, session.model_profile)
-        generated_with = _get_generated_with_line(resolve_agent_backend(config=config, session=session))
+        _pr_backend = resolve_agent_backend(config=config, session=session)
+        co_authored_by = get_co_authored_by_line(config, session.model_profile, agent_backend=_pr_backend, model_id=session.model_id)
+        generated_with = _get_generated_with_line(_pr_backend)
         description = f"""{jira_section}{description_content}
 
 ## Test plan
@@ -3141,7 +3143,6 @@ Generate a summary with 2-4 bullet points that:
 
 Format as markdown bullets. Return ONLY the bullet points, nothing else."""
 
-        # Try using agent CLI for best quality
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
         summary = agent.generate_text(prompt, timeout=30, display_name=display_name)
@@ -3149,7 +3150,7 @@ Format as markdown bullets. Return ONLY the bullet points, nothing else."""
             console.print("[dim]Generated PR summary using AI[/dim]")
             return summary
 
-        # Agent CLI not available or failed, try Anthropic API
+        # Agent CLI failed: use Anthropic API directly
         return _generate_pr_summary_with_api(session, working_dir)
 
     except Exception as e:
@@ -3878,13 +3879,14 @@ Generate a commit message with:
 
 Return ONLY the commit message."""
 
+        # Use session's agent backend for text generation (codex exec, opencode run, claude -p)
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
         result = agent.generate_text(prompt, timeout=30, display_name=display_name)
         if result:
             return strip_code_fences(result)
 
-        # Agent CLI not available or failed, try Anthropic API
+        # Agent CLI failed: use Anthropic API directly
         return _generate_commit_message_from_diff_api(diff_content, status_summary)
 
     except Exception:

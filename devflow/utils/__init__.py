@@ -7,13 +7,24 @@ __all__ = ["get_current_user", "get_cs_home", "get_cs_config_home", "get_cs_stat
 
 
 def strip_code_fences(text: str) -> str:
-    """Remove wrapping markdown code fences from AI-generated text."""
+    """Remove wrapping markdown code fences and preamble from AI-generated text."""
+    import re
+    text = text.strip()
+
+    # If text contains a code fence block, extract its content
+    # Handles preamble text before the fence (e.g., "Here's the result:\n```markdown\n...")
+    fence_match = re.search(r'^```\w*\n(.*?)^```\s*$', text, re.MULTILINE | re.DOTALL)
+    if fence_match:
+        return fence_match.group(1).strip()
+
+    # Simple case: entire text wrapped in backticks
     text = text.strip('`').strip()
-    if not text.startswith('```'):
-        return text
-    lines = text.split('\n')
-    if lines[0].strip().startswith('```'):
-        lines = lines[1:]
-    if lines and lines[-1].strip().startswith('```'):
-        lines = lines[:-1]
-    return '\n'.join(lines).strip()
+    if text.startswith('```'):
+        lines = text.split('\n')
+        if lines[0].strip().startswith('```'):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith('```'):
+            lines = lines[:-1]
+        return '\n'.join(lines).strip()
+
+    return text
