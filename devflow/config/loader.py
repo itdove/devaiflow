@@ -785,6 +785,22 @@ class ConfigLoader:
             or ModelProviderConfig()          # Default if not set anywhere
         )
 
+        # Merge per-backend model settings, allowing higher levels to override
+        # individual values while preserving unspecified lower-level values.
+        from .models import AgentModelConfig
+        agent_models = {}
+        for source in (
+            user_config.agent_models,
+            team_config.agent_models or {},
+            org_config.agent_models or {},
+            enterprise_config.agent_models or {},
+        ):
+            for backend, settings in source.items():
+                current = agent_models.get(backend, AgentModelConfig())
+                agent_models[backend] = AgentModelConfig(
+                    **{**current.model_dump(), **settings.model_dump(exclude_none=True)}
+                )
+
         # Construct final Config object
         config = Config(
             jira=merged_jira,
@@ -804,6 +820,7 @@ class ConfigLoader:
             gcp_vertex_region=user_config.gcp_vertex_region,
             update_checker_timeout=user_config.update_checker_timeout,
             concurrency=merged_concurrency,  # Merged from enterprise/team/user hierarchy
+            agent_models=agent_models,
         )
 
         # Auto-migrate hierarchical_config_source from organization.json to config.json
@@ -960,6 +977,7 @@ class ConfigLoader:
             update_checker_timeout=config.update_checker_timeout,
             jira_affected_version=config.jira.affected_version,
             concurrency=config.concurrency,
+            agent_models=config.agent_models,
         )
 
         # Save user config (config.json)
@@ -995,6 +1013,7 @@ class ConfigLoader:
         enterprise_config_to_save = EnterpriseConfig(
             agent_backend=existing_enterprise_data.get("agent_backend"),
             backend_overrides=existing_enterprise_data.get("backend_overrides"),
+            agent_models=existing_enterprise_data.get("agent_models"),
         )
 
         # Save enterprise config (enterprise.json)
@@ -1010,6 +1029,7 @@ class ConfigLoader:
             status_grouping_field=None,  # Preserve existing if file exists
             status_totals_field=None,  # Preserve existing if file exists
             hierarchical_config_source=None,  # Preserve existing if file exists
+            agent_models=None,
         )
 
         # If organization.json exists, preserve status fields and hierarchical_config_source
@@ -1024,6 +1044,8 @@ class ConfigLoader:
                     org_config.status_totals_field = existing_data["status_totals_field"]
                 if "hierarchical_config_source" in existing_data:
                     org_config.hierarchical_config_source = existing_data["hierarchical_config_source"]
+                if "agent_models" in existing_data:
+                    org_config.agent_models = existing_data["agent_models"]
             except Exception:
                 pass  # Ignore errors, will use default
 
@@ -1038,6 +1060,7 @@ class ConfigLoader:
             time_tracking_enabled=config.jira.time_tracking,
             jira_comment_visibility_type=config.jira.comment_visibility_type,
             jira_comment_visibility_value=config.jira.comment_visibility_value,
+            agent_models=None,
         )
 
         # Save team config (team.json)

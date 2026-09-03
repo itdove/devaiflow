@@ -232,6 +232,7 @@ def open_session(
     conversation_id: Optional[str] = None,
     model_profile: Optional[str] = None,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
     create_branch: Optional[bool] = None,
     source_branch: Optional[str] = None,
     on_branch_exists: Optional[str] = None,
@@ -1151,6 +1152,8 @@ def open_session(
                         env=env,
                         headless=headless,
                         auto_approve=auto_approve,
+                        reasoning_effort=reasoning_effort,
+                        model_override=model,
                         display_name=session.name,
                         session=session,
                     )

@@ -116,6 +116,8 @@ class ClaudeAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        reasoning_effort: Optional[str] = None,
+        model_override: Optional[str] = None,
         display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code with initial prompt (for new sessions).
@@ -170,6 +172,8 @@ class ClaudeAgent(AgentInterface):
         # Build full command with session ID and prompt
         # Format: claude [--name name] [--print] [--dangerously-skip-permissions] [--model model] --session-id <uuid> "<prompt>" --add-dir ...
         cmd = ["claude"]
+        from devflow.agent.model_config import get_agent_model_config
+        settings = get_agent_model_config(config, self.get_agent_name())
 
         if display_name:
             cmd.extend(["--name", display_name])
@@ -179,8 +183,11 @@ class ClaudeAgent(AgentInterface):
         if auto_approve:
             cmd.append("--dangerously-skip-permissions")
 
-        if model_provider_profile and model_provider_profile.get("model_name"):
-            cmd.extend(["--model", model_provider_profile["model_name"]])
+        model_name = model_override or (model_provider_profile or {}).get("model_name") or settings["model"]
+        if model_name:
+            cmd.extend(["--model", model_name])
+        if reasoning_effort or settings["reasoning_effort"]:
+            cmd.extend(["--effort", reasoning_effort or settings["reasoning_effort"]])
 
         cmd.extend(["--session-id", session_id])
         if initial_prompt:

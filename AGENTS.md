@@ -564,11 +564,13 @@ except JiraAuthError as e:
 
 ### Testing Guidelines
 
+**Targeted Testing Policy**: For code changes, run only the unit tests directly related to the changed code (for example, the affected test module or focused test selection). Do not run the full unit-test suite or integration-test suite locally; CI/CD runs the complete test suite.
+
 **When to Run Tests**:
 - ✅ **Run pytest** when making code changes (Python files in `devflow/`, `tests/`, or `integration-tests/`)
 - ⏭️ **Skip pytest** for documentation-only changes (`.md` files, `docs/`, `CHANGELOG.md`, `README.md`)
 - ⏭️ **Skip pytest** for workflow/config-only changes (`.github/workflows/`, `.yml` files without code changes)
-- ⚠️ **Always run pytest** if you modified any `.py` file, even if it seems minor
+- ⚠️ **Run the related unit tests** if you modified any `.py` file, even if it seems minor
 
 **Integration Tests**: Can be run from inside AI agent sessions using the test runner script `./run_all_integration_tests.sh`, which uses environment isolation (unsets `DEVAIFLOW_IN_SESSION` and `AI_AGENT_SESSION_ID`, sets temporary `DEVAIFLOW_HOME`) to avoid conflicts. Individual test scripts still require running outside AI agent sessions unless you manually set up the isolated environment.
 
@@ -594,10 +596,10 @@ When `--debug` is used with the test runner, it automatically propagates to all 
 - Use `pytest -x --tb=line -v` to see which test is running and stop on first failure
 - Check for missing input sequences in `CliRunner().invoke(..., input="...")` calls
 
-**⚠️ CRITICAL TESTING REQUIREMENT**: ALL TESTS MUST BE SUCCESSFUL before marking any task as complete when code changes are made. When tests fail:
+**⚠️ CRITICAL TESTING REQUIREMENT**: ALL RELATED UNIT TESTS MUST BE SUCCESSFUL before marking any task as complete when code changes are made. CI/CD runs the complete suite. When tests fail:
 - **DO NOT** ask the user for permission to continue fixing tests
 - **DO NOT** stop after fixing some tests - continue fixing ALL failing tests
-- **ALWAYS** run the full test suite (`pytest`) after every code change
+- **DO NOT** run the full test suite locally; run only the unit tests related to the code change. CI/CD runs the full test suite.
 - **ONLY** mark the task as complete when ALL 3600+ tests pass
 - If you encounter test failures, continue fixing them systematically until every test passes
 - **EXCEPTION**: Documentation-only or workflow-only changes do not require running pytest
@@ -625,8 +627,9 @@ When `--debug` is used with the test runner, it automatically propagates to all 
      - Boundary conditions
      - Integration with other components (using mocks)
 
-2. **Run Full Test Suite After Code Changes**
-   - **After completing each task with code changes**, run the complete test suite using `pytest`
+2. **Run Related Unit Tests After Code Changes**
+   - **After completing each task with code changes**, run only the unit tests related to the changed code
+   - CI/CD runs the complete test suite
    - **Documentation-only changes** (markdown files, docs/, CHANGELOG.md) do NOT require running pytest
    - **Workflow-only changes** (.github/workflows/ without code changes) do NOT require running pytest
    - Verify that all tests pass before marking a code change task as complete
@@ -703,8 +706,8 @@ When `--debug` is used with the test runner, it automatically propagates to all 
 # 3. Run tests to verify new functionality (can run inside Claude Code)
 pytest tests/test_session_manager.py
 
-# 4. Run full test suite before completing task (can run inside Claude Code)
-pytest
+# 4. Run only the related unit tests before completing the task
+pytest tests/test_session_manager.py
 
 # 5. Run integration tests if needed (can run inside Claude Code with test runner)
 cd integration-tests && ./run_all_integration_tests.sh

@@ -449,11 +449,19 @@ class OpenCodeAgent(AgentInterface):
             pass
         return None
 
-    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None) -> Optional[str]:
+    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None, config=None) -> Optional[str]:
         """Generate text using opencode run (non-interactive mode)."""
         try:
+            from devflow.agent.model_config import get_agent_model_config
+            settings = get_agent_model_config(config, self.get_agent_name(), utility=True)
+            cmd = ["opencode", "run", "-q"]
+            if settings["model"]:
+                cmd.extend(["--model", settings["model"]])
+            if settings["reasoning_effort"]:
+                cmd.extend(["--reasoning-effort", settings["reasoning_effort"]])
+            cmd.append(prompt)
             result = subprocess.run(
-                ["opencode", "run", "-q", prompt],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,

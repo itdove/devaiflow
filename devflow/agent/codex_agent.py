@@ -116,6 +116,8 @@ class CodexAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        reasoning_effort: Optional[str] = None,
+        model_override: Optional[str] = None,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch Codex with initial prompt.
@@ -143,6 +145,8 @@ class CodexAgent(AgentInterface):
         require_tool("codex", "launch Codex AI assistant")
 
         final_env = env if env is not None else os.environ.copy()
+        from devflow.agent.model_config import get_agent_model_config
+        settings = get_agent_model_config(config, self.get_agent_name())
 
         if headless:
             cmd = ["codex", "exec", initial_prompt]
@@ -154,9 +158,15 @@ class CodexAgent(AgentInterface):
             cmd = ["codex", "resume", session_id]
 
         if model_provider_profile:
-            model_name = model_provider_profile.get("model_name")
+            model_name = model_override or model_provider_profile.get("model_name")
             if model_name:
                 cmd.extend(["--model", model_name])
+        elif model_override or settings["model"]:
+            cmd.extend(["--model", model_override or settings["model"]])
+
+        effective_reasoning = reasoning_effort or settings["reasoning_effort"]
+        if effective_reasoning:
+            cmd.extend(["-c", f'model_reasoning_effort="{effective_reasoning}"'])
 
         if skills_dirs:
             for skill_dir in skills_dirs:
@@ -445,10 +455,19 @@ class CodexAgent(AgentInterface):
             pass
         return None
 
-    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None) -> Optional[str]:
+    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None, config=None) -> Optional[str]:
         """Generate text using codex exec (non-interactive mode)."""
         try:
-            cmd = ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", prompt]
+            from devflow.agent.model_config import get_agent_model_config
+            settings = get_agent_model_config(config, self.get_agent_name(), utility=True)
+            cmd = ["codex", "exec"]
+            model = settings["model"] or ("gpt-5.6-luna" if config is None else None)
+            if model:
+                cmd.extend(["--model", model])
+            reasoning = settings["reasoning_effort"] or ("low" if config is None else None)
+            if reasoning:
+                cmd.extend(["-c", f'model_reasoning_effort="{reasoning}"'])
+            cmd.append(prompt)
             result = subprocess.run(
                 cmd,
                 capture_output=True,
