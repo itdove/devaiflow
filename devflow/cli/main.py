@@ -1446,7 +1446,7 @@ jira.add_command(create_jira_update_command())
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str], model_profile: str, model: str, headless: bool, auto_approve: bool, agent: str) -> None:
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str], model_profile: str, model: str, reasoning_effort: str, headless: bool, auto_approve: bool, agent: str) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1519,7 +1519,7 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
         from devflow.agent.factory import validate_agent_backend
         agent = validate_agent_backend(agent)
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent, model_profile=model_profile, model=model)
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent, model_profile=model_profile, model=model, reasoning_effort=reasoning_effort)
 
 
 @jira.command(name="open")
@@ -1681,6 +1681,7 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
 @click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 @click.option("--model", "model", default=None, help="Model to use, overrides profile model_name (e.g., 'claude-sonnet-5', 'ollama/llama3:70b')")
+@click.option("--reasoning-effort", type=click.Choice(["low", "medium", "high"], case_sensitive=False), help="Reasoning effort for the agent session")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
@@ -3723,4 +3724,3 @@ def stop() -> None:
         console.print("[green]✓[/green] Dashboard stopped.")
     else:
         console.print("[red]✗[/red] Failed to stop dashboard.")
-

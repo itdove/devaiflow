@@ -396,6 +396,7 @@ def create_investigation_session(
     auto_approve: bool = False,
     agent: Optional[str] = None,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
