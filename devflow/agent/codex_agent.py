@@ -445,6 +445,21 @@ class CodexAgent(AgentInterface):
             pass
         return None
 
+    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None) -> Optional[str]:
+        """Generate text using codex exec (non-interactive mode)."""
+        try:
+            result = subprocess.run(
+                ["codex", "exec", prompt],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            return None
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
         return f"codex resume {session_id}"
 

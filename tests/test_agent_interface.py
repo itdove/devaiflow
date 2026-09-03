@@ -2098,14 +2098,13 @@ class TestGenerateText:
         )
 
     @patch("subprocess.run")
-    def test_opencode_generate_text_uses_opencode_binary(self, mock_run):
+    def test_opencode_generate_text_uses_opencode_run(self, mock_run):
         mock_run.return_value = Mock(returncode=0, stdout="opencode result\n")
         agent = OpenCodeAgent()
         result = agent.generate_text("test prompt")
         assert result == "opencode result"
         mock_run.assert_called_once_with(
-            ["opencode", "-p", "--model", "claude-haiku-4-5-20251001"],
-            input="test prompt",
+            ["opencode", "run", "-q", "test prompt"],
             capture_output=True,
             text=True,
             timeout=30,
