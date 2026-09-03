@@ -325,6 +325,7 @@ def cli(ctx: click.Context, non_interactive: bool, experimental: bool) -> None:
 @click.option("--new-session", is_flag=True, help="Force creation of new session instead of adding conversation to existing session")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 @click.option("--model", "model", default=None, help="Model to use, overrides profile model_name (e.g., 'claude-sonnet-5', 'ollama/llama3:70b')")
+@click.option("--reasoning-effort", type=click.Choice(["low", "medium", "high"], case_sensitive=False), help="Reasoning effort for the agent session")
 @click.option("--create-branch/--no-create-branch", default=None, help="Control branch creation (default: prompt)")
 @click.option("--source-branch", help="Source branch to create new branch from (default: base branch)")
 @click.option("--on-branch-exists", type=click.Choice(['error', 'use-existing', 'add-suffix', 'skip'], case_sensitive=False), help="Action when branch already exists")
@@ -336,7 +337,7 @@ def cli(ctx: click.Context, non_interactive: bool, experimental: bool) -> None:
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
 @json_option
-def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str, model: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, session_index: int, headless: bool, auto_approve: bool, agent: str) -> None:
+def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, working_directory: str, path: str, branch: str, template: str, workspace: str, projects: str, new_session: bool, model_profile: str, model: str, reasoning_effort: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, session_index: int, headless: bool, auto_approve: bool, agent: str) -> None:
     """Create a new session or add conversation to existing session.
 
     By default, if a session already exists with the same name, this command will
@@ -437,6 +438,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
         auto_approve=auto_approve,
         agent=agent,
         model=model,
+        reasoning_effort=reasoning_effort,
     )
 
 
@@ -451,6 +453,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--conversation-id", help="Resume a specific archived conversation by its UUID")
 @click.option("--model-profile", help="Model provider profile to use (overrides session default)")
 @click.option("--model", "model", default=None, help="Model to use, overrides profile model_name (e.g., 'claude-sonnet-5', 'ollama/llama3:70b')")
+@click.option("--reasoning-effort", type=click.Choice(["low", "medium", "high"], case_sensitive=False), help="Reasoning effort for the agent session")
 @click.option("--create-branch/--no-create-branch", default=None, help="Control branch creation when adding projects (default: prompt)")
 @click.option("--source-branch", help="Source branch for new branches when adding projects")
 @click.option("--on-branch-exists", type=click.Choice(['error', 'use-existing', 'add-suffix', 'skip'], case_sensitive=False), help="Action when branch exists when adding projects")
@@ -462,7 +465,7 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @click.option("--agent", default=None, help="AI agent backend to use (overrides session stored agent)")
 @json_option
-def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, model: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str, headless: bool, auto_approve: bool, agent: str) -> None:
+def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, model: str, reasoning_effort: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str, headless: bool, auto_approve: bool, agent: str) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -555,6 +558,7 @@ def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str
         conversation_id=conversation_id,
         model_profile=model_profile,
         model=model,
+        reasoning_effort=reasoning_effort,
         create_branch=create_branch,
         source_branch=source_branch,
         on_branch_exists=on_branch_exists,
@@ -1438,10 +1442,11 @@ jira.add_command(create_jira_update_command())
 @click.option("--affects-versions", help="Affected version for bugs (required for bug type)")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 @click.option("--model", "model", default=None, help="Model to use, overrides profile model_name (e.g., 'claude-sonnet-5', 'ollama/llama3:70b')")
+@click.option("--reasoning-effort", type=click.Choice(["low", "medium", "high"], case_sensitive=False), help="Reasoning effort for the agent session")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
-def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str], model_profile: str, model: str, headless: bool, auto_approve: bool, agent: str) -> None:
+def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: str, goal_file: str, name: str, path: str, branch: str, workspace: str, projects: str, temp_clone: bool, affects_versions: Optional[str], model_profile: str, model: str, reasoning_effort: str, headless: bool, auto_approve: bool, agent: str) -> None:
     """Create issue tracker ticket with analysis-only session.
 
     Creates a session with session_type="ticket_creation" that:
@@ -1514,7 +1519,7 @@ def jira_new(ctx: click.Context, issue_type: str, parent: Optional[str], goal: s
         from devflow.agent.factory import validate_agent_backend
         agent = validate_agent_backend(agent)
 
-    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent, model_profile=model_profile, model=model)
+    create_jira_ticket_session(issue_type, parent, goal, name, path, branch, workspace, affects_versions, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent, model_profile=model_profile, model=model, reasoning_effort=reasoning_effort)
 
 
 @jira.command(name="open")
@@ -1676,10 +1681,11 @@ def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], 
 @click.option("--temp-clone/--no-temp-clone", default=None, help="Clone to temporary directory for clean analysis (default: prompt)")
 @click.option("--model-profile", help="Model provider profile to use (e.g., 'vertex', 'llama-cpp')")
 @click.option("--model", "model", default=None, help="Model to use, overrides profile model_name (e.g., 'claude-sonnet-5', 'ollama/llama3:70b')")
+@click.option("--reasoning-effort", type=click.Choice(["low", "medium", "high"], case_sensitive=False), help="Reasoning effort for the agent session")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 @click.option("--agent", default=None, help="AI agent backend to use (e.g., claude, opencode, cursor, windsurf, ollama)")
-def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str, model: str, headless: bool, auto_approve: bool, agent: str) -> None:
+def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_file: str, parent: Optional[str], name: str, path: str, workspace: str, projects: str, temp_clone: bool, model_profile: str, model: str, reasoning_effort: str, headless: bool, auto_approve: bool, agent: str) -> None:
     """Create investigation-only session without ticket creation.
 
     Creates a session with session_type="investigation" that:
@@ -1716,7 +1722,7 @@ def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_fi
     # If issue_key provided, fetch issue details and delegate to command
     if issue_key:
         from devflow.cli.commands.investigate_command import create_investigation_from_issue
-        create_investigation_from_issue(issue_key, goal, parent, name, path, workspace, model_profile, projects, temp_clone, agent=agent, model=model)
+        create_investigation_from_issue(issue_key, goal, parent, name, path, workspace, model_profile, projects, temp_clone, agent=agent, model=model, reasoning_effort=reasoning_effort)
         return
 
     # Prompt for goal if not provided
@@ -1726,7 +1732,7 @@ def investigate(ctx: click.Context, issue_key: Optional[str], goal: str, goal_fi
     # Process --goal and --goal-file options (mutual exclusion and resolution)
     goal = process_goal_options(goal, goal_file)
 
-    create_investigation_session(goal, parent, name, path, workspace, model_profile, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent, model=model)
+    create_investigation_session(goal, parent, name, path, workspace, model_profile, projects=projects, temp_clone=temp_clone, headless=headless, auto_approve=auto_approve, agent=agent, model=model, reasoning_effort=reasoning_effort)
 
 
 @cli.group()
@@ -3718,5 +3724,3 @@ def stop() -> None:
         console.print("[green]✓[/green] Dashboard stopped.")
     else:
         console.print("[red]✗[/red] Failed to stop dashboard.")
-
-

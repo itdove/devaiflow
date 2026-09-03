@@ -42,6 +42,7 @@ def create_investigation_from_issue(
     temp_clone: Optional[bool] = None,
     agent: Optional[str] = None,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> None:
     """Create investigation session from an existing issue tracker ticket.
 
@@ -160,6 +161,7 @@ def create_investigation_from_issue(
         issue_details={"summary": issue_summary, "description": issue_description},
         agent=agent,
         model=model,
+        reasoning_effort=reasoning_effort,
     )
 
 
@@ -209,6 +211,7 @@ def _select_from_workspace_repos(
     model_profile: Optional[str],
     agent: Optional[str] = None,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ):
     """Select project(s) from workspace repositories.
 
@@ -393,6 +396,7 @@ def create_investigation_session(
     auto_approve: bool = False,
     agent: Optional[str] = None,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> None:
     """Create a new investigation session for codebase analysis.
 
@@ -775,6 +779,8 @@ def create_investigation_session(
             env=env,
             headless=headless,
             auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
+            model_override=model,
             display_name=session.name,
             session=session,
         )

@@ -308,6 +308,7 @@ def create_new_session(
     auto_approve: bool = False,
     agent: Optional[str] = None,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> None:
     """Create a new session or add conversation to existing session.
 
@@ -481,6 +482,8 @@ def create_new_session(
             non_interactive=non_interactive,
             headless=headless,
             auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
+            model_override=model,
             agent=agent,
         )
         return

@@ -3145,7 +3145,7 @@ Format as markdown bullets. Return ONLY the bullet points, nothing else."""
 
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
-        summary = agent.generate_text(prompt, timeout=30, display_name=display_name)
+        summary = agent.generate_text(prompt, timeout=30, display_name=display_name, config=config)
         if summary:
             console.print("[dim]Generated PR summary using AI[/dim]")
             return summary
@@ -3882,7 +3882,7 @@ Return ONLY the commit message."""
         # Use session's agent backend for text generation (codex exec, opencode run, claude -p)
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
-        result = agent.generate_text(prompt, timeout=30, display_name=display_name)
+        result = agent.generate_text(prompt, timeout=30, display_name=display_name, config=config)
         if result:
             return strip_code_fences(result)
 
@@ -4027,7 +4027,7 @@ Return ONLY the commit message in this exact format, nothing else."""
 
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
-        result = agent.generate_text(prompt, timeout=30, display_name=display_name)
+        result = agent.generate_text(prompt, timeout=30, display_name=display_name, config=config)
         if result:
             commit_text = strip_code_fences(result)
             console.print(f"[dim]Generated commit message using {agent_name} CLI[/dim]")

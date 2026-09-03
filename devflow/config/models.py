@@ -153,6 +153,15 @@ class OllamaConfig(BaseModel):
     )
 
 
+class AgentModelConfig(BaseModel):
+    """Model and reasoning settings for one AI agent backend."""
+
+    session_model: Optional[str] = None
+    utility_model: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    utility_reasoning_effort: Optional[str] = None
+
+
 class EnterpriseConfig(BaseModel):
     """Enterprise-wide configuration (enterprise.json).
 
@@ -166,6 +175,7 @@ class EnterpriseConfig(BaseModel):
     github_issue_types: Optional[List[str]] = None  # Allowed GitHub/GitLab issue types (e.g., ["bug", "enhancement", "task", "spike", "epic", "story"])
     model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration enforced by enterprise (can enforce alternative model providers)
     concurrency_mode: Optional[str] = None  # Enforce concurrency mode: "strict" | "analyze" | "permissive"
+    agent_models: Optional[Dict[str, "AgentModelConfig"]] = None
 
 
 class OrganizationConfig(BaseModel):
@@ -197,6 +207,7 @@ class OrganizationConfig(BaseModel):
 
     # Model provider configuration
     model_provider: Optional[ModelProviderConfig] = None  # Organization-level model provider configuration (project-specific profiles)
+    agent_models: Optional[Dict[str, AgentModelConfig]] = None
 
 
 class TeamConfig(BaseModel):
@@ -218,6 +229,7 @@ class TeamConfig(BaseModel):
 
     # GitHub-specific fields
     github_default_labels: List[str] = Field(default_factory=list)  # Team-level default labels for GitHub issues
+    agent_models: Optional[Dict[str, AgentModelConfig]] = None
     concurrency_mode: Optional[str] = None  # Team-level concurrency mode override: "strict" | "analyze" | "permissive"
     github_issue_templates: Optional[Dict[str, str]] = None  # Team-specific GitHub issue template overrides (e.g., {"Bug": "...", "Story": "..."})
 
@@ -564,6 +576,7 @@ class UserConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration
     clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
     concurrency: ConcurrencyConfig = Field(default_factory=ConcurrencyConfig)  # Concurrent session conflict detection
+    agent_models: Dict[str, AgentModelConfig] = Field(default_factory=dict)
 
 
 class Config(BaseModel):
@@ -603,6 +616,7 @@ class Config(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration (user-level)
     clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
     concurrency: ConcurrencyConfig = Field(default_factory=ConcurrencyConfig)  # Concurrent session conflict detection (merged from enterprise/team/user)
+    agent_models: Dict[str, AgentModelConfig] = Field(default_factory=dict)
 
 
     class Config:

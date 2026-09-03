@@ -130,7 +130,7 @@ Generate the filled PR/MR description now:"""
         from devflow.agent.factory import resolve_agent_backend
         agent_backend = resolve_agent_backend(session=session)
         agent = create_agent_client(agent_backend)
-        result = agent.generate_text(prompt, timeout=45, display_name=display_name)
+        result = agent.generate_text(prompt, timeout=45, display_name=display_name, config=config)
         if result:
             filled_template = strip_code_fences(result)
             console.print(f"[dim]✓ Template filled using AI ({agent.get_agent_name()})[/dim]")

@@ -239,6 +239,7 @@ def create_jira_ticket_session(
     agent: Optional[str] = None,
     model_profile: Optional[str] = None,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> None:
     """Create a new session for issue tracker ticket creation.
 
@@ -672,6 +673,8 @@ def create_jira_ticket_session(
             env=env,
             headless=headless,
             auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
+            model_override=model,
             display_name=session.name,
             session=session,
         )
@@ -1158,5 +1161,4 @@ def _create_multi_project_jira_session(
 
     if not success:
         handle_claude_code_launch_failure(session, session_manager, name)
-
 

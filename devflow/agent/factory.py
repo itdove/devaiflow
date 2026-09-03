@@ -482,6 +482,8 @@ def launch_and_capture(
     env: dict = None,
     headless: bool = False,
     auto_approve: bool = False,
+    reasoning_effort: str = None,
+    model_override: str = None,
     display_name: str = None,
     session=None,
 ) -> None:
@@ -496,7 +498,7 @@ def launch_and_capture(
     """
     sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
     try:
-        process = agent.launch_with_prompt(
+        launch_kwargs = dict(
             project_path=project_path,
             initial_prompt=initial_prompt,
             session_id=session_id,
@@ -509,6 +511,11 @@ def launch_and_capture(
             auto_approve=auto_approve,
             display_name=display_name,
         )
+        if reasoning_effort:
+            launch_kwargs["reasoning_effort"] = reasoning_effort
+        if model_override:
+            launch_kwargs["model_override"] = model_override
+        process = agent.launch_with_prompt(**launch_kwargs)
         agent.wait_for_exit(process, headless)
     finally:
         capture_agent_session_id(
