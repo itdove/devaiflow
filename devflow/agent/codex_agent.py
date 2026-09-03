@@ -448,6 +448,17 @@ class CodexAgent(AgentInterface):
     def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None) -> Optional[str]:
         """Generate text using codex exec (non-interactive mode)."""
         try:
+            cmd = ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", prompt]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+
+            # Fallback to default model if luna not available
             result = subprocess.run(
                 ["codex", "exec", prompt],
                 capture_output=True,

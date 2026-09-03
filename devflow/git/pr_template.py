@@ -47,6 +47,12 @@ def fill_pr_template_with_ai(
     config = config_loader.load_config() if config_loader.config_file.exists() else None
     jira_url = config.jira.url if config and config.jira else None
 
+    # Resolve agent name for Assisted-by field
+    from devflow.agent.factory import resolve_agent_backend, get_agent_display_name
+    _agent_backend = resolve_agent_backend(session=session)
+    _agent_display = get_agent_display_name(_agent_backend)
+    context_parts.append(f"AI Assistant: {_agent_display}")
+
     # Detect issue tracker backend
     issue_tracker = get_issue_tracker_backend(session)
 
@@ -109,7 +115,7 @@ Your task is to fill in the template by:
 - Read each section's HTML comments (<!-- ... -->) to understand what information is needed
 - Replace placeholder patterns like "PROJ-NNNN", "JIRA-KEY", etc. with actual values
 - Fill in the Description/Summary section based on commits and changes
-- For "Assisted-by" fields, use: Claude
+- For "Assisted-by" fields, use the AI assistant name from the context
 - For "Steps to test" sections, generate specific testing steps based on the changes
 - For "Deployment considerations", analyze if changes need special deployment handling
 - Preserve all markdown formatting (headers, lists, checkboxes, etc.)
@@ -120,37 +126,29 @@ Your task is to fill in the template by:
 Generate the filled PR/MR description now:"""
 
     try:
-        # Try Claude CLI first (faster, better)
-        cmd = ["claude", "-p", "--model", "claude-haiku-4-5-20251001"]
-        if display_name:
-            cmd.extend(["--name", display_name])
-        result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=45,
-        )
-
-        if result.returncode == 0:
-            filled_template = strip_code_fences(result.stdout.strip())
-            console.print("[dim]✓ Template filled using AI (Claude CLI)[/dim]")
+        from devflow.agent import create_agent_client
+        from devflow.agent.factory import resolve_agent_backend
+        agent_backend = resolve_agent_backend(session=session)
+        agent = create_agent_client(agent_backend)
+        result = agent.generate_text(prompt, timeout=45, display_name=display_name)
+        if result:
+            filled_template = strip_code_fences(result)
+            console.print(f"[dim]✓ Template filled using AI ({agent.get_agent_name()})[/dim]")
             return filled_template
 
-        # Fallback to Anthropic API if Claude CLI not available
-        console.print("[dim]Claude CLI not available, trying Anthropic API...[/dim]")
+        # Agent CLI failed: try Anthropic API
+        console.print("[dim]Agent CLI failed, trying Anthropic API...[/dim]")
         return _fill_template_with_api(prompt)
 
     except FileNotFoundError:
-        # Claude CLI not installed, try API
-        console.print("[dim]Claude CLI not found, trying Anthropic API...[/dim]")
+        console.print("[dim]Agent CLI not found, trying Anthropic API...[/dim]")
         return _fill_template_with_api(prompt)
     except subprocess.TimeoutExpired:
         console.print("[yellow]⚠[/yellow] AI template filling timed out, using fallback")
-        return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url)
+        return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url, agent_display_name=_agent_display)
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] AI template filling failed: {e}")
-        return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url)
+        return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url, agent_display_name=_agent_display)
 
 
 def _fill_template_with_api(prompt: str) -> str:
@@ -195,7 +193,7 @@ def _fill_template_with_api(prompt: str) -> str:
         raise RuntimeError(f"API template filling failed: {e}")
 
 
-def _fill_template_fallback(template_content: str, session, git_context: dict, jira_url: Optional[str] = None) -> str:
+def _fill_template_fallback(template_content: str, session, git_context: dict, jira_url: Optional[str] = None, agent_display_name: str = "Claude") -> str:
     """Fallback template filling when AI is not available.
 
     Uses pattern matching to fill common PR template placeholders.
@@ -269,14 +267,14 @@ def _fill_template_fallback(template_content: str, session, git_context: dict, j
     # Replace "Assisted-by" placeholders
     filled = re.sub(
         r'(Assisted-by:\s*)(?:<[^>]*>|<!-- .* -->)',
-        r'\1Claude',
+        rf'\1{agent_display_name}',
         filled,
     )
 
     # Replace generic "Assisted-by:" lines that still have placeholder text
     filled = re.sub(
         r'Assisted-by:\s*<name of code assistant>',
-        'Assisted-by: Claude',
+        f'Assisted-by: {agent_display_name}',
         filled,
         flags=re.IGNORECASE
     )

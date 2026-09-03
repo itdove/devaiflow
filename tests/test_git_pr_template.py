@@ -19,6 +19,7 @@ def mock_session():
     session.issue_key = "PROJ-12345"
     session.goal = "Add user authentication feature"
     session.issue_tracker = "jira"
+    session.agent_backend = "claude"
 
     # Mock active conversation
     conversation = Mock()
@@ -84,34 +85,34 @@ Assisted-by: Claude
 """
 
         with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                # Mock successful subprocess run
-                mock_result = Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = filled_content
-                mock_run.return_value = mock_result
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    mock_agent = Mock()
+                    mock_agent.generate_text.return_value = filled_content
+                    mock_agent.get_agent_name.return_value = "claude"
+                    mock_create.return_value = mock_agent
 
-                # Mock config loader
-                mock_config = Mock()
-                mock_config.jira.url = "https://jira.example.com"
-                mock_loader = Mock()
-                mock_loader.config_file.exists.return_value = True
-                mock_loader.load_config.return_value = mock_config
-                mock_config_loader_class.return_value = mock_loader
+                    # Mock config loader
+                    mock_config = Mock()
+                    mock_config.jira.url = "https://jira.example.com"
+                    mock_loader = Mock()
+                    mock_loader.config_file.exists.return_value = True
+                    mock_loader.load_config.return_value = mock_config
+                    mock_config_loader_class.return_value = mock_loader
 
-                result = fill_pr_template_with_ai(
-                    sample_template,
-                    mock_session,
-                    tmp_path,
-                    git_context
-                )
+                    result = fill_pr_template_with_ai(
+                        sample_template,
+                        mock_session,
+                        tmp_path,
+                        git_context
+                    )
 
-                assert "Add user authentication feature" in result
-                assert "PROJ-12345" in result
-                mock_run.assert_called_once()
+                    assert "Add user authentication feature" in result
+                    assert "PROJ-12345" in result
+                    mock_agent.generate_text.assert_called_once()
 
-    def test_claude_cli_with_code_fences(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
-        """Test that code fences are properly cleaned from Claude CLI output."""
+    def test_agent_with_code_fences(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
+        """Test that code fences are properly cleaned from agent output."""
         monkeypatch.chdir(tmp_path)
 
         filled_with_fences = """```
@@ -122,44 +123,18 @@ Assisted-by: Claude
 ```"""
 
         with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                mock_result = Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = filled_with_fences
-                mock_run.return_value = mock_result
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    mock_agent = Mock()
+                    mock_agent.generate_text.return_value = filled_with_fences
+                    mock_agent.get_agent_name.return_value = "claude"
+                    mock_create.return_value = mock_agent
 
-                mock_config = Mock()
-                mock_config.jira.url = "https://jira.example.com"
-                mock_loader = Mock()
-                mock_loader.config_file.exists.return_value = True
-                mock_loader.load_config.return_value = mock_config
-                mock_config_loader_class.return_value = mock_loader
-
-                result = fill_pr_template_with_ai(
-                    sample_template,
-                    mock_session,
-                    tmp_path,
-                    git_context
-                )
-
-                # Code fences should be removed
-                assert not result.startswith("```")
-                assert not result.endswith("```")
-                assert "## Description" in result
-
-    def test_claude_cli_not_found_fallback_to_api(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
-        """Test fallback to API when Claude CLI is not found."""
-        monkeypatch.chdir(tmp_path)
-
-        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                with patch('devflow.git.pr_template._fill_template_with_api') as mock_api:
-                    # Simulate Claude CLI not found
-                    mock_run.side_effect = FileNotFoundError("claude not found")
-                    mock_api.return_value = "Filled via API"
-
+                    mock_config = Mock()
+                    mock_config.jira.url = "https://jira.example.com"
                     mock_loader = Mock()
-                    mock_loader.config_file.exists.return_value = False
+                    mock_loader.config_file.exists.return_value = True
+                    mock_loader.load_config.return_value = mock_config
                     mock_config_loader_class.return_value = mock_loader
 
                     result = fill_pr_template_with_ai(
@@ -169,112 +144,140 @@ Assisted-by: Claude
                         git_context
                     )
 
-                    assert result == "Filled via API"
-                    mock_api.assert_called_once()
+                    assert not result.startswith("```")
+                    assert not result.endswith("```")
+                    assert "## Description" in result
 
-    def test_claude_cli_timeout_fallback(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
-        """Test fallback when Claude CLI times out."""
+    def test_agent_not_found_fallback_to_api(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
+        """Test fallback to API when agent CLI is not found."""
         monkeypatch.chdir(tmp_path)
 
         with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                with patch('devflow.git.pr_template._fill_template_fallback') as mock_fallback:
-                    # Simulate timeout
-                    mock_run.side_effect = subprocess.TimeoutExpired(cmd="claude", timeout=45)
-                    mock_fallback.return_value = "Filled via fallback"
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    with patch('devflow.git.pr_template._fill_template_with_api') as mock_api:
+                        mock_agent = Mock()
+                        mock_agent.generate_text.side_effect = FileNotFoundError("not found")
+                        mock_create.return_value = mock_agent
+                        mock_api.return_value = "Filled via API"
+
+                        mock_loader = Mock()
+                        mock_loader.config_file.exists.return_value = False
+                        mock_config_loader_class.return_value = mock_loader
+
+                        result = fill_pr_template_with_ai(
+                            sample_template,
+                            mock_session,
+                            tmp_path,
+                            git_context
+                        )
+
+                        assert result == "Filled via API"
+                        mock_api.assert_called_once()
+
+    def test_agent_timeout_fallback(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
+        """Test fallback when agent times out."""
+        monkeypatch.chdir(tmp_path)
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    with patch('devflow.git.pr_template._fill_template_fallback') as mock_fallback:
+                        mock_agent = Mock()
+                        mock_agent.generate_text.side_effect = subprocess.TimeoutExpired(cmd="agent", timeout=45)
+                        mock_create.return_value = mock_agent
+                        mock_fallback.return_value = "Filled via fallback"
+
+                        mock_loader = Mock()
+                        mock_loader.config_file.exists.return_value = False
+                        mock_config_loader_class.return_value = mock_loader
+
+                        result = fill_pr_template_with_ai(
+                            sample_template,
+                            mock_session,
+                            tmp_path,
+                            git_context
+                        )
+
+                        assert result == "Filled via fallback"
+
+    def test_agent_error_fallback(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
+        """Test fallback when agent has an error."""
+        monkeypatch.chdir(tmp_path)
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    with patch('devflow.git.pr_template._fill_template_fallback') as mock_fallback:
+                        mock_agent = Mock()
+                        mock_agent.generate_text.side_effect = RuntimeError("Unexpected error")
+                        mock_create.return_value = mock_agent
+                        mock_fallback.return_value = "Filled via fallback"
+
+                        mock_loader = Mock()
+                        mock_loader.config_file.exists.return_value = False
+                        mock_config_loader_class.return_value = mock_loader
+
+                        result = fill_pr_template_with_ai(
+                            sample_template,
+                            mock_session,
+                            tmp_path,
+                            git_context
+                        )
+
+                        assert result == "Filled via fallback"
+
+    def test_agent_returns_none_fallback_to_api(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
+        """Test API fallback when agent returns None."""
+        monkeypatch.chdir(tmp_path)
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    with patch('devflow.git.pr_template._fill_template_with_api') as mock_api:
+                        mock_agent = Mock()
+                        mock_agent.generate_text.return_value = None
+                        mock_create.return_value = mock_agent
+                        mock_api.return_value = "Filled via API"
+
+                        mock_loader = Mock()
+                        mock_loader.config_file.exists.return_value = False
+                        mock_config_loader_class.return_value = mock_loader
+
+                        result = fill_pr_template_with_ai(
+                            sample_template,
+                            mock_session,
+                            tmp_path,
+                            git_context
+                        )
+
+                        assert result == "Filled via API"
+                        mock_api.assert_called_once()
+
+    def test_agent_generate_text_called(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
+        """Test that agent's generate_text is called for template filling."""
+        monkeypatch.chdir(tmp_path)
+
+        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    mock_agent = Mock()
+                    mock_agent.generate_text.return_value = "Filled template"
+                    mock_agent.get_agent_name.return_value = "claude"
+                    mock_create.return_value = mock_agent
 
                     mock_loader = Mock()
                     mock_loader.config_file.exists.return_value = False
                     mock_config_loader_class.return_value = mock_loader
 
-                    result = fill_pr_template_with_ai(
+                    fill_pr_template_with_ai(
                         sample_template,
                         mock_session,
                         tmp_path,
                         git_context
                     )
 
-                    assert result == "Filled via fallback"
-                    mock_fallback.assert_called_once_with(sample_template, mock_session, git_context, jira_url=None)
-
-    def test_claude_cli_error_fallback(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
-        """Test fallback when Claude CLI has an error."""
-        monkeypatch.chdir(tmp_path)
-
-        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                with patch('devflow.git.pr_template._fill_template_fallback') as mock_fallback:
-                    # Simulate generic error
-                    mock_run.side_effect = RuntimeError("Unexpected error")
-                    mock_fallback.return_value = "Filled via fallback"
-
-                    mock_loader = Mock()
-                    mock_loader.config_file.exists.return_value = False
-                    mock_config_loader_class.return_value = mock_loader
-
-                    result = fill_pr_template_with_ai(
-                        sample_template,
-                        mock_session,
-                        tmp_path,
-                        git_context
-                    )
-
-                    assert result == "Filled via fallback"
-                    mock_fallback.assert_called_once()
-
-    def test_claude_cli_non_zero_return_code_api_fallback(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
-        """Test API fallback when Claude CLI returns non-zero exit code."""
-        monkeypatch.chdir(tmp_path)
-
-        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                with patch('devflow.git.pr_template._fill_template_with_api') as mock_api:
-                    # Simulate non-zero exit code
-                    mock_result = Mock()
-                    mock_result.returncode = 1
-                    mock_run.return_value = mock_result
-                    mock_api.return_value = "Filled via API"
-
-                    mock_loader = Mock()
-                    mock_loader.config_file.exists.return_value = False
-                    mock_config_loader_class.return_value = mock_loader
-
-                    result = fill_pr_template_with_ai(
-                        sample_template,
-                        mock_session,
-                        tmp_path,
-                        git_context
-                    )
-
-                    assert result == "Filled via API"
-                    mock_api.assert_called_once()
-
-    def test_claude_cli_uses_print_flag(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
-        """Test that Claude CLI is called with -p flag for non-interactive mode."""
-        monkeypatch.chdir(tmp_path)
-
-        with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                mock_result = Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = "Filled template"
-                mock_run.return_value = mock_result
-
-                mock_loader = Mock()
-                mock_loader.config_file.exists.return_value = False
-                mock_config_loader_class.return_value = mock_loader
-
-                fill_pr_template_with_ai(
-                    sample_template,
-                    mock_session,
-                    tmp_path,
-                    git_context
-                )
-
-                # Verify -p flag is used
-                call_args = mock_run.call_args
-                cmd = call_args[0][0] if call_args[0] else call_args.kwargs.get('args', [])
-                assert cmd == ["claude", "-p", "--model", "claude-haiku-4-5-20251001"], f"Expected haiku model flag, got {cmd}"
+                    mock_agent.generate_text.assert_called_once()
 
     def test_session_without_issue_key(self, sample_template, git_context, tmp_path, monkeypatch):
         """Test template filling when session has no issue key."""
@@ -285,28 +288,29 @@ Assisted-by: Claude
         session_no_issue.issue_tracker = None
         session_no_issue.goal = "Refactoring work"
         session_no_issue.active_conversation = None
+        session_no_issue.agent_backend = "claude"
 
         with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                mock_result = Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = "Filled template"
-                mock_run.return_value = mock_result
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    mock_agent = Mock()
+                    mock_agent.generate_text.return_value = "Filled template"
+                    mock_agent.get_agent_name.return_value = "claude"
+                    mock_create.return_value = mock_agent
 
-                mock_loader = Mock()
-                mock_loader.config_file.exists.return_value = False
-                mock_config_loader_class.return_value = mock_loader
+                    mock_loader = Mock()
+                    mock_loader.config_file.exists.return_value = False
+                    mock_config_loader_class.return_value = mock_loader
 
-                result = fill_pr_template_with_ai(
-                    sample_template,
-                    session_no_issue,
-                    tmp_path,
-                    git_context
-                )
+                    result = fill_pr_template_with_ai(
+                        sample_template,
+                        session_no_issue,
+                        tmp_path,
+                        git_context
+                    )
 
-                assert result == "Filled template"
-                # Verify subprocess was called (meaning no early exit)
-                mock_run.assert_called_once()
+                    assert result == "Filled template"
+                    mock_agent.generate_text.assert_called_once()
 
     def test_session_without_active_conversation(self, mock_session, sample_template, git_context, tmp_path, monkeypatch):
         """Test template filling when session has no active conversation."""
@@ -315,24 +319,25 @@ Assisted-by: Claude
         mock_session.active_conversation = None
 
         with patch('devflow.git.pr_template.ConfigLoader') as mock_config_loader_class:
-            with patch('devflow.git.pr_template.subprocess.run') as mock_run:
-                mock_result = Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = "Filled template"
-                mock_run.return_value = mock_result
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    mock_agent = Mock()
+                    mock_agent.generate_text.return_value = "Filled template"
+                    mock_agent.get_agent_name.return_value = "claude"
+                    mock_create.return_value = mock_agent
 
-                mock_loader = Mock()
-                mock_loader.config_file.exists.return_value = False
-                mock_config_loader_class.return_value = mock_loader
+                    mock_loader = Mock()
+                    mock_loader.config_file.exists.return_value = False
+                    mock_config_loader_class.return_value = mock_loader
 
-                result = fill_pr_template_with_ai(
-                    sample_template,
-                    mock_session,
-                    tmp_path,
-                    git_context
-                )
+                    result = fill_pr_template_with_ai(
+                        sample_template,
+                        mock_session,
+                        tmp_path,
+                        git_context
+                    )
 
-                assert result == "Filled template"
+                    assert result == "Filled template"
 
     def test_many_changed_files_truncation(self, mock_session, sample_template, tmp_path, monkeypatch):
         """Test that long file lists are truncated in context."""
@@ -666,20 +671,12 @@ class TestBackendDetectionInTemplates:
 
         session = Mock()
         session.issue_key = "owner/repo#42"
-        session.issue_tracker = None  # not set — triggers the bug
+        session.issue_tracker = None
         session.goal = "Fix login page"
+        session.agent_backend = "claude"
         conversation = Mock()
         conversation.branch = "fix/login"
         session.active_conversation = conversation
-
-        captured_prompt = {}
-
-        def fake_run(cmd, **kwargs):
-            captured_prompt['input'] = kwargs.get('input', '')
-            result = Mock()
-            result.returncode = 0
-            result.stdout = "## Description\nFixed login page\n"
-            return result
 
         with patch('devflow.git.pr_template.ConfigLoader') as mock_cls:
             mock_config = Mock()
@@ -689,12 +686,18 @@ class TestBackendDetectionInTemplates:
             loader.load_config.return_value = mock_config
             mock_cls.return_value = loader
 
-            with patch('devflow.git.pr_template.subprocess.run', side_effect=fake_run):
-                fill_pr_template_with_ai(sample_template, session, tmp_path, git_context)
+            with patch('devflow.agent.factory.resolve_agent_backend', return_value="claude"):
+                with patch('devflow.agent.create_agent_client') as mock_create:
+                    mock_agent = Mock()
+                    mock_agent.generate_text.return_value = "## Description\nFixed login page\n"
+                    mock_agent.get_agent_name.return_value = "claude"
+                    mock_create.return_value = mock_agent
 
-        prompt_text = captured_prompt['input']
-        assert "GitHub Issue: owner/repo#42" in prompt_text
-        assert "JIRA Issue:" not in prompt_text
+                    fill_pr_template_with_ai(sample_template, session, tmp_path, git_context)
+
+                    prompt_text = mock_agent.generate_text.call_args[0][0]
+                    assert "GitHub Issue: owner/repo#42" in prompt_text
+                    assert "JIRA Issue:" not in prompt_text
 
     def test_fallback_filling_github_session_no_jira_url(self):
         """Fallback for GitHub session should not inject JIRA URL."""
