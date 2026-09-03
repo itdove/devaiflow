@@ -150,9 +150,21 @@ class OpenCodeAgent(AgentInterface):
             cmd.extend(["--session", session_id])
 
         if model_provider_profile:
+            # OpenCode expects model in format "provider/model" (e.g., "llama/Qwen3.5-9B-GGUF")
+            # model_provider_profile may have just the model name or full path
+            # Pass as-is; OpenCode will resolve based on its configured providers
             model_name = model_provider_profile.get("model_name")
             if model_name:
                 cmd.extend(["--model", model_name])
+            elif profile_name:
+                # If no model_name but profile_name exists, try to infer from profile name
+                # e.g., "llama 9091" -> try "llama/*" models
+                provider = None
+                if " " in profile_name:
+                    parts = profile_name.split(" ", 1)
+                    provider = parts[0].lower()
+                if provider:
+                    cmd.extend(["--model", f"{provider}/*"])
 
         if auto_approve:
             cmd.append("--dangerously-skip-permissions")
