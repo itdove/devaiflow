@@ -3143,17 +3143,15 @@ Generate a summary with 2-4 bullet points that:
 
 Format as markdown bullets. Return ONLY the bullet points, nothing else."""
 
-        # generate_text uses Claude CLI flags — only works for claude/ollama
-        _backend = agent_backend or "claude"
-        if _backend in ("claude", "ollama", "ollama-claude"):
-            from devflow.agent import create_agent_client
-            agent = create_agent_client(_backend)
-            summary = agent.generate_text(prompt, timeout=30, display_name=display_name)
-            if summary:
-                console.print("[dim]Generated PR summary using AI[/dim]")
-                return summary
+        # Always use Claude CLI for text generation (available as utility regardless of session agent)
+        from devflow.agent import create_agent_client
+        agent = create_agent_client("claude")
+        summary = agent.generate_text(prompt, timeout=30, display_name=display_name)
+        if summary:
+            console.print("[dim]Generated PR summary using AI[/dim]")
+            return summary
 
-        # Non-Claude agents or CLI failed: use Anthropic API directly
+        # Claude CLI failed: use Anthropic API directly
         return _generate_pr_summary_with_api(session, working_dir)
 
     except Exception as e:
@@ -3882,16 +3880,14 @@ Generate a commit message with:
 
 Return ONLY the commit message."""
 
-        # generate_text uses Claude CLI flags (-p, --model) — only works for claude/ollama
-        _backend = agent_backend or "claude"
-        if _backend in ("claude", "ollama", "ollama-claude"):
-            from devflow.agent import create_agent_client
-            agent = create_agent_client(_backend)
-            result = agent.generate_text(prompt, timeout=30, display_name=display_name)
-            if result:
-                return strip_code_fences(result)
+        # Try Claude CLI for text generation (always available as utility regardless of session agent)
+        from devflow.agent import create_agent_client
+        agent = create_agent_client("claude")
+        result = agent.generate_text(prompt, timeout=30, display_name=display_name)
+        if result:
+            return strip_code_fences(result)
 
-        # Non-Claude agents or CLI failed: use Anthropic API directly
+        # Claude CLI failed: use Anthropic API directly
         return _generate_commit_message_from_diff_api(diff_content, status_summary)
 
     except Exception:
@@ -4030,16 +4026,14 @@ Short descriptive title (max 72 chars)
 
 Return ONLY the commit message in this exact format, nothing else."""
 
-        # generate_text uses Claude CLI flags — only works for claude/ollama
-        _backend = agent_backend or "claude"
-        if _backend in ("claude", "ollama", "ollama-claude"):
-            from devflow.agent import create_agent_client
-            agent = create_agent_client(_backend)
-            result = agent.generate_text(prompt, timeout=30, display_name=display_name)
-            if result:
-                commit_text = strip_code_fences(result)
-                console.print(f"[dim]Generated commit message using {agent_name} CLI[/dim]")
-                return commit_text
+        # Always use Claude CLI for text generation (available as utility regardless of session agent)
+        from devflow.agent import create_agent_client
+        agent = create_agent_client("claude")
+        result = agent.generate_text(prompt, timeout=30, display_name=display_name)
+        if result:
+            commit_text = strip_code_fences(result)
+            console.print(f"[dim]Generated commit message using Claude CLI[/dim]")
+            return commit_text
 
         return None
 
