@@ -48,6 +48,8 @@ def create_multi_project_session(
     headless: bool = False,
     auto_approve: bool = False,
     agent: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
+    model_override: Optional[str] = None,
 ) -> None:
     """Create a multi-project session with conversations for multiple repositories.
 
@@ -237,7 +239,9 @@ def create_multi_project_session(
     # Create new session with multi-project conversation
     # Use ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
+    _agent_backend_for_id = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
@@ -254,8 +258,20 @@ def create_multi_project_session(
     # Create session without initial conversation
     from devflow.utils.model_provider import get_active_profile, get_model_name_from_profile
     import os as _os
-    _resolved_profile = get_active_profile(config, override_profile_name=model_profile)
-    _model_id = _os.environ.get("CLAUDE_MODEL") or get_model_name_from_profile(_resolved_profile)
+    _agent_backend = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
+    _resolved_profile = get_active_profile(
+        config,
+        override_profile_name=model_profile,
+        agent_backend=_agent_backend,
+        command="new",
+    )
+    _resolved_profile = {
+        **(_resolved_profile or {}),
+        **({"model_name": model_override} if model_override else {}),
+    } or None
+    _model_id = model_override or _os.environ.get("CLAUDE_MODEL") or get_model_name_from_profile(_resolved_profile)
     session = session_manager.create_session(
         name=name,
         issue_key=issue_key,
@@ -265,7 +281,7 @@ def create_multi_project_session(
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
         model_profile=model_profile,
-        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
+        agent_backend=_agent_backend,
         model_id=_model_id,
     )
 
@@ -339,7 +355,7 @@ def create_multi_project_session(
     )
 
     # Launch AI agent at workspace level (not individual project)
-    agent_backend = resolve_agent_backend(cli_override=agent, config=config)
+    agent_backend = _agent_backend
     agent_name = get_agent_display_name(agent_backend)
     if should_launch_claude_code(config):
         console.print(f"[cyan]Launching {agent_name} at workspace level...[/cyan]\n")
@@ -356,6 +372,8 @@ def create_multi_project_session(
         # Set environment variables for the AI agent process
         import os
         env = os.environ.copy()
+        from devflow.utils.model_provider import build_env_from_profile
+        env.update(build_env_from_profile(_resolved_profile, env))
         env["DEVAIFLOW_IN_SESSION"] = "1"
         env["AI_AGENT_SESSION_ID"] = session_id
 
@@ -375,12 +393,14 @@ def create_multi_project_session(
                 session.active_conversation,
                 initial_prompt=initial_prompt,
                 session_id=session_id,
-                model_provider_profile=model_profile,
+                model_provider_profile=_resolved_profile,
                 workspace_path=workspace_path,
                 config=config,
                 env=env,
                 headless=headless,
                 auto_approve=auto_approve,
+                reasoning_effort=reasoning_effort,
+                model_override=model_override,
                 display_name=session.name,
                 session=session,
             )

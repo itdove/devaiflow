@@ -461,23 +461,41 @@ class OpenCodeAgent(AgentInterface):
             pass
         return None
 
-    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None, config=None) -> Optional[str]:
+    def generate_text(
+        self,
+        prompt: str,
+        timeout: int = 30,
+        display_name: Optional[str] = None,
+        config=None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """Generate text using opencode run (non-interactive mode)."""
         try:
             from devflow.agent.model_config import get_agent_model_config
-            settings = get_agent_model_config(config, self.get_agent_name(), utility=True)
+            settings = get_agent_model_config(
+                config,
+                self.get_agent_name(),
+                utility=True,
+                command="pr_template",
+                provider_profile=model_provider_profile,
+            )
+            from devflow.utils.model_provider import build_env_from_profile, get_model_name_from_profile
+
             cmd = ["opencode", "run", "-q"]
-            if settings["model"]:
-                cmd.extend(["--model", settings["model"]])
+            model = get_model_name_from_profile(
+                model_provider_profile,
+                command="pr_template",
+                utility=True,
+            ) or settings["model"]
+            if model:
+                cmd.extend(["--model", model])
             if settings["reasoning_effort"]:
                 cmd.extend(["--reasoning-effort", settings["reasoning_effort"]])
             cmd.append(prompt)
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            run_kwargs = {"capture_output": True, "text": True, "timeout": timeout}
+            if model_provider_profile:
+                run_kwargs["env"] = build_env_from_profile(model_provider_profile)
+            result = subprocess.run(cmd, **run_kwargs)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
             return None

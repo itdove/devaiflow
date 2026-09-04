@@ -49,8 +49,16 @@ def fill_pr_template_with_ai(
 
     # Resolve agent name for Assisted-by field
     from devflow.agent.factory import resolve_agent_backend, get_agent_display_name
-    _agent_backend = resolve_agent_backend(session=session)
+    _agent_backend = resolve_agent_backend(config=config, session=session)
     _agent_display = get_agent_display_name(_agent_backend)
+    from devflow.utils.model_provider import get_active_profile
+    model_profile = get_active_profile(
+        config,
+        override_profile_name=getattr(session, "model_profile", None),
+        agent_backend=_agent_backend,
+        command="pr_template",
+        utility=True,
+    ) if config else None
     context_parts.append(f"AI Assistant: {_agent_display}")
 
     # Detect issue tracker backend
@@ -128,9 +136,15 @@ Generate the filled PR/MR description now:"""
     try:
         from devflow.agent import create_agent_client
         from devflow.agent.factory import resolve_agent_backend
-        agent_backend = resolve_agent_backend(session=session)
+        agent_backend = resolve_agent_backend(config=config, session=session)
         agent = create_agent_client(agent_backend)
-        result = agent.generate_text(prompt, timeout=45, display_name=display_name, config=config)
+        result = agent.generate_text(
+            prompt,
+            timeout=45,
+            display_name=display_name,
+            config=config,
+            model_provider_profile=model_profile,
+        )
         if result:
             filled_template = strip_code_fences(result)
             console.print(f"[dim]✓ Template filled using AI ({agent.get_agent_name()})[/dim]")
@@ -138,11 +152,11 @@ Generate the filled PR/MR description now:"""
 
         # Agent CLI failed: try Anthropic API
         console.print("[dim]Agent CLI failed, trying Anthropic API...[/dim]")
-        return _fill_template_with_api(prompt)
+        return _fill_template_with_api(prompt, profile=model_profile)
 
     except FileNotFoundError:
         console.print("[dim]Agent CLI not found, trying Anthropic API...[/dim]")
-        return _fill_template_with_api(prompt)
+        return _fill_template_with_api(prompt, profile=model_profile)
     except subprocess.TimeoutExpired:
         console.print("[yellow]⚠[/yellow] AI template filling timed out, using fallback")
         return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url, agent_display_name=_agent_display)
@@ -151,7 +165,7 @@ Generate the filled PR/MR description now:"""
         return _fill_template_fallback(template_content, session, git_context, jira_url=jira_url, agent_display_name=_agent_display)
 
 
-def _fill_template_with_api(prompt: str) -> str:
+def _fill_template_with_api(prompt: str, profile: Optional[dict] = None) -> str:
     """Fill template using Anthropic API as fallback.
 
     Args:
@@ -164,14 +178,21 @@ def _fill_template_with_api(prompt: str) -> str:
         import anthropic
         import os
 
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = (profile or {}).get("api_key") or (profile or {}).get("auth_token") or os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client_kwargs = {"api_key": api_key}
+        api_url = (profile or {}).get("api_url") or (profile or {}).get("base_url")
+        if api_url:
+            client_kwargs["base_url"] = api_url
+        client = anthropic.Anthropic(**client_kwargs)
+
+        from devflow.utils.model_provider import get_model_name_from_profile
+        model = get_model_name_from_profile(profile, command="pr_template", utility=True) or "claude-haiku-4-5-20251001"
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=model,
             max_tokens=2000,
             messages=[{
                 "role": "user",

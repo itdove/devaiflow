@@ -545,6 +545,8 @@ def create_new_session(
                         non_interactive=non_interactive,
                         headless=headless,
                         auto_approve=auto_approve,
+                        reasoning_effort=reasoning_effort,
+                        model_override=model,
                         agent=agent,
                     )
                     return
@@ -643,7 +645,9 @@ def create_new_session(
 
     # Generate session ID upfront (agent-aware: placeholder for self-ID backends)
     from devflow.agent.factory import generate_agent_session_id, resolve_agent_backend
-    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
+    _agent_backend_for_id = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build concatenated goal for storage
@@ -784,7 +788,15 @@ def create_new_session(
     if session is None:
         from devflow.utils.model_provider import get_active_profile, get_model_name_from_profile, apply_model_override
         import os as _os
-        _resolved_profile = get_active_profile(config, override_profile_name=model_profile)
+        _agent_backend = resolve_agent_backend(
+            cli_override=agent, config=config, model_profile=model_profile
+        )
+        _resolved_profile = get_active_profile(
+            config,
+            override_profile_name=model_profile,
+            agent_backend=_agent_backend,
+            command="new",
+        )
         _resolved_profile = apply_model_override(_resolved_profile, model)
         _model_id = model or _os.environ.get("CLAUDE_MODEL") or get_model_name_from_profile(_resolved_profile)
         session = session_manager.create_session(
@@ -796,7 +808,7 @@ def create_new_session(
             branch=branch,
             ai_agent_session_id=session_id,
             model_profile=model_profile,
-            agent_backend=resolve_agent_backend(cli_override=agent, config=config),
+            agent_backend=_agent_backend,
             model_id=_model_id,
         )
 
@@ -845,7 +857,9 @@ def create_new_session(
         _display_session_banner(name, session.goal, working_directory, branch, project_path, session_id, issue_key, jira_url)
 
     # Resolve agent backend and display name
-    _agent_backend = resolve_agent_backend(cli_override=agent, config=config)
+    _agent_backend = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
     agent_name = get_agent_display_name(_agent_backend)
 
     # Check if we should launch Claude Code
@@ -884,20 +898,32 @@ def create_new_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = resolve_agent_backend(cli_override=agent, config=config)
+        agent_backend = resolve_agent_backend(
+            cli_override=agent, config=config, model_profile=session.model_profile
+        )
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
-        from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override
+        from devflow.utils.model_provider import (
+            get_active_profile as get_model_profile,
+            apply_model_override,
+            build_env_from_profile,
+        )
         model_profile = None
         if config and config.model_provider:
-            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+            model_profile = get_model_profile(
+                config,
+                override_profile_name=session.model_profile,
+                agent_backend=agent_backend,
+                command="new",
+            )
         model_profile = apply_model_override(model_profile, model)
 
         # Set environment variables for the AI agent process
         # DEVAIFLOW_IN_SESSION: Flag to indicate we're inside an AI session (used by safety guards)
         # AI_AGENT_SESSION_ID: Generic session ID (works with any AI agent)
         env = os.environ.copy()
+        env.update(build_env_from_profile(model_profile, env))
         env["DEVAIFLOW_IN_SESSION"] = "1"
         env["AI_AGENT_SESSION_ID"] = session_id
         env["DAF_SESSION_NAME"] = name
@@ -934,6 +960,8 @@ def create_new_session(
                 env=env,
                 headless=headless,
                 auto_approve=auto_approve,
+                reasoning_effort=reasoning_effort,
+                model_override=model,
                 display_name=session.name,
                 session=session,
             )

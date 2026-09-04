@@ -2,6 +2,53 @@
 
 DevAIFlow supports running Claude Code with alternative AI model providers. This allows you to use local models (Ollama, llama.cpp) or cloud providers (OpenRouter, Vertex AI, etc.) instead of the default Anthropic API.
 
+## Model and provider selection
+
+A provider profile is the primary model and agent selection. Configure one default
+profile under `model_provider`, then override it for a session with
+`--model-profile`. DevAIFlow infers the agent adapter from the profile provider
+(for example, `codex` uses Codex and `ollama` uses Ollama + Claude). Use
+`--agent` only when explicitly selecting a different adapter; an incompatible
+profile/agent combination is rejected with a clear error.
+
+Each profile can assign models by DevAIFlow command:
+
+```json
+{
+  "model_provider": {
+    "default_profile": "local-ollama",
+    "profiles": {
+      "local-ollama": {
+        "name": "local-ollama",
+        "provider": "ollama",
+        "api_url": "http://localhost:11434",
+        "models": {
+          "new": "qwen3-coder",
+          "open": "qwen3-coder",
+          "git_new": "qwen3-coder",
+          "jira_new": "qwen3-coder",
+          "investigation": "qwen3-coder",
+          "commit_message": "llama3.2",
+          "pr_template": "llama3.2"
+        },
+        "reasoning_efforts": {
+          "new": "high",
+          "open": "medium",
+          "commit_message": "low",
+          "pr_template": "medium"
+        }
+      }
+    }
+  }
+}
+```
+
+For `daf new`, `daf open`, `daf git new`, `daf jira new`, and
+`daf investigation`, `--model` overrides the profile's session model. It does
+not override `commit_message` or `pr_template`; those utilities always use the
+models configured in the selected profile. API URLs are required only for local
+providers: `llama.cpp`, `ollama`, and `mlx`.
+
 **✨ New:** Ollama is now fully supported through native integration! Use `ollama launch claude` for the simplest local model setup.
 
 ## Table of Contents
@@ -50,14 +97,21 @@ ollama pull qwen3-coder  # Recommended: Qwen3-Coder (25B - excellent for coding)
 
 # 3. Configure daf
 daf config edit
-# Set "AI Agent Backend" to "Ollama (local models)"
-# Optionally set "Default Model" under "Ollama Configuration"
+# Add/select an Ollama model profile and make it the default
+# The profile automatically selects the Ollama + Claude adapter
 
 # OR manually edit ~/.daf-sessions/config.json:
 # {
-#   "agent_backend": "ollama",
-#   "ollama": {
-#     "default_model": "qwen3-coder"
+#   "model_provider": {
+#     "default_profile": "local-ollama",
+#     "profiles": {
+#       "local-ollama": {
+#         "name": "local-ollama",
+#         "provider": "ollama",
+#         "api_url": "http://localhost:11434",
+#         "models": {"open": "qwen3-coder"}
+#       }
+#     }
 #   }
 # }
 
@@ -237,14 +291,11 @@ daf open PROJ-123
 
 ---
 
-### ❌ What About Ollama?
+### ✅ Ollama
 
-**Ollama does NOT work with Claude Code.** This is due to fundamental API incompatibility:
-- Ollama uses OpenAI-compatible API format
-- Claude Code requires Anthropic Messages API format
-- These formats are incompatible (like USB-A vs USB-C)
-
-**Use llama.cpp instead** - it provides the same local model experience with full Claude Code compatibility.
+Ollama profiles use DevAIFlow's Ollama + Claude adapter. The profile supplies
+the API URL, credentials, command-specific models, and optional reasoning
+strengths; no separate AI-backend selection is required.
 
 ## Using Profiles
 
@@ -305,10 +356,14 @@ All commands use this profile unless overridden.
 
 Profile selection follows this priority (highest to lowest):
 
-1. **`session.model_profile`** (stored in session from previous `--model-profile`)
-2. **`MODEL_PROVIDER_PROFILE` env var** (terminal session override)
-3. **`config.model_provider.default_profile`** (persistent default)
-4. **Anthropic API** (fallback)
+1. **Explicit `--model-profile`** (or the stored session profile when reopening)
+2. **`MODEL_PROVIDER_PROFILE` env var**
+3. **`config.model_provider.default_profile`**
+4. **Anthropic API** (fallback when no profile is configured)
+
+The selected profile determines the agent adapter. An explicit `--agent` may
+override the adapter, but DevAIFlow rejects it when it is incompatible with
+the selected profile.
 
 **When model provider IS enforced by enterprise/team:**
 
@@ -362,7 +417,12 @@ Each profile contains:
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
 | `name` | string | Profile name | `"llama-cpp"` |
-| `base_url` | string (optional) | ANTHROPIC_BASE_URL override | `"http://localhost:8000"` |
+| `provider` | string | Model service provider | `"llama.cpp"` |
+| `agent_backend` | string (optional) | Explicit agent adapter; normally inferred | `"claude"` |
+| `api_url` | string (required for llama.cpp, Ollama, and MLX) | Local provider API URL | `"http://localhost:8000"` |
+| `models` | object | Model by DevAIFlow command | `{"open": "qwen3-coder"}` |
+| `reasoning_efforts` | object (optional) | Reasoning strength by command | `{"open": "high"}` |
+| `base_url` | string (optional) | Legacy spelling for `api_url` | `"http://localhost:8000"` |
 | `auth_token` | string (optional) | ANTHROPIC_AUTH_TOKEN override | `"llama-cpp"` |
 | `api_key` | string (optional) | ANTHROPIC_API_KEY override | `""` (empty string to disable) |
 | `model_name` | string (optional) | Model for `--model` flag | `"devstral-small-2"` |
@@ -370,6 +430,9 @@ Each profile contains:
 | `vertex_project_id` | string (optional) | GCP project ID | `"my-project-123"` |
 | `vertex_region` | string (optional) | GCP region | `"us-east5"` |
 | `env_vars` | object (optional) | Additional env vars | `{"CUSTOM_VAR": "value"}` |
+
+`commit_message` and `pr_template` are utility entries in `models`; they are
+always used for their respective generators and are not changed by `--model`.
 
 ### Configuration Hierarchy
 

@@ -1033,7 +1033,12 @@ def open_session(
 
         # Get active model provider profile
         from devflow.utils.model_provider import apply_model_override
-        model_provider_profile = get_active_profile(config, override_profile_name=effective_profile_name) if config else None
+        model_provider_profile = get_active_profile(
+            config,
+            override_profile_name=effective_profile_name,
+            agent_backend=effective_agent_backend,
+            command="open",
+        ) if config else None
         model_provider_profile = apply_model_override(model_provider_profile, model)
 
         # Display which model provider is being used

@@ -26,6 +26,9 @@ def create_multi_project_ticket_creation_session(
     session_type: str = "ticket_creation",
     issue_type: Optional[str] = None,
     agent: Optional[str] = None,
+    model_profile: Optional[str] = None,
+    model: Optional[str] = None,
+    command: str = "git_new",
 ) -> tuple[object, str]:
     """Create a multi-project ticket creation session (analysis-only, no branches).
 
@@ -43,6 +46,9 @@ def create_multi_project_ticket_creation_session(
         session_type: Session type ("ticket_creation" for both jira/git new)
         issue_type: Optional issue type (for git new)
         agent: AI agent backend override (e.g., "claude", "opencode")
+        model_profile: Model provider profile override
+        model: Session model override
+        command: DevAIFlow command being executed
 
     Returns:
         Tuple of (session, ai_agent_session_id)
@@ -64,7 +70,9 @@ def create_multi_project_ticket_creation_session(
 
     # Create ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
+    _agent_backend_for_id = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
@@ -92,6 +100,13 @@ def create_multi_project_ticket_creation_session(
         }
 
     # Create session without initial conversation
+    _agent_backend = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
+    from devflow.utils.model_provider import get_model_for_command
+    _model_id = get_model_for_command(
+        config, _agent_backend, command, profile_name=model_profile, cli_model=model,
+    )
     session = session_manager.create_session(
         name=name,
         goal=goal,
@@ -99,7 +114,9 @@ def create_multi_project_ticket_creation_session(
         project_path=None,
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
-        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
+        agent_backend=_agent_backend,
+        model_profile=model_profile,
+        model_id=_model_id,
     )
 
     # Set session_type to "ticket_creation"

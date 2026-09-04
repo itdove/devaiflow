@@ -24,6 +24,75 @@
       "title": "AgentConfig",
       "type": "object"
     },
+    "AgentModelConfig": {
+      "description": "Model and reasoning settings for one AI agent backend.",
+      "properties": {
+        "session_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Model"
+        },
+        "utility_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Utility Model"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Models",
+          "type": "object"
+        },
+        "command_models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Command Models",
+          "type": "object"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Effort"
+        },
+        "utility_reasoning_effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Utility Reasoning Effort"
+        }
+      },
+      "title": "AgentModelConfig",
+      "type": "object"
+    },
     "ConcurrencyConfig": {
       "description": "Concurrent session conflict detection configuration.",
       "properties": {
@@ -646,12 +715,38 @@
       "type": "object"
     },
     "ModelProviderProfile": {
-      "description": "Configuration profile for an AI model provider.\n\nProfiles allow easy switching between different AI model providers\n(Anthropic, Vertex AI, llama.cpp, OpenRouter, etc.) via environment variables.",
+      "description": "Configuration profile for an AI model provider.\n\nProfiles describe a model service independently from the CLI agent that uses\nit.  A profile may provide credentials, a local API URL, and command-specific\nmodel choices.  ``model_name`` and ``base_url`` remain supported for\nbackwards compatibility with older configuration files.",
       "properties": {
         "name": {
           "description": "Profile name (e.g., 'vertex', 'llama-cpp', 'openrouter')",
           "title": "Name",
           "type": "string"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Provider identifier (e.g., anthropic, vertex, openrouter, llama-cpp, ollama, mlx)",
+          "title": "Provider"
+        },
+        "agent_backend": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional agent adapter for this profile; when omitted it is inferred from the provider (for example codex or ollama)",
+          "title": "Agent Backend"
         },
         "base_url": {
           "anyOf": [
@@ -663,7 +758,7 @@
             }
           ],
           "default": null,
-          "description": "ANTHROPIC_BASE_URL override (e.g., 'http://localhost:8000' for llama.cpp)",
+          "description": "API URL for local providers; retained as the legacy config key",
           "title": "Base Url"
         },
         "auth_token": {
@@ -704,6 +799,74 @@
           "default": null,
           "description": "Default model for claude --model flag (e.g., 'devstral-small-2', 'kimi-k2.5:cloud')",
           "title": "Model Name"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Command-specific models. Keys may be new, open, git_new, jira_new, investigation, commit_message, or pr_template",
+          "title": "Models",
+          "type": "object"
+        },
+        "reasoning_efforts": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Optional reasoning strength per command, such as low, medium, high, or max",
+          "title": "Reasoning Efforts",
+          "type": "object"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default reasoning strength for session commands when supported",
+          "title": "Reasoning Effort"
+        },
+        "utility_reasoning_effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default reasoning strength for commit-message and PR-template utilities",
+          "title": "Utility Reasoning Effort"
+        },
+        "commit_message_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model used to generate commit messages",
+          "title": "Commit Message Model"
+        },
+        "pr_template_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model used to generate PR/MR templates",
+          "title": "Pr Template Model"
         },
         "use_vertex": {
           "default": false,
@@ -1339,6 +1502,13 @@
     },
     "concurrency": {
       "$ref": "#/$defs/ConcurrencyConfig"
+    },
+    "agent_models": {
+      "additionalProperties": {
+        "$ref": "#/$defs/AgentModelConfig"
+      },
+      "title": "Agent Models",
+      "type": "object"
     }
   },
   "required": [

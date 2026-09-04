@@ -311,21 +311,37 @@ def resolve_agent_backend(
     cli_override: Optional[str] = None,
     session=None,
     config=None,
+    model_profile: Optional[str] = None,
 ) -> str:
-    """Resolve the effective agent backend from the fallback chain.
+    """Resolve the effective agent backend from CLI, profile, and legacy settings.
 
-    Priority: cli_override > session.agent_backend > config.agent_backend > "claude"
+    Priority: ``--agent`` > selected/default model profile > stored/configured
+    backend > ``claude``.  The profile is authoritative whenever it identifies
+    an agent adapter; the backend config remains a fallback for providers that
+    do not need a DevAIFlow adapter.
 
     Args:
         cli_override: Explicit backend from CLI ``--agent`` flag.
         session: Session object with an ``agent_backend`` attribute.
         config: Config object with an ``agent_backend`` attribute.
+        model_profile: Explicit profile name from the current command.
 
     Returns:
         Resolved backend identifier, never ``None``.
     """
     if cli_override:
         return cli_override
+
+    if config:
+        from devflow.utils.model_provider import get_profile_agent_backend
+
+        profile_name = model_profile
+        if profile_name is None and session:
+            profile_name = getattr(session, "model_profile", None)
+        profile_backend = get_profile_agent_backend(config, profile_name=profile_name)
+        if profile_backend:
+            return profile_backend
+
     if session:
         backend = getattr(session, "agent_backend", None)
         if backend:
@@ -511,6 +527,8 @@ def launch_and_capture(
             auto_approve=auto_approve,
             display_name=display_name,
         )
+        if not reasoning_effort and model_provider_profile:
+            reasoning_effort = model_provider_profile.get("reasoning_effort")
         if reasoning_effort:
             launch_kwargs["reasoning_effort"] = reasoning_effort
         if model_override:

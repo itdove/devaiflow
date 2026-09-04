@@ -442,11 +442,10 @@ class ClaudeAgent(AgentInterface):
         Returns:
             Tuple of (environment dict, command list)
         """
-        # Start with copy of base environment (or current environment if not provided)
-        if base_env is not None:
-            env = base_env.copy()
-        else:
-            env = os.environ.copy()
+        # Use the shared provider environment resolver so local provider URLs
+        # (including Ollama's OLLAMA_HOST convention) stay consistent everywhere.
+        from devflow.utils.model_provider import build_env_from_profile
+        env = build_env_from_profile(model_provider_profile, base_env=base_env)
 
         # Default command
         cmd = ["claude", "code"]
@@ -454,33 +453,6 @@ class ClaudeAgent(AgentInterface):
         # If no profile specified, return defaults
         if not model_provider_profile:
             return env, cmd
-
-        # Apply profile settings
-        if model_provider_profile.get("base_url"):
-            env["ANTHROPIC_BASE_URL"] = model_provider_profile["base_url"]
-
-        if model_provider_profile.get("auth_token"):
-            env["ANTHROPIC_AUTH_TOKEN"] = model_provider_profile["auth_token"]
-
-        if "api_key" in model_provider_profile and model_provider_profile["api_key"] is not None:
-            env["ANTHROPIC_API_KEY"] = model_provider_profile["api_key"]
-
-        if model_provider_profile.get("use_vertex"):
-            env["CLAUDE_CODE_USE_VERTEX"] = "1"
-
-            # Set Vertex-specific env vars if provided
-            if model_provider_profile.get("vertex_project_id"):
-                env["ANTHROPIC_VERTEX_PROJECT_ID"] = model_provider_profile["vertex_project_id"]
-
-            if model_provider_profile.get("vertex_region"):
-                env["ANTHROPIC_VERTEX_REGION"] = model_provider_profile["vertex_region"]
-        else:
-            # Explicitly unset Vertex flag if not using Vertex
-            env.pop("CLAUDE_CODE_USE_VERTEX", None)
-
-        # Apply additional environment variables
-        if model_provider_profile.get("env_vars"):
-            env.update(model_provider_profile["env_vars"])
 
         # Build command with model name if specified
         if model_provider_profile.get("model_name"):

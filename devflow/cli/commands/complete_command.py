@@ -3144,14 +3144,31 @@ Generate a summary with 2-4 bullet points that:
 Format as markdown bullets. Return ONLY the bullet points, nothing else."""
 
         from devflow.agent import create_agent_client
+        from devflow.config.loader import ConfigLoader
+        from devflow.utils.model_provider import get_active_profile
+        config_loader = ConfigLoader()
+        config = config_loader.load_config() if config_loader.config_file.exists() else None
+        model_profile = get_active_profile(
+            config,
+            override_profile_name=getattr(session, "model_profile", None),
+            agent_backend=agent_backend,
+            command="pr_template",
+            utility=True,
+        )
         agent = create_agent_client(agent_backend or "claude")
-        summary = agent.generate_text(prompt, timeout=30, display_name=display_name, config=config)
+        summary = agent.generate_text(
+            prompt,
+            timeout=30,
+            display_name=display_name,
+            config=config,
+            model_provider_profile=model_profile,
+        )
         if summary:
             console.print("[dim]Generated PR summary using AI[/dim]")
             return summary
 
         # Agent CLI failed: use Anthropic API directly
-        return _generate_pr_summary_with_api(session, working_dir)
+        return _generate_pr_summary_with_api(session, working_dir, profile=model_profile)
 
     except Exception as e:
         console.print(f"[dim]PR summary generation failed: {e}[/dim]")
@@ -3252,7 +3269,11 @@ def _generate_pr_title(session, working_dir: Path) -> str:
     return f"{title_prefix}{goal}"
 
 
-def _generate_pr_summary_with_api(session, working_dir: Path) -> Optional[str]:
+def _generate_pr_summary_with_api(
+    session,
+    working_dir: Path,
+    profile: Optional[dict] = None,
+) -> Optional[str]:
     """Generate PR summary using Anthropic API as fallback.
 
     Args:
@@ -3270,7 +3291,7 @@ def _generate_pr_summary_with_api(session, working_dir: Path) -> Optional[str]:
         import os
         from devflow.session.summary import generate_session_summary
 
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = (profile or {}).get("api_key") or (profile or {}).get("auth_token") or os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             return None
 
@@ -3309,9 +3330,16 @@ def _generate_pr_summary_with_api(session, working_dir: Path) -> Optional[str]:
         context = "\n\n".join(context_parts)
 
         # Call Anthropic API
-        client = anthropic.Anthropic(api_key=api_key)
+        client_kwargs = {"api_key": api_key}
+        api_url = (profile or {}).get("api_url") or (profile or {}).get("base_url")
+        if api_url:
+            client_kwargs["base_url"] = api_url
+        client = anthropic.Anthropic(**client_kwargs)
+        from devflow.utils.model_provider import get_model_name_from_profile
+        model = get_model_name_from_profile(profile, command="pr_template", utility=True)
+        model = model or "claude-haiku-4-5-20251001"
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=model,
             max_tokens=500,
             messages=[{
                 "role": "user",
@@ -3802,7 +3830,15 @@ def _generate_commit_message(session, agent_backend: Optional[str] = None, displ
 
                     # Generate commit message from diff using AI
                     logger.debug("Generating commit message from git diff...")
-                    commit_message = _generate_commit_message_from_diff(diff_content, status_summary, agent_backend=agent_backend, display_name=display_name)
+                    diff_kwargs = {
+                        "agent_backend": agent_backend,
+                        "display_name": display_name,
+                    }
+                    if getattr(session, "model_profile", None):
+                        diff_kwargs["model_profile_override"] = session.model_profile
+                    commit_message = _generate_commit_message_from_diff(
+                        diff_content, status_summary, **diff_kwargs
+                    )
 
                     if commit_message:
                         logger.info("Successfully generated AI commit message from git diff")
@@ -3844,7 +3880,13 @@ def _generate_commit_message(session, agent_backend: Optional[str] = None, displ
     return message
 
 
-def _generate_commit_message_from_diff(diff_content: str, status_summary: str, agent_backend: Optional[str] = None, display_name: Optional[str] = None) -> Optional[str]:
+def _generate_commit_message_from_diff(
+    diff_content: str,
+    status_summary: str,
+    agent_backend: Optional[str] = None,
+    display_name: Optional[str] = None,
+    model_profile_override: Optional[str] = None,
+) -> Optional[str]:
     """Generate commit message from git diff using the AI agent CLI.
 
     Args:
@@ -3852,6 +3894,7 @@ def _generate_commit_message_from_diff(diff_content: str, status_summary: str, a
         status_summary: Git status --short output
         agent_backend: Agent backend identifier (e.g., "claude", "opencode")
         display_name: Display name for the Claude session (--name flag)
+        model_profile_override: Session-specific provider profile name
 
     Returns:
         Generated commit message or None if generation fails
@@ -3879,21 +3922,48 @@ Generate a commit message with:
 
 Return ONLY the commit message."""
 
+        # Utility generation always resolves its own configured utility model.
+        from devflow.config.loader import ConfigLoader
+        from devflow.utils.model_provider import get_active_profile
+        config_loader = ConfigLoader()
+        utility_config = config_loader.load_config() if config_loader.config_file.exists() else None
+        model_profile = get_active_profile(
+            utility_config,
+            override_profile_name=model_profile_override,
+            agent_backend=agent_backend,
+            command="commit_message",
+            utility=True,
+        )
+
         # Use session's agent backend for text generation (codex exec, opencode run, claude -p)
         from devflow.agent import create_agent_client
         agent = create_agent_client(agent_backend or "claude")
-        result = agent.generate_text(prompt, timeout=30, display_name=display_name, config=config)
+        result = agent.generate_text(
+            prompt,
+            timeout=30,
+            display_name=display_name,
+            config=utility_config,
+            model_provider_profile=model_profile,
+        )
         if result:
             return strip_code_fences(result)
 
         # Agent CLI failed: use Anthropic API directly
+        if model_profile:
+            return _generate_commit_message_from_diff_api(
+                diff_content, status_summary, profile=model_profile
+            )
         return _generate_commit_message_from_diff_api(diff_content, status_summary)
 
     except Exception:
         return None
 
 
-def _generate_commit_message_from_diff_api(diff_content: str, status_summary: str) -> Optional[str]:
+def _generate_commit_message_from_diff_api(
+    diff_content: str,
+    status_summary: str,
+    profile: Optional[dict] = None,
+) -> Optional[str]:
     """Generate commit message from git diff using Anthropic API.
 
     Args:
@@ -3907,7 +3977,7 @@ def _generate_commit_message_from_diff_api(diff_content: str, status_summary: st
         import anthropic
         import os
 
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = (profile or {}).get("api_key") or (profile or {}).get("auth_token") or os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             return None
 
@@ -3916,10 +3986,18 @@ def _generate_commit_message_from_diff_api(diff_content: str, status_summary: st
         if len(diff_content) > 5000:
             truncated_diff += "\n\n... (diff truncated for analysis)"
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client_kwargs = {"api_key": api_key}
+        api_url = (profile or {}).get("api_url") or (profile or {}).get("base_url")
+        if api_url:
+            client_kwargs["base_url"] = api_url
+        client = anthropic.Anthropic(**client_kwargs)
+
+        from devflow.utils.model_provider import get_model_name_from_profile
+        model = get_model_name_from_profile(profile, command="commit_message", utility=True)
+        model = model or "claude-haiku-4-5-20251001"
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=model,
             max_tokens=500,
             messages=[{
                 "role": "user",

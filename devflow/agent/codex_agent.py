@@ -459,35 +459,47 @@ class CodexAgent(AgentInterface):
             pass
         return None
 
-    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None, config=None) -> Optional[str]:
+    def generate_text(
+        self,
+        prompt: str,
+        timeout: int = 30,
+        display_name: Optional[str] = None,
+        config=None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """Generate text using codex exec (non-interactive mode)."""
         try:
             from devflow.agent.model_config import get_agent_model_config
-            settings = get_agent_model_config(config, self.get_agent_name(), utility=True)
+            settings = get_agent_model_config(
+                config,
+                self.get_agent_name(),
+                utility=True,
+                command="pr_template",
+                provider_profile=model_provider_profile,
+            )
+            from devflow.utils.model_provider import build_env_from_profile, get_model_name_from_profile
+
             cmd = ["codex", "exec"]
-            model = settings["model"] or ("gpt-5.6-luna" if config is None else None)
+            model = get_model_name_from_profile(
+                model_provider_profile,
+                command="pr_template",
+                utility=True,
+            ) or settings["model"] or ("gpt-5.6-luna" if config is None else None)
             if model:
                 cmd.extend(["--model", model])
             reasoning = settings["reasoning_effort"] or ("low" if config is None else None)
             if reasoning:
                 cmd.extend(["-c", f'model_reasoning_effort="{reasoning}"'])
             cmd.append(prompt)
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            run_kwargs = {"capture_output": True, "text": True, "timeout": timeout}
+            if model_provider_profile:
+                run_kwargs["env"] = build_env_from_profile(model_provider_profile)
+            result = subprocess.run(cmd, **run_kwargs)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
 
             # Fallback to default model if luna not available
-            result = subprocess.run(
-                ["codex", "exec", prompt],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            result = subprocess.run(["codex", "exec", prompt], **run_kwargs)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
             return None

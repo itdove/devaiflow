@@ -52,6 +52,48 @@ Repositories:
 PR Template:
   URL: https://github.com/YOUR-ORG/.github/blob/main/.github/PULL_REQUEST_TEMPLATE.md
 
+Model Provider:
+  The default profile supplies the provider credentials and the model choices for
+  `new`, `open`, `git_new`, `jira_new`, `investigation`, `commit_message`, and
+  `pr_template`.
+
+  The selected profile also determines the agent adapter (`codex` uses Codex,
+  `ollama` uses Ollama + Claude, and Anthropic-compatible providers use Claude).
+  `--model-profile` selects a different profile for a session. `--agent` is an
+  explicit adapter override and incompatible profile/agent combinations fail
+  clearly. `--model` overrides the model for a session command only; commit-message
+  and PR-template generation always use their configured utility models.
+
+Example profile configuration:
+```json
+{
+  "model_provider": {
+    "default_profile": "local-ollama",
+    "profiles": {
+      "local-ollama": {
+        "name": "local-ollama",
+        "provider": "ollama",
+        "api_url": "http://localhost:11434",
+        "models": {
+          "new": "qwen3-coder",
+          "open": "qwen3-coder",
+          "commit_message": "llama3.2",
+          "pr_template": "llama3.2"
+        },
+        "reasoning_efforts": {
+          "new": "high",
+          "open": "medium",
+          "commit_message": "low",
+          "pr_template": "medium"
+        }
+      }
+    }
+  }
+}
+```
+
+Only local providers (`llama.cpp`, `ollama`, and `mlx`) require an API URL.
+
 Prompt Configuration:
   Prompts Enabled: Yes
   Memory Per Session: Default (system managed)

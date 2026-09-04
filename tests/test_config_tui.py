@@ -14,6 +14,7 @@ from devflow.ui.config_tui import (
     ContextFileEntry,
     AddContextFileScreen,
     ConfigTUI,
+    TemplateSelectionScreen,
     run_config_tui,
     _sanitize_widget_id,
 )
@@ -110,6 +111,11 @@ def test_sanitize_widget_id():
     # Test complex real-world example
     assert _sanitize_widget_id("jira.custom_field_defaults.sdlc_stage_when_should've_been_found") == \
            "jira_custom_field_defaults_sdlc_stage_when_should_ve_been_found"
+
+
+def test_template_selection_widget_id_supports_dotted_template_names():
+    """Provider template keys with dots must produce valid Textual IDs."""
+    assert TemplateSelectionScreen._widget_id("llama.cpp") == "llama_cpp"
 
 
 # ============================================================================
