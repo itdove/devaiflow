@@ -1365,6 +1365,32 @@ class AddEditProfileScreen(ModalScreen):
                     if field.help_text:
                         yield Static(f"[dim italic]{field.help_text}[/dim italic]")
 
+                # The adapter is part of the profile. It is displayed here so
+                # selecting a profile is sufficient to determine both the
+                # provider and the agent/IDE used to launch it.
+                from devflow.agent.factory import AGENT_DISPLAY_NAMES, AGENT_REGISTRY
+                default_agent_backend = self.existing_profile.get("agent_backend")
+                if not default_agent_backend:
+                    default_agent_backend = getattr(self.template, "default_agent_backend", None)
+                if not default_agent_backend:
+                    default_agent_backend = {
+                        "codex": "codex",
+                        "ollama": "ollama",
+                    }.get(self.template_id, "claude")
+                yield Label("Agent / IDE adapter *")
+                yield Select(
+                    options=[
+                        (AGENT_DISPLAY_NAMES.get(name, name), name)
+                        for name in AGENT_REGISTRY
+                    ],
+                    value=default_agent_backend,
+                    allow_blank=False,
+                    id="agent_backend",
+                )
+                yield Static(
+                    "[dim italic]This adapter is saved in the profile and determines how DevAIFlow launches the model.[/dim italic]"
+                )
+
                 yield Static(
                     "\n[bold]Command models[/bold]\n"
                     "Choose the model for each session command. Utility models are used for "
@@ -1435,6 +1461,14 @@ class AddEditProfileScreen(ModalScreen):
                 if strength:
                     reasoning_efforts[command] = strength
 
+            try:
+                agent_backend = self.query_one("#agent_backend", Select).value
+            except NoMatches:
+                agent_backend = None
+            if not isinstance(agent_backend, str) or not agent_backend:
+                self.app.notify("Agent / IDE adapter is required", severity="error", timeout=10)
+                return
+
             # Validate form data using template
             validation_errors = self.template.validate(form_data)
             if validation_errors:
@@ -1445,6 +1479,7 @@ class AddEditProfileScreen(ModalScreen):
             # Generate profile configuration from template
             try:
                 profile_data = self.template.generate_config(form_data)
+                profile_data["agent_backend"] = agent_backend
                 profile_data["models"] = command_models
                 profile_data["reasoning_efforts"] = reasoning_efforts
                 profile_data.setdefault("provider", self.template_id)
@@ -1624,25 +1659,6 @@ class ConfigTUI(App):
         self.modified = False
         self.advanced_mode = advanced_mode
 
-    def _get_agent_backend_enforcement_source(self) -> Optional[str]:
-        """Check if agent_backend is enforced by enterprise or team config.
-
-        Returns:
-            "enterprise" if enforced by enterprise config
-            "team" if enforced by team config
-            None if user can choose
-        """
-        # Load enterprise and team configs to check if they enforce agent_backend
-        enterprise_config = self.config_loader._load_enterprise_config()
-        team_config = self.config_loader._load_team_config()
-
-        if enterprise_config and enterprise_config.agent_backend:
-            return "enterprise"
-        elif team_config and team_config.agent_backend:
-            return "team"
-        else:
-            return None
-
     def _get_model_provider_enforcement_source(self) -> Optional[str]:
         """Check if model_provider is enforced by enterprise, organization, or team config.
 
@@ -1673,8 +1689,8 @@ class ConfigTUI(App):
         return get_profile_agent_backend(self.config)
 
     def _get_effective_agent_backend(self) -> str:
-        """Return the profile-selected adapter or the configured fallback."""
-        return self._get_profile_agent_backend() or self.config.agent_backend or "claude"
+        """Return the adapter selected by the active model profile."""
+        return self._get_profile_agent_backend() or "claude"
 
     def compose(self) -> ComposeResult:
         """Compose the main TUI layout."""
@@ -2240,13 +2256,8 @@ class ConfigTUI(App):
                 classes="section-help",
             )
 
-            # Agent backend fallback (a model profile is authoritative when present)
-            yield Static("[bold]Coding Assistant (agent backend)[/bold]", classes="subsection-title")
-
-            # Check if agent_backend is enforced by enterprise or team
-            agent_enforced_by = self._get_agent_backend_enforcement_source()
             profile_agent_backend = self._get_profile_agent_backend()
-            effective_agent_backend = profile_agent_backend or self.config.agent_backend or "claude"
+            effective_agent_backend = profile_agent_backend or "claude"
 
             if profile_agent_backend:
                 agent_display_name = {
@@ -2257,53 +2268,12 @@ class ConfigTUI(App):
                 }.get(profile_agent_backend, profile_agent_backend)
                 yield Static(
                     f"[bold]Profile-selected adapter:[/bold] {agent_display_name}\n"
-                    "[dim]The active model profile determines this adapter. Use --agent for a one-off override.[/dim]",
-                    classes="section-help",
-                )
-            elif agent_enforced_by:
-                # Agent backend is enforced - show as read-only
-                agent_display_name = {
-                    "claude": "Claude Code (fully tested)",
-                    "ollama": "Ollama (local models)",
-                    "ollama-claude": "Ollama (local models)",
-                    "github-copilot": "GitHub Copilot (experimental)",
-                    "cursor": "Cursor (experimental)",
-                    "windsurf": "Windsurf (experimental)",
-                    "aider": "Aider (experimental)",
-                    "continue": "Continue (experimental)",
-                    "crush": "Crush (experimental)",
-                    "opencode": "OpenCode (experimental)",
-                    "codex": "Codex (experimental)",
-                }.get(self.config.agent_backend, self.config.agent_backend)
-
-                yield Static(
-                    f"[bold]AI Agent:[/bold] {agent_display_name}\n"
-                    f"[dim]Enforced by {agent_enforced_by} configuration (read-only)[/dim]",
+                    "[dim]The active model profile determines this adapter. Select another profile to change it.[/dim]",
                     classes="section-help",
                 )
             else:
-                # User can choose agent backend
-                yield ConfigSelect(
-                    "Coding Assistant",
-                    "agent_backend",
-                    choices=[
-                        ("Claude Code (fully tested)", "claude"),
-                        ("Ollama (local models)", "ollama"),
-                        ("GitHub Copilot (experimental)", "github-copilot"),
-                        ("Cursor (experimental)", "cursor"),
-                        ("Windsurf (experimental)", "windsurf"),
-                        ("Aider (experimental)", "aider"),
-                        ("Continue (experimental)", "continue"),
-                        ("Crush (experimental)", "crush"),
-                        ("OpenCode (experimental)", "opencode"),
-                        ("Codex (experimental)", "codex"),
-                    ],
-                    value=self.config.agent_backend or "claude",
-                    help_text="Select which AI coding assistant to use with DevAIFlow",
-                    allow_blank=False,
-                )
                 yield Static(
-                    "[dim]Note: Only Claude Code is fully tested. Other agents are experimental.[/dim]",
+                    "[yellow]No model profile is configured. Add a profile in the Model Providers tab to select a provider and agent.[/yellow]",
                     classes="section-help",
                 )
 
@@ -2486,7 +2456,7 @@ class ConfigTUI(App):
             yield Static(
                 "A model profile selects the provider, model, and agent adapter. "
                 "Choose a default profile here or override it per session with --model-profile. "
-                "Use --agent only for an explicit adapter override. Local llama.cpp, Ollama, "
+                "Local llama.cpp, Ollama, "
                 "and MLX profiles require an API URL.",
                 classes="section-help",
             )
@@ -2528,7 +2498,7 @@ class ConfigTUI(App):
                 help_text += (
                     "[dim]• Default profile (marked with ⭐) is used unless overridden[/dim]\n"
                     "[dim]• Override per session: daf open NAME --model-profile profile-name[/dim]\n"
-                    "[dim]• The profile selects the agent adapter; --agent is an explicit override[/dim]\n"
+                    "[dim]• Each profile contains its provider and agent/IDE adapter[/dim]\n"
                     "[dim]• --model changes only the session model; utility models below are unaffected[/dim]\n"
                     "[dim]• The 'anthropic' profile is the base fallback and cannot be deleted[/dim]\n"
                     "[dim]• See docs/alternative-model-providers.md for setup guides[/dim]"
@@ -2956,11 +2926,8 @@ class ConfigTUI(App):
         Args:
             event: The select changed event
         """
-        # Check if it's the agent_backend select
-        if event.select.id == "select_agent_backend":
-            self._on_agent_backend_changed(event.value)
         # Check if it's the summary mode select
-        elif event.select.id == "select_session_summary_mode":
+        if event.select.id == "select_session_summary_mode":
             self._on_summary_mode_changed(event.value)
 
     def _on_agent_backend_changed(self, agent_backend: str) -> None:
@@ -3498,14 +3465,6 @@ class ConfigTUI(App):
         # AI Agent configuration settings (only in Simple mode)
         if not self.advanced_mode:
             try:
-                # Agent backend selection (only if not enforced by org/team)
-                if not self._get_profile_agent_backend() and not self._get_agent_backend_enforcement_source():
-                    # User can choose - collect the value
-                    agent_backend_val = self.query_one(key_to_id("select", "agent_backend"), Select).value
-                    if isinstance(agent_backend_val, str) and agent_backend_val:
-                        self.config.agent_backend = agent_backend_val
-                # If enforced, keep the value from org/team (already in self.config)
-
                 # Only collect region value if Vertex AI is available (field exists) and using Claude
                 # Always preserve the value even when not using Claude
                 if _is_vertex_ai_available() and self._get_effective_agent_backend() == "claude":
@@ -3720,14 +3679,6 @@ class ConfigTUI(App):
                     classes="section-help"
                 )
             else:
-                # Show read-only enterprise settings
-                if enterprise_config.agent_backend:
-                    yield Static(f"[bold]AI Agent Backend:[/bold] {enterprise_config.agent_backend}")
-                    yield Static(
-                        "[dim]This setting is enforced by your organization[/dim]",
-                        classes="section-help"
-                    )
-
                 if enterprise_config.backend_overrides:
                     yield Static("\n[bold]Backend Overrides:[/bold]")
                     yield Static(
@@ -3836,16 +3787,6 @@ class ConfigTUI(App):
             # Load team config
             team_config = self.config_loader._load_team_config()
 
-            # Check if team enforces agent_backend
-            if team_config and team_config.agent_backend:
-                yield Static(f"[bold]AI Agent Backend:[/bold] {team_config.agent_backend}")
-                yield Static(
-                    "[dim]This setting is enforced by your team[/dim]",
-                    classes="section-help"
-                )
-            else:
-                yield Static("[dim]No team-specific agent backend enforcement[/dim]")
-
             yield Static("\n[dim]Team defaults for custom fields:[/dim]", classes="subsection-title")
             yield Static(
                 "[dim]Configure team-wide defaults for JIRA fields[/dim]",
@@ -3883,17 +3824,11 @@ class ConfigTUI(App):
                 help_text="Repository root URL for hierarchical configs (e.g., https://github.com/org/devflow-config or /path/to/configs)",
             )
 
-            yield Static("\n[bold]AI Settings[/bold]", classes="subsection-title")
-
-            # Only show if not enforced by enterprise/team
-            enforcement_source = self._get_agent_backend_enforcement_source()
-            if enforcement_source:
-                yield Static(
-                    f"[yellow]AI Agent Backend is enforced by {enforcement_source} configuration[/yellow]",
-                    classes="section-help"
-                )
-            else:
-                yield ConfigSelect("AI Agent Backend", "agent_backend", [("Claude (Anthropic)", "claude"), ("GitHub Copilot", "github-copilot")], value=self.config.agent_backend or "claude")
+            yield Static(
+                "\n[bold]AI Settings[/bold]\n"
+                "[dim]Provider and agent selection are managed together by model profiles.[/dim]",
+                classes="section-help",
+            )
 
             yield Static("\n[bold]Personal Field Defaults[/bold]", classes="subsection-title")
             yield Static(

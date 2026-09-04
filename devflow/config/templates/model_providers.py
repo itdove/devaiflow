@@ -122,6 +122,7 @@ class AnthropicTemplate(ProviderTemplate):
         config = {
             "name": form_data["profile_name"],
             "provider": "anthropic",
+            "agent_backend": "claude",
         }
 
         # Only add optional fields if provided
@@ -177,6 +178,7 @@ class CodexTemplate(ProviderTemplate):
         config = {
             "name": form_data["profile_name"],
             "provider": "codex",
+            "agent_backend": "codex",
         }
         if form_data.get("api_key"):
             config["api_key"] = form_data["api_key"]
@@ -249,6 +251,7 @@ class VertexAITemplate(ProviderTemplate):
         config = {
             "name": form_data["profile_name"],
             "provider": "vertex",
+            "agent_backend": "claude",
             "use_vertex": True,
             "vertex_project_id": form_data["vertex_project_id"],
             "vertex_region": form_data["vertex_region"],
@@ -340,6 +343,7 @@ class OpenRouterTemplate(ProviderTemplate):
         config = {
             "name": form_data["profile_name"],
             "provider": "openrouter",
+            "agent_backend": "claude",
             "base_url": form_data.get("base_url") or "https://openrouter.ai/api",
             "auth_token": form_data["auth_token"],
             "api_key": "",  # Empty string to disable ANTHROPIC_API_KEY
@@ -422,6 +426,7 @@ class CustomServerTemplate(ProviderTemplate):
         config = {
             "name": form_data["profile_name"],
             "provider": "custom",
+            "agent_backend": "claude",
             "base_url": form_data["base_url"],
             "model_name": form_data["model_name"],
         }
@@ -442,6 +447,7 @@ class LocalProviderTemplate(CustomServerTemplate):
     display_name = "Local Model Server"
     description = "Connect to a local model server"
     default_url = "http://localhost:8000"
+    default_agent_backend = "claude"
 
     def get_name(self) -> str:
         return self.display_name
@@ -465,6 +471,7 @@ class LocalProviderTemplate(CustomServerTemplate):
         data["base_url"] = data.get("base_url") or self.default_url
         config = super().generate_config(data)
         config["provider"] = self.provider_id
+        config["agent_backend"] = self.default_agent_backend
         return config
 
 
@@ -484,6 +491,7 @@ class OllamaTemplate(LocalProviderTemplate):
     display_name = "Ollama"
     description = "Use models served by a local Ollama instance (API URL is required)"
     default_url = "http://localhost:11434"
+    default_agent_backend = "ollama"
 
 
 class MLXTemplate(LocalProviderTemplate):

@@ -694,7 +694,7 @@
       "type": "object"
     },
     "ModelProviderConfig": {
-      "description": "Model provider configuration for alternative AI providers.\n\nSupports multiple named profiles that can be switched via:\n- Environment variable: MODEL_PROVIDER_PROFILE=profile-name\n- Config setting: default_profile\n- CLI flag: --model-provider profile-name",
+      "description": "Model provider configuration for alternative AI providers.\n\nSupports multiple named profiles that can be switched via:\n- Environment variable: MODEL_PROVIDER_PROFILE=profile-name\n- Config setting: default_profile\n- CLI flag: --model-profile profile-name",
       "properties": {
         "default_profile": {
           "default": "anthropic",
@@ -715,7 +715,7 @@
       "type": "object"
     },
     "ModelProviderProfile": {
-      "description": "Configuration profile for an AI model provider.\n\nProfiles describe a model service independently from the CLI agent that uses\nit.  A profile may provide credentials, a local API URL, and command-specific\nmodel choices.  ``model_name`` and ``base_url`` remain supported for\nbackwards compatibility with older configuration files.",
+      "description": "Configuration profile for an AI model provider.\n\nA profile is the complete user-facing selection: it identifies the model\nprovider, the agent/IDE adapter that consumes it, credentials, an optional\nlocal API URL, and command-specific model choices.",
       "properties": {
         "name": {
           "description": "Profile name (e.g., 'vertex', 'llama-cpp', 'openrouter')",
@@ -736,17 +736,10 @@
           "title": "Provider"
         },
         "agent_backend": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional agent adapter for this profile; when omitted it is inferred from the provider (for example codex or ollama)",
-          "title": "Agent Backend"
+          "default": "claude",
+          "description": "Agent/IDE adapter used with this profile (for example claude, codex, ollama, or opencode)",
+          "title": "Agent Backend",
+          "type": "string"
         },
         "base_url": {
           "anyOf": [

@@ -101,10 +101,9 @@ class GitHubBackendConfig(BaseModel):
 class ModelProviderProfile(BaseModel):
     """Configuration profile for an AI model provider.
 
-    Profiles describe a model service independently from the CLI agent that uses
-    it.  A profile may provide credentials, a local API URL, and command-specific
-    model choices.  ``model_name`` and ``base_url`` remain supported for
-    backwards compatibility with older configuration files.
+    A profile is the complete user-facing selection: it identifies the model
+    provider, the agent/IDE adapter that consumes it, credentials, an optional
+    local API URL, and command-specific model choices.
     """
 
     name: str = Field(description="Profile name (e.g., 'vertex', 'llama-cpp', 'openrouter')")
@@ -112,11 +111,11 @@ class ModelProviderProfile(BaseModel):
         default=None,
         description="Provider identifier (e.g., anthropic, vertex, openrouter, llama-cpp, ollama, mlx)",
     )
-    agent_backend: Optional[str] = Field(
-        default=None,
+    agent_backend: str = Field(
+        default="claude",
         description=(
-            "Optional agent adapter for this profile; when omitted it is inferred "
-            "from the provider (for example codex or ollama)"
+            "Agent/IDE adapter used with this profile (for example claude, codex, "
+            "ollama, or opencode)"
         ),
     )
     base_url: Optional[str] = Field(
@@ -173,6 +172,14 @@ class ModelProviderProfile(BaseModel):
         if isinstance(values, dict) and values.get("api_url") and not values.get("base_url"):
             values = dict(values)
             values["base_url"] = values["api_url"]
+        if isinstance(values, dict) and not values.get("agent_backend"):
+            values = dict(values)
+            provider = str(values.get("provider") or values.get("name") or "").strip().lower()
+            values["agent_backend"] = {
+                "codex": "codex",
+                "openai": "codex",
+                "ollama": "ollama",
+            }.get(provider, "claude")
         return values
 
     @model_validator(mode="after")
@@ -196,7 +203,7 @@ class ModelProviderConfig(BaseModel):
     Supports multiple named profiles that can be switched via:
     - Environment variable: MODEL_PROVIDER_PROFILE=profile-name
     - Config setting: default_profile
-    - CLI flag: --model-provider profile-name
+    - CLI flag: --model-profile profile-name
     """
 
     default_profile: str = Field(default="anthropic", description="Default profile to use")

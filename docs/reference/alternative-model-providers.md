@@ -4,12 +4,11 @@ DevAIFlow supports running Claude Code with alternative AI model providers. This
 
 ## Model and provider selection
 
-A provider profile is the primary model and agent selection. Configure one default
-profile under `model_provider`, then override it for a session with
-`--model-profile`. DevAIFlow infers the agent adapter from the profile provider
-(for example, `codex` uses Codex and `ollama` uses Ollama + Claude). Use
-`--agent` only when explicitly selecting a different adapter; an incompatible
-profile/agent combination is rejected with a clear error.
+A provider profile is the complete model and agent selection. Configure one
+default profile under `model_provider`, then override it for a session with
+`--model-profile`. Each profile declares the agent/IDE adapter it uses (for
+example, a Codex profile uses Codex and an Ollama profile uses Ollama + Claude).
+There is no separate AI-backend selector.
 
 Each profile can assign models by DevAIFlow command:
 
@@ -21,6 +20,7 @@ Each profile can assign models by DevAIFlow command:
       "local-ollama": {
         "name": "local-ollama",
         "provider": "ollama",
+        "agent_backend": "ollama",
         "api_url": "http://localhost:11434",
         "models": {
           "new": "qwen3-coder",
@@ -361,9 +361,8 @@ Profile selection follows this priority (highest to lowest):
 3. **`config.model_provider.default_profile`**
 4. **Anthropic API** (fallback when no profile is configured)
 
-The selected profile determines the agent adapter. An explicit `--agent` may
-override the adapter, but DevAIFlow rejects it when it is incompatible with
-the selected profile.
+The selected profile determines the agent adapter. Select another profile when
+you need a different adapter.
 
 **When model provider IS enforced by enterprise/team:**
 
@@ -418,7 +417,7 @@ Each profile contains:
 |-------|------|-------------|---------|
 | `name` | string | Profile name | `"llama-cpp"` |
 | `provider` | string | Model service provider | `"llama.cpp"` |
-| `agent_backend` | string (optional) | Explicit agent adapter; normally inferred | `"claude"` |
+| `agent_backend` | string | Agent/IDE adapter used by the profile | `"claude"` |
 | `api_url` | string (required for llama.cpp, Ollama, and MLX) | Local provider API URL | `"http://localhost:8000"` |
 | `models` | object | Model by DevAIFlow command | `{"open": "qwen3-coder"}` |
 | `reasoning_efforts` | object (optional) | Reasoning strength by command | `{"open": "high"}` |

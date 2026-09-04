@@ -69,6 +69,10 @@ def list_profiles(output_json: bool = False) -> None:
         console.print("[dim]Add a profile with: daf model add <name>[/dim]")
         return
 
+    # Keep profile names visible even on narrow terminals where the detailed
+    # table is truncated horizontally.
+    console.print(f"[dim]Profiles: {', '.join(config.model_provider.profiles)}[/dim]")
+
     # Create table
     table = Table(title="\nConfigured Model Provider Profiles", show_header=True, header_style="bold cyan")
     table.add_column("Name", style="cyan")
@@ -85,6 +89,15 @@ def list_profiles(output_json: bool = False) -> None:
 
         # Determine type
         profile_type = profile.provider or ("vertex" if profile.use_vertex else "anthropic")
+        profile_type = {
+            "vertex": "Vertex AI",
+            "anthropic": "Anthropic",
+            "openrouter": "OpenRouter",
+            "llama.cpp": "llama.cpp",
+            "ollama": "Ollama",
+            "mlx": "MLX",
+            "codex": "Codex",
+        }.get(profile_type, profile_type)
         agent_backend = profile.agent_backend or {
             "codex": "codex",
             "openai": "codex",
@@ -556,6 +569,15 @@ def show_profile(name: Optional[str] = None, output_json: bool = False) -> None:
 
     # Determine type
     provider = profile.provider or ("vertex" if profile.use_vertex else "anthropic")
+    provider = {
+        "vertex": "Vertex AI",
+        "anthropic": "Anthropic",
+        "openrouter": "OpenRouter",
+        "llama.cpp": "llama.cpp",
+        "ollama": "Ollama",
+        "mlx": "MLX",
+        "codex": "Codex",
+    }.get(provider, provider)
     console.print(f"[yellow]Provider:[/yellow] {provider}")
     console.print(f"[yellow]Agent adapter:[/yellow] {profile.agent_backend or ('codex' if provider in {'codex', 'openai'} else 'ollama' if provider == 'ollama' else 'claude')}")
 

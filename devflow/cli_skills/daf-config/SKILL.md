@@ -57,11 +57,9 @@ Model Provider:
   `new`, `open`, `git_new`, `jira_new`, `investigation`, `commit_message`, and
   `pr_template`.
 
-  The selected profile also determines the agent adapter (`codex` uses Codex,
-  `ollama` uses Ollama + Claude, and Anthropic-compatible providers use Claude).
-  `--model-profile` selects a different profile for a session. `--agent` is an
-  explicit adapter override and incompatible profile/agent combinations fail
-  clearly. `--model` overrides the model for a session command only; commit-message
+  Each profile declares its agent/IDE adapter as well as provider credentials.
+  `--model-profile` selects a different profile for a session. There is no
+  separate AI-backend selector. `--model` overrides the model for a session command only; commit-message
   and PR-template generation always use their configured utility models.
 
 Example profile configuration:
@@ -73,6 +71,7 @@ Example profile configuration:
       "local-ollama": {
         "name": "local-ollama",
         "provider": "ollama",
+        "agent_backend": "ollama",
         "api_url": "http://localhost:11434",
         "models": {
           "new": "qwen3-coder",

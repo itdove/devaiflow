@@ -59,7 +59,7 @@ def test_cli_model_does_not_override_utility_model():
     ) == "utility-model"
 
 
-def test_agent_override_selects_matching_provider_profile(monkeypatch):
+def test_agent_backend_does_not_select_a_different_profile():
     profile = ModelProviderProfile(
         name="local-ollama",
         provider="ollama",
@@ -69,7 +69,8 @@ def test_agent_override_selects_matching_provider_profile(monkeypatch):
     cloud = ModelProviderProfile(name="cloud", provider="anthropic", model_name="cloud-model")
     config = _config({"local-ollama": profile, "cloud": cloud}, "cloud")
 
-    assert get_active_profile(config, agent_backend="ollama")["name"] == "local-ollama"
+    with pytest.raises(ValueError, match="matching agent adapter"):
+        get_active_profile(config, agent_backend="ollama")
 
 
 def test_local_provider_requires_api_url():

@@ -1079,61 +1079,41 @@ daf config edit
 - The region selector appears in the TUI only when `CLAUDE_CODE_USE_VERTEX` environment variable is set
 - This setting applies to all Claude Code launches from `daf open`, `daf new`, and `daf jira new`
 
-## AI Agent Backend Configuration
+## Agent and model selection
 
-### agent_backend
+There is no standalone AI-backend setting. A model profile is the single
+selection users configure: it contains the provider, credentials, model choices,
+and the `agent_backend` adapter used to launch that provider. Set
+`model_provider.default_profile` for the normal selection and use
+`--model-profile PROFILE` for a one-off session override.
 
-**Type:** string (optional)
-**Required:** No
-**Default:** `"claude"` (Claude Code)
-**Description:** AI coding assistant to use for development sessions
-
-DevAIFlow supports multiple AI coding assistants through a pluggable agent architecture. This setting determines which AI agent is launched when you run `daf open`, `daf new`, or `daf jira new`.
-
-**Supported backends:**
-- `claude` - Claude Code (fully tested, recommended)
-- `ollama` - Ollama with local models (fully integrated, zero configuration)
-- `github-copilot` - GitHub Copilot via VS Code (experimental)
-- `cursor` - Cursor editor (experimental)
-- `windsurf` - Windsurf editor (experimental)
-
-**Configuration in TUI:**
-```bash
-daf config edit
-# Navigate to "AI" tab
-# Under "AI Agent Backend" section
-# Select your preferred agent from the dropdown
-```
-
-**Configuration via JSON:**
 ```json
 {
-  "agent_backend": "claude"
-}
-```
-
-**Examples:**
-
-Use Ollama for local models:
-```json
-{
-  "agent_backend": "ollama",
-  "ollama": {
-    "default_model": "qwen3-coder"
+  "model_provider": {
+    "default_profile": "local-ollama",
+    "profiles": {
+      "local-ollama": {
+        "name": "local-ollama",
+        "provider": "ollama",
+        "agent_backend": "ollama",
+        "api_url": "http://localhost:11434",
+        "models": {
+          "new": "qwen3-coder",
+          "open": "qwen3-coder",
+          "commit_message": "qwen3-coder"
+        }
+      }
+    }
   }
 }
 ```
 
-Use GitHub Copilot:
-```json
-{
-  "agent_backend": "github-copilot"
-}
-```
+The TUI shows the adapter as part of each profile. Select another profile when
+you need a different provider or agent/IDE. The adapter is an internal launch
+detail, not an independent user choice.
 
-**See Also:**
-- [AI Agent Support Matrix](ai-agent-support-matrix.md) - Detailed comparison of all agents
-- [Alternative Model Providers](alternative-model-providers.md) - Guide for local and cloud models
+See [Alternative Model Providers](alternative-model-providers.md) for provider
+setup details.
 
 ## Ollama Configuration
 
@@ -1144,7 +1124,8 @@ Use GitHub Copilot:
 **Default:** None (uses Ollama's default)
 **Description:** Default Ollama model to use for Claude Code sessions
 
-This setting only applies when `agent_backend` is set to `"ollama"` or `"ollama-claude"`. It specifies which local model to use when launching Claude Code through Ollama.
+This setting is only a legacy fallback. Prefer an Ollama model profile with
+`agent_backend: "ollama"` and command-specific entries under `models`.
 
 **Model selection priority:**
 1. Model provider profile (if configured via `model_provider.profiles`)
@@ -1156,18 +1137,25 @@ This setting only applies when `agent_backend` is set to `"ollama"` or `"ollama-
 **Configuration in TUI:**
 ```bash
 daf config edit
-# Navigate to "AI" tab
-# Ensure "AI Agent Backend" is set to "Ollama (local models)"
-# Under "Ollama Configuration" section
+# Navigate to the "Model Providers" tab
+# Select or add an Ollama profile with the "ollama" adapter
+# Configure command models in that profile
 # Enter your preferred model name
 ```
 
 **Configuration via JSON:**
 ```json
 {
-  "agent_backend": "ollama",
-  "ollama": {
-    "default_model": "qwen3-coder"
+  "model_provider": {
+    "default_profile": "local-ollama",
+    "profiles": {
+      "local-ollama": {
+        "provider": "ollama",
+        "agent_backend": "ollama",
+        "api_url": "http://localhost:11434",
+        "models": {"new": "qwen3-coder"}
+      }
+    }
   }
 }
 ```
@@ -1181,9 +1169,16 @@ daf config edit
 **Example configuration:**
 ```json
 {
-  "agent_backend": "ollama",
-  "ollama": {
-    "default_model": "qwen3-coder"
+  "model_provider": {
+    "default_profile": "local-ollama",
+    "profiles": {
+      "local-ollama": {
+        "provider": "ollama",
+        "agent_backend": "ollama",
+        "api_url": "http://localhost:11434",
+        "models": {"new": "qwen3-coder"}
+      }
+    }
   }
 }
 ```
@@ -1204,7 +1199,7 @@ ollama list
 - Leave empty to use Ollama's default model
 - Model must be pulled before use (`ollama pull <model>`)
 - Invalid model names will cause Ollama to fail
-- This setting appears in TUI only when `agent_backend` is set to `"ollama"`
+- Profile model settings appear in the TUI under the Model Providers tab.
 
 **See Also:**
 - [Alternative Model Providers](alternative-model-providers.md) - Complete Ollama setup guide

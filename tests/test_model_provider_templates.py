@@ -95,6 +95,7 @@ class TestCodexTemplate:
         assert config == {
             "name": "codex-profile",
             "provider": "codex",
+            "agent_backend": "codex",
             "api_key": "test-key",
             "model_name": "gpt-5-codex",
         }

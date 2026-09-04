@@ -77,13 +77,7 @@ def _canonical_agent_backend(agent_backend: Optional[str]) -> str:
 
 
 def get_agent_backend_from_profile(profile: Optional[Dict[str, Any]]) -> Optional[str]:
-    """Infer the agent adapter required by a model provider profile.
-
-    Provider profiles are the primary configuration.  The adapter is derived
-    from the provider so a profile can select Codex or Ollama without a second,
-    conflicting global backend setting.  ``agent_backend`` is available for a
-    provider that needs an explicit adapter.
-    """
+    """Return the agent adapter declared by a model provider profile."""
     if not profile:
         return None
     if not isinstance(profile, dict):
@@ -147,8 +141,7 @@ def get_profile_compatibility_error(
         return (
             f"Model provider profile '{profile.get('name', '<unnamed>')}' selects agent "
             f"backend '{profile_backend}', which is not compatible with agent backend "
-            f"'{agent_backend}'. Select a compatible profile or use --agent with the "
-            f"matching backend."
+            f"'{agent_backend}'. Select a profile with the matching agent adapter."
         )
     provider = _provider_name(profile)
 
@@ -169,7 +162,7 @@ def get_profile_compatibility_error(
     return (
         f"Model provider profile '{profile.get('name', '<unnamed>')}' uses provider "
         f"'{provider}', which is not compatible with agent backend '{agent_backend}'. "
-        f"Select a compatible profile or use --agent with the matching backend."
+        f"Select a profile with the matching agent adapter."
     )
 
 
@@ -198,20 +191,6 @@ def _select_profile_name(config, override_profile_name: Optional[str], agent_bac
                 raise ModelProviderCompatibilityError(compatibility_error)
             return env_profile_name
         print(f"Warning: MODEL_PROVIDER_PROFILE={env_profile_name} not found in configuration")
-
-    # An explicitly selected native/local agent may have a matching profile. This
-    # makes --agent ollama/codex useful without making every agent name a provider.
-    if agent_backend:
-        for profile_name, profile in profiles.items():
-            profile_dict = _profile_to_dict(profile) or {}
-            if _profile_matches_agent(profile_name, profile_dict, agent_backend):
-                return profile_name
-
-        # Native agents (Codex, OpenCode, etc.) own their credentials when there
-        # is no matching provider profile. Do not accidentally inject the default
-        # Anthropic profile into them.
-        if agent_backend.lower() not in {"claude", "anthropic", "ollama", "ollama-claude"}:
-            return None
 
     default_profile = getattr(model_provider_config, "default_profile", None)
     if default_profile in profiles:

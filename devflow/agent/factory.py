@@ -313,15 +313,15 @@ def resolve_agent_backend(
     config=None,
     model_profile: Optional[str] = None,
 ) -> str:
-    """Resolve the effective agent backend from CLI, profile, and legacy settings.
+    """Resolve the internal agent adapter from the selected model profile.
 
-    Priority: ``--agent`` > selected/default model profile > stored/configured
-    backend > ``claude``.  The profile is authoritative whenever it identifies
-    an agent adapter; the backend config remains a fallback for providers that
-    do not need a DevAIFlow adapter.
+    Session commands expose only ``--model-profile``. The selected profile
+    supplies the adapter; session metadata and the built-in Claude adapter are
+    retained only for internal resume/fallback behavior.
 
     Args:
-        cli_override: Explicit backend from CLI ``--agent`` flag.
+        cli_override: Internal override for non-session integrations. It is not
+            exposed as a session command option.
         session: Session object with an ``agent_backend`` attribute.
         config: Config object with an ``agent_backend`` attribute.
         model_profile: Explicit profile name from the current command.
