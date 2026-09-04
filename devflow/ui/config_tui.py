@@ -3700,15 +3700,7 @@ class ConfigTUI(App):
                     classes="section-help"
                 )
             else:
-                agent_backend_select = Select(
-                    [
-                        ("Claude (Anthropic)", "claude"),
-                        ("GitHub Copilot", "github-copilot"),
-                    ],
-                    value=self.config.agent_backend or "claude",
-                    id="agent_backend",
-                )
-                yield ConfigSelect("AI Agent Backend", "agent_backend", agent_backend_select)
+                yield ConfigSelect("AI Agent Backend", "agent_backend", [("Claude (Anthropic)", "claude"), ("GitHub Copilot", "github-copilot")], value=self.config.agent_backend or "claude")
 
             yield Static("\n[bold]Personal Field Defaults[/bold]", classes="subsection-title")
             yield Static(

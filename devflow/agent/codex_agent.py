@@ -118,6 +118,7 @@ class CodexAgent(AgentInterface):
         auto_approve: bool = False,
         reasoning_effort: Optional[str] = None,
         model_override: Optional[str] = None,
+        display_name: Optional[str] = None,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch Codex with initial prompt.
@@ -135,6 +136,9 @@ class CodexAgent(AgentInterface):
             env: Environment variables dict (optional, defaults to os.environ)
             headless: Run non-interactively (codex exec), exits after completion
             auto_approve: Auto-approve all tool permissions via --approve-for-me
+            reasoning_effort: Model reasoning effort (e.g., "low", "high", "max")
+            model_override: Override default model (e.g., "codex/o3")
+            display_name: Display name for the session (passed to --name flag)
 
         Returns:
             Subprocess handle for Codex process
