@@ -1015,6 +1015,11 @@ class ModelProviderProfileEntry(Container):
         self.is_default = is_default
         self.enforced = enforced
 
+    @staticmethod
+    def _button_id_base(profile_name: str) -> str:
+        """Build a valid widget ID prefix from an arbitrary profile name."""
+        return f"profile_{_sanitize_widget_id(profile_name)}"
+
     def compose(self) -> ComposeResult:
         """Compose the profile entry widgets."""
         # Build compact text with name and badge
@@ -1075,7 +1080,7 @@ class ModelProviderProfileEntry(Container):
             details_text += f"\n[dim]strength: {', '.join(f'{key}={value}' for key, value in reasoning_efforts.items() if value)}[/dim]"
 
         # Profile info on top, buttons on bottom
-        btn_id_base = f"profile_{self.profile_name.replace(' ', '_').replace('-', '_')}"
+        btn_id_base = self._button_id_base(self.profile_name)
 
         yield Static(details_text, classes="profile-text")
 
