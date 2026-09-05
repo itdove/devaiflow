@@ -22,7 +22,11 @@ console = Console()
 @click.option("--installed", is_flag=True, help="Show installed skills (use with --list)")
 @click.option("--type", "asset_type", type=click.Choice(['all', 'bundled', 'hierarchical']), help="Type of assets to install (default: all)")
 @click.option("--dry-run", is_flag=True, help="Show what would be changed without actually changing")
-@click.option("--agent", type=str, help="AI agent to target (claude, cursor, windsurf, copilot, aider, continue)")
+@click.option(
+    "--agent",
+    type=str,
+    help="AI agent to target (claude, codex, cursor, windsurf, copilot, aider, continue, opencode, crush)",
+)
 @click.option("--all-agents", is_flag=True, help="Target all supported agents")
 @click.option("--level", type=click.Choice(['global', 'project', 'both']), help="Installation level (default: global)")
 @click.option("--project-path", type=click.Path(), help="Project directory for project-level operations")
@@ -60,7 +64,7 @@ def assets(
 
     \b
     Examples:
-        # Install all assets to Claude (default)
+        # Install all assets to detected agents
         daf assets
 
         # Install only bundled skills
@@ -75,7 +79,7 @@ def assets(
         # Install all assets to all agents
         daf assets --all-agents
 
-        # Install specific skill to Claude
+        # Install specific skill to detected agents
         daf assets daf-help
 
         # Install specific skill to Cursor
@@ -127,7 +131,8 @@ def assets(
         elif agent:
             agents_list = [agent]
         else:
-            agents_list = ['claude']  # Default to Claude
+            from devflow.agent.skill_directories import detect_configured_agents
+            agents_list = detect_configured_agents()
 
         # Determine installation level for listing
         install_level = level or 'global'
@@ -184,7 +189,9 @@ def assets(
         agents_list = [a for a in SUPPORTED_AGENTS if a != 'github-copilot']
     elif agent:
         agents_list = [agent]
-    # else: agents_list remains None, will default to ['claude']
+    else:
+        from devflow.agent.skill_directories import detect_configured_agents
+        agents_list = detect_configured_agents(config=config)
 
     # Determine installation level
     install_level = level or 'global'

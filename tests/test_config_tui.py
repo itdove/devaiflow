@@ -636,10 +636,10 @@ def test_tui_workspace_repo_count_empty_path(mock_config_loader, mock_config):
 
 
 @patch("devflow.ui.config_tui.ConfigLoader")
-@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
-@patch("devflow.utils.claude_commands.install_or_upgrade_reference_skills")
+@patch("devflow.agent.skill_directories.detect_configured_agents")
+@patch("devflow.utils.claude_commands.install_skills_to_agents")
 def test_handle_upgrade_commands_success(
-    mock_ref_skills, mock_slash_cmds, mock_config_loader, mock_config
+    mock_install, mock_detect, mock_config_loader, mock_config
 ):
     """Test successful skill upgrade via TUI button."""
     # Setup mocks
@@ -649,8 +649,10 @@ def test_handle_upgrade_commands_success(
     mock_config_loader.return_value = mock_loader_instance
 
     # Mock successful upgrade with some changes
-    mock_slash_cmds.return_value = (["daf-active", "daf-help"], [], [])
-    mock_ref_skills.return_value = (["daf-cli", "daf-git"], [], [])
+    mock_detect.return_value = ["claude"]
+    mock_install.return_value = {
+        "claude": (["daf-active", "daf-help", "daf-cli", "daf-git"], [], [])
+    }
 
     tui = ConfigTUI()
     tui.notify = Mock()
@@ -658,9 +660,14 @@ def test_handle_upgrade_commands_success(
     # Call the upgrade handler
     tui._handle_upgrade_commands()
 
-    # Verify both functions were called
-    mock_slash_cmds.assert_called_once_with(quiet=True)
-    mock_ref_skills.assert_called_once_with(quiet=True)
+    mock_detect.assert_called_once_with(config=mock_config)
+    mock_install.assert_called_once_with(
+        agents=["claude"],
+        level="global",
+        project_path=None,
+        skip_confirmation=True,
+        quiet=True,
+    )
 
     # Verify success notification
     assert tui.notify.call_count >= 2
@@ -670,10 +677,10 @@ def test_handle_upgrade_commands_success(
 
 
 @patch("devflow.ui.config_tui.ConfigLoader")
-@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
-@patch("devflow.utils.claude_commands.install_or_upgrade_reference_skills")
+@patch("devflow.agent.skill_directories.detect_configured_agents")
+@patch("devflow.utils.claude_commands.install_skills_to_agents")
 def test_handle_upgrade_commands_up_to_date(
-    mock_ref_skills, mock_slash_cmds, mock_config_loader, mock_config
+    mock_install, mock_detect, mock_config_loader, mock_config
 ):
     """Test skill upgrade when all skills are up-to-date."""
     # Setup mocks
@@ -683,8 +690,10 @@ def test_handle_upgrade_commands_up_to_date(
     mock_config_loader.return_value = mock_loader_instance
 
     # Mock all skills up-to-date
-    mock_slash_cmds.return_value = ([], ["daf-active", "daf-help"], [])
-    mock_ref_skills.return_value = ([], ["daf-cli", "daf-git"], [])
+    mock_detect.return_value = ["claude"]
+    mock_install.return_value = {
+        "claude": ([], ["daf-active", "daf-help", "daf-cli", "daf-git"], [])
+    }
 
     tui = ConfigTUI()
     tui.notify = Mock()
@@ -692,9 +701,13 @@ def test_handle_upgrade_commands_up_to_date(
     # Call the upgrade handler
     tui._handle_upgrade_commands()
 
-    # Verify both functions were called
-    mock_slash_cmds.assert_called_once_with(quiet=True)
-    mock_ref_skills.assert_called_once_with(quiet=True)
+    mock_install.assert_called_once_with(
+        agents=["claude"],
+        level="global",
+        project_path=None,
+        skip_confirmation=True,
+        quiet=True,
+    )
 
     # Verify up-to-date notification
     calls = [str(call) for call in tui.notify.call_args_list]
@@ -702,10 +715,10 @@ def test_handle_upgrade_commands_up_to_date(
 
 
 @patch("devflow.ui.config_tui.ConfigLoader")
-@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
-@patch("devflow.utils.claude_commands.install_or_upgrade_reference_skills")
+@patch("devflow.agent.skill_directories.detect_configured_agents")
+@patch("devflow.utils.claude_commands.install_skills_to_agents")
 def test_handle_upgrade_commands_with_failures(
-    mock_ref_skills, mock_slash_cmds, mock_config_loader, mock_config
+    mock_install, mock_detect, mock_config_loader, mock_config
 ):
     """Test skill upgrade with some failures."""
     # Setup mocks
@@ -715,8 +728,10 @@ def test_handle_upgrade_commands_with_failures(
     mock_config_loader.return_value = mock_loader_instance
 
     # Mock with some failures
-    mock_slash_cmds.return_value = (["daf-active"], ["daf-help"], ["daf-failed"])
-    mock_ref_skills.return_value = (["daf-cli"], [], ["daf-git"])
+    mock_detect.return_value = ["claude"]
+    mock_install.return_value = {
+        "claude": (["daf-active", "daf-cli"], ["daf-help"], ["daf-failed", "daf-git"])
+    }
 
     tui = ConfigTUI()
     tui.notify = Mock()
@@ -724,9 +739,13 @@ def test_handle_upgrade_commands_with_failures(
     # Call the upgrade handler
     tui._handle_upgrade_commands()
 
-    # Verify both functions were called
-    mock_slash_cmds.assert_called_once_with(quiet=True)
-    mock_ref_skills.assert_called_once_with(quiet=True)
+    mock_install.assert_called_once_with(
+        agents=["claude"],
+        level="global",
+        project_path=None,
+        skip_confirmation=True,
+        quiet=True,
+    )
 
     # Verify failure notification
     calls = [str(call) for call in tui.notify.call_args_list]
@@ -734,9 +753,10 @@ def test_handle_upgrade_commands_with_failures(
 
 
 @patch("devflow.ui.config_tui.ConfigLoader")
-@patch("devflow.utils.claude_commands.install_or_upgrade_slash_commands")
+@patch("devflow.agent.skill_directories.detect_configured_agents")
+@patch("devflow.utils.claude_commands.install_skills_to_agents")
 def test_handle_upgrade_commands_exception(
-    mock_slash_cmds, mock_config_loader, mock_config
+    mock_install, mock_detect, mock_config_loader, mock_config
 ):
     """Test skill upgrade handles exceptions gracefully."""
     # Setup mocks
@@ -746,7 +766,8 @@ def test_handle_upgrade_commands_exception(
     mock_config_loader.return_value = mock_loader_instance
 
     # Mock exception during upgrade
-    mock_slash_cmds.side_effect = Exception("Test error")
+    mock_detect.return_value = ["claude"]
+    mock_install.side_effect = Exception("Test error")
 
     tui = ConfigTUI()
     tui.notify = Mock()

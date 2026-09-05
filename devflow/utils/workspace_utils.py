@@ -1,7 +1,7 @@
 """Utilities for workspace management and auto-upgrade."""
 
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Any, Optional, Tuple
 from rich.console import Console
 
 console = Console()
@@ -9,20 +9,25 @@ console = Console()
 
 def ensure_workspace_skills_and_commands(
     workspace_path: str,
-    quiet: bool = True
+    quiet: bool = True,
+    config: Any = None,
 ) -> Tuple[bool, Optional[str]]:
-    """Ensure global skills are up-to-date.
+    """Ensure bundled skills are up-to-date for configured AI agents.
 
-    This function installs/upgrades bundled skills globally to ~/.claude/skills/.
-    Skills are now installed globally (not per-workspace) since Claude Code 2.1.3+
-    unified slash commands and skills into a single system.
+    The configured agent homes are detected automatically. When no agent is
+    configured or installed, Claude is used as the backwards-compatible fallback.
+    The configured ``AgentConfig.install_level`` controls whether installation is
+    global, project-level, or both.
 
-    Note: The workspace_path parameter is kept for backwards compatibility but is
-    only used to verify the workspace exists. Skills are installed globally.
+    ``workspace_path`` remains required because it is used to validate the
+    workspace and for project-level installations.
 
     Args:
-        workspace_path: Path to workspace directory (for validation only)
+        workspace_path: Path to workspace directory (for validation and
+            project-level installations)
         quiet: If True, suppress console output (default: True for auto-operations)
+        config: Optional loaded DevAIFlow configuration. If omitted, the current
+            configuration is loaded when available.
 
     Returns:
         Tuple of (success: bool, error_message: Optional[str])
@@ -34,11 +39,6 @@ def ensure_workspace_skills_and_commands(
         >>> if not success:
         ...     console.print(f"[red]✗[/red] {error}")
     """
-    from devflow.utils.claude_commands import (
-        install_or_upgrade_slash_commands,
-        install_or_upgrade_reference_skills
-    )
-
     workspace = Path(workspace_path).expanduser().resolve()
 
     # Check if workspace exists
@@ -46,29 +46,58 @@ def ensure_workspace_skills_and_commands(
         return False, f"Workspace directory does not exist: {workspace_path}"
 
     try:
-        # Install/upgrade slash commands globally to ~/.claude/skills/
-        changed_slash, _, failed_slash = install_or_upgrade_slash_commands(
+        if config is None:
+            from devflow.config.loader import ConfigLoader
+
+            try:
+                config_loader = ConfigLoader()
+                if config_loader.config_file.exists():
+                    config = config_loader.load_config()
+            except Exception:
+                # A stale or partially written config must not prevent the
+                # automatic bundled-skill upgrade from using detected agents.
+                config = None
+
+        from devflow.agent.skill_directories import detect_configured_agents
+        from devflow.utils.claude_commands import install_skills_to_agents
+
+        agents = detect_configured_agents(config=config)
+        agent_config = getattr(config, 'agent', None)
+        install_level = getattr(agent_config, 'install_level', 'global') or 'global'
+        if install_level not in ('global', 'project', 'both'):
+            install_level = 'global'
+
+        project_path = workspace if install_level in ('project', 'both') else None
+        results = install_skills_to_agents(
+            agents=agents,
+            level=install_level,
+            project_path=project_path,
+            skip_confirmation=True,
             dry_run=False,
-            quiet=quiet
+            quiet=quiet,
         )
 
-        # Install/upgrade reference skills globally to ~/.claude/skills/
-        changed_ref, _, failed_ref = install_or_upgrade_reference_skills(
-            dry_run=False,
-            quiet=quiet
-        )
+        failed_by_agent = {
+            agent: failed
+            for agent, (_, _, failed) in results.items()
+            if failed
+        }
+        if failed_by_agent:
+            failures = [
+                f"{agent}: {', '.join(failed)}"
+                for agent, failed in failed_by_agent.items()
+            ]
+            return False, f"Failed to install/upgrade ({'; '.join(failures)})"
 
-        # Combine results
-        changed_skills = changed_slash + changed_ref
-        failed_skills = failed_slash + failed_ref
-
-        # Check for failures
-        if failed_skills:
-            return False, f"Failed to install/upgrade: {', '.join(failed_skills)}"
-
-        # If anything was changed, report it (unless quiet)
-        if not quiet and changed_skills:
-            console.print(f"[green]✓[/green] Installed/upgraded {len(changed_skills)} skills globally to ~/.claude/skills/")
+        if not quiet:
+            changed_count = sum(len(changed) for changed, _, _ in results.values())
+            if changed_count:
+                locations = ', '.join(agents)
+                scope = 'global' if install_level == 'global' else install_level
+                console.print(
+                    f"[green]✓[/green] Installed/upgraded {changed_count} "
+                    f"skills for {locations} ({scope})"
+                )
 
         return True, None
 

@@ -9,6 +9,40 @@ from devflow.cli.main import cli
 from devflow.config.loader import ConfigLoader
 
 
+def test_init_installs_skills_for_detected_agents(temp_daf_home, tmp_path):
+    """Initialization installs bundled skills for every detected agent."""
+    from devflow.cli.main import _install_configured_skills_after_init
+    from devflow.config.models import AgentConfig, WorkspaceDefinition
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = ConfigLoader().create_default_config()
+    config.agent = AgentConfig(
+        enabled_agents=["claude", "codex"], install_level="both"
+    )
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path=str(workspace))
+    ]
+
+    with patch(
+        "devflow.agent.skill_directories.detect_configured_agents",
+        return_value=["claude", "codex"],
+    ):
+        with patch(
+            "devflow.utils.claude_commands.install_skills_to_agents",
+            return_value={
+                "claude": ([], ["daf-cli"], []),
+                "codex": ([], ["daf-cli"], []),
+            },
+        ) as mock_install:
+            _install_configured_skills_after_init(config)
+
+    assert mock_install.call_count == 2
+    assert mock_install.call_args_list[0].kwargs["level"] == "global"
+    assert mock_install.call_args_list[1].kwargs["level"] == "project"
+    assert mock_install.call_args_list[1].kwargs["project_path"] == workspace.resolve()
+
+
 def test_init_first_time_no_jira_token(temp_daf_home, monkeypatch):
     """Test first-time init without JIRA token using Local preset."""
     # Unset JIRA_API_TOKEN

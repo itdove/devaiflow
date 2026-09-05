@@ -608,7 +608,8 @@ class AgentConfig(BaseModel):
     """AI agent skill installation configuration.
 
     Controls which AI agents should receive skill installations and at what level.
-    Supports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf, Aider, Continue).
+    Supports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf,
+    Aider, Continue, OpenCode, Codex, and Crush).
     """
 
     enabled_agents: List[str] = Field(

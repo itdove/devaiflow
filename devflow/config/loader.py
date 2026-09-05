@@ -815,6 +815,7 @@ class ConfigLoader:
             storage=user_config.storage,  # Storage backend config
             backend_config_source=user_config.backend_config_source,
             agent_backend=agent_backend,  # Merged from org/team/user hierarchy
+            agent=user_config.agent,
             mock_services=user_config.mock_services,
             model_provider=model_provider,  # Merged from user/team/org/enterprise hierarchy (user takes priority)
             gcp_vertex_region=user_config.gcp_vertex_region,
@@ -973,6 +974,7 @@ class ConfigLoader:
             storage=config.storage,  # Storage backend config
             mock_services=config.mock_services,
             model_provider=user_model_provider,  # Model provider profiles (only if not enforced)
+            agent=config.agent,
             gcp_vertex_region=config.gcp_vertex_region,
             update_checker_timeout=config.update_checker_timeout,
             jira_affected_version=config.jira.affected_version,

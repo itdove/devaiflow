@@ -331,3 +331,16 @@ def test_skills_command_json_mode(monkeypatch):
                 mock_list.assert_called_once()
                 args, kwargs = mock_list.call_args
                 assert args[1] is True  # output_json parameter
+
+
+def test_skills_command_install_options_delegate_to_assets():
+    """Installer options on ``daf skills`` use the multi-agent installer."""
+    runner = CliRunner()
+
+    with patch("devflow.cli.commands.skills_command.assets.callback") as mock_assets:
+        result = runner.invoke(skills, ["--agent", "codex", "--dry-run"])
+
+    assert result.exit_code == 0
+    mock_assets.assert_called_once()
+    assert mock_assets.call_args.kwargs["agent"] == "codex"
+    assert mock_assets.call_args.kwargs["dry_run"] is True

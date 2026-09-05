@@ -4,7 +4,7 @@ This guide explains how DevAIFlow discovers and loads skills from multiple locat
 
 ## Overview
 
-DevAIFlow automatically discovers skills from four hierarchical locations, allowing you to organize skills by scope (user-level, workspace-specific, organization-specific, or project-specific). Skills are loaded in a specific order to ensure that organization-specific skills can extend generic ones.
+For Claude Code, DevAIFlow automatically discovers skills from four hierarchical locations, allowing you to organize skills by scope (user-level, workspace-specific, organization-specific, or project-specific). Other supported agents use their own global and project skill directories. Skills are loaded in a specific order to ensure that organization-specific skills can extend generic ones.
 
 ## Skills Discovery: The 4-Level Hierarchy
 
@@ -264,26 +264,26 @@ export CLAUDE_CONFIG_DIR=~/.daf-sessions
 DevAIFlow bundles generic skills that can be installed globally:
 
 ```bash
-# Install to user-level (~/.claude/skills/)
-daf skills
+# Install to detected agents' global directories
+daf assets
 
 # Install to project-level (<project>/.claude/skills/)
-daf skills --project-path /path/to/project
+daf assets --level project --project-path /path/to/project
 
 # Preview what would be installed
-daf skills --dry-run
+daf assets --dry-run
 ```
 
 ### Installing Hierarchical Skills
 
-Organization-specific skills are installed via `daf skills`:
+Organization-specific skills are installed via `daf assets`:
 
 ```bash
 # Download and install hierarchical skills from configured source
-daf skills
+daf assets --type hierarchical
 
 # Dry-run to preview changes
-daf skills --dry-run
+daf assets --type hierarchical --dry-run
 ```
 
 **Configuration:**

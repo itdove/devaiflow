@@ -3100,6 +3100,8 @@ def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_
             new_config.jira.field_cache_timestamp = current_config.jira.field_cache_timestamp
             config_loader.save_config(new_config)
 
+        _install_configured_skills_after_init(new_config)
+
         # Show summary of changes
         console.print()
         console.print("[green]✓[/green] Configuration updated")
@@ -3129,6 +3131,7 @@ def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_
         from devflow.config.init_wizard import run_init_wizard
         config = run_init_wizard(current_config=None)
         config_loader.save_config(config)
+        _install_configured_skills_after_init(config)
 
         # Check if we need JIRA field discovery (only for JIRA preset)
         enable_jira = config.jira.project is not None
@@ -3204,6 +3207,76 @@ def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_
     console.print()
     console.print("[green]✓[/green] Configuration refreshed")
     console.print(f"Location: {config_loader.config_file}")
+
+
+def _install_configured_skills_after_init(config) -> None:
+    """Install bundled skills for the agents discovered during initialization.
+
+    Global skills are installed once per init. Project-level skills are installed
+    for each configured workspace that already exists; users can run ``daf skills``
+    again after creating a missing workspace.
+    """
+    from pathlib import Path
+
+    try:
+        from devflow.agent.skill_directories import detect_configured_agents
+        from devflow.utils.claude_commands import install_skills_to_agents
+
+        agents = detect_configured_agents(config=config)
+        agent_config = getattr(config, "agent", None)
+        install_level = getattr(agent_config, "install_level", "global") or "global"
+        if install_level not in ("global", "project", "both"):
+            install_level = "global"
+
+        if install_level in ("global", "both"):
+            results = install_skills_to_agents(
+                agents=agents,
+                level="global",
+                skip_confirmation=True,
+                quiet=True,
+            )
+            failed = [
+                f"{agent}: {', '.join(agent_results[2])}"
+                for agent, agent_results in results.items()
+                if agent_results[2]
+            ]
+            if failed:
+                console.print(
+                    f"[yellow]⚠[/yellow] Some global skills could not be installed: "
+                    f"{'; '.join(failed)}"
+                )
+
+        if install_level in ("project", "both"):
+            workspaces = getattr(getattr(config, "repos", None), "workspaces", [])
+            for workspace_definition in workspaces:
+                workspace_path = Path(workspace_definition.path).expanduser().resolve()
+                if not workspace_path.is_dir():
+                    console.print(
+                        f"[yellow]⚠[/yellow] Skipping project-level skills for missing "
+                        f"workspace: {workspace_path}"
+                    )
+                    continue
+
+                results = install_skills_to_agents(
+                    agents=agents,
+                    level="project",
+                    project_path=workspace_path,
+                    skip_confirmation=True,
+                    quiet=True,
+                )
+                failed = [
+                    f"{agent}: {', '.join(agent_results[2])}"
+                    for agent, agent_results in results.items()
+                    if agent_results[2]
+                ]
+                if failed:
+                    console.print(
+                        f"[yellow]⚠[/yellow] Some project skills could not be installed "
+                        f"for {workspace_path}: {'; '.join(failed)}"
+                    )
+    except Exception as exc:
+        # Skill installation should not prevent configuration from being saved.
+        console.print(f"[yellow]⚠[/yellow] Could not install DevAIFlow skills: {exc}")
 
 
 def _setup_shell_completion_if_desired() -> None:

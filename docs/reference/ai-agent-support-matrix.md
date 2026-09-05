@@ -193,6 +193,7 @@ This is why token tracking is currently **Claude Code only** - it's the only age
 | **Continue** | `continue` | ⚠️  Experimental | `continue` (VS Code ext) | Limited | ✅ Experimental |
 | **Crush** | `crush` | ⚠️  Experimental | `crush` | Limited | ✅ Experimental |
 | **OpenCode** | `opencode`, `opencode-ai` | ⚠️  Experimental | `opencode` | Full CLI support | ✅ Experimental |
+| **Codex** | `codex` | ⚠️  Experimental | `codex` | Full CLI support | ✅ Experimental |
 
 ## Configuration
 
@@ -209,10 +210,11 @@ daf config set agent_backend aider
 daf config set agent_backend continue
 daf config set agent_backend crush
 daf config set agent_backend opencode
+daf config set agent_backend codex
 
 # Or manually edit $DEVAIFLOW_HOME/config.json
 {
-  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode"
+  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "codex"
   "ollama": {
     "default_model": "qwen3-coder"  // optional, only for ollama backend
   }
@@ -221,23 +223,26 @@ daf config set agent_backend opencode
 
 ## Multi-Agent Skill Installation
 
-**NEW:** DevAIFlow can install skills to multiple AI agents simultaneously, making it easier to maintain consistent tooling across different coding assistants.
+**NEW:** DevAIFlow can install skills to multiple AI agents simultaneously, making it easier to maintain consistent tooling across different coding assistants. Use `daf assets` for installation; installer options on `daf skills` remain available as a compatibility alias.
 
 ### Quick Start
 
 ```bash
 # Install skills to all supported agents
-daf skills --all-agents
+daf assets --all-agents
 
 # Install to a specific agent
-daf skills --agent cursor
-daf skills --agent windsurf
+daf assets --agent cursor
+daf assets --agent windsurf
 
 # Install to project directory (instead of global)
-daf skills --level project --project-path .
+daf assets --level project --project-path .
 
 # Install to both global and project
-daf skills --level both --project-path .
+daf assets --level both --project-path .
+
+# Compatibility form
+daf skills --agent codex
 ```
 
 ### Skill Directory Locations
@@ -254,8 +259,17 @@ Each agent has its own skills directory where DevAIFlow installs bundled skills:
 | **Continue** | `~/.continue/skills/` | `<project>/.continue/skills/` | _(none)_ |
 | **Crush** | `~/.local/share/crush/skills/` | `<project>/.crush/skills/` | `$XDG_DATA_HOME` |
 | **OpenCode** | `~/.config/opencode/skills/` | `<project>/.opencode/skills/` | `$XDG_CONFIG_HOME` |
+| **Codex** | `~/.codex/skills/` | `<project>/.codex/skills/` | `$CODEX_HOME` or `$XDG_CONFIG_HOME` |
 
-**Note:** Claude Code, GitHub Copilot, Crush, and OpenCode support environment variables to override the default config/data directory.
+**Note:** Claude Code, GitHub Copilot, Crush, OpenCode, and Codex support environment variables to override the default config/data directory. Crush also checks its XDG config directory when detecting an existing installation.
+
+### Automatic Agent Selection
+
+During `daf init` and workspace-triggered upgrades, DevAIFlow combines the
+configured agent list, the selected agent backend and model profiles, known
+agent home directories/environment variables, and uniquely identifiable CLIs.
+If nothing is detected, it falls back to Claude Code. `daf assets` uses the same
+selection when no explicit agent is supplied.
 
 ### Installation Levels
 
@@ -278,14 +292,14 @@ Each agent has its own skills directory where DevAIFlow installs bundled skills:
 **Personal Development:**
 ```bash
 # Install to all your agents globally
-daf skills --all-agents
+daf assets --all-agents
 ```
 
 **Team Collaboration:**
 ```bash
 # Install to project and commit to git
 cd /path/to/project
-daf skills --level project --project-path .
+daf assets --level project --project-path .
 git add .claude/skills .cursor/skills
 git commit -m "Add DevAIFlow skills for team"
 ```
@@ -294,7 +308,7 @@ git commit -m "Add DevAIFlow skills for team"
 ```bash
 # You have skills already installed for Claude
 # Now add them for Cursor too
-daf skills --agents cursor
+daf assets --agent cursor
 ```
 
 ### Compatibility
@@ -309,6 +323,9 @@ daf skills --agents cursor
 - ⚠️  Windsurf - Skills may work as context files
 - ⚠️  Aider - Skills may work with `--read` flag
 - ⚠️  Continue - Skills may work as context files
+- ⚠️  Crush - Skills may work as context files
+- ⚠️  OpenCode - Skills may work as context files
+- ⚠️  Codex - Skills may work as context files
 
 **Note:** Only Claude Code and Ollama have native skill support. Other agents may be able to use the skill files as context/documentation, but functionality is not guaranteed.
 

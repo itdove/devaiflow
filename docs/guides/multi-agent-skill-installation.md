@@ -7,6 +7,7 @@ DevAIFlow supports installing bundled skills to multiple AI coding assistants si
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Supported Agents](#supported-agents)
+- [Initialization and Automatic Updates](#initialization-and-automatic-updates)
 - [Installation Levels](#installation-levels)
 - [Use Cases](#use-cases)
 - [Skill Directory Locations](#skill-directory-locations)
@@ -20,22 +21,26 @@ DevAIFlow includes bundled skills that provide:
 - **Slash commands**: Interactive commands like `/daf-help`, `/daf-list`, `/daf-active`
 - **Reference skills**: Auto-loaded documentation (daf-cli, gh-cli, glab-cli)
 
-These skills can be installed to multiple AI agents using the `daf skills` command with multi-agent flags.
+These skills can be installed to multiple AI agents with `daf assets`. The
+installer options on `daf skills` are retained as a compatibility alias.
 
 ## Quick Start
 
 ```bash
 # Install to all supported agents
-daf skills --all-agents
+daf assets --all-agents
 
 # Install to specific agents
-daf skills --agent cursor
+daf assets --agent cursor
 
 # Install to project directory (for team sharing)
-daf skills --level project --project-path .
+daf assets --level project --project-path .
 
 # Install to both global and project
-daf skills --level both --project-path .
+daf assets --level both --project-path .
+
+# Compatibility form
+daf skills --agent codex
 ```
 
 ## Supported Agents
@@ -48,10 +53,39 @@ daf skills --level both --project-path .
 | **Windsurf** | ⚠️ Experimental | `~/.codeium/windsurf/skills/` | `<project>/.windsurf/skills/` | _(none)_ |
 | **Aider** | ⚠️ Experimental | `~/.aider/skills/` | `<project>/.aider/skills/` | _(none)_ |
 | **Continue** | ⚠️ Experimental | `~/.continue/skills/` | `<project>/.continue/skills/` | _(none)_ |
+| **OpenCode** | ⚠️ Experimental | `~/.config/opencode/skills/` | `<project>/.opencode/skills/` | `$XDG_CONFIG_HOME` |
+| **Codex** | ⚠️ Experimental | `~/.codex/skills/` | `<project>/.codex/skills/` | `$CODEX_HOME` or `$XDG_CONFIG_HOME` |
+| **Crush** | ⚠️ Experimental | `~/.local/share/crush/skills/` | `<project>/.crush/skills/` | `$XDG_DATA_HOME` |
 
 **Notes:**
 - ✅ **Fully Tested**: Claude Code has native skill support and has been thoroughly tested
 - ⚠️ **Experimental**: Other agents may support skills as context files, but functionality is not guaranteed
+
+## Initialization and Automatic Updates
+
+`daf init` and workspace-triggered skill upgrades detect the agents configured on the machine and install the bundled skills for each detected agent. Running `daf assets` without `--agent` or `--all-agents` uses the same detection rules. Plain `daf skills` remains the discovery/inspection command; add an installer option such as `--agent` to use its compatibility alias.
+
+Detection considers, in order-independent combination:
+
+- `agent.enabled_agents` in DevAIFlow configuration
+- the configured `agent_backend` and model-provider profiles
+- agent-specific home environment variables and existing global agent directories
+- uniquely identifying agent CLIs on `PATH` (shared commands such as `code` are not used to guess Copilot or Continue)
+
+If no supported agent is detected, DevAIFlow installs to Claude Code as the backwards-compatible default. Use `daf assets --agent <name>` when you want an explicit target, or `daf assets --all-agents` to install to every supported target.
+
+The optional `agent.install_level` setting controls automatic installation during initialization and workspace upgrades:
+
+```json
+{
+  "agent": {
+    "enabled_agents": ["claude", "codex"],
+    "install_level": "global"
+  }
+}
+```
+
+Global installation happens once per detected agent. Project-level installation uses each configured workspace and follows the project locations listed below.
 
 ## Installation Levels
 
@@ -70,7 +104,7 @@ Installs skills to the agent's global configuration directory (e.g., `~/.claude/
 
 **Example:**
 ```bash
-daf skills --agent cursor
+daf assets --agent cursor
 ```
 
 ### Project Installation
@@ -147,9 +181,9 @@ git push
 **Scenario**: You primarily use Claude Code but sometimes use Cursor for pair programming.
 
 ```bash
-# You already have skills for Claude (from daf skills)
+# You already have skills for Claude (from daf assets)
 # Now add them for Cursor
-daf skills --agents cursor
+daf assets --agent cursor
 ```
 
 ### Experimenting with New Agents
@@ -158,7 +192,7 @@ daf skills --agents cursor
 
 ```bash
 # Try Windsurf with DevAIFlow skills
-daf skills --agent windsurf
+daf assets --agent windsurf
 
 # Launch a session
 daf open PROJ-123
@@ -180,6 +214,9 @@ DevAIFlow installs skills to agent-specific directories. Here's where they go:
 | Windsurf (Windows) | `%APPDATA%\Codeium\Windsurf\skills\` | _(hardcoded)_ |
 | Aider | `~/.aider/skills/` | _(hardcoded)_ |
 | Continue | `~/.continue/skills/` | _(hardcoded)_ |
+| OpenCode | `~/.config/opencode/skills/` | `$XDG_CONFIG_HOME/opencode/skills/` |
+| Codex | `~/.codex/skills/` | `$CODEX_HOME/skills/` or `$XDG_CONFIG_HOME/codex/skills/` |
+| Crush | `~/.local/share/crush/skills/` | `$XDG_DATA_HOME/crush/skills/` |
 
 ### Project Directories
 
@@ -193,20 +230,23 @@ Project-level installations follow a consistent pattern:
 | Windsurf | `<project>/.windsurf/skills/` |
 | Aider | `<project>/.aider/skills/` |
 | Continue | `<project>/.continue/skills/` |
+| OpenCode | `<project>/.opencode/skills/` |
+| Codex | `<project>/.codex/skills/` |
+| Crush | `<project>/.crush/skills/` |
 
 ### Environment Variables
 
-**Claude Code** and **GitHub Copilot** support environment variables to override the default config directory:
+Claude Code, GitHub Copilot, Codex, OpenCode, and Crush support environment variables to override their default config/data directory:
 
 ```bash
 # Claude Code
 export CLAUDE_CONFIG_DIR=/custom/claude
-daf skills --agents claude
+daf skills --agent claude
 # Installs to /custom/claude/skills/
 
 # GitHub Copilot
 export COPILOT_HOME=/custom/copilot
-daf skills --agents copilot
+daf skills --agent copilot
 # Installs to /custom/copilot/skills/
 ```
 
@@ -286,14 +326,14 @@ daf skills --all-agents --level project --project-path . --dry-run
 
 ### Upgrading Existing Installations
 
-When you run `daf skills`, it automatically:
+When you run `daf assets` (or `daf skills` with installer options), it automatically:
 - **Installs** skills that don't exist
 - **Upgrades** skills that are outdated
 - **Skips** skills that are already up-to-date
 
 ```bash
 # Update all agents to latest skills
-daf skills --all-agents
+daf assets --all-agents
 ```
 
 ## Troubleshooting
@@ -308,10 +348,10 @@ daf skills --all-agents
 
 ### Installation Failed
 
-**Problem**: `daf skills --agents cursor` fails with error.
+**Problem**: `daf skills --agent cursor` fails with error.
 
 **Possible Causes**:
-1. Agent name misspelled (use `claude`, `cursor`, `windsurf`, `copilot`, `aider`, `continue`)
+1. Agent name misspelled (use `claude`, `codex`, `cursor`, `windsurf`, `copilot`, `aider`, `continue`, `opencode`, `crush`)
 2. Permission issues with agent's config directory
 3. Agent config directory doesn't exist
 
@@ -325,7 +365,7 @@ ls -la ~/.cursor/skills/
 mkdir -p ~/.cursor/skills/
 
 # Try with dry-run first
-daf skills --agents cursor --dry-run
+daf assets --agent cursor --dry-run
 ```
 
 ### Skills Not Found by Agent
@@ -350,7 +390,7 @@ daf skills --agents cursor --dry-run
 ```bash
 # If you use CLAUDE_CONFIG_DIR
 echo $CLAUDE_CONFIG_DIR
-daf skills --agents claude
+daf assets --agent claude
 # Installs to $CLAUDE_CONFIG_DIR/skills/, not ~/.claude/skills/
 ```
 
@@ -358,7 +398,7 @@ daf skills --agents claude
 ```bash
 # If you use COPILOT_HOME
 echo $COPILOT_HOME
-daf skills --agents copilot
+daf assets --agent copilot
 # Installs to $COPILOT_HOME/skills/, not ~/.copilot/skills/
 ```
 
@@ -373,10 +413,13 @@ rm -rf ~/.claude/skills/daf-* \
        ~/.cursor/skills/daf-* \
        ~/.codeium/windsurf/skills/daf-* \
        ~/.aider/skills/daf-* \
-       ~/.continue/skills/daf-*
+       ~/.continue/skills/daf-* \
+       ~/.config/opencode/skills/daf-* \
+       ~/.codex/skills/daf-* \
+       ~/.local/share/crush/skills/daf-*
 
 # Then reinstall fresh
-daf skills --all-agents
+daf assets --all-agents
 ```
 
 ## See Also

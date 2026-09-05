@@ -73,9 +73,13 @@ def _show_next_steps(preset_type: str, config: "Config") -> None:
 
     console.print("[bold]Next Steps:[/bold]\n")
 
-    # Step 1: Install Claude Code skills (common to all)
-    console.print("  1. Install Claude Code skills:")
-    console.print("     [cyan]daf skills[/cyan]\n")
+    # Step 1: Install skills for configured agents (common to all)
+    from devflow.agent.skill_directories import detect_configured_agents
+
+    detected_agents = detect_configured_agents(config=config)
+    console.print("  1. Install DevAIFlow skills for configured AI agents:")
+    console.print("     [cyan]daf assets --upgrade[/cyan]\n")
+    console.print(f"     [dim]Detected agents: {', '.join(detected_agents)}[/dim]\n")
 
     # Preset-specific next steps
     if preset_type == "github":
@@ -580,6 +584,8 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         TimeTrackingConfig,
         SessionSummaryConfig,
         TemplateConfig,
+        AgentConfig,
+        ModelProviderConfig,
     )
 
     console.print("\n[bold]DevAIFlow Configuration Wizard[/bold]\n")
@@ -805,7 +811,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     console.print("\n[bold]=== Hierarchical Configuration ===[/bold]\n")
     console.print("[dim]Optional: URL to organization-wide config files (ENTERPRISE.md, ORGANIZATION.md, etc.)[/dim]")
     console.print("[dim]This enables automatic distribution of organization policies and AI agent skills.[/dim]")
-    console.print("[dim]After setting this, run 'daf skills' to download config files and skills.[/dim]")
+    console.print("[dim]After setting this, run 'daf assets --upgrade' to download config files and skills.[/dim]")
     console.print("[dim]Can be set later via 'daf config edit --advanced' in the Organization tab.[/dim]\n")
     console.print("Examples:")
     console.print("  - file:///company/shared/devaiflow/configs")
@@ -895,6 +901,9 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
         time_tracking=TimeTrackingConfig(),
         session_summary=SessionSummaryConfig(),
         templates=TemplateConfig(),
+        agent_backend=current_config.agent_backend if current_config else "claude",
+        model_provider=current_config.model_provider if current_config else ModelProviderConfig(),
+        agent=current_config.agent if current_config else AgentConfig(),
     )
 
     # PR/MR Template Configuration (optional)

@@ -424,7 +424,9 @@ def create_new_session(
         # Auto-upgrade skills and commands for this workspace if needed
         if workspace_path:
             from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
-            success, error = ensure_workspace_skills_and_commands(workspace_path, quiet=True)
+            success, error = ensure_workspace_skills_and_commands(
+                workspace_path, quiet=True, config=config
+            )
             if not success:
                 console.print(f"[yellow]⚠[/yellow] Warning: {error}")
 
