@@ -1201,17 +1201,20 @@ def export(ctx: click.Context, identifier: str, all_sessions: bool, output: str)
 
 
 @cli.command(name="export-md")
-@click.option("--identifier", "-i", "identifiers", multiple=True, required=True, shell_complete=complete_session_identifiers, help="Session identifier (issue key or session name). Can be specified multiple times.")
+@click.option("--identifier", "-i", "identifiers", multiple=True, required=False, shell_complete=complete_session_identifiers, help="Session identifier (issue key or session name). Can be specified multiple times.")
+@click.option("--since", help="Export sessions active since this time (e.g., 'last week', '3 days ago', '2025-01-01')")
+@click.option("--before", help="Export sessions active before or on this time")
 @click.option("--output-dir", shell_complete=complete_file_paths, help="Output directory (defaults to current directory)")
 @click.option("--no-activity", is_flag=True, help="Exclude session activity summary")
 @click.option("--no-statistics", is_flag=True, help="Exclude detailed statistics")
 @click.option("--ai-summary", is_flag=True, help="Use AI-powered summary (requires ANTHROPIC_API_KEY)")
 @click.option("--combined", is_flag=True, help="Export all sessions to a single combined file")
 @json_option
-def export_md(ctx: click.Context, identifiers: tuple, output_dir: str, no_activity: bool, no_statistics: bool, ai_summary: bool, combined: bool) -> None:
+def export_md(ctx: click.Context, identifiers: tuple, since: str, before: str, output_dir: str, no_activity: bool, no_statistics: bool, ai_summary: bool, combined: bool) -> None:
     """Export sessions to Markdown documentation format.
 
-    Use --identifier/-i to specify session(s) to export (JIRA keys or session names).
+    Use --identifier/-i to specify session(s) to export (JIRA keys or session names),
+    or use --since/--before to select sessions by last activity.
 
     \b
     Creates standalone Markdown files suitable for documentation with:
@@ -1225,6 +1228,9 @@ def export_md(ctx: click.Context, identifiers: tuple, output_dir: str, no_activi
     Examples:
         daf export-md -i PROJ-12345                          # Export single session
         daf export-md -i PROJ-12345 -i PROJ-12346             # Export multiple sessions
+        daf export-md --since "last week"                    # Export recent sessions
+        daf export-md --since "2025-01-01" --before "2025-01-31" --combined
+        daf export-md -i SESSION-1 --since "3 days ago"     # Combine filters
         daf export-md -i PROJ-12345 --output-dir ./docs      # Export to specific directory
         daf export-md -i PROJ-12345 --ai-summary             # Use AI-powered summary
         daf export-md -i PROJ-12345 -i PROJ-12346 --combined  # Export to single file
@@ -1232,12 +1238,15 @@ def export_md(ctx: click.Context, identifiers: tuple, output_dir: str, no_activi
     from devflow.cli.commands.export_md_command import export_markdown
 
     export_markdown(
-        identifiers=list(identifiers),
+        identifiers=[*identifiers],
         output_dir=output_dir,
         include_activity=not no_activity,
         include_statistics=not no_statistics,
         ai_summary=ai_summary,
         combined=combined,
+        since=since,
+        before=before,
+        output_json=ctx.obj.get('output_json', False),
     )
 
 

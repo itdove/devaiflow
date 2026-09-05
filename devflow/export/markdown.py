@@ -92,16 +92,21 @@ class MarkdownExporter:
         include_statistics: bool = True,
         ai_summary: bool = False,
         combined: bool = False,
+        since: Optional[datetime] = None,
+        before: Optional[datetime] = None,
     ) -> List[Path]:
         """Export multiple sessions to Markdown files.
 
         Args:
-            identifiers: List of session identifiers (names or JIRA keys)
+            identifiers: List of session identifiers (names or JIRA keys). May be
+                empty when a date filter is provided.
             output_dir: Directory to write Markdown files. Defaults to current directory.
             include_activity: Include session activity summary
             include_statistics: Include detailed statistics
             ai_summary: Use AI-powered summary (requires ANTHROPIC_API_KEY)
             combined: Export all sessions to a single combined file
+            since: Only export sessions active at or after this datetime
+            before: Only export sessions active at or before this datetime
 
         Returns:
             List of paths to created Markdown files
@@ -120,6 +125,16 @@ class MarkdownExporter:
             session_list = sessions_index.get_sessions(identifier)
             if session_list:
                 all_sessions.extend(session_list)
+
+        if since is not None or before is not None:
+            date_filtered_sessions = sessions_index.list_sessions(since=since, before=before)
+            if identifiers:
+                date_filtered_names = {session.name for session in date_filtered_sessions}
+                all_sessions = [
+                    session for session in all_sessions if session.name in date_filtered_names
+                ]
+            else:
+                all_sessions = date_filtered_sessions
 
         if not all_sessions:
             raise ValueError("No sessions found to export")

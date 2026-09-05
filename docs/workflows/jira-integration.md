@@ -1280,7 +1280,7 @@ daf list --jira-status "In Progress"
 ### Export to Markdown
 
 ```bash
-daf export-md PROJ-12345 --ai-summary
+daf export-md -i PROJ-12345 --ai-summary
 ```
 
 Creates `PROJ-12345.md`:
@@ -1322,7 +1322,7 @@ Perfect for documentation, handoffs, or sprint reviews.
 ### Export Multiple Tickets
 
 ```bash
-daf export-md PROJ-12345 PROJ-12346 PROJ-12347 --combined
+daf export-md -i PROJ-12345 -i PROJ-12346 -i PROJ-12347 --combined
 ```
 
 Creates single file with all tickets.
@@ -1581,7 +1581,7 @@ Keeps you aware of sprint progress.
 
 End of sprint:
 ```bash
-daf export-md PROJ-12345 PROJ-12346 --combined --output sprint-report.md
+daf export-md -i PROJ-12345 -i PROJ-12346 --combined --output-dir ./sprint-report
 ```
 
 ## Next Steps
