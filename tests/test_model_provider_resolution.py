@@ -62,6 +62,19 @@ def test_only_profile_is_used_when_configured_default_is_missing():
     assert resolve_agent_backend(config=config) == "codex"
 
 
+def test_non_string_session_profile_metadata_is_not_treated_as_profile_name():
+    profile = ModelProviderProfile(
+        name="codex-profile",
+        provider="codex",
+        agent_backend="codex",
+        model_name="codex-model",
+    )
+    config = _config({"codex-profile": profile}, "codex-profile")
+    session = SimpleNamespace(model_profile=object(), agent_backend=None)
+
+    assert resolve_agent_backend(config=config, session=session) == "codex"
+
+
 def test_cli_model_does_not_override_utility_model():
     profile = ModelProviderProfile(
         name="cloud",

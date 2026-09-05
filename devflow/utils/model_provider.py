@@ -197,6 +197,12 @@ def get_profile_compatibility_error(
 
 def _select_profile_name(config, override_profile_name: Optional[str], agent_backend: Optional[str]) -> Optional[str]:
     """Resolve a profile name while keeping provider and agent selection separate."""
+    # Session-like objects are frequently mocked by callers and tests.  A
+    # missing string field on a Mock becomes another truthy Mock, which must
+    # not be mistaken for an explicitly requested profile name.
+    if override_profile_name is not None and not isinstance(override_profile_name, str):
+        override_profile_name = None
+
     model_provider_config = getattr(config, "model_provider", None) if config else None
     profiles = getattr(model_provider_config, "profiles", {}) if model_provider_config else {}
     if not isinstance(profiles, dict) or not profiles:
