@@ -3940,10 +3940,13 @@ This prevents accidentally using the wrong command and ensures you're using the 
 Export session(s) to Markdown documentation.
 
 ```bash
-daf export-md <NAME-or-JIRA>... [OPTIONS]
+daf export-md [OPTIONS]
 ```
 
 **Options:**
+- `--identifier`, `-i` `<NAME-or-JIRA>` - Session identifier. Can be specified multiple times; optional when a date filter is supplied
+- `--since` `<TIME>` - Include sessions active at or after this time
+- `--before` `<TIME>` - Include sessions active at or before this time
 - `--output-dir <DIR>` - Output directory (default: current directory)
 - `--ai-summary` - Use AI-powered summary
 - `--combined` - Export to single file
@@ -3953,19 +3956,28 @@ daf export-md <NAME-or-JIRA>... [OPTIONS]
 **Examples:**
 ```bash
 # Export single session
-daf export-md PROJ-12345
+daf export-md -i PROJ-12345
 
 # Export multiple sessions
-daf export-md PROJ-12345 PROJ-12346
+daf export-md -i PROJ-12345 -i PROJ-12346
 
 # Export to specific directory
-daf export-md PROJ-12345 --output-dir ./docs
+daf export-md -i PROJ-12345 --output-dir ./docs
 
 # Export with AI summary
-daf export-md PROJ-12345 --ai-summary
+daf export-md -i PROJ-12345 --ai-summary
 
 # Export multiple to single file
-daf export-md PROJ-12345 PROJ-12346 --combined
+daf export-md -i PROJ-12345 -i PROJ-12346 --combined
+
+# Export sessions active since last week
+daf export-md --since "last week"
+
+# Export a date range to one file
+daf export-md --since "2025-01-01" --before "2025-01-31" --combined
+
+# Combine an explicit identifier with a date filter
+daf export-md -i SESSION-1 --since "3 days ago"
 ```
 
 **Use cases:**

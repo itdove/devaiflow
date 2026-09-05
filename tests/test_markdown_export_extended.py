@@ -2,9 +2,10 @@
 
 import pytest
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from devflow.export.markdown import MarkdownExporter
-from devflow.config.models import Session
+from devflow.config.models import Session, SessionIndex
+from unittest.mock import MagicMock
 
 
 def test_export_session_basic(temp_daf_home):
@@ -184,6 +185,79 @@ def test_export_session_default_output_dir(temp_daf_home):
 
     # Should create file in current directory
     assert len(files) >= 0  # May or may not create file depending on implementation
+
+
+def test_export_sessions_date_only_uses_inclusive_last_active_bounds(temp_daf_home, tmp_path):
+    """Test date-only export includes sessions on both filter boundaries."""
+    lower_bound = datetime(2026, 1, 1, 12, 0)
+    upper_bound = datetime(2026, 1, 31, 12, 0)
+    sessions = SessionIndex(
+        sessions={
+            "at-lower": Session(
+                name="at-lower",
+                goal="Lower boundary",
+                created=lower_bound,
+                last_active=lower_bound,
+            ),
+            "at-upper": Session(
+                name="at-upper",
+                goal="Upper boundary",
+                created=upper_bound,
+                last_active=upper_bound,
+            ),
+            "outside": Session(
+                name="outside",
+                goal="Outside range",
+                created=upper_bound + timedelta(seconds=1),
+                last_active=upper_bound + timedelta(seconds=1),
+            ),
+        }
+    )
+    config_loader = MagicMock()
+    config_loader.load_sessions.return_value = sessions
+    config_loader.get_session_dir.side_effect = lambda name: tmp_path / "sessions" / name
+
+    files = MarkdownExporter(config_loader).export_sessions_to_markdown(
+        identifiers=[],
+        output_dir=tmp_path / "exports",
+        include_activity=False,
+        include_statistics=False,
+        since=lower_bound,
+        before=upper_bound,
+    )
+
+    assert {path.stem for path in files} == {"at-lower", "at-upper"}
+
+
+def test_export_sessions_combines_identifiers_with_date_filters(temp_daf_home, tmp_path):
+    """Test explicit identifiers are intersected with date-filtered sessions."""
+    lower_bound = datetime(2026, 1, 1)
+    in_range = Session(
+        name="in-range",
+        goal="Included session",
+        created=lower_bound,
+        last_active=lower_bound,
+    )
+    out_of_range = Session(
+        name="out-of-range",
+        goal="Excluded session",
+        created=lower_bound - timedelta(days=1),
+        last_active=lower_bound - timedelta(days=1),
+    )
+    sessions = SessionIndex(sessions={session.name: session for session in (in_range, out_of_range)})
+    config_loader = MagicMock()
+    config_loader.load_sessions.return_value = sessions
+    config_loader.get_session_dir.side_effect = lambda name: tmp_path / "sessions" / name
+
+    files = MarkdownExporter(config_loader).export_sessions_to_markdown(
+        identifiers=["in-range", "out-of-range"],
+        output_dir=tmp_path / "exports",
+        include_activity=False,
+        include_statistics=False,
+        since=lower_bound,
+    )
+
+    assert [path.stem for path in files] == ["in-range"]
 
 
 def test_format_title_with_jira(temp_daf_home):

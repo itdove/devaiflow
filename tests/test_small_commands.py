@@ -1,15 +1,18 @@
 """Tests for small CLI commands: update, restore, export-md, summary."""
 
+import json
 import pytest
 from pathlib import Path
 from datetime import datetime
 from unittest.mock import patch, MagicMock
+from click.testing import CliRunner
 
 from devflow.cli.commands.update_command import update_session
 from devflow.cli.commands.restore_command import restore_backup
 from devflow.cli.commands.export_md_command import export_markdown
 from devflow.cli.commands.summary_command import show_summary
 from devflow.config.models import Session
+from devflow.cli.main import cli
 
 
 # ========== update_command tests ==========
@@ -331,6 +334,129 @@ def test_export_markdown_handles_error(monkeypatch, temp_daf_home):
             # Verify error was printed
             print_calls = [str(call) for call in mock_console.print.call_args_list]
             assert any("Export failed" in str(call) for call in print_calls)
+
+
+def test_export_markdown_date_filters_are_parsed_and_forwarded(monkeypatch, temp_daf_home, tmp_path):
+    """Test export-md parses and forwards both date filters."""
+    monkeypatch.delenv('AI_AGENT_SESSION_ID', raising=False)
+
+    output_file = tmp_path / "session.md"
+    output_file.write_text("# Export")
+
+    with patch('devflow.cli.commands.export_md_command.MarkdownExporter') as mock_exporter:
+        mock_exp_instance = MagicMock()
+        mock_exp_instance.export_sessions_to_markdown.return_value = [output_file]
+        mock_exporter.return_value = mock_exp_instance
+
+        export_markdown(
+            [],
+            since="2025-01-01",
+            before="2025-01-31",
+            output_dir=str(tmp_path),
+        )
+
+        call_kwargs = mock_exp_instance.export_sessions_to_markdown.call_args.kwargs
+        assert call_kwargs["since"] == datetime(2025, 1, 1)
+        assert call_kwargs["before"] == datetime(2025, 1, 31)
+
+
+def test_export_markdown_invalid_time_expression_text(monkeypatch, temp_daf_home):
+    """Test invalid date expressions produce a clear text error."""
+    monkeypatch.delenv('AI_AGENT_SESSION_ID', raising=False)
+
+    with patch('devflow.cli.commands.export_md_command.console') as mock_console:
+        export_markdown([], since="not-a-time")
+
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Could not parse time expression for --since" in call for call in print_calls)
+
+
+def test_export_markdown_invalid_time_expression_json(monkeypatch, temp_daf_home, capsys):
+    """Test invalid date expressions produce a structured JSON error."""
+    monkeypatch.delenv('AI_AGENT_SESSION_ID', raising=False)
+
+    export_markdown([], before="not-a-time", output_json=True)
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is False
+    assert result["error"]["code"] == "INVALID_TIME_EXPRESSION"
+    assert "--before" in result["error"]["message"]
+
+
+def test_export_markdown_empty_results_text(monkeypatch, temp_daf_home):
+    """Test empty date-filtered results produce a clear text error."""
+    monkeypatch.delenv('AI_AGENT_SESSION_ID', raising=False)
+
+    with patch('devflow.cli.commands.export_md_command.MarkdownExporter') as mock_exporter:
+        mock_exp_instance = MagicMock()
+        mock_exp_instance.export_sessions_to_markdown.side_effect = ValueError(
+            "No sessions found to export"
+        )
+        mock_exporter.return_value = mock_exp_instance
+
+        with patch('devflow.cli.commands.export_md_command.console') as mock_console:
+            export_markdown([], since="2025-01-01")
+
+            print_calls = [str(call) for call in mock_console.print.call_args_list]
+            assert any("Export failed" in call for call in print_calls)
+            assert any("No sessions found to export" in call for call in print_calls)
+
+
+def test_export_markdown_empty_results_json(monkeypatch, temp_daf_home, capsys):
+    """Test empty date-filtered results produce a structured JSON error."""
+    monkeypatch.delenv('AI_AGENT_SESSION_ID', raising=False)
+
+    with patch('devflow.cli.commands.export_md_command.MarkdownExporter') as mock_exporter:
+        mock_exp_instance = MagicMock()
+        mock_exp_instance.export_sessions_to_markdown.side_effect = ValueError(
+            "No sessions found to export"
+        )
+        mock_exporter.return_value = mock_exp_instance
+
+        export_markdown([], since="2025-01-01", output_json=True)
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is False
+    assert result["error"] == {
+        "message": "No sessions found to export",
+        "code": "NO_SESSIONS_FOUND",
+    }
+
+
+def test_export_markdown_success_json(monkeypatch, temp_daf_home, tmp_path, capsys):
+    """Test a successful date-filtered export produces structured JSON."""
+    monkeypatch.delenv('AI_AGENT_SESSION_ID', raising=False)
+
+    output_file = tmp_path / "session.md"
+    output_file.write_text("# Export")
+
+    with patch('devflow.cli.commands.export_md_command.MarkdownExporter') as mock_exporter:
+        mock_exp_instance = MagicMock()
+        mock_exp_instance.export_sessions_to_markdown.return_value = [output_file]
+        mock_exporter.return_value = mock_exp_instance
+
+        export_markdown([], since="2025-01-01", output_json=True)
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is True
+    assert result["data"]["count"] == 1
+    assert result["data"]["files"] == [str(output_file)]
+    assert result["metadata"]["filters"]["since"] == "2025-01-01"
+
+
+def test_export_md_cli_allows_date_only_selection(temp_daf_home):
+    """Test the CLI accepts a date filter without an identifier."""
+    runner = CliRunner()
+
+    with patch('devflow.cli.commands.export_md_command.export_markdown') as mock_export:
+        result = runner.invoke(cli, ["export-md", "--since", "2025-01-01"])
+
+    assert result.exit_code == 0, result.output
+    mock_export.assert_called_once()
+    call_kwargs = mock_export.call_args.kwargs
+    assert call_kwargs["identifiers"] == []
+    assert call_kwargs["since"] == "2025-01-01"
+    assert call_kwargs["before"] is None
 
 
 # ========== summary_command tests ==========
