@@ -777,6 +777,26 @@ def test_save_agent_backend_to_user_config_not_enterprise(temp_daf_home):
     assert enterprise_data.get("agent_backend") is None
 
 
+def test_new_format_preserves_agent_skill_configuration(temp_daf_home):
+    """Persist multi-agent skill settings across split-format saves and loads."""
+    from devflow.config.models import AgentConfig
+
+    loader = ConfigLoader()
+    config = loader.create_default_config()
+    config.agent = AgentConfig(enabled_agents=["claude", "codex"], install_level="both")
+    loader.save_config(config)
+
+    loaded_config = loader.load_config()
+
+    assert loaded_config.agent.enabled_agents == ["claude", "codex"]
+    assert loaded_config.agent.install_level == "both"
+
+    with open(loader.config_file, "r") as f:
+        user_data = json.load(f)
+    assert user_data["agent"]["enabled_agents"] == ["claude", "codex"]
+    assert user_data["agent"]["install_level"] == "both"
+
+
 def test_save_preserves_enterprise_agent_backend(temp_daf_home):
     """Test that saving config preserves existing enterprise agent_backend.
 

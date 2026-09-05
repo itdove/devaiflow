@@ -52,6 +52,20 @@ user-invocable: false
 - List all available skills: `daf skills`
 - Inspect specific skill: `daf skills <skill-name>`
 - JSON output: `daf skills --json`
+- Install/upgrade for detected agents: `daf assets`
+- Install/upgrade for a specific agent: `daf assets --agent codex`
+- Install/upgrade for all supported agents: `daf assets --all-agents`
+- Install project skills: `daf assets --level project --project-path .`
+
+The installer options on `daf skills` are also accepted for compatibility, for
+example `daf skills --agent codex`.
+
+When no agent option is supplied, initialization, automatic workspace updates,
+and `daf assets` detect configured agent backends, agent home
+directories/environment variables, and uniquely identifiable agent CLIs. They
+fall back to Claude Code when no supported agent is detected. Codex skills use
+`~/.codex/skills/` by default, `$CODEX_HOME/skills/` when set, and
+`<project>/.codex/skills/` for project scope.
 
 ### Field Intelligence
 **See `daf-jira-fields` skill** for JIRA field mapping and validation rules.
@@ -98,7 +112,7 @@ DevAIFlow automatically discovers skills from multiple locations in a specific o
 
 ### Discovery Order (Load Order)
 
-1. **User-level**: `~/.claude/skills/` - Generic skills (daf-cli, daf-git, daf-jira, etc.)
+1. **User-level**: the selected agent's global skills directory (Claude defaults to `~/.claude/skills/`; Codex defaults to `~/.codex/skills/`)
 2. **Workspace-level**: `<workspace>/.claude/skills/` - Workspace-specific tools
 3. **Hierarchical**: `$DEVAIFLOW_HOME/.claude/skills/` - Organization-specific extensions
 4. **Project-level**: `<project>/.claude/skills/` - Project-specific skills

@@ -12,6 +12,7 @@ from devflow.utils.claude_commands import (
     list_reference_skills,
     install_or_upgrade_slash_commands,
     install_or_upgrade_reference_skills,
+    install_skills_to_agents,
     _are_skill_dirs_identical,
     get_skill_status,
     get_all_skill_statuses,
@@ -197,6 +198,21 @@ def test_install_reference_skills_fresh_install(temp_user_home):
     assert (skills_dir / "daf-cli").exists()
     assert (skills_dir / "daf-cli" / "SKILL.md").exists()
     assert (skills_dir / "daf-jira-fields").exists()
+
+
+def test_install_skills_to_multiple_agents_including_codex(temp_user_home):
+    """Install the complete bundled skill set to each requested agent home."""
+    results = install_skills_to_agents(
+        agents=["claude", "codex"],
+        level="global",
+        skip_confirmation=True,
+        quiet=True,
+    )
+
+    assert set(results) == {"claude", "codex"}
+    assert all(not failed for _, _, failed in results.values())
+    assert (temp_user_home / ".claude" / "skills" / "daf-cli" / "SKILL.md").exists()
+    assert (temp_user_home / ".codex" / "skills" / "daf-cli" / "SKILL.md").exists()
 
 
 def test_install_reference_skills_already_up_to_date(temp_user_home):

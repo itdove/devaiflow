@@ -1,7 +1,7 @@
 {
   "$defs": {
     "AgentConfig": {
-      "description": "AI agent skill installation configuration.\n\nControls which AI agents should receive skill installations and at what level.\nSupports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf, Aider, Continue).",
+      "description": "AI agent skill installation configuration.\n\nControls which AI agents should receive skill installations and at what level.\nSupports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf, Aider, Continue, OpenCode, Codex, and Crush).",
       "properties": {
         "enabled_agents": {
           "default": [

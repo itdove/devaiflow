@@ -2374,7 +2374,7 @@ class ConfigTUI(App):
                 yield Static("[bold]Claude Code Slash Commands (Claude only)[/bold]", classes="subsection-title")
                 yield Static(
                     "Bundled slash commands provide helpful prompts for multi-conversation sessions. "
-                    "Commands are installed to <workspace>/.claude/commands/",
+                    "Use Upgrade Skills to update the configured AI agents.",
                     classes="section-help",
                 )
 
@@ -3113,35 +3113,61 @@ class ConfigTUI(App):
     def _handle_upgrade_commands(self) -> None:
         """Handle the upgrade skills button press.
 
-        Upgrades bundled skills (slash commands + reference skills) to ~/.claude/skills/.
+        Upgrades bundled skills for the configured or detected AI agents.
         """
-        from devflow.utils.claude_commands import (
-            install_or_upgrade_slash_commands,
-            install_or_upgrade_reference_skills,
-        )
+        from devflow.agent.skill_directories import detect_configured_agents
+        from devflow.utils.claude_commands import install_skills_to_agents
 
-        self.notify("Upgrading skills to ~/.claude/skills/...", severity="information")
+        agents = detect_configured_agents(config=self.config)
+        agent_config = getattr(self.config, "agent", None)
+        install_level = getattr(agent_config, "install_level", "global") or "global"
+        if install_level not in ("global", "project", "both"):
+            install_level = "global"
+
+        project_path = None
+        if install_level in ("project", "both"):
+            repos = getattr(self.config, "repos", None)
+            workspace_path = (
+                repos.get_default_workspace_path()
+                if repos and hasattr(repos, "get_default_workspace_path")
+                else None
+            )
+            if not workspace_path:
+                self.notify(
+                    "Error upgrading skills: project-level installation requires a configured workspace",
+                    severity="error",
+                )
+                return
+            project_path = Path(workspace_path).expanduser().resolve()
+
+        self.notify(
+            f"Upgrading skills for {', '.join(agents)}...",
+            severity="information",
+        )
 
         all_changed = []
         all_up_to_date = []
         all_failed = []
 
         try:
-            # Install slash commands
-            changed, up_to_date, failed = install_or_upgrade_slash_commands(quiet=True)
-            all_changed.extend(changed)
-            all_up_to_date.extend(up_to_date)
-            all_failed.extend(failed)
-
-            # Install reference skills
-            changed, up_to_date, failed = install_or_upgrade_reference_skills(quiet=True)
-            all_changed.extend(changed)
-            all_up_to_date.extend(up_to_date)
-            all_failed.extend(failed)
+            results = install_skills_to_agents(
+                agents=agents,
+                level=install_level,
+                project_path=project_path,
+                skip_confirmation=True,
+                quiet=True,
+            )
+            for changed, up_to_date, failed in results.values():
+                all_changed.extend(changed)
+                all_up_to_date.extend(up_to_date)
+                all_failed.extend(failed)
 
             # Provide summary feedback
             if all_changed:
-                self.notify(f"✓ Upgraded {len(all_changed)} skill(s)", severity="information")
+                self.notify(
+                    f"✓ Upgraded {len(all_changed)} skill(s) for {', '.join(agents)}",
+                    severity="information",
+                )
             elif all_up_to_date:
                 self.notify("✓ All skills are up-to-date", severity="information")
 

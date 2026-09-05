@@ -1,4 +1,4 @@
-"""Implementation of 'daf skills' command for discovery and inspection."""
+"""Implementation of ``daf skills`` discovery and installation compatibility."""
 
 import json
 from pathlib import Path
@@ -19,7 +19,40 @@ console = Console()
 @click.command()
 @click.argument("skill_name", required=False)
 @click.option("--json", "output_json", is_flag=True, help="Output in JSON format")
-def skills(skill_name: Optional[str], output_json: bool) -> None:
+@click.option("--install", is_flag=True, help="Install assets (default action)")
+@click.option("--upgrade", is_flag=True, help="Upgrade assets (same as --install)")
+@click.option("--uninstall", is_flag=True, help="Uninstall assets")
+@click.option("--list", "list_skills", is_flag=True, help="List available or installed assets")
+@click.option("--available", is_flag=True, help="Show available bundled skills (use with --list)")
+@click.option("--installed", is_flag=True, help="Show installed skills (use with --list)")
+@click.option("--type", "asset_type", type=click.Choice(['all', 'bundled', 'hierarchical']))
+@click.option("--dry-run", is_flag=True, help="Show what would be changed without actually changing")
+@click.option("--agent", type=str, help="AI agent to target")
+@click.option("--all-agents", is_flag=True, help="Target all supported agents")
+@click.option("--level", type=click.Choice(['global', 'project', 'both']))
+@click.option("--project-path", type=click.Path(), help="Project directory for project-level operations")
+@click.option("--no-sync-json", is_flag=True, help="Skip JSON config sync")
+@click.option("--list-backups", is_flag=True, help="List available config backups")
+@click.option("--restore-backup", type=str, help="Restore config file from a backup")
+def skills(
+    skill_name: Optional[str],
+    output_json: bool,
+    install: bool,
+    upgrade: bool,
+    uninstall: bool,
+    list_skills: bool,
+    available: bool,
+    installed: bool,
+    asset_type: Optional[str],
+    dry_run: bool,
+    agent: Optional[str],
+    all_agents: bool,
+    level: Optional[str],
+    project_path: Optional[str],
+    no_sync_json: bool,
+    list_backups: bool,
+    restore_backup: Optional[str],
+) -> None:
     """List and inspect available skills.
 
     When run without arguments, lists all available skills grouped by level.
@@ -36,7 +69,53 @@ def skills(skill_name: Optional[str], output_json: bool) -> None:
         # JSON output
         daf skills --json
         daf skills daf-cli --json
+
+        # Install or upgrade bundled skills (compatibility alias for daf assets)
+        daf skills --agent codex
+        daf skills --all-agents
     """
+    installation_options_used = any([
+        install,
+        upgrade,
+        uninstall,
+        list_skills,
+        available,
+        installed,
+        asset_type,
+        dry_run,
+        agent,
+        all_agents,
+        level,
+        project_path,
+        no_sync_json,
+        list_backups,
+        restore_backup,
+    ])
+    if installation_options_used:
+        from devflow.cli.commands.skills_command import assets
+
+        # Keep ``daf skills`` compatible with the installer command while plain
+        # ``daf skills`` remains the discovery/inspection command.
+        assets.callback(
+            skill_name=skill_name,
+            install=install,
+            upgrade=upgrade,
+            uninstall=uninstall,
+            list_skills=list_skills,
+            available=available,
+            installed=installed,
+            asset_type=asset_type,
+            dry_run=dry_run,
+            agent=agent,
+            all_agents=all_agents,
+            level=level,
+            project_path=project_path,
+            no_sync_json=no_sync_json,
+            list_backups=list_backups,
+            restore_backup=restore_backup,
+        )
+        return
+
     config_loader = ConfigLoader()
     config = config_loader.load_config()
 

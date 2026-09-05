@@ -133,8 +133,8 @@ gh auth login
 # Initialize configuration (interactive wizard)
 daf init  # Configures workspaces, GitHub settings, etc.
 
-# Install Claude Code commands and skills
-daf skills  # Installs /daf-* slash commands into Claude Code
+# Install DevAIFlow skills for detected agents
+daf assets  # Installs /daf-* skills into each detected agent
 
 # Path A: Create new issue with analysis
 daf git new --goal "Add two-factor authentication"
@@ -172,7 +172,7 @@ export JIRA_URL="https://jira.example.com"
 
 # Initialize and upgrade
 daf init
-daf skills
+daf assets
 
 # Path A: Create new ticket with analysis
 daf jira new story --parent PROJ-59038 --goal "Add two-factor authentication"
@@ -425,6 +425,9 @@ All core features work across platforms with automatic platform-specific handlin
   - **GitHub Copilot** (experimental)
   - **Cursor** (experimental)
   - **Windsurf** (experimental)
+  - **OpenCode** (experimental)
+  - **Codex** (experimental)
+  - **Crush** (experimental)
 - **Git** - For branch management features
 - **GitHub CLI (`gh`)** (optional) - Required for creating GitHub PRs and fetching PR templates from private repos
 - **GitLab CLI (`glab`)** (optional) - Required for creating GitLab MRs and fetching MR templates from private repos
@@ -535,7 +538,7 @@ DevAIFlow supports the following environment variables for customization:
 - **Example**:
   ```bash
   export CLAUDE_CONFIG_DIR="~/.config/claude"
-  daf skills  # Skills will be installed to $CLAUDE_CONFIG_DIR/skills/
+  daf assets --agent claude  # Skills will be installed to $CLAUDE_CONFIG_DIR/skills/
   ```
 - **Documentation**: https://code.claude.com/docs/en/env-vars
 

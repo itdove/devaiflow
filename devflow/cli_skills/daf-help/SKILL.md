@@ -38,6 +38,9 @@ daf jira update PROJ-12345 --priority Major  # Update ticket
 daf config show              # View current configuration
 daf skills                   # List all available skills
 daf skills <skill-name>      # Inspect specific skill
+daf assets                   # Install/upgrade for detected agents
+daf skills --agent codex     # Install/upgrade skills for Codex
+daf skills --all-agents      # Install/upgrade skills for all agents
 ```
 
 **Getting Help:**

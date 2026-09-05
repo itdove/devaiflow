@@ -3,15 +3,20 @@
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
+from devflow.config.models import AgentConfig
 from devflow.agent.skill_directories import (
     SUPPORTED_AGENTS,
+    detect_configured_agents,
+    get_agent_config_dir,
     get_agent_global_skills_dir,
     get_agent_project_skills_dir,
     get_skill_install_paths,
+    is_agent_configured,
     validate_agent_names,
 )
 
@@ -92,6 +97,36 @@ class TestGetAgentGlobalSkillsDir:
         path = get_agent_global_skills_dir('continue')
         assert path == Path.home() / '.continue' / 'skills'
 
+    def test_codex_default_path(self):
+        """Test Codex uses ~/.codex/skills/ by default."""
+        with patch.dict(os.environ, {}, clear=True):
+            path = get_agent_global_skills_dir('codex')
+            assert path == Path.home() / '.codex' / 'skills'
+
+    def test_codex_respects_codex_home(self, tmp_path):
+        """Test Codex honors CODEX_HOME."""
+        with patch.dict(os.environ, {'CODEX_HOME': str(tmp_path / 'codex')}, clear=True):
+            path = get_agent_global_skills_dir('codex')
+            assert path == tmp_path / 'codex' / 'skills'
+
+    def test_codex_respects_xdg_config_home(self, tmp_path):
+        """Test Codex falls back to XDG_CONFIG_HOME/codex."""
+        with patch.dict(os.environ, {'XDG_CONFIG_HOME': str(tmp_path / 'config')}, clear=True):
+            path = get_agent_global_skills_dir('codex')
+            assert path == tmp_path / 'config' / 'codex' / 'skills'
+
+    def test_crush_default_path(self):
+        """Test Crush uses the XDG data default."""
+        with patch.dict(os.environ, {}, clear=True):
+            path = get_agent_global_skills_dir('crush')
+            assert path == Path.home() / '.local' / 'share' / 'crush' / 'skills'
+
+    def test_crush_respects_xdg_data_home(self, tmp_path):
+        """Test Crush honors XDG_DATA_HOME."""
+        with patch.dict(os.environ, {'XDG_DATA_HOME': str(tmp_path / 'data')}, clear=True):
+            path = get_agent_global_skills_dir('crush')
+            assert path == tmp_path / 'data' / 'crush' / 'skills'
+
     def test_case_insensitive(self):
         """Test agent names are case-insensitive."""
         assert get_agent_global_skills_dir('CLAUDE') == get_agent_global_skills_dir('claude')
@@ -141,6 +176,18 @@ class TestGetAgentProjectSkillsDir:
         project_path = Path('/my/project')
         path = get_agent_project_skills_dir('continue', project_path)
         assert path == Path('/my/project/.continue/skills')
+
+    def test_codex_project_path(self):
+        """Test Codex uses <project>/.codex/skills/."""
+        project_path = Path('/my/project')
+        path = get_agent_project_skills_dir('codex', project_path)
+        assert path == Path('/my/project/.codex/skills')
+
+    def test_crush_project_path(self):
+        """Test Crush uses <project>/.crush/skills/."""
+        project_path = Path('/my/project')
+        path = get_agent_project_skills_dir('crush', project_path)
+        assert path == Path('/my/project/.crush/skills')
 
     def test_path_resolution(self):
         """Test project path is resolved to absolute path."""
@@ -257,16 +304,115 @@ class TestValidateAgentNames:
         # All should be lowercase
         assert all(a.islower() for a in result)
 
+    def test_opencode_alias_normalization(self):
+        """Test the OpenCode alias is accepted and normalized."""
+        assert validate_agent_names(['opencode-ai']) == ['opencode']
+
+
+class TestConfiguredAgentDetection:
+    """Tests for automatic agent detection used by initialization."""
+
+    def test_falls_back_to_claude(self, tmp_path, monkeypatch):
+        """Use Claude when no agent signal is present."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert detect_configured_agents(check_cli=True) == ['claude']
+
+    def test_detects_codex_from_codex_home(self, tmp_path, monkeypatch):
+        """A CODEX_HOME setting counts even before the directory exists."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        with patch.dict(os.environ, {'CODEX_HOME': str(tmp_path / 'codex')}, clear=True):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert detect_configured_agents(check_cli=False) == ['codex']
+
+    def test_detects_crush_from_xdg_config_dir(self, tmp_path, monkeypatch):
+        """An existing Crush config directory counts as a configured agent."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        crush_config = tmp_path / 'config' / 'crush'
+        crush_config.mkdir(parents=True)
+        with patch.dict(
+            os.environ,
+            {'XDG_CONFIG_HOME': str(tmp_path / 'config')},
+            clear=True,
+        ):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert detect_configured_agents(check_cli=False) == ['crush']
+
+    def test_detects_existing_agent_directories(self, tmp_path, monkeypatch):
+        """Existing global agent homes enable all matching agents."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        (tmp_path / '.codex').mkdir()
+        (tmp_path / '.cursor').mkdir()
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert detect_configured_agents(check_cli=False) == ['cursor', 'codex']
+
+    def test_detects_configured_agents_and_aliases_from_config(self, tmp_path, monkeypatch):
+        """Configured agent lists and backend aliases are normalized."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        config = SimpleNamespace(
+            agent=SimpleNamespace(enabled_agents=['github-copilot', 'codex']),
+            agent_backend='opencode-ai',
+            model_provider=None,
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert detect_configured_agents(config, check_cli=False) == [
+                    'copilot', 'opencode', 'codex'
+                ]
+
+    def test_is_agent_configured_checks_cli(self, tmp_path, monkeypatch):
+        """A unique agent executable is a valid installation signal."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value='/bin/codex'):
+                assert is_agent_configured('codex', check_cli=True) is True
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert is_agent_configured('codex', check_cli=True) is False
+
+    def test_config_dir_matches_global_skills_path(self, tmp_path, monkeypatch):
+        """The resolved config directory is the parent of the skill directory."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        assert get_agent_config_dir('codex') == tmp_path / '.codex'
+
+    def test_detection_accepts_mapping_config(self, tmp_path, monkeypatch):
+        """Configuration detection also accepts serialized config mappings."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        config = {
+            'agent': {'enabled_agents': ['codex']},
+            'agent_backend': None,
+            'model_provider': {'profiles': {}},
+        }
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert detect_configured_agents(config, check_cli=False) == ['codex']
+
+    def test_backend_signal_does_not_include_default_claude(self, tmp_path, monkeypatch):
+        """An explicit backend should not be joined by AgentConfig's default Claude value."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        config = SimpleNamespace(
+            agent=AgentConfig(),
+            agent_backend='codex',
+            model_provider=None,
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('devflow.agent.skill_directories.shutil.which', return_value=None):
+                assert detect_configured_agents(config, check_cli=False) == ['codex']
+
 
 class TestSupportedAgents:
     """Tests for SUPPORTED_AGENTS constant."""
 
     def test_supported_agents_list(self):
         """Test SUPPORTED_AGENTS contains expected agents."""
-        expected_agents = ['claude', 'copilot', 'github-copilot', 'cursor', 'windsurf', 'aider', 'continue', 'opencode']
+        expected_agents = [
+            'claude', 'copilot', 'github-copilot', 'cursor', 'windsurf',
+            'aider', 'continue', 'opencode', 'codex', 'crush'
+        ]
         assert set(SUPPORTED_AGENTS) == set(expected_agents)
 
     def test_supported_agents_count(self):
         """Test SUPPORTED_AGENTS has the expected count."""
-        # 7 unique agents + 1 alias (github-copilot -> copilot)
-        assert len(SUPPORTED_AGENTS) == 8
+        # 9 unique agents + 1 alias (github-copilot -> copilot)
+        assert len(SUPPORTED_AGENTS) == 10

@@ -493,19 +493,19 @@ After running `daf init`, verify and customize your configuration:
 
 For detailed configuration options and multi-file structure, see [Multi-File Configuration System](../reference/configuration.md#multi-file-configuration-system).
 
-### 2. Install Claude Code Skills
+### 2. Install DevAIFlow Skills
 
-After initializing configuration, install the DevAIFlow skills into Claude Code:
+After initializing configuration, install the DevAIFlow skills for detected agents:
 
 ```bash
-daf skills
+daf assets
 ```
 
-This installs all bundled skills globally to `~/.claude/skills/`:
+This installs all bundled skills globally to each detected agent's global skills directory:
 - **Slash commands** (`/daf-*`) - Skills with `name:` field in frontmatter (e.g., `/daf-help`, `/daf-list`, `/daf-status`)
 - **Reference skills** - Skills without `name:` field that are auto-loaded (e.g., `daf-cli`, `gh-cli`, `glab-cli`)
 
-These enable you to use DevAIFlow features directly within Claude Code sessions.
+When no supported agent is detected, Claude Code remains the backwards-compatible fallback. Use `daf assets --agent codex` (or `daf skills --agent codex`) for an explicit target.
 
 **Example usage:**
 ```bash
@@ -513,10 +513,10 @@ These enable you to use DevAIFlow features directly within Claude Code sessions.
 daf skills --dry-run
 
 # Install all skills (slash commands + reference skills)
-daf skills
+daf assets
 ```
 
-**Note:** Skills are installed globally to `~/.claude/skills/` and are available in all Claude Code sessions. Claude Code 2.1.3+ is required for slash command support.
+**Note:** Claude Code uses `~/.claude/skills/` by default, while Codex uses `~/.codex/skills/` (or `$CODEX_HOME/skills/`). Claude Code 2.1.3+ is required for slash command support.
 
 ### 3. Edit Configuration (Optional)
 
