@@ -1294,7 +1294,8 @@ The tool can automatically fetch and fill PR/MR templates from your repository. 
 
 Templates are automatically discovered in this priority order:
 1. Organization `.github` repository (enforced, cannot be overridden)
-2. Repository `.github/`, `docs/`, or root directory
+2. Repository `.github/PULL_REQUEST_TEMPLATE.md`, `.github/pull_request_template.md`,
+   `docs/PULL_REQUEST_TEMPLATE.md`, or `PULL_REQUEST_TEMPLATE.md` at the root
 3. User-configured URL in `config.json` (for testing)
 4. Default built-in template
 

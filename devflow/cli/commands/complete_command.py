@@ -2838,8 +2838,9 @@ def _try_discover_repo_template(working_dir: Path) -> Optional[str]:
 
     Checks standard locations in order:
     1. .github/PULL_REQUEST_TEMPLATE.md
-    2. docs/PULL_REQUEST_TEMPLATE.md
-    3. PULL_REQUEST_TEMPLATE.md (root)
+    2. .github/pull_request_template.md
+    3. docs/PULL_REQUEST_TEMPLATE.md
+    4. PULL_REQUEST_TEMPLATE.md (root)
 
     Args:
         working_dir: Repository path
@@ -2849,6 +2850,7 @@ def _try_discover_repo_template(working_dir: Path) -> Optional[str]:
     """
     standard_locations = [
         ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/pull_request_template.md",
         "docs/PULL_REQUEST_TEMPLATE.md",
         "PULL_REQUEST_TEMPLATE.md",
     ]
