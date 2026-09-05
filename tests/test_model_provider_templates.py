@@ -3,6 +3,7 @@
 import pytest
 from devflow.config.templates.model_providers import (
     AnthropicTemplate,
+    CodexTemplate,
     VertexAITemplate,
     OpenRouterTemplate,
     CustomServerTemplate,
@@ -76,6 +77,28 @@ class TestAnthropicTemplate:
 
         errors = template.validate(form_data)
         assert len(errors) == 0
+
+
+class TestCodexTemplate:
+    """Tests for the Codex/OpenAI provider template."""
+
+    def test_generate_config(self):
+        template = CodexTemplate()
+        config = template.generate_config(
+            {
+                "profile_name": "codex-profile",
+                "api_key": "test-key",
+                "model_name": "gpt-5-codex",
+            }
+        )
+
+        assert config == {
+            "name": "codex-profile",
+            "provider": "codex",
+            "agent_backend": "codex",
+            "api_key": "test-key",
+            "model_name": "gpt-5-codex",
+        }
 
 
 class TestVertexAITemplate:
@@ -245,11 +268,13 @@ class TestTemplateRegistry:
         assert "vertex" in registry
         assert "openrouter" in registry
         assert "custom" in registry
+        assert "codex" in registry
 
         assert isinstance(registry["anthropic"], AnthropicTemplate)
         assert isinstance(registry["vertex"], VertexAITemplate)
         assert isinstance(registry["openrouter"], OpenRouterTemplate)
         assert isinstance(registry["custom"], CustomServerTemplate)
+        assert isinstance(registry["codex"], CodexTemplate)
 
 
 class TestDetectTemplate:

@@ -70,6 +70,19 @@ class TestModelFlagInHelp:
         assert result.exit_code == 0
         assert "--model-profile" in result.output
 
+    @pytest.mark.parametrize("cmd", [
+        ["new", "--help"],
+        ["open", "--help"],
+        ["investigate", "--help"],
+        ["jira", "new", "--help"],
+        ["git", "new", "--help"],
+    ])
+    def test_session_commands_do_not_expose_agent_selector(self, cmd):
+        runner = CliRunner()
+        result = runner.invoke(cli, cmd)
+        assert result.exit_code == 0
+        assert "--agent" not in result.output
+
 
 class TestModelFlagPassthrough:
     """Test --model flag is passed through to command handlers."""

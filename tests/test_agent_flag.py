@@ -1,12 +1,10 @@
-"""Tests for --agent flag on daf open/new/investigate/jira new/git new.
+"""Tests for internal agent adapters and profile-only session selection.
 
 Tests cover:
 - Agent backend validation (SUPPORTED_BACKENDS, validate_agent_backend)
-- Priority resolution for daf open: flag > session > config > default
-- Priority resolution for daf new: flag > config > default
+- Priority resolution for daf open/new through model profiles and session state
 - Agent stored in session metadata for future reopens
-- --agent flag accepted by all 5 commands
-- Invalid agent names rejected with clear error
+- Standalone --agent flag is not exposed by session commands
 - List command shows agent column
 """
 
@@ -269,67 +267,66 @@ class TestAgentStoredInSession:
 
 
 # ───────────────────────────────────────────────────────────────────────────────
-# CLI --agent flag acceptance on all 5 commands
+# Standalone --agent flag is removed from all 5 session commands
 # ───────────────────────────────────────────────────────────────────────────────
 
-class TestAgentFlagAccepted:
-    """Tests that --agent flag is accepted by all 5 commands."""
+class TestAgentFlagRemoved:
+    """Tests that session commands use model profiles instead of --agent."""
 
-    def test_new_accepts_agent_flag(self, temp_daf_home):
-        """daf new --help shows --agent option."""
+    def test_new_does_not_expose_agent_flag(self, temp_daf_home):
+        """daf new --help does not show --agent option."""
         runner = CliRunner()
         result = runner.invoke(cli, ["new", "--help"])
         assert result.exit_code == 0
-        assert "--agent" in result.output
+        assert "--agent" not in result.output
 
-    def test_open_accepts_agent_flag(self, temp_daf_home):
-        """daf open --help shows --agent option."""
+    def test_open_does_not_expose_agent_flag(self, temp_daf_home):
+        """daf open --help does not show --agent option."""
         runner = CliRunner()
         result = runner.invoke(cli, ["open", "--help"])
         assert result.exit_code == 0
-        assert "--agent" in result.output
+        assert "--agent" not in result.output
 
-    def test_investigate_accepts_agent_flag(self, temp_daf_home):
-        """daf investigate --help shows --agent option."""
+    def test_investigate_does_not_expose_agent_flag(self, temp_daf_home):
+        """daf investigate --help does not show --agent option."""
         runner = CliRunner()
         result = runner.invoke(cli, ["investigate", "--help"])
         assert result.exit_code == 0
-        assert "--agent" in result.output
+        assert "--agent" not in result.output
 
-    def test_jira_new_accepts_agent_flag(self, temp_daf_home):
-        """daf jira new --help shows --agent option."""
+    def test_jira_new_does_not_expose_agent_flag(self, temp_daf_home):
+        """daf jira new --help does not show --agent option."""
         runner = CliRunner()
         result = runner.invoke(cli, ["jira", "new", "--help"])
         assert result.exit_code == 0
-        assert "--agent" in result.output
+        assert "--agent" not in result.output
 
-    def test_git_new_accepts_agent_flag(self, temp_daf_home):
-        """daf git new --help shows --agent option."""
+    def test_git_new_does_not_expose_agent_flag(self, temp_daf_home):
+        """daf git new --help does not show --agent option."""
         runner = CliRunner()
         result = runner.invoke(cli, ["git", "new", "--help"])
         assert result.exit_code == 0
-        assert "--agent" in result.output
+        assert "--agent" not in result.output
 
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Invalid agent names rejected
 # ───────────────────────────────────────────────────────────────────────────────
 
-class TestInvalidAgentRejected:
-    """Tests that invalid agent names are rejected."""
+class TestStandaloneAgentRejected:
+    """Tests that the removed standalone agent option is rejected."""
 
-    def test_new_rejects_invalid_agent(self, temp_daf_home):
-        """daf new --agent invalid-agent exits with error."""
+    def test_new_rejects_standalone_agent_option(self, temp_daf_home):
+        """daf new --agent is no longer accepted."""
         runner = CliRunner()
         result = runner.invoke(cli, [
             "new", "--name", "test", "--goal", "test", "--agent", "invalid-agent"
         ], input="n\n")  # Answer no to any prompt
-        # Should fail with BadParameter
         assert result.exit_code != 0
-        assert "Unsupported agent backend" in result.output
+        assert "No such option '--agent'" in result.output
 
-    def test_open_rejects_invalid_agent(self, temp_daf_home):
-        """daf open --agent invalid-agent exits with error."""
+    def test_open_rejects_standalone_agent_option(self, temp_daf_home):
+        """daf open --agent is no longer accepted."""
         # Create a session first
         config_loader = ConfigLoader()
         session_manager = SessionManager(config_loader)
@@ -345,7 +342,7 @@ class TestInvalidAgentRejected:
             "open", "test-reject", "--agent", "nonexistent-agent"
         ])
         assert result.exit_code != 0
-        assert "Unsupported agent backend" in result.output
+        assert "No such option '--agent'" in result.output
 
 
 # ───────────────────────────────────────────────────────────────────────────────

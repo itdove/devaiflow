@@ -121,6 +121,8 @@ class AnthropicTemplate(ProviderTemplate):
         """Generate Anthropic profile configuration."""
         config = {
             "name": form_data["profile_name"],
+            "provider": "anthropic",
+            "agent_backend": "claude",
         }
 
         # Only add optional fields if provided
@@ -129,6 +131,59 @@ class AnthropicTemplate(ProviderTemplate):
         if form_data.get("model_name"):
             config["model_name"] = form_data["model_name"]
 
+        return config
+
+
+class CodexTemplate(ProviderTemplate):
+    """Template for OpenAI credentials used by the Codex agent."""
+
+    def get_name(self) -> str:
+        return "OpenAI / Codex"
+
+    def get_description(self) -> str:
+        return "Use OpenAI models with the Codex agent (API key or Codex login)"
+
+    def get_template_id(self) -> str:
+        return "codex"
+
+    def get_fields(self) -> List[FormField]:
+        return [
+            FormField(
+                field_id="profile_name",
+                label="Profile Name",
+                field_type="input",
+                placeholder="e.g., codex, openai-prod",
+                required=True,
+                help_text="Unique name for this profile",
+            ),
+            FormField(
+                field_id="api_key",
+                label="OpenAI API Key (optional)",
+                field_type="input",
+                placeholder="Leave empty to use Codex login or OPENAI_API_KEY",
+                required=False,
+                help_text="Used when the Codex agent authenticates with an API key",
+            ),
+            FormField(
+                field_id="model_name",
+                label="Model Name (optional)",
+                field_type="input",
+                placeholder="e.g., gpt-5-codex",
+                required=False,
+                help_text="Specific OpenAI model; leave empty for the Codex default",
+            ),
+        ]
+
+    def generate_config(self, form_data: Dict[str, Any]) -> Dict[str, Any]:
+        config = {
+            "name": form_data["profile_name"],
+            "provider": "codex",
+            "agent_backend": "codex",
+        }
+        if form_data.get("api_key"):
+            config["api_key"] = form_data["api_key"]
+        if form_data.get("model_name"):
+            config["model_name"] = form_data["model_name"]
         return config
 
 
@@ -195,6 +250,8 @@ class VertexAITemplate(ProviderTemplate):
         """Generate Vertex AI profile configuration."""
         config = {
             "name": form_data["profile_name"],
+            "provider": "vertex",
+            "agent_backend": "claude",
             "use_vertex": True,
             "vertex_project_id": form_data["vertex_project_id"],
             "vertex_region": form_data["vertex_region"],
@@ -285,6 +342,8 @@ class OpenRouterTemplate(ProviderTemplate):
 
         config = {
             "name": form_data["profile_name"],
+            "provider": "openrouter",
+            "agent_backend": "claude",
             "base_url": form_data.get("base_url") or "https://openrouter.ai/api",
             "auth_token": form_data["auth_token"],
             "api_key": "",  # Empty string to disable ANTHROPIC_API_KEY
@@ -366,6 +425,8 @@ class CustomServerTemplate(ProviderTemplate):
         """Generate custom server profile configuration."""
         config = {
             "name": form_data["profile_name"],
+            "provider": "custom",
+            "agent_backend": "claude",
             "base_url": form_data["base_url"],
             "model_name": form_data["model_name"],
         }
@@ -379,12 +440,79 @@ class CustomServerTemplate(ProviderTemplate):
         return config
 
 
+class LocalProviderTemplate(CustomServerTemplate):
+    """Base template for a named local OpenAI-compatible provider."""
+
+    provider_id = "custom"
+    display_name = "Local Model Server"
+    description = "Connect to a local model server"
+    default_url = "http://localhost:8000"
+    default_agent_backend = "claude"
+
+    def get_name(self) -> str:
+        return self.display_name
+
+    def get_description(self) -> str:
+        return self.description
+
+    def get_template_id(self) -> str:
+        return self.provider_id
+
+    def get_fields(self) -> List[FormField]:
+        fields = super().get_fields()
+        for field in fields:
+            if field.field_id == "base_url":
+                field.label = "API URL"
+                field.default_value = self.default_url
+        return fields
+
+    def generate_config(self, form_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(form_data)
+        data["base_url"] = data.get("base_url") or self.default_url
+        config = super().generate_config(data)
+        config["provider"] = self.provider_id
+        config["agent_backend"] = self.default_agent_backend
+        return config
+
+
+class LlamaCppTemplate(LocalProviderTemplate):
+    """Template for a local llama.cpp server."""
+
+    provider_id = "llama.cpp"
+    display_name = "llama.cpp"
+    description = "Use a local llama.cpp server (API URL is required)"
+    default_url = "http://localhost:8000"
+
+
+class OllamaTemplate(LocalProviderTemplate):
+    """Template for an Ollama server."""
+
+    provider_id = "ollama"
+    display_name = "Ollama"
+    description = "Use models served by a local Ollama instance (API URL is required)"
+    default_url = "http://localhost:11434"
+    default_agent_backend = "ollama"
+
+
+class MLXTemplate(LocalProviderTemplate):
+    """Template for an MLX server."""
+
+    provider_id = "mlx"
+    display_name = "MLX"
+    description = "Use a local MLX server (API URL is required)"
+    default_url = "http://localhost:8080"
+
+
 # Template Registry
 _TEMPLATE_REGISTRY: Dict[str, ProviderTemplate] = {
     "anthropic": AnthropicTemplate(),
+    "codex": CodexTemplate(),
     "vertex": VertexAITemplate(),
     "openrouter": OpenRouterTemplate(),
     "custom": CustomServerTemplate(),
+    "llama.cpp": LlamaCppTemplate(),
+    "ollama": OllamaTemplate(),
+    "mlx": MLXTemplate(),
 }
 
 
@@ -406,12 +534,23 @@ def detect_template_from_profile(profile_data: Dict[str, Any]) -> str:
     Returns:
         Template ID (one of: anthropic, vertex, openrouter, custom)
     """
+    if hasattr(profile_data, "model_dump"):
+        profile_data = profile_data.model_dump()
+
+    provider = str(profile_data.get("provider", "")).lower()
+    if provider in _TEMPLATE_REGISTRY:
+        return provider
+    if provider in {"llama-cpp", "llamacpp"}:
+        return "llama.cpp"
+    if provider == "mlx-lm":
+        return "mlx"
+
     # Check for Vertex AI
     if profile_data.get("use_vertex"):
         return "vertex"
 
     # Check for OpenRouter (has base_url pointing to openrouter.ai)
-    base_url = profile_data.get("base_url", "")
+    base_url = profile_data.get("api_url") or profile_data.get("base_url", "")
     if "openrouter.ai" in base_url:
         return "openrouter"
 

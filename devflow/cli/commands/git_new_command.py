@@ -500,6 +500,11 @@ def create_git_issue_session(
             workspace=workspace,
             selected_workspace_name=selected_workspace_name,
             repository=repository,
+            agent=agent,
+            model_profile=model_profile,
+            model=model,
+            headless=headless,
+            auto_approve=auto_approve,
         )
     elif path is not None:
         # Use provided path
@@ -567,6 +572,11 @@ def create_git_issue_session(
                 workspace=workspace,
                 selected_workspace_name=selected_workspace_name,
                 repository=repository,
+                agent=agent,
+                model_profile=model_profile,
+                model=model,
+                headless=headless,
+                auto_approve=auto_approve,
             )
 
         project_path = project_paths_result[0]
@@ -623,6 +633,14 @@ def create_git_issue_session(
     # Build the goal string that includes the issue creation task
     full_goal = f"Create GitHub/GitLab issue: {goal}" if not issue_type else f"Create GitHub/GitLab {issue_type}: {goal}"
 
+    _agent_backend = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
+    from devflow.utils.model_provider import get_model_for_command
+    _model_id = get_model_for_command(
+        config, _agent_backend, "git_new", profile_name=model_profile, cli_model=model,
+    )
+
     # Create session with session_type="ticket_creation"
     session = session_manager.create_session(
         name=name,
@@ -630,8 +648,9 @@ def create_git_issue_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=branch,
-        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
+        agent_backend=_agent_backend,
         model_profile=model_profile,
+        model_id=_model_id,
     )
 
     # Set session_type to "ticket_creation"
@@ -697,15 +716,19 @@ def create_git_issue_session(
         return
 
     # Check if we should launch Claude Code
-    agent_name = get_agent_display_name(resolve_agent_backend(cli_override=agent, config=config))
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    _agent_backend_for_id = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
+    agent_name = get_agent_display_name(_agent_backend_for_id)
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=_agent_backend_for_id
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
 
     # Generate a new agent session ID (agent-aware: placeholder for self-ID backends)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = resolve_agent_backend(cli_override=agent, config=config)
     ai_agent_session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Update session with Claude session ID
@@ -762,16 +785,28 @@ def create_git_issue_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = resolve_agent_backend(cli_override=agent, config=config)
+        agent_backend = resolve_agent_backend(
+            cli_override=agent, config=config, model_profile=session.model_profile
+        )
         agent_name = get_agent_display_name(agent_backend)
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
-        from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override
+        from devflow.utils.model_provider import (
+            get_active_profile as get_model_profile,
+            apply_model_override,
+            build_env_from_profile,
+        )
         model_profile = None
         if config and config.model_provider:
-            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+            model_profile = get_model_profile(
+                config,
+                override_profile_name=session.model_profile,
+                agent_backend=agent_backend,
+                command="git_new",
+            )
         model_profile = apply_model_override(model_profile, model)
+        env.update(build_env_from_profile(model_profile, env))
 
         workspace_path_for_skills = None
         if session.workspace_name and config and config.repos:
@@ -1170,6 +1205,11 @@ def _create_multi_project_git_session(
     workspace: Optional[str],
     selected_workspace_name: str,
     repository: Optional[str] = None,
+    agent: Optional[str] = None,
+    model_profile: Optional[str] = None,
+    model: Optional[str] = None,
+    headless: bool = False,
+    auto_approve: bool = False,
 ) -> None:
     """Create a multi-project ticket creation session for GitHub/GitLab (Issue #179).
 
@@ -1185,6 +1225,11 @@ def _create_multi_project_git_session(
         workspace: Workspace flag
         selected_workspace_name: Selected workspace name
         repository: Optional repository in owner/repo format
+        agent: AI agent backend override
+        model_profile: Model provider profile override
+        model: Session model override
+        headless: Run the agent non-interactively
+        auto_approve: Skip agent permission prompts
     """
     from devflow.cli.commands.ticket_creation_multiproject import create_multi_project_ticket_creation_session
 
@@ -1213,6 +1258,9 @@ def _create_multi_project_git_session(
         selected_workspace_name=selected_workspace_name,
         session_type="ticket_creation",
         issue_type=issue_type,
+        agent=agent,
+        model_profile=model_profile,
+        model=model,
     )
 
     # Set issue tracker backend (github or gitlab) from target repository
@@ -1230,8 +1278,11 @@ def _create_multi_project_git_session(
     session_manager.update_session(session)
 
     # Check if we should launch Claude Code
-    agent_name = get_agent_display_name(resolve_agent_backend(config=config, session=session))
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    _agent_backend_for_id = resolve_agent_backend(config=config, session=session)
+    agent_name = get_agent_display_name(_agent_backend_for_id)
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=_agent_backend_for_id
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
@@ -1249,21 +1300,52 @@ def _create_multi_project_git_session(
         repository=repository,
     )
 
-    # Launch Claude Code
-    from devflow.claude_code.launcher import launch_claude_code
     from devflow.cli.utils import handle_claude_code_launch_failure
 
-    # Use the first project as the primary working directory for Claude Code
+    # Use the first project as the primary working directory for the selected agent
     primary_project_path = project_paths[0]
 
-    success = launch_claude_code(
-        project_path=primary_project_path,
-        initial_prompt=initial_prompt,
-        ai_agent_session_id=ai_agent_session_id,
-        config=config
-    )
+    agent_backend = resolve_agent_backend(config=config, session=session)
+    try:
+        from devflow.agent import create_agent_client
+        from devflow.agent.factory import launch_and_capture
+        from devflow.utils.model_provider import (
+            apply_model_override,
+            build_env_from_profile,
+            get_active_profile,
+        )
 
-    if not success:
+        agent_client = create_agent_client(agent_backend)
+        resolved_profile = get_active_profile(
+            config,
+            override_profile_name=session.model_profile,
+            agent_backend=agent_backend,
+            command="git_new",
+        )
+        resolved_profile = apply_model_override(resolved_profile, model)
+        env = build_env_from_profile(resolved_profile)
+        env.update({
+            "CS_SESSION_NAME": name,
+            "DAF_SESSION_NAME": name,
+            "DAF_COMMAND": "git-new",
+            "DEVAIFLOW_IN_SESSION": "1",
+        })
+        launch_and_capture(
+            agent_client,
+            agent_backend,
+            primary_project_path,
+            session.active_conversation,
+            initial_prompt=initial_prompt,
+            session_id=ai_agent_session_id,
+            model_provider_profile=resolved_profile,
+            workspace_path=workspace_path,
+            config=config,
+            env=env,
+            headless=headless,
+            auto_approve=auto_approve,
+            model_override=model,
+            display_name=session.name,
+            session=session,
+        )
+    except Exception:
         handle_claude_code_launch_failure(session, session_manager, name)
-
-

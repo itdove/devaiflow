@@ -211,6 +211,8 @@ def _select_from_workspace_repos(
     model_profile: Optional[str],
     agent: Optional[str] = None,
     model: Optional[str] = None,
+    headless: bool = False,
+    auto_approve: bool = False,
     reasoning_effort: Optional[str] = None,
 ):
     """Select project(s) from workspace repositories.
@@ -281,13 +283,28 @@ def _select_from_workspace_repos(
             model_profile=model_profile,
             agent=agent,
             model=model,
+            headless=headless,
+            auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
         )
         return ("multi_project_handled",)
 
     return (project_paths_result[0], selected_workspace_name)
 
 
-def _prompt_investigation_location(config, config_loader, name, goal, parent, model_profile, agent=None, model=None):
+def _prompt_investigation_location(
+    config,
+    config_loader,
+    name,
+    goal,
+    parent,
+    model_profile,
+    agent=None,
+    model=None,
+    headless=False,
+    auto_approve=False,
+    reasoning_effort=None,
+):
     """Prompt user for investigation location when no path/workspace specified.
 
     Presents 4 options:
@@ -366,7 +383,18 @@ def _prompt_investigation_location(config, config_loader, name, goal, parent, mo
 
     elif choice == "4":
         result = _select_from_workspace_repos(
-            config, config_loader, None, name, goal, parent, model_profile, agent=agent, model=model,
+            config,
+            config_loader,
+            None,
+            name,
+            goal,
+            parent,
+            model_profile,
+            agent=agent,
+            model=model,
+            headless=headless,
+            auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
         )
         if result is None:
             return None
@@ -512,6 +540,9 @@ def create_investigation_session(
             model_profile=model_profile,
             agent=agent,
             model=model,
+            headless=headless,
+            auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
         )
     elif path is not None:
         # Use provided path
@@ -526,7 +557,18 @@ def create_investigation_session(
     elif workspace:
         # --workspace provided without --projects: go to workspace repo selection
         result = _select_from_workspace_repos(
-            config, config_loader, workspace, name, goal, parent, model_profile, agent=agent, model=model,
+            config,
+            config_loader,
+            workspace,
+            name,
+            goal,
+            parent,
+            model_profile,
+            agent=agent,
+            model=model,
+            headless=headless,
+            auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
         )
         if result is None:
             sys.exit(1)
@@ -536,7 +578,17 @@ def create_investigation_session(
     else:
         # No --path, --projects, or --workspace: ask user where to work
         result = _prompt_investigation_location(
-            config, config_loader, name, goal, parent, model_profile, agent=agent, model=model,
+            config,
+            config_loader,
+            name,
+            goal,
+            parent,
+            model_profile,
+            agent=agent,
+            model=model,
+            headless=headless,
+            auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
         )
         if result is None:
             if is_json_mode():
@@ -611,6 +663,14 @@ def create_investigation_session(
     else:
         full_goal = f"Investigate: {goal}"
 
+    _agent_backend = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
+    from devflow.utils.model_provider import get_model_for_command
+    _model_id = get_model_for_command(
+        config, _agent_backend, "investigation", profile_name=model_profile, cli_model=model,
+    )
+
     # Create session with session_type="investigation"
     session = session_manager.create_session(
         name=name,
@@ -619,7 +679,8 @@ def create_investigation_session(
         project_path=project_path,
         branch=None,  # No branch for investigation sessions
         model_profile=model_profile,
-        agent_backend=resolve_agent_backend(cli_override=agent, config=config),
+        agent_backend=_agent_backend,
+        model_id=_model_id,
     )
 
     # Set session_type to "investigation"
@@ -663,11 +724,15 @@ def create_investigation_session(
         return
 
     # Resolve agent display name for user-facing messages
-    agent_backend = resolve_agent_backend(cli_override=agent, config=config)
+    agent_backend = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
     agent_name = get_agent_display_name(agent_backend)
 
     # Check if we should launch Claude Code
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=agent_backend
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
@@ -718,7 +783,13 @@ def create_investigation_session(
 
     # Get active model provider profile
     from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name, apply_model_override
-    model_provider_profile = get_active_profile(config, override_profile_name=session.model_profile) if config else None
+    agent_backend = _agent_backend
+    model_provider_profile = get_active_profile(
+        config,
+        override_profile_name=session.model_profile,
+        agent_backend=agent_backend,
+        command="investigation",
+    ) if config else None
     model_provider_profile = apply_model_override(model_provider_profile, model)
 
     # Display which model provider is being used
@@ -744,14 +815,18 @@ def create_investigation_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        agent_backend = resolve_agent_backend(cli_override=agent, config=config)
         agent_client = create_agent_client(agent_backend)
 
         # Get model provider profile if configured
         from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override as _apply_model_override
         model_profile = None
         if config and config.model_provider:
-            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+            model_profile = get_model_profile(
+                config,
+                override_profile_name=session.model_profile,
+                agent_backend=agent_backend,
+                command="investigation",
+            )
         model_profile = _apply_model_override(model_profile, model)
 
         # AAP-64886: Get workspace path from session instead of using default
@@ -1082,6 +1157,9 @@ def _create_multi_project_investigation_session(
     model_profile: Optional[str] = None,
     agent: Optional[str] = None,
     model: Optional[str] = None,
+    headless: bool = False,
+    auto_approve: bool = False,
+    reasoning_effort: Optional[str] = None,
 ) -> None:
     """Create a multi-project investigation session (Issue #182).
 
@@ -1096,6 +1174,10 @@ def _create_multi_project_investigation_session(
         selected_workspace_name: Selected workspace name
         model_profile: Optional model provider profile
         agent: AI agent backend override (e.g., "claude", "opencode")
+        model: Session model override
+        headless: Run the agent non-interactively
+        auto_approve: Skip agent permission prompts
+        reasoning_effort: Agent reasoning effort override
     """
     from devflow.cli.commands.ticket_creation_multiproject import create_multi_project_ticket_creation_session
     from devflow.cli.utils import get_workspace_path, resolve_workspace_path
@@ -1129,6 +1211,9 @@ def _create_multi_project_investigation_session(
         selected_workspace_name=selected_workspace_name,
         session_type="investigation",  # Use investigation session type
         agent=agent,
+        model_profile=model_profile,
+        model=model,
+        command="investigation",
     )
 
     # Set model profile if provided
@@ -1146,7 +1231,9 @@ def _create_multi_project_investigation_session(
     agent_name = get_agent_display_name(agent_backend)
 
     # Check if we should launch the AI agent
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=agent_backend
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
@@ -1173,7 +1260,15 @@ def _create_multi_project_investigation_session(
 
     # Get active model provider profile
     from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name, apply_model_override
-    model_provider_profile = get_active_profile(config, override_profile_name=session.model_profile) if config else None
+    _agent_backend = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
+    )
+    model_provider_profile = get_active_profile(
+        config,
+        override_profile_name=session.model_profile,
+        agent_backend=_agent_backend,
+        command="investigation",
+    ) if config else None
     model_provider_profile = apply_model_override(model_provider_profile, model)
 
     # Display which model provider is being used
@@ -1199,14 +1294,18 @@ def _create_multi_project_investigation_session(
         # Get agent backend from config
         from devflow.agent import create_agent_client
 
-        _agent_backend = resolve_agent_backend(config=config, session=session)
         agent_client = create_agent_client(_agent_backend)
 
         # Get model provider profile if configured
         from devflow.utils.model_provider import get_active_profile as get_model_profile, apply_model_override as _apply_model_override2
         model_profile = None
         if config and config.model_provider:
-            model_profile = get_model_profile(config, override_profile_name=session.model_profile)
+            model_profile = get_model_profile(
+                config,
+                override_profile_name=session.model_profile,
+                agent_backend=_agent_backend,
+                command="investigation",
+            )
         model_profile = _apply_model_override2(model_profile, model)
 
         # Use workspace path as the primary directory
@@ -1234,6 +1333,7 @@ def _create_multi_project_investigation_session(
             env=env,
             headless=headless,
             auto_approve=auto_approve,
+            reasoning_effort=reasoning_effort,
             display_name=session.name,
             session=session,
         )

@@ -1092,8 +1092,12 @@ def check_concurrent_session(
     return ConcurrencyCheckResult(safe_to_proceed=False, active_session=active_session)
 
 
-def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool = False) -> bool:
-    """Check if AI agent should be launched based on config or user prompt.
+def should_launch_claude_code(
+    config: Optional[Config] = None,
+    mock_mode: bool = False,
+    agent_backend: Optional[str] = None,
+) -> bool:
+    """Check if the selected AI agent should be launched.
 
     This shared utility consolidates the logic for determining whether to launch
     the AI agent across all commands (daf open, daf new, daf jira new).
@@ -1103,6 +1107,8 @@ def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool =
     Args:
         config: Optional Config object to check auto_launch_agent setting
         mock_mode: If True, check DAF_MOCK_MODE environment variable and return False if set
+        agent_backend: Backend selected by the active model profile. When omitted,
+            the configured default backend is used.
 
     Returns:
         True if AI agent should be launched, False otherwise
@@ -1121,7 +1127,7 @@ def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool =
         True
 
         >>> # Without config, prompts user
-        >>> should_launch_claude_code()  # Prompts: "Launch AI agent?"
+        >>> should_launch_claude_code()  # Prompts with the selected agent name
     """
     # Check mock mode first
     from devflow.utils import is_mock_mode
@@ -1132,12 +1138,16 @@ def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool =
         console_print()
         return False
 
+    if agent_backend is None:
+        agent_backend = resolve_agent_backend(config=config)
+    from devflow.agent.factory import get_agent_display_name
+    agent_name = get_agent_display_name(agent_backend)
+
     # Check config setting (with backward compatibility for auto_launch_claude)
     if config and config.prompts:
         # Check auto_launch_agent first (new field)
         if config.prompts.auto_launch_agent is not None:
             should_launch = config.prompts.auto_launch_agent
-            agent_name = resolve_agent_backend(config=config).capitalize()
             if should_launch:
                 console_print(f"[dim]Automatically launching {agent_name} (configured in prompts)[/dim]")
             else:
@@ -1147,9 +1157,9 @@ def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool =
         elif config.prompts.auto_launch_claude is not None:
             should_launch = config.prompts.auto_launch_claude
             if should_launch:
-                console_print("[dim]Automatically launching Claude Code (configured in prompts)[/dim]")
+                console_print(f"[dim]Automatically launching {agent_name} (configured in prompts)[/dim]")
             else:
-                console_print("[dim]Skipping Claude Code launch (configured in prompts)[/dim]")
+                console_print(f"[dim]Skipping {agent_name} launch (configured in prompts)[/dim]")
             return should_launch
 
     # Prompt user (only if not in JSON mode)
@@ -1157,7 +1167,7 @@ def should_launch_claude_code(config: Optional[Config] = None, mock_mode: bool =
         # In JSON mode, default to True (launch) without prompting
         return True
 
-    return Confirm.ask("\nLaunch Claude Code?", default=True)
+    return Confirm.ask(f"\nLaunch {agent_name}?", default=True)
 
 
 def select_workspace(

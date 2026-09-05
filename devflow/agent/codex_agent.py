@@ -29,7 +29,9 @@ Note:
 
 import json
 import os
+import re
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional, Set, List, Dict, Any
 
@@ -70,12 +72,33 @@ class CodexAgent(AgentInterface):
             codex_dir: Codex config directory. Defaults to ~/.codex
         """
         if codex_dir is None:
-            if os.environ.get("XDG_CONFIG_HOME"):
+            if os.environ.get("CODEX_HOME"):
+                codex_dir = Path(os.environ["CODEX_HOME"])
+            elif os.environ.get("XDG_CONFIG_HOME"):
                 codex_dir = Path(os.environ["XDG_CONFIG_HOME"]) / "codex"
             else:
                 codex_dir = Path.home() / ".codex"
 
         self.codex_dir = Path(codex_dir)
+
+    @staticmethod
+    def _build_launch_env(env: Optional[Dict[str, str]]) -> Dict[str, str]:
+        """Prepare an environment for an independent Codex process.
+
+        DevAIFlow can itself be launched from Codex.  Parent-session markers
+        must not be inherited by the child, otherwise Codex may treat the
+        invocation as a nested/CI process and exit instead of opening its TUI.
+        """
+        final_env = (env if env is not None else os.environ).copy()
+        for key in (
+            "CODEX_CI",
+            "CODEX_PERMISSION_PROFILE",
+            "CODEX_THREAD_ID",
+            "CODEX_SESSION_ID",
+            "CODEX_SANDBOX_NETWORK_DISABLED",
+        ):
+            final_env.pop(key, None)
+        return final_env
 
     def launch_session(
         self,
@@ -96,7 +119,7 @@ class CodexAgent(AgentInterface):
         """
         require_tool("codex", "launch Codex AI assistant")
 
-        final_env = env if env is not None else os.environ.copy()
+        final_env = self._build_launch_env(env)
 
         return subprocess.Popen(
             ["codex"],
@@ -148,7 +171,7 @@ class CodexAgent(AgentInterface):
         """
         require_tool("codex", "launch Codex AI assistant")
 
-        final_env = env if env is not None else os.environ.copy()
+        final_env = self._build_launch_env(env)
         from devflow.agent.model_config import get_agent_model_config
         settings = get_agent_model_config(config, self.get_agent_name())
 
@@ -206,7 +229,7 @@ class CodexAgent(AgentInterface):
         """
         require_tool("codex", "resume Codex AI assistant")
 
-        final_env = env if env is not None else os.environ.copy()
+        final_env = self._build_launch_env(env)
 
         cmd = ["codex", "resume", session_id]
 
@@ -300,7 +323,10 @@ class CodexAgent(AgentInterface):
     def get_existing_sessions(self, project_path: str) -> Set[str]:
         """Get set of existing session IDs from Codex.
 
-        Queries the Codex thread_history SQLite database for thread IDs.
+        Queries the Codex thread history database and rollout filenames for
+        thread IDs. The SQLite projection can lag behind the rollout file (or
+        be unavailable while Codex is shutting down), so the file fallback is
+        required for reliable session capture.
 
         Args:
             project_path: Absolute path to project (unused — Codex sessions are global)
@@ -309,17 +335,31 @@ class CodexAgent(AgentInterface):
             Set of session thread IDs
         """
         import sqlite3 as _sqlite3
+        result: Set[str] = set()
         db_path = self.codex_dir / "thread_history_1.sqlite"
-        if not db_path.exists():
-            return set()
-        try:
-            conn = _sqlite3.connect(str(db_path), timeout=5)
-            cursor = conn.execute("SELECT DISTINCT thread_id FROM thread_turns")
-            result = {row[0] for row in cursor.fetchall()}
-            conn.close()
-            return result
-        except Exception:
-            return set()
+        if db_path.exists():
+            try:
+                conn = _sqlite3.connect(str(db_path), timeout=5)
+                cursor = conn.execute("SELECT DISTINCT thread_id FROM thread_turns")
+                result.update(row[0] for row in cursor.fetchall() if row[0])
+                conn.close()
+            except Exception:
+                # The rollout files remain usable when the projection database
+                # is locked, read-only, or from a different Codex version.
+                pass
+
+        sessions_dir = self.codex_dir / "sessions"
+        if sessions_dir.exists():
+            thread_id_pattern = re.compile(
+                r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$",
+                re.IGNORECASE,
+            )
+            for rollout in sessions_dir.rglob("rollout-*.jsonl"):
+                match = thread_id_pattern.search(rollout.name)
+                if match:
+                    result.add(match.group(1))
+
+        return result
 
     def get_session_message_count(self, session_id: str, project_path: str) -> int:
         """Get the number of messages in a Codex session.
@@ -459,35 +499,47 @@ class CodexAgent(AgentInterface):
             pass
         return None
 
-    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None, config=None) -> Optional[str]:
+    def generate_text(
+        self,
+        prompt: str,
+        timeout: int = 30,
+        display_name: Optional[str] = None,
+        config=None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """Generate text using codex exec (non-interactive mode)."""
         try:
             from devflow.agent.model_config import get_agent_model_config
-            settings = get_agent_model_config(config, self.get_agent_name(), utility=True)
+            settings = get_agent_model_config(
+                config,
+                self.get_agent_name(),
+                utility=True,
+                command="pr_template",
+                provider_profile=model_provider_profile,
+            )
+            from devflow.utils.model_provider import build_env_from_profile, get_model_name_from_profile
+
             cmd = ["codex", "exec"]
-            model = settings["model"] or ("gpt-5.6-luna" if config is None else None)
+            model = get_model_name_from_profile(
+                model_provider_profile,
+                command="pr_template",
+                utility=True,
+            ) or settings["model"] or ("gpt-5.6-luna" if config is None else None)
             if model:
                 cmd.extend(["--model", model])
             reasoning = settings["reasoning_effort"] or ("low" if config is None else None)
             if reasoning:
                 cmd.extend(["-c", f'model_reasoning_effort="{reasoning}"'])
             cmd.append(prompt)
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            run_kwargs = {"capture_output": True, "text": True, "timeout": timeout}
+            if model_provider_profile:
+                run_kwargs["env"] = build_env_from_profile(model_provider_profile)
+            result = subprocess.run(cmd, **run_kwargs)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
 
             # Fallback to default model if luna not available
-            result = subprocess.run(
-                ["codex", "exec", prompt],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            result = subprocess.run(["codex", "exec", prompt], **run_kwargs)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
             return None

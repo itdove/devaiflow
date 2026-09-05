@@ -8,6 +8,243 @@ import os
 import re
 from typing import Dict, Optional, Any
 
+import click
+
+
+UTILITY_COMMANDS = {"commit_message", "pr_template"}
+LOCAL_PROVIDERS = {"llama.cpp", "llama-cpp", "llamacpp", "ollama", "mlx", "mlx-lm"}
+CLAUDE_PROFILE_PROVIDERS = {
+    "anthropic",
+    "vertex",
+    "openrouter",
+    "custom",
+    "llama.cpp",
+    "llama-cpp",
+    "llamacpp",
+    "mlx",
+    "mlx-lm",
+}
+
+
+class ModelProviderCompatibilityError(ValueError, click.ClickException):
+    """Raised when a selected profile cannot be used by an agent adapter."""
+
+    def __init__(self, message: str):
+        ValueError.__init__(self, message)
+        click.ClickException.__init__(self, message)
+
+
+class ModelProviderProfileNotFoundError(ValueError, click.ClickException):
+    """Raised when an explicit model profile is not configured."""
+
+    def __init__(self, message: str):
+        ValueError.__init__(self, message)
+        click.ClickException.__init__(self, message)
+
+
+def _profile_to_dict(profile: Any) -> Optional[Dict[str, Any]]:
+    """Return a provider profile as a mutable dictionary."""
+    if profile is None:
+        return None
+    if hasattr(profile, "model_dump"):
+        return profile.model_dump()
+    return dict(profile)
+
+
+def normalize_model_command(command: Optional[str]) -> Optional[str]:
+    """Normalize command names used by CLI options and configuration files."""
+    if not command:
+        return None
+    return {
+        "git-new": "git_new",
+        "jira-new": "jira_new",
+        "investigate": "investigation",
+        "commit": "commit_message",
+        "pr": "pr_template",
+        "pr-template": "pr_template",
+    }.get(command, command)
+
+
+def _provider_name(profile: Dict[str, Any]) -> str:
+    """Return the canonical provider identifier for a profile."""
+    provider = profile.get("provider")
+    if provider:
+        return str(provider).strip().lower()
+    if profile.get("use_vertex"):
+        return "vertex"
+    return str(profile.get("name", "")).strip().lower()
+
+
+def _canonical_agent_backend(agent_backend: Optional[str]) -> str:
+    """Normalize backend aliases for profile selection and compatibility checks."""
+    return {
+        "ollama-claude": "ollama",
+        "anthropic": "claude",
+        "opencode-ai": "opencode",
+    }.get((agent_backend or "").strip().lower(), (agent_backend or "").strip().lower())
+
+
+def get_agent_backend_from_profile(profile: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Return the agent adapter declared by a model provider profile."""
+    if not profile:
+        return None
+    if not isinstance(profile, dict):
+        profile = _profile_to_dict(profile)
+    if not profile:
+        return None
+
+    explicit_backend = profile.get("agent_backend")
+    if explicit_backend:
+        return str(explicit_backend)
+
+    provider = _provider_name(profile)
+    if provider in {"codex", "openai"}:
+        return "codex"
+    if provider == "ollama":
+        return "ollama"
+    if provider in CLAUDE_PROFILE_PROVIDERS:
+        return "claude"
+    return None
+
+
+def get_profile_agent_backend(config, profile_name: Optional[str] = None) -> Optional[str]:
+    """Return the backend selected by a named or default model profile."""
+    profile = get_active_profile(config, override_profile_name=profile_name)
+    return get_agent_backend_from_profile(profile)
+
+
+def get_default_profile_name(config) -> Optional[str]:
+    """Return the configured default profile, or the only profile if there is one.
+
+    A configuration created before model profiles were added can still carry the
+    built-in ``anthropic`` default even after the user adds a different profile.
+    With only one profile there is no meaningful ambiguity, so that profile is
+    the effective default until the user chooses another one.
+    """
+    model_provider_config = getattr(config, "model_provider", None) if config else None
+    profiles = getattr(model_provider_config, "profiles", {}) if model_provider_config else {}
+    if not isinstance(profiles, dict) or not profiles:
+        return None
+
+    configured_default = getattr(model_provider_config, "default_profile", None)
+    if configured_default in profiles:
+        return configured_default
+    if len(profiles) == 1:
+        return next(iter(profiles))
+    return None
+
+
+def _profile_matches_agent(profile_name: str, profile: Dict[str, Any], agent_backend: str) -> bool:
+    """Whether a provider profile is an obvious match for an agent backend."""
+    backend = (agent_backend or "").strip().lower()
+    inferred_backend = get_agent_backend_from_profile(profile)
+    if inferred_backend and _canonical_agent_backend(inferred_backend) == _canonical_agent_backend(backend):
+        return True
+    provider = _provider_name(profile)
+    profile_key = profile_name.strip().lower()
+    aliases = {
+        "ollama-claude": "ollama",
+        "llama_cpp": "llama-cpp",
+        "llama.cpp": "llama-cpp",
+        "mlx-lm": "mlx",
+    }
+    return provider in {backend, aliases.get(backend, backend)} or profile_key in {
+        backend,
+        aliases.get(backend, backend),
+    }
+
+
+def get_profile_compatibility_error(
+    profile: Optional[Dict[str, Any]], agent_backend: Optional[str]
+) -> Optional[str]:
+    """Return a clear error when a profile cannot configure an agent backend."""
+    if not profile or not agent_backend:
+        return None
+
+    backend = _canonical_agent_backend(agent_backend)
+    profile_backend = get_agent_backend_from_profile(profile)
+    if profile.get("agent_backend"):
+        compatible = backend == _canonical_agent_backend(profile_backend)
+        if compatible:
+            return None
+        return (
+            f"Model provider profile '{profile.get('name', '<unnamed>')}' selects agent "
+            f"backend '{profile_backend}', which is not compatible with agent backend "
+            f"'{agent_backend}'. Select a profile with the matching agent adapter."
+        )
+    provider = _provider_name(profile)
+
+    if provider in {"codex", "openai"}:
+        compatible = backend == "codex"
+    elif provider == "ollama":
+        compatible = backend == "ollama"
+    elif provider in CLAUDE_PROFILE_PROVIDERS:
+        compatible = backend == "claude"
+    else:
+        # Unknown/custom provider profiles are only safe for the Anthropic
+        # protocol client until an explicit backend adapter is added.
+        compatible = backend == "claude"
+
+    if compatible:
+        return None
+
+    return (
+        f"Model provider profile '{profile.get('name', '<unnamed>')}' uses provider "
+        f"'{provider}', which is not compatible with agent backend '{agent_backend}'. "
+        f"Select a profile with the matching agent adapter."
+    )
+
+
+def _select_profile_name(config, override_profile_name: Optional[str], agent_backend: Optional[str]) -> Optional[str]:
+    """Resolve a profile name while keeping provider and agent selection separate."""
+    # Session-like objects are frequently mocked by callers and tests.  A
+    # missing string field on a Mock becomes another truthy Mock, which must
+    # not be mistaken for an explicitly requested profile name.
+    if override_profile_name is not None and not isinstance(override_profile_name, str):
+        override_profile_name = None
+
+    model_provider_config = getattr(config, "model_provider", None) if config else None
+    profiles = getattr(model_provider_config, "profiles", {}) if model_provider_config else {}
+    if not isinstance(profiles, dict) or not profiles:
+        if override_profile_name:
+            raise ModelProviderProfileNotFoundError(
+                f"Model provider profile '{override_profile_name}' is not configured. "
+                "Add it with 'daf config edit' or choose a configured profile."
+            )
+        return None
+
+    if override_profile_name:
+        if override_profile_name in profiles:
+            profile = _profile_to_dict(profiles[override_profile_name]) or {}
+            compatibility_error = get_profile_compatibility_error(profile, agent_backend)
+            if compatibility_error:
+                raise ModelProviderCompatibilityError(compatibility_error)
+            return override_profile_name
+        available_profiles = ", ".join(profiles) or "none"
+        raise ModelProviderProfileNotFoundError(
+            f"Model provider profile '{override_profile_name}' is not configured. "
+            f"Available profiles: {available_profiles}"
+        )
+
+    env_profile_name = os.environ.get("MODEL_PROVIDER_PROFILE")
+    if env_profile_name:
+        if env_profile_name in profiles:
+            profile = _profile_to_dict(profiles[env_profile_name]) or {}
+            compatibility_error = get_profile_compatibility_error(profile, agent_backend)
+            if compatibility_error:
+                raise ModelProviderCompatibilityError(compatibility_error)
+            return env_profile_name
+        print(f"Warning: MODEL_PROVIDER_PROFILE={env_profile_name} not found in configuration")
+
+    default_profile = get_default_profile_name(config)
+    if default_profile:
+        profile = _profile_to_dict(profiles[default_profile]) or {}
+        compatibility_error = get_profile_compatibility_error(profile, agent_backend)
+        if compatibility_error:
+            raise ModelProviderCompatibilityError(compatibility_error)
+        return default_profile
+    return None
+
 
 def get_profile_by_name(config, profile_name: str) -> Optional[Dict[str, Any]]:
     """Get a specific model provider profile by name.
@@ -26,63 +263,47 @@ def get_profile_by_name(config, profile_name: str) -> Optional[Dict[str, Any]]:
     if not model_provider_config or not model_provider_config.profiles:
         return None
 
-    profile = model_provider_config.profiles.get(profile_name)
-    if profile:
-        return profile.model_dump() if hasattr(profile, 'model_dump') else profile
-
-    return None
+    return _profile_to_dict(model_provider_config.profiles.get(profile_name))
 
 
-def get_active_profile(config, override_profile_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def get_active_profile(
+    config,
+    override_profile_name: Optional[str] = None,
+    agent_backend: Optional[str] = None,
+    command: Optional[str] = None,
+    utility: bool = False,
+) -> Optional[Dict[str, Any]]:
     """Get the active model provider profile from configuration.
 
     Profile resolution order:
-    1. override_profile_name parameter (highest priority - from --model-profile flag)
+    1. override_profile_name (from --model-profile or the session)
     2. Environment variable MODEL_PROVIDER_PROFILE
     3. Config default_profile setting
-    4. None (use default Anthropic API)
+    4. The only configured profile, when exactly one exists
+    5. None (the native agent owns provider configuration)
 
     Args:
         config: Merged configuration object with model_provider field
         override_profile_name: Optional profile name to use (e.g., from CLI flag or session setting)
+        agent_backend: Optional AI agent backend used to find a matching provider profile
+        command: Optional DevAIFlow command whose model should be selected
+        utility: Whether the command is a commit-message/PR-template utility call
 
     Returns:
         Profile dictionary or None if using default Anthropic API
     """
-    if not config or not hasattr(config, 'model_provider'):
-        return None
-
-    model_provider_config = config.model_provider
-    if not model_provider_config or not model_provider_config.profiles:
-        return None
-
-    # Check override parameter first (from --model-profile flag or session.model_profile)
-    if override_profile_name:
-        profile = model_provider_config.profiles.get(override_profile_name)
-        if profile:
-            return profile.model_dump() if hasattr(profile, 'model_dump') else profile
-        else:
-            # Override specified but profile not found - warn but continue with next priority
-            print(f"Warning: Model profile '{override_profile_name}' not found in configuration")
-
-    # Check environment variable second (temporary override)
-    env_profile_name = os.environ.get("MODEL_PROVIDER_PROFILE")
-    if env_profile_name:
-        profile = model_provider_config.profiles.get(env_profile_name)
-        if profile:
-            return profile.model_dump() if hasattr(profile, 'model_dump') else profile
-        else:
-            # Env var specified but profile not found - warn but continue with default
-            print(f"Warning: MODEL_PROVIDER_PROFILE={env_profile_name} not found in configuration")
-
-    # Use configured default profile
-    if model_provider_config.default_profile:
-        profile = model_provider_config.profiles.get(model_provider_config.default_profile)
-        if profile:
-            return profile.model_dump() if hasattr(profile, 'model_dump') else profile
-
-    # No profile configured - use default Anthropic API
-    return None
+    profile_name = _select_profile_name(config, override_profile_name, agent_backend)
+    profile = get_profile_by_name(config, profile_name) if profile_name else None
+    if profile and command:
+        model_name = get_model_name_from_profile(profile, command=command, utility=utility)
+        if model_name:
+            profile["model_name"] = model_name
+        reasoning_effort = get_reasoning_effort_from_profile(
+            profile, command=command, utility=utility
+        )
+        if reasoning_effort:
+            profile["utility_reasoning_effort" if utility else "reasoning_effort"] = reasoning_effort
+    return profile
 
 
 def build_env_from_profile(profile: Optional[Dict[str, Any]], base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -95,6 +316,9 @@ def build_env_from_profile(profile: Optional[Dict[str, Any]], base_env: Optional
     Returns:
         Environment dict with profile settings applied
     """
+    if profile and not isinstance(profile, dict):
+        profile = _profile_to_dict(profile)
+
     # Start with copy of base environment
     if base_env is None:
         env = os.environ.copy()
@@ -105,15 +329,27 @@ def build_env_from_profile(profile: Optional[Dict[str, Any]], base_env: Optional
     if not profile:
         return env
 
-    # Apply profile settings
-    if profile.get("base_url"):
-        env["ANTHROPIC_BASE_URL"] = profile["base_url"]
+    # Apply profile settings. API URLs are required only for local providers;
+    # cloud providers use their SDK defaults unless a custom URL is supplied.
+    provider = _provider_name(profile)
+    api_url = profile.get("api_url") or profile.get("base_url")
+    if api_url:
+        if provider == "ollama":
+            env["OLLAMA_HOST"] = api_url
+        else:
+            env["ANTHROPIC_BASE_URL"] = api_url
 
     if profile.get("auth_token"):
-        env["ANTHROPIC_AUTH_TOKEN"] = profile["auth_token"]
+        if provider in {"codex", "openai"}:
+            env["OPENAI_API_KEY"] = profile["auth_token"]
+        else:
+            env["ANTHROPIC_AUTH_TOKEN"] = profile["auth_token"]
 
     if "api_key" in profile and profile["api_key"] is not None:
-        env["ANTHROPIC_API_KEY"] = profile["api_key"]
+        if provider in {"codex", "openai"}:
+            env["OPENAI_API_KEY"] = profile["api_key"]
+        else:
+            env["ANTHROPIC_API_KEY"] = profile["api_key"]
 
     if profile.get("use_vertex"):
         env["CLAUDE_CODE_USE_VERTEX"] = "1"
@@ -149,12 +385,16 @@ def apply_model_override(profile: Optional[Dict[str, Any]], model: Optional[str]
         return profile
     if profile is None:
         return {"model_name": model}
-    profile = dict(profile)
+    profile = _profile_to_dict(profile)
     profile["model_name"] = model
     return profile
 
 
-def get_model_name_from_profile(profile: Optional[Dict[str, Any]]) -> Optional[str]:
+def get_model_name_from_profile(
+    profile: Optional[Dict[str, Any]],
+    command: Optional[str] = None,
+    utility: bool = False,
+) -> Optional[str]:
     """Get the model name from a profile.
 
     Args:
@@ -166,7 +406,124 @@ def get_model_name_from_profile(profile: Optional[Dict[str, Any]]) -> Optional[s
     if not profile:
         return None
 
+    if not isinstance(profile, dict):
+        profile = _profile_to_dict(profile)
+    if not profile:
+        return None
+
+    command = normalize_model_command(command)
+    models = profile.get("models") or profile.get("command_models") or {}
+    if command and isinstance(models, dict):
+        if models.get(command):
+            return models[command]
+        if utility and models.get("utility"):
+            return models["utility"]
+
+    if utility:
+        return profile.get("commit_message_model") if command == "commit_message" else (
+            profile.get("pr_template_model") if command == "pr_template" else profile.get("utility_model")
+        ) or profile.get("model_name")
+
     return profile.get("model_name")
+
+
+def get_reasoning_effort_from_profile(
+    profile: Optional[Dict[str, Any]],
+    command: Optional[str] = None,
+    utility: bool = False,
+) -> Optional[str]:
+    """Get the optional reasoning strength configured for a profile command."""
+    if not profile:
+        return None
+
+    if not isinstance(profile, dict):
+        profile = _profile_to_dict(profile)
+    if not profile:
+        return None
+
+    command = normalize_model_command(command)
+    reasoning_efforts = profile.get("reasoning_efforts") or profile.get("command_reasoning") or {}
+    if command and isinstance(reasoning_efforts, dict):
+        if reasoning_efforts.get(command):
+            return reasoning_efforts[command]
+        if utility and reasoning_efforts.get("utility"):
+            return reasoning_efforts["utility"]
+
+    if utility:
+        return profile.get("utility_reasoning_effort") or profile.get("reasoning_effort")
+    return profile.get("reasoning_effort")
+
+
+def get_reasoning_for_command(
+    config,
+    agent_backend: str,
+    command: str,
+    profile_name: Optional[str] = None,
+    cli_override: Optional[str] = None,
+    utility: bool = False,
+) -> Optional[str]:
+    """Resolve reasoning strength using the same precedence as model selection."""
+    if cli_override:
+        return cli_override
+
+    profile = get_active_profile(
+        config,
+        override_profile_name=profile_name,
+        agent_backend=agent_backend,
+        command=command,
+        utility=utility,
+    )
+    reasoning_effort = get_reasoning_effort_from_profile(
+        profile, command=command, utility=utility
+    )
+    if reasoning_effort:
+        return reasoning_effort
+
+    from devflow.agent.model_config import get_agent_model_config
+
+    return get_agent_model_config(
+        config,
+        agent_backend,
+        utility=utility,
+        command=command,
+    )["reasoning_effort"]
+
+
+def get_model_for_command(
+    config,
+    agent_backend: str,
+    command: str,
+    profile_name: Optional[str] = None,
+    cli_model: Optional[str] = None,
+    utility: bool = False,
+) -> Optional[str]:
+    """Resolve the model for a command, including its provider profile.
+
+    ``cli_model`` applies to session commands only. Utility commands deliberately
+    ignore it and use the profile's commit-message or PR-template model.
+    """
+    profile = get_active_profile(
+        config,
+        override_profile_name=profile_name,
+        agent_backend=agent_backend,
+        command=command,
+        utility=utility,
+    )
+    if cli_model and not utility:
+        return cli_model
+    model = get_model_name_from_profile(profile, command=command, utility=utility)
+    if model:
+        return model
+
+    from devflow.agent.model_config import get_agent_model_config
+
+    return get_agent_model_config(
+        config,
+        agent_backend,
+        utility=utility,
+        command=command,
+        model_override=cli_model if not utility else None,
+    )["model"]
 
 
 def get_profile_display_name(profile: Optional[Dict[str, Any]]) -> str:
@@ -182,14 +539,15 @@ def get_profile_display_name(profile: Optional[Dict[str, Any]]) -> str:
         return "Anthropic API"
 
     name = profile.get("name", "Unknown")
+    provider = _provider_name(profile)
 
     # Add additional context based on configuration
     if profile.get("use_vertex"):
         project_id = profile.get("vertex_project_id", "unknown")
         return f"Vertex AI ({project_id})"
 
-    if profile.get("base_url"):
-        base_url = profile["base_url"]
+    if profile.get("base_url") or profile.get("api_url"):
+        base_url = profile.get("api_url") or profile["base_url"]
         if "localhost" in base_url or "127.0.0.1" in base_url:
             model = profile.get("model_name", "local model")
             return f"{name} ({model})"
@@ -199,7 +557,7 @@ def get_profile_display_name(profile: Optional[Dict[str, Any]]) -> str:
         else:
             return f"{name} ({base_url})"
 
-    return name
+    return f"{name} ({provider})" if provider and provider != name.lower() else name
 
 
 def parse_claude_model_display_name(model_id: str) -> str:

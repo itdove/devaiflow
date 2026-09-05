@@ -43,6 +43,18 @@
                 "type": "string",
                 "description": "Profile name"
               },
+              "provider": {
+                "type": ["string", "null"],
+                "description": "Provider identifier"
+              },
+              "agent_backend": {
+                "type": ["string", "null"],
+                "description": "Agent adapter selected by this profile"
+              },
+              "api_url": {
+                "type": ["string", "null"],
+                "description": "API URL for local providers"
+              },
               "base_url": {
                 "type": ["string", "null"],
                 "description": "ANTHROPIC_BASE_URL override"
@@ -58,6 +70,32 @@
               "model_name": {
                 "type": ["string", "null"],
                 "description": "Default model name"
+              },
+              "models": {
+                "type": "object",
+                "description": "Model by DevAIFlow command",
+                "additionalProperties": {"type": "string"}
+              },
+              "reasoning_efforts": {
+                "type": "object",
+                "description": "Reasoning strength by DevAIFlow command",
+                "additionalProperties": {"type": "string"}
+              },
+              "reasoning_effort": {
+                "type": ["string", "null"],
+                "description": "Default session reasoning strength"
+              },
+              "utility_reasoning_effort": {
+                "type": ["string", "null"],
+                "description": "Default utility reasoning strength"
+              },
+              "commit_message_model": {
+                "type": ["string", "null"],
+                "description": "Model for commit messages"
+              },
+              "pr_template_model": {
+                "type": ["string", "null"],
+                "description": "Model for PR/MR templates"
               },
               "use_vertex": {
                 "type": "boolean",

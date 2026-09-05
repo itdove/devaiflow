@@ -315,13 +315,22 @@ class AgentInterface(ABC):
         """
         return f"claude --resume {session_id}"
 
-    def generate_text(self, prompt: str, timeout: int = 30, display_name: Optional[str] = None, config=None) -> Optional[str]:
+    def generate_text(
+        self,
+        prompt: str,
+        timeout: int = 30,
+        display_name: Optional[str] = None,
+        config=None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """Generate text by piping a prompt through the agent's CLI.
 
         Args:
             prompt: Text prompt to send
             timeout: Maximum seconds to wait
             display_name: Display name for the Claude session (--name flag)
+            config: DevAIFlow configuration
+            model_provider_profile: Resolved provider profile for this utility call
 
         Returns:
             Generated text (stripped), or None on any failure
@@ -330,22 +339,36 @@ class AgentInterface(ABC):
             from devflow.agent.factory import get_agent_cli_binary
             cli_binary = get_agent_cli_binary(self.get_agent_name())
             from devflow.agent.model_config import get_agent_model_config
-            settings = get_agent_model_config(config, self.get_agent_name(), utility=True)
+            settings = get_agent_model_config(
+                config,
+                self.get_agent_name(),
+                utility=True,
+                command="commit_message",
+                provider_profile=model_provider_profile,
+            )
+            from devflow.utils.model_provider import build_env_from_profile, get_model_name_from_profile
+
             cmd = [cli_binary, "-p"]
-            model = settings["model"] or ("claude-haiku-4-5-20251001" if config is None else None)
+            model = get_model_name_from_profile(
+                model_provider_profile,
+                command="commit_message",
+                utility=True,
+            ) or settings["model"] or ("claude-haiku-4-5-20251001" if config is None else None)
             if model:
                 cmd.extend(["--model", model])
             if settings["reasoning_effort"]:
                 cmd.extend(["--effort", settings["reasoning_effort"]])
             if display_name:
                 cmd.extend(["--name", display_name])
-            result = subprocess.run(
-                cmd,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            run_kwargs = {
+                "input": prompt,
+                "capture_output": True,
+                "text": True,
+                "timeout": timeout,
+            }
+            if model_provider_profile:
+                run_kwargs["env"] = build_env_from_profile(model_provider_profile)
+            result = subprocess.run(cmd, **run_kwargs)
             if result.returncode != 0:
                 stderr_snippet = (result.stderr or "").strip()[:200]
                 logger.warning(

@@ -1014,6 +1014,7 @@ class ConfigLoader:
             agent_backend=existing_enterprise_data.get("agent_backend"),
             backend_overrides=existing_enterprise_data.get("backend_overrides"),
             agent_models=existing_enterprise_data.get("agent_models"),
+            model_provider=existing_enterprise_data.get("model_provider"),
         )
 
         # Save enterprise config (enterprise.json)
@@ -1046,6 +1047,8 @@ class ConfigLoader:
                     org_config.hierarchical_config_source = existing_data["hierarchical_config_source"]
                 if "agent_models" in existing_data:
                     org_config.agent_models = existing_data["agent_models"]
+                if "model_provider" in existing_data:
+                    org_config.model_provider = existing_data["model_provider"]
             except Exception:
                 pass  # Ignore errors, will use default
 
@@ -1061,7 +1064,18 @@ class ConfigLoader:
             jira_comment_visibility_type=config.jira.comment_visibility_type,
             jira_comment_visibility_value=config.jira.comment_visibility_value,
             agent_models=None,
+            model_provider=None,
         )
+
+        team_file = self.config_dir / "team.json"
+        if team_file.exists():
+            try:
+                with open(team_file, "r") as f:
+                    existing_team_data = json.load(f)
+                if "model_provider" in existing_team_data:
+                    team_config.model_provider = existing_team_data["model_provider"]
+            except Exception:
+                pass
 
         # Save team config (team.json)
         with open(self.config_dir / "team.json", "w") as f:

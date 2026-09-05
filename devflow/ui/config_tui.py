@@ -51,9 +51,30 @@ from devflow.config.templates.model_providers import (
 )
 from devflow.jira.client import JiraClient
 from devflow.jira.utils import get_field_with_alias
+from devflow.utils.model_provider import get_default_profile_name
 
 
 console = Console()
+
+# These assignments are part of every provider profile. The provider credentials
+# remain in the template-specific form above; these fields make command routing
+# visible and editable in the same screen.
+PROFILE_MODEL_FIELDS = (
+    ("new", "Model for daf new"),
+    ("open", "Model for daf open"),
+    ("git_new", "Model for daf git new"),
+    ("jira_new", "Model for daf jira new"),
+    ("investigation", "Model for daf investigation"),
+    ("commit_message", "Model for commit messages"),
+    ("pr_template", "Model for PR/MR templates"),
+)
+
+
+def _profile_value(profile: Any, key: str, default: Any = None) -> Any:
+    """Read a value from either a Pydantic profile or a dictionary."""
+    if isinstance(profile, dict):
+        return profile.get(key, default)
+    return getattr(profile, key, default)
 
 
 def _sanitize_widget_id(config_key: str) -> str:
@@ -995,6 +1016,11 @@ class ModelProviderProfileEntry(Container):
         self.is_default = is_default
         self.enforced = enforced
 
+    @staticmethod
+    def _button_id_base(profile_name: str) -> str:
+        """Build a valid widget ID prefix from an arbitrary profile name."""
+        return f"profile_{_sanitize_widget_id(profile_name)}"
+
     def compose(self) -> ComposeResult:
         """Compose the profile entry widgets."""
         # Build compact text with name and badge
@@ -1002,22 +1028,60 @@ class ModelProviderProfileEntry(Container):
         if self.is_default:
             name_text += " [yellow]⭐[/yellow]"
 
-        # Add very short provider hint
-        if hasattr(self.profile_data, 'use_vertex') and self.profile_data.use_vertex:
-            region = getattr(self.profile_data, 'vertex_region', 'N/A')
+        # Add provider, endpoint, and configured model hints. Profile data may be
+        # either a Pydantic object or a dict depending on where this widget is used.
+        provider = _profile_value(self.profile_data, "provider")
+        if not provider and _profile_value(self.profile_data, "use_vertex"):
+            provider = "vertex"
+        provider = provider or "anthropic"
+        agent_backend = _profile_value(self.profile_data, "agent_backend") or {
+            "codex": "codex",
+            "openai": "codex",
+            "ollama": "ollama",
+        }.get(provider, "claude")
+        api_url = _profile_value(self.profile_data, "api_url") or _profile_value(self.profile_data, "base_url")
+        models = _profile_value(self.profile_data, "models", {}) or {}
+        session_models = [
+            f"{key}={value}"
+            for key, value in models.items()
+            if key not in {"commit_message", "pr_template"} and value
+        ]
+        utility_models = [
+            f"{key}={value}"
+            for key, value in models.items()
+            if key in {"commit_message", "pr_template"} and value
+        ]
+        reasoning_efforts = _profile_value(self.profile_data, "reasoning_efforts", {}) or {}
+        if _profile_value(self.profile_data, "commit_message_model"):
+            utility_models.append(f"commit_message={_profile_value(self.profile_data, 'commit_message_model')}")
+        if _profile_value(self.profile_data, "pr_template_model"):
+            utility_models.append(f"pr_template={_profile_value(self.profile_data, 'pr_template_model')}")
+
+        if _profile_value(self.profile_data, "use_vertex"):
+            region = _profile_value(self.profile_data, "vertex_region", "N/A")
             # Shorten region names
             if region == 'us-east5':
                 region = 'us-e5'
             elif region == 'europe-west1':
                 region = 'eu-w1'
-            details_text = f"[bold]{name_text}[/bold] [dim]{region}[/dim]"
-        elif hasattr(self.profile_data, 'base_url') and self.profile_data.base_url:
-            details_text = f"[bold]{name_text}[/bold] [dim]local[/dim]"
+            details_text = f"[bold]{name_text}[/bold] [dim]{provider} · {agent_backend} · {region}[/dim]"
         else:
-            details_text = f"[bold]{name_text}[/bold]"
+            details_text = f"[bold]{name_text}[/bold] [dim]{provider} · {agent_backend}[/dim]"
+
+        if api_url:
+            details_text += f" [dim]· {api_url}[/dim]"
+        default_model = _profile_value(self.profile_data, "model_name")
+        if default_model:
+            details_text += f"\n[dim]default={default_model}[/dim]"
+        if session_models:
+            details_text += f"\n[dim]commands: {', '.join(session_models)}[/dim]"
+        if utility_models:
+            details_text += f"\n[dim]utilities: {', '.join(utility_models)}[/dim]"
+        if reasoning_efforts:
+            details_text += f"\n[dim]strength: {', '.join(f'{key}={value}' for key, value in reasoning_efforts.items() if value)}[/dim]"
 
         # Profile info on top, buttons on bottom
-        btn_id_base = f"profile_{self.profile_name.replace(' ', '_').replace('-', '_')}"
+        btn_id_base = self._button_id_base(self.profile_name)
 
         yield Static(details_text, classes="profile-text")
 
@@ -1047,6 +1111,21 @@ class TemplateSelectionScreen(ModalScreen):
     DEFAULT_CSS = """
     TemplateSelectionScreen {
         align: center middle;
+    }
+
+    TemplateSelectionScreen > VerticalScroll {
+        width: 80;
+        height: 80%;
+        max-height: 80%;
+        background: $surface;
+        border: thick $primary;
+        padding: 1 2;
+        scrollbar-size: 1 1;
+    }
+
+    TemplateSelectionScreen > VerticalScroll > Container {
+        width: 100%;
+        height: auto;
     }
 
     TemplateSelectionScreen > Container {
@@ -1088,6 +1167,11 @@ class TemplateSelectionScreen(ModalScreen):
         Binding("escape", "dismiss", "Cancel"),
     ]
 
+    @staticmethod
+    def _widget_id(template_id: str) -> str:
+        """Return a valid Textual suffix while preserving the template key."""
+        return _sanitize_widget_id(template_id)
+
     def compose(self) -> ComposeResult:
         """Compose template selection screen."""
         with VerticalScroll():
@@ -1104,10 +1188,11 @@ class TemplateSelectionScreen(ModalScreen):
 
                 # Display template options
                 for template_id, template in templates.items():
-                    with Container(classes="template-option", id=f"template_{template_id}"):
+                    widget_id = self._widget_id(template_id)
+                    with Container(classes="template-option", id=f"template_{widget_id}"):
                         yield Static(f"[bold]{template.get_name()}[/bold]")
                         yield Static(f"[dim]{template.get_description()}[/dim]")
-                        yield Button("Select", variant="primary", id=f"select_{template_id}")
+                        yield Button("Select", variant="primary", id=f"select_{widget_id}")
 
                 with Horizontal(classes="button-row"):
                     yield Button("Cancel", variant="default", id="cancel")
@@ -1117,7 +1202,15 @@ class TemplateSelectionScreen(ModalScreen):
         if event.button.id == "cancel":
             self.dismiss(None)
         elif event.button.id.startswith("select_"):
-            template_id = event.button.id.replace("select_", "")
+            widget_id = event.button.id.replace("select_", "", 1)
+            template_id = next(
+                (
+                    candidate
+                    for candidate in get_template_registry()
+                    if self._widget_id(candidate) == widget_id
+                ),
+                widget_id,
+            )
             self.dismiss(template_id)
 
 
@@ -1127,6 +1220,21 @@ class AddEditProfileScreen(ModalScreen):
     DEFAULT_CSS = """
     AddEditProfileScreen {
         align: center middle;
+    }
+
+    AddEditProfileScreen > VerticalScroll {
+        width: 90%;
+        height: 90%;
+        max-height: 90%;
+        background: $surface;
+        border: thick $primary;
+        padding: 1 2;
+        scrollbar-size: 1 1;
+    }
+
+    AddEditProfileScreen > VerticalScroll > Container {
+        width: 100%;
+        height: auto;
     }
 
     AddEditProfileScreen > Container {
@@ -1183,7 +1291,11 @@ class AddEditProfileScreen(ModalScreen):
         """
         super().__init__()
         self.existing_name = existing_name
-        self.existing_profile = existing_profile or {}
+        self.existing_profile = (
+            existing_profile.model_dump()
+            if hasattr(existing_profile, "model_dump")
+            else existing_profile or {}
+        )
         self.is_edit_mode = existing_name is not None
 
         # Detect template from existing profile or use provided template
@@ -1259,6 +1371,59 @@ class AddEditProfileScreen(ModalScreen):
                     if field.help_text:
                         yield Static(f"[dim italic]{field.help_text}[/dim italic]")
 
+                # The adapter is part of the profile. It is displayed here so
+                # selecting a profile is sufficient to determine both the
+                # provider and the agent/IDE used to launch it.
+                from devflow.agent.factory import AGENT_DISPLAY_NAMES, AGENT_REGISTRY
+                default_agent_backend = self.existing_profile.get("agent_backend")
+                if not default_agent_backend:
+                    default_agent_backend = getattr(self.template, "default_agent_backend", None)
+                if not default_agent_backend:
+                    default_agent_backend = {
+                        "codex": "codex",
+                        "ollama": "ollama",
+                    }.get(self.template_id, "claude")
+                yield Label("Agent / IDE adapter *")
+                yield Select(
+                    options=[
+                        (AGENT_DISPLAY_NAMES.get(name, name), name)
+                        for name in AGENT_REGISTRY
+                    ],
+                    value=default_agent_backend,
+                    allow_blank=False,
+                    id="agent_backend",
+                )
+                yield Static(
+                    "[dim italic]This adapter is saved in the profile and determines how DevAIFlow launches the model.[/dim italic]"
+                )
+
+                yield Static(
+                    "\n[bold]Command models[/bold]\n"
+                    "Choose the model for each session command. Utility models are used for "
+                    "commit messages and PR/MR templates and ignore --model.",
+                    classes="section-help",
+                )
+                existing_models = self.existing_profile.get("models", {}) or {}
+                existing_reasoning = self.existing_profile.get("reasoning_efforts", {}) or {}
+                for command, label in PROFILE_MODEL_FIELDS:
+                    existing_value = existing_models.get(command, "")
+                    if command == "commit_message":
+                        existing_value = existing_value or self.existing_profile.get("commit_message_model", "")
+                    elif command == "pr_template":
+                        existing_value = existing_value or self.existing_profile.get("pr_template_model", "")
+                    yield Label(label)
+                    yield Input(
+                        value=str(existing_value) if existing_value else "",
+                        placeholder="Leave empty to use the profile default model",
+                        id=f"model_{command}",
+                    )
+                    yield Label(f"{label} reasoning strength")
+                    yield Input(
+                        value=str(existing_reasoning.get(command, "")) if existing_reasoning.get(command) else "",
+                        placeholder="Optional: low, medium, high, max",
+                        id=f"reasoning_{command}",
+                    )
+
                 # Buttons
                 with Horizontal(classes="button-row"):
                     save_label = "Update" if self.is_edit_mode else "Add"
@@ -1286,6 +1451,30 @@ class AddEditProfileScreen(ModalScreen):
                     if field.default_value is not None:
                         form_data[field.field_id] = field.default_value
 
+            command_models = {}
+            reasoning_efforts = {}
+            for command, _label in PROFILE_MODEL_FIELDS:
+                try:
+                    value = self.query_one(f"#model_{command}", Input).value.strip()
+                except NoMatches:
+                    value = ""
+                if value:
+                    command_models[command] = value
+                try:
+                    strength = self.query_one(f"#reasoning_{command}", Input).value.strip()
+                except NoMatches:
+                    strength = ""
+                if strength:
+                    reasoning_efforts[command] = strength
+
+            try:
+                agent_backend = self.query_one("#agent_backend", Select).value
+            except NoMatches:
+                agent_backend = None
+            if not isinstance(agent_backend, str) or not agent_backend:
+                self.app.notify("Agent / IDE adapter is required", severity="error", timeout=10)
+                return
+
             # Validate form data using template
             validation_errors = self.template.validate(form_data)
             if validation_errors:
@@ -1296,6 +1485,10 @@ class AddEditProfileScreen(ModalScreen):
             # Generate profile configuration from template
             try:
                 profile_data = self.template.generate_config(form_data)
+                profile_data["agent_backend"] = agent_backend
+                profile_data["models"] = command_models
+                profile_data["reasoning_efforts"] = reasoning_efforts
+                profile_data.setdefault("provider", self.template_id)
                 profile_name = form_data.get("profile_name", "")
                 self.dismiss((profile_name, profile_data))
             except Exception as e:
@@ -1397,6 +1590,7 @@ class ConfigTUI(App):
 
     TabPane {
         padding: 1 2;
+        height: 1fr;
     }
 
     .section-title {
@@ -1426,6 +1620,13 @@ class ConfigTUI(App):
 
     VerticalScroll {
         height: 1fr;
+        min-height: 0;
+        scrollbar-size: 1 1;
+    }
+
+    #tab_model_providers > VerticalScroll {
+        height: 1fr;
+        overflow-y: scroll;
     }
 
     .mode-indicator {
@@ -1464,25 +1665,6 @@ class ConfigTUI(App):
         self.modified = False
         self.advanced_mode = advanced_mode
 
-    def _get_agent_backend_enforcement_source(self) -> Optional[str]:
-        """Check if agent_backend is enforced by enterprise or team config.
-
-        Returns:
-            "enterprise" if enforced by enterprise config
-            "team" if enforced by team config
-            None if user can choose
-        """
-        # Load enterprise and team configs to check if they enforce agent_backend
-        enterprise_config = self.config_loader._load_enterprise_config()
-        team_config = self.config_loader._load_team_config()
-
-        if enterprise_config and enterprise_config.agent_backend:
-            return "enterprise"
-        elif team_config and team_config.agent_backend:
-            return "team"
-        else:
-            return None
-
     def _get_model_provider_enforcement_source(self) -> Optional[str]:
         """Check if model_provider is enforced by enterprise, organization, or team config.
 
@@ -1505,6 +1687,16 @@ class ConfigTUI(App):
             return "team"
         else:
             return None
+
+    def _get_profile_agent_backend(self) -> Optional[str]:
+        """Return the adapter inferred from the selected/default model profile."""
+        from devflow.utils.model_provider import get_profile_agent_backend
+
+        return get_profile_agent_backend(self.config)
+
+    def _get_effective_agent_backend(self) -> str:
+        """Return the adapter selected by the active model profile."""
+        return self._get_profile_agent_backend() or "claude"
 
     def compose(self) -> ComposeResult:
         """Compose the main TUI layout."""
@@ -1558,8 +1750,8 @@ class ConfigTUI(App):
 
     def on_mount(self) -> None:
         """Set initial visibility of Claude-specific sections after mount."""
-        # Set initial visibility based on current agent_backend
-        self._on_agent_backend_changed(self.config.agent_backend)
+        # A model profile is authoritative when one is configured.
+        self._on_agent_backend_changed(self._get_effective_agent_backend())
 
         # Also explicitly update API key visibility after mount
         # This ensures the field is properly rendered before we hide it
@@ -2070,59 +2262,29 @@ class ConfigTUI(App):
                 classes="section-help",
             )
 
-            # Agent Backend Selection
-            yield Static("[bold]AI Agent Backend[/bold]", classes="subsection-title")
+            profile_agent_backend = self._get_profile_agent_backend()
+            effective_agent_backend = profile_agent_backend or "claude"
 
-            # Check if agent_backend is enforced by enterprise or team
-            agent_enforced_by = self._get_agent_backend_enforcement_source()
-
-            if agent_enforced_by:
-                # Agent backend is enforced - show as read-only
+            if profile_agent_backend:
                 agent_display_name = {
-                    "claude": "Claude Code (fully tested)",
-                    "ollama": "Ollama (local models)",
-                    "ollama-claude": "Ollama (local models)",
-                    "github-copilot": "GitHub Copilot (experimental)",
-                    "cursor": "Cursor (experimental)",
-                    "windsurf": "Windsurf (experimental)",
-                    "aider": "Aider (experimental)",
-                    "continue": "Continue (experimental)",
-                    "crush": "Crush (experimental)",
-                    "opencode": "OpenCode (experimental)",
-                }.get(self.config.agent_backend, self.config.agent_backend)
-
+                    "claude": "Claude Code",
+                    "ollama": "Ollama + Claude Code",
+                    "codex": "Codex",
+                    "opencode": "OpenCode",
+                }.get(profile_agent_backend, profile_agent_backend)
                 yield Static(
-                    f"[bold]AI Agent:[/bold] {agent_display_name}\n"
-                    f"[dim]Enforced by {agent_enforced_by} configuration (read-only)[/dim]",
+                    f"[bold]Profile-selected adapter:[/bold] {agent_display_name}\n"
+                    "[dim]The active model profile determines this adapter. Select another profile to change it.[/dim]",
                     classes="section-help",
                 )
             else:
-                # User can choose agent backend
-                yield ConfigSelect(
-                    "AI Agent",
-                    "agent_backend",
-                    choices=[
-                        ("Claude Code (fully tested)", "claude"),
-                        ("Ollama (local models)", "ollama"),
-                        ("GitHub Copilot (experimental)", "github-copilot"),
-                        ("Cursor (experimental)", "cursor"),
-                        ("Windsurf (experimental)", "windsurf"),
-                        ("Aider (experimental)", "aider"),
-                        ("Continue (experimental)", "continue"),
-                        ("Crush (experimental)", "crush"),
-                        ("OpenCode (experimental)", "opencode"),
-                    ],
-                    value=self.config.agent_backend,
-                    help_text="Select which AI coding assistant to use with DevAIFlow",
-                    allow_blank=False,
-                )
                 yield Static(
-                    "[dim]Note: Only Claude Code is fully tested. Other agents are experimental.[/dim]",
+                    "[yellow]No model profile is configured. Add a profile in the Model Providers tab to select a provider and agent.[/yellow]",
                     classes="section-help",
                 )
 
             # Claude-specific settings (only shown when Claude is selected)
-            is_claude = self.config.agent_backend == "claude"
+            is_claude = effective_agent_backend == "claude"
 
             # GCP Vertex AI Section (Claude only)
             with Vertical(id="claude_vertex_ai_section"):
@@ -2151,7 +2313,7 @@ class ConfigTUI(App):
                     )
 
             # Ollama-specific settings (only shown when Ollama is selected)
-            is_ollama = self.config.agent_backend in ("ollama", "ollama-claude")
+            is_ollama = effective_agent_backend in ("ollama", "ollama-claude")
 
             with Vertical(id="ollama_section"):
                 yield Static("[bold]Ollama Configuration (Ollama only)[/bold]", classes="subsection-title")
@@ -2298,9 +2460,10 @@ class ConfigTUI(App):
         with VerticalScroll():
             yield Static("[bold cyan]Model Provider Profiles[/bold cyan]", classes="section-title")
             yield Static(
-                "Configure alternative AI model providers for Claude Code. "
-                "Use llama.cpp for local models, OpenRouter for cloud, or Vertex AI for GCP. "
-                "Switch providers per session: MODEL_PROVIDER_PROFILE=name daf open",
+                "A model profile selects the provider, model, and agent adapter. "
+                "Choose a default profile here or override it per session with --model-profile. "
+                "Local llama.cpp, Ollama, "
+                "and MLX profiles require an API URL.",
                 classes="section-help",
             )
 
@@ -2321,7 +2484,7 @@ class ConfigTUI(App):
             # Container for profile entries (will be updated dynamically)
             with Vertical(id="profiles_list"):
                 if hasattr(self.config, 'model_provider') and self.config.model_provider and self.config.model_provider.profiles:
-                    default_profile = self.config.model_provider.default_profile or "anthropic"
+                    default_profile = get_default_profile_name(self.config)
                     for profile_name, profile_data in self.config.model_provider.profiles.items():
                         is_default = (profile_name == default_profile)
                         yield ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default, enforced=bool(provider_enforced_by))
@@ -2340,7 +2503,9 @@ class ConfigTUI(App):
             if not provider_enforced_by:
                 help_text += (
                     "[dim]• Default profile (marked with ⭐) is used unless overridden[/dim]\n"
-                    "[dim]• Override per session: MODEL_PROVIDER_PROFILE=profile-name daf open[/dim]\n"
+                    "[dim]• Override per session: daf open NAME --model-profile profile-name[/dim]\n"
+                    "[dim]• Each profile contains its provider and agent/IDE adapter[/dim]\n"
+                    "[dim]• --model changes only the session model; utility models below are unaffected[/dim]\n"
                     "[dim]• The 'anthropic' profile is the base fallback and cannot be deleted[/dim]\n"
                     "[dim]• See docs/alternative-model-providers.md for setup guides[/dim]"
                 )
@@ -2719,9 +2884,11 @@ class ConfigTUI(App):
         if self.config.model_provider and message.profile_name in self.config.model_provider.profiles:
             del self.config.model_provider.profiles[message.profile_name]
 
-            # If this was the default profile, update to anthropic
+            # If this was the default profile, select another configured profile.
             if message.profile_name == self.config.model_provider.default_profile:
-                self.config.model_provider.default_profile = "anthropic"
+                self.config.model_provider.default_profile = (
+                    next(iter(self.config.model_provider.profiles), "")
+                )
 
             self._refresh_profiles_list()
             self.notify(f"Removed profile: {message.profile_name}", severity="information")
@@ -2765,11 +2932,8 @@ class ConfigTUI(App):
         Args:
             event: The select changed event
         """
-        # Check if it's the agent_backend select
-        if event.select.id == "select_agent_backend":
-            self._on_agent_backend_changed(event.value)
         # Check if it's the summary mode select
-        elif event.select.id == "select_session_summary_mode":
+        if event.select.id == "select_session_summary_mode":
             self._on_summary_mode_changed(event.value)
 
     def _on_agent_backend_changed(self, agent_backend: str) -> None:
@@ -2828,7 +2992,7 @@ class ConfigTUI(App):
         """
         try:
             # Get current values
-            agent_backend = self.config.agent_backend
+            agent_backend = self._get_effective_agent_backend()
 
             # Try to get summary mode from select widget
             try:
@@ -2915,7 +3079,7 @@ class ConfigTUI(App):
                             if not self.config.model_provider:
                                 from devflow.config.models import ModelProviderConfig
                                 self.config.model_provider = ModelProviderConfig(
-                                    default_profile="anthropic",
+                                    default_profile=profile_name,
                                     profiles={}
                                 )
 
@@ -2930,6 +3094,8 @@ class ConfigTUI(App):
 
                             # Add the new profile
                             self.config.model_provider.profiles[profile_name] = profile_obj
+                            if len(self.config.model_provider.profiles) == 1:
+                                self.config.model_provider.default_profile = profile_name
 
                             self._refresh_profiles_list()
                             self.notify(f"Added profile: {profile_name}", severity="information")
@@ -3047,7 +3213,7 @@ class ConfigTUI(App):
 
             # Re-add profile entries
             if self.config.model_provider and self.config.model_provider.profiles:
-                default_profile = self.config.model_provider.default_profile or "anthropic"
+                default_profile = get_default_profile_name(self.config)
                 for profile_name, profile_data in self.config.model_provider.profiles.items():
                     is_default = (profile_name == default_profile)
                     list_container.mount(ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default))
@@ -3305,23 +3471,15 @@ class ConfigTUI(App):
         # AI Agent configuration settings (only in Simple mode)
         if not self.advanced_mode:
             try:
-                # Agent backend selection (only if not enforced by org/team)
-                if not self._get_agent_backend_enforcement_source():
-                    # User can choose - collect the value
-                    agent_backend_val = self.query_one(key_to_id("select", "agent_backend"), Select).value
-                    if isinstance(agent_backend_val, str) and agent_backend_val:
-                        self.config.agent_backend = agent_backend_val
-                # If enforced, keep the value from org/team (already in self.config)
-
                 # Only collect region value if Vertex AI is available (field exists) and using Claude
                 # Always preserve the value even when not using Claude
-                if _is_vertex_ai_available() and self.config.agent_backend == "claude":
+                if _is_vertex_ai_available() and self._get_effective_agent_backend() == "claude":
                     region_val = self.query_one(key_to_id("select", "gcp_vertex_region"), Select).value
                     self.config.gcp_vertex_region = region_val if isinstance(region_val, str) else None
                 # If Vertex AI not available or not using Claude, keep existing value
 
                 # Ollama configuration (only when Ollama is selected)
-                if self.config.agent_backend in ("ollama", "ollama-claude"):
+                if self._get_effective_agent_backend() in ("ollama", "ollama-claude"):
                     try:
                         # Ensure ollama config exists
                         if not hasattr(self.config, 'ollama') or self.config.ollama is None:
@@ -3352,7 +3510,7 @@ class ConfigTUI(App):
 
                 # Auto-load related conversations (only for Claude, but preserve value)
                 # Only query the field if Claude is selected (field only exists when is_claude=True)
-                if self.config.agent_backend == "claude":
+                if self._get_effective_agent_backend() == "claude":
                     auto_load_conv = self.query_one(key_to_id("select", "prompts.auto_load_related_conversations"), Select).value
                     self.config.prompts.auto_load_related_conversations = (auto_load_conv == "true")
                 # Otherwise keep existing value
@@ -3527,14 +3685,6 @@ class ConfigTUI(App):
                     classes="section-help"
                 )
             else:
-                # Show read-only enterprise settings
-                if enterprise_config.agent_backend:
-                    yield Static(f"[bold]AI Agent Backend:[/bold] {enterprise_config.agent_backend}")
-                    yield Static(
-                        "[dim]This setting is enforced by your organization[/dim]",
-                        classes="section-help"
-                    )
-
                 if enterprise_config.backend_overrides:
                     yield Static("\n[bold]Backend Overrides:[/bold]")
                     yield Static(
@@ -3643,16 +3793,6 @@ class ConfigTUI(App):
             # Load team config
             team_config = self.config_loader._load_team_config()
 
-            # Check if team enforces agent_backend
-            if team_config and team_config.agent_backend:
-                yield Static(f"[bold]AI Agent Backend:[/bold] {team_config.agent_backend}")
-                yield Static(
-                    "[dim]This setting is enforced by your team[/dim]",
-                    classes="section-help"
-                )
-            else:
-                yield Static("[dim]No team-specific agent backend enforcement[/dim]")
-
             yield Static("\n[dim]Team defaults for custom fields:[/dim]", classes="subsection-title")
             yield Static(
                 "[dim]Configure team-wide defaults for JIRA fields[/dim]",
@@ -3690,17 +3830,11 @@ class ConfigTUI(App):
                 help_text="Repository root URL for hierarchical configs (e.g., https://github.com/org/devflow-config or /path/to/configs)",
             )
 
-            yield Static("\n[bold]AI Settings[/bold]", classes="subsection-title")
-
-            # Only show if not enforced by enterprise/team
-            enforcement_source = self._get_agent_backend_enforcement_source()
-            if enforcement_source:
-                yield Static(
-                    f"[yellow]AI Agent Backend is enforced by {enforcement_source} configuration[/yellow]",
-                    classes="section-help"
-                )
-            else:
-                yield ConfigSelect("AI Agent Backend", "agent_backend", [("Claude (Anthropic)", "claude"), ("GitHub Copilot", "github-copilot")], value=self.config.agent_backend or "claude")
+            yield Static(
+                "\n[bold]AI Settings[/bold]\n"
+                "[dim]Provider and agent selection are managed together by model profiles.[/dim]",
+                classes="section-help",
+            )
 
             yield Static("\n[bold]Personal Field Defaults[/bold]", classes="subsection-title")
             yield Static(

@@ -477,7 +477,14 @@ def open_session(
             workspace=workspace_path,
         )
 
-        agent_name = get_agent_display_name(resolve_agent_backend(cli_override=agent, session=session, config=config))
+        agent_name = get_agent_display_name(
+            resolve_agent_backend(
+                cli_override=agent,
+                session=session,
+                config=config,
+                model_profile=model_profile or session.model_profile,
+            )
+        )
         console.print(f"[green]✓[/green] Created new conversation with fresh {agent_name} session")
         console.print(f"[dim]New session ID: {new_conv.ai_agent_session_id}[/dim]")
 
@@ -575,13 +582,25 @@ def open_session(
     )
     is_first_launch = not has_real_session_id
 
-    # Resolve effective agent backend: --agent flag > session-stored > config > "claude" (backward compatible)
-    effective_agent_backend = resolve_agent_backend(cli_override=agent, session=session, config=config)
+    # Resolve the profile before the backend: an explicit --model-profile selects
+    # the agent adapter for this launch and must beat the stored session backend.
+    effective_profile_name = model_profile or session.model_profile
+    effective_agent_backend = resolve_agent_backend(
+        cli_override=agent,
+        session=session,
+        config=config,
+        model_profile=effective_profile_name,
+    )
     agent_name = get_agent_display_name(effective_agent_backend)
 
-    # Persist agent_backend to session if it changed (e.g., user reopened with --agent flag)
-    if effective_agent_backend != session.agent_backend:
+    # Persist command profile/backend overrides for subsequent resumes.
+    profile_changed = bool(model_profile and model_profile != session.model_profile)
+    backend_changed = effective_agent_backend != session.agent_backend
+    if profile_changed:
+        session.model_profile = model_profile
+    if backend_changed:
         session.agent_backend = effective_agent_backend
+    if profile_changed or backend_changed:
         session_manager.update_session(session)
 
     if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
@@ -995,7 +1014,9 @@ def open_session(
         console.print(f"[dim]Skipping issue tracker status transition (session_type: ticket_creation)[/dim]")
 
     # Check if we should launch Claude Code (after all prerequisites)
-    if not should_launch_claude_code(config=config, mock_mode=True):
+    if not should_launch_claude_code(
+        config=config, mock_mode=True, agent_backend=effective_agent_backend
+    ):
         return
 
     # Display launch/resume message using correct agent name
@@ -1022,18 +1043,14 @@ def open_session(
         return
 
     try:
-        # Determine which model profile to use
-        # Priority: --model-profile flag > session.model_profile > config default
-        effective_profile_name = model_profile or session.model_profile
-
-        # Store profile override in session if provided via flag
-        if model_profile and model_profile != session.model_profile:
-            session.model_profile = model_profile
-            session_manager.update_session(session)
-
         # Get active model provider profile
         from devflow.utils.model_provider import apply_model_override
-        model_provider_profile = get_active_profile(config, override_profile_name=effective_profile_name) if config else None
+        model_provider_profile = get_active_profile(
+            config,
+            override_profile_name=effective_profile_name,
+            agent_backend=effective_agent_backend,
+            command="open",
+        ) if config else None
         model_provider_profile = apply_model_override(model_provider_profile, model)
 
         # Display which model provider is being used

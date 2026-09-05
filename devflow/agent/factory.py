@@ -311,21 +311,37 @@ def resolve_agent_backend(
     cli_override: Optional[str] = None,
     session=None,
     config=None,
+    model_profile: Optional[str] = None,
 ) -> str:
-    """Resolve the effective agent backend from the fallback chain.
+    """Resolve the internal agent adapter from the selected model profile.
 
-    Priority: cli_override > session.agent_backend > config.agent_backend > "claude"
+    Session commands expose only ``--model-profile``. The selected profile
+    supplies the adapter; session metadata and the built-in Claude adapter are
+    retained only for internal resume/fallback behavior.
 
     Args:
-        cli_override: Explicit backend from CLI ``--agent`` flag.
+        cli_override: Internal override for non-session integrations. It is not
+            exposed as a session command option.
         session: Session object with an ``agent_backend`` attribute.
         config: Config object with an ``agent_backend`` attribute.
+        model_profile: Explicit profile name from the current command.
 
     Returns:
         Resolved backend identifier, never ``None``.
     """
     if cli_override:
         return cli_override
+
+    if config:
+        from devflow.utils.model_provider import get_profile_agent_backend
+
+        profile_name = model_profile
+        if profile_name is None and session:
+            profile_name = getattr(session, "model_profile", None)
+        profile_backend = get_profile_agent_backend(config, profile_name=profile_name)
+        if profile_backend:
+            return profile_backend
+
     if session:
         backend = getattr(session, "agent_backend", None)
         if backend:
@@ -511,12 +527,21 @@ def launch_and_capture(
             auto_approve=auto_approve,
             display_name=display_name,
         )
+        if not reasoning_effort and model_provider_profile:
+            reasoning_effort = model_provider_profile.get("reasoning_effort")
         if reasoning_effort:
             launch_kwargs["reasoning_effort"] = reasoning_effort
         if model_override:
             launch_kwargs["model_override"] = model_override
         process = agent.launch_with_prompt(**launch_kwargs)
         agent.wait_for_exit(process, headless)
+        return_code = getattr(process, "returncode", None)
+        if isinstance(return_code, int) and return_code != 0:
+            from rich.console import Console
+
+            Console().print(
+                f"[red]✗ {agent.get_agent_name()} exited with status {return_code}.[/red]"
+            )
     finally:
         capture_agent_session_id(
             agent, agent_backend, project_path,

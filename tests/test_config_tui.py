@@ -14,6 +14,8 @@ from devflow.ui.config_tui import (
     ContextFileEntry,
     AddContextFileScreen,
     ConfigTUI,
+    ModelProviderProfileEntry,
+    TemplateSelectionScreen,
     run_config_tui,
     _sanitize_widget_id,
 )
@@ -110,6 +112,21 @@ def test_sanitize_widget_id():
     # Test complex real-world example
     assert _sanitize_widget_id("jira.custom_field_defaults.sdlc_stage_when_should've_been_found") == \
            "jira_custom_field_defaults_sdlc_stage_when_should_ve_been_found"
+
+
+def test_template_selection_widget_id_supports_dotted_template_names():
+    """Provider template keys with dots must produce valid Textual IDs."""
+    assert TemplateSelectionScreen._widget_id("llama.cpp") == "llama_cpp"
+
+
+def test_profile_entry_widget_ids_support_dotted_profile_names():
+    """Profile action buttons must accept dots and other valid profile-name characters."""
+    button_id_base = ModelProviderProfileEntry._button_id_base("codex_gpt-5.6_luna")
+
+    assert button_id_base == "profile_codex_gpt-5_6_luna"
+    assert f"edit_{button_id_base}" == "edit_profile_codex_gpt-5_6_luna"
+    assert f"default_{button_id_base}" == "default_profile_codex_gpt-5_6_luna"
+    assert f"remove_{button_id_base}" == "remove_profile_codex_gpt-5_6_luna"
 
 
 # ============================================================================

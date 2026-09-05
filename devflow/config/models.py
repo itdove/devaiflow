@@ -101,15 +101,59 @@ class GitHubBackendConfig(BaseModel):
 class ModelProviderProfile(BaseModel):
     """Configuration profile for an AI model provider.
 
-    Profiles allow easy switching between different AI model providers
-    (Anthropic, Vertex AI, llama.cpp, OpenRouter, etc.) via environment variables.
+    A profile is the complete user-facing selection: it identifies the model
+    provider, the agent/IDE adapter that consumes it, credentials, an optional
+    local API URL, and command-specific model choices.
     """
 
     name: str = Field(description="Profile name (e.g., 'vertex', 'llama-cpp', 'openrouter')")
-    base_url: Optional[str] = Field(default=None, description="ANTHROPIC_BASE_URL override (e.g., 'http://localhost:8000' for llama.cpp)")
+    provider: Optional[str] = Field(
+        default=None,
+        description="Provider identifier (e.g., anthropic, vertex, openrouter, llama-cpp, ollama, mlx)",
+    )
+    agent_backend: str = Field(
+        default="claude",
+        description=(
+            "Agent/IDE adapter used with this profile (for example claude, codex, "
+            "ollama, or opencode)"
+        ),
+    )
+    base_url: Optional[str] = Field(
+        default=None,
+        description="API URL for local providers; retained as the legacy config key",
+    )
     auth_token: Optional[str] = Field(default=None, description="ANTHROPIC_AUTH_TOKEN override (e.g., 'llama-cpp' for llama.cpp, API key for cloud)")
     api_key: Optional[str] = Field(default=None, description="ANTHROPIC_API_KEY override (empty string '' to disable)")
     model_name: Optional[str] = Field(default=None, description="Default model for claude --model flag (e.g., 'devstral-small-2', 'kimi-k2.5:cloud')")
+    models: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Command-specific models. Keys may be new, open, git_new, jira_new, "
+            "investigation, commit_message, or pr_template"
+        ),
+    )
+    reasoning_efforts: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Optional reasoning strength per command, such as low, medium, high, or max"
+        ),
+    )
+    reasoning_effort: Optional[str] = Field(
+        default=None,
+        description="Default reasoning strength for session commands when supported",
+    )
+    utility_reasoning_effort: Optional[str] = Field(
+        default=None,
+        description="Default reasoning strength for commit-message and PR-template utilities",
+    )
+    commit_message_model: Optional[str] = Field(
+        default=None,
+        description="Model used to generate commit messages",
+    )
+    pr_template_model: Optional[str] = Field(
+        default=None,
+        description="Model used to generate PR/MR templates",
+    )
     use_vertex: bool = Field(default=False, description="Set CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI")
     vertex_project_id: Optional[str] = Field(default=None, description="ANTHROPIC_VERTEX_PROJECT_ID for Vertex AI")
     vertex_region: Optional[str] = Field(default=None, description="ANTHROPIC_VERTEX_REGION for Vertex AI (e.g., 'us-east5')")
@@ -121,6 +165,37 @@ class ModelProviderProfile(BaseModel):
     monthly_budget_usd: Optional[float] = Field(default=None, description="Monthly budget limit in USD (optional, for budget alerts)")
     cost_center: Optional[str] = Field(default=None, description="Cost center or department code for accounting (e.g., 'ENG-PLATFORM')")
 
+    @model_validator(mode="before")
+    @classmethod
+    def accept_api_url_alias(cls, values: Any) -> Any:
+        """Accept the clearer ``api_url`` spelling in new configuration files."""
+        if isinstance(values, dict) and values.get("api_url") and not values.get("base_url"):
+            values = dict(values)
+            values["base_url"] = values["api_url"]
+        if isinstance(values, dict) and not values.get("agent_backend"):
+            values = dict(values)
+            provider = str(values.get("provider") or values.get("name") or "").strip().lower()
+            values["agent_backend"] = {
+                "codex": "codex",
+                "openai": "codex",
+                "ollama": "ollama",
+            }.get(provider, "claude")
+        return values
+
+    @model_validator(mode="after")
+    def validate_local_provider_url(self) -> "ModelProviderProfile":
+        """Require an API URL when a profile explicitly identifies a local provider."""
+        local_providers = {"llama.cpp", "llama-cpp", "llamacpp", "ollama", "mlx", "mlx-lm"}
+        provider_name = (self.provider or self.name or "").strip().lower()
+        if provider_name in local_providers and not self.base_url:
+            raise ValueError(f"api_url/base_url is required for local provider '{self.provider}'")
+        return self
+
+    @property
+    def api_url(self) -> Optional[str]:
+        """Return the API URL using the preferred terminology."""
+        return self.base_url
+
 
 class ModelProviderConfig(BaseModel):
     """Model provider configuration for alternative AI providers.
@@ -128,11 +203,29 @@ class ModelProviderConfig(BaseModel):
     Supports multiple named profiles that can be switched via:
     - Environment variable: MODEL_PROVIDER_PROFILE=profile-name
     - Config setting: default_profile
-    - CLI flag: --model-provider profile-name
+    - CLI flag: --model-profile profile-name
     """
 
     default_profile: str = Field(default="anthropic", description="Default profile to use")
     profiles: Dict[str, ModelProviderProfile] = Field(default_factory=dict, description="Named provider profiles")
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_default_provider_alias(cls, values: Any) -> Any:
+        """Accept ``default_provider`` as an alias for ``default_profile``."""
+        if isinstance(values, dict) and values.get("default_provider") and not values.get("default_profile"):
+            values = dict(values)
+            values["default_profile"] = values["default_provider"]
+        return values
+
+    @property
+    def default_provider(self) -> str:
+        """Return the selected default provider profile."""
+        return self.default_profile
+
+    @default_provider.setter
+    def default_provider(self, value: str) -> None:
+        self.default_profile = value
 
 
 class OllamaConfig(BaseModel):
@@ -158,6 +251,8 @@ class AgentModelConfig(BaseModel):
 
     session_model: Optional[str] = None
     utility_model: Optional[str] = None
+    models: Dict[str, str] = Field(default_factory=dict)
+    command_models: Dict[str, str] = Field(default_factory=dict)
     reasoning_effort: Optional[str] = None
     utility_reasoning_effort: Optional[str] = None
 
