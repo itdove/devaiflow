@@ -1537,6 +1537,7 @@ Private repositories require `gh` CLI installed and authenticated:
 
    # Common locations:
    # - .github/PULL_REQUEST_TEMPLATE.md
+   # - .github/pull_request_template.md
    # - docs/PULL_REQUEST_TEMPLATE.md
    # - PULL_REQUEST_TEMPLATE.md (root)
    ```

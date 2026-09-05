@@ -32,6 +32,50 @@ class TestRepoTemplateDiscovery:
         result = _try_discover_repo_template(tmp_path)
         assert result == template_content
 
+    def test_discovers_lowercase_template_in_github_directory(self, tmp_path):
+        """Test template discovery from .github/pull_request_template.md."""
+        github_dir = tmp_path / ".github"
+        github_dir.mkdir()
+        template_file = github_dir / "pull_request_template.md"
+        template_content = "## Lowercase Template\nFrom .github directory"
+        template_file.write_text(template_content, encoding="utf-8")
+
+        result = _try_discover_repo_template(tmp_path)
+
+        assert result == template_content
+
+    def test_uppercase_github_template_has_priority_over_lowercase(self, tmp_path):
+        """Test the existing uppercase filename remains the preferred variant."""
+        github_dir = tmp_path / ".github"
+        github_dir.mkdir()
+        (github_dir / "PULL_REQUEST_TEMPLATE.md").write_text(
+            "Uppercase template", encoding="utf-8"
+        )
+        (github_dir / "pull_request_template.md").write_text(
+            "Lowercase template", encoding="utf-8"
+        )
+
+        result = _try_discover_repo_template(tmp_path)
+
+        assert result == "Uppercase template"
+
+    def test_lowercase_github_template_has_priority_over_docs(self, tmp_path):
+        """Test lowercase .github discovery still precedes docs discovery."""
+        github_dir = tmp_path / ".github"
+        github_dir.mkdir()
+        (github_dir / "pull_request_template.md").write_text(
+            "Lowercase GitHub template", encoding="utf-8"
+        )
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "PULL_REQUEST_TEMPLATE.md").write_text(
+            "Docs template", encoding="utf-8"
+        )
+
+        result = _try_discover_repo_template(tmp_path)
+
+        assert result == "Lowercase GitHub template"
+
     def test_discovers_template_in_docs_directory(self, tmp_path):
         """Test template discovery from docs/PULL_REQUEST_TEMPLATE.md"""
         # Create template file
