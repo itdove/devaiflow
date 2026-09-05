@@ -231,7 +231,22 @@ class CodexAgent(AgentInterface):
 
         final_env = self._build_launch_env(env)
 
-        cmd = ["codex", "resume", session_id]
+        # DevAIFlow may intentionally replace the project directory between
+        # launches (for example, investigation sessions are re-cloned into a
+        # fresh temporary directory). Codex otherwise compares the new cwd
+        # with the last cwd recorded in the session and opens its own cwd
+        # selection prompt. The project_path supplied by DevAIFlow is the
+        # authoritative directory for this resume, so make that choice
+        # explicit for this invocation.
+        cmd = [
+            "codex",
+            "resume",
+            "--cd",
+            project_path,
+            "-c",
+            "tui.resume_cwd=\"current\"",
+            session_id,
+        ]
 
         return subprocess.Popen(
             cmd,
