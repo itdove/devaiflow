@@ -6,6 +6,8 @@ from typing import Optional, TYPE_CHECKING
 
 from rich.console import Console
 
+from devflow.cli.utils import reset_terminal_after_tui
+
 if TYPE_CHECKING:
     from devflow.session.manager import SessionManager
     from devflow.session.models import Session
@@ -52,6 +54,11 @@ def _cleanup_on_signal(signum, frame):
     6. Prompt for session completion
     """
     global _cleanup_done
+
+    # Signals from a TUI agent are delivered to the parent and child process
+    # group together. Restore the terminal and discard the exit key sequence
+    # before rendering or reading the completion prompt.
+    reset_terminal_after_tui()
 
     console.print(f"\n[yellow]Received signal {signum}, cleaning up...[/yellow]")
 

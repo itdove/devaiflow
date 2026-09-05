@@ -56,6 +56,21 @@ def reset_terminal_after_tui() -> None:
     except (OSError, FileNotFoundError):
         pass
 
+    # A TUI may leave its final key sequence (for example, Ctrl+C or an
+    # escape sequence) queued in the terminal input buffer.  If that byte is
+    # still present when Rich asks the post-session question, it is treated
+    # as an invalid answer and the prompt is shown again.  Flush only queued
+    # input; output and terminal settings have already been restored above.
+    try:
+        import termios
+
+        if sys.stdin.isatty():
+            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    except (ImportError, AttributeError, OSError, ValueError):
+        # Non-POSIX platforms, redirected input, and closed file descriptors
+        # should not prevent session cleanup from completing.
+        pass
+
 
 def clear_screen_after_tui() -> None:
     """Move cursor below the TUI exit splash so daf output prints cleanly.
