@@ -21,6 +21,7 @@ def test_launch_env_drops_parent_codex_session_markers():
     assert env["CODEX_THREAD_ID"] == "parent-thread"
 
 
+
 @patch("devflow.agent.codex_agent.require_tool")
 @patch("devflow.agent.codex_agent.subprocess.Popen")
 def test_launch_with_prompt_starts_independent_interactive_session(mock_popen, mock_require):
@@ -70,3 +71,30 @@ def test_codex_home_overrides_other_home_resolution(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
 
     assert CodexAgent().codex_dir == tmp_path / "codex-home"
+
+
+@patch("devflow.agent.codex_agent.require_tool")
+@patch("devflow.agent.codex_agent.subprocess.Popen")
+def test_resume_session_uses_selected_project_directory_without_cwd_prompt(
+    mock_popen, mock_require, tmp_path
+):
+    project_path = str(tmp_path / "fresh-investigation-clone")
+    session_id = "01a072a1-9c95-7ef0-b1e0-1690bb31122d"
+    mock_process = Mock()
+    mock_popen.return_value = mock_process
+
+    result = CodexAgent().resume_session(session_id, project_path)
+
+    assert result is mock_process
+    mock_require.assert_called_once_with("codex", "resume Codex AI assistant")
+    args, kwargs = mock_popen.call_args
+    assert args[0] == [
+        "codex",
+        "resume",
+        "--cd",
+        project_path,
+        "-c",
+        "tui.resume_cwd=\"current\"",
+        session_id,
+    ]
+    assert kwargs["cwd"] == project_path
