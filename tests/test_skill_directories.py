@@ -374,6 +374,9 @@ class TestConfiguredAgentDetection:
     def test_config_dir_matches_global_skills_path(self, tmp_path, monkeypatch):
         """The resolved config directory is the parent of the skill directory."""
         monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        # This test covers the default path, so ignore host-level overrides.
+        monkeypatch.delenv('CODEX_HOME', raising=False)
+        monkeypatch.delenv('XDG_CONFIG_HOME', raising=False)
         assert get_agent_config_dir('codex') == tmp_path / '.codex'
 
     def test_detection_accepts_mapping_config(self, tmp_path, monkeypatch):

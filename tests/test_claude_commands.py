@@ -26,6 +26,9 @@ def temp_user_home(tmp_path, monkeypatch):
     user_home = tmp_path / "home"
     user_home.mkdir()
     monkeypatch.setenv("HOME", str(user_home))
+    # Keep global-agent path tests isolated from CI-provided overrides.
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     # Also patch Path.home() to return our temp home
     monkeypatch.setattr(Path, "home", lambda: user_home)
     return user_home
