@@ -92,6 +92,7 @@ class CodexAgent(AgentInterface):
         final_env = (env if env is not None else os.environ).copy()
         for key in (
             "CODEX_CI",
+            "CODEX_PERMISSION_PROFILE",
             "CODEX_THREAD_ID",
             "CODEX_SESSION_ID",
             "CODEX_SANDBOX_NETWORK_DISABLED",

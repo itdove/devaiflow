@@ -9,6 +9,7 @@ def test_launch_env_drops_parent_codex_session_markers():
     env = {
         "PATH": "/bin",
         "CODEX_CI": "1",
+        "CODEX_PERMISSION_PROFILE": ":workspace",
         "CODEX_THREAD_ID": "parent-thread",
         "CODEX_SESSION_ID": "parent-session",
         "CODEX_SANDBOX_NETWORK_DISABLED": "1",
@@ -28,6 +29,7 @@ def test_launch_with_prompt_starts_independent_interactive_session(mock_popen, m
     env = {
         "PATH": "/bin",
         "CODEX_CI": "1",
+        "CODEX_PERMISSION_PROFILE": ":workspace",
         "CODEX_THREAD_ID": "parent-thread",
         "CODEX_SESSION_ID": "parent-session",
     }
