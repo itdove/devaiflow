@@ -16,7 +16,7 @@ Codex is an AI coding assistant with:
 - Sandbox for command execution
 
 Limitations:
-- Session detection relies on CLI output parsing
+- Session detection relies on Codex's local database and rollout metadata
 - Skills support is TBD (uses --add-dir flag)
 - Token extraction depends on CLI availability
 
@@ -30,6 +30,7 @@ Note:
 import json
 import os
 import re
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -151,7 +152,8 @@ class CodexAgent(AgentInterface):
         Args:
             project_path: Absolute path to project
             initial_prompt: Initial prompt to send to the agent
-            session_id: Session UUID (used for --session flag if resuming)
+            session_id: Session UUID. A non-pending value resumes the existing
+                session; ``pending-capture`` starts a new session.
             model_provider_profile: Model provider profile (optional)
             skills_dirs: Skills directories (optional, Codex support via --add-dir)
             workspace_path: Workspace path (passed via -C/--cd flag)
@@ -175,14 +177,25 @@ class CodexAgent(AgentInterface):
         from devflow.agent.model_config import get_agent_model_config
         settings = get_agent_model_config(config, self.get_agent_name())
 
+        is_resume = bool(session_id and not session_id.startswith("pending"))
+
         if headless:
             cmd = ["codex", "exec", initial_prompt]
         else:
             cmd = ["codex", initial_prompt]
 
-        if session_id and session_id.startswith("ses"):
-            # Codex resume accepts session ID as argument
-            cmd = ["codex", "resume", session_id]
+        if is_resume:
+            # Keep this path consistent with resume_session(). Investigation
+            # sessions can be reopened from a fresh clone, so Codex must use
+            # the selected project and avoid its own cwd-selection prompt.
+            cmd = [
+                "codex",
+                "resume",
+                "--cd",
+                project_path,
+                "-c",
+                'tui.resume_cwd="current"',
+            ]
 
         if model_provider_profile:
             model_name = model_override or model_provider_profile.get("model_name")
@@ -201,6 +214,11 @@ class CodexAgent(AgentInterface):
 
         if auto_approve:
             cmd.extend(["--approve-for-me"])
+
+        if is_resume:
+            # Keep the positional session ID after all resume options so the
+            # Codex CLI parses it consistently across supported versions.
+            cmd.append(session_id)
 
         return subprocess.Popen(
             cmd,
@@ -339,40 +357,112 @@ class CodexAgent(AgentInterface):
         """Get set of existing session IDs from Codex.
 
         Queries the Codex thread history database and rollout filenames for
-        thread IDs. The SQLite projection can lag behind the rollout file (or
-        be unavailable while Codex is shutting down), so the file fallback is
-        required for reliable session capture.
+        thread IDs. Rollout metadata records the working directory, which is
+        used to keep session discovery scoped to the directory that DevAIFlow
+        launched. This matters because Codex stores sessions globally and a
+        different recently opened Codex session must not be captured here.
+
+        The SQLite projection can lag behind the rollout file (or be
+        unavailable while Codex is shutting down), so rollout files are used
+        for project association. The database remains a fallback only when no
+        rollout metadata is available at all.
 
         Args:
-            project_path: Absolute path to project (unused — Codex sessions are global)
+            project_path: Absolute path to project used to scope rollout metadata
 
         Returns:
             Set of session thread IDs
         """
         import sqlite3 as _sqlite3
-        result: Set[str] = set()
+
+        database_sessions: Set[str] = set()
         db_path = self.codex_dir / "thread_history_1.sqlite"
         if db_path.exists():
             try:
                 conn = _sqlite3.connect(str(db_path), timeout=5)
                 cursor = conn.execute("SELECT DISTINCT thread_id FROM thread_turns")
-                result.update(row[0] for row in cursor.fetchall() if row[0])
+                database_sessions.update(row[0] for row in cursor.fetchall() if row[0])
                 conn.close()
             except Exception:
                 # The rollout files remain usable when the projection database
                 # is locked, read-only, or from a different Codex version.
                 pass
 
+        rollout_sessions = self._get_rollout_sessions()
+
+        # Without a project path there is no scope to apply. This branch also
+        # preserves the complete global-session behavior for callers that need
+        # to inspect Codex's entire history.
+        if not project_path:
+            return database_sessions | set(rollout_sessions)
+
+        matching_rollouts = {
+            session_id
+            for session_id, recorded_cwd in rollout_sessions.items()
+            if not recorded_cwd or self._paths_match(recorded_cwd, project_path)
+        }
+
+        if rollout_sessions:
+            # A database-only session has no cwd information, so it cannot be
+            # safely associated with this project. It will be picked up on a
+            # later poll once Codex writes its rollout metadata.
+            return matching_rollouts
+
+        # If no rollout files are available at all, retain the database
+        # fallback. There is no metadata to use for filtering in that case.
+        return database_sessions
+
+    @staticmethod
+    def _paths_match(first: str, second: str) -> bool:
+        """Compare project paths after resolving symlinks and relative parts."""
+        try:
+            return Path(first).expanduser().resolve() == Path(second).expanduser().resolve()
+        except (OSError, RuntimeError, TypeError):
+            return os.path.normcase(os.path.abspath(os.path.expanduser(first))) == os.path.normcase(
+                os.path.abspath(os.path.expanduser(second))
+            )
+
+    def _get_rollout_sessions(self) -> Dict[str, Optional[str]]:
+        """Return rollout session IDs mapped to their recorded working directory."""
         sessions_dir = self.codex_dir / "sessions"
+        result: Dict[str, Optional[str]] = {}
         if sessions_dir.exists():
             thread_id_pattern = re.compile(
                 r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$",
                 re.IGNORECASE,
             )
-            for rollout in sessions_dir.rglob("rollout-*.jsonl"):
-                match = thread_id_pattern.search(rollout.name)
-                if match:
-                    result.add(match.group(1))
+            try:
+                rollouts = sessions_dir.rglob("rollout-*.jsonl")
+                for rollout in rollouts:
+                    match = thread_id_pattern.search(rollout.name)
+                    if not match:
+                        continue
+
+                    session_id = match.group(1)
+                    recorded_cwd = None
+                    try:
+                        with rollout.open(encoding="utf-8") as rollout_file:
+                            first_record = json.loads(rollout_file.readline())
+                        payload = (
+                            first_record.get("payload", {})
+                            if isinstance(first_record, dict)
+                            else {}
+                        )
+                        if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
+                            recorded_cwd = payload["cwd"]
+                    except (OSError, TypeError, ValueError):
+                        # The filename still provides a usable session ID when
+                        # a rollout is incomplete or from an older format.
+                        pass
+
+                    # A session should normally have one rollout file. Prefer
+                    # a path-bearing record if duplicate/partial files exist.
+                    if session_id not in result or (
+                        result[session_id] is None and recorded_cwd
+                    ):
+                        result[session_id] = recorded_cwd
+            except OSError:
+                pass
 
         return result
 
@@ -562,7 +652,11 @@ class CodexAgent(AgentInterface):
             return None
 
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
-        return f"codex resume {session_id}"
+        resume_cwd_config = shlex.quote('tui.resume_cwd="current"')
+        return (
+            f"codex resume --cd {shlex.quote(project_path)} "
+            f"-c {resume_cwd_config} {shlex.quote(session_id)}"
+        )
 
     def uses_file_based_sessions(self) -> bool:
         """Codex stores sessions in a database (not files).
