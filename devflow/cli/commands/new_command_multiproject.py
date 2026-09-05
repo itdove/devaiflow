@@ -357,7 +357,7 @@ def create_multi_project_session(
     # Launch AI agent at workspace level (not individual project)
     agent_backend = _agent_backend
     agent_name = get_agent_display_name(agent_backend)
-    if should_launch_claude_code(config):
+    if should_launch_claude_code(config, agent_backend=agent_backend):
         console.print(f"[cyan]Launching {agent_name} at workspace level...[/cyan]\n")
 
         # Update session status and start work session

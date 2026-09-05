@@ -716,19 +716,19 @@ def create_git_issue_session(
         return
 
     # Check if we should launch Claude Code
-    agent_name = get_agent_display_name(
-        resolve_agent_backend(cli_override=agent, config=config, model_profile=model_profile)
+    _agent_backend_for_id = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=model_profile
     )
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    agent_name = get_agent_display_name(_agent_backend_for_id)
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=_agent_backend_for_id
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
 
     # Generate a new agent session ID (agent-aware: placeholder for self-ID backends)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = resolve_agent_backend(
-        cli_override=agent, config=config, model_profile=model_profile
-    )
     ai_agent_session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Update session with Claude session ID
@@ -1278,8 +1278,11 @@ def _create_multi_project_git_session(
     session_manager.update_session(session)
 
     # Check if we should launch Claude Code
-    agent_name = get_agent_display_name(resolve_agent_backend(config=config, session=session))
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    _agent_backend_for_id = resolve_agent_backend(config=config, session=session)
+    agent_name = get_agent_display_name(_agent_backend_for_id)
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=_agent_backend_for_id
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return

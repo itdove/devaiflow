@@ -34,6 +34,14 @@ class ModelProviderCompatibilityError(ValueError, click.ClickException):
         click.ClickException.__init__(self, message)
 
 
+class ModelProviderProfileNotFoundError(ValueError, click.ClickException):
+    """Raised when an explicit model profile is not configured."""
+
+    def __init__(self, message: str):
+        ValueError.__init__(self, message)
+        click.ClickException.__init__(self, message)
+
+
 def _profile_to_dict(profile: Any) -> Optional[Dict[str, Any]]:
     """Return a provider profile as a mutable dictionary."""
     if profile is None:
@@ -105,6 +113,27 @@ def get_profile_agent_backend(config, profile_name: Optional[str] = None) -> Opt
     return get_agent_backend_from_profile(profile)
 
 
+def get_default_profile_name(config) -> Optional[str]:
+    """Return the configured default profile, or the only profile if there is one.
+
+    A configuration created before model profiles were added can still carry the
+    built-in ``anthropic`` default even after the user adds a different profile.
+    With only one profile there is no meaningful ambiguity, so that profile is
+    the effective default until the user chooses another one.
+    """
+    model_provider_config = getattr(config, "model_provider", None) if config else None
+    profiles = getattr(model_provider_config, "profiles", {}) if model_provider_config else {}
+    if not isinstance(profiles, dict) or not profiles:
+        return None
+
+    configured_default = getattr(model_provider_config, "default_profile", None)
+    if configured_default in profiles:
+        return configured_default
+    if len(profiles) == 1:
+        return next(iter(profiles))
+    return None
+
+
 def _profile_matches_agent(profile_name: str, profile: Dict[str, Any], agent_backend: str) -> bool:
     """Whether a provider profile is an obvious match for an agent backend."""
     backend = (agent_backend or "").strip().lower()
@@ -171,6 +200,11 @@ def _select_profile_name(config, override_profile_name: Optional[str], agent_bac
     model_provider_config = getattr(config, "model_provider", None) if config else None
     profiles = getattr(model_provider_config, "profiles", {}) if model_provider_config else {}
     if not isinstance(profiles, dict) or not profiles:
+        if override_profile_name:
+            raise ModelProviderProfileNotFoundError(
+                f"Model provider profile '{override_profile_name}' is not configured. "
+                "Add it with 'daf config edit' or choose a configured profile."
+            )
         return None
 
     if override_profile_name:
@@ -180,7 +214,11 @@ def _select_profile_name(config, override_profile_name: Optional[str], agent_bac
             if compatibility_error:
                 raise ModelProviderCompatibilityError(compatibility_error)
             return override_profile_name
-        print(f"Warning: Model profile '{override_profile_name}' not found in configuration")
+        available_profiles = ", ".join(profiles) or "none"
+        raise ModelProviderProfileNotFoundError(
+            f"Model provider profile '{override_profile_name}' is not configured. "
+            f"Available profiles: {available_profiles}"
+        )
 
     env_profile_name = os.environ.get("MODEL_PROVIDER_PROFILE")
     if env_profile_name:
@@ -192,8 +230,8 @@ def _select_profile_name(config, override_profile_name: Optional[str], agent_bac
             return env_profile_name
         print(f"Warning: MODEL_PROVIDER_PROFILE={env_profile_name} not found in configuration")
 
-    default_profile = getattr(model_provider_config, "default_profile", None)
-    if default_profile in profiles:
+    default_profile = get_default_profile_name(config)
+    if default_profile:
         profile = _profile_to_dict(profiles[default_profile]) or {}
         compatibility_error = get_profile_compatibility_error(profile, agent_backend)
         if compatibility_error:
@@ -234,8 +272,8 @@ def get_active_profile(
     Profile resolution order:
     1. override_profile_name (from --model-profile or the session)
     2. Environment variable MODEL_PROVIDER_PROFILE
-    3. A profile matching the selected agent backend
-    4. Config default_profile setting
+    3. Config default_profile setting
+    4. The only configured profile, when exactly one exists
     5. None (the native agent owns provider configuration)
 
     Args:

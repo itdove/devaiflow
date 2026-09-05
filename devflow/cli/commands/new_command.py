@@ -835,6 +835,25 @@ def create_new_session(
         session.issue_metadata = {k: v for k, v in issue_metadata_dict.items() if k not in ('key', 'updated') and v is not None}
         session_manager.update_session(session)
 
+    # A profile flag must also apply when ``daf new`` adds a conversation to an
+    # existing session.  In that case the session already has an agent backend,
+    # but the explicit profile is the command-level override.
+    effective_profile_name = model_profile or session.model_profile
+    _agent_backend = resolve_agent_backend(
+        cli_override=agent,
+        session=session,
+        config=config,
+        model_profile=effective_profile_name,
+    )
+    profile_changed = bool(model_profile and model_profile != session.model_profile)
+    backend_changed = session.agent_backend != _agent_backend
+    if model_profile and model_profile != session.model_profile:
+        session.model_profile = model_profile
+    if backend_changed:
+        session.agent_backend = _agent_backend
+    if profile_changed or backend_changed:
+        session_manager.update_session(session)
+
     # JSON output mode
     if output_json:
         session_data = serialize_session(session)
@@ -857,13 +876,12 @@ def create_new_session(
         _display_session_banner(name, session.goal, working_directory, branch, project_path, session_id, issue_key, jira_url)
 
     # Resolve agent backend and display name
-    _agent_backend = resolve_agent_backend(
-        cli_override=agent, config=config, model_profile=model_profile
-    )
     agent_name = get_agent_display_name(_agent_backend)
 
     # Check if we should launch Claude Code
-    if not should_launch_claude_code(config=config, mock_mode=True):
+    if not should_launch_claude_code(
+        config=config, mock_mode=True, agent_backend=_agent_backend
+    ):
         if not output_json:
             console.print(f"\n[dim]Start later with: daf open {name}[/dim]")
         return
@@ -899,7 +917,10 @@ def create_new_session(
         from devflow.agent import create_agent_client
 
         agent_backend = resolve_agent_backend(
-            cli_override=agent, config=config, model_profile=session.model_profile
+            cli_override=agent,
+            session=session,
+            config=config,
+            model_profile=effective_profile_name,
         )
         agent_client = create_agent_client(agent_backend)
 
@@ -913,7 +934,7 @@ def create_new_session(
         if config and config.model_provider:
             model_profile = get_model_profile(
                 config,
-                override_profile_name=session.model_profile,
+                override_profile_name=effective_profile_name,
                 agent_backend=agent_backend,
                 command="new",
             )

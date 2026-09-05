@@ -9,11 +9,13 @@ from devflow.config.models import ModelProviderConfig, ModelProviderProfile
 from devflow.utils.model_provider import (
     build_env_from_profile,
     get_active_profile,
+    get_default_profile_name,
     get_profile_agent_backend,
     get_model_for_command,
     get_model_name_from_profile,
     get_profile_compatibility_error,
     get_reasoning_for_command,
+    ModelProviderProfileNotFoundError,
 )
 
 
@@ -42,6 +44,22 @@ def test_default_profile_resolves_command_model():
 
     assert resolved["model_name"] == "new-model"
     assert get_model_for_command(config, "ollama", "commit_message", utility=True) == "commit-model"
+
+
+def test_only_profile_is_used_when_configured_default_is_missing():
+    """A lone profile is the effective default even if the legacy default is stale."""
+    profile = ModelProviderProfile(
+        name="codex_gpt-5.6_luna",
+        provider="codex",
+        agent_backend="codex",
+        model_name="gpt-5.6-luna",
+    )
+    config = _config({"codex_gpt-5.6_luna": profile}, "anthropic")
+
+    assert get_default_profile_name(config) == "codex_gpt-5.6_luna"
+    assert get_active_profile(config)["name"] == "codex_gpt-5.6_luna"
+    assert get_profile_agent_backend(config) == "codex"
+    assert resolve_agent_backend(config=config) == "codex"
 
 
 def test_cli_model_does_not_override_utility_model():
@@ -145,6 +163,25 @@ def test_explicit_model_profile_selects_its_backend():
     config = _config({"openai": profile}, "unused")
 
     assert resolve_agent_backend(config=config, model_profile="openai") == "codex"
+
+
+def test_explicit_model_profile_overrides_existing_session_backend():
+    profile = ModelProviderProfile(name="openai", provider="codex")
+    config = _config({"openai": profile}, "unused")
+    session = SimpleNamespace(model_profile=None, agent_backend="claude")
+
+    assert resolve_agent_backend(
+        session=session,
+        config=config,
+        model_profile="openai",
+    ) == "codex"
+
+
+def test_explicit_unknown_model_profile_does_not_fall_back_to_claude():
+    config = _config({}, "anthropic")
+
+    with pytest.raises(ModelProviderProfileNotFoundError, match="not configured"):
+        get_active_profile(config, override_profile_name="codex-luna")
 
 
 def test_selected_session_profile_supersedes_stored_agent_backend():

@@ -25,10 +25,21 @@ from devflow.cli.utils import (
     require_outside_claude,
     _read_goal_from_file,
     _fetch_goal_from_url,
+    should_launch_claude_code,
 )
 from devflow.config.loader import ConfigLoader
 from devflow.jira.exceptions import JiraApiError
 from devflow.session.manager import SessionManager
+
+
+def test_should_launch_agent_uses_selected_backend_in_prompt(monkeypatch):
+    """The launch confirmation names the agent selected by the model profile."""
+    monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+
+    with patch("devflow.cli.utils.Confirm.ask", return_value=True) as mock_confirm:
+        assert should_launch_claude_code(agent_backend="codex") is True
+
+    mock_confirm.assert_called_once_with("\nLaunch Codex?", default=True)
 
 
 def test_get_session_with_prompt_with_valid_session_id(temp_daf_home):

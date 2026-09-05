@@ -730,7 +730,9 @@ def create_investigation_session(
     agent_name = get_agent_display_name(agent_backend)
 
     # Check if we should launch Claude Code
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=agent_backend
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return
@@ -1229,7 +1231,9 @@ def _create_multi_project_investigation_session(
     agent_name = get_agent_display_name(agent_backend)
 
     # Check if we should launch the AI agent
-    if not should_launch_claude_code(config=config, mock_mode=False):
+    if not should_launch_claude_code(
+        config=config, mock_mode=False, agent_backend=agent_backend
+    ):
         console_print(f"[yellow]⚠[/yellow] Session created but {agent_name} not launched.")
         console_print(f"  Run [cyan]daf open {name}[/cyan] to start working on it.")
         return

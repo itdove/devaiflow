@@ -535,6 +535,13 @@ def launch_and_capture(
             launch_kwargs["model_override"] = model_override
         process = agent.launch_with_prompt(**launch_kwargs)
         agent.wait_for_exit(process, headless)
+        return_code = getattr(process, "returncode", None)
+        if isinstance(return_code, int) and return_code != 0:
+            from rich.console import Console
+
+            Console().print(
+                f"[red]✗ {agent.get_agent_name()} exited with status {return_code}.[/red]"
+            )
     finally:
         capture_agent_session_id(
             agent, agent_backend, project_path,

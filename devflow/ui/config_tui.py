@@ -51,6 +51,7 @@ from devflow.config.templates.model_providers import (
 )
 from devflow.jira.client import JiraClient
 from devflow.jira.utils import get_field_with_alias
+from devflow.utils.model_provider import get_default_profile_name
 
 
 console = Console()
@@ -2483,7 +2484,7 @@ class ConfigTUI(App):
             # Container for profile entries (will be updated dynamically)
             with Vertical(id="profiles_list"):
                 if hasattr(self.config, 'model_provider') and self.config.model_provider and self.config.model_provider.profiles:
-                    default_profile = self.config.model_provider.default_profile or "anthropic"
+                    default_profile = get_default_profile_name(self.config)
                     for profile_name, profile_data in self.config.model_provider.profiles.items():
                         is_default = (profile_name == default_profile)
                         yield ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default, enforced=bool(provider_enforced_by))
@@ -3212,7 +3213,7 @@ class ConfigTUI(App):
 
             # Re-add profile entries
             if self.config.model_provider and self.config.model_provider.profiles:
-                default_profile = self.config.model_provider.default_profile or "anthropic"
+                default_profile = get_default_profile_name(self.config)
                 for profile_name, profile_data in self.config.model_provider.profiles.items():
                     is_default = (profile_name == default_profile)
                     list_container.mount(ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default))
