@@ -464,7 +464,7 @@ def capture_agent_session_id(
             if len(new_sessions) > 1:
                 console.print(
                     f"[yellow]Warning: Multiple new {agent.get_agent_name()} sessions detected "
-                    f"({len(new_sessions)}). Using most recent. "
+                    f"({len(new_sessions)}). Using the most recent matching session. "
                     f"Session will be verified on next open.[/yellow]"
                 )
             real_session_id = sorted(new_sessions)[-1]

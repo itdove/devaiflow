@@ -102,16 +102,17 @@ gh pr create --draft --title "PROJ-12345: Your PR Title" --body "$(cat <<'EOF'
 - [ ] This code change is ready for deployment on its own
 - [ ] This code change requires the following considerations before being deployed:
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [<actual AI assistant>](<assistant project URL>)
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Assisted-by: <actual AI assistant>
 EOF
 )"
 ```
 
 **Important Notes:**
 - Always use the template format shown above
-- Always include "Co-Authored-By: Claude <noreply@anthropic.com>" when AI assistance is used
+- Use the actual AI assistant's name in the attribution (for example, `Assisted-by: Codex` when Codex made the change). Do not copy a historical or hard-coded Claude attribution.
+- PRs use `Assisted-by:` for assistant attribution; do not use `Co-Authored-By:` as the PR assistant attribution.
 - The PR body must follow the template structure
 
 #### Commit Message Format
@@ -126,16 +127,17 @@ More detailed explanation if needed. Explain what and why, not how.
 - Bullet points are acceptable
 - Use present tense
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [<actual AI assistant>](<assistant project URL>)
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: <actual AI assistant> <actual assistant email>
 EOF
 )"
 ```
 
 **IMPORTANT**:
-- All commits made with AI assistance MUST include the `Co-Authored-By` field (GitHub standard)
-- Format: `Co-Authored-By: <Name> <email>` (e.g., `Co-Authored-By: Claude <noreply@anthropic.com>`)
+- All commits made with AI assistance MUST identify the actual assistant that made the change; never substitute another assistant's identity.
+- Use the assistant's canonical commit identity when available: `Co-Authored-By: <actual AI assistant> <actual assistant email>`.
+- The generated-attribution line and commit trailer must name the assistant running the current task (for example, Codex), not the agent historically used by this repository.
 
 #### Updating Existing Pull Requests
 
@@ -156,7 +158,7 @@ This ensures reviewers have a clear understanding of all changes without having 
 gh pr edit <PR-NUMBER> --title "Updated title reflecting all changes"
 
 # Update PR body (use a file for complex updates)
-# IMPORTANT: Maintain the template structure and include Co-Authored-By field
+# IMPORTANT: Maintain the template structure and include the actual assistant attribution field
 gh pr edit <PR-NUMBER> --body "$(cat <<'EOF'
 ## Description
 - Added: New validation for instance names
@@ -178,14 +180,14 @@ gh pr edit <PR-NUMBER> --body "$(cat <<'EOF'
 - [ ] This code change requires the following considerations before being deployed:
 
 ---
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [<actual AI assistant>](<assistant project URL>)
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Assisted-by: <actual AI assistant>
 EOF
 )"
 ```
 
-**IMPORTANT**: All PRs created with AI assistance MUST include the `Co-Authored-By:` field at the end of the description.
+**IMPORTANT**: All PRs created with AI assistance MUST include `Assisted-by: <actual AI assistant>` at the end of the description. Do not use a hard-coded assistant name.
 
 #### Branch Naming Convention
 
@@ -204,9 +206,9 @@ The PR must be created as draft.
 
 #### AI Assistant Attribution
 
-When creating pull requests, the `Assisted-by: <name of code assistant>` field in the PR description must be updated with the name of the code assistant used (e.g., "Cursor AI", "GitHub Copilot", "Claude", etc.).
+When creating pull requests, the `Assisted-by: <name of code assistant>` field in the PR description must be updated with the actual code assistant used (e.g., "Codex", "Cursor AI", "GitHub Copilot", or "Claude").
 
-**Note**: Use the `Assisted-by:` tag instead of `Co-Authored-by:` for AI assistant attribution.
+**Note**: Use the `Assisted-by:` tag instead of `Co-Authored-by:` for PR assistant attribution. The value must match the assistant running the current task; never default to Claude or any other historical value.
 
 
 ### DevAIFlow (daf tool)
