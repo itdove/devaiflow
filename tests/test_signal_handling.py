@@ -68,6 +68,38 @@ def test_signal_handler_updates_session_status(temp_daf_home, monkeypatch):
         f"Expected session status to be 'paused', got '{fresh_session.status}'"
 
 
+def test_signal_handler_restores_terminal_before_completion_prompt(temp_daf_home):
+    """Restore and flush the terminal before prompting after an interrupt."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    session = session_manager.create_session(
+        name="test-terminal-cleanup",
+        goal="Test terminal cleanup",
+        working_directory="test-repo",
+        project_path="/tmp/test-repo",
+        ai_agent_session_id="test-terminal-cleanup-uuid",
+    )
+    setup_signal_handlers(session, session_manager, "test-terminal-cleanup", None)
+
+    events = []
+
+    def record_reset():
+        events.append("reset")
+
+    def record_prompt(*args, **kwargs):
+        events.append("prompt")
+
+    with patch("devflow.cli.signal_handler.reset_terminal_after_tui", side_effect=record_reset):
+        with patch(
+            "devflow.cli.commands.open_command._prompt_for_complete_on_exit",
+            side_effect=record_prompt,
+        ):
+            with patch("sys.exit"):
+                _cleanup_on_signal(signal.SIGINT, None)
+
+    assert events == ["reset", "prompt"]
+
+
 def test_signal_handler_ends_work_session(temp_daf_home, monkeypatch):
     """Test that signal handler properly ends the work session."""
     config_loader = ConfigLoader()

@@ -1020,6 +1020,25 @@ class TestResetTerminalAfterTui:
         for call in mock_run.call_args_list:
             assert call[0][0] != ["tput", "reset"]
 
+    @patch("termios.tcflush")
+    @patch("subprocess.run")
+    def test_flushes_pending_tty_input(self, mock_run, mock_tcflush):
+        """Discard queued TUI input before the next interactive prompt."""
+        import io
+        import sys
+        import termios
+
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: True
+        fake_stdin = io.StringIO()
+        fake_stdin.isatty = lambda: True
+        fake_stdin.fileno = lambda: 42
+
+        with patch.object(sys, "stdout", fake_stdout), patch.object(sys, "stdin", fake_stdin):
+            reset_terminal_after_tui()
+
+        mock_tcflush.assert_called_once_with(42, termios.TCIFLUSH)
+
     @patch("subprocess.run")
     def test_skipped_when_not_tty(self, mock_run):
         """No escape sequences or stty when stdout is not a TTY."""
