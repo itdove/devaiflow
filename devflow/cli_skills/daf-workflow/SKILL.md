@@ -6,6 +6,17 @@ user-invocable: true
 
 # DevAIFlow Session Context
 
+This skill is used by every supported AI agent or IDE integration. In this
+document, **agent session** means the configured backend for the current
+session (for example Claude Code, Codex, GitHub Copilot, Cursor, Windsurf,
+Aider, Continue, OpenCode, Crush, or an Ollama-backed adapter). Use an
+agent-specific name or path only when the instruction explicitly calls for
+backend-specific behavior.
+
+Session identifiers are also backend-specific. Use the active conversation's
+agent session ID from `daf active` or `daf info`; do not substitute the most
+recently opened session from another agent or repository.
+
 Run this command to check the session environment:
 
 ```bash
@@ -64,8 +75,15 @@ Then read the hierarchical context files if they exist in `CONFIG_DIR`:
 ### 4. Read Skill Files
 
 Using the same `CONFIG_DIR` from Step 3, check for additional skills:
-- `CONFIG_DIR/.claude/skills/` (enterprise/organization/team/user skills)
-- Project-level skills in the project's `.claude/skills/` directory
+- `CONFIG_DIR/.claude/skills/` (the current DevAIFlow hierarchical skill
+  storage for enterprise/organization/team/user skills)
+- Project-level skills for the active agent, such as `.claude/skills/`,
+  `.codex/skills/`, `.cursor/skills/`, or `.windsurf/skills/` (or the path
+  reported by `daf assets --dry-run` for another supported agent)
+
+Global skills are installed in an agent-specific directory by `daf assets`.
+Do not assume that a Claude-specific global directory is available when the
+session uses another agent.
 
 Read any that are relevant to the session.
 
@@ -125,7 +143,7 @@ Standard development session. Resume or start work on a task.
 - Verify your current working directory before making changes
 - Each project has its own git repository and branch
 
-**When work is complete**, inform the user that all acceptance criteria are met and the session is ready for completion. The user runs `daf complete` outside this session to commit, create PR/MR, and close.
+**When work is complete**, inform the user that all acceptance criteria are met and the session is ready for completion. The user runs `daf complete` outside the active agent session to commit, create PR/MR, and close.
 
 **Do NOT:**
 - Create git commits (handled by `daf complete`)
@@ -278,4 +296,5 @@ daf config refresh-jira-fields  # Refresh from JIRA API
 
 **For detailed command syntax:** See **daf-cli skill**
 **For JIRA field rules:** See **daf-jira-fields skill**
-**For project standards:** See **AGENTS.md** and **CLAUDE.md**
+**For project standards:** See **AGENTS.md** and any project-specific agent
+instruction files, such as **CLAUDE.md** when Claude Code is in use.

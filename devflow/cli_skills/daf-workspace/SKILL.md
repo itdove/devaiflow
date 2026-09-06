@@ -42,4 +42,4 @@ daf workspace list
 - Verify workspace paths are correct
 - Find workspace names to use with `--workspace` flag
 
-**Note:** This is a READ-ONLY command showing configured workspaces. Workspace configuration is managed outside Claude Code sessions.
+**Note:** This is a READ-ONLY command showing configured workspaces. Workspace configuration is managed outside active AI agent sessions.

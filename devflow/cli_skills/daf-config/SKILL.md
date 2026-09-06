@@ -121,6 +121,6 @@ daf config --help             # Full list of config subcommands
 ```
 
 **Important:**
-- This is a READ-ONLY command - safe to run inside Claude Code
-- To modify config, exit Claude Code and use `daf config set-*` commands
+- This is a READ-ONLY command - safe to run inside an AI agent session
+- To modify config, exit the active agent or IDE and use `daf config set-*` commands
 - Configuration is stored in $DEVAIFLOW_HOME/config.yaml

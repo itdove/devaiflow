@@ -27,14 +27,14 @@ argument-hint: "[TICKET-ID]"
 
 ---
 
-View the JIRA ticket associated with the current session in Claude-friendly format.
+View the JIRA ticket associated with the current session in an agent-friendly format.
 
 ```bash
 daf jira view
 ```
 
 **Auto-detects current session:**
-The command will automatically detect the current Claude Code session and display the associated JIRA ticket details.
+The command will automatically detect the current AI agent session and display the associated JIRA ticket details.
 
 **Explicit ticket lookup:**
 ```bash
@@ -79,7 +79,7 @@ Acceptance Criteria:
 
 **Why use this:**
 - More reliable than curl commands (automatic auth)
-- Better formatted for Claude to read
+- Better formatted for an AI agent to read
 - Shows all relevant ticket context
 - Consistent with daf tool ecosystem
 - Helps understand requirements before coding

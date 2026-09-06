@@ -12,7 +12,7 @@ daf notes
 ```
 
 **Auto-detects current session:**
-The command will automatically detect the current Claude Code session and display all notes.
+The command will automatically detect the current AI agent session and display all notes.
 
 **Explicit session lookup:**
 ```bash
@@ -51,11 +51,11 @@ Total: 3 notes
 - Refresh context when resuming work
 
 **Important notes:**
-- This is a READ-ONLY command - safe to run inside Claude Code
+- This is a READ-ONLY command - safe to run inside an AI agent session
 - Notes are stored in $DEVAIFLOW_HOME/sessions/<name>/notes.md
 - Notes persist across sessions and exports
 - Included in session summaries
-- To add notes, use `daf note` (works inside Claude sessions)
+- To add notes, use `daf note` (works inside managed agent sessions)
 
 **Related commands:**
 ```bash
