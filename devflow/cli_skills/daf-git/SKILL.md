@@ -241,7 +241,7 @@ gh pr create --draft --title "PROJ-123: Feature" --body "$(cat <<'EOF'
 ## Description
 ...
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Assisted-by: <actual AI assistant>
 EOF
 )"
 ```
@@ -374,7 +374,7 @@ Standard template used by daf tool:
 - [ ] This code change is ready for deployment on its own
 - [ ] This code change requires considerations before being deployed:
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Assisted-by: <actual AI assistant>
 ```
 
 **GitLab addition:** Add `Jira Issue: https://jira.example.com/browse/PROJ-XXXXX` at the top if using JIRA.

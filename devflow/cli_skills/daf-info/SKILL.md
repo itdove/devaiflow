@@ -5,14 +5,14 @@ user-invocable: true
 argument-hint: "[SESSION-NAME|TICKET-ID]"
 ---
 
-Display detailed session information including all conversations, branches, and Claude Code session UUIDs.
+Display detailed session information including all conversations, branches, and AI agent session IDs.
 
 ```bash
 daf info
 ```
 
 **Auto-detects current session:**
-The command will automatically detect the current Claude Code session and display comprehensive details.
+The command will automatically detect the current AI agent session and display comprehensive details.
 
 **Explicit session lookup:**
 ```bash
@@ -33,7 +33,7 @@ For each conversation in the session:
 - Working directory (repository name)
 - Project path
 - Git branch
-- Claude Code session UUID
+- AI agent session ID (the format depends on the configured backend)
 - Conversation file location
 - PR/MR links (if created)
 - Message count
@@ -55,8 +55,8 @@ Conversations: 2
   Working Directory: backend-api
   Project Path: /path/to/backend-api
   Branch: feature-backup
-  Claude Session UUID: f545206f-480f-4c2d-8823-c6643f0e693d
-  Conversation File: ~/.claude/projects/.../f545206f-...jsonl
+  Agent Session ID: f545206f-480f-4c2d-8823-c6643f0e693d
+  Conversation File: <agent-specific path>/f545206f-...jsonl
   Created: 2025-12-05 13:07:00
   Last Active: 2025-12-05 18:30:15
   Messages: 45
@@ -66,7 +66,7 @@ Conversations: 2
   Working Directory: frontend-app
   Project Path: /path/to/frontend-app
   Branch: feature-backup
-  Claude Session UUID: be07636e-44c3-41fb-a3b6-dc9c0a530806
+  Agent Session ID: be07636e-44c3-41fb-a3b6-dc9c0a530806
   ...
 
 Time Tracked: 5h 45m
@@ -75,7 +75,7 @@ Notes: 12 entries
 
 **Use this to:**
 - See all conversations in current session
-- Find Claude session UUIDs for debugging
+- Find agent session IDs for debugging
 - Check which branch each conversation uses
 - Verify conversation file locations
 - See PR/MR links associated with session

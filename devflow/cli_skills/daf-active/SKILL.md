@@ -4,7 +4,7 @@ description: Show information about the currently active conversation
 user-invocable: true
 ---
 
-Display details about the currently active Claude Code conversation, including session info, branch, and other conversations in the session.
+Display details about the currently active AI agent conversation, including session info, branch, and other conversations in the session.
 
 ```bash
 daf active
@@ -38,7 +38,7 @@ daf active
 │   • frontend-app (branch: feature/PROJ-12345-ui)    │
 └────────────────────────────────────────────────────┘
 
-To pause: Exit Claude Code
+To pause: Exit the active agent or IDE
 ```
 
 **When no active conversation:**

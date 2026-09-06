@@ -1,12 +1,12 @@
 ---
 name: daf-cli
-description: Quick reference and safety guide for daf commands in Claude Code sessions
+description: Quick reference and safety guide for daf commands in AI agent sessions
 user-invocable: false
 ---
 
 # DAF Quick Reference
 
-**IMPORTANT**: You are currently inside an active Claude Code session. This guide helps you navigate to the right skill documentation.
+**IMPORTANT**: You are currently inside an active AI agent session. This guide helps you navigate to the right skill documentation.
 
 ## Command Reference by Category
 
@@ -78,7 +78,7 @@ fall back to Claude Code when no supported agent is detected. Codex skills use
 
 ## Safety Warnings: Commands Blocked Inside Sessions
 
-**CRITICAL**: The following commands are BLOCKED inside Claude Code sessions to prevent data corruption and nested session issues:
+**CRITICAL**: The following commands are BLOCKED inside AI agent sessions to prevent data corruption and nested session issues:
 
 **Session lifecycle** (run from regular terminal):
 - `daf new`, `daf open`, `daf complete`, `daf delete`
@@ -98,13 +98,13 @@ fall back to Claude Code when no supported agent is detected. Codex skills use
 - `daf pause`, `daf resume`
 
 **Why this matters:**
-Running these commands inside Claude Code can cause:
+Running these commands inside an active agent session can cause:
 - Nested session creation and confusion
 - Concurrent modifications to session metadata
 - Session state corruption
 - Lost work from conflicting updates
 
-**If you need these commands:** Exit Claude Code and run them from a regular terminal.
+**If you need these commands:** Exit the active agent or IDE and run them from a regular terminal.
 
 ## Skills Management
 
@@ -112,10 +112,10 @@ DevAIFlow automatically discovers skills from multiple locations in a specific o
 
 ### Discovery Order (Load Order)
 
-1. **User-level**: the selected agent's global skills directory (Claude defaults to `~/.claude/skills/`; Codex defaults to `~/.codex/skills/`)
-2. **Workspace-level**: `<workspace>/.claude/skills/` - Workspace-specific tools
-3. **Hierarchical**: `$DEVAIFLOW_HOME/.claude/skills/` - Organization-specific extensions
-4. **Project-level**: `<project>/.claude/skills/` - Project-specific skills
+1. **User-level**: the selected agent's global skills directory (for example, `~/.claude/skills/` for Claude Code or `~/.codex/skills/` for Codex)
+2. **Workspace-level**: the selected agent's workspace skill directory
+3. **Hierarchical**: `$DEVAIFLOW_HOME/.claude/skills/` - DevAIFlow organization-specific extensions
+4. **Project-level**: the selected agent's project skill directory (for example, `<project>/.claude/skills/` or `<project>/.codex/skills/`)
 
 ### Precedence Rules
 
@@ -128,14 +128,14 @@ Later-loaded skills can override or extend earlier ones. This is why generic ski
 ### Best Practices
 
 1. **Use unique skill names** - Avoid naming conflicts by using unique names per level
-2. **Generic skills at user-level** - Place reusable tool documentation in `~/.claude/skills/`
+2. **Generic skills at user-level** - Place reusable tool documentation in the selected agent's global skills directory
 3. **Organization extensions in hierarchical** - Extend generic skills with company-specific details in `$DEVAIFLOW_HOME/.claude/skills/`
-4. **Project-specific only when needed** - Only place truly project-specific skills in `<project>/.claude/skills/`
+4. **Project-specific only when needed** - Only place truly project-specific skills in the selected agent's project skills directory
 
 ### Why This Order?
 
 Organization-specific skills (hierarchical) **extend** generic skills rather than replace them. For example:
-- `~/.claude/skills/daf-cli/` provides generic daf command documentation
+- The selected agent's global `daf-cli` skill provides generic daf command documentation
 - `$DEVAIFLOW_HOME/.claude/skills/01-enterprise/` extends it with Red Hat-specific JIRA fields
 
 Both skills are loaded, but hierarchical skills add organization-specific context.
@@ -143,7 +143,7 @@ Both skills are loaded, but hierarchical skills add organization-specific contex
 ### Duplicate Prevention
 
 DevAIFlow automatically prevents duplicate loading:
-- In single-project sessions, project-level skills are auto-loaded by Claude from `cwd`
+- In single-project sessions, project-level skills are auto-loaded by the active agent from `cwd`
 - DevAIFlow filters these out of `--add-dir` to prevent duplicates
 - Each skill directory is loaded exactly once
 

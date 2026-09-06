@@ -22,11 +22,12 @@ daf info
 # The output shows all conversations with their:
 # - Working directory name (e.g., "backend-api", "frontend-ui")
 # - Repository name
-# - Claude Code session UUID
+# - Agent session ID
 # - Git branch
 
-# Read the conversation file directly using the Claude Code session UUID:
-# Conversation files are stored at: ~/.claude/projects/<encoded-path>/<uuid>.jsonl
+# Read the conversation using the session ID and storage format reported by
+# `daf info`. Conversation files are backend-specific. For Claude Code they
+# are stored at: ~/.claude/projects/<encoded-path>/<uuid>.jsonl
 
 # Example workflow:
 # 1. Get the session UUID for the conversation you want to read
