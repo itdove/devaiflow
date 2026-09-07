@@ -6,7 +6,7 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
@@ -23,6 +23,10 @@ from devflow.utils.context_files import load_hierarchical_context_files
 from devflow.utils.daf_agents_validation import validate_daf_agents_md
 
 console = Console()
+
+if TYPE_CHECKING:
+    from devflow.config.models import Session
+    from devflow.session.manager import SessionManager
 
 DEFAULT_GITHUB_ISSUE_TEMPLATES = {
     "bug": (
@@ -259,6 +263,76 @@ def _create_mock_git_issue(
     console_print()
 
     return full_issue_key
+
+
+def _sync_captured_agent_session(
+    session_manager: "SessionManager",
+    session: "Session",
+    original_name: str,
+    agent_backend: str,
+) -> Optional["Session"]:
+    """Persist a captured self-identifying agent session ID.
+
+    The agent runs in a child process and may link the issue, rename the
+    ticket-creation session, and update its metadata before the parent captures
+    the newly-created session ID.  The parent ``session`` object is therefore
+    stale, so only the capture-generated fields are merged into the latest
+    session loaded from disk.
+
+    Args:
+        session_manager: Session manager whose index contains the latest session data.
+        session: Parent-process session object updated by the capture lifecycle.
+        original_name: Session name used before the agent was launched.
+        agent_backend: Agent backend used for the launch.
+
+    Returns:
+        The latest session object, including a renamed session when found.
+    """
+    current_session = session_manager.index.sessions.get(original_name)
+    if current_session is None:
+        # The child process can rename ticket-creation sessions after creating
+        # the issue.  ``created`` is stable across that rename and avoids
+        # overwriting metadata that the child process saved to the new record.
+        for candidate in session_manager.list_sessions():
+            if (
+                candidate.session_type == session.session_type
+                and candidate.created == session.created
+            ):
+                current_session = candidate
+                break
+
+    if current_session is None:
+        return None
+
+    from devflow.agent.factory import is_pending_capture, is_self_id_backend
+
+    captured_conversation = session.active_conversation
+    current_conversation = current_session.active_conversation
+    captured_session_id = (
+        captured_conversation.ai_agent_session_id
+        if captured_conversation
+        else None
+    )
+
+    # A failed capture must retain the placeholder so the next open can retry.
+    if not (
+        is_self_id_backend(agent_backend)
+        and current_conversation
+        and captured_session_id
+        and not is_pending_capture(captured_session_id)
+    ):
+        return current_session
+
+    current_conversation.ai_agent_session_id = captured_session_id
+
+    # Capture can also discover the model for a self-identifying backend.  Do
+    # not replace a model recorded by the child process, but preserve a model
+    # found by the parent when the latest record does not have one.
+    if getattr(session, "model_id", None) and not current_session.model_id:
+        current_session.model_id = session.model_id
+
+    session_manager.update_session(current_session)
+    return current_session
 
 
 @require_outside_claude
@@ -857,15 +931,23 @@ def create_git_issue_session(
             session=session,
         )
     finally:
+        # Reload and persist the captured ID even when the signal handler has
+        # already completed the user-facing cleanup.  The capture lifecycle
+        # runs before this block, so this is the last point at which the
+        # parent can save a self-identifying agent's session ID.
+        session_manager.index = session_manager.config_loader.load_sessions()
+        current_session = _sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            _agent_backend_for_id,
+        )
+        if current_session is None:
+            current_session = session_manager.get_session(name)
+        actual_name = current_session.name if current_session else name
+
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")
-
-            # Reload index from disk
-            session_manager.index = session_manager.config_loader.load_sessions()
-
-            # Check if session was renamed during execution
-            current_session = session_manager.get_session(name)
-            actual_name = name
 
             if not current_session:
                 # Session not found with original name - it was likely renamed
@@ -1300,8 +1382,6 @@ def _create_multi_project_git_session(
         repository=repository,
     )
 
-    from devflow.cli.utils import handle_claude_code_launch_failure
-
     # Use the first project as the primary working directory for the selected agent
     primary_project_path = project_paths[0]
 
@@ -1347,5 +1427,19 @@ def _create_multi_project_git_session(
             display_name=session.name,
             session=session,
         )
-    except Exception:
-        handle_claude_code_launch_failure(session, session_manager, name)
+    except Exception as error:
+        console_print(f"\n[red]Error launching {agent_name}:[/red] {error}")
+        session.status = "paused"
+        session_manager.update_session(session)
+    finally:
+        # The agent can capture its own session ID and rename the ticket
+        # creation session in the child process.  Persist those changes after
+        # the launch lifecycle has completed, just as in the single-project
+        # path above.
+        session_manager.index = session_manager.config_loader.load_sessions()
+        _sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            agent_backend,
+        )
