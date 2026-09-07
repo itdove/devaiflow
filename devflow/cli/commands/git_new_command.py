@@ -6,11 +6,11 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
 from devflow.agent import get_agent_display_name
 from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.commands.sync_command import issue_key_to_session_name
@@ -23,10 +23,6 @@ from devflow.utils.context_files import load_hierarchical_context_files
 from devflow.utils.daf_agents_validation import validate_daf_agents_md
 
 console = Console()
-
-if TYPE_CHECKING:
-    from devflow.config.models import Session
-    from devflow.session.manager import SessionManager
 
 DEFAULT_GITHUB_ISSUE_TEMPLATES = {
     "bug": (
@@ -265,74 +261,9 @@ def _create_mock_git_issue(
     return full_issue_key
 
 
-def _sync_captured_agent_session(
-    session_manager: "SessionManager",
-    session: "Session",
-    original_name: str,
-    agent_backend: str,
-) -> Optional["Session"]:
-    """Persist a captured self-identifying agent session ID.
-
-    The agent runs in a child process and may link the issue, rename the
-    ticket-creation session, and update its metadata before the parent captures
-    the newly-created session ID.  The parent ``session`` object is therefore
-    stale, so only the capture-generated fields are merged into the latest
-    session loaded from disk.
-
-    Args:
-        session_manager: Session manager whose index contains the latest session data.
-        session: Parent-process session object updated by the capture lifecycle.
-        original_name: Session name used before the agent was launched.
-        agent_backend: Agent backend used for the launch.
-
-    Returns:
-        The latest session object, including a renamed session when found.
-    """
-    current_session = session_manager.index.sessions.get(original_name)
-    if current_session is None:
-        # The child process can rename ticket-creation sessions after creating
-        # the issue.  ``created`` is stable across that rename and avoids
-        # overwriting metadata that the child process saved to the new record.
-        for candidate in session_manager.list_sessions():
-            if (
-                candidate.session_type == session.session_type
-                and candidate.created == session.created
-            ):
-                current_session = candidate
-                break
-
-    if current_session is None:
-        return None
-
-    from devflow.agent.factory import is_pending_capture, is_self_id_backend
-
-    captured_conversation = session.active_conversation
-    current_conversation = current_session.active_conversation
-    captured_session_id = (
-        captured_conversation.ai_agent_session_id
-        if captured_conversation
-        else None
-    )
-
-    # A failed capture must retain the placeholder so the next open can retry.
-    if not (
-        is_self_id_backend(agent_backend)
-        and current_conversation
-        and captured_session_id
-        and not is_pending_capture(captured_session_id)
-    ):
-        return current_session
-
-    current_conversation.ai_agent_session_id = captured_session_id
-
-    # Capture can also discover the model for a self-identifying backend.  Do
-    # not replace a model recorded by the child process, but preserve a model
-    # found by the parent when the latest record does not have one.
-    if getattr(session, "model_id", None) and not current_session.model_id:
-        current_session.model_id = session.model_id
-
-    session_manager.update_session(current_session)
-    return current_session
+# Keep the old private name available for callers that imported it while the
+# lifecycle helper was specific to this command.
+_sync_captured_agent_session = sync_captured_agent_session
 
 
 @require_outside_claude

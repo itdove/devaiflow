@@ -16,6 +16,7 @@ from devflow.cli.utils import (
     output_json as json_output,
     serialize_session,
     should_launch_claude_code,
+    sync_captured_agent_session,
 )
 from devflow.config.loader import ConfigLoader
 from devflow.git.utils import GitUtils
@@ -405,21 +406,31 @@ def create_multi_project_session(
                 session=session,
             )
         finally:
+            session_manager.index = session_manager.config_loader.load_sessions()
+            current_session = sync_captured_agent_session(
+                session_manager,
+                session,
+                name,
+                agent_backend,
+            )
+            if current_session is None:
+                current_session = session_manager.get_session(name) or session
+
             if not is_cleanup_done():
                 console.print(f"\n[green]✓[/green] {agent_name} session completed")
 
                 # Update session status to paused
-                session.status = "paused"
-                session_manager.update_session(session)
+                current_session.status = "paused"
+                session_manager.update_session(current_session)
 
                 # Auto-pause: End work session when AI agent closes
-                session_manager.end_work_session(name)
+                session_manager.end_work_session(current_session.name)
 
-                console.print(f"[dim]Resume anytime with: daf open {name}[/dim]")
+                console.print(f"[dim]Resume anytime with: daf open {current_session.name}[/dim]")
 
                 # Check if we should run 'daf complete' on exit
                 from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
-                _prompt_for_complete_on_exit(session, config)
+                _prompt_for_complete_on_exit(current_session, config)
     else:
         console.print(f"\n[dim]{agent_name} launch disabled in config[/dim]")
         console.print(f"[dim]Session UUID: {session_id}[/dim]")
