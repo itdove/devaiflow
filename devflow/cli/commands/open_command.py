@@ -14,7 +14,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from devflow.cli.commands.new_command import _generate_initial_prompt
-from devflow.cli.utils import check_concurrent_session, extract_repository_from_issue_key, get_session_with_prompt, get_status_display, get_workspace_path, require_outside_claude, scan_workspace_repositories, should_launch_claude_code, unified_project_selection
+from devflow.cli.utils import check_concurrent_session, extract_repository_from_issue_key, get_session_with_prompt, get_status_display, get_workspace_path, require_outside_claude, scan_workspace_repositories, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
 from devflow.config.loader import ConfigLoader
 from devflow.git.utils import GitUtils
 from devflow.jira import transition_on_start as jira_transition_on_start
@@ -1177,28 +1177,38 @@ def open_session(
                         session=session,
                     )
             finally:
+                session_manager.index = session_manager.config_loader.load_sessions()
+                current_session = sync_captured_agent_session(
+                    session_manager,
+                    session,
+                    session.name,
+                    agent_backend,
+                )
+                if current_session is None:
+                    current_session = session_manager.get_session(session.name) or session
+
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
                     # Update session status to paused
-                    session.status = "paused"
-                    session_manager.update_session(session)
+                    current_session.status = "paused"
+                    session_manager.update_session(current_session)
 
                     # Auto-pause: End work session when Claude Code closes
-                    session_manager.end_work_session(identifier)
+                    session_manager.end_work_session(current_session.name)
 
-                    console.print(f"[dim]Resume anytime with: daf open {session.name}[/dim]")
+                    console.print(f"[dim]Resume anytime with: daf open {current_session.name}[/dim]")
 
                     # Save conversation file to stable location before cleaning up temp directory
-                    if session.active_conversation and session.active_conversation.temp_directory:
-                        _copy_conversation_from_temp(session, session.active_conversation.temp_directory, config)
+                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
+                        _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory, config)
 
                     # Check if we should run 'daf complete' on exit (BEFORE temp dir cleanup)
-                    _prompt_for_complete_on_exit(session, config)
+                    _prompt_for_complete_on_exit(current_session, config)
 
                     # Clean up temporary directory AFTER daf complete has had a chance to commit/push
-                    if session.active_conversation and session.active_conversation.temp_directory:
-                        _cleanup_temp_directory_on_exit(session.active_conversation.temp_directory)
+                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
+                        _cleanup_temp_directory_on_exit(current_session.active_conversation.temp_directory)
         else:
             # Resume existing session
             # Use effective agent backend (session-stored > config > "claude")
@@ -1351,37 +1361,51 @@ def open_session(
                 elif not cmd and 'process' in locals():
                     agent.wait_for_exit(process, headless)
             finally:
+                # The fallback launch creates a new self-identifying agent
+                # session.  Capture it before the cleanup guard, because a
+                # signal may have already caused the command to exit.
+                if _resume_needs_capture:
+                    from devflow.agent.factory import capture_agent_session_id as _cap_resume
+                    _cap_resume(
+                        agent, agent_backend,
+                        oc_project_path,
+                        active_conv, _resume_sessions_before,
+                    )
+
+                session_manager.index = session_manager.config_loader.load_sessions()
+                current_session = None
+                if _resume_needs_capture:
+                    current_session = sync_captured_agent_session(
+                        session_manager,
+                        session,
+                        session.name,
+                        agent_backend,
+                    )
+                if current_session is None:
+                    current_session = session_manager.get_session(session.name) or session
+
                 if not is_cleanup_done():
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
-                    # Capture session ID for self-ID agents if launched via fallback path
-                    if _resume_needs_capture:
-                        from devflow.agent.factory import capture_agent_session_id as _cap_resume
-                        _cap_resume(
-                            agent, agent_backend,
-                            oc_project_path,
-                            active_conv, _resume_sessions_before,
-                        )
-
                     # Update session status to paused
-                    session.status = "paused"
-                    session_manager.update_session(session)
+                    current_session.status = "paused"
+                    session_manager.update_session(current_session)
 
                     # Auto-pause: End work session when Claude Code closes
-                    session_manager.end_work_session(identifier)
+                    session_manager.end_work_session(current_session.name)
 
-                    console.print(f"[dim]Resume anytime with: daf open {session.name}[/dim]")
+                    console.print(f"[dim]Resume anytime with: daf open {current_session.name}[/dim]")
 
                     # Save conversation file to stable location before cleaning up temp directory
-                    if session.active_conversation and session.active_conversation.temp_directory:
-                        _copy_conversation_from_temp(session, session.active_conversation.temp_directory, config)
+                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
+                        _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory, config)
 
                     # Check if we should run 'daf complete' on exit (BEFORE temp dir cleanup)
-                    _prompt_for_complete_on_exit(session, config)
+                    _prompt_for_complete_on_exit(current_session, config)
 
                     # Clean up temporary directory AFTER daf complete has had a chance to commit/push
-                    if session.active_conversation and session.active_conversation.temp_directory:
-                        _cleanup_temp_directory_on_exit(session.active_conversation.temp_directory)
+                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
+                        _cleanup_temp_directory_on_exit(current_session.active_conversation.temp_directory)
 
     except Exception as e:
         console.print(f"\n[red]Error launching {_display_agent_name}:[/red] {e}")

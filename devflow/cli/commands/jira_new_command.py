@@ -10,7 +10,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
 from devflow.agent import get_agent_display_name
 from devflow.agent.factory import resolve_agent_backend
 from devflow.git.utils import GitUtils
@@ -715,19 +715,25 @@ def create_jira_ticket_session(
             session=session,
         )
     finally:
+        # The child agent may have captured its own ID and renamed the
+        # ticket-creation session.  Reload and merge that capture before the
+        # cleanup guard so signal-triggered cleanup cannot lose it.
+        session_manager.index = session_manager.config_loader.load_sessions()
+        current_session = sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            _agent_backend_for_id,
+        )
+        if current_session is None:
+            current_session = session_manager.get_session(name)
+        actual_name = current_session.name if current_session else name
+
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")
 
-            # Reload index from disk before checking for rename
-            # This is critical because the child process (Claude) may have renamed the session
-            # and we need to see the latest state from disk, not our stale in-memory index
-            session_manager.index = session_manager.config_loader.load_sessions()
-
             # Check if session was renamed during execution
             # This happens when daf jira create renames from temp name to creation-PROJ-*
-            current_session = session_manager.get_session(name)
-            actual_name = name
-
             if not current_session:
                 # Session not found with original name - it was likely renamed
                 # Find the renamed session by searching for ticket_creation sessions
@@ -1200,12 +1206,11 @@ def _create_multi_project_jira_session(
         affects_versions=affects_versions,
     )
 
-    from devflow.cli.utils import handle_claude_code_launch_failure
-
     # Use the first project as the primary working directory for the selected agent
     primary_project_path = project_paths[0]
 
     agent_backend = resolve_agent_backend(config=config, session=session)
+    launch_error = None
     try:
         from devflow.agent import create_agent_client
         from devflow.agent.factory import launch_and_capture
@@ -1248,5 +1253,19 @@ def _create_multi_project_jira_session(
             display_name=session.name,
             session=session,
         )
-    except Exception:
-        handle_claude_code_launch_failure(session, session_manager, name)
+    except Exception as error:
+        launch_error = error
+        console_print(f"\n[red]Error launching {agent_name}:[/red] {error}")
+    finally:
+        session_manager.index = session_manager.config_loader.load_sessions()
+        current_session = sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            agent_backend,
+        )
+        if launch_error is not None:
+            if current_session is None:
+                current_session = session_manager.get_session(name) or session
+            current_session.status = "paused"
+            session_manager.update_session(current_session)

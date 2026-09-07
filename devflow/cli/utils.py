@@ -171,6 +171,75 @@ def require_outside_claude(f):
     return wrapper
 
 
+def sync_captured_agent_session(
+    session_manager: SessionManager,
+    session: Session,
+    original_name: str,
+    agent_backend: str,
+) -> Optional[Session]:
+    """Persist a captured self-identifying agent session ID.
+
+    The agent runs in a child process and may update or rename the session before
+    the parent captures the newly-created session ID.  Merge only the captured
+    fields into the latest record loaded from disk so child-process metadata is
+    preserved.
+
+    Args:
+        session_manager: Session manager whose index contains the latest session data.
+        session: Parent-process session object updated by the capture lifecycle.
+        original_name: Session name used before the agent was launched.
+        agent_backend: Agent backend used for the launch.
+
+    Returns:
+        The latest session object, including a renamed session when found.
+    """
+    current_session = session_manager.index.sessions.get(original_name)
+    if current_session is None:
+        # The child process can rename ticket-creation sessions after creating
+        # the issue.  ``created`` is stable across that rename and avoids
+        # overwriting metadata that the child process saved to the new record.
+        for candidate in session_manager.list_sessions():
+            if (
+                candidate.session_type == session.session_type
+                and candidate.created == session.created
+            ):
+                current_session = candidate
+                break
+
+    if current_session is None:
+        return None
+
+    from devflow.agent.factory import is_pending_capture, is_self_id_backend
+
+    captured_conversation = session.active_conversation
+    current_conversation = current_session.active_conversation
+    captured_session_id = (
+        captured_conversation.ai_agent_session_id
+        if captured_conversation
+        else None
+    )
+
+    # A failed capture must retain the placeholder so the next open can retry.
+    if not (
+        is_self_id_backend(agent_backend)
+        and current_conversation
+        and captured_session_id
+        and not is_pending_capture(captured_session_id)
+    ):
+        return current_session
+
+    current_conversation.ai_agent_session_id = captured_session_id
+
+    # Capture can also discover the model for a self-identifying backend.  Do
+    # not replace a model recorded by the child process, but preserve a model
+    # found by the parent when the latest record does not have one.
+    if getattr(session, "model_id", None) and not current_session.model_id:
+        current_session.model_id = session.model_id
+
+    session_manager.update_session(current_session)
+    return current_session
+
+
 def resolve_goal_input(goal_text: str) -> str:
     """Resolve goal input from plain text, file path, or URL.
 

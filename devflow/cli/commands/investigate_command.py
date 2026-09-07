@@ -13,7 +13,7 @@ from rich.prompt import Prompt, Confirm
 
 from devflow.agent import get_agent_display_name
 from devflow.agent.factory import resolve_agent_backend
-from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, select_workspace, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
 from devflow.git.utils import GitUtils
 from devflow.utils.backend_detection import detect_backend_from_key
 from devflow.issue_tracker.factory import create_issue_tracker_client
@@ -860,24 +860,30 @@ def create_investigation_session(
             session=session,
         )
     finally:
+        # Self-identifying agents report their real session ID only after the
+        # child process exits.  Merge that capture before the cleanup guard so
+        # signal-triggered cleanup cannot leave the placeholder behind.
+        session_manager.index = session_manager.config_loader.load_sessions()
+        current_session = sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            agent_backend,
+        )
+        if current_session is None:
+            current_session = session_manager.get_session(name) or session
+        actual_name = current_session.name if current_session else name
+
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")
 
-            # Reload index from disk
-            session_manager.index = session_manager.config_loader.load_sessions()
-
-            # Get current session
-            current_session = session_manager.get_session(name)
-            if not current_session:
-                current_session = session
-
             # End work session
             try:
-                session_manager.end_work_session(name)
+                session_manager.end_work_session(actual_name)
             except ValueError as e:
                 console_print(f"[yellow]⚠[/yellow] Could not end work session: {e}")
 
-            console_print(f"[dim]Resume anytime with: daf open {name}[/dim]")
+            console_print(f"[dim]Resume anytime with: daf open {actual_name}[/dim]")
 
             # Save conversation file before cleanup
             if current_session and current_session.active_conversation and current_session.active_conversation.temp_directory:
@@ -1338,24 +1344,29 @@ def _create_multi_project_investigation_session(
             session=session,
         )
     finally:
+        # Preserve the real self-identifying agent session ID, including when
+        # the child process renamed the investigation session.
+        session_manager.index = session_manager.config_loader.load_sessions()
+        current_session = sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            _agent_backend,
+        )
+        if current_session is None:
+            current_session = session_manager.get_session(name) or session
+        actual_name = current_session.name if current_session else name
+
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")
 
-            # Reload index from disk
-            session_manager.index = session_manager.config_loader.load_sessions()
-
-            # Get current session
-            current_session = session_manager.get_session(name)
-            if not current_session:
-                current_session = session
-
             # End work session
             try:
-                session_manager.end_work_session(name)
+                session_manager.end_work_session(actual_name)
             except ValueError as e:
                 console_print(f"[yellow]⚠[/yellow] Could not end work session: {e}")
 
-            console_print(f"[dim]Resume anytime with: daf open {name}[/dim]")
+            console_print(f"[dim]Resume anytime with: daf open {actual_name}[/dim]")
 
             # Prompt for complete on exit
             from devflow.cli.commands.open_command import _prompt_for_complete_on_exit

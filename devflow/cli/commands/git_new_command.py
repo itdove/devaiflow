@@ -10,7 +10,7 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
-from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, unified_project_selection
+from devflow.cli.utils import console_print, get_workspace_path, is_json_mode, output_json, require_outside_claude, scan_workspace_repositories, select_workspace, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
 from devflow.agent import get_agent_display_name
 from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.commands.sync_command import issue_key_to_session_name
@@ -259,6 +259,11 @@ def _create_mock_git_issue(
     console_print()
 
     return full_issue_key
+
+
+# Keep the old private name available for callers that imported it while the
+# lifecycle helper was specific to this command.
+_sync_captured_agent_session = sync_captured_agent_session
 
 
 @require_outside_claude
@@ -857,15 +862,23 @@ def create_git_issue_session(
             session=session,
         )
     finally:
+        # Reload and persist the captured ID even when the signal handler has
+        # already completed the user-facing cleanup.  The capture lifecycle
+        # runs before this block, so this is the last point at which the
+        # parent can save a self-identifying agent's session ID.
+        session_manager.index = session_manager.config_loader.load_sessions()
+        current_session = _sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            _agent_backend_for_id,
+        )
+        if current_session is None:
+            current_session = session_manager.get_session(name)
+        actual_name = current_session.name if current_session else name
+
         if not is_cleanup_done():
             console_print(f"\n[green]✓[/green] {agent_name} session completed")
-
-            # Reload index from disk
-            session_manager.index = session_manager.config_loader.load_sessions()
-
-            # Check if session was renamed during execution
-            current_session = session_manager.get_session(name)
-            actual_name = name
 
             if not current_session:
                 # Session not found with original name - it was likely renamed
@@ -1300,8 +1313,6 @@ def _create_multi_project_git_session(
         repository=repository,
     )
 
-    from devflow.cli.utils import handle_claude_code_launch_failure
-
     # Use the first project as the primary working directory for the selected agent
     primary_project_path = project_paths[0]
 
@@ -1347,5 +1358,19 @@ def _create_multi_project_git_session(
             display_name=session.name,
             session=session,
         )
-    except Exception:
-        handle_claude_code_launch_failure(session, session_manager, name)
+    except Exception as error:
+        console_print(f"\n[red]Error launching {agent_name}:[/red] {error}")
+        session.status = "paused"
+        session_manager.update_session(session)
+    finally:
+        # The agent can capture its own session ID and rename the ticket
+        # creation session in the child process.  Persist those changes after
+        # the launch lifecycle has completed, just as in the single-project
+        # path above.
+        session_manager.index = session_manager.config_loader.load_sessions()
+        _sync_captured_agent_session(
+            session_manager,
+            session,
+            name,
+            agent_backend,
+        )
