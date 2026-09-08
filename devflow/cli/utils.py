@@ -1831,9 +1831,11 @@ def unified_project_selection(
     Args:
         workspace_path: Resolved workspace directory path
         repo_options: List of repository names found in workspace
-        suggested_repo: Repository name to highlight (e.g., from issue key)
+        suggested_repo: Repository name to highlight and prefer as the default
+            when it is available (e.g., from an issue key)
         suggested_repo_source: Label for suggestion (e.g., "from issue", "remembered")
-        default_repo: Repository name to use as default selection (overrides last-used)
+        default_repo: Repository name to use as the fallback default selection
+            (overrides last-used when no suggested repository is available)
         allow_multi_project: Whether to offer multi-project session option
         on_selection: Callback(repo_name, workspace_path) called after selection
         config_loader: ConfigLoader for reading/saving last-used repo per workspace
@@ -1901,12 +1903,14 @@ def unified_project_selection(
     console.print(f"  • Enter an absolute path (starting with / or ~)")
     console.print(f"  • Enter 'cancel' or 'q' to exit")
 
-    # Calculate default: explicit default_repo > suggested_repo > first repo
+    # Prefer an available suggestion (for example, the repository from an issue
+    # key) over remembered or explicitly supplied defaults. If the suggestion
+    # is unavailable, preserve the existing default-repository behavior.
     default_value = "1"
-    if default_repo and default_repo in display_repos:
-        default_value = str(display_repos.index(default_repo) + 1)
-    elif suggested_repo_index is not None:
+    if suggested_repo_index is not None:
         default_value = str(suggested_repo_index + 1)
+    elif default_repo and default_repo in display_repos:
+        default_value = str(display_repos.index(default_repo) + 1)
 
     selection = Prompt.ask("Selection", default=default_value)
 
