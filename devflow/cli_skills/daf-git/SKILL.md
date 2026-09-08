@@ -13,8 +13,7 @@ Automatically detects the platform from your git repository.
 **View issue details (use gh/glab CLI directly):**
 ```bash
 # GitHub
-gh issue view 123
-gh issue view 123 --comments
+gh issue view 123 --json title,body,comments,labels,url
 
 # GitLab
 glab issue view 123
@@ -90,9 +89,8 @@ Use the `gh` or `glab` CLI directly to view issues:
 
 ```bash
 # GitHub
-gh issue view 123                          # View issue
-gh issue view 123 --comments              # Include comments
-gh issue view 123 -R owner/repo           # Cross-repo
+gh issue view 123 --json title,body,comments,labels,url    # View issue
+gh issue view 123 --repo owner/repo --json title,body,comments,labels,url
 
 # GitLab
 glab issue view 123                        # View issue
@@ -101,6 +99,11 @@ glab issue view 123 -R owner/repo         # Cross-repo
 ```
 
 **Tip:** The issue key is available from `daf info` or `daf status`.
+
+For a key in `owner/repo#123` form, split the key at the final `#` and pass the
+repository explicitly. Run one lookup command only: a non-zero result should
+be reported as an error, and empty issue fields in a successful response should
+not trigger a retry with another repository or output format.
 
 ### Adding Comments
 
@@ -410,7 +413,8 @@ Both platforms use `#` format for issues:
 **Working on existing issue:**
 ```bash
 # 1. View issue details
-gh issue view 456 --comments    # or: glab issue view 456 --comments
+gh issue view 456 --json title,body,comments,labels,url    # GitHub
+# or: glab issue view 456 --comments                              # GitLab
 
 # 2. Add status comment (use gh/glab directly)
 gh issue comment 456 --body "Started implementation"    # GitHub

@@ -414,7 +414,7 @@ def test_generate_initial_prompt_with_github_issue(temp_daf_home):
     assert "owner/repo#123: Fix timeout in subscription endpoint" in prompt
 
     # Verify GitHub CLI command is suggested (NOT JIRA)
-    assert "gh issue view 123 -R owner/repo --comments" in prompt
+    assert "gh issue view 123 --repo owner/repo --json title,body,comments,labels,url" in prompt
     assert "daf jira view" not in prompt
 
     # Verify context files are included
@@ -444,7 +444,7 @@ def test_generate_initial_prompt_with_github_hash_format(temp_daf_home):
     assert "#456: Implement caching layer" in prompt
 
     # Verify GitHub CLI command is suggested (NOT JIRA)
-    assert "gh issue view 456 --comments" in prompt
+    assert "gh issue view 456 --json title,body,comments,labels,url" in prompt
     assert "daf jira view" not in prompt
 
 
