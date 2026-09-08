@@ -1048,6 +1048,38 @@ class TestOptionalProjectSelection:
         assert ws_name is None
         assert temp_dir is None
 
+    def test_current_directory_selection_does_not_repeat_temp_clone_prompt(
+        self, temp_daf_home, monkeypatch
+    ):
+        """Selecting CWD should not trigger a second temp-clone prompt."""
+        monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
+        monkeypatch.delenv("DEVAIFLOW_IN_SESSION", raising=False)
+        monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+
+        config_loader = ConfigLoader()
+        config = config_loader.create_default_config()
+        config_loader.save_config(config)
+
+        with patch("devflow.cli.commands.investigate_command.Prompt") as mock_prompt, \
+             patch("devflow.utils.temp_directory.should_clone_to_temp") as mock_should_clone, \
+             patch("devflow.utils.temp_directory.prompt_and_clone_to_temp") as mock_prompt_clone, \
+             patch("devflow.cli.commands.investigate_command.should_launch_claude_code", return_value=False):
+            mock_prompt.ask.return_value = "1"
+            mock_should_clone.return_value = True
+
+            create_investigation_session(
+                goal="Investigate current directory behavior",
+                name="test-current-directory-investigation",
+            )
+
+        mock_should_clone.assert_not_called()
+        mock_prompt_clone.assert_not_called()
+
+        session_manager = SessionManager(config_loader=config_loader)
+        session = session_manager.get_session("test-current-directory-investigation")
+        assert session is not None
+        assert session.session_type == "investigation"
+
     def test_prompt_investigation_location_temp_directory_git_repo(self, temp_daf_home, monkeypatch):
         """Test _prompt_investigation_location option 2 clones when CWD is a git repo."""
         monkeypatch.delenv("DAF_MOCK_MODE", raising=False)
