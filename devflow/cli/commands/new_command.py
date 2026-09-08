@@ -133,22 +133,36 @@ def _generate_initial_prompt(
         # Detect backend from issue key format
         backend = detect_backend_from_key(issue_key, config)
 
-        prompt += f"\nAlso read the issue tracker ticket with comments:\n"
+        prompt += "\nRead the issue tracker ticket exactly once with comments:\n"
         if backend == "github":
             # Use gh/glab CLI directly for GitHub/GitLab issues
             _is_gitlab = config and hasattr(config, 'issue_tracker_backend') and config.issue_tracker_backend == "gitlab"
             _cli_tool = "glab" if _is_gitlab else "gh"
+            _view_args = (
+                "--comments"
+                if _cli_tool == "glab"
+                else "--json title,body,comments,labels,url"
+            )
             if '#' in issue_key:
                 _repo, _issue_number = issue_key.rsplit('#', 1)
                 if _repo:
-                    prompt += f"{_cli_tool} issue view {_issue_number} -R {_repo} --comments\n"
+                    _repo_flag = "-R" if _cli_tool == "glab" else "--repo"
+                    prompt += (
+                        f"{_cli_tool} issue view {_issue_number} "
+                        f"{_repo_flag} {_repo} {_view_args}\n"
+                    )
                 else:
-                    prompt += f"{_cli_tool} issue view {_issue_number} --comments\n"
+                    prompt += f"{_cli_tool} issue view {_issue_number} {_view_args}\n"
             else:
-                prompt += f"{_cli_tool} issue view {issue_key} --comments\n"
+                prompt += f"{_cli_tool} issue view {issue_key} {_view_args}\n"
         else:
             # JIRA or other backends
             prompt += f"daf jira view {issue_key} --comments\n"
+        prompt += (
+            "Run only this one lookup. If it fails, report the command and error "
+            "and do not retry with another repository or output format. Empty "
+            "body/comments fields in a successful response are valid.\n"
+        )
 
     # Add multi-project scope constraints
     if is_multi_project and other_projects:

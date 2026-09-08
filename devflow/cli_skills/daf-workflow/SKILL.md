@@ -43,20 +43,38 @@ This shows: session name, goal, issue key, status, working directory, branch, wo
 
 ### 2. Read Issue Tracker Ticket
 
-If `daf info` shows an issue key (e.g., `owner/repo#123` or `PROJ-456`), read the ticket using that key:
+If `daf info` shows an issue key (e.g., `owner/repo#123` or `PROJ-456`), read the
+ticket exactly once using the key and the matching backend. For GitHub, use
+structured output so a successful issue with an empty body or no comments is
+still distinguishable from a command failure.
 
 ```bash
-# For GitHub issues (use the issue number from daf info)
-gh issue view <number> --comments
+# For GitHub issues with an owner/repo#number key from daf info
+gh issue view <number> --repo <owner/repo> --json title,body,comments,labels,url
 
-# For GitLab issues
+# For GitHub issues with a #number or number-only key
+gh issue view <number> --json title,body,comments,labels,url
+
+# For GitLab issues with an owner/repo#number key
+glab issue view <number> -R <owner/repo> --comments
+
+# For GitLab issues with a #number or number-only key
 glab issue view <number> --comments
 
 # For JIRA tickets (use the issue key from daf info)
 daf jira view <issue_key> --comments
 ```
 
-Replace `<number>` or `<issue_key>` with the actual value shown in `daf info` output.
+Replace placeholders with the values shown in `daf info`. When the GitHub or
+GitLab key contains `owner/repo#number`, split at the final `#` and pass the
+repository explicitly (`--repo` for `gh`, `-R` for `glab`). Do not first run an
+unqualified lookup and then retry with a repository.
+
+Run only one lookup command for the ticket. If it exits non-zero, report the
+command and its error clearly, then continue initialization without ticket
+contents; do not retry with a different repository, output mode, or CLI command
+unless the user explicitly asks. Empty `body` or `comments` fields in a
+successful structured response are valid issue data, not a reason to retry.
 
 ### 3. Read Context Files
 

@@ -145,7 +145,8 @@ def test_initial_prompt_uses_gh_issue_view_when_session_has_github_backend(temp_
     )
 
     # Verify GitHub CLI command is suggested
-    assert "gh issue view 123 -R owner/repo --comments" in prompt
+    assert "gh issue view 123 --repo owner/repo --json title,body,comments,labels,url" in prompt
+    assert prompt.count("gh issue view") == 1
     assert "daf jira view" not in prompt
 
 
