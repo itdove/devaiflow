@@ -1,7 +1,7 @@
 """Implementation of 'daf note' and 'daf notes' commands."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -9,9 +9,52 @@ from rich.prompt import Prompt
 
 from devflow.cli.utils import get_session_with_prompt, add_jira_comment
 from devflow.config.loader import ConfigLoader
+from devflow.config.models import ConversationContext, Session
 from devflow.session.manager import SessionManager
 
 console = Console()
+
+
+def _get_managed_active_conversation(
+    session_manager: SessionManager,
+    session_name: str,
+) -> Optional[Tuple[Session, ConversationContext, str]]:
+    """Return the active conversation for a managed session name.
+
+    The managed session name is the authoritative identity inside an agent
+    session.  The agent session ID can be stale or shared by placeholder
+    sessions, so it must not be used to choose a different session here.
+
+    Args:
+        session_manager: Session manager containing the managed session.
+        session_name: Session name from the managed environment.
+
+    Returns:
+        The session, active conversation, and working-directory key, or None
+        when the managed session is not an active development session.
+    """
+    # Use the exact session-name index.  The public lookup also accepts issue
+    # keys, which would weaken the identity supplied by DAF_SESSION_NAME.
+    session = session_manager.index.sessions.get(session_name)
+    if not session or session.status not in {"created", "in_progress"}:
+        return None
+
+    if (
+        session.working_directory
+        and session.working_directory in session.conversations
+    ):
+        working_dir = session.working_directory
+    elif len(session.conversations) == 1:
+        working_dir = next(iter(session.conversations))
+    else:
+        return None
+
+    conversation_entry = session.conversations[working_dir]
+    conversation = getattr(conversation_entry, "active_session", conversation_entry)
+    if conversation is None or conversation.archived:
+        return None
+
+    return session, conversation, working_dir
 
 
 def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_to_jira: bool = False, latest: bool = False) -> None:
@@ -26,7 +69,7 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
-    # Import get_active_conversation for auto-detection
+    # Import auto-detection helpers lazily to avoid unnecessary CLI imports.
     from devflow.cli.utils import get_active_conversation
     import os
 
@@ -34,8 +77,27 @@ def add_note(identifier: Optional[str] = None, note: Optional[str] = None, sync_
     # When identifier is provided but note is None, check if we're in an active session
     # If yes, treat identifier as note content (fix for issue #198)
     if identifier and not note and not latest:
-        # Check if we're in an active Claude Code session
-        active_result = get_active_conversation(session_manager)
+        # The managed session name is authoritative.  Falling back to the
+        # agent session ID first can select a stale or paused session when
+        # multiple sessions still contain the same placeholder ID.
+        managed_session_name = (
+            os.environ.get("DAF_SESSION_NAME")
+            or os.environ.get("CS_SESSION_NAME")
+        )
+        if managed_session_name:
+            active_result = _get_managed_active_conversation(
+                session_manager,
+                managed_session_name,
+            )
+            if active_result is None:
+                console.print(
+                    f"[red]No active session found for '{managed_session_name}'[/red]"
+                )
+                import sys
+                sys.exit(1)
+        else:
+            active_result = get_active_conversation(session_manager)
+
         if active_result:
             # We're in an active session - treat identifier as note content
             session, conversation, working_dir = active_result

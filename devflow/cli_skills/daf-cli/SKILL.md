@@ -30,6 +30,9 @@ user-invocable: false
 **See `daf-notes` skill** for viewing session notes:
 - Add note: `daf note "Progress update"`
 - View notes: `daf notes`
+- Inside a managed agent session, message-only notes use `DAF_SESSION_NAME` as
+  the authoritative session identity; explicit `daf note SESSION "message"`
+  usage remains available.
 
 ### Session Information
 - **`daf-active` skill**: Show currently active conversation

@@ -296,6 +296,134 @@ def test_get_active_conversation_with_multiple_conversations(temp_daf_home):
             del os.environ["AI_AGENT_SESSION_ID"]
 
 
+def test_get_active_conversation_ignores_paused_sessions(temp_daf_home, monkeypatch):
+    """A stale agent ID must not select a paused session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="paused-session",
+        goal="Paused session",
+        working_directory="project-a",
+        project_path="/path/to/project-a",
+        ai_agent_session_id="stale-session-id",
+    )
+    session.status = "paused"
+    session_manager.update_session(session)
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "stale-session-id")
+
+    assert get_active_conversation(session_manager) is None
+
+
+def test_get_active_conversation_prefers_active_over_paused_duplicate_id(
+    temp_daf_home, monkeypatch
+):
+    """A paused duplicate ID must not hide a valid active conversation."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    paused_session = session_manager.create_session(
+        name="paused-session",
+        goal="Paused session",
+        working_directory="project-a",
+        project_path="/path/to/project-a",
+        ai_agent_session_id="duplicate-session-id",
+    )
+    paused_session.status = "paused"
+    session_manager.update_session(paused_session)
+
+    active_session = session_manager.create_session(
+        name="active-session",
+        goal="Active session",
+        working_directory="project-b",
+        project_path="/path/to/project-b",
+        ai_agent_session_id="duplicate-session-id",
+    )
+
+    monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CS_SESSION_NAME", raising=False)
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "duplicate-session-id")
+
+    result = get_active_conversation(session_manager)
+
+    assert result is not None
+    assert result[0].name == active_session.name
+
+
+def test_get_active_conversation_ignores_archived_sessions(temp_daf_home, monkeypatch):
+    """A stale agent ID must not select an archived conversation."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="archived-session",
+        goal="Archived conversation",
+        working_directory="project-a",
+        project_path="/path/to/project-a",
+        ai_agent_session_id="archived-session-id",
+    )
+    session.create_new_conversation(
+        working_dir="project-a",
+        project_path="/path/to/project-a",
+        branch="main",
+    )
+    session_manager.update_session(session)
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "archived-session-id")
+
+    assert get_active_conversation(session_manager) is None
+
+
+def test_get_active_conversation_rejects_ambiguous_agent_id(temp_daf_home, monkeypatch):
+    """Duplicated agent IDs are not routed to an arbitrary project."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    for name, project in (
+        ("session-a", "/path/to/project-a"),
+        ("session-b", "/path/to/project-b"),
+    ):
+        session_manager.create_session(
+            name=name,
+            goal="Ambiguous session",
+            working_directory=name,
+            project_path=project,
+            ai_agent_session_id="duplicate-session-id",
+        )
+
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "duplicate-session-id")
+
+    assert get_active_conversation(session_manager) is None
+
+
+def test_get_active_conversation_uses_current_project_for_duplicate_id(
+    temp_daf_home, monkeypatch, tmp_path
+):
+    """The current project can disambiguate otherwise identical agent IDs."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    project_a = tmp_path / "project-a"
+    project_b = tmp_path / "project-b"
+    project_a.mkdir()
+    project_b.mkdir()
+
+    for name, project in (("session-a", project_a), ("session-b", project_b)):
+        session_manager.create_session(
+            name=name,
+            goal="Duplicate ID session",
+            working_directory=name,
+            project_path=str(project),
+            ai_agent_session_id="duplicate-session-id",
+        )
+
+    monkeypatch.chdir(project_b)
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "duplicate-session-id")
+
+    result = get_active_conversation(session_manager)
+
+    assert result is not None
+    assert result[0].name == "session-b"
+
+
 def test_prevent_duplicate_conversation_for_same_directory(temp_daf_home):
     """Test that add_conversation prevents creating duplicate conversations for same directory."""
     config_loader = ConfigLoader()

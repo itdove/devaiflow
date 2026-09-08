@@ -777,7 +777,10 @@ def add_jira_comment(issue_key: str, comment: str, timeout: int = 10, silent_suc
 def get_active_conversation(session_manager: SessionManager) -> Optional[Tuple[Session, ConversationContext, str]]:
     """Detect currently active AI agent conversation.
 
-    Checks the AI_AGENT_SESSION_ID environment variable to find the active conversation.
+    Checks the AI_AGENT_SESSION_ID environment variable to find the active
+    conversation.  When a valid managed session name is available, searches
+    only that session.  Otherwise, only non-archived conversations belonging
+    to non-paused sessions are considered.
 
     Args:
         session_manager: SessionManager instance
@@ -791,13 +794,63 @@ def get_active_conversation(session_manager: SessionManager) -> Optional[Tuple[S
     if not agent_session_id:
         return None
 
-    # Search through all sessions to find matching conversation
-    for session in session_manager.index.sessions.values():
+    # Prefer an explicitly supplied managed session name when it resolves in
+    # this session index.  Do not use get_active_session_name() here: its
+    # AI_AGENT_SESSION_ID fallback can resolve to a paused or archived session
+    # before the active-session filters below get a chance to run.
+    managed_session_name = (
+        os.environ.get("DAF_SESSION_NAME") or os.environ.get("CS_SESSION_NAME")
+    )
+    if managed_session_name:
+        managed_session = session_manager.index.sessions.get(managed_session_name)
+        sessions = [managed_session] if managed_session else []
+    else:
+        sessions = list(session_manager.index.sessions.values())
+
+    matches = []
+    for session in sessions:
+        if not session or session.status not in {"created", "in_progress"}:
+            continue
+
         for working_dir, conversation in session.conversations.items():
-            # Check all sessions (active + archived) in this Conversation
-            for conv_ctx in conversation.get_all_sessions():
-                if conv_ctx.ai_agent_session_id == agent_session_id:
-                    return (session, conv_ctx, working_dir)
+            # Only the active conversation can be the current destination.
+            # ``get_all_sessions()`` also includes archived conversations,
+            # which may retain an old or placeholder agent session ID.
+            conv_ctx = getattr(conversation, "active_session", conversation)
+            if (
+                not conv_ctx.archived
+                and conv_ctx.ai_agent_session_id == agent_session_id
+            ):
+                matches.append((session, conv_ctx, working_dir))
+
+    if len(matches) == 1:
+        return matches[0]
+
+    if len(matches) > 1:
+        # A duplicated/stale agent ID is ambiguous.  Use the current project
+        # path only when it identifies exactly one matching conversation;
+        # otherwise fail closed instead of selecting an arbitrary session.
+        current_path = Path.cwd().resolve()
+        project_matches = []
+        for match in matches:
+            conversation = match[1]
+            project_paths = conversation.get_all_project_paths()
+            if conversation.original_project_path:
+                project_paths.append(conversation.original_project_path)
+
+            for project_path in project_paths:
+                if not project_path:
+                    continue
+                resolved_project = Path(project_path).expanduser().resolve()
+                if (
+                    current_path == resolved_project
+                    or resolved_project in current_path.parents
+                ):
+                    project_matches.append(match)
+                    break
+
+        if len(project_matches) == 1:
+            return project_matches[0]
 
     return None
 

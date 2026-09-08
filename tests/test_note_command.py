@@ -484,6 +484,97 @@ def test_add_note_auto_detects_active_session_with_message_only(temp_daf_home, m
     assert "My note message" in content
 
 
+def test_add_note_prefers_managed_session_over_stale_agent_id(temp_daf_home, monkeypatch):
+    """Message-only notes use DAF_SESSION_NAME instead of a stale agent ID."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    wrong_session = session_manager.create_session(
+        name="unrelated-session",
+        goal="Unrelated session",
+        working_directory="project-a",
+        project_path="/path/to/project-a",
+        ai_agent_session_id="stale-session-id",
+    )
+    wrong_session.status = "in_progress"
+    session_manager.update_session(wrong_session)
+
+    managed_session = session_manager.create_session(
+        name="managed-session",
+        goal="Current managed session",
+        working_directory="project-b",
+        project_path="/path/to/project-b",
+        ai_agent_session_id="current-session-id",
+    )
+    managed_session.status = "in_progress"
+    session_manager.update_session(managed_session)
+
+    monkeypatch.setenv("DAF_SESSION_NAME", "managed-session")
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "stale-session-id")
+
+    add_note(identifier="Note for the managed session", note=None)
+
+    managed_notes = config_loader.get_session_dir("managed-session") / "notes.md"
+    wrong_notes = config_loader.get_session_dir("unrelated-session") / "notes.md"
+    assert managed_notes.exists()
+    assert "Note for the managed session" in managed_notes.read_text()
+    assert not wrong_notes.exists()
+
+
+def test_add_note_fails_when_only_matching_session_is_paused(temp_daf_home, monkeypatch):
+    """Message-only notes do not write to a paused fallback session."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    session = session_manager.create_session(
+        name="paused-session",
+        goal="Paused session",
+        working_directory="project-a",
+        project_path="/path/to/project-a",
+        ai_agent_session_id="stale-session-id",
+    )
+    session.status = "paused"
+    session_manager.update_session(session)
+
+    monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "stale-session-id")
+
+    with pytest.raises(SystemExit) as exc_info:
+        add_note(identifier="Should not be saved", note=None)
+
+    assert exc_info.value.code == 1
+    notes_file = config_loader.get_session_dir("paused-session") / "notes.md"
+    assert not notes_file.exists()
+
+
+def test_add_note_does_not_fallback_from_unknown_managed_session(
+    temp_daf_home, monkeypatch
+):
+    """An unknown managed name must not route using a stale agent ID."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    wrong_session = session_manager.create_session(
+        name="unrelated-session",
+        goal="Unrelated session",
+        working_directory="project-a",
+        project_path="/path/to/project-a",
+        ai_agent_session_id="stale-session-id",
+    )
+    wrong_session.status = "in_progress"
+    session_manager.update_session(wrong_session)
+
+    monkeypatch.setenv("DAF_SESSION_NAME", "missing-managed-session")
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "stale-session-id")
+
+    with pytest.raises(SystemExit) as exc_info:
+        add_note(identifier="Should not be saved", note=None)
+
+    assert exc_info.value.code == 1
+    notes_file = config_loader.get_session_dir("unrelated-session") / "notes.md"
+    assert not notes_file.exists()
+
+
 def test_add_note_explicit_session_still_works(temp_daf_home, monkeypatch):
     """Test that 'daf note SESSION MESSAGE' still works with explicit session."""
     config_loader = ConfigLoader()
