@@ -306,10 +306,12 @@ def temp_daf_home(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "home", mock_home)
 
-    # Remove AI_AGENT_SESSION_ID from environment if present
-    # This allows tests to run inside Claude Code without triggering
-    # the "Cannot run 'daf open' while inside Claude Code" protection
+    # Remove agent session identity from the environment. This allows tests
+    # to run inside an agent session without triggering nested-session
+    # detection or accidentally using the outer session's routing context.
     monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+    monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CS_SESSION_NAME", raising=False)
 
     return daf_home
 
@@ -421,8 +423,10 @@ def temp_daf_home_no_patches(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "home", mock_home)
 
-    # Remove AI_AGENT_SESSION_ID from environment if present
+    # Remove agent session identity from the environment.
     monkeypatch.delenv("AI_AGENT_SESSION_ID", raising=False)
+    monkeypatch.delenv("DAF_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CS_SESSION_NAME", raising=False)
 
     return daf_home
 
