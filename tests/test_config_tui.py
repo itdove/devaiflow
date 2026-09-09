@@ -15,11 +15,20 @@ from devflow.ui.config_tui import (
     AddContextFileScreen,
     ConfigTUI,
     ModelProviderProfileEntry,
+    ProfileValidationScreen,
     TemplateSelectionScreen,
     run_config_tui,
     _sanitize_widget_id,
 )
-from devflow.config.models import Config, JiraConfig, RepoConfig, ContextFile
+from devflow.config.models import (
+    Config,
+    JiraConfig,
+    ModelProviderConfig,
+    ModelProviderProfile,
+    RepoConfig,
+    ContextFile,
+)
+from devflow.utils.model_provider import ModelProviderValidationResult
 
 
 # ============================================================================
@@ -127,6 +136,92 @@ def test_profile_entry_widget_ids_support_dotted_profile_names():
     assert f"edit_{button_id_base}" == "edit_profile_codex_gpt-5_6_luna"
     assert f"default_{button_id_base}" == "default_profile_codex_gpt-5_6_luna"
     assert f"remove_{button_id_base}" == "remove_profile_codex_gpt-5_6_luna"
+
+
+def test_profile_entry_validate_message_is_read_only():
+    """The Validate button emits a message without changing profile data."""
+    profile = ModelProviderProfile(
+        name="codex-profile",
+        provider="codex",
+        agent_backend="codex",
+        model_name="model-a",
+    )
+    entry = ModelProviderProfileEntry("codex-profile", profile)
+    entry.post_message = Mock()
+    event = Mock()
+    event.button.id = "validate_profile_codex-profile"
+
+    entry.on_button_pressed(event)
+
+    event.stop.assert_called_once_with()
+    message = entry.post_message.call_args.args[0]
+    assert isinstance(message, ModelProviderProfileEntry.ValidatePressed)
+    assert message.profile_name == "codex-profile"
+    assert message.profile_data is profile
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+@patch("devflow.ui.config_tui.validate_model_provider_profile")
+def test_config_tui_validate_profile_does_not_modify_config(
+    mock_validate, mock_config_loader, mock_config
+):
+    """Clicking Validate displays results and leaves the in-memory profile unchanged."""
+    profile = ModelProviderProfile(
+        name="codex-profile",
+        provider="codex",
+        agent_backend="codex",
+        model_name="model-a",
+    )
+    mock_config.model_provider = ModelProviderConfig(
+        default_profile="codex-profile",
+        profiles={"codex-profile": profile},
+    )
+    loader = Mock()
+    loader.load_config.return_value = mock_config
+    loader.session_home = Path("/tmp/test")
+    mock_config_loader.return_value = loader
+    result = ModelProviderValidationResult(
+        profile_name="codex-profile",
+        provider="codex",
+        agent_backend="codex",
+        checks=["Profile name is present."],
+    )
+    mock_validate.return_value = result
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+    tui.push_screen = Mock()
+    before = tui.config.model_provider.model_dump()
+
+    tui.on_model_provider_profile_entry_validate_pressed(
+        ModelProviderProfileEntry.ValidatePressed("codex-profile", profile)
+    )
+
+    mock_validate.assert_called_once_with(profile, verify_remote=True)
+    pushed_screen = tui.push_screen.call_args.args[0]
+    assert isinstance(pushed_screen, ProfileValidationScreen)
+    assert pushed_screen.result is result
+    assert tui.config.model_provider.model_dump() == before
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+@patch("devflow.ui.config_tui.validate_model_provider_profile")
+def test_config_tui_does_not_validate_when_profile_is_opened(
+    mock_validate, mock_config_loader, mock_config
+):
+    """Opening the model-provider tab has no provider-validation side effect."""
+    mock_config.model_provider = ModelProviderConfig(
+        default_profile="anthropic",
+        profiles={"anthropic": ModelProviderProfile(name="anthropic")},
+    )
+    loader = Mock()
+    loader.load_config.return_value = mock_config
+    loader.session_home = Path("/tmp/test")
+    mock_config_loader.return_value = loader
+
+    ConfigTUI()
+
+    mock_validate.assert_not_called()
 
 
 # ============================================================================

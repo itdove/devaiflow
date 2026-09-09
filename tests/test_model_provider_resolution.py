@@ -1,6 +1,7 @@
 """Tests for provider/profile and command model resolution."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -15,7 +16,9 @@ from devflow.utils.model_provider import (
     get_model_name_from_profile,
     get_profile_compatibility_error,
     get_reasoning_for_command,
+    ModelProviderValidationResult,
     ModelProviderProfileNotFoundError,
+    validate_model_provider_profile,
 )
 
 
@@ -154,6 +157,137 @@ def test_incompatible_explicit_profile_is_rejected():
         )
 
     assert get_profile_compatibility_error(profile.model_dump(), "claude")
+
+
+def test_validate_model_provider_profile_success_is_secret_free():
+    """Valid profiles report checks without copying credential values to output."""
+    profile = ModelProviderProfile(
+        name="codex-profile",
+        provider="codex",
+        agent_backend="codex",
+        api_key="test-secret-token",
+        model_name="model-a",
+        reasoning_efforts={"open": "high"},
+    )
+    before = profile.model_dump()
+
+    result = validate_model_provider_profile(profile, environ={})
+
+    assert isinstance(result, ModelProviderValidationResult)
+    assert result.valid is True
+    assert result.issues == []
+    assert "test-secret-token" not in str(result.as_dict())
+    assert profile.model_dump() == before
+
+
+def test_validate_model_provider_profile_reports_codex_configuration_errors():
+    """Codex model and reasoning typos are reported with actionable messages."""
+    profile = {
+        "name": "codex-profile",
+        "provider": "codex",
+        "agent_backend": "codex",
+        "model_name": "model with spaces",
+        "reasoning_efforts": {"open": "unsupported"},
+    }
+
+    result = validate_model_provider_profile(profile, environ={})
+
+    assert result.valid is False
+    assert any("default model" in issue and "whitespace" in issue for issue in result.issues)
+    assert any("Reasoning strength" in issue and "Supported values" in issue for issue in result.issues)
+
+
+def test_validate_model_provider_profile_reports_provider_agent_mismatch():
+    """Provider and agent selections must be compatible before remote checks run."""
+    result = validate_model_provider_profile(
+        ModelProviderProfile(
+            name="codex-profile",
+            provider="codex",
+            agent_backend="claude",
+            model_name="model-a",
+        ),
+        environ={},
+    )
+
+    assert result.valid is False
+    assert any("not compatible" in issue for issue in result.issues)
+
+
+def test_validate_model_provider_profile_redacts_url_credentials():
+    """Malformed URLs never echo embedded credentials or query tokens."""
+    result = validate_model_provider_profile(
+        {
+            "name": "custom-profile",
+            "provider": "custom",
+            "agent_backend": "claude",
+            "base_url": "https://user:password@example.invalid/api?token=secret",
+            "model_name": "model-a",
+        },
+        environ={},
+    )
+
+    output = str(result.as_dict())
+    assert result.valid is False
+    assert "password" not in output
+    assert "secret" not in output
+    assert "embedded credentials" in output
+
+
+@patch("devflow.utils.model_provider.requests.get")
+def test_validate_model_provider_profile_verifies_models_on_explicit_request(mock_get):
+    """Remote model verification occurs only when explicitly requested."""
+    response = Mock(status_code=200)
+    response.json.return_value = {"data": [{"id": "model-a"}]}
+    mock_get.return_value = response
+    profile = ModelProviderProfile(
+        name="codex-profile",
+        provider="codex",
+        agent_backend="codex",
+        api_key="test-secret-token",
+        model_name="model-a",
+    )
+
+    static_result = validate_model_provider_profile(profile, environ={})
+    assert mock_get.called is False
+    assert static_result.remote_verified is False
+
+    result = validate_model_provider_profile(profile, verify_remote=True, environ={})
+
+    mock_get.assert_called_once_with(
+        "https://api.openai.com/v1/models",
+        headers={
+            "Accept": "application/json",
+            "Authorization": "Bearer test-secret-token",
+        },
+        timeout=5.0,
+    )
+    assert result.remote_verified is True
+    assert result.valid is True
+    assert "test-secret-token" not in str(result.as_dict())
+
+
+@patch("devflow.utils.model_provider.requests.get")
+def test_validate_model_provider_profile_reports_unavailable_model_without_secret(mock_get):
+    """A successful model-list response flags a model the account cannot use."""
+    response = Mock(status_code=200)
+    response.json.return_value = {"data": [{"id": "model-a"}]}
+    mock_get.return_value = response
+
+    result = validate_model_provider_profile(
+        ModelProviderProfile(
+            name="codex-profile",
+            provider="codex",
+            agent_backend="codex",
+            api_key="test-secret-token",
+            model_name="model-b",
+        ),
+        verify_remote=True,
+        environ={},
+    )
+
+    assert result.valid is False
+    assert any("model-b" in issue for issue in result.issues)
+    assert "test-secret-token" not in str(result.as_dict())
 
 
 def test_default_model_profile_supersedes_configured_agent_backend():

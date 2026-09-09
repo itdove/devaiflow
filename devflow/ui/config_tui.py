@@ -40,6 +40,7 @@ from textual.widgets import (
 from textual.validation import ValidationResult, Validator, Integer, Number
 from textual.message import Message
 from rich.console import Console
+from rich.markup import escape
 from rich.text import Text
 
 from devflow.config.loader import ConfigLoader
@@ -51,7 +52,11 @@ from devflow.config.templates.model_providers import (
 )
 from devflow.jira.client import JiraClient
 from devflow.jira.utils import get_field_with_alias
-from devflow.utils.model_provider import get_default_profile_name
+from devflow.utils.model_provider import (
+    ModelProviderValidationResult,
+    get_default_profile_name,
+    validate_model_provider_profile,
+)
 
 
 console = Console()
@@ -948,7 +953,7 @@ class AddEditWorkspaceScreen(ModalScreen):
 
 
 class ModelProviderProfileEntry(Container):
-    """Widget for displaying a single model provider profile with edit/remove/set-default buttons."""
+    """Widget for displaying a profile with validation and management buttons."""
 
     DEFAULT_CSS = """
     ModelProviderProfileEntry {
@@ -1000,6 +1005,14 @@ class ModelProviderProfileEntry(Container):
         def __init__(self, profile_name: str):
             super().__init__()
             self.profile_name = profile_name
+
+    class ValidatePressed(Message):
+        """Message sent when the validate button is pressed."""
+
+        def __init__(self, profile_name: str, profile_data: Dict[str, Any]):
+            super().__init__()
+            self.profile_name = profile_name
+            self.profile_data = profile_data
 
     def __init__(self, profile_name: str, profile_data: Dict[str, Any], is_default: bool = False, enforced: bool = False, **kwargs):
         """Initialize profile entry.
@@ -1089,6 +1102,9 @@ class ModelProviderProfileEntry(Container):
         with Horizontal(classes="button-row"):
             if not self.is_default:
                 yield Button("Set Default", variant="success", id=f"default_{btn_id_base}", disabled=self.enforced)
+            # Validation is read-only, so it remains available even when an
+            # enterprise/team policy prevents editing the profile.
+            yield Button("Validate", variant="primary", id=f"validate_{btn_id_base}")
             yield Button("Edit", variant="primary", id=f"edit_{btn_id_base}", disabled=self.enforced)
             # Don't allow removing default profile or anthropic profile
             if not self.is_default and self.profile_name != "anthropic":
@@ -1103,6 +1119,8 @@ class ModelProviderProfileEntry(Container):
             self.post_message(self.RemovePressed(self.profile_name))
         elif event.button.id.startswith("default_"):
             self.post_message(self.SetAsDefaultPressed(self.profile_name))
+        elif event.button.id.startswith("validate_"):
+            self.post_message(self.ValidatePressed(self.profile_name, self.profile_data))
 
 
 class TemplateSelectionScreen(ModalScreen):
@@ -1495,6 +1513,106 @@ class AddEditProfileScreen(ModalScreen):
                 self.app.notify(f"Error generating profile: {str(e)}", severity="error")
                 return
         else:
+            self.dismiss(None)
+
+
+class ProfileValidationScreen(ModalScreen):
+    """Modal screen showing the result of an explicit profile validation."""
+
+    DEFAULT_CSS = """
+    ProfileValidationScreen {
+        align: center middle;
+    }
+
+    ProfileValidationScreen > VerticalScroll {
+        width: 90%;
+        height: 85%;
+        max-height: 85%;
+        background: $surface;
+        border: thick $primary;
+        padding: 1 2;
+        scrollbar-size: 1 1;
+    }
+
+    ProfileValidationScreen > VerticalScroll > Container {
+        width: 100%;
+        height: auto;
+    }
+
+    ProfileValidationScreen .validation-section {
+        margin: 1 0 0 0;
+    }
+
+    ProfileValidationScreen .validation-footer {
+        margin: 1 0 0 0;
+        color: $text-muted;
+    }
+
+    ProfileValidationScreen .button-row {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin: 1 0 0 0;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close"),
+    ]
+
+    def __init__(self, profile_name: str, result: ModelProviderValidationResult):
+        """Initialize the validation result screen.
+
+        Args:
+            profile_name: Name of the profile that was validated.
+            result: Secret-free validation result.
+        """
+        super().__init__()
+        self.profile_name = profile_name
+        self.result = result
+
+    def compose(self) -> ComposeResult:
+        """Compose the validation result screen."""
+        result = self.result
+        safe_name = escape(self.profile_name)
+
+        if result.issues:
+            status = "[bold red]✗ Validation failed[/bold red]"
+        elif result.warnings:
+            status = "[bold yellow]⚠ Validation completed with warnings[/bold yellow]"
+        else:
+            status = "[bold green]✓ Profile configuration is valid[/bold green]"
+
+        with VerticalScroll():
+            with Container():
+                yield Static(f"[bold cyan]Validate Profile: {safe_name}[/bold cyan]")
+                yield Static(status)
+
+                if result.checks:
+                    yield Static("[bold]Checks[/bold]", classes="validation-section")
+                    for check in result.checks:
+                        yield Static(f"[green]✓[/green] {escape(check)}")
+
+                if result.issues:
+                    yield Static("[bold red]Errors[/bold red]", classes="validation-section")
+                    for issue in result.issues:
+                        yield Static(f"[red]•[/red] {escape(issue)}")
+
+                if result.warnings:
+                    yield Static("[bold yellow]Warnings[/bold yellow]", classes="validation-section")
+                    for warning in result.warnings:
+                        yield Static(f"[yellow]•[/yellow] {escape(warning)}")
+
+                yield Static(
+                    "No profile values were changed. Credential values are never displayed.",
+                    classes="validation-footer",
+                )
+                with Horizontal(classes="button-row"):
+                    yield Button("Close", variant="default", id="close")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Close the validation result screen."""
+        if event.button.id == "close":
             self.dismiss(None)
 
 
@@ -2505,6 +2623,7 @@ class ConfigTUI(App):
                     "[dim]• Default profile (marked with ⭐) is used unless overridden[/dim]\n"
                     "[dim]• Override per session: daf open NAME --model-profile profile-name[/dim]\n"
                     "[dim]• Each profile contains its provider and agent/IDE adapter[/dim]\n"
+                    "[dim]• Click 'Validate' to run checks and optional provider model verification[/dim]\n"
                     "[dim]• --model changes only the session model; utility models below are unaffected[/dim]\n"
                     "[dim]• The 'anthropic' profile is the base fallback and cannot be deleted[/dim]\n"
                     "[dim]• See docs/alternative-model-providers.md for setup guides[/dim]"
@@ -2863,6 +2982,39 @@ class ConfigTUI(App):
             AddEditProfileScreen(existing_name=message.profile_name, existing_profile=profile_dict),
             handle_edit_result
         )
+
+    def on_model_provider_profile_entry_validate_pressed(
+        self, message: ModelProviderProfileEntry.ValidatePressed
+    ) -> None:
+        """Validate a profile after an explicit click without changing it.
+
+        The profile is copied by the shared validator before any checks run.
+        Remote verification is therefore limited to this button action and
+        cannot be triggered by opening, editing, or saving a profile.
+
+        Args:
+            message: The validate pressed message containing profile name/data.
+        """
+        profile = None
+        if self.config.model_provider:
+            profile = self.config.model_provider.profiles.get(message.profile_name)
+        profile = profile or message.profile_data
+        if profile is None:
+            self.notify(f"Profile not found: {message.profile_name}", severity="error")
+            return
+
+        self.notify(f"Validating profile '{message.profile_name}'...", severity="information")
+        try:
+            result = validate_model_provider_profile(profile, verify_remote=True)
+        except Exception:
+            # Do not echo an unexpected exception: a provider library may
+            # include request details or credential material in its message.
+            result = ModelProviderValidationResult(
+                profile_name=message.profile_name,
+                issues=["Profile validation could not be completed safely."],
+            )
+
+        self.push_screen(ProfileValidationScreen(message.profile_name, result))
 
     def on_model_provider_profile_entry_remove_pressed(self, message: ModelProviderProfileEntry.RemovePressed) -> None:
         """Handle remove button press on profile entry.

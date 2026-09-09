@@ -11,6 +11,7 @@ from rich.table import Table
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import ModelProviderProfile
+from devflow.utils.model_provider import validate_model_provider_profile
 
 console = Console()
 
@@ -650,53 +651,40 @@ def test_profile(name: Optional[str] = None, output_json: bool = False) -> None:
         return
 
     profile = config.model_provider.profiles[name]
+    result = validate_model_provider_profile(profile)
 
     if not output_json:
         console.print(f"\n[bold]Testing profile: {name}[/bold]\n")
 
-    # Validation checks
-    issues = []
-    warnings = []
-
-    # Check Vertex AI configuration
-    if profile.use_vertex:
-        if not profile.vertex_project_id:
-            issues.append("Vertex AI enabled but vertex_project_id not set")
-        if not profile.vertex_region:
-            warnings.append("Vertex AI enabled but vertex_region not set (will use default)")
-
-    # Check custom base URL
-    if profile.base_url:
-        if not profile.base_url.startswith(("http://", "https://")):
-            issues.append(f"Invalid base_url format: {profile.base_url}")
-
-    # Report results
     if output_json:
+        # Keep the existing JSON contract stable while using the same
+        # validation implementation as the configuration TUI.
         json_output_func(
-            success=len(issues) == 0,
+            success=result.valid,
             data={
                 "profile": name,
-                "valid": len(issues) == 0,
-                "issues": issues,
-                "warnings": warnings,
-            }
+                "valid": result.valid,
+                "issues": list(result.issues),
+                "warnings": list(result.warnings),
+            },
         )
+        return
+
+    if result.issues:
+        console.print("[red]✗ Validation failed[/red]\n")
+        console.print("[bold]Issues:[/bold]")
+        for issue in result.issues:
+            console.print(f"  [red]•[/red] {issue}")
     else:
-        if issues:
-            console.print("[red]✗ Validation failed[/red]\n")
-            console.print("[bold]Issues:[/bold]")
-            for issue in issues:
-                console.print(f"  [red]•[/red] {issue}")
-        else:
-            console.print("[green]✓ Profile configuration is valid[/green]\n")
+        console.print("[green]✓ Profile configuration is valid[/green]\n")
 
-        if warnings:
-            console.print("\n[bold]Warnings:[/bold]")
-            for warning in warnings:
-                console.print(f"  [yellow]•[/yellow] {warning}")
+    if result.warnings:
+        console.print("\n[bold]Warnings:[/bold]")
+        for warning in result.warnings:
+            console.print(f"  [yellow]•[/yellow] {warning}")
 
-        if not issues:
-            console.print("\n[dim]Note: This command validates configuration only.[/dim]")
-            console.print("[dim]To test actual connectivity, use the profile with your AI agent.[/dim]")
+    if not result.issues:
+        console.print("\n[dim]Note: This command validates configuration only.[/dim]")
+        console.print("[dim]To test actual connectivity, use the profile with your AI agent.[/dim]")
 
-        console.print()
+    console.print()
