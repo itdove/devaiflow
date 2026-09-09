@@ -6,9 +6,12 @@ and build environment variables for launching Claude Code with alternative AI pr
 
 import os
 import re
-from typing import Dict, Optional, Any
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Mapping, Optional, Tuple
+from urllib.parse import urlsplit, urlunsplit
 
 import click
+import requests
 
 
 UTILITY_COMMANDS = {"commit_message", "pr_template"}
@@ -24,6 +27,56 @@ CLAUDE_PROFILE_PROVIDERS = {
     "mlx",
     "mlx-lm",
 }
+
+# These are the effort values understood by the agent adapters supported by
+# DevAIFlow.  Codex has added ``minimal`` and ``xhigh`` over time, while older
+# versions and Claude Code use the familiar low/medium/high values.  ``max``
+# is retained for compatibility with existing profile files.
+KNOWN_REASONING_EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max"}
+CODEX_REASONING_EFFORTS = KNOWN_REASONING_EFFORTS
+CLAUDE_REASONING_EFFORTS = {"low", "medium", "high", "max"}
+
+
+@dataclass
+class ModelProviderValidationResult:
+    """Safe, user-facing results from validating a model provider profile.
+
+    The result intentionally contains only configuration metadata and
+    human-readable messages.  Credential values and provider response bodies
+    are never retained, so the same result can safely be shown by the CLI or
+    configuration TUI.
+    """
+
+    profile_name: str = ""
+    provider: str = ""
+    agent_backend: str = ""
+    issues: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    checks: List[str] = field(default_factory=list)
+    remote_verified: bool = False
+
+    @property
+    def valid(self) -> bool:
+        """Whether validation found no blocking issues."""
+        return not self.issues
+
+    @property
+    def is_valid(self) -> bool:
+        """Alias for :attr:`valid` used by callers that prefer predicate wording."""
+        return self.valid
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Return a JSON-serializable representation without secrets."""
+        return {
+            "profile": self.profile_name,
+            "provider": self.provider,
+            "agent_backend": self.agent_backend,
+            "valid": self.valid,
+            "issues": list(self.issues),
+            "warnings": list(self.warnings),
+            "checks": list(self.checks),
+            "remote_verified": self.remote_verified,
+        }
 
 
 class ModelProviderCompatibilityError(ValueError, click.ClickException):
@@ -193,6 +246,708 @@ def get_profile_compatibility_error(
         f"'{provider}', which is not compatible with agent backend '{agent_backend}'. "
         f"Select a profile with the matching agent adapter."
     )
+
+
+def _add_validation_message(messages: List[str], message: str) -> None:
+    """Append a validation message once, preserving its first-seen order."""
+    if message not in messages:
+        messages.append(message)
+
+
+def _safe_url_for_message(value: str) -> str:
+    """Return a URL suitable for an error message without embedded secrets."""
+    try:
+        parsed = urlsplit(value)
+        # A URL can carry credentials in userinfo or a token in its query.  Do
+        # not echo either form into CLI/TUI output.
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            if parsed.scheme and parsed.hostname:
+                host = parsed.hostname
+                if parsed.port:
+                    host = f"{host}:{parsed.port}"
+                return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
+            return "<redacted URL>"
+    except (ValueError, TypeError):
+        return "<invalid URL>"
+    return value
+
+
+def _validate_profile_url(result: ModelProviderValidationResult, value: Any) -> bool:
+    """Validate an optional profile URL and return whether it is usable."""
+    if value is None or value == "":
+        return False
+    if not isinstance(value, str):
+        _add_validation_message(result.issues, "API URL must be a string.")
+        return False
+
+    raw_value = value.strip()
+    try:
+        parsed = urlsplit(raw_value)
+        valid = (
+            bool(raw_value)
+            and parsed.scheme in {"http", "https"}
+            and bool(parsed.netloc)
+            and not parsed.username
+            and not parsed.password
+            and not parsed.query
+            and not parsed.fragment
+        )
+        # Accessing ``port`` catches malformed values such as an invalid port
+        # number before the URL is used by the remote verifier.
+        if parsed.netloc:
+            _ = parsed.port
+    except (ValueError, TypeError):
+        valid = False
+
+    if not valid:
+        safe_value = _safe_url_for_message(raw_value)
+        _add_validation_message(result.issues, f"Invalid base_url format: {safe_value}")
+        if "<redacted URL>" not in safe_value and "<invalid URL>" not in safe_value:
+            # Keep the legacy wording useful while explicitly explaining why
+            # URLs containing credentials/query strings are rejected.
+            try:
+                parsed = urlsplit(raw_value)
+                if parsed.username or parsed.password or parsed.query or parsed.fragment:
+                    _add_validation_message(
+                        result.issues,
+                        "API URL must not contain embedded credentials or query parameters; "
+                        "use the profile credential fields instead.",
+                    )
+            except (ValueError, TypeError):
+                pass
+        return False
+
+    _add_validation_message(result.checks, "API URL format is valid.")
+    return True
+
+
+def _known_agent_backends() -> set[str]:
+    """Return agent identifiers from the central agent registry."""
+    try:
+        from devflow.agent.factory import AGENT_ALIASES, AGENT_REGISTRY
+
+        return set(AGENT_REGISTRY) | set(AGENT_ALIASES)
+    except (ImportError, AttributeError):
+        # Keep validation usable during partial installs or isolated unit tests.
+        return {
+            "claude",
+            "codex",
+            "ollama",
+            "opencode",
+            "github-copilot",
+            "cursor",
+            "windsurf",
+            "aider",
+            "continue",
+            "crush",
+        }
+
+
+def _compatible_agent_backends(provider: str) -> Optional[set[str]]:
+    """Return adapters known to work with a provider, if the provider is known."""
+    provider_backends = {
+        "anthropic": {"claude"},
+        "vertex": {"claude"},
+        "openrouter": {"claude"},
+        "custom": {"claude"},
+        "llama.cpp": {"claude"},
+        "llama-cpp": {"claude"},
+        "llamacpp": {"claude"},
+        "mlx": {"claude"},
+        "mlx-lm": {"claude"},
+        "ollama": {"ollama", "claude"},  # ``claude`` keeps legacy profiles valid.
+        "codex": {"codex"},
+        "openai": {"codex"},
+    }
+    return provider_backends.get(provider)
+
+
+def _configured_profile_models(profile: Dict[str, Any]) -> Tuple[List[Tuple[str, Any]], bool]:
+    """Collect configured model identifiers and report malformed model maps."""
+    models: List[Tuple[str, Any]] = []
+    malformed = False
+
+    default_model = profile.get("model_name")
+    if default_model not in (None, ""):
+        models.append(("default model", default_model))
+
+    command_models = profile.get("models")
+    if command_models is None:
+        command_models = profile.get("command_models") or {}
+    if not isinstance(command_models, dict):
+        malformed = True
+        command_models = {}
+    for command, model in command_models.items():
+        if model not in (None, ""):
+            models.append((f"model for {command}", model))
+
+    # These fields predate the command-model map and still appear in existing
+    # configuration files.  Do not add duplicates when both spellings exist.
+    for key, label in (
+        ("commit_message_model", "model for commit_message"),
+        ("pr_template_model", "model for pr_template"),
+    ):
+        value = profile.get(key)
+        if value not in (None, "") and not any(model == value for _, model in models):
+            models.append((label, value))
+
+    return models, malformed
+
+
+def _credential_value(
+    profile: Dict[str, Any],
+    provider: str,
+    environ: Mapping[str, str],
+) -> Optional[str]:
+    """Resolve a credential for remote verification without exposing it."""
+    profile_values = []
+    if provider in {"codex", "openai"}:
+        profile_values = [profile.get("api_key"), profile.get("auth_token")]
+        env_names = ("OPENAI_API_KEY",)
+    elif provider == "openrouter":
+        profile_values = [profile.get("auth_token"), profile.get("api_key")]
+        env_names = ("OPENROUTER_API_KEY", "OPENAI_API_KEY")
+    elif provider == "anthropic":
+        profile_values = [profile.get("api_key"), profile.get("auth_token")]
+        env_names = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+    else:
+        profile_values = [profile.get("api_key"), profile.get("auth_token")]
+        env_names = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+
+    for value in profile_values:
+        if isinstance(value, str) and value.strip():
+            return value
+
+    env_vars = profile.get("env_vars")
+    if isinstance(env_vars, dict):
+        for env_name in env_names:
+            value = env_vars.get(env_name)
+            if isinstance(value, str) and value.strip():
+                return value
+
+    for env_name in env_names:
+        value = environ.get(env_name)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _remote_base_url(
+    profile: Dict[str, Any], provider: str, environ: Mapping[str, str]
+) -> Optional[str]:
+    """Resolve a safe base URL for provider model-list verification."""
+    configured = profile.get("api_url") or profile.get("base_url")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+
+    env_names = {
+        "ollama": ("OLLAMA_HOST",),
+        "codex": ("OPENAI_BASE_URL",),
+        "openai": ("OPENAI_BASE_URL",),
+        "anthropic": ("ANTHROPIC_BASE_URL",),
+        "openrouter": ("OPENROUTER_BASE_URL",),
+    }.get(provider, ())
+    for env_name in env_names:
+        value = environ.get(env_name)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return {
+        "codex": "https://api.openai.com/v1",
+        "openai": "https://api.openai.com/v1",
+        "anthropic": "https://api.anthropic.com/v1",
+        "openrouter": "https://openrouter.ai/api/v1",
+    }.get(provider)
+
+
+def _model_list_endpoint(base_url: str, provider: str) -> str:
+    """Build the provider model-list endpoint from a configured base URL."""
+    parsed = urlsplit(base_url.rstrip("/"))
+    path = parsed.path.rstrip("/")
+
+    if provider == "ollama":
+        if path.endswith("/api/tags"):
+            endpoint_path = path
+        elif path.endswith("/api"):
+            endpoint_path = f"{path}/tags"
+        else:
+            endpoint_path = f"{path}/api/tags"
+    else:
+        if path.endswith("/models"):
+            endpoint_path = path
+        elif path.endswith("/v1"):
+            endpoint_path = f"{path}/models"
+        elif path.endswith("/api"):
+            endpoint_path = f"{path}/v1/models"
+        else:
+            endpoint_path = f"{path}/v1/models"
+
+    return urlunsplit((parsed.scheme, parsed.netloc, endpoint_path, "", ""))
+
+
+def _extract_model_ids(payload: Any) -> List[str]:
+    """Extract model IDs from OpenAI-compatible and Ollama responses."""
+    if not isinstance(payload, dict):
+        return []
+
+    candidates = payload.get("data")
+    if candidates is None:
+        candidates = payload.get("models")
+    if not isinstance(candidates, list):
+        return []
+
+    model_ids: List[str] = []
+    for candidate in candidates:
+        if isinstance(candidate, str):
+            value = candidate.strip()
+        elif isinstance(candidate, dict):
+            value = next(
+                (
+                    candidate.get(key)
+                    for key in ("id", "name", "model", "model_name")
+                    if isinstance(candidate.get(key), str) and candidate.get(key).strip()
+                ),
+                "",
+            ).strip()
+        else:
+            value = ""
+        if value and value not in model_ids:
+            model_ids.append(value)
+    return model_ids
+
+
+def _verify_remote_profile(
+    result: ModelProviderValidationResult,
+    profile: Dict[str, Any],
+    provider: str,
+    environ: Mapping[str, str],
+    timeout: float,
+) -> None:
+    """Verify a provider endpoint after the user explicitly requests it."""
+    if provider == "vertex":
+        _add_validation_message(
+            result.warnings,
+            "Vertex AI model verification requires Google Cloud credentials and is not "
+            "available from the profile validator.",
+        )
+        return
+
+    if provider not in {
+        "anthropic",
+        "openrouter",
+        "custom",
+        "llama.cpp",
+        "llama-cpp",
+        "llamacpp",
+        "ollama",
+        "mlx",
+        "mlx-lm",
+        "codex",
+        "openai",
+    }:
+        _add_validation_message(
+            result.warnings,
+            "Remote provider verification is unavailable for this provider; static checks "
+            "were completed.",
+        )
+        return
+
+    base_url = _remote_base_url(profile, provider, environ)
+    if not base_url:
+        _add_validation_message(
+            result.warnings,
+            "Remote provider verification was skipped because no API URL is configured.",
+        )
+        return
+
+    credential = _credential_value(profile, provider, environ)
+    cloud_provider = provider in {"anthropic", "openrouter", "codex", "openai"}
+    if cloud_provider and not credential:
+        _add_validation_message(
+            result.warnings,
+            "Remote provider verification was skipped because no API credential is "
+            "available to DevAIFlow; the agent's own login may still provide access.",
+        )
+        return
+
+    endpoint = _model_list_endpoint(base_url, provider)
+    headers = {"Accept": "application/json"}
+    if credential:
+        if provider == "anthropic":
+            headers["x-api-key"] = credential
+            headers["anthropic-version"] = "2023-06-01"
+        else:
+            headers["Authorization"] = f"Bearer {credential}"
+
+    try:
+        response = requests.get(endpoint, headers=headers, timeout=timeout)
+    except requests.Timeout:
+        _add_validation_message(
+            result.issues,
+            f"Provider endpoint did not respond within {timeout:g} seconds. Check the "
+            "API URL and server availability.",
+        )
+        return
+    except requests.ConnectionError:
+        _add_validation_message(
+            result.issues,
+            "Could not reach the provider endpoint. Check the API URL and server availability.",
+        )
+        return
+    except requests.RequestException:
+        _add_validation_message(
+            result.issues,
+            "Provider verification failed before a response was received. Check the API URL.",
+        )
+        return
+
+    status_code = getattr(response, "status_code", None)
+    if status_code in {401, 403}:
+        _add_validation_message(
+            result.issues,
+            f"Provider rejected the configured credentials (HTTP {status_code}). Check the "
+            "credential source and permissions.",
+        )
+        return
+    if status_code == 404:
+        _add_validation_message(
+            result.warnings,
+            "The provider does not expose a supported model-list endpoint at this URL; "
+            "configured model names could not be verified.",
+        )
+        return
+    if status_code == 429:
+        _add_validation_message(
+            result.warnings,
+            "The provider rate-limited validation; configured model names could not be verified.",
+        )
+        return
+    if not isinstance(status_code, int) or status_code < 200 or status_code >= 300:
+        _add_validation_message(
+            result.issues,
+            f"Provider verification returned HTTP {status_code or 'an unknown error'}.",
+        )
+        return
+
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        _add_validation_message(
+            result.warnings,
+            "Provider responded successfully, but its model list was not readable; "
+            "configured model names could not be verified.",
+        )
+        return
+
+    model_ids = _extract_model_ids(payload)
+    if not model_ids:
+        _add_validation_message(
+            result.warnings,
+            "Provider responded successfully, but did not return a readable model list; "
+            "configured model names could not be verified.",
+        )
+        return
+
+    result.remote_verified = True
+    _add_validation_message(result.checks, "Provider accepted the request and returned its model list.")
+    configured_models, _ = _configured_profile_models(profile)
+    missing = [
+        (label, model)
+        for label, model in configured_models
+        if isinstance(model, str) and model.strip() not in model_ids
+    ]
+    if missing:
+        for label, model in missing:
+            _add_validation_message(
+                result.issues,
+                f"Configured {label} '{model}' was not returned by the provider. Check the "
+                "model identifier and account access.",
+            )
+    elif configured_models:
+        _add_validation_message(result.checks, "Configured model names were found in the provider model list.")
+    else:
+        _add_validation_message(
+            result.warnings,
+            "The provider model list was retrieved, but this profile has no explicit model "
+            "to compare.",
+        )
+
+
+def validate_model_provider_profile(
+    profile: Any,
+    *,
+    agent_backend: Optional[str] = None,
+    verify_remote: bool = False,
+    timeout: float = 5.0,
+    environ: Optional[Mapping[str, str]] = None,
+) -> ModelProviderValidationResult:
+    """Validate a provider profile without changing it or exposing secrets.
+
+    Static checks are always performed.  If ``verify_remote`` is true, the
+    function makes a model-list request only for providers that expose a
+    compatible endpoint.  Callers should use that option only for an explicit
+    user action, such as the configuration TUI's Validate button.
+
+    Args:
+        profile: Pydantic ``ModelProviderProfile`` or profile dictionary.
+        agent_backend: Optional adapter to validate against.  Defaults to the
+            adapter declared by the profile.
+        verify_remote: Whether to contact the configured provider endpoint.
+        timeout: HTTP timeout used for explicit remote verification.
+        environ: Environment mapping used for credential and endpoint lookup.
+
+    Returns:
+        A secret-free validation result.
+    """
+    try:
+        profile_data = _profile_to_dict(profile) or {}
+    except (TypeError, ValueError):
+        return ModelProviderValidationResult(
+            issues=["Profile configuration must be a mapping or model provider profile."]
+        )
+
+    if environ is None:
+        environ = os.environ
+    profile_name_value = profile_data.get("name")
+    profile_name = profile_name_value.strip() if isinstance(profile_name_value, str) else ""
+    provider = _provider_name(profile_data)
+    if profile_data.get("use_vertex"):
+        provider = "vertex"
+
+    selected_backend_value = agent_backend or profile_data.get("agent_backend")
+    if not selected_backend_value:
+        selected_backend_value = get_agent_backend_from_profile(profile_data)
+    selected_backend = (
+        selected_backend_value.strip()
+        if isinstance(selected_backend_value, str)
+        else ""
+    )
+    result = ModelProviderValidationResult(
+        profile_name=profile_name,
+        provider=provider,
+        agent_backend=selected_backend,
+    )
+
+    if not profile_name:
+        _add_validation_message(result.issues, "Profile name is required.")
+    else:
+        _add_validation_message(result.checks, "Profile name is present.")
+
+    if not provider:
+        _add_validation_message(result.issues, "Provider is required.")
+    elif provider not in {
+        "anthropic",
+        "vertex",
+        "openrouter",
+        "custom",
+        "llama.cpp",
+        "llama-cpp",
+        "llamacpp",
+        "ollama",
+        "mlx",
+        "mlx-lm",
+        "codex",
+        "openai",
+    }:
+        _add_validation_message(
+            result.warnings,
+            "Provider '{0}' is not recognized; only generic static checks are available.".format(provider),
+        )
+    else:
+        _add_validation_message(result.checks, "Provider is recognized.")
+
+    if not selected_backend:
+        _add_validation_message(result.issues, "Agent / IDE adapter is required.")
+    else:
+        known_backends = _known_agent_backends()
+        canonical_backend = _canonical_agent_backend(selected_backend)
+        canonical_known = {
+            _canonical_agent_backend(backend) for backend in known_backends
+        }
+        if canonical_backend not in canonical_known:
+            _add_validation_message(
+                result.issues,
+                f"Unknown agent / IDE adapter '{selected_backend}'. Choose a supported adapter.",
+            )
+        else:
+            _add_validation_message(result.checks, "Agent / IDE adapter is recognized.")
+
+        compatible_backends = _compatible_agent_backends(provider)
+        if compatible_backends and canonical_backend != "opencode":
+            compatible_canonical = {
+                _canonical_agent_backend(backend) for backend in compatible_backends
+            }
+            if canonical_backend not in compatible_canonical:
+                expected = ", ".join(sorted(compatible_canonical))
+                _add_validation_message(
+                    result.issues,
+                    f"Provider '{provider}' is not compatible with agent adapter "
+                    f"'{selected_backend}'. Use {expected} for this provider.",
+                )
+            else:
+                _add_validation_message(result.checks, "Provider and agent adapter are compatible.")
+
+    # Re-run Pydantic's profile-level validators against a copy.  Error text is
+    # reduced to field-level information so a malformed credential can never be
+    # echoed by a validation exception.
+    try:
+        from devflow.config.models import ModelProviderProfile
+
+        ModelProviderProfile.model_validate(profile_data)
+    except Exception as exc:
+        errors = getattr(exc, "errors", lambda: [])()
+        if errors:
+            for error in errors:
+                location = error.get("loc", ()) if isinstance(error, dict) else ()
+                location_parts = [str(part) for part in location]
+                if any(part in {"api_key", "auth_token", "env_vars"} for part in location_parts):
+                    _add_validation_message(result.issues, "Credential configuration is invalid.")
+                    continue
+                field_name = ".".join(location_parts) or "profile"
+                message = error.get("msg", "invalid value") if isinstance(error, dict) else "invalid value"
+                _add_validation_message(result.issues, f"Invalid {field_name} configuration: {message}.")
+
+    use_vertex = bool(profile_data.get("use_vertex") or provider == "vertex")
+    if use_vertex:
+        if not profile_data.get("vertex_project_id"):
+            _add_validation_message(result.issues, "Vertex AI enabled but vertex_project_id not set")
+        if not profile_data.get("vertex_region"):
+            _add_validation_message(
+                result.warnings,
+                "Vertex AI enabled but vertex_region not set (will use default)",
+            )
+        if provider == "vertex":
+            _add_validation_message(result.checks, "Vertex AI settings are internally consistent.")
+
+    base_url = profile_data.get("api_url") or profile_data.get("base_url")
+    has_valid_url = _validate_profile_url(result, base_url)
+    if provider in LOCAL_PROVIDERS and not base_url:
+        _add_validation_message(
+            result.issues,
+            f"api_url/base_url is required for local provider '{provider}'",
+        )
+    elif base_url and has_valid_url:
+        _add_validation_message(result.checks, "Configured provider URL is usable.")
+
+    profile_credential = any(
+        isinstance(profile_data.get(field_name), str) and profile_data.get(field_name).strip()
+        for field_name in ("api_key", "auth_token")
+    )
+    env_credential = _credential_value(profile_data, provider, environ) is not None
+    if profile_data.get("api_key") and profile_data.get("auth_token"):
+        _add_validation_message(
+            result.warnings,
+            "Both API key and auth token are configured; the API key takes precedence. Values are hidden.",
+        )
+    if provider == "vertex":
+        _add_validation_message(
+            result.checks,
+            "Vertex credentials are supplied by the configured Google Cloud environment/account.",
+        )
+    elif provider in {"anthropic", "openrouter", "codex", "openai"} and not profile_credential:
+        if env_credential:
+            _add_validation_message(
+                result.checks,
+                "Provider credential is available from the environment (value hidden).",
+            )
+        else:
+            _add_validation_message(
+                result.warnings,
+                "No provider credential is configured in this profile; an agent login or "
+                "environment credential may still be required.",
+            )
+    elif profile_credential:
+        _add_validation_message(result.checks, "Provider credential fields are configured (value hidden).")
+    elif provider in LOCAL_PROVIDERS:
+        _add_validation_message(result.checks, "No credential is required for the configured local provider.")
+    else:
+        _add_validation_message(result.checks, "Credential configuration is not required for static validation.")
+
+    configured_models, malformed_models = _configured_profile_models(profile_data)
+    if malformed_models:
+        _add_validation_message(result.issues, "The models configuration must be an object of command-to-model values.")
+    for label, model in configured_models:
+        if not isinstance(model, str) or not model.strip():
+            _add_validation_message(result.issues, f"Configured {label} must be a non-empty string.")
+        elif any(character.isspace() for character in model):
+            _add_validation_message(
+                result.issues,
+                f"Configured {label} contains whitespace; use the provider's exact model identifier.",
+            )
+
+    if not configured_models:
+        if provider in LOCAL_PROVIDERS or provider in {"custom", "openrouter"}:
+            _add_validation_message(
+                result.issues,
+                f"A model name is required for {provider} profiles.",
+            )
+        else:
+            _add_validation_message(
+                result.warnings,
+                "No explicit model is configured; the selected agent/provider default will be used.",
+            )
+    else:
+        _add_validation_message(result.checks, "Configured model values are present.")
+
+    if provider == "openrouter":
+        for label, model in configured_models:
+            if isinstance(model, str) and model.strip() and "/" not in model:
+                _add_validation_message(
+                    result.warnings,
+                    f"Configured {label} does not use the usual OpenRouter provider/model format; "
+                    "remote verification will determine whether it is available.",
+                )
+
+    reasoning_values: List[Tuple[str, Any]] = []
+    reasoning_efforts = profile_data.get("reasoning_efforts")
+    if reasoning_efforts is None:
+        reasoning_efforts = profile_data.get("command_reasoning") or {}
+    if not isinstance(reasoning_efforts, dict):
+        _add_validation_message(result.issues, "The reasoning_efforts configuration must be an object of values.")
+        reasoning_efforts = {}
+    reasoning_values.extend((f"{command} command", value) for command, value in reasoning_efforts.items())
+    if profile_data.get("reasoning_effort"):
+        reasoning_values.append(("default", profile_data.get("reasoning_effort")))
+    if profile_data.get("utility_reasoning_effort"):
+        reasoning_values.append(("utility", profile_data.get("utility_reasoning_effort")))
+
+    canonical_backend = _canonical_agent_backend(selected_backend)
+    allowed_efforts = (
+        CODEX_REASONING_EFFORTS
+        if canonical_backend == "codex"
+        else CLAUDE_REASONING_EFFORTS
+        if canonical_backend == "claude"
+        else KNOWN_REASONING_EFFORTS
+    )
+    for label, effort in reasoning_values:
+        if not isinstance(effort, str) or not effort.strip():
+            _add_validation_message(result.issues, f"Reasoning strength for {label} must be a non-empty string.")
+            continue
+        normalized_effort = effort.strip().lower()
+        if normalized_effort not in allowed_efforts:
+            supported = ", ".join(sorted(allowed_efforts))
+            message = (
+                f"Reasoning strength for {label} '{effort}' is not recognized for "
+                f"agent adapter '{selected_backend}'. Supported values: {supported}."
+            )
+            if canonical_backend in {"codex", "claude"}:
+                _add_validation_message(result.issues, message)
+            else:
+                _add_validation_message(result.warnings, message)
+    if reasoning_values and not any(
+        message.startswith("Reasoning strength") for message in result.issues
+    ):
+        _add_validation_message(result.checks, "Configured reasoning strength values are supported.")
+
+    if verify_remote and not result.issues:
+        _verify_remote_profile(result, profile_data, provider, environ, timeout)
+    elif verify_remote and result.issues:
+        _add_validation_message(
+            result.warnings,
+            "Remote provider verification was skipped until the profile configuration errors are fixed.",
+        )
+
+    return result
 
 
 def _select_profile_name(config, override_profile_name: Optional[str], agent_backend: Optional[str]) -> Optional[str]:
