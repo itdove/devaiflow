@@ -499,6 +499,7 @@ def create_investigation_session(
     selected_workspace_name = None
     loc_temp_directory = None
     loc_original_path = None
+    location_selected_current_directory = False
     if projects and workspace:
         # Multi-project mode via --projects flag
         # Parse project names
@@ -597,6 +598,10 @@ def create_investigation_session(
         if len(result) == 1 and result[0] == "multi_project_handled":
             return
         project_path, selected_workspace_name, loc_temp_directory, loc_original_path = result
+        location_selected_current_directory = (
+            loc_temp_directory is None
+            and Path(project_path).resolve() == Path.cwd().resolve()
+        )
 
     # For temp directories: use original repo name if cloned, session name if empty
     temp_directory = None
@@ -639,6 +644,9 @@ def create_investigation_session(
     elif mock_mode or is_json:
         # Non-interactive mode: skip temp directory prompt
         console_print(f"[dim]Non-interactive mode - skipping temp directory clone prompt[/dim]")
+    elif location_selected_current_directory:
+        # The location prompt already answered the temp-clone question by selecting CWD.
+        console_print(f"[dim]Using current directory (skipping temp directory clone prompt)[/dim]")
     else:
         # No flag provided: prompt user
         from devflow.utils.temp_directory import should_clone_to_temp, prompt_and_clone_to_temp
