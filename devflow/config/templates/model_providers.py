@@ -537,20 +537,27 @@ def detect_template_from_profile(profile_data: Dict[str, Any]) -> str:
     if hasattr(profile_data, "model_dump"):
         profile_data = profile_data.model_dump()
 
-    provider = str(profile_data.get("provider", "")).lower()
+    provider = str(profile_data.get("provider") or "").strip().lower()
     if provider in _TEMPLATE_REGISTRY:
         return provider
+    if provider == "openai":
+        return "codex"
     if provider in {"llama-cpp", "llamacpp"}:
         return "llama.cpp"
     if provider == "mlx-lm":
         return "mlx"
+
+    # Older profiles may omit the provider while still selecting the Codex
+    # adapter. Keep those profiles editable with the Codex form.
+    if str(profile_data.get("agent_backend") or "").strip().lower() == "codex":
+        return "codex"
 
     # Check for Vertex AI
     if profile_data.get("use_vertex"):
         return "vertex"
 
     # Check for OpenRouter (has base_url pointing to openrouter.ai)
-    base_url = profile_data.get("api_url") or profile_data.get("base_url", "")
+    base_url = profile_data.get("api_url") or profile_data.get("base_url") or ""
     if "openrouter.ai" in base_url:
         return "openrouter"
 

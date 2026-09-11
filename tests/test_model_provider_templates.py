@@ -311,3 +311,25 @@ class TestDetectTemplate:
             "model_name": "Qwen3-Coder",
         }
         assert detect_template_from_profile(profile) == "custom"
+
+    def test_detect_codex_profile_with_null_provider_url(self):
+        """Codex profiles without an endpoint remain editable in the TUI."""
+        profile = {
+            "name": "codex",
+            "provider": None,
+            "agent_backend": "codex",
+            "base_url": None,
+        }
+
+        assert detect_template_from_profile(profile) == "codex"
+
+    def test_detect_openai_profile_with_null_provider_url(self):
+        """OpenAI provider aliases map to the Codex template without an endpoint."""
+        profile = {
+            "name": "openai-profile",
+            "provider": "openai",
+            "agent_backend": "codex",
+            "base_url": None,
+        }
+
+        assert detect_template_from_profile(profile) == "codex"
