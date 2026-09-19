@@ -1,0 +1,112 @@
+# syntax=docker/dockerfile:1
+# DevAIFlow OpenShell-compatible image
+#
+# This image layers DevAIFlow onto the published AI Guardian OpenShell image.
+# The inherited image supplies the OpenShell filesystem layout, agent
+# integrations, entrypoint, and security policy. Host persistence is
+# configured by container/run.sh; no host directory is mounted at build time.
+#
+# Build from the repository root:
+#   podman build -f container/Dockerfile.openshell \
+#       -t localhost/devaiflow-openshell:latest container/
+#
+# Run with host-shared DevAIFlow XDG directories:
+#   container/run.sh --image localhost/devaiflow-openshell:latest
+
+ARG BASE_IMAGE=quay.io/redhatproductsecurity/ai-guardian-openshell:latest
+FROM ${BASE_IMAGE}
+
+# Keep the default tied to a released version. Supply DEVAIFLOW_WHEEL for a
+# local or development build instead of silently installing an unpinned
+# package from an index.
+ARG DEVAIFLOW_VERSION=2.2.0
+ARG DEVAIFLOW_WHEEL=""
+
+USER root
+
+# Keep the minimum GitHub read/write OpenShell overlay inside the image for
+# inspection and for gateway launchers that can retrieve image assets. The
+# policy never contains credentials; providers supply those separately.
+COPY openshell-github-readwrite-policy.yaml \
+    /usr/share/devaiflow/openshell-github-readwrite-policy.yaml
+
+# OpenShell uploads the DAF configuration snapshot after the sandbox process
+# starts. Keep the staging logic in the image so the host launcher can use the
+# same fallback-copy contract as AI Guardian without uploading session data.
+COPY stage-devaiflow.sh /usr/local/bin/devaiflow-stage
+COPY daf-wrapper.sh /usr/local/bin/daf
+RUN chmod 755 /usr/local/bin/devaiflow-stage /usr/local/bin/daf
+
+# The AI Guardian OpenShell image normally exposes the sandbox virtualenv in
+# PATH. Repeat it here because OpenShell may replace PATH at runtime.
+ENV PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# An empty vendor directory keeps the PyPI build path reproducible while
+# allowing a wheel to be supplied without changing the Dockerfile.
+COPY vendor/ /tmp/devaiflow-vendor/
+
+RUN set -eux; \
+    if [ -n "${DEVAIFLOW_WHEEL}" ]; then \
+        case "${DEVAIFLOW_WHEEL}" in \
+            */*) \
+                echo "DEVAIFLOW_WHEEL must be a filename in container/vendor/" >&2; \
+                exit 2 ;; \
+        esac; \
+        wheel="/tmp/devaiflow-vendor/${DEVAIFLOW_WHEEL}"; \
+        test -f "${wheel}"; \
+        uv pip install --python /sandbox/.venv/bin/python "${wheel}"; \
+    else \
+        uv pip install --python /sandbox/.venv/bin/python \
+            "devaiflow==${DEVAIFLOW_VERSION}"; \
+    fi; \
+    test -x /sandbox/.venv/bin/daf; \
+    test -x /usr/local/bin/daf; \
+    mkdir -p /sandbox/.local/share/devaiflow; \
+    test ! -e /sandbox/.daf-sessions; \
+    ln -s /sandbox/.local/share/devaiflow /sandbox/.daf-sessions; \
+    /sandbox/.venv/bin/daf --version; \
+    rm -rf /tmp/devaiflow-vendor
+
+# Keep every directory used by DevAIFlow writable by the sandbox user. The
+# launcher mounts only the final /devaiflow directories, never the host XDG
+# roots, so unrelated host configuration remains outside the container.
+RUN mkdir -p \
+        /sandbox/.config/devaiflow/backends \
+        /sandbox/.config/devaiflow/templates \
+        /sandbox/.config/devaiflow/.claude/skills \
+        /sandbox/.local/share/devaiflow/sessions \
+        /sandbox/.local/state/devaiflow/state \
+        /sandbox/.cache/ai-guardian \
+        /sandbox/.cache/devaiflow/clones \
+    && chown -R sandbox:sandbox \
+        /sandbox/.config/devaiflow \
+        /sandbox/.local/share/devaiflow \
+        /sandbox/.local/state/devaiflow \
+        /sandbox/.cache/ai-guardian \
+        /sandbox/.cache/devaiflow
+
+# DevAIFlow 2.2.0 (the pinned PyPI fallback) predates split-XDG storage and
+# still defaults to ~/.daf-sessions. The compatibility link is created before
+# its build-time version check above so it cannot lose sessions on exit. An
+# XDG-aware wheel ignores the empty link and uses the four split directories;
+# an explicit DEVAIFLOW_HOME from run.sh still wins.
+
+# DevAIFlow intentionally uses XDG mode in this image unless the launcher
+# detects an existing host DEVAIFLOW_HOME or legacy ~/.daf-sessions install.
+ENV HOME=/sandbox \
+    XDG_DATA_HOME=/sandbox/.local/share \
+    XDG_CONFIG_HOME=/sandbox/.config \
+    XDG_STATE_HOME=/sandbox/.local/state \
+    XDG_CACHE_HOME=/sandbox/.cache \
+    PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+LABEL ai-guardian.daemon=true \
+      ai-guardian.openshell-base=true \
+      ai-guardian.support-image=true \
+      devaiflow.openshell-base=true \
+      devaiflow.support-image=true \
+      devaiflow.config-staging=/usr/local/bin/devaiflow-stage \
+      devaiflow.github-policy=/usr/share/devaiflow/openshell-github-readwrite-policy.yaml
+
+WORKDIR /sandbox
+USER sandbox
