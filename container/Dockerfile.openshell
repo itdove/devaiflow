@@ -30,6 +30,13 @@ USER root
 COPY openshell-github-readwrite-policy.yaml \
     /usr/share/devaiflow/openshell-github-readwrite-policy.yaml
 
+# OpenShell uploads the DAF configuration snapshot after the sandbox process
+# starts. Keep the staging logic in the image so the host launcher can use the
+# same fallback-copy contract as AI Guardian without uploading session data.
+COPY stage-devaiflow.sh /usr/local/bin/devaiflow-stage
+COPY daf-wrapper.sh /usr/local/bin/daf
+RUN chmod 755 /usr/local/bin/devaiflow-stage /usr/local/bin/daf
+
 # The AI Guardian OpenShell image normally exposes the sandbox virtualenv in
 # PATH. Repeat it here because OpenShell may replace PATH at runtime.
 ENV PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -53,7 +60,7 @@ RUN set -eux; \
             "devaiflow==${DEVAIFLOW_VERSION}"; \
     fi; \
     test -x /sandbox/.venv/bin/daf; \
-    ln -sf /sandbox/.venv/bin/daf /usr/local/bin/daf; \
+    test -x /usr/local/bin/daf; \
     mkdir -p /sandbox/.local/share/devaiflow; \
     test ! -e /sandbox/.daf-sessions; \
     ln -s /sandbox/.local/share/devaiflow /sandbox/.daf-sessions; \
@@ -98,6 +105,7 @@ LABEL ai-guardian.daemon=true \
       ai-guardian.support-image=true \
       devaiflow.openshell-base=true \
       devaiflow.support-image=true \
+      devaiflow.config-staging=/usr/local/bin/devaiflow-stage \
       devaiflow.github-policy=/usr/share/devaiflow/openshell-github-readwrite-policy.yaml
 
 WORKDIR /sandbox

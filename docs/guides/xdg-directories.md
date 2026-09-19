@@ -113,3 +113,6 @@ The [OpenShell-compatible container guide](../../container/README.md) maps the
 four final `devaiflow` directories into `/sandbox` while preserving this same
 resolution behavior. It also detects an existing `DEVAIFLOW_HOME` or valid
 legacy `~/.daf-sessions` installation before falling back to split XDG paths.
+For gateway sandboxes, `container/openshell.sh` uploads only the configuration
+subset and keeps data, state, and cache sandbox-local; use `container/run.sh`
+when live host-shared XDG directories are required.

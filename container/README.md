@@ -132,14 +132,13 @@ if you want to migrate a unified installation intentionally.
 ## OpenShell gateway mode
 
 OpenShell's `sandbox create --upload` transfers a snapshot into the sandbox;
-the current CLI does not expose host bind mounts. Therefore live host-shared
-XDG persistence uses `run.sh` with Podman or Docker. For an isolated OpenShell
-gateway session, use the merged AI Guardian sandbox lifecycle command with
-this image:
+the current CLI does not expose host bind mounts. For an isolated OpenShell
+gateway session, use the DAF launcher below. It delegates sandbox lifecycle and
+daemon setup to the merged `ai-guardian sandbox create` command, then uploads the DAF
+configuration snapshot with the native OpenShell upload command:
 
 ```bash
-ai-guardian sandbox create \
-  --runtime openshell \
+container/openshell.sh \
   --name devaiflow-codex \
   --image localhost/devaiflow-openshell:latest \
   --cli codex \
@@ -147,16 +146,52 @@ ai-guardian sandbox create \
   --repo "$PWD"
 ```
 
+The launcher uploads only the configuration-owned files from the selected DAF
+config directory (`config.json`, split config files, backends, templates, and
+DAF skills/context) to `/sandbox/.config/devaiflow.host`. The image's
+`devaiflow-stage` helper copies that snapshot into the writable active config
+directory only when a sandbox-local `config.json` does not already exist. This
+matches AI Guardian's precedence rule: the host snapshot is an initial input,
+not a live mount and never receives writes back from the sandbox. Existing
+unified `DEVAIFLOW_HOME` and legacy `~/.daf-sessions` installations are reduced
+to that configuration subset before upload.
+
+The other XDG directories are deliberately not uploaded: sessions and backups
+remain in `/sandbox/.local/share/devaiflow`, state and audit files in
+`/sandbox/.local/state/devaiflow`, and clones in `/sandbox/.cache/devaiflow`.
+Those paths are sandbox-local, just like AI Guardian's state/cache data. If a
+session must be retained before deleting the sandbox, download only the
+specific DAF data directory and review it on the host:
+
+```bash
+openshell sandbox download devaiflow-codex \
+  /sandbox/.local/share/devaiflow ./devaiflow-data
+```
+
 The AI Guardian command composes the OpenShell baseline and Codex policy with
 the supplied overlay, then creates the gateway-managed `ai-guardian` service
 used by tray/NiceGUI discovery. The policy is consumed at sandbox creation, so
-pass the repository copy above; keeping a copy inside the image does not apply
+pass the repository policy file; keeping a copy inside the image does not apply
 it automatically. OpenShell uses its gateway service URL rather than a host
 port-forward, and the host tray/NiceGUI must use the same active OpenShell
-gateway. The sandbox receives an uploaded repository snapshot, not live XDG
-mounts; to retain DAF state, download only the specific DAF directory from the
-sandbox and review/merge it on the host. Do not upload or mount the host's
-entire home.
+gateway. Do not upload or mount the host's entire home.
+
+Use `--config-dir DIR` when the DAF configuration is stored outside the normal
+XDG location. Use `--no-connect` to create and stage the sandbox without
+opening a shell, or pass a command after `--`:
+
+```bash
+container/openshell.sh --config-dir "$HOME/.config/devaiflow" --no-connect
+container/openshell.sh -- daf --version
+```
+
+OpenShell limits sandbox names to 19 characters. Keep an explicitly supplied
+`--name` within that limit; the launcher rejects longer names so the upload and
+subsequent lifecycle commands cannot target a different auto-shortened name.
+
+The image's `daf` wrapper also performs the same one-time staging check, so a
+later `daf` invocation remains safe if the upload arrives after the initial
+OpenShell process starts.
 
 Use the gateway lifecycle commands to inspect the target and service:
 

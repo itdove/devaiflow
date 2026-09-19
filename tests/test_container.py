@@ -13,6 +13,9 @@ CONTAINER_DIR = REPO_ROOT / "container"
 DOCKERFILE = CONTAINER_DIR / "Dockerfile.openshell"
 RUNNER = CONTAINER_DIR / "run.sh"
 SMOKE_TEST = CONTAINER_DIR / "smoke-test.sh"
+OPEN_SHELL = CONTAINER_DIR / "openshell.sh"
+STAGE_SCRIPT = CONTAINER_DIR / "stage-devaiflow.sh"
+DAF_WRAPPER = CONTAINER_DIR / "daf-wrapper.sh"
 GITHUB_POLICY = CONTAINER_DIR / "openshell-github-readwrite-policy.yaml"
 
 
@@ -117,6 +120,9 @@ def test_openshell_dockerfile_uses_pinned_ai_guardian_and_daf_base():
     assert "ai-guardian.support-image=true" in dockerfile
     assert "COPY openshell-github-readwrite-policy.yaml" in dockerfile
     assert "/usr/share/devaiflow/openshell-github-readwrite-policy.yaml" in dockerfile
+    assert "COPY stage-devaiflow.sh /usr/local/bin/devaiflow-stage" in dockerfile
+    assert "COPY daf-wrapper.sh /usr/local/bin/daf" in dockerfile
+    assert "devaiflow.config-staging=/usr/local/bin/devaiflow-stage" in dockerfile
 
 
 def test_github_readwrite_policy_is_narrow_and_credential_free():
@@ -154,7 +160,7 @@ def test_openshell_dockerfile_creates_writable_xdg_layout():
 @pytest.mark.skipif(os.name == "nt", reason="The launcher is a POSIX shell script")
 def test_container_scripts_are_valid_and_executable():
     """The launcher and smoke test are executable and syntactically valid."""
-    for script in (RUNNER, SMOKE_TEST):
+    for script in (RUNNER, SMOKE_TEST, OPEN_SHELL, STAGE_SCRIPT, DAF_WRAPPER):
         result = subprocess.run(
             ["bash", "-n", str(script)],
             capture_output=True,
@@ -315,12 +321,178 @@ def test_smoke_test_covers_paths_and_cross_container_persistence():
     assert "DEVAIFLOW_VOLUME_SUFFIX" in smoke_test
 
 
-def test_openshell_docs_use_ai_guardian_lifecycle_command():
-    """Gateway instructions use the merged AI Guardian sandbox workflow."""
+def test_devaiflow_stage_preserves_sandbox_local_config_precedence(tmp_path):
+    """An uploaded host snapshot is copied once and never overwrites local config."""
+    host_config = tmp_path / "host-config"
+    active_config = tmp_path / "active-config"
+    host_config.mkdir()
+    (host_config / "config.json").write_text('{"source": "host"}\n', encoding="utf-8")
+    (host_config / "backends").mkdir()
+    (host_config / "backends" / "jira.json").write_text("{}\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    (tmp_path / "home").mkdir()
+    env.update(
+        {
+            "DEVAIFLOW_HOST_CONFIG_MOUNTED": "true",
+            "DEVAIFLOW_HOST_CONFIG_PATH": str(host_config),
+            "DEVAIFLOW_ACTIVE_CONFIG_DIR": str(active_config),
+            "HOME": str(tmp_path / "home"),
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        }
+    )
+    first = subprocess.run(
+        ["bash", str(STAGE_SCRIPT)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stderr
+    assert (active_config / "config.json").read_text(encoding="utf-8") == (
+        '{"source": "host"}\n'
+    )
+    assert (active_config / "backends" / "jira.json").is_file()
+
+    (active_config / "config.json").write_text('{"source": "local"}\n', encoding="utf-8")
+    second = subprocess.run(
+        ["bash", str(STAGE_SCRIPT)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert second.returncode == 0, second.stderr
+    assert (active_config / "config.json").read_text(encoding="utf-8") == (
+        '{"source": "local"}\n'
+    )
+
+
+def test_openshell_launcher_uploads_only_daf_config(tmp_path):
+    """The gateway launcher uploads config and leaves XDG data/state/cache local."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    ai_guardian_log = tmp_path / "ai-guardian.log"
+    openshell_log = tmp_path / "openshell.log"
+    for name in ("ai-guardian", "openshell"):
+        command = fake_bin / name
+        command.write_text(
+            "#!/usr/bin/env bash\n",
+            encoding="utf-8",
+        )
+        command.chmod(command.stat().st_mode | stat.S_IXUSR)
+
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "config.json").write_text('{"source": "host"}\n', encoding="utf-8")
+    (config_dir / "sessions.json").write_text('{"must_not_upload": true}\n', encoding="utf-8")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    env = os.environ.copy()
+    (tmp_path / "home").mkdir()
+    env.update(
+        {
+            "HOME": str(tmp_path / "home"),
+            "PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+            "COMMAND_LOG": str(ai_guardian_log),
+        }
+    )
+    # Point each fake command at its own argument log.
+    (fake_bin / "ai-guardian").write_text(
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$@" >> "${AI_GUARDIAN_LOG}"\n',
+        encoding="utf-8",
+    )
+    (fake_bin / "openshell").write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "${1:-}" == "sandbox" && "${2:-}" == "get" ]]; then exit 1; fi\n'
+        'if [[ "${1:-}" == "sandbox" && "${2:-}" == "upload" ]]; then\n'
+        '    test ! -e "${5}/sessions.json"\n'
+        'fi\n'
+        'printf \'%s\\n\' "$@" >> "${OPENSHELL_LOG}"\n',
+        encoding="utf-8",
+    )
+    (fake_bin / "ai-guardian").chmod((fake_bin / "ai-guardian").stat().st_mode | stat.S_IXUSR)
+    (fake_bin / "openshell").chmod((fake_bin / "openshell").stat().st_mode | stat.S_IXUSR)
+    env.update(
+        {
+            "AI_GUARDIAN_LOG": str(ai_guardian_log),
+            "OPENSHELL_LOG": str(openshell_log),
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(OPEN_SHELL),
+            "--name",
+            "devaiflow-test",
+            "--image",
+            "quay.io/example/devaiflow:test",
+            "--config-dir",
+            str(config_dir),
+            "--repo",
+            str(repo),
+            "--no-connect",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    ai_args = ai_guardian_log.read_text(encoding="utf-8").splitlines()
+    openshell_args = openshell_log.read_text(encoding="utf-8").splitlines()
+    assert "--runtime" in ai_args
+    assert "openshell" in ai_args
+    assert "DEVAIFLOW_HOST_CONFIG_MOUNTED=true" in ai_args
+    assert "DEVAIFLOW_HOST_CONFIG_PATH=/sandbox/.config/devaiflow.host" in ai_args
+    assert "DEVAIFLOW_OPEN_SHELL_STAGING=true" in ai_args
+    assert openshell_args[:3] == ["sandbox", "upload", "--no-git-ignore"]
+    upload_index = openshell_args.index("upload")
+    upload_args = openshell_args[upload_index:]
+    assert "/sandbox/.config/devaiflow.host" in upload_args
+    assert "/sandbox/.local/share/devaiflow" not in upload_args
+    assert "/sandbox/.local/state/devaiflow" not in upload_args
+    assert "/sandbox/.cache/devaiflow" not in upload_args
+    assert "/usr/local/bin/devaiflow-stage" in openshell_args
+
+
+def test_openshell_launcher_rejects_names_that_ai_guardian_would_shorten(tmp_path):
+    """The wrapper fails before creation when the gateway name is too long."""
+    result = subprocess.run(
+        [
+            "bash",
+            str(OPEN_SHELL),
+            "--name",
+            "devaiflow-name-that-is-too-long",
+            "--repo",
+            str(tmp_path),
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "HOME": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "at most 19 characters" in result.stderr
+
+
+def test_openshell_docs_use_daf_config_upload_and_local_xdg_strategy():
+    """Gateway instructions document the DAF upload and sandbox-local data rule."""
     guide = (CONTAINER_DIR / "README.md").read_text(encoding="utf-8")
 
+    assert "container/openshell.sh" in guide
     assert "ai-guardian sandbox create" in guide
-    assert "--runtime openshell" in guide
-    assert "--cli codex" in guide
-    assert "--policy ./container/openshell-github-readwrite-policy.yaml" in guide
-    assert "container/openshell.sh" not in guide
+    assert "/sandbox/.config/devaiflow.host" in guide
+    assert "sandbox-local" in guide
+    assert "sessions and backups" in guide
+    assert "state and audit files" in guide
+    assert "clones in" in guide
+    assert "19 characters" in guide

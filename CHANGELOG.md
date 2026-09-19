@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Persists the four XDG directories through a narrow Podman/Docker mount contract
   - Bundles a credential-free GitHub read/write policy overlay
   - Adds AI Guardian tray-discovery labels and REST-port publication for Podman/Docker
+  - Uploads the DAF configuration snapshot for OpenShell while keeping sessions, state, and cache sandbox-local
   - Documents legacy unified-home compatibility, the AI Guardian OpenShell lifecycle flow, and a container persistence smoke test
 - **Smart concurrent session conflict detection with auto-clone** (#518)
   - Three configurable concurrency modes: `strict` (default, backward compatible), `analyze` (file overlap detection), `permissive` (always offer clone)
