@@ -264,10 +264,10 @@ container/run.sh --image localhost/devaiflow-openshell:latest --repo "$PWD"
 
 The image installs a pinned DevAIFlow release or an explicitly supplied local
 wheel. `container/run.sh` mounts only the host DevAIFlow data, config, state,
-and cache directories; see [container/README.md](container/README.md) for the
-XDG mapping, legacy-install compatibility, SELinux, and OpenShell gateway
-workflow. The image also contains the minimum GitHub read/write OpenShell
-policy overlay. OpenShell gateway launches use
+and cache directories and binds the daemon to loopback by default; see
+[container/README.md](container/README.md) for the XDG mapping, legacy-install
+compatibility, SELinux, and OpenShell gateway workflow. The image also contains
+the minimum GitHub read/write OpenShell policy overlay. OpenShell gateway launches use
 `ai-guardian sandbox create --runtime openshell` and must pass the repository
 copy with `--policy`; the merged AI Guardian command exposes the daemon through
 its gateway-managed service for tray/NiceGUI discovery.

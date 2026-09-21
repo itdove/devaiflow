@@ -16,6 +16,7 @@ SMOKE_TEST = CONTAINER_DIR / "smoke-test.sh"
 OPEN_SHELL = CONTAINER_DIR / "openshell.sh"
 STAGE_SCRIPT = CONTAINER_DIR / "stage-devaiflow.sh"
 DAF_WRAPPER = CONTAINER_DIR / "daf-wrapper.sh"
+CONFIG_SANITIZER = CONTAINER_DIR / "sanitize-config.py"
 GITHUB_POLICY = CONTAINER_DIR / "openshell-github-readwrite-policy.yaml"
 
 
@@ -53,6 +54,7 @@ def _clean_launcher_env(tmp_path: Path, engine: Path, capture: Path) -> dict[str
         "AI_GUARDIAN_AGENT",
         "AI_GUARDIAN_IDE",
         "AI_GUARDIAN_REST_PORT",
+        "AI_GUARDIAN_REST_BIND_ADDRESS",
         "AI_GUARDIAN_PROFILE",
         "AI_GUARDIAN_SETUP_SCOPE",
         "CONTAINER_ENGINE_HOME",
@@ -123,6 +125,9 @@ def test_openshell_dockerfile_uses_pinned_ai_guardian_and_daf_base():
     assert "COPY stage-devaiflow.sh /usr/local/bin/devaiflow-stage" in dockerfile
     assert "COPY daf-wrapper.sh /usr/local/bin/daf" in dockerfile
     assert "devaiflow.config-staging=/usr/local/bin/devaiflow-stage" in dockerfile
+    assert "ENV PATH=/usr/local/bin:/sandbox/.venv/bin" in dockerfile
+    assert "mv /sandbox/.venv/bin/daf /sandbox/.venv/bin/daf-real" in dockerfile
+    assert "exec /sandbox/.venv/bin/daf-real" in DAF_WRAPPER.read_text(encoding="utf-8")
 
 
 def test_github_readwrite_policy_is_narrow_and_credential_free():
@@ -135,6 +140,46 @@ def test_github_readwrite_policy_is_narrow_and_credential_free():
     assert 'path: "/**/git-receive-pack"' in policy
     assert "GITHUB_TOKEN" not in policy
     assert "Authorization" not in policy
+
+
+def test_config_sanitizer_removes_credentials_without_losing_safe_settings(tmp_path):
+    """Config snapshots omit credential values before OpenShell upload."""
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    (source / "config.json").write_text(
+        '{"api_url":"https://example.invalid/api",'
+        '"model_provider":{"profiles":{"local":{'
+        '"api_key":"do-not-upload", "model_name":"model-a"}}}}\n',
+        encoding="utf-8",
+    )
+    (source / "backends").mkdir()
+    (source / "backends" / "service.json").write_text(
+        '{"auth_token":"also-do-not-upload", "enabled":true}\n',
+        encoding="utf-8",
+    )
+    (source / "auth.json").write_text('{"token":"do-not-upload"}\n', encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.write_text("outside\n", encoding="utf-8")
+    (source / "linked").symlink_to(outside)
+
+    result = subprocess.run(
+        ["python3", str(CONFIG_SANITIZER), str(source), str(destination)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    sanitized = (destination / "config.json").read_text(encoding="utf-8")
+    backend = (destination / "backends" / "service.json").read_text(encoding="utf-8")
+    assert "do-not-upload" not in sanitized
+    assert "do-not-upload" not in backend
+    assert "api_url" in sanitized
+    assert "model_name" in sanitized
+    assert not (destination / "auth.json").exists()
+    assert not (destination / "linked").exists()
 
 
 def test_openshell_dockerfile_creates_writable_xdg_layout():
@@ -154,7 +199,7 @@ def test_openshell_dockerfile_creates_writable_xdg_layout():
     assert "XDG_CONFIG_HOME=/sandbox/.config" in dockerfile
     assert "XDG_STATE_HOME=/sandbox/.local/state" in dockerfile
     assert "XDG_CACHE_HOME=/sandbox/.cache" in dockerfile
-    assert "ln -s /sandbox/.local/share/devaiflow /sandbox/.daf-sessions" in dockerfile
+    assert "test ! -L /sandbox/.daf-sessions" in dockerfile
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The launcher is a POSIX shell script")
@@ -206,6 +251,8 @@ def test_launcher_mounts_only_final_xdg_directories(tmp_path):
     assert "XDG_STATE_HOME=/sandbox/.local/state" in env_values
     assert "XDG_CACHE_HOME=/sandbox/.cache" in env_values
     assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=false" in env_values
+    assert "DEVAIFLOW_HOST_CONFIG_MOUNTED=true" in env_values
+    assert "DEVAIFLOW_HOST_CONFIG_PATH=/sandbox/.config/devaiflow" in env_values
     assert "AI_GUARDIAN_REST_PORT=63152" in env_values
     assert "AI_GUARDIAN_REST_HOST=0.0.0.0" in env_values
     assert not any(value.startswith(str(host_root / "config") + ":") for value in volumes)
@@ -215,7 +262,7 @@ def test_launcher_mounts_only_final_xdg_directories(tmp_path):
     assert f"{host_root / 'cache' / 'devaiflow'}:/sandbox/.cache/devaiflow" in volumes
     assert f"{repo.resolve()}:/sandbox/repo" in volumes
     assert "--pull=never" in args
-    assert _flag_values(args, "--publish") == ["63152"]
+    assert _flag_values(args, "--publish") == ["127.0.0.1::63152"]
     labels = _flag_values(args, "--label")
     assert "ai-guardian.managed=true" in labels
     assert "ai-guardian.daemon=true" in labels
@@ -238,8 +285,26 @@ def test_launcher_allows_a_custom_daemon_rest_port(tmp_path):
     labels = _flag_values(args, "--label")
 
     assert "AI_GUARDIAN_REST_PORT=63200" in env_values
-    assert _flag_values(args, "--publish") == ["63200"]
+    assert _flag_values(args, "--publish") == ["127.0.0.1::63200"]
     assert "ai-guardian.rest-port=63200" in labels
+
+
+def test_launcher_allows_an_explicit_rest_bind_address(tmp_path):
+    """A caller can opt into a non-loopback daemon binding explicitly."""
+    engine = _capture_engine(tmp_path / "fake-engine")
+    capture = tmp_path / "args"
+    env = _clean_launcher_env(tmp_path, engine, capture)
+
+    args = _run_launcher(
+        env,
+        "--bind-address",
+        "0.0.0.0",
+        "--",
+        "daf",
+        "--version",
+    )
+
+    assert _flag_values(args, "--publish") == ["0.0.0.0::63152"]
 
 
 def test_launcher_can_separate_engine_environment_from_daf_xdg_roots(tmp_path):
@@ -315,7 +380,8 @@ def test_smoke_test_covers_paths_and_cross_container_persistence():
     assert "/sandbox/.config/devaiflow" in smoke_test
     assert "/sandbox/.local/state/devaiflow" in smoke_test
     assert "/sandbox/.cache/devaiflow" in smoke_test
-    assert "/sandbox/.daf-sessions" in smoke_test
+    assert 'cmp "$(command -v daf)" /usr/local/bin/daf' in smoke_test
+    assert "test ! -e /sandbox/.daf-sessions" in smoke_test
     assert "/usr/share/devaiflow/openshell-github-readwrite-policy.yaml" in smoke_test
     assert ".container-smoke-marker" in smoke_test
     assert "DEVAIFLOW_VOLUME_SUFFIX" in smoke_test
@@ -386,7 +452,9 @@ def test_openshell_launcher_uploads_only_daf_config(tmp_path):
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "config.json").write_text('{"source": "host"}\n', encoding="utf-8")
+    (config_dir / "config.json").write_text(
+        '{"source": "host", "api_key": "do-not-upload"}\n', encoding="utf-8"
+    )
     (config_dir / "sessions.json").write_text('{"must_not_upload": true}\n', encoding="utf-8")
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -411,6 +479,8 @@ def test_openshell_launcher_uploads_only_daf_config(tmp_path):
         'if [[ "${1:-}" == "sandbox" && "${2:-}" == "get" ]]; then exit 1; fi\n'
         'if [[ "${1:-}" == "sandbox" && "${2:-}" == "upload" ]]; then\n'
         '    test ! -e "${5}/sessions.json"\n'
+        '    ! grep -F "do-not-upload" "${5}/config.json"\n'
+        '    grep -F "source" "${5}/config.json" >/dev/null\n'
         'fi\n'
         'printf \'%s\\n\' "$@" >> "${OPENSHELL_LOG}"\n',
         encoding="utf-8",
@@ -496,3 +566,5 @@ def test_openshell_docs_use_daf_config_upload_and_local_xdg_strategy():
     assert "state and audit files" in guide
     assert "clones in" in guide
     assert "19 characters" in guide
+    assert "credential fields" in guide
+    assert "loopback" in guide

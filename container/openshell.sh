@@ -6,6 +6,7 @@ set -euo pipefail
 # sandbox-local; use container/run.sh when live host XDG persistence is wanted.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SANITIZER="${SCRIPT_DIR}/sanitize-config.py"
 IMAGE="${DEVAIFLOW_IMAGE:-localhost/devaiflow-openshell:latest}"
 AGENT="${AI_GUARDIAN_AGENT:-${AI_GUARDIAN_IDE:-codex}}"
 NAME=""
@@ -15,6 +16,7 @@ POLICIES=()
 NO_CONNECT=false
 EXTRA_COMMAND=()
 STAGE_DIR=""
+SANDBOX_CREATED=false
 
 _require_option_value() {
     if [[ $# -lt 2 || -z "${2:-}" ]]; then
@@ -121,6 +123,10 @@ for policy in "${POLICIES[@]}"; do
         exit 2
     fi
 done
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "Error: python3 is required to sanitize the DevAIFlow config snapshot." >&2
+    exit 2
+fi
 
 HOST_HOME="${HOME:-${PWD:-.}}"
 if [[ "$HOST_HOME" != /* ]]; then
@@ -161,7 +167,7 @@ _copy_config_entry() {
     local source="$1"
     local destination="$2"
     if [[ -e "$source" || -L "$source" ]]; then
-        cp -a -- "$source" "$destination"
+        python3 "$SANITIZER" "$source" "$destination"
         return 0
     fi
     return 1
@@ -196,9 +202,14 @@ _prepare_config_upload() {
 }
 
 cleanup() {
+    local status=$?
     if [[ -n "$STAGE_DIR" && -d "$STAGE_DIR" ]]; then
         rm -rf -- "$STAGE_DIR"
     fi
+    if [[ "$status" -ne 0 && "$SANDBOX_CREATED" == true ]]; then
+        openshell sandbox delete "$NAME" >/dev/null 2>&1 || true
+    fi
+    return "$status"
 }
 trap cleanup EXIT
 
@@ -250,6 +261,7 @@ done
 # script upload DAF's independent config before the user's command/shell starts.
 CREATE_ARGS+=(-- /bin/true)
 "${CREATE_ARGS[@]}"
+SANDBOX_CREATED=true
 
 if [[ -n "$STAGE_DIR" ]]; then
     openshell sandbox upload --no-git-ignore "$NAME" "$STAGE_DIR" \

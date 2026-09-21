@@ -71,17 +71,21 @@ The launcher creates missing host directories and mounts only these paths:
 
 Inside the container, the corresponding `XDG_*` variables point at the
 `/sandbox` roots above. The image does not set `DEVAIFLOW_HOME`, so fresh hosts
-use the normal split XDG layout. For compatibility with the pinned 2.2.0
-fallback, the image links `/sandbox/.daf-sessions` into the data directory;
-an XDG-aware wheel uses the split paths and an explicit `DEVAIFLOW_HOME` still
-takes precedence.
+use the normal split XDG layout. The pinned 2.2.0 fallback predates split-XDG
+support; the image wrapper detects that release and uses the mounted data
+directory as its unified home without creating a legacy symlink. An explicitly
+supplied XDG-aware wheel uses all four paths independently, and an explicit
+`DEVAIFLOW_HOME` still takes precedence.
 
 The launcher also starts the AI Guardian daemon on the container's REST port
-(63152 by default), publishes that port to a runtime-selected host port, and
+(63152 by default), publishes a runtime-selected host port on loopback, and
 adds the `ai-guardian.daemon=true`, `ai-guardian.managed=true`, and
 `ai-guardian.rest-port` labels used by the tray/NiceGUI container discovery.
 The host port is intentionally selected by Podman/Docker so multiple sessions
-can run at once. To use a different daemon port, pass `--port PORT`.
+can run at once. To use a different daemon port, pass `--port PORT`. To make
+the service reachable beyond the local machine, explicitly pass
+`--bind-address ADDRESS`; loopback is the default because `/api/health` does
+not require a token.
 
 The tray and NiceGUI must use the same host Podman/Docker socket as the
 launcher. To verify the mapping from the host, list the managed container and
@@ -148,7 +152,10 @@ container/openshell.sh \
 
 The launcher uploads only the configuration-owned files from the selected DAF
 config directory (`config.json`, split config files, backends, templates, and
-DAF skills/context) to `/sandbox/.config/devaiflow.host`. The image's
+DAF skills/context) to `/sandbox/.config/devaiflow.host`. Before upload, JSON
+credential fields and common credential assignments in text files are removed;
+credential files and symlinks are omitted. Configure provider credentials
+through the AI Guardian/OpenShell provider flow instead. The image's
 `devaiflow-stage` helper copies that snapshot into the writable active config
 directory only when a sandbox-local `config.json` does not already exist. This
 matches AI Guardian's precedence rule: the host snapshot is an initial input,

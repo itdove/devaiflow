@@ -10,6 +10,7 @@ IMAGE="${DEVAIFLOW_IMAGE:-localhost/devaiflow-openshell:latest}"
 CONTAINER_ENGINE="${CONTAINER_ENGINE:-podman}"
 AGENT="${AI_GUARDIAN_AGENT:-${AI_GUARDIAN_IDE:-codex}}"
 REST_PORT="${AI_GUARDIAN_REST_PORT:-63152}"
+REST_BIND_ADDRESS="${AI_GUARDIAN_REST_BIND_ADDRESS:-127.0.0.1}"
 PROFILE=""
 SETUP_SCOPE="${AI_GUARDIAN_SETUP_SCOPE:-selected}"
 REPO_PATH=""
@@ -32,6 +33,7 @@ _print_help() {
     echo "  --image IMAGE             Image to run (default: ${IMAGE})"
     echo "  --agent NAME              AI Guardian agent (default: ${AGENT})"
     echo "  --port PORT               Daemon REST port (default: ${REST_PORT})"
+    echo "  --bind-address ADDRESS    Host bind address (default: ${REST_BIND_ADDRESS})"
     echo "  --profile @NAME           Bundled AI Guardian profile"
     echo "  --setup-scope SCOPE       selected, cli, or all"
     echo "  --repo DIR                Mount one repository at /sandbox/repo"
@@ -58,6 +60,11 @@ while [[ $# -gt 0 ]]; do
         --port)
             _require_option_value "$@"
             REST_PORT="$2"
+            shift 2
+            ;;
+        --bind-address)
+            _require_option_value "$@"
+            REST_BIND_ADDRESS="$2"
             shift 2
             ;;
         --profile)
@@ -104,6 +111,11 @@ esac
 if [[ -n "$PROFILE" && "$PROFILE" != @* ]]; then
     echo "Error: only bundled @profiles are accepted by this launcher." >&2
     echo "A host profile path is not mounted automatically." >&2
+    exit 2
+fi
+
+if [[ "$REST_BIND_ADDRESS" =~ [[:space:]] ]]; then
+    echo "Error: --bind-address must not contain whitespace." >&2
     exit 2
 fi
 
@@ -223,6 +235,14 @@ if [[ -n "$PROFILE" ]]; then
 fi
 if [[ "$PERSISTENCE_MODE" = unified ]]; then
     env_args+=(--env "DEVAIFLOW_HOME=/sandbox/.devaiflow")
+else
+    # Released DevAIFlow wheels without split-XDG support use this mounted
+    # snapshot to seed their unified data directory. XDG-aware wheels read the
+    # same config directory directly.
+    env_args+=(
+        --env "DEVAIFLOW_HOST_CONFIG_MOUNTED=true"
+        --env "DEVAIFLOW_HOST_CONFIG_PATH=/sandbox/.config/devaiflow"
+    )
 fi
 
 volume_args=()
@@ -251,7 +271,7 @@ fi
 # AI Guardian discovery reads the resulting container mapping, which allows
 # multiple sandboxes to coexist without guessing a host port.
 engine_args+=(
-    --publish "$REST_PORT"
+    --publish "${REST_BIND_ADDRESS}::${REST_PORT}"
     --label "ai-guardian.managed=true"
     --label "ai-guardian.daemon=true"
     --label "ai-guardian.runtime=container"
@@ -292,6 +312,7 @@ echo "  Image:       ${IMAGE}"
 echo "  Engine:      ${CONTAINER_ENGINE}"
 echo "  Agent:       ${AGENT}"
 echo "  REST port:   ${REST_PORT} (host port selected by ${CONTAINER_ENGINE})"
+echo "  REST bind:   ${REST_BIND_ADDRESS}"
 echo "  Persistence: ${PERSISTENCE_MODE} host mapping"
 [[ -n "$REPO_PATH" ]] && echo "  Repo:        ${REPO_PATH} -> /sandbox/repo"
 echo ""
