@@ -37,9 +37,9 @@ COPY stage-devaiflow.sh /usr/local/bin/devaiflow-stage
 COPY daf-wrapper.sh /usr/local/bin/daf
 RUN chmod 755 /usr/local/bin/devaiflow-stage /usr/local/bin/daf
 
-# The AI Guardian OpenShell image normally exposes the sandbox virtualenv in
-# PATH. Repeat it here because OpenShell may replace PATH at runtime.
-ENV PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Put the wrapper before the virtualenv so late OpenShell uploads are staged
+# before every `daf` invocation. The wrapper execs the real virtualenv binary.
+ENV PATH=/usr/local/bin:/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # An empty vendor directory keeps the PyPI build path reproducible while
 # allowing a wheel to be supplied without changing the Dockerfile.
@@ -61,9 +61,11 @@ RUN set -eux; \
     fi; \
     test -x /sandbox/.venv/bin/daf; \
     test -x /usr/local/bin/daf; \
+    mv /sandbox/.venv/bin/daf /sandbox/.venv/bin/daf-real; \
+    cp /usr/local/bin/daf /sandbox/.venv/bin/daf; \
+    chmod 755 /sandbox/.venv/bin/daf; \
     mkdir -p /sandbox/.local/share/devaiflow; \
-    test ! -e /sandbox/.daf-sessions; \
-    ln -s /sandbox/.local/share/devaiflow /sandbox/.daf-sessions; \
+    test ! -L /sandbox/.daf-sessions; \
     /sandbox/.venv/bin/daf --version; \
     rm -rf /tmp/devaiflow-vendor
 
@@ -85,20 +87,20 @@ RUN mkdir -p \
         /sandbox/.cache/ai-guardian \
         /sandbox/.cache/devaiflow
 
-# DevAIFlow 2.2.0 (the pinned PyPI fallback) predates split-XDG storage and
-# still defaults to ~/.daf-sessions. The compatibility link is created before
-# its build-time version check above so it cannot lose sessions on exit. An
-# XDG-aware wheel ignores the empty link and uses the four split directories;
-# an explicit DEVAIFLOW_HOME from run.sh still wins.
+# The pinned 2.2.0 PyPI fallback predates split-XDG storage. The runtime
+# wrapper detects that capability and uses the mounted data directory as its
+# unified home without creating a legacy symlink that could poison an
+# XDG-aware build. An explicit DEVAIFLOW_HOME from run.sh still wins.
 
-# DevAIFlow intentionally uses XDG mode in this image unless the launcher
-# detects an existing host DEVAIFLOW_HOME or legacy ~/.daf-sessions install.
+# Export the standard container-side XDG roots. The wrapper selects the
+# compatibility data home only for releases that predate split-XDG support;
+# an explicit DEVAIFLOW_HOME from the launcher still wins.
 ENV HOME=/sandbox \
     XDG_DATA_HOME=/sandbox/.local/share \
     XDG_CONFIG_HOME=/sandbox/.config \
     XDG_STATE_HOME=/sandbox/.local/state \
     XDG_CACHE_HOME=/sandbox/.cache \
-    PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    PATH=/usr/local/bin:/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 
 LABEL ai-guardian.daemon=true \
       ai-guardian.openshell-base=true \

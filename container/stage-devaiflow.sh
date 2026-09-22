@@ -44,15 +44,21 @@ _active_config_dir() {
         return 0
     fi
 
+    if [[ -n "${DEVAIFLOW_HOME:-}" ]]; then
+        printf '%s\n' "$DEVAIFLOW_HOME"
+        return 0
+    fi
+
     # XDG-aware DevAIFlow exposes get_cs_config_home(). Older pinned releases
-    # predate the XDG split and use ~/.daf-sessions instead. Keep the fallback
-    # so the image can accept either the stable wheel or a development wheel.
+    # predate the XDG split and use ~/.daf-sessions instead. Use the mounted
+    # data directory for that fallback; a legacy symlink would make an
+    # XDG-aware wheel switch to unified mode after its first session.
     if [[ -x "$PYTHON" ]]; then
         "$PYTHON" -c \
             'from devflow.utils.paths import get_cs_config_home; print(get_cs_config_home())' \
             2>/dev/null && return 0
     fi
-    printf '%s\n' "${HOME:-/sandbox}/.daf-sessions"
+    printf '%s\n' "/sandbox/.local/share/devaiflow"
 }
 
 _wait_for_upload
@@ -67,7 +73,10 @@ if [[ -f "$ACTIVE_CONFIG_DIR/config.json" ]]; then
 fi
 
 if [[ -d "$HOST_CONFIG_PATH" ]]; then
-    cp -a -- "$HOST_CONFIG_PATH"/. "$ACTIVE_CONFIG_DIR"/
+    # Bind-mounted XDG directories may reject timestamp/ownership restoration
+    # even when their contents are writable. Copy content only so staging works
+    # with rootless Podman and Docker user mappings alike.
+    cp -R --no-preserve=all -- "$HOST_CONFIG_PATH"/. "$ACTIVE_CONFIG_DIR"/
 elif [[ -f "$HOST_CONFIG_PATH" ]]; then
     install -m 0600 -- "$HOST_CONFIG_PATH" "$ACTIVE_CONFIG_DIR/config.json"
 else

@@ -49,6 +49,7 @@ chmod 0777 \
     "$HOST_CONFIG_HOME/devaiflow" \
     "$HOST_STATE_HOME/devaiflow" \
     "$HOST_CACHE_HOME/devaiflow"
+printf '{"source":"container-smoke-test"}\n' > "$HOST_CONFIG_HOME/devaiflow/config.json"
 
 _run_container() {
     local command="$1"
@@ -76,6 +77,7 @@ _run_container() {
 _run_container '
 set -eu
 command -v daf >/dev/null
+cmp "$(command -v daf)" /usr/local/bin/daf
 daf --version >/dev/null
 test "$XDG_CONFIG_HOME" = "/sandbox/.config"
 test "$XDG_DATA_HOME" = "/sandbox/.local/share"
@@ -86,7 +88,13 @@ test -d /sandbox/.config/devaiflow
 test -d /sandbox/.local/share/devaiflow
 test -d /sandbox/.local/state/devaiflow
 test -d /sandbox/.cache/devaiflow
-test -L /sandbox/.daf-sessions
+test ! -e /sandbox/.daf-sessions
+test -f /sandbox/.config/devaiflow/config.json
+if python -c "from devflow.utils.paths import get_cs_config_home" >/dev/null 2>&1; then
+    test -f /sandbox/.config/devaiflow/config.json
+else
+    test -f /sandbox/.local/share/devaiflow/config.json
+fi
 test -f /usr/share/devaiflow/openshell-github-readwrite-policy.yaml
 grep -F "host: api.github.com" /usr/share/devaiflow/openshell-github-readwrite-policy.yaml >/dev/null
 grep -F "path: \"/**/git-receive-pack\"" /usr/share/devaiflow/openshell-github-readwrite-policy.yaml >/dev/null
