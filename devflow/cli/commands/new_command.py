@@ -659,6 +659,10 @@ def create_new_session(
         else:
             branch = branch_result
 
+        # Persist the current branch when the user skips creating a new one.
+        if branch is None:
+            branch = GitUtils.get_current_branch(Path(project_path))
+
     # Generate session ID upfront (agent-aware: placeholder for self-ID backends)
     from devflow.agent.factory import generate_agent_session_id, resolve_agent_backend
     _agent_backend_for_id = resolve_agent_backend(
@@ -788,7 +792,7 @@ def create_new_session(
                     working_dir=working_directory,
                     ai_agent_session_id=session_id,
                     project_path=project_path,
-                    branch=branch or "",  # branch is required, use empty string if None
+                    branch=branch,
                     base_branch=source_branch_for_base or "main",
                     workspace=workspace_path,
                 )

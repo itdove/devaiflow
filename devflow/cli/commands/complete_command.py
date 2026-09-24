@@ -198,6 +198,24 @@ def complete_session(
     # Get active conversation for accessing conversation-specific fields
     active_conv = session.active_conversation
 
+    # Repair older sessions that did not persist the branch when branch creation
+    # was skipped. The current branch is the only safe branch available here.
+    if (
+        session.session_type == "development"
+        and active_conv
+        and active_conv.project_path
+        and not active_conv.branch
+    ):
+        missing_branch_dir = Path(active_conv.project_path)
+        if GitUtils.is_git_repository(missing_branch_dir):
+            current_branch = GitUtils.get_current_branch(missing_branch_dir)
+            if current_branch:
+                active_conv.branch = current_branch
+                session_manager.update_session(session)
+                console.print(
+                    f"\n[yellow]⚠[/yellow] Session branch was missing; using current branch '{current_branch}'"
+                )
+
     # IMPORTANT: Verify we're on the correct branch BEFORE marking as complete or attempting any commits
     # This prevents committing session changes to the wrong branch
     if active_conv and active_conv.project_path and active_conv.branch:
@@ -696,7 +714,11 @@ def complete_session(
 
                     # Push commits to remote immediately after committing
                     # This ensures commits are backed up even if user declines PR creation
-                    if success and GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
+                    if success and not active_conv.branch:
+                        console.print(
+                            "[yellow]⚠[/yellow] Skipping push because the session branch is missing"
+                        )
+                    elif success and GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
                         # Check if auto_push_to_remote is configured
                         should_push = True
                         if yes or is_non_interactive():
@@ -721,7 +743,7 @@ def complete_session(
                                 console.print(f"[dim]You can push manually later with: git push origin {active_conv.branch}[/dim]")
                         else:
                             console.print(f"[dim]Skipping push - commits remain local[/dim]")
-                    else:
+                    elif success:
                         console.print(f"[dim]No unpushed commits - branch is up to date with remote[/dim]")
                 else:
                     console.print("[yellow]⚠[/yellow] Failed to commit changes")

@@ -3603,6 +3603,61 @@ def test_complete_pushes_commits_after_committing_with_prompt(temp_daf_home, tmp
     assert "Commits pushed to remote" in captured.out
 
 
+def test_complete_recovers_missing_branch_before_push(temp_daf_home, tmp_path, monkeypatch):
+    """Test completion uses the current branch when older metadata is empty."""
+    import subprocess
+
+    repo_dir = tmp_path / "test-repo-missing-branch"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init", "-b", "feature-missing"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, capture_output=True)
+    (repo_dir / "test.txt").write_text("original")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_dir, capture_output=True)
+    (repo_dir / "test.txt").write_text("modified")
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    session = session_manager.create_session(
+        name="missing-branch-test",
+        goal="Test missing branch recovery",
+        working_directory="test-repo-missing-branch",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-missing-branch",
+        branch="feature-missing",
+    )
+    session.active_conversation.branch = ""
+    session_manager.update_session(session)
+
+    pushed_branches = []
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._get_pr_for_branch",
+        lambda working_dir, branch: None,
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._generate_commit_message",
+        lambda session, agent_backend=None, display_name=None: "Test commit",
+    )
+    monkeypatch.setattr(GitUtils, "has_unpushed_commits", lambda path, branch: True)
+    monkeypatch.setattr(
+        GitUtils,
+        "push_branch",
+        lambda path, branch: pushed_branches.append(branch) or (True, None),
+    )
+
+    complete_session(
+        "missing-branch-test",
+        no_pr=True,
+        yes=True,
+        commit_message="Test commit",
+    )
+
+    assert pushed_branches == ["feature-missing"]
+    reloaded_session = SessionManager(config_loader).get_session("missing-branch-test")
+    assert reloaded_session.active_conversation.branch == "feature-missing"
+
+
 def test_complete_skips_push_when_user_declines(temp_daf_home, tmp_path, monkeypatch, capsys, clean_ci_env):
     """Test Push is skipped when user declines the prompt."""
     # Ensure interactive mode for this test

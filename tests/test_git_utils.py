@@ -601,6 +601,21 @@ def test_get_status_summary_with_changes(tmp_path):
     assert " M test.txt" in result or "M test.txt" in result
 
 
+@pytest.mark.parametrize("branch_name", [None, "", "   "])
+def test_has_unpushed_commits_missing_branch_returns_false(tmp_path, branch_name):
+    """A missing branch must not be treated as an unpushed branch."""
+    assert GitUtils.has_unpushed_commits(tmp_path, branch_name) is False
+
+
+@pytest.mark.parametrize("branch_name", [None, "", "   "])
+def test_push_branch_missing_branch_returns_clear_error(tmp_path, branch_name):
+    """A missing branch must not produce an invalid git refspec."""
+    success, error_message = GitUtils.push_branch(tmp_path, branch_name)
+
+    assert success is False
+    assert error_message == "Cannot push: branch name is missing"
+
+
 def test_commit_all_not_git(tmp_path):
     """Test commit_all with non-git directory."""
     success, error_msg = GitUtils.commit_all(tmp_path, "Test commit")

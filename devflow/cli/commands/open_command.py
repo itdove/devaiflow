@@ -869,6 +869,10 @@ def open_session(
         else:
             branch = branch_result
 
+        # A skipped branch creation still needs the current branch persisted.
+        if branch is None and active_conv.project_path:
+            branch = GitUtils.get_current_branch(Path(active_conv.project_path))
+
         if branch:
             # Update active conversation's branch
             if session.active_conversation:
