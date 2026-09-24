@@ -576,7 +576,7 @@ class GitUtils:
             return False
 
     @staticmethod
-    def has_unpushed_commits(path: Path, branch_name: str) -> bool:
+    def has_unpushed_commits(path: Path, branch_name: Optional[str]) -> bool:
         """Check if a branch has commits ahead of the default branch on remote.
 
         Compares against origin/{default_branch} rather than origin/{branch_name}
@@ -591,6 +591,9 @@ class GitUtils:
         Returns:
             True if there are commits ahead of the remote default branch
         """
+        if not branch_name or not branch_name.strip():
+            return False
+
         try:
             default_branch = GitUtils.get_default_branch(path) or "main"
             result = subprocess.run(
@@ -655,7 +658,7 @@ class GitUtils:
             return False
 
     @staticmethod
-    def push_branch(path: Path, branch_name: str, set_upstream: bool = True) -> tuple[bool, Optional[str]]:
+    def push_branch(path: Path, branch_name: Optional[str], set_upstream: bool = True) -> tuple[bool, Optional[str]]:
         """Push a branch to remote.
 
         Args:
@@ -671,6 +674,9 @@ class GitUtils:
         Raises:
             ToolNotFoundError: If git is not installed
         """
+        if not branch_name or not branch_name.strip():
+            return (False, "Cannot push: branch name is missing")
+
         require_tool("git", "push branch")
 
         try:
