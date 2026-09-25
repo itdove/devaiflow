@@ -1747,6 +1747,10 @@ class ConfigTUI(App):
         overflow-y: scroll;
     }
 
+    #tab_model_providers > VerticalScroll > #profiles_list {
+        height: auto;
+    }
+
     .mode-indicator {
         height: 1;
         padding: 0 2;
