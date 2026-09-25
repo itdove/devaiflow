@@ -9,21 +9,22 @@ metadata.  Derived constants (``SUPPORTED_BACKENDS``, ``AGENT_DISPLAY_NAMES``,
 ``SELF_ID_BACKENDS``) are computed from it for backward compatibility.
 """
 
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from devflow.agent.interface import AgentInterface
-from devflow.agent.claude_agent import ClaudeAgent
-from devflow.agent.github_copilot_agent import GitHubCopilotAgent
-from devflow.agent.cursor_agent import CursorAgent
-from devflow.agent.windsurf_agent import WindsurfAgent
-from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
 from devflow.agent.aider_agent import AiderAgent
+from devflow.agent.claude_agent import ClaudeAgent
 from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
+from devflow.agent.cursor_agent import CursorAgent
+from devflow.agent.github_copilot_agent import GitHubCopilotAgent
+from devflow.agent.interface import AgentInterface
+from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
 from devflow.agent.pi_agent import PiAgent
+from devflow.agent.windsurf_agent import WindsurfAgent
 
 # ---------------------------------------------------------------------------
 # Unified agent metadata registry
@@ -270,6 +271,8 @@ SELF_ID_BACKENDS: tuple = tuple(
 )
 
 PENDING_CAPTURE_PLACEHOLDER = "pending-capture"
+_SESSION_CAPTURE_POLL_ATTEMPTS = 10
+_SESSION_CAPTURE_POLL_INTERVAL = 0.1
 
 
 def _resolve_alias(backend: str) -> str:
@@ -477,9 +480,21 @@ def capture_agent_session_id(
         return False
     from rich.console import Console
     console = Console()
+
+    file_backed = agent.uses_file_based_sessions() is True
+    attempts = _SESSION_CAPTURE_POLL_ATTEMPTS if file_backed else 1
+    new_sessions: Set[str] = set()
     try:
-        sessions_after = agent.get_existing_sessions(launch_dir)
-        new_sessions = sessions_after - sessions_before
+        for attempt in range(attempts):
+            sessions_after = agent.get_existing_sessions(launch_dir)
+            new_sessions = sessions_after - sessions_before
+            if new_sessions:
+                break
+
+            if attempt < attempts - 1:
+                # File-backed agents may flush their session after the process exits.
+                time.sleep(_SESSION_CAPTURE_POLL_INTERVAL)
+
         if new_sessions:
             if len(new_sessions) > 1:
                 console.print(

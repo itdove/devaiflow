@@ -158,6 +158,28 @@ class TestCaptureAgentSessionId:
         assert result is True
         assert active_conv.ai_agent_session_id == "ses_new"
 
+    def test_file_backed_capture_retries_after_delayed_flush(self):
+        agent = Mock()
+        agent.uses_file_based_sessions.return_value = True
+        agent.get_existing_sessions.side_effect = [
+            {"ses_abc", "ses_def"},
+            {"ses_abc", "ses_def"},
+            {"ses_abc", "ses_def", "ses_new"},
+        ]
+        agent.get_agent_name.return_value = "pi"
+
+        active_conv = Mock()
+        active_conv.ai_agent_session_id = PENDING_CAPTURE_PLACEHOLDER
+
+        with patch("devflow.agent.factory.time.sleep") as sleep:
+            result = capture_agent_session_id(
+                agent, "pi", "/project", active_conv, {"ses_abc", "ses_def"}
+            )
+
+        assert result is True
+        assert active_conv.ai_agent_session_id == "ses_new"
+        assert sleep.call_count == 2
+
     def test_no_new_sessions_returns_false(self):
         agent = Mock()
         agent.get_existing_sessions.return_value = {"ses_abc", "ses_def"}
