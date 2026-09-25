@@ -9,6 +9,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from devflow.agent import get_agent_display_name
+from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import require_outside_claude
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
@@ -53,7 +54,11 @@ def repair_conversation(
         agent_name = get_agent_display_name()
         console.print(f"\n[bold]Scanning all {agent_name} conversations for corruption...[/bold]\n")
 
-        corrupted_files = scan_all_conversations()
+        scan_backend = resolve_agent_backend(config=config_loader.load_config())
+        if isinstance(scan_backend, str):
+            corrupted_files = scan_all_conversations(agent_backend=scan_backend)
+        else:
+            corrupted_files = scan_all_conversations()
 
         if not corrupted_files:
             console.print("[green]✓[/green] No corrupted conversation files found")
@@ -89,7 +94,11 @@ def repair_conversation(
     if repair_all:
         console.print("\n[bold]Scanning for corrupted conversations...[/bold]\n")
 
-        corrupted_files = scan_all_conversations()
+        scan_backend = resolve_agent_backend(config=config_loader.load_config())
+        if isinstance(scan_backend, str):
+            corrupted_files = scan_all_conversations(agent_backend=scan_backend)
+        else:
+            corrupted_files = scan_all_conversations()
 
         if not corrupted_files:
             console.print("[green]✓[/green] No corrupted conversation files found")
@@ -188,7 +197,13 @@ def repair_conversation(
                 return
 
             conversation = all_conversations[conversation_id - 1]
-            _repair_single_conversation(conversation.ai_agent_session_id, max_size, dry_run)
+            _repair_single_conversation(
+                conversation.ai_agent_session_id,
+                max_size,
+                dry_run,
+                agent_backend=resolve_agent_backend(session=session),
+                project_path=conversation.project_path,
+            )
 
         else:
             # Repair all conversations in session
@@ -200,7 +215,13 @@ def repair_conversation(
                     console.print(f"[bold]Conversation #{conv_number}:[/bold] {conv.ai_agent_session_id}{status}")
                     console.print(f"[dim]Path: {conv.project_path}[/dim]")
 
-                    _repair_single_conversation(conv.ai_agent_session_id, max_size, dry_run)
+                    _repair_single_conversation(
+                        conv.ai_agent_session_id,
+                        max_size,
+                        dry_run,
+                        agent_backend=resolve_agent_backend(session=session),
+                        project_path=conv.project_path,
+                    )
                     console.print()
                     conv_number += 1
 
@@ -210,7 +231,12 @@ def repair_conversation(
         # Not found as session - check if it's a direct UUID
         if is_valid_uuid(identifier):
             console.print(f"\n[dim]Session not found in index, treating as direct UUID[/dim]\n")
-            _repair_single_conversation(identifier, max_size, dry_run)
+            _repair_single_conversation(
+                identifier,
+                max_size,
+                dry_run,
+                agent_backend=resolve_agent_backend(config=manager.config_loader.load_config()),
+            )
         else:
             console.print(f"[red]✗[/red] Session '{identifier}' not found and not a valid UUID")
             console.print("\nTry:")
@@ -219,7 +245,13 @@ def repair_conversation(
             console.print("  - Providing a valid agent session UUID")
 
 
-def _repair_single_conversation(ai_agent_session_id: str, max_size: int, dry_run: bool) -> None:
+def _repair_single_conversation(
+    ai_agent_session_id: str,
+    max_size: int,
+    dry_run: bool,
+    agent_backend: str = "claude",
+    project_path: Optional[str] = None,
+) -> None:
     """Repair a single conversation by UUID.
 
     Args:
@@ -228,7 +260,11 @@ def _repair_single_conversation(ai_agent_session_id: str, max_size: int, dry_run
         dry_run: Report issues without making changes
     """
     # Find conversation file
-    conv_file = get_conversation_file_path(ai_agent_session_id)
+    conv_file = get_conversation_file_path(
+        ai_agent_session_id,
+        agent_backend=agent_backend,
+        project_path=project_path,
+    )
 
     if not conv_file:
         console.print(f"[red]✗[/red] Conversation file not found for UUID: {ai_agent_session_id}")

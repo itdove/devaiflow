@@ -427,7 +427,7 @@ print_test "Create investigation linked to parent ticket"
 # First create a parent ticket
 echo -e "  ${YELLOW}DEBUG:${NC} Creating parent ticket..."
 set +e
-PARENT_JSON=$(timeout 30 daf jira new story --parent PROJ-99999 --goal "API Performance" --name "parent-perf" --json 2>&1)
+PARENT_JSON=$(timeout 30 daf jira new story --parent PROJ-99999 --goal "API Performance" --name "parent-perf" --path "." --branch test-branch --json 2>&1)
 PARENT_EXIT=$?
 set -e
 echo -e "  ${YELLOW}DEBUG:${NC} Parent creation exit code: $PARENT_EXIT"

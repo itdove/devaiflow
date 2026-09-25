@@ -66,6 +66,9 @@ class TestSupportedBackends:
     def test_contains_opencode_ai_alias(self):
         assert "opencode-ai" in SUPPORTED_BACKENDS
 
+    def test_contains_pi(self):
+        assert "pi" in SUPPORTED_BACKENDS
+
 
 # ───────────────────────────────────────────────────────────────────────────────
 # validate_agent_backend
@@ -79,6 +82,9 @@ class TestValidateAgentBackend:
 
     def test_valid_opencode(self):
         assert validate_agent_backend("opencode") == "opencode"
+
+    def test_valid_pi(self):
+        assert validate_agent_backend("pi") == "pi"
 
     def test_valid_cursor(self):
         assert validate_agent_backend("cursor") == "cursor"

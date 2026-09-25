@@ -7,8 +7,8 @@
   "properties": {
     "agent_backend": {
       "type": ["string", "null"],
-      "enum": ["claude", "github-copilot", null],
-      "description": "AI agent backend enforced by enterprise (e.g., 'claude', 'github-copilot'). Use null to allow teams/users to choose."
+      "enum": ["claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "codex", "pi", null],
+      "description": "AI agent backend enforced by enterprise. Use null to allow teams/users to choose."
     },
     "backend_overrides": {
       "type": ["object", "null"],

@@ -55,6 +55,7 @@ daf skills --agent codex
 | **Continue** | ⚠️ Experimental | `~/.continue/skills/` | `<project>/.continue/skills/` | _(none)_ |
 | **OpenCode** | ⚠️ Experimental | `~/.config/opencode/skills/` | `<project>/.opencode/skills/` | `$XDG_CONFIG_HOME` |
 | **Codex** | ⚠️ Experimental | `~/.codex/skills/` | `<project>/.codex/skills/` | `$CODEX_HOME` or `$XDG_CONFIG_HOME` |
+| **Pi** | ⚠️ Experimental | `~/.pi/agent/skills/` | `<project>/.pi/skills/` | `$PI_CODING_AGENT_DIR` |
 | **Crush** | ⚠️ Experimental | `~/.local/share/crush/skills/` | `<project>/.crush/skills/` | `$XDG_DATA_HOME` |
 
 **Notes:**
@@ -216,6 +217,7 @@ DevAIFlow installs skills to agent-specific directories. Here's where they go:
 | Continue | `~/.continue/skills/` | _(hardcoded)_ |
 | OpenCode | `~/.config/opencode/skills/` | `$XDG_CONFIG_HOME/opencode/skills/` |
 | Codex | `~/.codex/skills/` | `$CODEX_HOME/skills/` or `$XDG_CONFIG_HOME/codex/skills/` |
+| Pi | `~/.pi/agent/skills/` | `$PI_CODING_AGENT_DIR/skills/` |
 | Crush | `~/.local/share/crush/skills/` | `$XDG_DATA_HOME/crush/skills/` |
 
 ### Project Directories
@@ -232,11 +234,12 @@ Project-level installations follow a consistent pattern:
 | Continue | `<project>/.continue/skills/` |
 | OpenCode | `<project>/.opencode/skills/` |
 | Codex | `<project>/.codex/skills/` |
+| Pi | `<project>/.pi/skills/` |
 | Crush | `<project>/.crush/skills/` |
 
 ### Environment Variables
 
-Claude Code, GitHub Copilot, Codex, OpenCode, and Crush support environment variables to override their default config/data directory:
+Claude Code, GitHub Copilot, Codex, Pi, OpenCode, and Crush support environment variables to override their default config/data directory:
 
 ```bash
 # Claude Code
@@ -248,6 +251,11 @@ daf skills --agent claude
 export COPILOT_HOME=/custom/copilot
 daf skills --agent copilot
 # Installs to /custom/copilot/skills/
+
+# Pi
+export PI_CODING_AGENT_DIR=/custom/pi-agent
+daf assets --agent pi
+# Installs to /custom/pi-agent/skills/
 ```
 
 ## Compatibility

@@ -11,7 +11,7 @@ from devflow.agent.factory import resolve_agent_backend
 from devflow.archive.base import ArchiveManagerBase
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
-from devflow.utils.paths import get_cs_home, get_claude_config_dir
+from devflow.utils.paths import get_cs_home
 
 
 class ExportManager(ArchiveManagerBase):
@@ -315,9 +315,11 @@ class ExportManager(ArchiveManagerBase):
                 )
 
             # Read export metadata
+            archive_agent_backend = None
             if metadata_file.exists():
                 with open(metadata_file, "r") as f:
                     metadata = json.load(f)
+                    archive_agent_backend = metadata.get("agent_backend")
 
                     # Double-check archive type
                     if metadata.get("archive_type") == "backup":
@@ -373,7 +375,7 @@ class ExportManager(ArchiveManagerBase):
 
             # Import conversation history files if present
             conversations_dir = temp_dir / "conversations"
-            agent_backend = self._get_agent_backend()
+            agent_backend = archive_agent_backend or self._get_agent_backend()
 
             if conversations_dir.exists():
                 if not self._is_conversation_backupable(agent_backend):
@@ -384,10 +386,6 @@ class ExportManager(ArchiveManagerBase):
                             f"Session metadata has been imported, but {conversation_count} conversation file(s) were skipped."
                         )
                 else:
-                    claude_dir = get_claude_config_dir() / "projects"
-                    if not claude_dir.exists():
-                        claude_dir.mkdir(parents=True)
-
                     for conversation_file in conversations_dir.glob("*.jsonl"):
                         # Parse filename to extract UUID
                         # Format: {group_name}-{session_id}-{working_dir}-{UUID}.jsonl
@@ -439,13 +437,13 @@ class ExportManager(ArchiveManagerBase):
 
                         # Copy conversation file if we found a project_path
                         if project_path:
-                            encoded_path = self._encode_path(project_path)
-                            target_dir = claude_dir / encoded_path
-                            target_dir.mkdir(parents=True, exist_ok=True)
-
-                            target_file = target_dir / f"{ai_agent_session_id}.jsonl"
-                            if not target_file.exists() or not merge:
-                                shutil.copy2(conversation_file, target_file)
+                            self._restore_conversation_file(
+                                conversation_file,
+                                ai_agent_session_id,
+                                project_path,
+                                agent_backend,
+                                merge=merge,
+                            )
 
             # Import mock data if present (for mock mode testing)
             # This is needed for collaboration workflow tests where sessions are exported/imported
@@ -509,6 +507,7 @@ class ExportManager(ArchiveManagerBase):
                 "created": datetime.now().isoformat(),
                 "session_count": total_sessions,
                 "includes_conversations": True,  # Always True for team handoff
+                "agent_backend": self._get_agent_backend(),
             },
             "sessions": {
                 session_name: session.model_dump(mode='json', exclude={'workspace_name'})
@@ -693,4 +692,3 @@ class ExportManager(ArchiveManagerBase):
         console.print(
             f"[yellow]You can still work with imported sessions, but you'll need to clone the repositories before opening them.[/yellow]"
         )
-

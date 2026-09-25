@@ -11,7 +11,7 @@ from devflow.agent.factory import resolve_agent_backend
 from devflow.archive.base import ArchiveManagerBase
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
-from devflow.utils.paths import get_cs_home, get_claude_config_dir
+from devflow.utils.paths import get_cs_home
 
 
 class BackupManager(ArchiveManagerBase):
@@ -172,7 +172,7 @@ class BackupManager(ArchiveManagerBase):
 
                     archive_agent_backend = metadata.get("agent_backend")
 
-            agent_backend = self._get_agent_backend()
+            agent_backend = archive_agent_backend or self._get_agent_backend()
 
             # Restore sessions.json
             sessions_json = temp_dir / "sessions.json"
@@ -231,11 +231,6 @@ class BackupManager(ArchiveManagerBase):
                             f"Session metadata has been restored, but {conversation_count} conversation file(s) were skipped."
                         )
                 else:
-                    # Find Claude's projects directory
-                    claude_dir = get_claude_config_dir() / "projects"
-                    if not claude_dir.exists():
-                        claude_dir.mkdir(parents=True)
-
                     # Load the restored sessions for fallback lookup
                     restored_sessions = self.config_loader.load_sessions()
 
@@ -285,14 +280,13 @@ class BackupManager(ArchiveManagerBase):
 
                         # Copy conversation file if we found a project_path
                         if project_path:
-                            # Encode path like Claude does
-                            encoded_path = self._encode_path(project_path)
-                            target_dir = claude_dir / encoded_path
-                            target_dir.mkdir(parents=True, exist_ok=True)
-
-                            # Copy conversation file
-                            target_file = target_dir / f"{ai_agent_session_id}.jsonl"
-                            shutil.copy2(conversation_file, target_file)
+                            self._restore_conversation_file(
+                                conversation_file,
+                                ai_agent_session_id,
+                                project_path,
+                                agent_backend,
+                                merge=merge,
+                            )
 
             # Restore diagnostic logs
             self._restore_diagnostic_logs(temp_dir)

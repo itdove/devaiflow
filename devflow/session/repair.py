@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 from rich.console import Console
 
+from devflow.agent.factory import create_agent_client
 from devflow.utils.paths import get_claude_config_dir
 
 console = Console()
@@ -19,15 +20,33 @@ class ConversationRepairError(Exception):
     pass
 
 
-def get_conversation_file_path(ai_agent_session_id: str) -> Optional[Path]:
-    """Get the path to a Claude Code conversation file by UUID.
+def get_conversation_file_path(
+    ai_agent_session_id: str,
+    agent_backend: str = "claude",
+    project_path: Optional[str] = None,
+) -> Optional[Path]:
+    """Get the path to a file-backed agent conversation by session ID.
 
     Args:
-        ai_agent_session_id: Claude Code session UUID
+        ai_agent_session_id: Agent session ID
+        agent_backend: Agent backend that owns the session
+        project_path: Project path used to scope storage when available
 
     Returns:
         Path to conversation file if found, None otherwise
     """
+    try:
+        agent = create_agent_client(agent_backend)
+        if agent.uses_file_based_sessions():
+            conversation_file = agent.get_session_file_path(
+                ai_agent_session_id,
+                project_path or "",
+            )
+            if conversation_file.exists():
+                return conversation_file
+    except (OSError, TypeError, ValueError):
+        pass
+
     claude_home = get_claude_config_dir()
     projects_dir = claude_home / "projects"
 
@@ -335,35 +354,42 @@ def repair_conversation_file(
         raise ConversationRepairError(f"Repair failed: {e}")
 
 
-def scan_all_conversations() -> List[Tuple[str, Path, Dict[str, any]]]:
-    """Scan all Claude Code conversation files for corruption.
+def scan_all_conversations(agent_backend: str = "claude") -> List[Tuple[str, Path, Dict[str, any]]]:
+    """Scan all file-backed agent conversation files for corruption.
 
     Returns:
         List of tuples: (ai_agent_session_id, file_path, corruption_info)
     """
-    claude_home = get_claude_config_dir()
-    projects_dir = claude_home / "projects"
-
-    if not projects_dir.exists():
-        return []
+    try:
+        agent = create_agent_client(agent_backend)
+        session_files = agent.get_session_files()
+    except (AttributeError, OSError, TypeError, ValueError):
+        claude_home = get_claude_config_dir()
+        projects_dir = claude_home / "projects"
+        if not projects_dir.exists():
+            return []
+        session_files = [
+            conv_file
+            for project_dir in projects_dir.iterdir()
+            if project_dir.is_dir()
+            for conv_file in project_dir.glob("*.jsonl")
+        ]
 
     corrupted_files = []
 
-    for project_dir in projects_dir.iterdir():
-        if not project_dir.is_dir():
+    for conv_file in session_files:
+        # Pi prefixes filenames with a timestamp; other file-backed agents use
+        # the session ID directly.
+        ai_agent_session_id = conv_file.stem.rsplit("_", 1)[-1]
+
+        # Skip non-UUID filenames for Claude-compatible storage. Pi session IDs
+        # are also UUIDs, but their filenames include the timestamp prefix.
+        if agent_backend.lower() in {"claude", "ollama", "ollama-claude"} and not is_valid_uuid(ai_agent_session_id):
             continue
 
-        for conv_file in project_dir.glob("*.jsonl"):
-            # Extract UUID from filename
-            ai_agent_session_id = conv_file.stem
+        corruption_info = detect_corruption(conv_file)
 
-            # Skip non-UUID filenames (like agent-*.jsonl)
-            if not is_valid_uuid(ai_agent_session_id):
-                continue
-
-            corruption_info = detect_corruption(conv_file)
-
-            if corruption_info['is_corrupt']:
-                corrupted_files.append((ai_agent_session_id, conv_file, corruption_info))
+        if corruption_info['is_corrupt']:
+            corrupted_files.append((ai_agent_session_id, conv_file, corruption_info))
 
     return corrupted_files

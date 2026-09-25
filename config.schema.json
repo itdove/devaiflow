@@ -1,13 +1,13 @@
 {
   "$defs": {
     "AgentConfig": {
-      "description": "AI agent skill installation configuration.\n\nControls which AI agents should receive skill installations and at what level.\nSupports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf, Aider, Continue, OpenCode, Codex, and Crush).",
+      "description": "AI agent skill installation configuration.\n\nControls which AI agents should receive skill installations and at what level.\nSupports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf,\nAider, Continue, OpenCode, Codex, Pi, and Crush).",
       "properties": {
         "enabled_agents": {
           "default": [
             "claude"
           ],
-          "description": "List of AI agents to install skills to (e.g., ['claude', 'cursor', 'windsurf'])",
+          "description": "List of AI agents to install skills to (e.g., ['claude', 'cursor', 'pi'])",
           "items": {
             "type": "string"
           },
@@ -737,7 +737,7 @@
         },
         "agent_backend": {
           "default": "claude",
-          "description": "Agent/IDE adapter used with this profile (for example claude, codex, ollama, or opencode)",
+          "description": "Agent/IDE adapter used with this profile (for example claude, codex, ollama, opencode, or pi)",
           "title": "Agent Backend",
           "type": "string"
         },

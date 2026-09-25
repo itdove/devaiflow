@@ -364,5 +364,8 @@ class TestSelfIdBackendsConstant:
     def test_contains_opencode_ai(self):
         assert "opencode-ai" in SELF_ID_BACKENDS
 
+    def test_contains_pi(self):
+        assert "pi" in SELF_ID_BACKENDS
+
     def test_does_not_contain_claude(self):
         assert "claude" not in SELF_ID_BACKENDS

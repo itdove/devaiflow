@@ -4,6 +4,7 @@ import pytest
 from devflow.config.templates.model_providers import (
     AnthropicTemplate,
     CodexTemplate,
+    PiTemplate,
     VertexAITemplate,
     OpenRouterTemplate,
     CustomServerTemplate,
@@ -32,6 +33,7 @@ class TestAnthropicTemplate:
         assert "profile_name" in field_ids
         assert "api_key" in field_ids
         assert "model_name" in field_ids
+
 
     def test_generate_config_minimal(self):
         """Test generating minimal Anthropic config."""
@@ -77,6 +79,28 @@ class TestAnthropicTemplate:
 
         errors = template.validate(form_data)
         assert len(errors) == 0
+
+
+class TestPiTemplate:
+    """Tests for Pi provider template."""
+
+    def test_generate_config(self):
+        config = PiTemplate().generate_config(
+            {
+                "profile_name": "pi-test",
+                "provider": "test-provider",
+                "api_key": "test-key",
+                "model_name": "test-model",
+            }
+        )
+
+        assert config == {
+            "name": "pi-test",
+            "provider": "test-provider",
+            "agent_backend": "pi",
+            "api_key": "test-key",
+            "model_name": "test-model",
+        }
 
 
 class TestCodexTemplate:
@@ -275,6 +299,7 @@ class TestTemplateRegistry:
         assert isinstance(registry["openrouter"], OpenRouterTemplate)
         assert isinstance(registry["custom"], CustomServerTemplate)
         assert isinstance(registry["codex"], CodexTemplate)
+        assert isinstance(registry["pi"], PiTemplate)
 
 
 class TestDetectTemplate:
@@ -322,6 +347,15 @@ class TestDetectTemplate:
         }
 
         assert detect_template_from_profile(profile) == "codex"
+
+    def test_detect_pi_profile(self):
+        profile = {
+            "name": "pi-profile",
+            "provider": "test-provider",
+            "agent_backend": "pi",
+        }
+
+        assert detect_template_from_profile(profile) == "pi"
 
     def test_detect_openai_profile_with_null_provider_url(self):
         """OpenAI provider aliases map to the Codex template without an endpoint."""

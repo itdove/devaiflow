@@ -187,6 +187,67 @@ class CodexTemplate(ProviderTemplate):
         return config
 
 
+class PiTemplate(ProviderTemplate):
+    """Template for Pi's provider/model selection."""
+
+    def get_name(self) -> str:
+        return "Pi"
+
+    def get_description(self) -> str:
+        return "Use Pi.dev with a configured model provider"
+
+    def get_template_id(self) -> str:
+        return "pi"
+
+    def get_fields(self) -> List[FormField]:
+        return [
+            FormField(
+                field_id="profile_name",
+                label="Profile Name",
+                field_type="input",
+                placeholder="e.g., pi-anthropic",
+                required=True,
+                help_text="Unique name for this profile",
+            ),
+            FormField(
+                field_id="provider",
+                label="Provider",
+                field_type="input",
+                placeholder="e.g., anthropic, openai, google",
+                required=True,
+                help_text="Pi provider identifier",
+            ),
+            FormField(
+                field_id="api_key",
+                label="API Key (optional)",
+                field_type="input",
+                placeholder="Leave empty to use Pi auth or provider environment variables",
+                required=False,
+                help_text="Optional provider API key",
+            ),
+            FormField(
+                field_id="model_name",
+                label="Model Name (optional)",
+                field_type="input",
+                placeholder="e.g., claude-sonnet-4-5",
+                required=False,
+                help_text="Specific Pi model; leave empty for the provider default",
+            ),
+        ]
+
+    def generate_config(self, form_data: Dict[str, Any]) -> Dict[str, Any]:
+        config = {
+            "name": form_data["profile_name"],
+            "provider": form_data["provider"],
+            "agent_backend": "pi",
+        }
+        if form_data.get("api_key"):
+            config["api_key"] = form_data["api_key"]
+        if form_data.get("model_name"):
+            config["model_name"] = form_data["model_name"]
+        return config
+
+
 class VertexAITemplate(ProviderTemplate):
     """Template for Google Vertex AI configuration."""
 
@@ -507,6 +568,7 @@ class MLXTemplate(LocalProviderTemplate):
 _TEMPLATE_REGISTRY: Dict[str, ProviderTemplate] = {
     "anthropic": AnthropicTemplate(),
     "codex": CodexTemplate(),
+    "pi": PiTemplate(),
     "vertex": VertexAITemplate(),
     "openrouter": OpenRouterTemplate(),
     "custom": CustomServerTemplate(),
@@ -538,6 +600,11 @@ def detect_template_from_profile(profile_data: Dict[str, Any]) -> str:
         profile_data = profile_data.model_dump()
 
     provider = str(profile_data.get("provider") or "").strip().lower()
+    if str(profile_data.get("agent_backend") or "").strip().lower() in {
+        "pi",
+        "pi-coding-agent",
+    }:
+        return "pi"
     if provider in _TEMPLATE_REGISTRY:
         return provider
     if provider == "openai":

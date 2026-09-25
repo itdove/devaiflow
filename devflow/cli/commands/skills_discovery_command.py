@@ -11,6 +11,11 @@ from rich.table import Table
 from rich.panel import Panel
 
 from devflow.config.loader import ConfigLoader
+from devflow.agent.factory import resolve_agent_backend
+from devflow.agent.skill_directories import (
+    get_agent_global_skills_dir,
+    get_agent_project_skills_dir,
+)
 from devflow.utils.paths import get_claude_config_dir, get_cs_config_home
 
 console = Console()
@@ -131,7 +136,10 @@ def skills(
             workspace_path = default_workspace.path
 
     # Discover all skills
-    skills_by_level = _discover_all_skills(workspace_path)
+    skills_by_level = _discover_all_skills(
+        workspace_path,
+        agent_backend=resolve_agent_backend(config=config),
+    )
 
     if skill_name:
         # Inspect specific skill
@@ -141,7 +149,10 @@ def skills(
         _list_all_skills(skills_by_level, output_json)
 
 
-def _discover_all_skills(workspace_path: Optional[str] = None) -> Dict[str, List[Dict]]:
+def _discover_all_skills(
+    workspace_path: Optional[str] = None,
+    agent_backend: str = "claude",
+) -> Dict[str, List[Dict]]:
     """Discover all skills grouped by level.
 
     Returns:
@@ -154,27 +165,42 @@ def _discover_all_skills(workspace_path: Optional[str] = None) -> Dict[str, List
         "project": []
     }
 
-    # 1. User-level skills: ~/.claude/skills/
-    claude_config = get_claude_config_dir()
-    user_skills_dir = claude_config / "skills"
+    skill_agent = {
+        "github-copilot": "copilot",
+        "copilot": "copilot",
+        "ollama": "claude",
+        "ollama-claude": "claude",
+        "opencode-ai": "opencode",
+        "pi-coding-agent": "pi",
+    }.get(agent_backend, agent_backend)
+
+    # 1. User-level skills for the selected agent.
+    if skill_agent == "claude":
+        # Keep the legacy Claude path hook available to callers that customize
+        # or patch the Claude config directory directly.
+        user_skills_dir = get_claude_config_dir() / "skills"
+    else:
+        user_skills_dir = get_agent_global_skills_dir(skill_agent)
     if user_skills_dir.exists():
         skills_by_level["user"] = _discover_skills_in_dir(user_skills_dir, "user")
 
-    # 2. Workspace-level skills: <workspace>/.claude/skills/
+    # 2. Workspace-level skills for the selected agent.
     if workspace_path:
-        workspace_skills_dir = Path(workspace_path).expanduser().resolve() / ".claude" / "skills"
+        workspace_skills_dir = get_agent_project_skills_dir(
+            skill_agent, Path(workspace_path)
+        )
         if workspace_skills_dir.exists():
             skills_by_level["workspace"] = _discover_skills_in_dir(workspace_skills_dir, "workspace")
 
-    # 3. Hierarchical skills: $DEVAIFLOW_HOME/.claude/skills/
+    # 3. Hierarchical skills under the DevAIFlow configuration home.
     cs_home = get_cs_config_home()
-    hierarchical_skills_dir = cs_home / ".claude" / "skills"
+    hierarchical_skills_dir = get_agent_project_skills_dir(skill_agent, cs_home)
     if hierarchical_skills_dir.exists():
         skills_by_level["hierarchical"] = _discover_skills_in_dir(hierarchical_skills_dir, "hierarchical")
 
-    # 4. Project-level skills: <project>/.claude/skills/
+    # 4. Project-level skills for the selected agent.
     # Note: We check current directory for project-level skills
-    project_skills_dir = Path.cwd() / ".claude" / "skills"
+    project_skills_dir = get_agent_project_skills_dir(skill_agent, Path.cwd())
     if project_skills_dir.exists():
         skills_by_level["project"] = _discover_skills_in_dir(project_skills_dir, "project")
 
@@ -332,10 +358,10 @@ def _list_skills_table(skills_by_level: Dict[str, List[Dict]]) -> None:
 
     # Group by level for display
     level_display = {
-        "user": f"User-level ({get_claude_config_dir() / 'skills'}):",
-        "workspace": "Workspace-level (<workspace>/.claude/skills/):",
-        "hierarchical": f"Hierarchical ({get_cs_config_home() / '.claude/skills'}):",
-        "project": "Project-level (<project>/.claude/skills/):"
+        "user": "User-level",
+        "workspace": "Workspace-level",
+        "hierarchical": "Hierarchical",
+        "project": "Project-level",
     }
 
     # Display skills grouped by level
@@ -343,7 +369,8 @@ def _list_skills_table(skills_by_level: Dict[str, List[Dict]]) -> None:
         level_skills = [s for s in all_skills if s["level"] == level_key]
 
         if level_skills:
-            console.print(f"\n[bold]{level_display[level_key]}[/bold]")
+            location = level_skills[0]["location"]
+            console.print(f"\n[bold]{level_display[level_key]} ({location})[/bold]")
             for skill in level_skills:
                 console.print(f"  [cyan]• {skill['name']}[/cyan] - {skill['description']}")
 

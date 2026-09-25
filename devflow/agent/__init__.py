@@ -13,6 +13,8 @@ Supported Agents:
 - Continue (experimental)
 - Crush (experimental)
 - OpenCode (experimental)
+- Codex (experimental)
+- Pi (experimental)
 
 Note: Only Claude Code and Ollama have been fully tested. Other agents are experimental implementations
 that may have limitations in session management, conversation export, and message counting.
@@ -28,6 +30,8 @@ from devflow.agent.aider_agent import AiderAgent
 from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
+from devflow.agent.codex_agent import CodexAgent
+from devflow.agent.pi_agent import PiAgent
 from devflow.agent.factory import (
     AGENT_REGISTRY,
     AGENT_ALIASES,
@@ -62,6 +66,8 @@ __all__ = [
     "ContinueAgent",
     "CrushAgent",
     "OpenCodeAgent",
+    "CodexAgent",
+    "PiAgent",
     "AGENT_REGISTRY",
     "AGENT_ALIASES",
     "create_agent_client",

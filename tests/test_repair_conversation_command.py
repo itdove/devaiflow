@@ -18,6 +18,7 @@ def mock_session():
     session = Mock()
     session.name = "test-session"
     session.issue_key = "PROJ-12345"
+    session.agent_backend = "claude"
     session.working_directory = "/path/to/project"
     session.last_active = datetime(2026, 1, 15, 10, 30)
     session.created = datetime(2026, 1, 1, 10, 0)
@@ -363,7 +364,13 @@ class TestRepairConversation:
                         dry_run=False
                     )
 
-                    mock_repair.assert_called_once_with("test-uuid-1234", 100000, False)
+                    mock_repair.assert_called_once_with(
+                        "test-uuid-1234",
+                        100000,
+                        False,
+                        agent_backend="claude",
+                        project_path="/path/to/project",
+                    )
 
     def test_repair_all_conversations_in_session(self, monkeypatch, mock_session):
         """Test repairing all conversations in a session."""

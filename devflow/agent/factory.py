@@ -23,6 +23,7 @@ from devflow.agent.aider_agent import AiderAgent
 from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
+from devflow.agent.pi_agent import PiAgent
 
 # ---------------------------------------------------------------------------
 # Unified agent metadata registry
@@ -222,12 +223,31 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         },
         "notes": "Requires 'codex' CLI tool from OpenAI",
     },
+    "pi": {
+        "display_name": "Pi",
+        "description": "Pi.dev terminal coding agent",
+        "cli_binary": "pi",
+        "cli_command": "pi",
+        "project_url": "https://pi.dev",
+        "install_url": "https://pi.dev/docs/installation",
+        "status": "experimental",
+        "self_id": True,
+        "features": {
+            "session_management": True,
+            "conversation_export": True,
+            "message_counting": True,
+            "resume_support": True,
+            "skills_support": True,
+        },
+        "notes": "Requires the 'pi' CLI from pi.dev",
+    },
 }
 
 AGENT_ALIASES: Dict[str, str] = {
     "ollama-claude": "ollama",
     "copilot": "github-copilot",
     "opencode-ai": "opencode",
+    "pi-coding-agent": "pi",
 }
 
 # ---------------------------------------------------------------------------
@@ -664,12 +684,17 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         >>> agent.get_agent_name()
         'opencode'
 
+        >>> # Create a Pi agent
+        >>> agent = create_agent_client("pi")
+        >>> agent.get_agent_name()
+        'pi'
+
         >>> # Create with custom home directory
         >>> agent = create_agent_client("claude", Path("/custom/path"))
 
     Note:
         Only Claude Code and Ollama have been fully tested. Other agents (GitHub Copilot,
-        Cursor, Windsurf, Aider, Continue, Crush, OpenCode) are experimental and may have
+        Cursor, Windsurf, Aider, Continue, Crush, OpenCode, Codex, and Pi) are experimental and may have
         limitations in session management, conversation export, and message counting capabilities.
     """
     backend = backend.lower()
@@ -695,8 +720,10 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
     elif backend == "codex":
         from devflow.agent.codex_agent import CodexAgent
         return CodexAgent(codex_dir=agent_home)
+    elif backend in ("pi", "pi-coding-agent"):
+        return PiAgent(pi_dir=agent_home)
     else:
         raise ValueError(
             f"Unsupported agent backend: {backend}. "
-            f"Supported backends: claude, ollama, github-copilot, cursor, windsurf, aider, continue, crush, opencode, codex"
+            f"Supported backends: {', '.join(AGENT_REGISTRY)}"
         )

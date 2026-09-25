@@ -35,6 +35,7 @@ CLAUDE_PROFILE_PROVIDERS = {
 KNOWN_REASONING_EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max"}
 CODEX_REASONING_EFFORTS = KNOWN_REASONING_EFFORTS
 CLAUDE_REASONING_EFFORTS = {"low", "medium", "high", "max"}
+PI_REASONING_EFFORTS = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 
 @dataclass
@@ -134,6 +135,7 @@ def _canonical_agent_backend(agent_backend: Optional[str]) -> str:
         "ollama-claude": "ollama",
         "anthropic": "claude",
         "opencode-ai": "opencode",
+        "pi-coding-agent": "pi",
     }.get((agent_backend or "").strip().lower(), (agent_backend or "").strip().lower())
 
 
@@ -155,6 +157,8 @@ def get_agent_backend_from_profile(profile: Optional[Dict[str, Any]]) -> Optiona
         return "codex"
     if provider == "ollama":
         return "ollama"
+    if provider == "pi":
+        return "pi"
     if provider in CLAUDE_PROFILE_PROVIDERS:
         return "claude"
     return None
@@ -334,6 +338,7 @@ def _known_agent_backends() -> set[str]:
             "codex",
             "ollama",
             "opencode",
+            "pi",
             "github-copilot",
             "cursor",
             "windsurf",
@@ -358,6 +363,7 @@ def _compatible_agent_backends(provider: str) -> Optional[set[str]]:
         "ollama": {"ollama", "claude"},  # ``claude`` keeps legacy profiles valid.
         "codex": {"codex"},
         "openai": {"codex"},
+        "pi": {"pi"},
     }
     return provider_backends.get(provider)
 
@@ -542,8 +548,9 @@ def _verify_remote_profile(
         "ollama",
         "mlx",
         "mlx-lm",
-        "codex",
-        "openai",
+         "codex",
+         "openai",
+         "pi",
     }:
         _add_validation_message(
             result.warnings,
@@ -748,6 +755,7 @@ def validate_model_provider_profile(
         "mlx-lm",
         "codex",
         "openai",
+        "pi",
     }:
         _add_validation_message(
             result.warnings,
@@ -773,7 +781,7 @@ def validate_model_provider_profile(
             _add_validation_message(result.checks, "Agent / IDE adapter is recognized.")
 
         compatible_backends = _compatible_agent_backends(provider)
-        if compatible_backends and canonical_backend != "opencode":
+        if compatible_backends and canonical_backend not in {"opencode", "pi"}:
             compatible_canonical = {
                 _canonical_agent_backend(backend) for backend in compatible_backends
             }
@@ -917,6 +925,8 @@ def validate_model_provider_profile(
         if canonical_backend == "codex"
         else CLAUDE_REASONING_EFFORTS
         if canonical_backend == "claude"
+        else PI_REASONING_EFFORTS
+        if canonical_backend == "pi"
         else KNOWN_REASONING_EFFORTS
     )
     for label, effort in reasoning_values:
@@ -1388,11 +1398,13 @@ def get_co_authored_by_line(config=None, model_profile_override: Optional[str] =
     _AGENT_ATTRIBUTION = {
         "codex": ("Codex", "noreply@openai.com"),
         "opencode": ("OpenCode", "noreply@opencode.ai"),
+        "pi": ("Pi", "noreply@pi.dev"),
         "aider": ("Aider", "noreply@aider.chat"),
     }
 
-    if agent_backend and agent_backend in _AGENT_ATTRIBUTION:
-        default_name, email = _AGENT_ATTRIBUTION[agent_backend]
+    normalized_backend = _canonical_agent_backend(agent_backend)
+    if normalized_backend in _AGENT_ATTRIBUTION:
+        default_name, email = _AGENT_ATTRIBUTION[normalized_backend]
         profile = get_active_profile(config, override_profile_name=model_profile_override) if config else None
         model_name = get_model_name_from_profile(profile) or model_id
         name = f"{default_name} ({model_name})" if model_name else default_name

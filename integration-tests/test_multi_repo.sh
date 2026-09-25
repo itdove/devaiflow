@@ -247,7 +247,7 @@ fi
 print_section "Test 6: List All Conversations"
 print_test "Use daf list to view all conversations"
 
-LIST_SESSIONS_OUTPUT=$(daf list "$SESSION_NAME" 2>&1)
+LIST_SESSIONS_OUTPUT=$(daf list 2>&1)
 LIST_EXIT=$?
 
 if [ $LIST_EXIT -eq 0 ]; then

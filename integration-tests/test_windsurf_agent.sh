@@ -219,7 +219,6 @@ if echo "$INFO_OUTPUT" | grep -iq "windsurf\|codeium"; then
 else
     echo -e "  ${YELLOW}ℹ${NC}  Agent backend may not be displayed in info"
 fi
-TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Test 4: Test initial prompt limitation
 print_section "Test 3: Initial Prompt Limitation"
@@ -241,7 +240,6 @@ LIST_EXIT=$?
 verify_success "List command works with Windsurf sessions" $LIST_EXIT
 
 echo -e "  ${YELLOW}ℹ${NC}  Known limitation: Message counting not supported (Windsurf internal DB)"
-TESTS_PASSED=$((TESTS_PASSED + 1))
 
 # Test 6: Test session resume
 print_section "Test 5: Session Resume Workflow"

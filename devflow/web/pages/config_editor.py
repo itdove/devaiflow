@@ -465,10 +465,14 @@ def _build_workspaces_tab(config: Any, bridge: DataBridge) -> Dict[str, Any]:
 def _build_ai_tab(config: Any) -> Dict[str, Any]:
     """Build AI tab fields."""
     widgets: Dict[str, Any] = {}
+    from devflow.agent.factory import AGENT_DISPLAY_NAMES, AGENT_REGISTRY
 
     widgets["agent_backend"] = _select(
         "AI Agent Backend",
-        ["claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode"],
+        {
+            name: AGENT_DISPLAY_NAMES.get(name, name)
+            for name in AGENT_REGISTRY
+        },
         config.agent_backend or "claude",
         "Which AI agent to use",
     )
