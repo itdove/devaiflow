@@ -1,6 +1,7 @@
 """Base class for archive operations (backup/export)."""
 
 import json
+import shutil
 import tarfile
 from datetime import datetime
 from pathlib import Path
@@ -8,8 +9,9 @@ from typing import Dict, List, Optional
 
 from devflow.config.loader import ConfigLoader
 from devflow.utils.paths import get_claude_config_dir
+from devflow.agent.factory import create_agent_client, get_agent_metadata
 
-CONVERSATION_BACKUP_BACKENDS = {"claude", "ollama"}
+CONVERSATION_BACKUP_BACKENDS = {"claude", "ollama", "pi"}
 
 
 class ArchiveManagerBase:
@@ -40,7 +42,17 @@ class ArchiveManagerBase:
         Returns:
             True if conversation backup is supported
         """
-        return agent_backend.lower() in CONVERSATION_BACKUP_BACKENDS
+        canonical = agent_backend.lower()
+        metadata = get_agent_metadata(canonical)
+        if metadata:
+            try:
+                agent = create_agent_client(canonical)
+                if not agent.uses_file_based_sessions():
+                    return False
+            except (OSError, TypeError, ValueError):
+                return False
+            return bool(metadata.get("features", {}).get("conversation_export"))
+        return canonical in CONVERSATION_BACKUP_BACKENDS
 
     def get_conversation_warnings(self) -> List[str]:
         """Get warnings about skipped conversations.
@@ -66,6 +78,16 @@ class ArchiveManagerBase:
         if agent_backend and not self._is_conversation_backupable(agent_backend):
             return None
 
+        if agent_backend:
+            try:
+                agent = create_agent_client(agent_backend)
+                if agent.uses_file_based_sessions():
+                    agent_file = agent.get_session_file_path(session_id, "")
+                    if agent_file.is_file():
+                        return agent_file
+            except (OSError, TypeError, ValueError):
+                pass
+
         claude_dir = get_claude_config_dir() / "projects"
         if not claude_dir.exists():
             return None
@@ -77,6 +99,29 @@ class ArchiveManagerBase:
                     return jsonl_file
 
         return None
+
+    def _restore_conversation_file(
+        self,
+        source_file: Path,
+        session_id: str,
+        project_path: str,
+        agent_backend: str,
+        merge: bool = True,
+    ) -> bool:
+        """Restore a conversation through its owning agent adapter."""
+        try:
+            agent = create_agent_client(agent_backend)
+            if not agent.uses_file_based_sessions():
+                return False
+
+            target_file = agent.get_session_file_path(session_id, project_path)
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            if target_file.exists() and merge:
+                return False
+            shutil.copy2(source_file, target_file)
+            return True
+        except (OSError, TypeError, ValueError):
+            return False
 
     def _add_json_to_tar(self, tar: tarfile.TarFile, arcname: str, data: Dict) -> None:
         """Add JSON data to tar archive.

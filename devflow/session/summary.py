@@ -5,12 +5,13 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
 from devflow.config.models import Session
 from devflow.utils.paths import get_claude_config_dir
+from devflow.agent.factory import create_agent_client, resolve_agent_backend
 
 
 class CommandExecution(BaseModel):
@@ -137,6 +138,26 @@ def extract_tool_calls(messages: List[Dict]) -> Dict[str, List[Dict]]:
         Dictionary mapping tool name to list of tool call messages
     """
     tool_calls = defaultdict(list)
+
+    def add_tool_call(tool_name: Optional[str], payload: Any) -> None:
+        """Store Claude- and Pi-shaped tool calls in one summary format."""
+        if not tool_name:
+            return
+        normalized_name = {
+            "read": "Read",
+            "write": "Write",
+            "edit": "Edit",
+            "bash": "Bash",
+            "tool_read": "Read",
+            "tool_write": "Write",
+            "tool_edit": "Edit",
+            "tool_bash": "Bash",
+        }.get(str(tool_name), tool_name)
+        if isinstance(payload, dict):
+            tool_calls[normalized_name].append({"input": payload})
+        else:
+            tool_calls[normalized_name].append({"input": {}})
+
     for msg in messages:
         # Look for tool use in various message formats
         if isinstance(msg, dict):
@@ -145,25 +166,33 @@ def extract_tool_calls(messages: List[Dict]) -> Dict[str, List[Dict]]:
                 tool_name = msg.get("name")
                 if tool_name:
                     tool_calls[tool_name].append(msg)
+            elif msg.get("type") in {"toolCall", "tool_call"}:
+                add_tool_call(msg.get("name") or msg.get("toolName"), msg.get("arguments") or msg.get("input"))
             # Claude Code format: nested message.content structure
             elif "message" in msg:
                 inner_msg = msg.get("message", {})
                 content = inner_msg.get("content", [])
                 if isinstance(content, list):
                     for block in content:
-                        if isinstance(block, dict) and block.get("type") == "tool_use":
-                            tool_name = block.get("name")
-                            if tool_name:
-                                tool_calls[tool_name].append(block)
+                        if isinstance(block, dict) and block.get("type") in {
+                            "tool_use", "toolCall", "tool_call"
+                        }:
+                            add_tool_call(
+                                block.get("name") or block.get("toolName"),
+                                block.get("arguments") or block.get("input") or block.get("parameters"),
+                            )
             # Content block format with tool uses
             elif "content" in msg:
                 content = msg["content"]
                 if isinstance(content, list):
                     for block in content:
-                        if isinstance(block, dict) and block.get("type") == "tool_use":
-                            tool_name = block.get("name")
-                            if tool_name:
-                                tool_calls[tool_name].append(block)
+                        if isinstance(block, dict) and block.get("type") in {
+                            "tool_use", "toolCall", "tool_call"
+                        }:
+                            add_tool_call(
+                                block.get("name") or block.get("toolName"),
+                                block.get("arguments") or block.get("input") or block.get("parameters"),
+                            )
 
     return tool_calls
 
@@ -325,7 +354,11 @@ def extract_last_assistant_message(messages: List[Dict]) -> Optional[str]:
     def extract_text_from_message(msg: Dict) -> Optional[str]:
         """Helper to extract text from a message in various formats."""
         # Claude Code format: nested message.content structure
-        if "message" in msg and msg.get("type") == "assistant":
+        if (
+            "message" in msg
+            and isinstance(msg.get("message"), dict)
+            and (msg.get("type") == "assistant" or msg["message"].get("role") == "assistant")
+        ):
             inner_msg = msg.get("message", {})
             content = inner_msg.get("content")
             if content:
@@ -418,8 +451,22 @@ def find_conversation_file(session: Session) -> Optional[Path]:
     if not active_conv or not active_conv.project_path or not active_conv.ai_agent_session_id:
         return None
 
-    # Claude Code stores conversations in ~/.claude/projects/{encoded-path}/{uuid}.jsonl
-    # Encode the project path (replace / with - AND replace _ with -)
+    # Let the selected agent resolve its own session storage first. This keeps
+    # summaries usable for file-backed agents whose filenames are not plain UUIDs.
+    backend = resolve_agent_backend(session=session)
+    try:
+        agent = create_agent_client(backend)
+        if agent.uses_file_based_sessions():
+            conversation_file = agent.get_session_file_path(
+                active_conv.ai_agent_session_id,
+                active_conv.project_path,
+            )
+            if conversation_file.exists():
+                return conversation_file
+    except (OSError, ValueError, TypeError):
+        pass
+
+    # Backward-compatible Claude fallback for legacy sessions without a stored backend.
     project_path = Path(active_conv.project_path)
     encoded_path = str(project_path).replace("/", "-").replace("_", "-")
 

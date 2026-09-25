@@ -1,8 +1,10 @@
 """Tests for export/import manager."""
 
 import json
+import shutil
 import tarfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -1642,3 +1644,53 @@ def test_import_without_workspace_name(temp_daf_home):
 
     # Cleanup
     export_path.unlink()
+
+
+def test_pi_export_import_restores_conversation_to_pi_storage(temp_daf_home, tmp_path, monkeypatch):
+    """Test Pi JSONL conversations survive export/import in Pi storage."""
+    pi_home = tmp_path / "pi-agent"
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(pi_home))
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    project_path = str(tmp_path / "project-a")
+    Path(project_path).mkdir()
+    session_id = "01a0d843-d177-7547-8bd6-13c50ee236c8"
+
+    session_manager.create_session(
+        name="pi-session",
+        goal="Test Pi export",
+        working_directory="project-a",
+        project_path=project_path,
+        ai_agent_session_id=session_id,
+        issue_key="PROJ-588",
+        agent_backend="pi",
+    )
+
+    from devflow.agent.pi_agent import PiAgent
+
+    pi_agent = PiAgent(pi_home)
+    source_dir = pi_agent.get_session_dir(project_path)
+    source_dir.mkdir(parents=True)
+    source_file = source_dir / f"2026-01-01T00-00-00-000Z_{session_id}.jsonl"
+    source_file.write_text(
+        json.dumps({"type": "session", "id": session_id, "cwd": project_path}) + "\n"
+    )
+
+    export_manager = ExportManager(config_loader)
+    export_path = temp_daf_home / "pi-session-export.tar.gz"
+    with patch.object(export_manager, "_get_agent_backend", return_value="pi"):
+        export_manager.export_sessions(
+            identifiers=["pi-session"],
+            output_path=export_path,
+        )
+
+    session_manager.delete_session("pi-session")
+    shutil.rmtree(source_dir)
+
+    imported_keys = export_manager.import_sessions(export_path, merge=False)
+
+    assert imported_keys == ["pi-session"]
+    restored_file = pi_agent.get_session_file_path(session_id, project_path)
+    assert restored_file.exists()
+    assert restored_file.read_text().startswith('{"type": "session"')

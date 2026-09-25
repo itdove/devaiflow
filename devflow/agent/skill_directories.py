@@ -57,7 +57,13 @@ in their official documentation. See the links below for the authoritative sourc
    - Env vars: CODEX_HOME, XDG_CONFIG_HOME
    - Docs: https://github.com/openai/codex
 
-9. Crush (Experimental)
+9. Pi (Experimental)
+   - Global: ~/.pi/agent/skills/ (or $PI_CODING_AGENT_DIR/skills/)
+   - Project: <project>/.pi/skills/
+   - Env var: PI_CODING_AGENT_DIR
+   - Docs: https://pi.dev/docs/skills
+
+10. Crush (Experimental)
    - Global: ~/.local/share/crush/skills/ (or
      $XDG_DATA_HOME/crush/skills/)
    - Project: <project>/.crush/skills/
@@ -92,6 +98,7 @@ def get_agent_global_skills_dir(agent: str) -> Path:
     - Claude Code: CLAUDE_CONFIG_DIR (defaults to ~/.claude/)
     - GitHub Copilot: COPILOT_HOME (defaults to ~/.copilot/)
     - Codex: CODEX_HOME, then XDG_CONFIG_HOME (defaults to ~/.codex/)
+    - Pi: PI_CODING_AGENT_DIR (defaults to ~/.pi/agent/)
     - OpenCode: XDG_CONFIG_HOME (defaults to ~/.config/)
     - Crush: XDG_DATA_HOME (defaults to ~/.local/share/)
     - Other agents: Use their documented default directories
@@ -110,6 +117,8 @@ def get_agent_global_skills_dir(agent: str) -> Path:
         agent = 'copilot'
     elif agent in ('opencode-ai', 'opencode_ai'):
         agent = 'opencode'
+    elif agent in ('pi-coding-agent', 'pi_coding_agent'):
+        agent = 'pi'
 
     if agent == 'claude':
         # Claude Code supports CLAUDE_CONFIG_DIR environment variable
@@ -192,6 +201,11 @@ def get_agent_global_skills_dir(agent: str) -> Path:
             base_dir = Path.home() / '.codex'
         return base_dir / 'skills'
 
+    elif agent == 'pi':
+        pi_home = os.environ.get('PI_CODING_AGENT_DIR')
+        base_dir = Path(pi_home).expanduser() if pi_home else Path.home() / '.pi' / 'agent'
+        return base_dir / 'skills'
+
     elif agent == 'crush':
         # Crush follows the XDG data directory for its global data.
         xdg_data = os.environ.get('XDG_DATA_HOME')
@@ -226,6 +240,8 @@ def get_agent_project_skills_dir(agent: str, project_path: Path) -> Path:
         agent = 'copilot'
     elif agent in ('opencode-ai', 'opencode_ai'):
         agent = 'opencode'
+    elif agent in ('pi-coding-agent', 'pi_coding_agent'):
+        agent = 'pi'
     project_path = Path(project_path).resolve()
 
     if agent == 'claude':
@@ -251,6 +267,9 @@ def get_agent_project_skills_dir(agent: str, project_path: Path) -> Path:
 
     elif agent == 'codex':
         return project_path / '.codex' / 'skills'
+
+    elif agent == 'pi':
+        return project_path / '.pi' / 'skills'
 
     elif agent == 'crush':
         return project_path / '.crush' / 'skills'
@@ -330,12 +349,13 @@ SUPPORTED_AGENTS = [
     'continue',
     'opencode',
     'codex',
+    'pi',
     'crush',
 ]
 
 _CANONICAL_SKILL_AGENTS = [
     'claude', 'copilot', 'cursor', 'windsurf', 'aider', 'continue',
-    'opencode', 'codex', 'crush',
+    'opencode', 'codex', 'pi', 'crush',
 ]
 
 # Only agents with a unique command are detected from PATH. Copilot and Continue
@@ -347,6 +367,7 @@ _AGENT_CLI_COMMANDS = {
     'aider': 'aider',
     'opencode': 'opencode',
     'codex': 'codex',
+    'pi': 'pi',
     'crush': 'crush',
 }
 
@@ -354,6 +375,7 @@ _AGENT_HOME_ENV_VARS = {
     'claude': 'CLAUDE_CONFIG_DIR',
     'copilot': 'COPILOT_HOME',
     'codex': 'CODEX_HOME',
+    'pi': 'PI_CODING_AGENT_DIR',
 }
 
 
@@ -368,6 +390,8 @@ def _normalize_detection_agent(agent: Any) -> Optional[str]:
         'github_copilot': 'copilot',
         'opencode-ai': 'opencode',
         'opencode_ai': 'opencode',
+        'pi-coding-agent': 'pi',
+        'pi_coding_agent': 'pi',
         'anthropic': 'claude',
         # Ollama's supported adapter uses Claude Code, so its skills live there.
         'ollama': 'claude',

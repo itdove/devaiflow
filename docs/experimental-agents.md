@@ -1,10 +1,10 @@
 # Experimental AI Agents
 
-This document provides comprehensive information about experimental AI agent support in DevAIFlow, including GitHub Copilot, Cursor, Windsurf, Aider, and Continue.
+This document provides comprehensive information about experimental AI agent support in DevAIFlow, including Pi, GitHub Copilot, Cursor, Windsurf, Aider, and Continue.
 
 ## Overview
 
-DevAIFlow supports multiple AI coding assistants through a unified agent interface. While Claude Code is fully tested and production-ready, GitHub Copilot, Cursor, Windsurf, Aider, and Continue are currently experimental with known limitations.
+DevAIFlow supports multiple AI coding assistants through a unified agent interface. While Claude Code is fully tested and production-ready, Pi, GitHub Copilot, Cursor, Windsurf, Aider, and Continue are currently experimental with known limitations.
 
 ## Support Status
 
@@ -17,6 +17,7 @@ DevAIFlow supports multiple AI coding assistants through a unified agent interfa
 | **Windsurf** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ❌ Not Supported |
 | **Aider** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ⚠️ Partial |
 | **Continue** | ⚠️ Experimental | 100% | ⚠️ Limited | ⚠️ Limited | ❌ Not Supported |
+| **Pi** | ⚠️ Experimental | Extensive | ✅ Full Support | ✅ Full Support | ✅ Supported |
 
 ## Feature Comparison Matrix
 
@@ -184,11 +185,28 @@ export DAF_AGENT_BACKEND="github-copilot"  # or "cursor" or "windsurf"
 **Supported values:**
 - `"claude"` - Claude Code (default, fully supported)
 - `"ollama"` or `"ollama-claude"` - Ollama with Claude CLI (supported)
+- `"pi"` or `"pi-coding-agent"` - Pi.dev (experimental)
 - `"github-copilot"` or `"copilot"` - GitHub Copilot (experimental)
 - `"cursor"` - Cursor (experimental)
 - `"windsurf"` - Windsurf (experimental)
 - `"aider"` - Aider (experimental)
 - `"continue"` - Continue (experimental)
+
+### Pi
+
+Pi is a terminal coding agent with project-scoped JSONL session files. DevAIFlow
+supports initial prompts, session capture and resume, message counting, token
+usage extraction, summaries, repair, and session export/import for Pi.
+
+```bash
+export PI_CODING_AGENT_DIR="$HOME/.pi/agent"
+export PI_CODING_AGENT_SESSION_DIR="$HOME/.pi/agent/sessions"
+```
+
+Pi stores sessions below `PI_CODING_AGENT_SESSION_DIR` in directories derived
+from the project path. Set `agent_backend` to `"pi"` in the DevAIFlow config or
+select a Pi model-provider profile. Pi skills are loaded from
+`~/.pi/agent/skills/` globally and `<project>/.pi/skills/` per project.
 
 ### Enterprise Enforcement
 
@@ -632,4 +650,3 @@ Help improve experimental agent support:
 - ❌ For session export/import and team collaboration
 - ❌ For accurate conversation tracking
 - ❌ For CLI-only workflows (requires IDE)
-

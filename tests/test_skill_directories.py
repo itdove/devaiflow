@@ -115,6 +115,24 @@ class TestGetAgentGlobalSkillsDir:
             path = get_agent_global_skills_dir('codex')
             assert path == tmp_path / 'config' / 'codex' / 'skills'
 
+    def test_pi_default_path(self):
+        """Test Pi uses ~/.pi/agent/skills/ by default."""
+        with patch.dict(os.environ, {}, clear=True):
+            path = get_agent_global_skills_dir('pi')
+            assert path == Path.home() / '.pi' / 'agent' / 'skills'
+
+    def test_pi_respects_env_var(self, tmp_path):
+        """Test Pi honors PI_CODING_AGENT_DIR."""
+        with patch.dict(os.environ, {'PI_CODING_AGENT_DIR': str(tmp_path / 'pi-agent')}, clear=True):
+            path = get_agent_global_skills_dir('pi')
+            assert path == tmp_path / 'pi-agent' / 'skills'
+
+    def test_pi_alias(self):
+        """Test the pi-coding-agent alias uses Pi's global path."""
+        assert get_agent_global_skills_dir('pi-coding-agent') == (
+            Path.home() / '.pi' / 'agent' / 'skills'
+        )
+
     def test_crush_default_path(self):
         """Test Crush uses the XDG data default."""
         with patch.dict(os.environ, {}, clear=True):
@@ -182,6 +200,18 @@ class TestGetAgentProjectSkillsDir:
         project_path = Path('/my/project')
         path = get_agent_project_skills_dir('codex', project_path)
         assert path == Path('/my/project/.codex/skills')
+
+    def test_pi_project_path(self):
+        """Test Pi uses <project>/.pi/skills/."""
+        project_path = Path('/my/project')
+        path = get_agent_project_skills_dir('pi', project_path)
+        assert path == Path('/my/project/.pi/skills')
+
+    def test_pi_alias_project_path(self):
+        """Test the pi-coding-agent alias uses Pi's project path."""
+        project_path = Path('/my/project')
+        path = get_agent_project_skills_dir('pi-coding-agent', project_path)
+        assert path == Path('/my/project/.pi/skills')
 
     def test_crush_project_path(self):
         """Test Crush uses <project>/.crush/skills/."""
@@ -411,11 +441,11 @@ class TestSupportedAgents:
         """Test SUPPORTED_AGENTS contains expected agents."""
         expected_agents = [
             'claude', 'copilot', 'github-copilot', 'cursor', 'windsurf',
-            'aider', 'continue', 'opencode', 'codex', 'crush'
+            'aider', 'continue', 'opencode', 'codex', 'pi', 'crush'
         ]
         assert set(SUPPORTED_AGENTS) == set(expected_agents)
 
     def test_supported_agents_count(self):
         """Test SUPPORTED_AGENTS has the expected count."""
-        # 9 unique agents + 1 alias (github-copilot -> copilot)
-        assert len(SUPPORTED_AGENTS) == 10
+        # 10 unique agents + 1 alias (github-copilot -> copilot)
+        assert len(SUPPORTED_AGENTS) == 11

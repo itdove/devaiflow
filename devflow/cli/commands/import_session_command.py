@@ -12,6 +12,7 @@ from devflow.cli.utils import get_status_display, is_non_interactive, require_ou
 from devflow.config.loader import ConfigLoader
 from devflow.session.discovery import SessionDiscovery
 from devflow.session.manager import SessionManager
+from devflow.utils.model_provider import get_profile_agent_backend
 
 console = Console()
 
@@ -29,7 +30,16 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
-    discovery = SessionDiscovery()
+    config = config_loader.load_config()
+    agent_backend = get_profile_agent_backend(config) or getattr(config, "agent_backend", None) or "claude"
+    try:
+        discovery = SessionDiscovery(agent_backend=agent_backend)
+    except TypeError as exc:
+        # Keep compatibility with integrations that replace discovery with a
+        # legacy zero-argument factory.
+        if "agent_backend" not in str(exc):
+            raise
+        discovery = SessionDiscovery()
 
     # Discover all sessions
     discovered = discovery.discover_sessions()
@@ -208,7 +218,6 @@ def import_session(uuid: str, issue_key: str = None, goal: str = None, path: str
     console.print(f"📁 Working Directory: {working_directory}")
     console.print(f"📂 Path: {project_path}")
     console.print(f"💬 Messages: {session.active_conversation.message_count if session.active_conversation else 0}")
-    config = config_loader.load_config()
     agent_name = get_agent_display_name(resolve_agent_backend(config=config, session=session))
     console.print(f"🆔 {agent_name} Session ID: {uuid}")
     console.print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

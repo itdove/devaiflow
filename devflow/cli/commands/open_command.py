@@ -1221,7 +1221,7 @@ def open_session(
             agent_backend = effective_agent_backend
             agent = create_agent_client(agent_backend)
 
-            # Initialize self-ID capture state (used by OpenCode resume path)
+            # Initialize self-ID capture state (used by self-identifying agents)
             _resume_needs_capture = False
             _resume_sessions_before = set()
             oc_project_path = None
@@ -1300,8 +1300,8 @@ def open_session(
                     hierarchical_files = load_hierarchical_context_files(config)
                     if hierarchical_files:
                         cmd.extend(["--add-dir", str(cs_config)])
-            elif agent_backend in ("opencode", "opencode-ai", "codex"):
-                # OpenCode/Codex support session resume
+            elif agent_backend in ("opencode", "opencode-ai", "codex", "pi", "pi-coding-agent"):
+                # Self-identifying agents support session resume.
                 from devflow.agent.factory import snapshot_agent_sessions as _snap_resume, is_self_id_backend
                 if active_conv and active_conv.is_multi_project:
                     oc_project_path = active_conv.workspace_path or workspace_path
@@ -3482,7 +3482,9 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None, old_temp_dir
 
     capture = SessionCapture(agent=agent)
     stable_session_dir = capture.get_session_dir(conv.original_project_path)
-    stable_conversation_file = stable_session_dir / f"{conv.ai_agent_session_id}.jsonl"
+    stable_conversation_file = agent.get_session_file_path(
+        conv.ai_agent_session_id, conv.original_project_path
+    )
 
     console.print(f"[dim]Looking for conversation at stable location:[/dim]")
     console.print(f"[dim]  {stable_conversation_file}[/dim]")
@@ -3492,11 +3494,13 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None, old_temp_dir
         fallback_temp = old_temp_dir or conv.temp_directory
         if fallback_temp:
             old_temp_resolved = str(Path(fallback_temp).resolve())
-            old_temp_session_dir = capture.get_session_dir(old_temp_resolved)
-            old_temp_file = old_temp_session_dir / f"{conv.ai_agent_session_id}.jsonl"
+            old_temp_file = agent.get_session_file_path(
+                conv.ai_agent_session_id, old_temp_resolved
+            )
             if old_temp_file.exists():
-                console.print(f"[dim]Found conversation in previous temp dir's Claude data[/dim]")
+                console.print(f"[dim]Found conversation in previous temp dir's agent data[/dim]")
                 stable_session_dir.mkdir(parents=True, exist_ok=True)
+                stable_conversation_file = stable_session_dir / old_temp_file.name
                 shutil.copy2(old_temp_file, stable_conversation_file)
                 console.print(f"[dim]Recovered to stable location[/dim]")
             else:
@@ -3511,7 +3515,7 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None, old_temp_dir
 
     temp_session_dir = capture.get_session_dir(temp_path_resolved)
     temp_session_dir.mkdir(parents=True, exist_ok=True)
-    temp_conversation_file = temp_session_dir / f"{conv.ai_agent_session_id}.jsonl"
+    temp_conversation_file = temp_session_dir / stable_conversation_file.name
 
     try:
         shutil.copy2(stable_conversation_file, temp_conversation_file)
@@ -3548,7 +3552,7 @@ def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
 
     # Get conversation file from temp directory
     # Use resolved path to handle macOS /var -> /private/var canonicalization
-    # SessionCapture now correctly encodes underscores as dashes
+    # SessionCapture delegates project storage to the selected agent adapter.
     from devflow.agent import create_agent_client
     effective_backend = resolve_agent_backend(session=session, config=config)
     agent = create_agent_client(effective_backend)
@@ -3561,7 +3565,9 @@ def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
     temp_path_resolved = str(Path(temp_dir).resolve())
 
     temp_session_dir = capture.get_session_dir(temp_path_resolved)
-    temp_conversation_file = temp_session_dir / f"{conv.ai_agent_session_id}.jsonl"
+    temp_conversation_file = agent.get_session_file_path(
+        conv.ai_agent_session_id, temp_path_resolved
+    )
 
     if not temp_conversation_file.exists():
         console.print(f"[dim]Conversation file not found in temp directory[/dim]")
@@ -3571,7 +3577,7 @@ def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
     # Copy to stable location (based on original_project_path)
     stable_session_dir = capture.get_session_dir(conv.original_project_path)
     stable_session_dir.mkdir(parents=True, exist_ok=True)
-    stable_conversation_file = stable_session_dir / f"{conv.ai_agent_session_id}.jsonl"
+    stable_conversation_file = stable_session_dir / temp_conversation_file.name
 
     try:
         shutil.copy2(temp_conversation_file, stable_conversation_file)

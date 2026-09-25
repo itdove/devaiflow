@@ -31,8 +31,8 @@
     },
     "agent_backend": {
       "type": ["string", "null"],
-      "enum": ["claude", "github-copilot", null],
-      "description": "AI agent backend enforced by team (e.g., 'claude', 'github-copilot'). Use null to allow users to choose."
+      "enum": ["claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "codex", "pi", null],
+      "description": "AI agent backend enforced by team. Use null to allow users to choose."
     },
     "jira_issue_templates": {
       "type": ["object", "null"],

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from devflow.config.validators.base import BaseConfigValidator, ValidationIssue
+from devflow.agent.factory import AGENT_ALIASES, AGENT_REGISTRY
 
 
 class TeamConfigValidator(BaseConfigValidator):
@@ -25,14 +26,15 @@ class TeamConfigValidator(BaseConfigValidator):
 
         # Validate agent_backend is a known value
         agent_backend = data.get("agent_backend")
-        if agent_backend and agent_backend not in ["claude", "github-copilot"]:
+        supported_backends = set(AGENT_REGISTRY) | set(AGENT_ALIASES)
+        if agent_backend and agent_backend not in supported_backends:
             issues.append(
                 ValidationIssue(
                     file=self.config_file,
                     field="agent_backend",
                     issue_type="invalid_value",
                     message=f"Unknown agent_backend: '{agent_backend}'",
-                    suggestion="Use 'claude' or 'github-copilot'",
+                    suggestion=f"Use one of: {', '.join(sorted(supported_backends))}",
                     severity="error",
                 )
             )

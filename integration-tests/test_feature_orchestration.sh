@@ -99,11 +99,37 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Setting up test environment..."
 python3 "$SCRIPT_DIR/setup_test_config.py" > /dev/null 2>&1
 
+create_mock_ticket() {
+    local issue_type="$1"
+    local goal="$2"
+    local name="$3"
+    local parent="${4:-}"
+
+    python3 - "$issue_type" "$goal" "$name" "$parent" <<'PY'
+import sys
+
+from devflow.issue_tracker.mock_client import MockIssueTrackerClient
+
+issue_type, goal, _name, parent = sys.argv[1:5]
+client = MockIssueTrackerClient()
+ticket_key = client.create_issue(
+    issue_type=issue_type.title(),
+    summary=goal,
+    description=f"Mock ticket created for: {goal}",
+    priority="Major",
+    project_key="PROJ",
+    field_mapper=None,
+    parent=parent or None,
+)
+if parent:
+    client.update_issue(ticket_key, {"fields": {"assignee": "test-user"}})
+print(ticket_key)
+PY
+}
+
 # Create parent epic with children in mock backend
 echo "Creating mock JIRA parent epic with child stories..."
-PARENT_KEY=$(daf jira create epic \
-    --summary "Test Feature Parent Epic" \
-    --json 2>&1 | jq -r '.data.issue_key')
+PARENT_KEY=$(create_mock_ticket epic "Test Feature Parent Epic" "parent-epic")
 
 if [ -z "$PARENT_KEY" ]; then
     echo -e "${RED}Failed to create parent epic${NC}"
@@ -112,25 +138,9 @@ fi
 echo "Created parent: $PARENT_KEY"
 
 # Create child stories
-CHILD1_KEY=$(daf jira create story \
-    --parent "$PARENT_KEY" \
-    --summary "Child Story 1" \
-    --json 2>&1 | jq -r '.data.issue_key')
-
-CHILD2_KEY=$(daf jira create story \
-    --parent "$PARENT_KEY" \
-    --summary "Child Story 2" \
-    --json 2>&1 | jq -r '.data.issue_key')
-
-CHILD3_KEY=$(daf jira create story \
-    --parent "$PARENT_KEY" \
-    --summary "Child Story 3" \
-    --json 2>&1 | jq -r '.data.issue_key')
-
-# Assign to test-user so they match sync filter
-daf jira update "$CHILD1_KEY" --assignee "test-user" > /dev/null 2>&1
-daf jira update "$CHILD2_KEY" --assignee "test-user" > /dev/null 2>&1
-daf jira update "$CHILD3_KEY" --assignee "test-user" > /dev/null 2>&1
+CHILD1_KEY=$(create_mock_ticket story "Child Story 1" "child-story-1" "$PARENT_KEY")
+CHILD2_KEY=$(create_mock_ticket story "Child Story 2" "child-story-2" "$PARENT_KEY")
+CHILD3_KEY=$(create_mock_ticket story "Child Story 3" "child-story-3" "$PARENT_KEY")
 
 echo "Created children: $CHILD1_KEY, $CHILD2_KEY, $CHILD3_KEY"
 
@@ -198,13 +208,7 @@ echo -e "${GREEN}✓ Sync completed${NC}"
 # Test 4: Add new child and sync again
 echo ""
 echo "Test 4: Adding new child and syncing..."
-CHILD4_KEY=$(daf jira create story \
-    --parent "$PARENT_KEY" \
-    --summary "Child Story 4 - Added Later" \
-    --json 2>&1 | jq -r '.data.issue_key')
-
-# Assign to test-user
-daf jira update "$CHILD4_KEY" --assignee "test-user" > /dev/null 2>&1
+CHILD4_KEY=$(create_mock_ticket story "Child Story 4 - Added Later" "child-story-4" "$PARENT_KEY")
 
 echo "Created new child: $CHILD4_KEY"
 

@@ -25,7 +25,7 @@ console = Console()
 @click.option(
     "--agent",
     type=str,
-    help="AI agent to target (claude, codex, cursor, windsurf, copilot, aider, continue, opencode, crush)",
+    help="AI agent to target (claude, codex, pi, cursor, windsurf, copilot, aider, continue, opencode, crush)",
 )
 @click.option("--all-agents", is_flag=True, help="Target all supported agents")
 @click.option("--level", type=click.Choice(['global', 'project', 'both']), help="Installation level (default: global)")

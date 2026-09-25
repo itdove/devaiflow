@@ -115,7 +115,7 @@ class ModelProviderProfile(BaseModel):
         default="claude",
         description=(
             "Agent/IDE adapter used with this profile (for example claude, codex, "
-            "ollama, or opencode)"
+            "ollama, opencode, or pi)"
         ),
     )
     base_url: Optional[str] = Field(
@@ -179,6 +179,7 @@ class ModelProviderProfile(BaseModel):
                 "codex": "codex",
                 "openai": "codex",
                 "ollama": "ollama",
+                "pi": "pi",
             }.get(provider, "claude")
         return values
 
@@ -609,12 +610,12 @@ class AgentConfig(BaseModel):
 
     Controls which AI agents should receive skill installations and at what level.
     Supports multi-agent skill deployment (Claude, Copilot, Cursor, Windsurf,
-    Aider, Continue, OpenCode, Codex, and Crush).
+    Aider, Continue, OpenCode, Codex, Pi, and Crush).
     """
 
     enabled_agents: List[str] = Field(
         default=['claude'],
-        description="List of AI agents to install skills to (e.g., ['claude', 'cursor', 'windsurf'])"
+        description="List of AI agents to install skills to (e.g., ['claude', 'cursor', 'pi'])"
     )
     install_level: str = Field(
         default='global',
@@ -703,7 +704,7 @@ class Config(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)  # Storage backend config
     backend_config_source: str = "local"  # "local" or "central_db" (future) - NEW in PROJ-62719
     issue_tracker_backend: str = "jira"  # Issue tracker backend: "jira", "github", "gitlab", etc. - NEW in PROJ-63197
-    agent_backend: str = "claude"  # AI agent backend: "claude", "ollama", "copilot", "opencode", etc. - NEW in PROJ-63294
+    agent_backend: str = "claude"  # AI agent backend: "claude", "ollama", "copilot", "opencode", "pi", etc. - NEW in PROJ-63294
     ollama: Optional[OllamaConfig] = None  # Ollama configuration for local models - NEW in itdove/devaiflow#241
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use (mock mode uses DAF_MOCK_MODE env var)
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4") - DEPRECATED: use model_provider instead

@@ -11,6 +11,7 @@ from devflow.archive.base import ArchiveManagerBase, CONVERSATION_BACKUP_BACKEND
 from devflow.backup.manager import BackupManager
 from devflow.config.loader import ConfigLoader
 from devflow.export.manager import ExportManager
+from devflow.agent.pi_agent import PiAgent
 from devflow.session.manager import SessionManager
 
 
@@ -26,6 +27,11 @@ class TestConversationBackupBackends:
         manager = ArchiveManagerBase.__new__(ArchiveManagerBase)
         manager._conversation_warnings = []
         assert manager._is_conversation_backupable("ollama") is True
+
+    def test_pi_is_backupable(self):
+        manager = ArchiveManagerBase.__new__(ArchiveManagerBase)
+        manager._conversation_warnings = []
+        assert manager._is_conversation_backupable("pi") is True
 
     def test_opencode_not_backupable(self):
         manager = ArchiveManagerBase.__new__(ArchiveManagerBase)
@@ -70,7 +76,7 @@ class TestConversationBackupBackends:
         assert manager._is_conversation_backupable("Ollama") is True
 
     def test_constant_only_contains_expected_backends(self):
-        assert CONVERSATION_BACKUP_BACKENDS == {"claude", "ollama"}
+        assert CONVERSATION_BACKUP_BACKENDS == {"claude", "ollama", "pi"}
 
 
 class TestFindConversationFileWithBackend:
@@ -94,6 +100,47 @@ class TestFindConversationFileWithBackend:
         manager = BackupManager()
         result = manager._find_conversation_file("nonexistent-uuid")
         assert result is None
+
+
+class TestConversationRestore:
+    """Test adapter-owned conversation restore paths."""
+
+    def test_restore_uses_pi_storage_path(self, tmp_path):
+        manager = ArchiveManagerBase.__new__(ArchiveManagerBase)
+        source_file = tmp_path / "conversation.jsonl"
+        source_file.write_text('{"type":"message"}\n')
+        project_path = str(tmp_path / "project-a")
+        pi_agent = PiAgent(tmp_path / "pi-agent")
+
+        with patch("devflow.archive.base.create_agent_client", return_value=pi_agent):
+            restored = manager._restore_conversation_file(
+                source_file,
+                "01a0d843-d177-7547-8bd6-13c50ee236c8",
+                project_path,
+                "pi",
+            )
+
+        target_file = pi_agent.get_session_file_path(
+            "01a0d843-d177-7547-8bd6-13c50ee236c8", project_path
+        )
+        assert restored is True
+        assert target_file.read_text() == source_file.read_text()
+
+    def test_restore_skips_database_backed_agent(self, tmp_path):
+        manager = ArchiveManagerBase.__new__(ArchiveManagerBase)
+        source_file = tmp_path / "conversation.jsonl"
+        source_file.write_text('{"type":"message"}\n')
+
+        with patch("devflow.archive.base.create_agent_client") as create_agent:
+            create_agent.return_value.uses_file_based_sessions.return_value = False
+            restored = manager._restore_conversation_file(
+                source_file,
+                "session-id",
+                str(tmp_path / "project-a"),
+                "opencode",
+            )
+
+        assert restored is False
 
 
 class TestBackupWithNonClaudeBackend:

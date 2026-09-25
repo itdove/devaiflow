@@ -203,6 +203,8 @@ TICKET_JSON=$(daf jira new story \
     --parent PROJ-99999 \
     --goal "Test linking" \
     --name "link-test" \
+    --path "." \
+    --branch test-branch \
     --json 2>&1)
 
 TICKET_KEY=$(echo "$TICKET_JSON" | python3 -c "

@@ -20,11 +20,12 @@ def discover_sessions() -> None:
     config = config_loader.load_config()
     agent_name = get_agent_display_name(resolve_agent_backend(config=config))
     session_manager = SessionManager(config_loader)
-    discovery = SessionDiscovery()
+    backend = resolve_agent_backend(config=config)
+    discovery = SessionDiscovery(agent_backend=backend)
 
     console.print(f"\n[bold]Discovering {agent_name} sessions...[/bold]\n")
 
-    # Discover all Claude sessions
+    # Discover all sessions for the configured file-backed agent.
     discovered = discovery.discover_sessions()
 
     if not discovered:
