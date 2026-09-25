@@ -75,6 +75,18 @@ def test_get_session_dir(mock_agent):
     mock_agent.encode_project_path.assert_called_once_with("/path/to/project")
 
 
+def test_get_session_dir_uses_agent_specific_path(tmp_path):
+    """Test agents with custom storage use their own session directory."""
+    from devflow.agent.pi_agent import PiAgent
+
+    agent = PiAgent(tmp_path / "pi-agent")
+    capture = SessionCapture(agent=agent)
+
+    assert capture.get_session_dir("/path/to/project") == agent.get_session_dir(
+        "/path/to/project"
+    )
+
+
 def test_get_existing_sessions(mock_agent):
     """Test get_existing_sessions delegates to agent."""
     capture = SessionCapture(agent=mock_agent)
