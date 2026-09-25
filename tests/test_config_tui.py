@@ -1,8 +1,12 @@
 """Tests for configuration TUI."""
 
+import asyncio
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
+
+from textual.containers import Vertical, VerticalScroll
+from textual.widgets import TabbedContent
 
 from devflow.ui.config_tui import (
     URLValidator,
@@ -876,10 +880,42 @@ def test_handle_upgrade_commands_exception(
 
 
 # ============================================================================
-# Widget Rendering Tests (would require textual.testing)
+# Layout Regression Tests
 # ============================================================================
 
 
-# Note: Full rendering tests would require textual's testing utilities
-# and would be more complex. These basic tests validate the structure
-# and initialization of the TUI components.
+def test_model_providers_tab_scrolls_when_profiles_overflow(mock_config):
+    """The model provider profile list expands so its parent owns scrolling."""
+    mock_config.model_provider = ModelProviderConfig(
+        default_profile="profile-0",
+        profiles={
+            f"profile-{index}": ModelProviderProfile(
+                name=f"Profile {index}",
+                provider="anthropic",
+                model_name=f"model-{index}",
+            )
+            for index in range(8)
+        },
+    )
+    mock_loader = Mock()
+    mock_loader.load_config.return_value = mock_config
+    mock_loader.session_home = Path("/tmp/test")
+    mock_loader._load_enterprise_config.return_value = None
+    mock_loader._load_organization_config.return_value = None
+    mock_loader._load_team_config.return_value = None
+
+    async def assert_scrollable_layout():
+        with patch("devflow.ui.config_tui.ConfigLoader", return_value=mock_loader):
+            app = ConfigTUI()
+            async with app.run_test(size=(100, 24)) as pilot:
+                app.query_one("#main_tabs", TabbedContent).active = "tab_model_providers"
+                await pilot.pause()
+
+                model_providers_tab = app.query_one("#tab_model_providers")
+                scroll = model_providers_tab.query_one(VerticalScroll)
+                profiles_list = model_providers_tab.query_one("#profiles_list", Vertical)
+
+                assert profiles_list.region.height > scroll.content_region.height
+                assert scroll.max_scroll_y > 0
+
+    asyncio.run(assert_scrollable_layout())
