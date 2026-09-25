@@ -10,6 +10,7 @@ from devflow.config.models import ModelProviderConfig, ModelProviderProfile
 from devflow.utils.model_provider import (
     build_env_from_profile,
     get_active_profile,
+    get_active_profile_name,
     get_default_profile_name,
     get_profile_agent_backend,
     get_model_for_command,
@@ -63,6 +64,28 @@ def test_only_profile_is_used_when_configured_default_is_missing():
     assert get_active_profile(config)["name"] == "codex_gpt-5.6_luna"
     assert get_profile_agent_backend(config) == "codex"
     assert resolve_agent_backend(config=config) == "codex"
+
+
+def test_active_profile_name_persists_explicit_environment_and_default_selection(monkeypatch):
+    local = ModelProviderProfile(
+        name="local",
+        provider="ollama",
+        base_url="http://localhost:11434",
+        model_name="local-model",
+    )
+    cloud = ModelProviderProfile(name="cloud", provider="anthropic", model_name="cloud-model")
+    config = _config({"local": local, "cloud": cloud}, "cloud")
+
+    assert get_active_profile_name(config, agent_backend="claude") == "cloud"
+
+    monkeypatch.setenv("MODEL_PROVIDER_PROFILE", "local")
+    assert get_active_profile_name(config, agent_backend="ollama") == "local"
+
+    assert get_active_profile_name(
+        config,
+        override_profile_name="cloud",
+        agent_backend="claude",
+    ) == "cloud"
 
 
 def test_non_string_session_profile_metadata_is_not_treated_as_profile_name():

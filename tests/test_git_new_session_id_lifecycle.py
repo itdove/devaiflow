@@ -48,6 +48,9 @@ def test_sync_captured_agent_session_persists_id_after_session_rename(
     project_path = str(tmp_path / "project-a")
 
     session = _create_ticket_creation_session(session_manager, project_path)
+    session.model_profile = "configured-profile"
+    session.model_id = "configured-model"
+    session_manager.update_session(session)
 
     # Simulate the child process linking the issue and renaming the session.
     child_manager = SessionManager(config_loader=config_loader)
@@ -71,12 +74,16 @@ def test_sync_captured_agent_session_persists_id_after_session_rename(
     assert synced_session is not None
     assert synced_session.name == "creation-owner-repo-123"
     assert synced_session.active_conversation.ai_agent_session_id == "codex-thread-123"
+    assert synced_session.model_profile == "configured-profile"
+    assert synced_session.model_id == "configured-model"
 
     reloaded_session = SessionManager(config_loader=config_loader).get_session(
         "creation-owner-repo-123"
     )
     assert reloaded_session.issue_key == "owner/repo#123"
     assert reloaded_session.active_conversation.ai_agent_session_id == "codex-thread-123"
+    assert reloaded_session.model_profile == "configured-profile"
+    assert reloaded_session.model_id == "configured-model"
 
 
 def test_sync_captured_agent_session_keeps_placeholder_when_capture_fails(

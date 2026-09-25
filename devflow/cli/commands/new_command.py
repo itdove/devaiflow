@@ -806,14 +806,24 @@ def create_new_session(
 
     # Create session if we didn't add to an existing one
     if session is None:
-        from devflow.utils.model_provider import get_active_profile, get_model_name_from_profile, apply_model_override
+        from devflow.utils.model_provider import (
+            apply_model_override,
+            get_active_profile,
+            get_active_profile_name,
+            get_model_name_from_profile,
+        )
         import os as _os
         _agent_backend = resolve_agent_backend(
             cli_override=agent, config=config, model_profile=model_profile
         )
-        _resolved_profile = get_active_profile(
+        _effective_profile_name = get_active_profile_name(
             config,
             override_profile_name=model_profile,
+            agent_backend=_agent_backend,
+        )
+        _resolved_profile = get_active_profile(
+            config,
+            override_profile_name=_effective_profile_name,
             agent_backend=_agent_backend,
             command="new",
         )
@@ -827,7 +837,7 @@ def create_new_session(
             project_path=project_path,
             branch=branch,
             ai_agent_session_id=session_id,
-            model_profile=model_profile,
+            model_profile=_effective_profile_name,
             agent_backend=_agent_backend,
             model_id=_model_id,
         )

@@ -1011,6 +1011,20 @@ def _select_profile_name(config, override_profile_name: Optional[str], agent_bac
     return None
 
 
+def get_active_profile_name(
+    config,
+    override_profile_name: Optional[str] = None,
+    agent_backend: Optional[str] = None,
+) -> Optional[str]:
+    """Return the effective profile name using the normal selection order.
+
+    This is useful when session metadata must retain the profile selected from
+    an environment variable or configuration default, rather than only an
+    explicit CLI override.
+    """
+    return _select_profile_name(config, override_profile_name, agent_backend)
+
+
 def get_profile_by_name(config, profile_name: str) -> Optional[Dict[str, Any]]:
     """Get a specific model provider profile by name.
 
