@@ -674,9 +674,18 @@ def create_investigation_session(
     _agent_backend = resolve_agent_backend(
         cli_override=agent, config=config, model_profile=model_profile
     )
-    from devflow.utils.model_provider import get_model_for_command
+    from devflow.utils.model_provider import get_active_profile_name, get_model_for_command
+    _effective_profile_name = get_active_profile_name(
+        config,
+        override_profile_name=model_profile,
+        agent_backend=_agent_backend,
+    )
     _model_id = get_model_for_command(
-        config, _agent_backend, "investigation", profile_name=model_profile, cli_model=model,
+        config,
+        _agent_backend,
+        "investigation",
+        profile_name=_effective_profile_name,
+        cli_model=model,
     )
 
     # Create session with session_type="investigation"
@@ -686,7 +695,7 @@ def create_investigation_session(
         working_directory=working_directory,
         project_path=project_path,
         branch=None,  # No branch for investigation sessions
-        model_profile=model_profile,
+        model_profile=_effective_profile_name,
         agent_backend=_agent_backend,
         model_id=_model_id,
     )
@@ -733,7 +742,7 @@ def create_investigation_session(
 
     # Resolve agent display name for user-facing messages
     agent_backend = resolve_agent_backend(
-        cli_override=agent, config=config, model_profile=model_profile
+        cli_override=agent, config=config, model_profile=session.model_profile
     )
     agent_name = get_agent_display_name(agent_backend)
 
@@ -1275,7 +1284,7 @@ def _create_multi_project_investigation_session(
     # Get active model provider profile
     from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name, apply_model_override
     _agent_backend = resolve_agent_backend(
-        cli_override=agent, config=config, model_profile=model_profile
+        cli_override=agent, config=config, model_profile=session.model_profile
     )
     model_provider_profile = get_active_profile(
         config,

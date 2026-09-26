@@ -70,8 +70,20 @@ def create_multi_project_ticket_creation_session(
 
     # Create ONE shared session ID for all projects (agent-aware)
     from devflow.agent.factory import generate_agent_session_id
-    _agent_backend_for_id = resolve_agent_backend(
+    from devflow.utils.model_provider import (
+        get_active_profile_name,
+        get_model_for_command,
+    )
+    _agent_backend = resolve_agent_backend(
         cli_override=agent, config=config, model_profile=model_profile
+    )
+    _effective_profile_name = get_active_profile_name(
+        config,
+        override_profile_name=model_profile,
+        agent_backend=_agent_backend,
+    )
+    _agent_backend_for_id = resolve_agent_backend(
+        cli_override=agent, config=config, model_profile=_effective_profile_name
     )
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
@@ -101,11 +113,10 @@ def create_multi_project_ticket_creation_session(
 
     # Create session without initial conversation
     _agent_backend = resolve_agent_backend(
-        cli_override=agent, config=config, model_profile=model_profile
+        cli_override=agent, config=config, model_profile=_effective_profile_name
     )
-    from devflow.utils.model_provider import get_model_for_command
     _model_id = get_model_for_command(
-        config, _agent_backend, command, profile_name=model_profile, cli_model=model,
+        config, _agent_backend, command, profile_name=_effective_profile_name, cli_model=model,
     )
     session = session_manager.create_session(
         name=name,
@@ -115,7 +126,7 @@ def create_multi_project_ticket_creation_session(
         branch=None,
         ai_agent_session_id=None,  # Will be set by add_multi_project_conversation
         agent_backend=_agent_backend,
-        model_profile=model_profile,
+        model_profile=_effective_profile_name,
         model_id=_model_id,
     )
 

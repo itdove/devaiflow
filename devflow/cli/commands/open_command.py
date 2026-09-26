@@ -1019,45 +1019,64 @@ def open_session(
     elif session.session_type == "ticket_creation":
         console.print(f"[dim]Skipping issue tracker status transition (session_type: ticket_creation)[/dim]")
 
-    # Check if we should launch Claude Code (after all prerequisites)
-    if not should_launch_claude_code(
-        config=config, mock_mode=True, agent_backend=effective_agent_backend
-    ):
-        return
-
-    # Display launch/resume message using correct agent name
+    # Resolve the display name before entering the guarded launch block so the
+    # error handler can always identify the selected backend.
     from devflow.agent.factory import get_agent_display_name as _get_display_name
     _display_agent_name = _get_display_name(effective_agent_backend)
-    if is_first_launch:
-        console.print(f"\n[cyan]Launching {_display_agent_name} for the first time...[/cyan]")
-    else:
-        console.print(f"\n[cyan]Resuming {_display_agent_name} session...[/cyan]")
-
-    # Update session status and start work session
-    session.status = "in_progress"
-    session_manager.start_work_session(identifier)
-
-    # Display context banner
-    jira_url = config.jira.url if config and config.jira else None
-    _display_resume_banner(session, jira_url)
-
-    # Set up signal handlers for cleanup (using unified utility)
-    setup_signal_handlers(session, session_manager, identifier, config)
-
-    # Note: daf-workflow skill is auto-loaded, no validation needed
-    if active_conv and not _validate_context_files(session, config_loader):
-        return
 
     try:
         # Get active model provider profile
-        from devflow.utils.model_provider import apply_model_override
+        from devflow.utils.model_provider import apply_model_override, get_model_name_from_profile
         model_provider_profile = get_active_profile(
             config,
             override_profile_name=effective_profile_name,
             agent_backend=effective_agent_backend,
             command="open",
         ) if config else None
-        model_provider_profile = apply_model_override(model_provider_profile, model)
+        profile_model_id = get_model_name_from_profile(model_provider_profile, command="open")
+        if model is not None:
+            effective_model_id = model
+        elif model_profile is not None:
+            # An explicit profile is an intentional selection, so use its
+            # model instead of carrying an override from the previous profile.
+            effective_model_id = profile_model_id
+        else:
+            effective_model_id = session.model_id or profile_model_id
+        model_provider_profile = apply_model_override(
+            model_provider_profile, effective_model_id
+        )
+
+        if session.model_id != effective_model_id:
+            session.model_id = effective_model_id
+            session_manager.update_session(session)
+
+        # Check if we should launch Claude Code (after resolving and persisting
+        # the effective model selection).
+        if not should_launch_claude_code(
+            config=config, mock_mode=True, agent_backend=effective_agent_backend
+        ):
+            return
+
+        # Display launch/resume message using correct agent name.
+        if is_first_launch:
+            console.print(f"\n[cyan]Launching {_display_agent_name} for the first time...[/cyan]")
+        else:
+            console.print(f"\n[cyan]Resuming {_display_agent_name} session...[/cyan]")
+
+        # Update session status and start work session.
+        session.status = "in_progress"
+        session_manager.start_work_session(identifier)
+
+        # Display context banner.
+        jira_url = config.jira.url if config and config.jira else None
+        _display_resume_banner(session, jira_url)
+
+        # Set up signal handlers for cleanup.
+        setup_signal_handlers(session, session_manager, identifier, config)
+
+        # Note: daf-workflow skill is auto-loaded, no validation needed.
+        if active_conv and not _validate_context_files(session, config_loader):
+            return
 
         # Display which model provider is being used
         if model_provider_profile:
@@ -1176,7 +1195,7 @@ def open_session(
                         headless=headless,
                         auto_approve=auto_approve,
                         reasoning_effort=reasoning_effort,
-                        model_override=model,
+                        model_override=effective_model_id,
                         display_name=session.name,
                         session=session,
                     )

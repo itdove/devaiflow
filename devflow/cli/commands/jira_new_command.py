@@ -497,9 +497,14 @@ def create_jira_ticket_session(
     _agent_backend = resolve_agent_backend(
         cli_override=agent, config=config, model_profile=model_profile
     )
-    from devflow.utils.model_provider import get_model_for_command
+    from devflow.utils.model_provider import get_active_profile_name, get_model_for_command
+    _effective_profile_name = get_active_profile_name(
+        config,
+        override_profile_name=model_profile,
+        agent_backend=_agent_backend,
+    )
     _model_id = get_model_for_command(
-        config, _agent_backend, "jira_new", profile_name=model_profile, cli_model=model,
+        config, _agent_backend, "jira_new", profile_name=_effective_profile_name, cli_model=model,
     )
     session = session_manager.create_session(
         name=name,
@@ -508,7 +513,7 @@ def create_jira_ticket_session(
         project_path=project_path,
         branch=branch,  # Use provided branch or None for no branch
         agent_backend=_agent_backend,
-        model_profile=model_profile,
+        model_profile=_effective_profile_name,
         model_id=_model_id,
     )
 
@@ -568,7 +573,7 @@ def create_jira_ticket_session(
 
     # Check if we should launch Claude Code
     _agent_backend_for_id = resolve_agent_backend(
-        cli_override=agent, config=config, model_profile=model_profile
+        cli_override=agent, config=config, model_profile=session.model_profile
     )
     agent_name = get_agent_display_name(_agent_backend_for_id)
     if not should_launch_claude_code(
