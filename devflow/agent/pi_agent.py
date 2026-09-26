@@ -153,7 +153,12 @@ class PiAgent(AgentInterface):
     ) -> subprocess.Popen:
         """Launch a new interactive Pi session."""
         require_tool("pi", "launch Pi AI assistant")
-        return subprocess.Popen(["pi"], cwd=project_path, env=self._build_env(env))
+        command = [
+            "pi",
+            "--session-dir",
+            str(self.get_session_dir(project_path)),
+        ]
+        return subprocess.Popen(command, cwd=project_path, env=self._build_env(env))
 
     def launch_with_prompt(
         self,
@@ -174,7 +179,11 @@ class PiAgent(AgentInterface):
     ) -> subprocess.Popen:
         """Launch Pi with an initial prompt or in print mode."""
         require_tool("pi", "launch Pi AI assistant")
-        command = ["pi"]
+        command = [
+            "pi",
+            "--session-dir",
+            str(self.get_session_dir(project_path)),
+        ]
         if headless:
             command.append("--print")
         if session_id and not session_id.startswith("pending"):
@@ -207,7 +216,13 @@ class PiAgent(AgentInterface):
         """Resume an existing Pi session."""
         require_tool("pi", "resume Pi AI assistant")
         return subprocess.Popen(
-            ["pi", "--session", session_id],
+            [
+                "pi",
+                "--session-dir",
+                str(self.get_session_dir(project_path)),
+                "--session",
+                session_id,
+            ],
             cwd=project_path,
             env=self._build_env(env),
         )
@@ -437,6 +452,9 @@ class PiAgent(AgentInterface):
 
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
         """Return a shell-safe manual resume command."""
+        if project_path:
+            session_dir = shlex.quote(str(self.get_session_dir(project_path)))
+            return f"pi --session-dir {session_dir} --session {shlex.quote(session_id)}"
         return f"pi --session {shlex.quote(session_id)}"
 
     def uses_file_based_sessions(self) -> bool:

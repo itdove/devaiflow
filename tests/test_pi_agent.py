@@ -91,6 +91,8 @@ class TestPiAgent:
         command = mock_popen.call_args.args[0]
         assert command == [
             "pi",
+            "--session-dir",
+            str(agent.get_session_dir(PROJECT_PATH)),
             "--print",
             "--provider",
             "test-provider",
@@ -118,7 +120,30 @@ class TestPiAgent:
 
         assert agent.resume_session(SESSION_ID, PROJECT_PATH) is process
         mock_require.assert_called_once_with("pi", "resume Pi AI assistant")
-        assert mock_popen.call_args.args[0] == ["pi", "--session", SESSION_ID]
+        assert mock_popen.call_args.args[0] == [
+            "pi",
+            "--session-dir",
+            str(agent.get_session_dir(PROJECT_PATH)),
+            "--session",
+            SESSION_ID,
+        ]
+
+    @patch("devflow.agent.pi_agent.require_tool")
+    @patch("devflow.agent.pi_agent.subprocess.Popen")
+    def test_launch_session_uses_project_session_dir(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        process = Mock()
+        mock_popen.return_value = process
+        agent = PiAgent(tmp_path / "pi-agent")
+
+        assert agent.launch_session(PROJECT_PATH) is process
+        mock_require.assert_called_once_with("pi", "launch Pi AI assistant")
+        assert mock_popen.call_args.args[0] == [
+            "pi",
+            "--session-dir",
+            str(agent.get_session_dir(PROJECT_PATH)),
+        ]
 
     @patch("devflow.agent.pi_agent.require_tool")
     @patch("devflow.agent.pi_agent.subprocess.Popen")
@@ -136,6 +161,8 @@ class TestPiAgent:
 
         assert mock_popen.call_args.args[0] == [
             "pi",
+            "--session-dir",
+            str(agent.get_session_dir(PROJECT_PATH)),
             "--session-id",
             SESSION_ID,
             "--",
@@ -236,5 +263,5 @@ class TestPiAgent:
         assert is_self_id_backend("pi") is True
         assert PENDING_CAPTURE_PLACEHOLDER == "pending-capture"
         assert agent.get_manual_resume_command(SESSION_ID, PROJECT_PATH) == (
-            f"pi --session {SESSION_ID}"
+            f"pi --session-dir {agent.get_session_dir(PROJECT_PATH)} --session {SESSION_ID}"
         )
