@@ -51,6 +51,39 @@ providers: `llama.cpp`, `ollama`, and `mlx`.
 
 **✨ New:** Ollama is now fully supported through native integration! Use `ollama launch claude` for the simplest local model setup.
 
+## OpenCode provider-qualified models
+
+OpenCode expects every model argument in `provider/model` format. Set the
+provider separately in the profile and DevAIFlow will qualify bare model names
+for normal sessions, command-specific selections, CLI `--model` overrides, and
+utility generation:
+
+```json
+{
+  "model_provider": {
+    "default_profile": "openai-opencode",
+    "profiles": {
+      "openai-opencode": {
+        "name": "openai-opencode",
+        "provider": "openai",
+        "agent_backend": "opencode",
+        "models": {
+          "new": "gpt-5.6-sol",
+          "open": "gpt-5.6-terra",
+          "commit_message": "gpt-5.6-luna",
+          "pr_template": "gpt-5.6-luna"
+        }
+      }
+    }
+  }
+}
+```
+
+For this profile, DevAIFlow passes `openai/gpt-5.6-sol` to OpenCode. A model
+already written as `openai/gpt-5.6-luna` is preserved without adding a second
+provider prefix. Bare OpenCode models require the profile's `provider` field;
+otherwise validation stops the launch with an actionable configuration error.
+
 ## Table of Contents
 
 1. [Why Use Alternative Providers?](#why-use-alternative-providers)

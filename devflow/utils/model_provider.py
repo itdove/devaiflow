@@ -883,6 +883,18 @@ def validate_model_provider_profile(
                 f"Configured {label} contains whitespace; use the provider's exact model identifier.",
             )
 
+    if _canonical_agent_backend(selected_backend) == "opencode":
+        configured_provider = profile_data.get("provider")
+        if not isinstance(configured_provider, str) or not configured_provider.strip():
+            for label, model in configured_models:
+                if isinstance(model, str) and model.strip() and "/" not in model:
+                    _add_validation_message(
+                        result.issues,
+                        f"OpenCode requires an explicit provider for unqualified {label} "
+                        f"'{model}'. Set the profile's provider field or use a "
+                        "provider-qualified model such as 'openai/gpt-5.6-luna'.",
+                    )
+
     if not configured_models:
         if provider in LOCAL_PROVIDERS or provider in {"custom", "openrouter"}:
             _add_validation_message(
@@ -1206,6 +1218,47 @@ def get_model_name_from_profile(
     return profile.get("model_name")
 
 
+def qualify_model_for_agent(
+    model: Optional[str],
+    agent_backend: Optional[str],
+    profile: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Return the model identifier in the format required by an agent adapter.
+
+    OpenCode requires provider-qualified model identifiers.  Other adapters keep
+    receiving the model value exactly as configured because they pass provider
+    selection through separate options or environment variables.
+
+    Args:
+        model: Model identifier selected for the command.
+        agent_backend: Agent adapter that will receive the model.
+        profile: Selected provider profile, used to qualify bare OpenCode models.
+
+    Raises:
+        ModelProviderCompatibilityError: If OpenCode receives a bare model
+            without an explicit provider in the selected profile.
+    """
+    if not model or _canonical_agent_backend(agent_backend) != "opencode":
+        return model
+    if not isinstance(model, str):
+        return model
+
+    model_value = model.strip()
+    if "/" in model_value:
+        return model
+
+    profile_data = _profile_to_dict(profile) or {}
+    configured_provider = profile_data.get("provider")
+    if not isinstance(configured_provider, str) or not configured_provider.strip():
+        raise ModelProviderCompatibilityError(
+            f"OpenCode requires an explicit provider for unqualified model '{model}'. "
+            "Set the selected model profile's 'provider' field or use a "
+            "provider-qualified model such as 'openai/gpt-5.6-luna'."
+        )
+
+    return f"{configured_provider.strip()}/{model_value}"
+
+
 def get_reasoning_effort_from_profile(
     profile: Optional[Dict[str, Any]],
     command: Optional[str] = None,
@@ -1289,20 +1342,21 @@ def get_model_for_command(
         utility=utility,
     )
     if cli_model and not utility:
-        return cli_model
-    model = get_model_name_from_profile(profile, command=command, utility=utility)
-    if model:
-        return model
+        model = cli_model
+    else:
+        model = get_model_name_from_profile(profile, command=command, utility=utility)
+        if not model:
+            from devflow.agent.model_config import get_agent_model_config
 
-    from devflow.agent.model_config import get_agent_model_config
+            model = get_agent_model_config(
+                config,
+                agent_backend,
+                utility=utility,
+                command=command,
+                model_override=cli_model if not utility else None,
+            )["model"]
 
-    return get_agent_model_config(
-        config,
-        agent_backend,
-        utility=utility,
-        command=command,
-        model_override=cli_model if not utility else None,
-    )["model"]
+    return qualify_model_for_agent(model, agent_backend, profile)
 
 
 def get_profile_display_name(profile: Optional[Dict[str, Any]]) -> str:
