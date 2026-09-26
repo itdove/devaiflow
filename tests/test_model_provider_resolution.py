@@ -168,6 +168,55 @@ def test_profile_reasoning_strength_resolves_per_command():
     assert get_reasoning_for_command(config, "claude", "commit_message", utility=True) == "low"
 
 
+def test_opencode_qualifies_command_models_and_cli_overrides():
+    """OpenCode command models and session overrides use provider/model syntax."""
+    profile = ModelProviderProfile(
+        name="openai-opencode",
+        provider="openai",
+        agent_backend="opencode",
+        models={
+            "open": "gpt-5.6-sol",
+            "pr_template": "gpt-5.6-terra",
+        },
+    )
+    config = _config({"openai-opencode": profile}, "openai-opencode")
+
+    assert get_model_for_command(config, "opencode", "open") == "openai/gpt-5.6-sol"
+    assert (
+        get_model_for_command(
+            config,
+            "opencode",
+            "open",
+            cli_model="gpt-5.6-luna",
+        )
+        == "openai/gpt-5.6-luna"
+    )
+    assert (
+        get_model_for_command(
+            config,
+            "opencode",
+            "pr_template",
+            utility=True,
+        )
+        == "openai/gpt-5.6-terra"
+    )
+
+
+def test_validate_opencode_requires_provider_for_bare_models():
+    """OpenCode profiles report missing providers before the agent is launched."""
+    result = validate_model_provider_profile(
+        {
+            "name": "opencode-profile",
+            "agent_backend": "opencode",
+            "model_name": "gpt-5.6-luna",
+        },
+        environ={},
+    )
+
+    assert result.valid is False
+    assert any("OpenCode requires an explicit provider" in issue for issue in result.issues)
+
+
 def test_incompatible_explicit_profile_is_rejected():
     profile = ModelProviderProfile(name="codex-profile", provider="codex")
     config = _config({"codex-profile": profile}, "codex-profile")

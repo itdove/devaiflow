@@ -301,6 +301,74 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
+    def test_launch_with_prompt_qualifies_unqualified_model(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """Test OpenCode receives provider/model for a bare configured model."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        agent.launch_with_prompt(
+            project_path=str(project_dir),
+            initial_prompt="Fix bug",
+            session_id="test-id",
+            model_provider_profile={
+                "provider": "openai",
+                "model_name": "gpt-5.6-luna",
+            },
+        )
+
+        command = mock_popen.call_args.args[0]
+        assert command[command.index("--model") + 1] == "openai/gpt-5.6-luna"
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_qualifies_model_override(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """Test a bare CLI model override uses the profile provider."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        agent.launch_with_prompt(
+            project_path=str(project_dir),
+            initial_prompt="Fix bug",
+            session_id="test-id",
+            model_provider_profile={"provider": "openai", "model_name": "gpt-5.6-sol"},
+            model_override="gpt-5.6-terra",
+        )
+
+        command = mock_popen.call_args.args[0]
+        assert command[command.index("--model") + 1] == "openai/gpt-5.6-terra"
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_rejects_unqualified_model_without_provider(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """Test missing provider configuration fails before OpenCode starts."""
+        agent = OpenCodeAgent()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with pytest.raises(ValueError, match="OpenCode requires an explicit provider"):
+            agent.launch_with_prompt(
+                project_path=str(project_dir),
+                initial_prompt="Fix bug",
+                session_id="test-id",
+                model_provider_profile={"model_name": "gpt-5.6-luna"},
+            )
+
+        mock_popen.assert_not_called()
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
     def test_resume_session(self, mock_popen, mock_require):
         """Test resuming an existing OpenCode session."""
         agent = OpenCodeAgent()
@@ -472,6 +540,35 @@ class TestOpenCodeAgentTokenUsage:
 
         usage = agent.extract_token_usage("test-uuid", "/home/user/project")
         assert usage is None
+
+
+class TestOpenCodeAgentTextGeneration:
+    """Test non-interactive OpenCode model selection."""
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_generate_text_qualifies_utility_model(self, mock_run):
+        """Test command-specific utility models use the configured provider."""
+        mock_run.return_value = Mock(returncode=0, stdout="Generated result\n")
+        agent = OpenCodeAgent()
+
+        result = agent.generate_text(
+            "Write a short summary",
+            model_provider_profile={
+                "provider": "openai",
+                "models": {"pr_template": "gpt-5.6-terra"},
+            },
+        )
+
+        assert result == "Generated result"
+        command = mock_run.call_args.args[0]
+        assert command == [
+            "opencode",
+            "run",
+            "-q",
+            "--model",
+            "openai/gpt-5.6-terra",
+            "Write a short summary",
+        ]
 
 
 class TestOpenCodeAgentDbPath:

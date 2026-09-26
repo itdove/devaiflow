@@ -105,6 +105,7 @@ class OpenCodeAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        model_override: Optional[str] = None,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
@@ -128,6 +129,7 @@ class OpenCodeAgent(AgentInterface):
             env: Environment variables dict (optional, defaults to os.environ)
             headless: Run non-interactively (opencode run), exits after completion
             auto_approve: Auto-approve all tool permissions
+            model_override: Override the selected profile model for this session
 
         Returns:
             Subprocess handle for OpenCode process
@@ -149,22 +151,27 @@ class OpenCodeAgent(AgentInterface):
         if session_id and session_id.startswith("ses"):
             cmd.extend(["--session", session_id])
 
-        if model_provider_profile:
-            # OpenCode expects model in format "provider/model" (e.g., "llama/Qwen3.5-9B-GGUF")
-            # model_provider_profile may have just the model name or full path
-            # Pass as-is; OpenCode will resolve based on its configured providers
-            model_name = model_provider_profile.get("model_name")
-            if model_name:
-                cmd.extend(["--model", model_name])
-            elif profile_name:
-                # If no model_name but profile_name exists, try to infer from profile name
-                # e.g., "llama 9091" -> try "llama/*" models
-                provider = None
-                if " " in profile_name:
-                    parts = profile_name.split(" ", 1)
-                    provider = parts[0].lower()
-                if provider:
-                    cmd.extend(["--model", f"{provider}/*"])
+        from devflow.agent.model_config import get_agent_model_config
+        from devflow.utils.model_provider import (
+            get_model_name_from_profile,
+            qualify_model_for_agent,
+        )
+
+        settings = get_agent_model_config(
+            config,
+            self.get_agent_name(),
+            provider_profile=model_provider_profile,
+            model_override=model_override,
+        )
+        model_name = model_override or get_model_name_from_profile(model_provider_profile)
+        model_name = model_name or settings.get("model")
+        model_name = qualify_model_for_agent(
+            model_name,
+            self.get_agent_name(),
+            model_provider_profile,
+        )
+        if model_name:
+            cmd.extend(["--model", model_name])
 
         if auto_approve:
             cmd.append("--dangerously-skip-permissions")
@@ -479,7 +486,11 @@ class OpenCodeAgent(AgentInterface):
                 command="pr_template",
                 provider_profile=model_provider_profile,
             )
-            from devflow.utils.model_provider import build_env_from_profile, get_model_name_from_profile
+            from devflow.utils.model_provider import (
+                build_env_from_profile,
+                get_model_name_from_profile,
+                qualify_model_for_agent,
+            )
 
             cmd = ["opencode", "run", "-q"]
             model = get_model_name_from_profile(
@@ -487,6 +498,11 @@ class OpenCodeAgent(AgentInterface):
                 command="pr_template",
                 utility=True,
             ) or settings["model"]
+            model = qualify_model_for_agent(
+                model,
+                self.get_agent_name(),
+                model_provider_profile,
+            )
             if model:
                 cmd.extend(["--model", model])
             if settings["reasoning_effort"]:
