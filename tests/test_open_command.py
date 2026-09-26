@@ -891,6 +891,44 @@ def test_detect_working_directory_from_cwd_git_repo_outside_workspace(tmp_path, 
     assert detected == "standalone-repo"
 
 
+@pytest.mark.parametrize("workspace_order", [("parent", "nested"), ("nested", "parent")])
+def test_detection_prefers_most_specific_overlapping_workspace(
+    tmp_path, temp_daf_home, workspace_order
+):
+    """Test workspace and repository detection is independent of config order."""
+    from devflow.cli.commands.open_command import (
+        _detect_working_directory_from_cwd,
+        _detect_workspace_from_cwd,
+    )
+    from devflow.config.models import (
+        Config,
+        JiraConfig,
+        RepoConfig,
+        WorkspaceDefinition,
+    )
+
+    parent_workspace = tmp_path / "workspace-parent"
+    nested_workspace = parent_workspace / "workspace-nested"
+    repo_dir = nested_workspace / "repo-a"
+    repo_dir.mkdir(parents=True)
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True, check=True)
+
+    config_loader = ConfigLoader()
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.com", project="PROJ", transitions={}),
+        repos=RepoConfig(),
+    )
+    definitions = {
+        "parent": WorkspaceDefinition(name="parent", path=str(parent_workspace)),
+        "nested": WorkspaceDefinition(name="nested", path=str(nested_workspace)),
+    }
+    config.repos.workspaces = [definitions[name] for name in workspace_order]
+    config_loader.save_config(config)
+
+    assert _detect_workspace_from_cwd(repo_dir, config_loader) == "nested"
+    assert _detect_working_directory_from_cwd(repo_dir, config_loader) == "repo-a"
+
+
 def test_handle_conversation_selection_create_new(tmp_path, temp_daf_home, monkeypatch):
     """Test _handle_conversation_selection creates new conversation when user selects 'n'."""
     from devflow.cli.commands.open_command import _handle_conversation_selection
@@ -2148,5 +2186,3 @@ class TestOpenCommandOpenCodeResume:
             captured_id = loaded.active_conversation.ai_agent_session_id
             assert captured_id == "ses_captured_id_456", \
                 f"Expected ses_captured_id_456, got {captured_id}"
-
-

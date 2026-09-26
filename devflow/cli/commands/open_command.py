@@ -16,6 +16,7 @@ from rich.table import Table
 from devflow.cli.commands.new_command import _generate_initial_prompt
 from devflow.cli.utils import check_concurrent_session, extract_repository_from_issue_key, get_session_with_prompt, get_status_display, get_workspace_path, require_outside_claude, scan_workspace_repositories, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
 from devflow.config.loader import ConfigLoader
+from devflow.config.models import WorkspaceDefinition
 from devflow.git.utils import GitUtils
 from devflow.jira import transition_on_start as jira_transition_on_start
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
@@ -2007,6 +2008,29 @@ def _detect_working_directory_from_path(path: Path, config_loader) -> Optional[s
         return None
 
 
+def _find_most_specific_workspace(
+    current_dir: Path, workspaces: list[WorkspaceDefinition]
+) -> Optional[tuple[WorkspaceDefinition, Path]]:
+    """Find the deepest configured workspace containing the current directory."""
+    current_dir = current_dir.expanduser().absolute()
+    best_match: Optional[tuple[Path, WorkspaceDefinition, Path]] = None
+
+    for workspace_def in workspaces:
+        workspace = Path(workspace_def.path).expanduser().absolute()
+        try:
+            relative = current_dir.relative_to(workspace)
+        except ValueError:
+            continue
+
+        if best_match is None or len(workspace.parts) > len(best_match[0].parts):
+            best_match = (workspace, workspace_def, relative)
+
+    if best_match is None:
+        return None
+
+    return best_match[1], best_match[2]
+
+
 def _detect_working_directory_from_cwd(current_dir: Path, config_loader) -> Optional[str]:
     """Detect the working directory name from current working directory.
 
@@ -2034,21 +2058,13 @@ def _detect_working_directory_from_cwd(current_dir: Path, config_loader) -> Opti
         return current_dir.name
 
     if config and config.repos and config.repos.workspaces:
-        # Check if current_dir is within ANY of the configured workspaces
-        for workspace_def in config.repos.workspaces:
-            workspace = Path(workspace_def.path).expanduser().absolute()
-
-            # Check if current_dir is within the workspace or IS the workspace
-            try:
-                # This will raise ValueError if current_dir is not relative to workspace
-                relative = current_dir.relative_to(workspace)
-                # Get the first component of the relative path (the repository name)
-                repo_name = relative.parts[0] if relative.parts else current_dir.name
-                console.print(f"[dim]Detected repository in workspace '{workspace_def.name}': {repo_name}[/dim]")
-                return repo_name
-            except ValueError:
-                # current_dir is not within this workspace, try next one
-                continue
+        workspace_match = _find_most_specific_workspace(current_dir, config.repos.workspaces)
+        if workspace_match:
+            workspace_def, relative = workspace_match
+            # Get the first component of the relative path (the repository name)
+            repo_name = relative.parts[0] if relative.parts else current_dir.name
+            console.print(f"[dim]Detected repository in workspace '{workspace_def.name}': {repo_name}[/dim]")
+            return repo_name
 
         # Not in any workspace, use directory name
         repo_name = current_dir.name
@@ -2082,19 +2098,9 @@ def _detect_workspace_from_cwd(current_dir: Path, config_loader) -> Optional[str
     if not config or not config.repos or not config.repos.workspaces:
         return None
 
-    # Check if current_dir is within ANY of the configured workspaces
-    for workspace_def in config.repos.workspaces:
-        workspace = Path(workspace_def.path).expanduser().absolute()
-
-        # Check if current_dir is within the workspace
-        try:
-            # This will raise ValueError if current_dir is not relative to workspace
-            current_dir.relative_to(workspace)
-            # Current dir is within this workspace
-            return workspace_def.name
-        except ValueError:
-            # current_dir is not within this workspace, try next one
-            continue
+    workspace_match = _find_most_specific_workspace(current_dir, config.repos.workspaces)
+    if workspace_match:
+        return workspace_match[0].name
 
     # Not in any workspace
     return None
