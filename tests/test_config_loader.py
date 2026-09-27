@@ -48,6 +48,46 @@ def test_save_and_load_config(temp_daf_home):
     assert loaded_config.repos.workspaces[0].path == str(Path.home() / "development")
 
 
+def test_targeted_preference_updates_preserve_full_config(temp_daf_home):
+    """Preference updates must not replace unrelated model-provider data."""
+    from devflow.config.models import (
+        ModelProviderConfig,
+        ModelProviderProfile,
+        WorkspaceDefinition,
+    )
+
+    loader = ConfigLoader()
+    config = loader.create_default_config()
+    config.model_provider = ModelProviderConfig(
+        default_profile="configured-profile",
+        profiles={
+            "configured-profile": ModelProviderProfile(
+                name="configured-profile",
+                provider="custom",
+                agent_backend="opencode",
+                arguments=["--profile-option", "configured-value"],
+            )
+        },
+    )
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path="/workspace/default"),
+        WorkspaceDefinition(name="ai", path="/workspace/ai"),
+    ]
+    loader.save_config(config)
+
+    loader.update_last_used_workspace("ai")
+    loader.update_last_used_repo("ai", "project-a")
+
+    loaded_config = loader.load_config()
+    assert loaded_config.model_provider.default_profile == "configured-profile"
+    assert loaded_config.model_provider.profiles["configured-profile"].arguments == [
+        "--profile-option",
+        "configured-value",
+    ]
+    assert loaded_config.repos.last_used_workspace == "ai"
+    assert loaded_config.prompts.last_used_repo_per_workspace["ai"] == "project-a"
+
+
 def test_load_config_invalid_json(temp_daf_home):
     """Test loading config with invalid JSON."""
     loader = ConfigLoader()

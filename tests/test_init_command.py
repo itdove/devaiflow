@@ -563,6 +563,74 @@ def test_init_reset_preserves_unchanged_values(temp_daf_home_no_patches, mock_ji
     assert updated_config.repos.workspaces[0].path == "/custom/workspace"
 
 
+def test_init_reset_preserves_full_config_sections(temp_daf_home_no_patches, monkeypatch):
+    """Reset updates prompted fields without deleting unrelated configuration."""
+    from devflow.config.models import (
+        ConcurrencyConfig,
+        ContextFile,
+        ModelProviderConfig,
+        ModelProviderProfile,
+        WorkspaceDefinition,
+    )
+
+    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+    loader = ConfigLoader()
+    config = loader.create_default_config()
+    config.agent_backend = "opencode"
+    config.model_provider = ModelProviderConfig(
+        default_profile="configured-profile",
+        profiles={
+            "configured-profile": ModelProviderProfile(
+                name="configured-profile",
+                provider="custom",
+                agent_backend="opencode",
+                arguments=["--profile-option", "configured-value"],
+            )
+        },
+    )
+    config.repos.workspaces = [
+        WorkspaceDefinition(name="default", path="/old/default"),
+        WorkspaceDefinition(name="ai", path="/old/ai"),
+    ]
+    config.repos.last_used_workspace = "ai"
+    config.prompts.auto_commit_on_complete = True
+    config.context_files.files = [ContextFile(path="AGENT.md", description="project rules")]
+    config.concurrency = ConcurrencyConfig(mode="permissive")
+    config.session_summary.mode = "both"
+    config.templates.auto_use = False
+    loader.save_config(config)
+
+    runner = CliRunner()
+    with patch("rich.prompt.Prompt.ask") as mock_prompt, patch(
+        "rich.prompt.Confirm.ask", return_value=False
+    ):
+        mock_prompt.side_effect = [
+            "https://new-jira.example.com",
+            "NEW",
+            "group",
+            "New Team",
+            "/new/ai",
+        ]
+        result = runner.invoke(cli, ["init", "--reset", "--skip-jira-discovery"])
+
+    assert result.exit_code == 0
+    updated_config = loader.load_config()
+    assert updated_config.model_provider.default_profile == "configured-profile"
+    assert updated_config.model_provider.profiles["configured-profile"].arguments == [
+        "--profile-option",
+        "configured-value",
+    ]
+    assert [(workspace.name, workspace.path) for workspace in updated_config.repos.workspaces] == [
+        ("default", "/old/default"),
+        ("ai", "/new/ai"),
+    ]
+    assert updated_config.prompts.auto_commit_on_complete is True
+    assert updated_config.context_files.files[0].path == "AGENT.md"
+    assert updated_config.concurrency.mode == "permissive"
+    assert updated_config.session_summary.mode == "both"
+    assert updated_config.templates.auto_use is False
+
+
 def test_init_reset_refreshes_field_mappings(temp_daf_home, mock_jira_cli, monkeypatch):
     """Test daf init --reset automatically refreshes JIRA field mappings."""
     # Set JIRA_API_TOKEN

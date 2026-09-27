@@ -1429,11 +1429,12 @@ def select_workspace(
                 # Save as last-used workspace for future sessions
                 if save_last_used:
                     config.repos.last_used_workspace = selected.name
-                    # Save config to persist the last_used_workspace
+                    # Update only this preference so a stale session cannot
+                    # overwrite unrelated configuration sections.
                     try:
                         from devflow.config.loader import ConfigLoader
                         config_loader = ConfigLoader()
-                        config_loader.save_config(config)
+                        config_loader.update_last_used_workspace(selected.name)
                     except Exception as e:
                         # Don't fail if save fails, just warn
                         console.print(f"[dim yellow]Warning: Could not save last-used workspace preference: {e}[/dim yellow]")
@@ -1982,10 +1983,7 @@ def unified_project_selection(
             on_selection(repo_name, workspace_path)
         if config_loader and workspace_name:
             try:
-                cfg = config_loader.load_config()
-                if cfg and cfg.prompts:
-                    cfg.prompts.last_used_repo_per_workspace[workspace_name] = repo_name
-                    config_loader.save_config(cfg)
+                config_loader.update_last_used_repo(workspace_name, repo_name)
             except Exception:
                 pass
 
