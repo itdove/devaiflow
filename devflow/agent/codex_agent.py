@@ -105,6 +105,7 @@ class CodexAgent(AgentInterface):
         self,
         project_path: str,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> subprocess.Popen:
         """Launch a new Codex session in a project directory.
 
@@ -121,9 +122,11 @@ class CodexAgent(AgentInterface):
         require_tool("codex", "launch Codex AI assistant")
 
         final_env = self._build_launch_env(env)
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         return subprocess.Popen(
-            ["codex"],
+            ["codex", *profile_arguments],
             cwd=project_path,
             env=final_env,
         )
@@ -174,15 +177,17 @@ class CodexAgent(AgentInterface):
         require_tool("codex", "launch Codex AI assistant")
 
         final_env = self._build_launch_env(env)
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         from devflow.agent.model_config import get_agent_model_config
         settings = get_agent_model_config(config, self.get_agent_name())
 
         is_resume = bool(session_id and not session_id.startswith("pending"))
 
         if headless:
-            cmd = ["codex", "exec", initial_prompt]
+            cmd = ["codex", "exec", *profile_arguments, initial_prompt]
         else:
-            cmd = ["codex", initial_prompt]
+            cmd = ["codex", *profile_arguments, initial_prompt]
 
         if is_resume:
             # Keep this path consistent with resume_session(). Investigation
@@ -191,6 +196,7 @@ class CodexAgent(AgentInterface):
             cmd = [
                 "codex",
                 "resume",
+                *profile_arguments,
                 "--cd",
                 project_path,
                 "-c",
@@ -231,6 +237,7 @@ class CodexAgent(AgentInterface):
         session_id: str,
         project_path: str,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> subprocess.Popen:
         """Resume an existing Codex session.
 
@@ -248,6 +255,8 @@ class CodexAgent(AgentInterface):
         require_tool("codex", "resume Codex AI assistant")
 
         final_env = self._build_launch_env(env)
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         # DevAIFlow may intentionally replace the project directory between
         # launches (for example, investigation sessions are re-cloned into a
@@ -259,6 +268,7 @@ class CodexAgent(AgentInterface):
         cmd = [
             "codex",
             "resume",
+            *profile_arguments,
             "--cd",
             project_path,
             "-c",
@@ -623,8 +633,10 @@ class CodexAgent(AgentInterface):
                 provider_profile=model_provider_profile,
             )
             from devflow.utils.model_provider import build_env_from_profile, get_model_name_from_profile
+            from devflow.utils.model_provider import get_profile_arguments
 
-            cmd = ["codex", "exec"]
+            profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
+            cmd = ["codex", "exec", *profile_arguments]
             model = get_model_name_from_profile(
                 model_provider_profile,
                 command="pr_template",
@@ -644,7 +656,7 @@ class CodexAgent(AgentInterface):
                 return result.stdout.strip()
 
             # Fallback to default model if luna not available
-            result = subprocess.run(["codex", "exec", prompt], **run_kwargs)
+            result = subprocess.run(["codex", "exec", *profile_arguments, prompt], **run_kwargs)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
             return None

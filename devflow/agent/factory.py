@@ -42,6 +42,7 @@ from devflow.agent.windsurf_agent import WindsurfAgent
 #   status        – "fully-tested" or "experimental"
 #   self_id       – True if the agent generates its own session IDs
 #   features      – capability flags
+#   profile_arguments – "pass-through" or "unsupported" for profile argv tokens
 #   notes         – (optional) extra context
 # ---------------------------------------------------------------------------
 
@@ -62,6 +63,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": True,
             "skills_support": True,
         },
+        "profile_arguments": "pass-through",
     },
     "ollama": {
         "display_name": "Ollama + Claude Code",
@@ -79,6 +81,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": True,
             "skills_support": True,
         },
+        "profile_arguments": "pass-through",
         "notes": "Requires both 'ollama' and 'claude' CLI tools",
     },
     "github-copilot": {
@@ -97,6 +100,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": False,
             "skills_support": False,
         },
+        "profile_arguments": "unsupported",
         "notes": "Limited integration - experimental support only",
     },
     "cursor": {
@@ -115,6 +119,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": False,
             "skills_support": False,
         },
+        "profile_arguments": "unsupported",
         "notes": "Limited integration - experimental support only",
     },
     "windsurf": {
@@ -133,6 +138,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": False,
             "skills_support": False,
         },
+        "profile_arguments": "unsupported",
         "notes": "Limited integration - experimental support only",
     },
     "aider": {
@@ -151,6 +157,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": False,
             "skills_support": False,
         },
+        "profile_arguments": "pass-through",
         "notes": "Git-first approach with chat history files",
     },
     "continue": {
@@ -169,6 +176,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": False,
             "skills_support": False,
         },
+        "profile_arguments": "unsupported",
         "notes": "VS Code extension - limited CLI integration",
     },
     "crush": {
@@ -187,6 +195,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": False,
             "skills_support": False,
         },
+        "profile_arguments": "pass-through",
         "notes": "Limited integration - experimental support only",
     },
     "opencode": {
@@ -205,6 +214,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": True,
             "skills_support": False,
         },
+        "profile_arguments": "pass-through",
     },
     "codex": {
         "display_name": "Codex",
@@ -222,6 +232,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": True,
             "skills_support": False,
         },
+        "profile_arguments": "pass-through",
         "notes": "Requires 'codex' CLI tool from OpenAI",
     },
     "pi": {
@@ -240,6 +251,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "resume_support": True,
             "skills_support": True,
         },
+        "profile_arguments": "pass-through",
         "notes": "Requires the 'pi' CLI from pi.dev",
     },
 }

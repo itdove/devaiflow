@@ -105,6 +105,49 @@ def _profile_to_dict(profile: Any) -> Optional[Dict[str, Any]]:
     return dict(profile)
 
 
+def get_profile_arguments(
+    profile: Optional[Dict[str, Any]],
+    agent_backend: str,
+) -> List[str]:
+    """Return validated adapter arguments from a selected provider profile.
+
+    Profile arguments are already argv tokens.  They are never shell-parsed or
+    joined into a command string.  Adapter support is declared in the agent
+    registry so unsupported IDE integrations fail before subprocess launch.
+    """
+    if not profile:
+        return []
+
+    if not isinstance(profile, dict):
+        profile = _profile_to_dict(profile)
+    if not profile:
+        return []
+
+    arguments = profile.get("arguments", [])
+    if arguments is None:
+        return []
+    if not isinstance(arguments, list) or any(not isinstance(argument, str) for argument in arguments):
+        raise ModelProviderCompatibilityError(
+            "Profile 'arguments' must be a list of string argv tokens."
+        )
+    if not arguments:
+        return []
+
+    from devflow.agent.factory import get_agent_metadata
+
+    metadata = get_agent_metadata(agent_backend)
+    if metadata.get("profile_arguments") != "pass-through":
+        display_name = metadata.get("display_name") or agent_backend
+        profile_name = profile.get("name") or "selected profile"
+        raise ModelProviderCompatibilityError(
+            f"Profile '{profile_name}' defines command-line arguments, but {display_name} "
+            f"({agent_backend}) does not support profile arguments. Remove the 'arguments' "
+            "field or choose an adapter with pass-through support."
+        )
+
+    return list(arguments)
+
+
 def normalize_model_command(command: Optional[str]) -> Optional[str]:
     """Normalize command names used by CLI options and configuration files."""
     if not command:
@@ -814,6 +857,20 @@ def validate_model_provider_profile(
                 field_name = ".".join(location_parts) or "profile"
                 message = error.get("msg", "invalid value") if isinstance(error, dict) else "invalid value"
                 _add_validation_message(result.issues, f"Invalid {field_name} configuration: {message}.")
+
+    profile_arguments = profile_data.get("arguments", [])
+    if not isinstance(profile_arguments, list) or any(
+        not isinstance(argument, str) for argument in profile_arguments
+    ):
+        _add_validation_message(
+            result.issues,
+            "Profile arguments must be a list of string argv tokens.",
+        )
+    elif profile_arguments and selected_backend:
+        try:
+            get_profile_arguments(profile_data, selected_backend)
+        except ModelProviderCompatibilityError as exc:
+            _add_validation_message(result.issues, str(exc))
 
     use_vertex = bool(profile_data.get("use_vertex") or provider == "vertex")
     if use_vertex:

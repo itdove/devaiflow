@@ -63,7 +63,12 @@ class AiderAgent(AgentInterface):
         self.aider_dir.mkdir(parents=True, exist_ok=True)
         self.chat_history_dir.mkdir(parents=True, exist_ok=True)
 
-    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def launch_session(
+        self,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Launch Aider in a project directory.
 
         Args:
@@ -77,11 +82,13 @@ class AiderAgent(AgentInterface):
             ToolNotFoundError: If aider command is not installed
         """
         require_tool("aider", "launch Aider AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         # Launch Aider in the project directory
         # Basic launch without specific files (user will add them in session)
         return subprocess.Popen(
-            ["aider"],
+            ["aider", *profile_arguments],
             cwd=project_path,
             env=env,
             # Aider needs terminal interaction
@@ -126,13 +133,15 @@ class AiderAgent(AgentInterface):
             ToolNotFoundError: If aider command is not installed
         """
         require_tool("aider", "launch Aider AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         # Save initial prompt to a file for user reference
         prompt_file = self.chat_history_dir / f"{session_id}_initial_prompt.txt"
         prompt_file.write_text(initial_prompt)
 
         # Build command with optional model specification
-        cmd = ["aider"]
+        cmd = ["aider", *profile_arguments]
 
         # Add model if specified in profile
         if model_provider_profile and model_provider_profile.get("model_name"):
@@ -151,7 +160,13 @@ class AiderAgent(AgentInterface):
             # Aider needs terminal interaction
         )
 
-    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def resume_session(
+        self,
+        session_id: str,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Resume an Aider session.
 
         Aider sessions are resumed by loading the chat history file.
@@ -168,11 +183,13 @@ class AiderAgent(AgentInterface):
             ToolNotFoundError: If aider command is not installed
         """
         require_tool("aider", "resume Aider AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         # Resume by loading chat history file
         chat_history_file = self.chat_history_dir / f"{session_id}_chat.txt"
 
-        cmd = ["aider"]
+        cmd = ["aider", *profile_arguments]
         if chat_history_file.exists():
             cmd.extend(["--chat-history-file", str(chat_history_file)])
 

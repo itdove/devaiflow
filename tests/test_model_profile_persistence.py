@@ -27,6 +27,7 @@ def _configure_profiles(config_loader: ConfigLoader):
                 provider="anthropic",
                 agent_backend="claude",
                 model_name="configured-model",
+                arguments=["--profile-option", "configured-value"],
             ),
             "changed-profile": ModelProviderProfile(
                 name="changed-profile",
@@ -61,6 +62,18 @@ def test_new_persists_configured_profile_and_model(temp_daf_home, tmp_path):
     assert session.model_profile == "configured-profile"
     assert session.model_id == "configured-model"
     assert session.agent_backend == "claude"
+
+
+def test_config_loader_round_trips_profile_arguments(temp_daf_home):
+    config_loader = ConfigLoader()
+    _configure_profiles(config_loader)
+
+    loaded = ConfigLoader().load_config()
+
+    assert loaded.model_provider.profiles["configured-profile"].arguments == [
+        "--profile-option",
+        "configured-value",
+    ]
 
 
 def test_new_multi_project_persists_configured_profile_and_model(temp_daf_home, tmp_path):
@@ -172,6 +185,39 @@ def test_git_new_persists_configured_profile_and_model(
     assert session is not None
     assert session.model_profile == "configured-profile"
     assert session.model_id == "configured-model"
+
+
+def test_git_new_repository_selection_preserves_configured_profile(
+    temp_daf_home, tmp_path
+):
+    """Git issue repository selection must not overwrite the user config."""
+    from devflow.cli.utils import unified_project_selection
+
+    config_loader = ConfigLoader()
+    config = _configure_profiles(config_loader)
+    workspace_path = tmp_path / "workspace"
+    project_path = workspace_path / "project-a"
+    (project_path / ".git").mkdir(parents=True)
+    config.repos.workspaces[0].path = str(workspace_path)
+    config_loader.save_config(config)
+
+    with patch("rich.prompt.Prompt.ask", return_value="1"):
+        selected_paths, is_multi = unified_project_selection(
+            workspace_path=str(workspace_path),
+            repo_options=["project-a"],
+            allow_multi_project=True,
+            config_loader=config_loader,
+            workspace_name="default",
+        )
+
+    assert selected_paths == [str(project_path)]
+    assert is_multi is False
+    loaded_config = ConfigLoader().load_config()
+    assert loaded_config.model_provider.default_profile == "configured-profile"
+    assert loaded_config.model_provider.profiles["configured-profile"].arguments == [
+        "--profile-option",
+        "configured-value",
+    ]
 
 
 def test_jira_new_persists_configured_profile_and_model(temp_daf_home, tmp_path):

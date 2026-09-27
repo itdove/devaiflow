@@ -4815,6 +4815,7 @@ When config exists, use `daf init --reset` to review and update all configuratio
 - **Automatically refreshes JIRA field mappings** after prompts
 - Updates `config.json` with new values
 - Shows summary of changes made
+- **Preserves model-provider profiles, named workspaces, and all other sections not edited by the wizard**
 - **Preserves user data** (sessions, templates, backups)
 - **Does NOT delete** any configuration data
 

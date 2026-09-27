@@ -12,11 +12,13 @@ from devflow.utils.model_provider import (
     get_active_profile,
     get_active_profile_name,
     get_default_profile_name,
+    get_profile_arguments,
     get_profile_agent_backend,
     get_model_for_command,
     get_model_name_from_profile,
     get_profile_compatibility_error,
     get_reasoning_for_command,
+    ModelProviderCompatibilityError,
     ModelProviderValidationResult,
     ModelProviderProfileNotFoundError,
     validate_model_provider_profile,
@@ -48,6 +50,68 @@ def test_default_profile_resolves_command_model():
 
     assert resolved["model_name"] == "new-model"
     assert get_model_for_command(config, "ollama", "commit_message", utility=True) == "commit-model"
+
+
+def test_profile_arguments_default_validate_and_serialize():
+    profile = ModelProviderProfile(name="cloud")
+
+    assert profile.arguments == []
+    assert profile.model_dump()["arguments"] == []
+
+    configured = ModelProviderProfile(
+        name="opencode-profile",
+        agent_backend="opencode",
+        arguments=["--config", "custom.json"],
+    )
+    assert configured.model_dump()["arguments"] == ["--config", "custom.json"]
+
+    with pytest.raises(ValueError, match="list of string argv tokens"):
+        ModelProviderProfile(name="invalid", arguments="--config custom.json")
+    with pytest.raises(ValueError, match="list of string argv tokens"):
+        ModelProviderProfile(name="invalid", arguments=["--config", 1])
+
+
+def test_active_profile_preserves_arguments_from_selected_profile():
+    profile = ModelProviderProfile(
+        name="opencode-profile",
+        provider="openai",
+        agent_backend="opencode",
+        model_name="gpt-5.6-sol",
+        arguments=["--config", "custom.json"],
+    )
+    config = _config({"opencode-profile": profile}, "opencode-profile")
+
+    resolved = get_active_profile(config, agent_backend="opencode", command="open")
+
+    assert resolved["arguments"] == ["--config", "custom.json"]
+    assert get_profile_arguments(resolved, "opencode") == ["--config", "custom.json"]
+
+
+def test_unsupported_adapter_arguments_fail_with_actionable_error():
+    profile = ModelProviderProfile(
+        name="cursor-profile",
+        provider="custom",
+        agent_backend="cursor",
+        arguments=["--some-option"],
+    )
+
+    with pytest.raises(ModelProviderCompatibilityError, match="does not support profile arguments"):
+        get_profile_arguments(profile, "cursor")
+
+
+def test_profile_validation_reports_unsupported_adapter_arguments():
+    result = validate_model_provider_profile(
+        ModelProviderProfile(
+            name="cursor-profile",
+            provider="custom",
+            agent_backend="cursor",
+            arguments=["--some-option"],
+        ),
+        environ={},
+    )
+
+    assert result.valid is False
+    assert any("does not support profile arguments" in issue for issue in result.issues)
 
 
 def test_only_profile_is_used_when_configured_default_is_missing():

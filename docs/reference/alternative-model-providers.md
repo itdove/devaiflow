@@ -84,6 +84,59 @@ already written as `openai/gpt-5.6-luna` is preserved without adding a second
 provider prefix. Bare OpenCode models require the profile's `provider` field;
 otherwise validation stops the launch with an actionable configuration error.
 
+## Adapter arguments
+
+Profiles may include adapter-specific command-line options in `arguments`. Each
+list entry is one argv token; DevAIFlow passes the list directly to the adapter
+without shell parsing or `shell=True`:
+
+```json
+{
+  "name": "openai-opencode",
+  "provider": "openai",
+  "agent_backend": "opencode",
+  "models": {"open": "gpt-5.6-terra"},
+  "arguments": ["--some-agent-option", "value"]
+}
+```
+
+IDE integrations are explicit about unsupported arguments. For example, this
+Cursor profile is rejected before launch rather than silently ignoring the
+configured tokens:
+
+```json
+{
+  "name": "cursor-default",
+  "provider": "custom",
+  "agent_backend": "cursor",
+  "arguments": ["--workspace-option", "value"]
+}
+```
+
+Do not write a shell command string or combine an option and its value into one
+entry. For example, use `"--flag", "value"`, not `"--flag value"`. Values that
+contain spaces remain a single token by putting the complete value in one list
+entry.
+
+Profile arguments are inserted after the adapter executable/subcommand and
+before DevAIFlow-generated arguments. Generated model, session/resume, prompt,
+headless, and permission arguments are therefore authoritative when the same
+option appears in both places. The prompt or session identifier remains in its
+normal adapter-specific position.
+
+Supported adapter behavior:
+
+| Adapter | Profile `arguments` behavior |
+|---|---|
+| Claude Code, Ollama + Claude Code | Passed through to the launcher |
+| Codex, OpenCode, Pi | Passed through to the launcher and utility commands |
+| Aider, Crush | Passed through to the launcher |
+| GitHub Copilot, Cursor, Windsurf, Continue | Rejected with an actionable error because these IDE integrations do not expose a supported agent-argument pass-through |
+
+The configuration TUI displays the number of configured tokens and edits them
+as one token per line. If an adapter does not support profile arguments, remove
+`arguments` or select an adapter with pass-through support.
+
 ## Table of Contents
 
 1. [Why Use Alternative Providers?](#why-use-alternative-providers)
@@ -94,11 +147,12 @@ otherwise validation stops the launch with an actionable configuration error.
    - [Enterprise: Vertex AI](#-enterprise-google-vertex-ai---tested)
 3. [Using Profiles](#using-profiles) - How to switch between providers
 4. [Configuration](#configuration) - Profile structure and settings
-5. [Provider Setup Guides](#provider-setup-guides) - Detailed setup instructions
-6. [Troubleshooting](#troubleshooting) - Common issues and solutions
-7. [Performance Comparison](#performance-comparison) - Benchmarks and costs
-8. [Decision Matrix](#decision-matrix-which-solution-to-use) - Which provider to choose
-9. [Best Practices](#best-practices) - Tips and recommendations
+5. [Adapter Arguments](#adapter-arguments) - Safe argv-token configuration
+6. [Provider Setup Guides](#provider-setup-guides) - Detailed setup instructions
+7. [Troubleshooting](#troubleshooting) - Common issues and solutions
+8. [Performance Comparison](#performance-comparison) - Benchmarks and costs
+9. [Decision Matrix](#decision-matrix-which-solution-to-use) - Which provider to choose
+10. [Best Practices](#best-practices) - Tips and recommendations
 
 ## Why Use Alternative Providers?
 
@@ -458,6 +512,7 @@ Each profile contains:
 | `auth_token` | string (optional) | ANTHROPIC_AUTH_TOKEN override | `"llama-cpp"` |
 | `api_key` | string (optional) | ANTHROPIC_API_KEY override | `""` (empty string to disable) |
 | `model_name` | string (optional) | Model for `--model` flag | `"devstral-small-2"` |
+| `arguments` | array of strings (optional) | Adapter-specific argv tokens | `["--flag", "value"]` |
 | `use_vertex` | boolean | Use Google Vertex AI | `true` |
 | `vertex_project_id` | string (optional) | GCP project ID | `"my-project-123"` |
 | `vertex_region` | string (optional) | GCP region | `"us-east5"` |

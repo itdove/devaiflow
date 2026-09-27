@@ -158,6 +158,23 @@ class ModelProviderProfile(BaseModel):
     vertex_project_id: Optional[str] = Field(default=None, description="ANTHROPIC_VERTEX_PROJECT_ID for Vertex AI")
     vertex_region: Optional[str] = Field(default=None, description="ANTHROPIC_VERTEX_REGION for Vertex AI (e.g., 'us-east5')")
     env_vars: Dict[str, str] = Field(default_factory=dict, description="Additional environment variables")
+    arguments: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Additional adapter command-line arguments as argv tokens. Each list entry is "
+            "passed as one token without shell parsing."
+        ),
+    )
+
+    @field_validator("arguments", mode="before")
+    @classmethod
+    def validate_arguments(cls, value: Any) -> List[str]:
+        """Require profile arguments to be a list of string argv tokens."""
+        if value is None:
+            return []
+        if not isinstance(value, list) or any(not isinstance(argument, str) for argument in value):
+            raise ValueError("arguments must be a list of string argv tokens")
+        return value
 
     # Cost tracking fields (for enterprise budget management)
     cost_per_million_input_tokens: Optional[float] = Field(default=None, description="Estimated cost per million input tokens in USD (e.g., 3.00 for Claude Sonnet)")

@@ -1092,6 +1092,9 @@ class ModelProviderProfileEntry(Container):
             details_text += f"\n[dim]utilities: {', '.join(utility_models)}[/dim]"
         if reasoning_efforts:
             details_text += f"\n[dim]strength: {', '.join(f'{key}={value}' for key, value in reasoning_efforts.items() if value)}[/dim]"
+        profile_arguments = _profile_value(self.profile_data, "arguments", []) or []
+        if profile_arguments:
+            details_text += f"\n[dim]arguments: {len(profile_arguments)} configured[/dim]"
 
         # Profile info on top, buttons on bottom
         btn_id_base = self._button_id_base(self.profile_name)
@@ -1414,6 +1417,17 @@ class AddEditProfileScreen(ModalScreen):
                 yield Static(
                     "[dim italic]This adapter is saved in the profile and determines how DevAIFlow launches the model.[/dim italic]"
                 )
+                existing_arguments = self.existing_profile.get("arguments", []) or []
+                yield Label("Adapter arguments (one argv token per line)")
+                yield TextArea(
+                    text="\n".join(str(argument) for argument in existing_arguments),
+                    id="arguments",
+                    soft_wrap=False,
+                )
+                yield Static(
+                    "[dim italic]Arguments are passed directly to the adapter without shell parsing. "
+                    "Generated DevAIFlow flags are added afterward.[/dim italic]"
+                )
 
                 yield Static(
                     "\n[bold]Command models[/bold]\n"
@@ -1493,6 +1507,11 @@ class AddEditProfileScreen(ModalScreen):
                 self.app.notify("Agent / IDE adapter is required", severity="error", timeout=10)
                 return
 
+            try:
+                arguments = self.query_one("#arguments", TextArea).text.splitlines()
+            except NoMatches:
+                arguments = list(self.existing_profile.get("arguments", []) or [])
+
             # Validate form data using template
             validation_errors = self.template.validate(form_data)
             if validation_errors:
@@ -1504,6 +1523,7 @@ class AddEditProfileScreen(ModalScreen):
             try:
                 profile_data = self.template.generate_config(form_data)
                 profile_data["agent_backend"] = agent_backend
+                profile_data["arguments"] = arguments
                 profile_data["models"] = command_models
                 profile_data["reasoning_efforts"] = reasoning_efforts
                 profile_data.setdefault("provider", self.template_id)

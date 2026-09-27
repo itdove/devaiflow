@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from pydantic import ValidationError
 from rich.console import Console
@@ -197,6 +197,97 @@ class ConfigLoader:
             # No config file exists - save as old format for backward compatibility
             # (Tests and existing workflows expect old format by default)
             self._save_old_format_config(config)
+
+    def update_last_used_workspace(self, workspace_name: str) -> None:
+        """Persist only the last-used workspace preference.
+
+        Workspace selection can happen in long-running, concurrent DAF
+        processes. Updating the raw user-config field avoids serializing a
+        stale full ``Config`` object over unrelated changes.
+
+        Args:
+            workspace_name: Name of the selected workspace.
+        """
+        def update(data: Dict[str, Any]) -> None:
+            repos = data.setdefault("repos", {})
+            if not isinstance(repos, dict):
+                raise ValueError("Configuration field 'repos' must be an object")
+            repos["last_used_workspace"] = workspace_name
+
+        self._update_user_config_json(update)
+
+    def update_last_used_repo(self, workspace_name: str, repository_name: str) -> None:
+        """Persist only the last-used repository preference for a workspace.
+
+        Args:
+            workspace_name: Workspace containing the repository.
+            repository_name: Selected repository name.
+        """
+        def update(data: Dict[str, Any]) -> None:
+            prompts = data.setdefault("prompts", {})
+            if not isinstance(prompts, dict):
+                raise ValueError("Configuration field 'prompts' must be an object")
+            last_used = prompts.setdefault("last_used_repo_per_workspace", {})
+            if not isinstance(last_used, dict):
+                raise ValueError(
+                    "Configuration field 'last_used_repo_per_workspace' must be an object"
+                )
+            last_used[workspace_name] = repository_name
+
+        self._update_user_config_json(update)
+
+    def _update_user_config_json(
+        self, update: Callable[[Dict[str, Any]], None]
+    ) -> None:
+        """Atomically update selected fields in the user config file.
+
+        A separate lock file keeps concurrent DAF processes from racing while
+        ``config.json`` is atomically replaced. The update callback receives
+        the raw user config so fields unknown to the current process remain
+        untouched.
+        """
+        import os
+        import sys
+        import tempfile
+
+        if not self.config_file.exists():
+            return
+
+        lock_file = self.config_dir / ".config.json.lock"
+        temporary_path = None
+        with open(lock_file, "a+") as lock:
+            if sys.platform != "win32":
+                import fcntl
+
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+
+            try:
+                with open(self.config_file, "r") as config_file:
+                    data = json.load(config_file)
+                if not isinstance(data, dict):
+                    raise ValueError("Configuration root must be an object")
+
+                update(data)
+
+                file_descriptor, temporary_path = tempfile.mkstemp(
+                    prefix=".config.json.", suffix=".tmp", dir=self.config_dir
+                )
+                with os.fdopen(file_descriptor, "w") as temporary_file:
+                    json.dump(data, temporary_file, indent=2)
+                    temporary_file.flush()
+                    os.fsync(temporary_file.fileno())
+                os.replace(temporary_path, self.config_file)
+                temporary_path = None
+            finally:
+                if temporary_path:
+                    try:
+                        os.unlink(temporary_path)
+                    except FileNotFoundError:
+                        pass
+                if sys.platform != "win32":
+                    import fcntl
+
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
     def _save_old_format_config(self, config: Config) -> None:
         """Save configuration in old single-file format.

@@ -844,22 +844,31 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
             source_input = Prompt.ask("Hierarchical config source URL", default="")
             hierarchical_config_source = source_input if source_input else None
 
-    # Build JIRA config with transitions
-    jira_config = JiraConfig(
-        url=jira_url,
-        project=jira_project,
-        transitions={},  # Transitions configured via patches or daf config set-transition-* commands
-        filters={
-            "sync": JiraFiltersConfig(
-                status=["New", "To Do", "In Progress"],
-                required_fields=[],  # Configure in organization.json or team.json
-                assignee="currentUser()",
-            )
-        },
-        time_tracking=True,
-        comment_visibility_type=visibility_type_choice,
-        comment_visibility_value=visibility_value,
-    )
+    # Start from the existing JIRA configuration during reset so fields that
+    # this wizard does not edit (transitions, filters, defaults, caches, etc.)
+    # cannot be replaced by model defaults.
+    if current_config:
+        jira_config = current_config.jira.model_copy(deep=True)
+        jira_config.url = jira_url
+        jira_config.project = jira_project
+        jira_config.comment_visibility_type = visibility_type_choice
+        jira_config.comment_visibility_value = visibility_value
+    else:
+        jira_config = JiraConfig(
+            url=jira_url,
+            project=jira_project,
+            transitions={},  # Transitions configured via patches or daf config set-transition-* commands
+            filters={
+                "sync": JiraFiltersConfig(
+                    status=["New", "To Do", "In Progress"],
+                    required_fields=[],  # Configure in organization.json or team.json
+                    assignee="currentUser()",
+                )
+            },
+            time_tracking=True,
+            comment_visibility_type=visibility_type_choice,
+            comment_visibility_value=visibility_value,
+        )
 
     # Preserve field mappings and custom field defaults from current config if available
     if current_config and current_config.jira.field_mappings:
@@ -869,19 +878,37 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
     if current_config and current_config.jira.custom_field_defaults:
         jira_config.custom_field_defaults = current_config.jira.custom_field_defaults
 
-    # Build repo config with workspaces list
+    # Preserve named workspaces during reset and update the workspace whose
+    # path supplied the prompt default.  The old implementation collapsed
+    # every reset to a single workspace named "default".
     from devflow.config.models import WorkspaceDefinition
-    repos_config = RepoConfig(
-        workspaces=[
-            WorkspaceDefinition(name="default", path=workspace_path)
-        ],
-        last_used_workspace="default",
-        keywords=keywords,
-    )
+    if current_config and current_config.repos:
+        repos_config = current_config.repos.model_copy(deep=True)
+        target_workspace = repos_config.get_workspace_by_name(repos_config.last_used_workspace) if repos_config.last_used_workspace else None
+        if target_workspace is None and repos_config.workspaces:
+            target_workspace = repos_config.workspaces[0]
+        if target_workspace is None:
+            repos_config.workspaces.append(
+                WorkspaceDefinition(name="default", path=workspace_path)
+            )
+            repos_config.last_used_workspace = "default"
+        else:
+            target_workspace.path = workspace_path
+        repos_config.keywords = keywords
+    else:
+        repos_config = RepoConfig(
+            workspaces=[
+                WorkspaceDefinition(name="default", path=workspace_path)
+            ],
+            last_used_workspace="default",
+            keywords=keywords,
+        )
 
     # Build GitHub config (optional)
     github_config = None
-    if configure_github or (current_config and current_config.github):
+    if current_config and current_config.github:
+        github_config = current_config.github.model_copy(deep=True)
+    elif configure_github:
         from devflow.config.models import GitHubConfig
         github_config = GitHubConfig(
             api_url=github_api_url if github_api_url else "https://api.github.com",
@@ -889,22 +916,31 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
             default_labels=github_default_labels,
             auto_close_on_complete=github_auto_close,
         )
-        # Preserve existing repository setting if present
-        if current_config and current_config.github and current_config.github.repository:
-            github_config.repository = current_config.github.repository
+    if configure_github and github_config:
+        github_config.api_url = github_api_url or github_config.api_url
+        github_config.default_labels = github_default_labels
+        github_config.auto_close_on_complete = github_auto_close
 
-    # Build new config
-    new_config = Config(
-        jira=jira_config,
-        github=github_config,
-        repos=repos_config,
-        time_tracking=TimeTrackingConfig(),
-        session_summary=SessionSummaryConfig(),
-        templates=TemplateConfig(),
-        agent_backend=current_config.agent_backend if current_config else "claude",
-        model_provider=current_config.model_provider if current_config else ModelProviderConfig(),
-        agent=current_config.agent if current_config else AgentConfig(),
-    )
+    # Preserve every configuration section not explicitly edited by this
+    # wizard.  This includes model-provider profiles and prevents a reset from
+    # silently reverting the complete configuration to defaults.
+    if current_config:
+        new_config = current_config.model_copy(deep=True)
+        new_config.jira = jira_config
+        new_config.github = github_config
+        new_config.repos = repos_config
+    else:
+        new_config = Config(
+            jira=jira_config,
+            github=github_config,
+            repos=repos_config,
+            time_tracking=TimeTrackingConfig(),
+            session_summary=SessionSummaryConfig(),
+            templates=TemplateConfig(),
+            agent_backend="claude",
+            model_provider=ModelProviderConfig(),
+            agent=AgentConfig(),
+        )
 
     # PR/MR Template Configuration (optional)
     console.print("\n[bold]=== PR/MR Template Configuration ===[/bold]\n")
