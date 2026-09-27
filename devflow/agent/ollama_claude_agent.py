@@ -105,6 +105,8 @@ class OllamaClaudeAgent(AgentInterface):
 
         # Build command: ollama launch claude [--model <model>]
         cmd = ["ollama", "launch", "claude"]
+        from devflow.utils.model_provider import get_profile_arguments
+        cmd.extend(get_profile_arguments(model_provider_profile, self.get_agent_name()))
 
         # Determine model from config/env/default (priority order)
         model = self._get_model_name(model_provider_profile)
@@ -192,6 +194,8 @@ class OllamaClaudeAgent(AgentInterface):
 
         # Build command: ollama launch claude [--model <model>]
         cmd = ["ollama", "launch", "claude"]
+        from devflow.utils.model_provider import get_profile_arguments
+        cmd.extend(get_profile_arguments(model_provider_profile, self.get_agent_name()))
 
         # Determine model from config/env/default (priority order)
         model = self._get_model_name(model_provider_profile)
@@ -235,9 +239,11 @@ class OllamaClaudeAgent(AgentInterface):
             ToolNotFoundError: If ollama or claude command is not installed
         """
         # Try ollama launch claude first, fall back to regular claude --resume
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         try:
             require_tool("ollama", "resume Claude Code session with Ollama")
-            cmd = ["ollama", "launch", "claude"]
+            cmd = ["ollama", "launch", "claude", *profile_arguments]
 
             # Determine model from config/env/default
             model = self._get_model_name(model_provider_profile)
@@ -257,7 +263,7 @@ class OllamaClaudeAgent(AgentInterface):
             # Fall back to regular claude --resume
             require_tool("claude", "resume Claude Code session")
             return subprocess.Popen(
-                ["claude", "--resume", session_id],
+                ["claude", *profile_arguments, "--resume", session_id],
                 cwd=project_path,
                 env=env if env is not None else os.environ.copy(),
                 # Do NOT redirect stdout/stderr - Claude Code needs terminal interaction

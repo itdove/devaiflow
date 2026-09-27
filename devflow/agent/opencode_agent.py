@@ -70,6 +70,7 @@ class OpenCodeAgent(AgentInterface):
         self,
         project_path: str,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> subprocess.Popen:
         """Launch a new OpenCode session in a project directory.
 
@@ -86,9 +87,11 @@ class OpenCodeAgent(AgentInterface):
         require_tool("opencode", "launch OpenCode AI assistant")
 
         final_env = env if env is not None else os.environ.copy()
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         return subprocess.Popen(
-            ["opencode"],
+            ["opencode", *profile_arguments],
             cwd=project_path,
             env=final_env,
         )
@@ -140,13 +143,13 @@ class OpenCodeAgent(AgentInterface):
         require_tool("opencode", "launch OpenCode AI assistant")
 
         final_env = env if env is not None else os.environ.copy()
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         if headless:
-            cmd = ["opencode", "run", initial_prompt]
+            cmd = ["opencode", "run", *profile_arguments]
         else:
-            cmd = ["opencode"]
-            if initial_prompt:
-                cmd.extend(["--prompt", initial_prompt])
+            cmd = ["opencode", *profile_arguments]
 
         if session_id and session_id.startswith("ses"):
             cmd.extend(["--session", session_id])
@@ -176,6 +179,12 @@ class OpenCodeAgent(AgentInterface):
         if auto_approve:
             cmd.append("--dangerously-skip-permissions")
 
+        if headless:
+            if initial_prompt:
+                cmd.append(initial_prompt)
+        elif initial_prompt:
+            cmd.extend(["--prompt", initial_prompt])
+
         return subprocess.Popen(
             cmd,
             cwd=project_path,
@@ -187,6 +196,7 @@ class OpenCodeAgent(AgentInterface):
         session_id: str,
         project_path: str,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> subprocess.Popen:
         """Resume an existing OpenCode session.
 
@@ -204,8 +214,10 @@ class OpenCodeAgent(AgentInterface):
         require_tool("opencode", "resume OpenCode AI assistant")
 
         final_env = env if env is not None else os.environ.copy()
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
-        cmd = ["opencode", "--session", session_id]
+        cmd = ["opencode", *profile_arguments, "--session", session_id]
 
         return subprocess.Popen(
             cmd,
@@ -489,10 +501,12 @@ class OpenCodeAgent(AgentInterface):
             from devflow.utils.model_provider import (
                 build_env_from_profile,
                 get_model_name_from_profile,
+                get_profile_arguments,
                 qualify_model_for_agent,
             )
 
-            cmd = ["opencode", "run", "-q"]
+            profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
+            cmd = ["opencode", "run", "-q", *profile_arguments]
             model = get_model_name_from_profile(
                 model_provider_profile,
                 command="pr_template",

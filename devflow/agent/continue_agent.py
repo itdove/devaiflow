@@ -65,7 +65,12 @@ class ContinueAgent(AgentInterface):
         self.vscode_dir = Path.home() / ".vscode"
         self.workspace_storage = self.vscode_dir / "User" / "workspaceStorage"
 
-    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def launch_session(
+        self,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Launch VS Code with Continue extension in a project directory.
 
         Args:
@@ -78,6 +83,8 @@ class ContinueAgent(AgentInterface):
         Raises:
             ToolNotFoundError: If code command is not installed
         """
+        from devflow.utils.model_provider import get_profile_arguments
+        get_profile_arguments(model_provider_profile, self.get_agent_name())
         require_tool("code", "launch VS Code with Continue extension")
 
         # Launch VS Code in the project directory
@@ -128,6 +135,8 @@ class ContinueAgent(AgentInterface):
         Raises:
             ToolNotFoundError: If code command is not installed
         """
+        from devflow.utils.model_provider import get_profile_arguments
+        get_profile_arguments(model_provider_profile, self.get_agent_name())
         require_tool("code", "launch VS Code with Continue extension")
 
         # Save initial prompt to a file for user reference
@@ -144,7 +153,13 @@ class ContinueAgent(AgentInterface):
             env=env,
         )
 
-    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def resume_session(
+        self,
+        session_id: str,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Resume VS Code with Continue extension.
 
         VS Code and Continue automatically restore the previous workspace state
@@ -161,6 +176,8 @@ class ContinueAgent(AgentInterface):
         Raises:
             ToolNotFoundError: If code command is not installed
         """
+        from devflow.utils.model_provider import get_profile_arguments
+        get_profile_arguments(model_provider_profile, self.get_agent_name())
         require_tool("code", "resume VS Code with Continue extension")
 
         # VS Code automatically restores workspace state and Continue chat history

@@ -27,6 +27,7 @@ def _configure_profiles(config_loader: ConfigLoader):
                 provider="anthropic",
                 agent_backend="claude",
                 model_name="configured-model",
+                arguments=["--profile-option", "configured-value"],
             ),
             "changed-profile": ModelProviderProfile(
                 name="changed-profile",
@@ -61,6 +62,18 @@ def test_new_persists_configured_profile_and_model(temp_daf_home, tmp_path):
     assert session.model_profile == "configured-profile"
     assert session.model_id == "configured-model"
     assert session.agent_backend == "claude"
+
+
+def test_config_loader_round_trips_profile_arguments(temp_daf_home):
+    config_loader = ConfigLoader()
+    _configure_profiles(config_loader)
+
+    loaded = ConfigLoader().load_config()
+
+    assert loaded.model_provider.profiles["configured-profile"].arguments == [
+        "--profile-option",
+        "configured-value",
+    ]
 
 
 def test_new_multi_project_persists_configured_profile_and_model(temp_daf_home, tmp_path):

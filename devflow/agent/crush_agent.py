@@ -74,6 +74,7 @@ class CrushAgent(AgentInterface):
         self,
         project_path: str,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> subprocess.Popen:
         """Launch a new Crush session in a project directory.
 
@@ -88,13 +89,15 @@ class CrushAgent(AgentInterface):
             ToolNotFoundError: If crush command is not installed
         """
         require_tool("crush", "launch Crush AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         # Prepare environment
         final_env = env if env is not None else os.environ.copy()
 
         # Launch Crush in the project directory
         return subprocess.Popen(
-            ["crush"],
+            ["crush", *profile_arguments],
             cwd=project_path,
             env=final_env,
             # Crush needs terminal interaction for TUI
@@ -139,6 +142,8 @@ class CrushAgent(AgentInterface):
             ToolNotFoundError: If crush command is not installed
         """
         require_tool("crush", "launch Crush AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         # Prepare environment
         final_env = env if env is not None else os.environ.copy()
@@ -146,7 +151,7 @@ class CrushAgent(AgentInterface):
         # Build command
         # Crush doesn't support passing initial prompts via CLI
         # We can only open a specific session with --session flag
-        cmd = ["crush", "--session", session_id]
+        cmd = ["crush", *profile_arguments, "--session", session_id]
 
         # Note: Skills directories are not supported by Crush
         # Model provider configuration would need to be set in ~/.config/crush/crush.json
@@ -163,6 +168,7 @@ class CrushAgent(AgentInterface):
         session_id: str,
         project_path: str,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> subprocess.Popen:
         """Resume an existing Crush session.
 
@@ -178,12 +184,14 @@ class CrushAgent(AgentInterface):
             ToolNotFoundError: If crush command is not installed
         """
         require_tool("crush", "resume Crush AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
         # Prepare environment
         final_env = env if env is not None else os.environ.copy()
 
         # Resume session by UUID
-        cmd = ["crush", "--session", session_id]
+        cmd = ["crush", *profile_arguments, "--session", session_id]
 
         return subprocess.Popen(
             cmd,

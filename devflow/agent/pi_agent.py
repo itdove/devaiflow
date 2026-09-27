@@ -150,11 +150,15 @@ class PiAgent(AgentInterface):
         self,
         project_path: str,
         env: dict[str, str] | None = None,
+        model_provider_profile: dict[str, Any] | None = None,
     ) -> subprocess.Popen:
         """Launch a new interactive Pi session."""
         require_tool("pi", "launch Pi AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         command = [
             "pi",
+            *profile_arguments,
             "--session-dir",
             str(self.get_session_dir(project_path)),
         ]
@@ -179,8 +183,11 @@ class PiAgent(AgentInterface):
     ) -> subprocess.Popen:
         """Launch Pi with an initial prompt or in print mode."""
         require_tool("pi", "launch Pi AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         command = [
             "pi",
+            *profile_arguments,
             "--session-dir",
             str(self.get_session_dir(project_path)),
         ]
@@ -212,12 +219,16 @@ class PiAgent(AgentInterface):
         session_id: str,
         project_path: str,
         env: dict[str, str] | None = None,
+        model_provider_profile: dict[str, Any] | None = None,
     ) -> subprocess.Popen:
         """Resume an existing Pi session."""
         require_tool("pi", "resume Pi AI assistant")
+        from devflow.utils.model_provider import get_profile_arguments
+        profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         return subprocess.Popen(
             [
                 "pi",
+                *profile_arguments,
                 "--session-dir",
                 str(self.get_session_dir(project_path)),
                 "--session",
@@ -428,7 +439,9 @@ class PiAgent(AgentInterface):
     ) -> str | None:
         """Generate text using Pi's non-interactive print mode."""
         try:
-            command = ["pi", "--print"]
+            from devflow.utils.model_provider import get_profile_arguments
+            profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
+            command = ["pi", "--print", *profile_arguments]
             self._append_profile_options(
                 command,
                 model_provider_profile,

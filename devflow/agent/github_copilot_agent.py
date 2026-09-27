@@ -49,7 +49,12 @@ class GitHubCopilotAgent(AgentInterface):
         else:
             self.copilot_dir = copilot_dir
 
-    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def launch_session(
+        self,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Launch VS Code with GitHub Copilot in a project directory.
 
         Args:
@@ -62,6 +67,8 @@ class GitHubCopilotAgent(AgentInterface):
         Raises:
             ToolNotFoundError: If code command is not installed
         """
+        from devflow.utils.model_provider import get_profile_arguments
+        get_profile_arguments(model_provider_profile, self.get_agent_name())
         require_tool("code", "launch VS Code with GitHub Copilot")
 
         return subprocess.Popen(
@@ -112,9 +119,19 @@ class GitHubCopilotAgent(AgentInterface):
         """
         # GitHub Copilot doesn't support CLI-based prompts or session IDs
         # Just launch VS Code and let the user interact with Copilot Chat manually
-        return self.launch_session(project_path, env=env)
+        return self.launch_session(
+            project_path,
+            env=env,
+            model_provider_profile=model_provider_profile,
+        )
 
-    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def resume_session(
+        self,
+        session_id: str,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Resume VS Code in a project directory.
 
         Note: VS Code manages its own window sessions. The session_id parameter
@@ -131,6 +148,8 @@ class GitHubCopilotAgent(AgentInterface):
         Raises:
             ToolNotFoundError: If code command is not installed
         """
+        from devflow.utils.model_provider import get_profile_arguments
+        get_profile_arguments(model_provider_profile, self.get_agent_name())
         require_tool("code", "resume VS Code with GitHub Copilot")
 
         # VS Code automatically restores previous session

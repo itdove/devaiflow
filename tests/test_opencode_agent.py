@@ -301,6 +301,34 @@ class TestOpenCodeAgentLaunch:
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
+    def test_launch_with_prompt_passes_profile_arguments_before_generated_flags(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """Profile argv tokens are preserved and generated options remain authoritative."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        agent.launch_with_prompt(
+            project_path=str(project_dir),
+            initial_prompt="Fix bug",
+            session_id="ses_abc123",
+            model_provider_profile={
+                "provider": "openai",
+                "model_name": "gpt-5.6-sol",
+                "arguments": ["--config", "custom.json"],
+            },
+        )
+
+        command = mock_popen.call_args.args[0]
+        assert command[1:3] == ["--config", "custom.json"]
+        assert command.index("--config") < command.index("--model")
+        assert command[command.index("--model") + 1] == "openai/gpt-5.6-sol"
+        assert command[-1] == "Fix bug"
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
     def test_launch_with_prompt_qualifies_unqualified_model(
         self, mock_popen, mock_require, tmp_path
     ):

@@ -51,7 +51,12 @@ class WindsurfAgent(AgentInterface):
         self.windsurf_dir = windsurf_dir
         self.workspace_storage = windsurf_dir / "User" / "workspaceStorage"
 
-    def launch_session(self, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def launch_session(
+        self,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Launch Windsurf in a project directory.
 
         Args:
@@ -64,6 +69,8 @@ class WindsurfAgent(AgentInterface):
         Raises:
             ToolNotFoundError: If windsurf command is not installed
         """
+        from devflow.utils.model_provider import get_profile_arguments
+        get_profile_arguments(model_provider_profile, self.get_agent_name())
         require_tool("windsurf", "launch Windsurf editor")
 
         return subprocess.Popen(
@@ -114,9 +121,19 @@ class WindsurfAgent(AgentInterface):
         """
         # Windsurf doesn't support CLI-based prompts or session IDs
         # Just launch Windsurf and let the user interact with AI Chat/Cascade manually
-        return self.launch_session(project_path, env=env)
+        return self.launch_session(
+            project_path,
+            env=env,
+            model_provider_profile=model_provider_profile,
+        )
 
-    def resume_session(self, session_id: str, project_path: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def resume_session(
+        self,
+        session_id: str,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
+    ) -> subprocess.Popen:
         """Resume Windsurf in a project directory.
 
         Windsurf automatically restores the previous workspace state including
@@ -133,6 +150,8 @@ class WindsurfAgent(AgentInterface):
         Raises:
             ToolNotFoundError: If windsurf command is not installed
         """
+        from devflow.utils.model_provider import get_profile_arguments
+        get_profile_arguments(model_provider_profile, self.get_agent_name())
         require_tool("windsurf", "resume Windsurf editor")
 
         # Windsurf automatically restores workspace state

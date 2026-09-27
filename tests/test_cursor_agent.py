@@ -36,6 +36,23 @@ def test_launch_session():
             assert call_args[0][0] == ["cursor", "/path/to/project"]
 
 
+def test_profile_arguments_are_rejected_before_cursor_launch():
+    """Cursor must not silently ignore unsupported profile argv tokens."""
+    agent = CursorAgent()
+
+    with patch("devflow.agent.cursor_agent.subprocess.Popen") as mock_popen:
+        with patch("devflow.agent.cursor_agent.require_tool"):
+            with pytest.raises(ValueError, match="does not support profile arguments"):
+                agent.launch_with_prompt(
+                    "/path/to/project",
+                    "Inspect the project",
+                    "session-123",
+                    model_provider_profile={"arguments": ["--agent-option"]},
+                )
+
+            mock_popen.assert_not_called()
+
+
 def test_resume_session():
     """Test resuming Cursor session."""
     agent = CursorAgent()

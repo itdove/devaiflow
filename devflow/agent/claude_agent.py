@@ -172,6 +172,8 @@ class ClaudeAgent(AgentInterface):
         # Build full command with session ID and prompt
         # Format: claude [--name name] [--print] [--dangerously-skip-permissions] [--model model] --session-id <uuid> "<prompt>" --add-dir ...
         cmd = ["claude"]
+        from devflow.utils.model_provider import get_profile_arguments
+        cmd.extend(get_profile_arguments(model_provider_profile, self.get_agent_name()))
         from devflow.agent.model_config import get_agent_model_config
         settings = get_agent_model_config(config, self.get_agent_name())
 
@@ -241,6 +243,8 @@ class ClaudeAgent(AgentInterface):
         # Build environment (command is always claude --resume for resume)
         final_env, _ = self._build_env_and_cmd(model_provider_profile, base_env=env)
         cmd = ["claude"]
+        from devflow.utils.model_provider import get_profile_arguments
+        cmd.extend(get_profile_arguments(model_provider_profile, self.get_agent_name()))
         if display_name:
             cmd.extend(["--name", display_name])
         cmd.extend(["--resume", session_id])
@@ -454,9 +458,12 @@ class ClaudeAgent(AgentInterface):
         if not model_provider_profile:
             return env, cmd
 
+        from devflow.utils.model_provider import get_profile_arguments
+        cmd = ["claude"] + get_profile_arguments(model_provider_profile, self.get_agent_name())
+
         # Build command with model name if specified
         if model_provider_profile.get("model_name"):
-            cmd = ["claude", "--model", model_provider_profile["model_name"]]
+            cmd.extend(["--model", model_provider_profile["model_name"]])
 
         return env, cmd
 

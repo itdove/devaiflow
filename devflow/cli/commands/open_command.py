@@ -1250,8 +1250,14 @@ def open_session(
             # Other agents may not support resume in the same way
             if agent_backend in ("claude", "ollama", "ollama-claude"):
                 # Build resume command with --model flag if using alternative provider
+                from devflow.utils.model_provider import get_profile_arguments
                 agent_cmd = "ollama" if agent_backend in ("ollama", "ollama-claude") else "claude"
                 base_cmd = [agent_cmd]
+
+                if agent_cmd == "ollama":
+                    base_cmd.extend(["launch", "claude"])
+
+                base_cmd.extend(get_profile_arguments(model_provider_profile, agent_backend))
 
                 # Add session display name
                 if agent_cmd == "claude":
@@ -1259,12 +1265,7 @@ def open_session(
 
                 # Add model flag for alternative providers
                 if model_provider_profile and model_provider_profile.get("model_name"):
-                    if agent_backend in ("ollama", "ollama-claude"):
-                        base_cmd.extend(["launch", "claude", "--model", model_provider_profile["model_name"]])
-                    else:
-                        base_cmd.extend(["--model", model_provider_profile["model_name"]])
-                elif agent_backend in ("ollama", "ollama-claude"):
-                    base_cmd.extend(["launch", "claude"])
+                    base_cmd.extend(["--model", model_provider_profile["model_name"]])
 
                 # Add resume flag with session ID
                 base_cmd.extend(["--resume", active_conv.ai_agent_session_id])
@@ -1339,12 +1340,17 @@ def open_session(
                             session_id=sid,
                             project_path=oc_project_path,
                             env=env,
+                            model_provider_profile=model_provider_profile,
                         )
                     else:
                         # Fallback: launch new session and capture ID
                         _resume_sessions_before = _snap_resume(agent, agent_backend, oc_project_path)
                         _resume_needs_capture = True
-                        process = agent.launch_session(oc_project_path, env=env)
+                        process = agent.launch_session(
+                            oc_project_path,
+                            env=env,
+                            model_provider_profile=model_provider_profile,
+                        )
                     cmd = None
             else:
                 # For other agent backends (GitHub Copilot, Cursor, Windsurf),
@@ -1357,7 +1363,11 @@ def open_session(
 
                 # Launch new session
                 if project_path:
-                    process = agent.launch_session(project_path)
+                    process = agent.launch_session(
+                        project_path,
+                        env=env,
+                        model_provider_profile=model_provider_profile,
+                    )
                     # Note: We don't wait here, we'll handle it in the try block below
                     cmd = None  # Signal that we've already launched
 
