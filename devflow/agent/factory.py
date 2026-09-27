@@ -476,7 +476,9 @@ def capture_agent_session_id(
 
     For agents that generate their own session IDs (like OpenCode), this
     compares session lists before and after launch to find the new session.
-    Updates ``active_conv.ai_agent_session_id`` in place.
+    Updates ``active_conv.ai_agent_session_id`` only when exactly one new
+    session can be identified; ambiguous results leave the capture placeholder
+    intact for a later verified retry.
 
     Args:
         agent: Agent client instance
@@ -493,28 +495,44 @@ def capture_agent_session_id(
     from rich.console import Console
     console = Console()
 
+    # File-backed agents can flush after exit, and OpenCode's database-backed
+    # session list can show the same delay.  Keep the grace period scoped to
+    # those backends so other self-ID adapters retain their existing lifecycle.
     file_backed = agent.uses_file_based_sessions() is True
-    attempts = _SESSION_CAPTURE_POLL_ATTEMPTS if file_backed else 1
+    opencode_backend = _resolve_alias(agent_backend) == "opencode"
+    attempts = _SESSION_CAPTURE_POLL_ATTEMPTS if file_backed or opencode_backend else 1
     new_sessions: Set[str] = set()
     try:
         for attempt in range(attempts):
             sessions_after = agent.get_existing_sessions(launch_dir)
-            new_sessions = sessions_after - sessions_before
-            if new_sessions:
+            current_new_sessions = sessions_after - sessions_before
+            if opencode_backend:
+                # Keep scanning the short grace period so a second concurrent
+                # session cannot arrive after the first candidate is seen.
+                new_sessions.update(current_new_sessions)
+            else:
+                new_sessions = current_new_sessions
+
+            if (opencode_backend and len(new_sessions) > 1) or (
+                not opencode_backend and new_sessions
+            ):
                 break
 
             if attempt < attempts - 1:
-                # File-backed agents may flush their session after the process exits.
+                # Agents may flush their session after the process exits.
                 time.sleep(_SESSION_CAPTURE_POLL_INTERVAL)
 
         if new_sessions:
             if len(new_sessions) > 1:
                 console.print(
                     f"[yellow]Warning: Multiple new {agent.get_agent_name()} sessions detected "
-                    f"({len(new_sessions)}). Using the most recent matching session. "
-                    f"Session will be verified on next open.[/yellow]"
+                    f"({len(new_sessions)}). Unable to identify the current session safely. "
+                    f"Leaving the session ID as {PENDING_CAPTURE_PLACEHOLDER}; "
+                    "reopen after verifying the active agent session.[/yellow]"
                 )
-            real_session_id = sorted(new_sessions)[-1]
+                return False
+
+            real_session_id = next(iter(new_sessions))
             active_conv.ai_agent_session_id = real_session_id
             console.print(f"[dim]Captured {agent.get_agent_name()} session ID: {real_session_id}[/dim]")
             return True
