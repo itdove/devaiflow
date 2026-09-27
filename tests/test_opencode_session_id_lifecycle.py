@@ -161,11 +161,14 @@ class TestCaptureAgentSessionId:
     def test_file_backed_capture_retries_after_delayed_flush(self):
         agent = Mock()
         agent.uses_file_based_sessions.return_value = True
-        agent.get_existing_sessions.side_effect = [
+        responses = [
             {"ses_abc", "ses_def"},
             {"ses_abc", "ses_def"},
             {"ses_abc", "ses_def", "ses_new"},
         ]
+        agent.get_existing_sessions.side_effect = (
+            lambda _path: responses.pop(0) if responses else {"ses_abc", "ses_def", "ses_new"}
+        )
         agent.get_agent_name.return_value = "pi"
 
         active_conv = Mock()
@@ -179,6 +182,98 @@ class TestCaptureAgentSessionId:
         assert result is True
         assert active_conv.ai_agent_session_id == "ses_new"
         assert sleep.call_count == 2
+
+    def test_opencode_capture_retries_after_delayed_database_flush(self):
+        agent = Mock()
+        responses = [
+            {"ses_abc", "ses_def"},
+            {"ses_abc", "ses_def"},
+            {"ses_abc", "ses_def", "ses_new"},
+        ]
+        agent.get_existing_sessions.side_effect = (
+            lambda _path: responses.pop(0) if responses else {"ses_abc", "ses_def", "ses_new"}
+        )
+        agent.get_agent_name.return_value = "opencode"
+
+        active_conv = Mock()
+        active_conv.ai_agent_session_id = PENDING_CAPTURE_PLACEHOLDER
+
+        with patch("devflow.agent.factory.time.sleep") as sleep:
+            result = capture_agent_session_id(
+                agent, "opencode", "/project", active_conv, {"ses_abc", "ses_def"}
+            )
+
+        assert result is True
+        assert active_conv.ai_agent_session_id == "ses_new"
+        assert sleep.call_count == 9
+
+    def test_late_concurrent_candidate_prevents_capture(self):
+        agent = Mock()
+        responses = [
+            {"ses_current"},
+            {"ses_current", "ses_unrelated"},
+        ]
+        agent.get_existing_sessions.side_effect = (
+            lambda _path: responses.pop(0) if responses else {"ses_current", "ses_unrelated"}
+        )
+        agent.get_agent_name.return_value = "opencode"
+
+        active_conv = Mock()
+        active_conv.ai_agent_session_id = PENDING_CAPTURE_PLACEHOLDER
+
+        with patch("devflow.agent.factory.time.sleep"):
+            result = capture_agent_session_id(
+                agent, "opencode", "/project", active_conv, set()
+            )
+
+        assert result is False
+        assert active_conv.ai_agent_session_id == PENDING_CAPTURE_PLACEHOLDER
+
+    def test_stale_recent_candidate_is_not_considered_new(self):
+        agent = Mock()
+        agent.get_existing_sessions.return_value = {
+            "ses_stale_recent",
+            "ses_current",
+        }
+        agent.get_agent_name.return_value = "opencode"
+
+        active_conv = Mock()
+        active_conv.ai_agent_session_id = PENDING_CAPTURE_PLACEHOLDER
+
+        result = capture_agent_session_id(
+            agent,
+            "opencode",
+            "/project",
+            active_conv,
+            {"ses_stale_recent"},
+        )
+
+        assert result is True
+        assert active_conv.ai_agent_session_id == "ses_current"
+
+    def test_ambiguous_new_sessions_leave_capture_pending(self, capsys):
+        agent = Mock()
+        agent.get_existing_sessions.return_value = {
+            "ses_current",
+            "ses_unrelated",
+        }
+        agent.get_agent_name.return_value = "opencode"
+
+        active_conv = Mock()
+        active_conv.ai_agent_session_id = PENDING_CAPTURE_PLACEHOLDER
+
+        result = capture_agent_session_id(
+            agent, "opencode", "/project", active_conv, set()
+        )
+
+        assert result is False
+        assert active_conv.ai_agent_session_id == PENDING_CAPTURE_PLACEHOLDER
+
+        output = " ".join(capsys.readouterr().out.split())
+        assert "most recent" not in output
+        assert "Unable to identify the current session safely" in output
+        assert "ses_current" not in output
+        assert "ses_unrelated" not in output
 
     def test_no_new_sessions_returns_false(self):
         agent = Mock()
