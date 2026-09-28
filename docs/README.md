@@ -31,6 +31,7 @@ Detailed technical documentation:
 In-depth guides for specific topics:
 
 - **[Session Management](guides/session-management.md)** - Understanding sessions, conversations, and workspaces
+- **[Web Dashboard](guides/web-dashboard.md)** - Browser-based session, configuration, and issue tracker console
 - **[Multi-Agent Skill Installation](guides/multi-agent-skill-installation.md)** - Install skills to multiple AI agents
 - **[Troubleshooting](guides/troubleshooting.md)** - Common issues and solutions
 - **[Hierarchical Skills](guides/hierarchical-skills.md)** - Custom Claude Code skills system

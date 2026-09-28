@@ -4350,7 +4350,6 @@ daf dashboard [OPTIONS]
 - `--port PORT` - Port to bind to (default: 0 = auto-assign)
 - `--no-open` - Don't auto-open the browser
 - `--reload` - Enable auto-reload for development
-- `--host HOST` - Host to bind to (default: 127.0.0.1)
 - `-b`, `--background` - Run in the background (daemonize)
 
 **Subcommands:**
@@ -4385,7 +4384,7 @@ daf dashboard stop
 - **Time** (`/time`) - Time tracking visualization with charts
 - **Workspaces** (`/workspaces`) - Workspace management with repo discovery
 
-**Requires:** `pip install devaiflow[web]` (NiceGUI optional dependency)
+**Requires:** `pip install devaiflow` (NiceGUI is included in the main package dependencies)
 
 See [Web Dashboard Guide](../guides/web-dashboard.md) for full documentation.
 

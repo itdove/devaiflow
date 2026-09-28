@@ -3647,10 +3647,9 @@ def release(version: str, approve: str, from_tag: str, dry_run: bool, auto_push:
 @click.option("--port", default=0, type=int, help="Port to bind to (0 = auto-assign)")
 @click.option("--no-open", is_flag=True, help="Don't auto-open the browser")
 @click.option("--reload", is_flag=True, help="Enable auto-reload for development")
-@click.option("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
 @click.option("-b", "--background", is_flag=True, help="Run in the background (daemonize)")
 @click.pass_context
-def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: str, background: bool) -> None:
+def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, background: bool) -> None:
     """Launch the web-based dashboard in a browser.
 
     Opens a NiceGUI-based web interface for viewing and managing
@@ -3691,7 +3690,7 @@ def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: 
         import subprocess
         import time
         import webbrowser
-        from devflow.web.app import _write_pid, _read_port, _get_state_dir
+        from devflow.web.app import _read_port, _get_state_dir
 
         # Find the daf binary -- prefer the same one the user invoked
         daf_bin = shutil.which("daf")
@@ -3702,7 +3701,7 @@ def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: 
             cmd = [daf_bin]
 
         # Child always runs foreground with --no-open (parent opens browser)
-        cmd += ["dashboard", "--no-open", "--port", str(port), "--host", host]
+        cmd += ["dashboard", "--no-open", "--port", str(port)]
         if reload:
             cmd.append("--reload")
 
@@ -3740,7 +3739,7 @@ def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: 
                 break
 
         if discovered_port:
-            url = f"http://{host}:{discovered_port}"
+            url = f"http://127.0.0.1:{discovered_port}"
             console.print(
                 f"[green]✓[/green] Dashboard started in background (pid={proc.pid}, port={discovered_port})"
             )
@@ -3755,7 +3754,7 @@ def dashboard(ctx: click.Context, port: int, no_open: bool, reload: bool, host: 
         return
 
     app = DashboardApp()
-    app.run(host=host, port=port, show=not no_open, reload=reload)
+    app.run(port=port, show=not no_open, reload=reload)
 
 
 @dashboard.command()

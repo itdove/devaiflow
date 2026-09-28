@@ -4,16 +4,16 @@ The DevAIFlow web dashboard is a browser-based alternative to the Textual TUI, b
 
 ## Installation
 
-The web dashboard requires the `web` optional dependency:
+NiceGUI is installed with the main DevAIFlow package:
 
 ```bash
-pip install devaiflow[web]
+pip install devaiflow
 ```
 
-Or install NiceGUI directly:
+For a development checkout, install the project normally:
 
 ```bash
-pip install nicegui
+pip install -e .
 ```
 
 ## Launching the Dashboard
@@ -40,7 +40,7 @@ daf dashboard -b
 #   Stop: daf dashboard stop
 ```
 
-The dashboard writes its PID and port to state files (`~/.daf-sessions/state/dashboard.pid` and `dashboard.port`) so it can be discovered and stopped later.
+The dashboard writes its PID and port to `state/dashboard.pid` and `state/dashboard.port` under the XDG-aware DevAIFlow state directory so it can be discovered and stopped later.
 
 If you run `daf dashboard` while a background instance is already running, it tells you the existing URL instead of starting a duplicate.
 
@@ -61,9 +61,9 @@ This sends SIGTERM to the background process and cleans up the state files.
 The main page shows:
 
 - **Status summary cards** -- total, in-progress, paused, complete, and created session counts
-- **Filter controls** -- filter sessions by status
+- **Filter controls** -- filter sessions by status, workspace, and issue tracker
 - **Session table** -- sortable, searchable table with columns: Status, Name, Workspace, Issue Key, Goal, Time, Last Active
-- **Auto-refresh** -- session data refreshes every 10 seconds
+- **Auto-refresh** -- session data and status cards refresh every 10 seconds
 
 Click any session row to navigate to its detail page.
 
@@ -72,7 +72,7 @@ Click any session row to navigate to its detail page.
 Full session information:
 
 - **Metadata** -- name, status, type, issue key, workspace, goal, created/last active times
-- **Conversations** -- list of AI agent conversations with project paths, branches, session IDs, message counts, and PR links
+- **Conversations** -- list of active and archived AI agent conversations with project paths, branches, session IDs, message counts, summaries, and PR links
 - **Work Sessions** -- time tracking history with start/end times, duration, and user
 - **Notes** -- view existing notes and add new ones directly from the web UI
 
@@ -87,9 +87,9 @@ Supports two modes, matching the Textual TUI:
 | **JIRA Integration** | URL, project key, components (dropdown from field_mappings), comment visibility, dynamic custom field defaults with dropdowns for fields with allowed values, auto-add summary, auto-update PR URL |
 | **GitHub/GitLab** | API URL, repository, labels, auto-close, status labels, completion label, GitLab settings |
 | **Repository & VCS** | Detection method/fallback, branch checkout, base sync, branch strategy, commit, PR/MR creation and push |
-| **Workspaces** | Add/remove/set-default workspaces with name and path |
-| **AI** | Agent backend, session summary mode, auto-launch, unit test instructions, context files management |
-| **Model Providers** | View and set default model provider profiles |
+| **Workspaces** | Add/edit/remove/set-default workspaces with name and path |
+| **AI** | Agent backend, session summary mode, auto-launch, unit test instructions, add/edit/remove context files |
+| **Model Providers** | Add/edit/remove/set-default profiles and explicitly validate provider configuration |
 | **Session Workflow** | Auto-complete on exit, time tracking |
 | **Advanced** | Update checker timeout, issue tracker backend, hierarchical config source |
 
@@ -107,13 +107,17 @@ Click "Switch to Advanced/Simple Mode" in the top-right corner to toggle between
 **Actions:**
 - **Preview JSON** -- shows full config as JSON with option to confirm and save
 - **Save** -- saves config with automatic backup
+- **Edit dialogs** -- workspace, context-file, and model-provider changes are marked dirty and saved with the rest of the configuration
+- **Provider validation** -- runs the same static and optional remote checks as the Textual TUI without changing profile values or displaying credentials
 
 ### Issue Tracker (`/issues`)
 
 - Displays sessions linked to JIRA/GitHub/GitLab tickets
 - Shows issue tracker configuration (JIRA URL/project, GitHub repo)
 - Sortable, searchable table filtered to sessions with issue keys
-- Click any row to view session details
+- Click any row to load ticket details and comments
+- Add comments through the configured issue tracker client
+- Open the ticket in the external issue tracker
 
 ### Time Tracking (`/time`)
 
@@ -161,8 +165,8 @@ devflow/web/
 
 - **Localhost only** -- binds to `127.0.0.1` by default
 - **Dynamic port** -- uses OS-assigned port to avoid conflicts and reduce predictability
-- **Port file** -- writes assigned port to `~/.daf-sessions/state/dashboard.port` for discovery
-- **Security warning** -- logs a warning if `--host` is set to a non-localhost address
+- **Port file** -- writes the assigned port to the XDG-aware DevAIFlow state directory for discovery
+- **Security warning** -- the application API logs a warning for non-localhost bindings; the CLI intentionally exposes no host override
 - **No authentication** -- designed for local use; remote access is not recommended
 
 ## Troubleshooting
@@ -173,8 +177,8 @@ devflow/web/
 daf dashboard
 ✗ NiceGUI is required for the web dashboard but is not installed.
 
-Install it with:
-  pip install devaiflow[web]
+Install the package with its main dependencies:
+  pip install devaiflow
 ```
 
 ### Port already in use
