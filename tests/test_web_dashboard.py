@@ -12,6 +12,7 @@ import json
 import os
 import socket
 from datetime import datetime
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch, PropertyMock
 
@@ -24,13 +25,14 @@ from devflow.config.models import (
     ConversationContext,
     Conversation,
     JiraConfig,
+    ModelProviderProfile,
     RepoConfig,
     Session,
+    WorkspaceDefinition,
     WorkSession,
 )
 from devflow.session.manager import SessionManager
 from devflow.web.utils.data_bridge import DataBridge
-
 
 # ============================================================================
 # Helper functions
@@ -261,6 +263,31 @@ class TestDataBridgeSessionToDetailDict:
 
         assert result["conversations"] == []
 
+    def test_detail_dict_includes_archived_conversations(self):
+        """Test that archived repository conversations are displayed too."""
+        bridge = DataBridge.__new__(DataBridge)
+        bridge.config_loader = Mock()
+
+        session = _make_session()
+        session.add_conversation(
+            working_dir="test-dir",
+            ai_agent_session_id="uuid-active",
+            project_path="/path/to/project",
+            branch="main",
+        )
+        session.create_new_conversation(
+            working_dir="test-dir",
+            project_path="/path/to/project",
+            branch="feature",
+        )
+
+        result = bridge._session_to_detail_dict(session)
+
+        assert len(result["conversations"]) == 2
+        assert result["conversations"][0]["session_id"] == "uuid-active"
+        assert result["conversations"][0]["archived"] is True
+        assert result["conversations"][1]["archived"] is False
+
 
 class TestDataBridgeListSessions:
     """Tests for DataBridge.list_sessions method."""
@@ -303,6 +330,62 @@ class TestDataBridgeListSessions:
             working_directory=None,
         )
         assert len(result) == 1
+
+    @patch("devflow.web.utils.data_bridge.SessionManager")
+    def test_list_sessions_with_workspace_and_tracker_filters(self, mock_manager_cls):
+        """Test dashboard filters that are applied by the data bridge."""
+        bridge = DataBridge.__new__(DataBridge)
+        config_loader = Mock()
+        config_loader.load_config.return_value = SimpleNamespace(
+            issue_tracker_backend="github",
+            github=SimpleNamespace(
+                repository="example/project",
+                api_url="https://api.github.com",
+            ),
+        )
+        bridge.config_loader = config_loader
+
+        sessions = [
+            _make_session(
+                name="github-session",
+                issue_key="#12",
+                workspace_name="workspace-a",
+            ),
+            _make_session(
+                name="unlinked-session",
+                workspace_name="workspace-b",
+            ),
+        ]
+        mock_manager = Mock()
+        mock_manager.list_sessions.return_value = sessions
+        mock_manager_cls.return_value = mock_manager
+
+        result = bridge.list_sessions(
+            workspace="workspace-a",
+            issue_tracker="github",
+        )
+
+        assert [session["name"] for session in result] == ["github-session"]
+        assert result[0]["issue_url"] == "https://github.com/example/project/issues/12"
+
+    def test_list_sessions_can_select_unlinked_sessions(self):
+        """Test that the unlinked issue-tracker filter is supported."""
+        bridge = DataBridge.__new__(DataBridge)
+        config_loader = Mock()
+        config_loader.load_config.return_value = SimpleNamespace(
+            issue_tracker_backend="jira",
+            jira=SimpleNamespace(url="https://jira.example.test"),
+        )
+        bridge.config_loader = config_loader
+
+        with patch("devflow.web.utils.data_bridge.SessionManager") as manager_cls:
+            manager_cls.return_value.list_sessions.return_value = [
+                _make_session(name="unlinked"),
+                _make_session(name="linked", issue_key="PROJ-1"),
+            ]
+            result = bridge.list_sessions(issue_tracker="unlinked")
+
+        assert [session["name"] for session in result] == ["unlinked"]
 
 
 class TestDataBridgeGetSession:
@@ -351,9 +434,14 @@ class TestDataBridgeNotes:
         session_dir = tmp_path / ".daf-sessions" / "sessions" / "test-session"
         session_dir.mkdir(parents=True)
         notes_file = session_dir / "notes.md"
-        notes_file.write_text("# Session Notes: test-session\n\n## 2026-01-01 10:00\n- Test note\n")
+        notes_file.write_text(
+            "# Session Notes: test-session\n\n## 2026-01-01 10:00\n- Test note\n"
+        )
 
-        with patch("devflow.web.utils.data_bridge.get_cs_home", return_value=tmp_path / ".daf-sessions"):
+        with patch(
+            "devflow.web.utils.data_bridge.get_cs_home",
+            return_value=tmp_path / ".daf-sessions",
+        ):
             result = bridge.get_session_notes("test-session")
 
         assert "Test note" in result
@@ -364,10 +452,24 @@ class TestDataBridgeNotes:
         bridge = DataBridge.__new__(DataBridge)
         bridge.config_loader = Mock()
 
-        with patch("devflow.web.utils.data_bridge.get_cs_home", return_value=tmp_path / ".daf-sessions"):
+        with patch(
+            "devflow.web.utils.data_bridge.get_cs_home",
+            return_value=tmp_path / ".daf-sessions",
+        ):
             result = bridge.get_session_notes("nonexistent-session")
 
         assert result == ""
+
+    def test_get_session_notes_uses_configured_sessions_dir(self, tmp_path):
+        """Test notes follow a custom ConfigLoader session directory."""
+        bridge = DataBridge.__new__(DataBridge)
+        session_dir = tmp_path / "sessions"
+        notes_dir = session_dir / "configured-session"
+        notes_dir.mkdir(parents=True)
+        (notes_dir / "notes.md").write_text("configured note", encoding="utf-8")
+        bridge.config_loader = SimpleNamespace(sessions_dir=session_dir)
+
+        assert bridge.get_session_notes("configured-session") == "configured note"
 
     @patch("devflow.web.utils.data_bridge.SessionManager")
     def test_add_session_note_success(self, mock_manager_cls):
@@ -557,17 +659,24 @@ class TestDashboardApp:
         # Mock the nicegui imports that happen inside run()
         mock_ui = MagicMock()
         mock_nicegui_app = MagicMock()
-        with patch.dict("sys.modules", {
-            "nicegui": MagicMock(ui=mock_ui, app=mock_nicegui_app),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "nicegui": MagicMock(ui=mock_ui, app=mock_nicegui_app),
+            },
+        ):
             with patch("devflow.web.app.webbrowser"):
                 # Patch nicegui imports inside run()
                 import devflow.web.app as app_module
+
                 original_run = app_module.DashboardApp.run
 
-                def mock_run(self_inner, host="127.0.0.1", port=0, show=True, reload=False):
+                def mock_run(
+                    self_inner, host="127.0.0.1", port=0, show=True, reload=False
+                ):
                     """Mock run that skips NiceGUI but tests port allocation."""
                     import devflow.web.app as _mod
+
                     if host != "127.0.0.1":
                         _mod.logger.warning(
                             "Dashboard binding to %s -- exposed on network. "
@@ -576,7 +685,9 @@ class TestDashboardApp:
                             host,
                         )
                     if port == 0:
-                        sock = mock_socket_mod.socket(mock_socket_mod.AF_INET, mock_socket_mod.SOCK_STREAM)
+                        sock = mock_socket_mod.socket(
+                            mock_socket_mod.AF_INET, mock_socket_mod.SOCK_STREAM
+                        )
                         sock.bind((host, 0))
                         port = sock.getsockname()[1]
                         sock.close()
@@ -594,7 +705,9 @@ class TestDashboardApp:
     @patch("devflow.web.app.socket")
     @patch("devflow.web.app._write_port")
     @patch("devflow.web.app.atexit")
-    def test_run_non_localhost_warning(self, mock_atexit, mock_write_port, mock_socket_mod, mock_logger):
+    def test_run_non_localhost_warning(
+        self, mock_atexit, mock_write_port, mock_socket_mod, mock_logger
+    ):
         """Test security warning when binding to non-localhost."""
         from devflow.web.app import DashboardApp
 
@@ -611,6 +724,7 @@ class TestDashboardApp:
         def mock_run(self_inner, host="127.0.0.1", port=0, show=True, reload=False):
             """Mock run that only tests security warning."""
             import devflow.web.app as _mod
+
             if host != "127.0.0.1":
                 _mod.logger.warning(
                     "Dashboard binding to %s -- exposed on network. "
@@ -619,7 +733,9 @@ class TestDashboardApp:
                     host,
                 )
             if port == 0:
-                sock = mock_socket_mod.socket(mock_socket_mod.AF_INET, mock_socket_mod.SOCK_STREAM)
+                sock = mock_socket_mod.socket(
+                    mock_socket_mod.AF_INET, mock_socket_mod.SOCK_STREAM
+                )
                 sock.bind((host, 0))
                 port = sock.getsockname()[1]
                 sock.close()
@@ -662,7 +778,7 @@ class TestDashboardCLICommand:
         assert "--reload" in result.output
 
     def test_dashboard_command_options(self):
-        """Test that dashboard command accepts expected options."""
+        """Test that dashboard command exposes only safe CLI options."""
         from devflow.cli.main import cli
 
         runner = CliRunner()
@@ -671,7 +787,7 @@ class TestDashboardCLICommand:
         assert "--port" in result.output
         assert "--no-open" in result.output
         assert "--reload" in result.output
-        assert "--host" in result.output
+        assert "--host" not in result.output
 
 
 # ============================================================================
@@ -737,7 +853,30 @@ class TestSessionTableColumns:
         from devflow.web.components.session_table import COLUMNS
 
         for col in COLUMNS:
-            assert col.get("sortable") is True, f"Column '{col['name']}' should be sortable"
+            assert (
+                col.get("sortable") is True
+            ), f"Column '{col['name']}' should be sortable"
+
+
+class TestDashboardFilterOptions:
+    """Tests for dashboard filter option generation."""
+
+    def test_filter_options_include_sorted_values_and_empty_label(self):
+        """Test stable options for populated and unassigned session fields."""
+        from devflow.web.pages.dashboard import _filter_options
+
+        sessions = [
+            {"workspace": "workspace-b"},
+            {"workspace": "workspace-a"},
+            {"workspace": ""},
+        ]
+
+        assert _filter_options(sessions, "workspace", "Unassigned") == [
+            "All",
+            "Unassigned",
+            "workspace-a",
+            "workspace-b",
+        ]
 
 
 # ============================================================================
@@ -917,6 +1056,21 @@ class TestDataBridgeConfigMethods:
         backups = list(backup_dir.glob("config-*.json"))
         assert len(backups) == 1
 
+    def test_save_config_uses_config_directory_for_backup(self, tmp_path):
+        """Test that XDG config backups stay beside the configured file."""
+        bridge = DataBridge.__new__(DataBridge)
+        mock_loader = Mock()
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text("{}")
+        mock_loader.config_dir = config_dir
+        mock_loader.config_file = config_file
+        bridge.config_loader = mock_loader
+
+        assert bridge.save_config(Mock()) is True
+        assert list((config_dir / "backups").glob("config-*.json"))
+
     def test_save_config_failure(self):
         """Test save_config returns False on error."""
         bridge = DataBridge.__new__(DataBridge)
@@ -942,6 +1096,42 @@ class TestDataBridgeConfigMethods:
 
         assert '"key": "value"' in result
         assert '"nested"' in result
+
+    @patch("devflow.issue_tracker.factory.create_issue_tracker_client")
+    def test_get_issue_details(self, create_client):
+        """Test loading detailed issue data through the configured backend."""
+        bridge = DataBridge.__new__(DataBridge)
+        bridge.config_loader = Mock()
+        bridge.config_loader.load_config.return_value = SimpleNamespace(
+            issue_tracker_backend="mock",
+            mock=None,
+        )
+        client = Mock()
+        client.get_ticket_detailed.return_value = {"key": "PROJ-1", "summary": "Test"}
+        create_client.return_value = client
+
+        result = bridge.get_issue_details("PROJ-1")
+
+        assert result["summary"] == "Test"
+        client.get_ticket_detailed.assert_called_once_with(
+            "PROJ-1", include_changelog=True, include_comments=True
+        )
+
+    @patch("devflow.issue_tracker.factory.create_issue_tracker_client")
+    def test_add_issue_comment(self, create_client):
+        """Test adding a non-empty issue comment through the backend."""
+        bridge = DataBridge.__new__(DataBridge)
+        bridge.config_loader = Mock()
+        bridge.config_loader.load_config.return_value = SimpleNamespace(
+            issue_tracker_backend="mock",
+            mock=None,
+        )
+        client = Mock()
+        create_client.return_value = client
+
+        assert bridge.add_issue_comment("PROJ-1", "  useful update  ") is True
+        client.add_comment.assert_called_once_with("PROJ-1", "useful update")
+        assert bridge.add_issue_comment("PROJ-1", " ") is False
 
     def test_get_enterprise_config(self):
         """Test loading enterprise config."""
@@ -1268,6 +1458,142 @@ class TestConfigEditorHelpers:
         assert _TRI_STATE_OPTIONS["False"] is False
         assert _TRI_STATE_OPTIONS["Prompt"] is None
 
+    def test_profile_summary_includes_provider_adapter_and_default_model(self):
+        """Test the profile summary shown by the provider list."""
+        from devflow.web.pages.config_editor import _profile_summary
+
+        profile = ModelProviderProfile(
+            name="local-profile",
+            provider="ollama",
+            agent_backend="ollama",
+            base_url="http://localhost:11434",
+            model_name="model-a",
+        )
+
+        summary = _profile_summary(profile)
+
+        assert summary == "ollama · ollama · http://localhost:11434 · default=model-a"
+
+    def test_model_provider_enforcement_source_prefers_enterprise(self):
+        """Test that hierarchy enforcement follows the TUI precedence order."""
+        from devflow.web.pages.config_editor import _model_provider_enforcement_source
+
+        bridge = Mock()
+        bridge.get_enterprise_config.return_value = {"model_provider": {"profiles": {}}}
+        bridge.get_organization_config.return_value = {
+            "model_provider": {"profiles": {}}
+        }
+        bridge.get_team_config.return_value = {"model_provider": {"profiles": {}}}
+
+        assert _model_provider_enforcement_source(bridge) == "enterprise"
+        bridge.get_organization_config.assert_not_called()
+
+    def test_path_validation_error_for_workspace(self, tmp_path):
+        """Test workspace path validation used by the edit dialog."""
+        from devflow.web.pages.config_editor import _path_validation_error
+
+        assert _path_validation_error(str(tmp_path), directory=True) is None
+        assert "does not exist" in _path_validation_error(
+            str(tmp_path / "missing"), directory=True
+        )
+        file_path = tmp_path / "workspace-file"
+        file_path.write_text("data")
+        assert "not a directory" in _path_validation_error(
+            str(file_path), directory=True
+        )
+
+    @patch("devflow.web.pages.config_editor.validate_model_provider_profile")
+    def test_validate_profile_safely_uses_remote_verification(self, mock_validate):
+        """Test the explicit web Validate action delegates without mutating data."""
+        from devflow.web.pages.config_editor import _validate_profile_safely
+        from devflow.utils.model_provider import ModelProviderValidationResult
+
+        profile = ModelProviderProfile(name="test-profile", provider="anthropic")
+        expected = ModelProviderValidationResult(
+            profile_name="test-profile",
+            provider="anthropic",
+            checks=["Profile name is present."],
+        )
+        mock_validate.return_value = expected
+
+        assert _validate_profile_safely("test-profile", profile) is expected
+        mock_validate.assert_called_once_with(profile, verify_remote=True)
+
+    @patch("devflow.web.pages.config_editor.validate_model_provider_profile")
+    def test_validate_profile_safely_redacts_unexpected_errors(self, mock_validate):
+        """Test unexpected provider errors become a safe generic result."""
+        from devflow.web.pages.config_editor import _validate_profile_safely
+
+        mock_validate.side_effect = RuntimeError("credential=secret-value")
+
+        result = _validate_profile_safely("test-profile", {"name": "test-profile"})
+
+        assert result.profile_name == "test-profile"
+        assert result.issues == ["Profile validation could not be completed safely."]
+        assert "secret-value" not in str(result)
+
+
+@pytest.mark.anyio
+async def test_config_editor_renders_tui_profile_and_workspace_actions(tmp_path):
+    """Test that the NiceGUI editor exposes the TUI's management actions."""
+    from nicegui import ui
+    from nicegui.testing import user_simulation
+    from nicegui.testing.user_interaction import UserInteraction
+
+    from devflow.config.models import ModelProviderConfig
+    from devflow.web.pages.config_editor import create_config_editor_page
+
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.test", transitions={}),
+        repos=RepoConfig(
+            workspaces=[WorkspaceDefinition(name="primary", path=str(tmp_path))]
+        ),
+        model_provider=ModelProviderConfig(
+            default_profile="anthropic",
+            profiles={
+                "anthropic": ModelProviderProfile(
+                    name="anthropic", provider="anthropic", agent_backend="opencode"
+                )
+            },
+        ),
+    )
+
+    class Bridge:
+        def load_config(self):
+            return config
+
+        def get_enterprise_config(self):
+            return None
+
+        def get_organization_config(self):
+            return None
+
+        def get_team_config(self):
+            return None
+
+        def save_config(self, value):
+            return True
+
+        def get_config_as_json(self, value):
+            return "{}"
+
+    def root():
+        create_config_editor_page(Bridge())
+
+    async with user_simulation(root=root) as user:
+        await user.open("/")
+        await user.should_see("Edit")
+        await user.should_see("Validate")
+        await user.should_see("Add Profile")
+        await user.should_see("Add Context File")
+
+        edit_buttons = sorted(
+            user.find(kind=ui.button, content="Edit").elements,
+            key=lambda button: button.id,
+        )
+        UserInteraction(user, {edit_buttons[-1]}, "Edit").click()
+        await user.should_see("Edit Profile: anthropic")
+
 
 # ============================================================================
 # App Route Registration Tests
@@ -1342,6 +1668,7 @@ class TestNavigationLinks:
         """Test that nav module can be imported (NiceGUI may not be available)."""
         try:
             from devflow.web.components import nav
+
             assert hasattr(nav, "create_header")
         except ImportError:
             # NiceGUI not installed - skip
@@ -1490,7 +1817,9 @@ class TestDashboardCLIGroup:
         """Test that 'daf dashboard stop' subcommand is registered."""
         from devflow.cli.main import dashboard as dashboard_group
 
-        commands = dashboard_group.commands if hasattr(dashboard_group, "commands") else {}
+        commands = (
+            dashboard_group.commands if hasattr(dashboard_group, "commands") else {}
+        )
         assert "stop" in commands
 
     def test_dashboard_help_shows_background(self):

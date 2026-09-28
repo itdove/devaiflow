@@ -32,7 +32,13 @@ def _create_metadata_section(session: Dict[str, Any]) -> None:
             with ui.row().classes("items-center"):
                 session_type_badge(session.get("session_type", "development"))
 
-            _field("Issue Key", session.get("issue_key", "") or "None")
+            ui.label("Issue Key").classes("font-semibold text-gray-400")
+            issue_key = session.get("issue_key", "")
+            issue_url = session.get("issue_url")
+            if issue_key and issue_url:
+                ui.link(issue_key, issue_url, new_tab=True).classes("text-blue-400")
+            else:
+                ui.label(issue_key or "None").classes("text-white")
             _field("Workspace", session.get("workspace", "") or "None")
             _field("Goal", session.get("goal", ""))
             _field("Created", session.get("created", ""))
@@ -49,9 +55,7 @@ def _create_metadata_section(session: Dict[str, Any]) -> None:
             with ui.row().classes("mt-2 gap-1"):
                 ui.label("Tags:").classes("font-semibold")
                 for tag in tags:
-                    ui.badge(tag).classes(
-                        "bg-gray-600 text-white px-2 py-1 rounded"
-                    )
+                    ui.badge(tag).classes("bg-gray-600 text-white px-2 py-1 rounded")
 
 
 def _field(label: str, value: str) -> None:
@@ -84,8 +88,26 @@ def _create_conversations_section(conversations: List[Dict[str, Any]]) -> None:
                     _field("Working Directory", conv.get("working_dir", ""))
                     _field("Project Path", conv.get("project_path", ""))
                     _field("Branch", conv.get("branch", ""))
-                    _field("Session ID", conv.get("session_id", "")[:12] + "..." if len(conv.get("session_id", "")) > 12 else conv.get("session_id", ""))
+                    _field(
+                        "Session ID",
+                        (
+                            conv.get("session_id", "")[:12] + "..."
+                            if len(conv.get("session_id", "")) > 12
+                            else conv.get("session_id", "")
+                        ),
+                    )
                     _field("Messages", str(conv.get("message_count", 0)))
+                    _field("Created", conv.get("created", ""))
+                    _field("Last Active", conv.get("last_active", ""))
+
+                with ui.row().classes("items-center gap-2"):
+                    ui.label("Archived:").classes("font-semibold text-gray-400")
+                    ui.badge("Yes" if conv.get("archived") else "Active").classes(
+                        "bg-gray-600 text-white"
+                    )
+
+                if conv.get("summary"):
+                    ui.markdown(conv["summary"]).classes("mt-1 text-gray-300")
 
                 # PRs
                 prs = conv.get("prs", [])
@@ -112,7 +134,12 @@ def _create_work_sessions_section(work_sessions: List[Dict[str, Any]]) -> None:
         columns = [
             {"name": "start", "label": "Start", "field": "start", "align": "left"},
             {"name": "end", "label": "End", "field": "end", "align": "left"},
-            {"name": "duration", "label": "Duration", "field": "duration", "align": "left"},
+            {
+                "name": "duration",
+                "label": "Duration",
+                "field": "duration",
+                "align": "left",
+            },
             {"name": "user", "label": "User", "field": "user", "align": "left"},
         ]
 
@@ -120,12 +147,12 @@ def _create_work_sessions_section(work_sessions: List[Dict[str, Any]]) -> None:
             columns=columns,
             rows=work_sessions,
             row_key="start",
-        ).classes("w-full").props("dense")
+        ).classes(
+            "w-full"
+        ).props("dense")
 
 
-def _create_notes_section(
-    bridge: DataBridge, session_name: str
-) -> None:
+def _create_notes_section(bridge: DataBridge, session_name: str) -> None:
     """Create the notes section with view and add functionality.
 
     Args:

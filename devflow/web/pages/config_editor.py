@@ -4,13 +4,27 @@ Provides all 8 tabs from the TUI: JIRA Integration, GitHub/GitLab,
 Repository & VCS, Workspaces, AI, Model Providers, Session Workflow, Advanced.
 """
 
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 from nicegui import ui
 
+from devflow.config.models import (
+    ContextFile,
+    ModelProviderConfig,
+    ModelProviderProfile,
+    WorkspaceDefinition,
+)
+from devflow.config.templates.model_providers import (
+    detect_template_from_profile,
+    get_template_registry,
+)
+from devflow.utils.model_provider import (
+    ModelProviderValidationResult,
+    validate_model_provider_profile,
+)
 from devflow.web.components.nav import create_header
 from devflow.web.utils.data_bridge import DataBridge
-
 
 # -- Tri-state helpers (matches TUI _bool_to_choice / _choice_to_bool) --------
 
@@ -34,7 +48,91 @@ def _strict_bool(val: str) -> bool:
     return val == "True"
 
 
+_PROFILE_MODEL_FIELDS = (
+    ("new", "Model for daf new"),
+    ("open", "Model for daf open"),
+    ("git_new", "Model for daf git new"),
+    ("jira_new", "Model for daf jira new"),
+    ("investigation", "Model for daf investigation"),
+    ("commit_message", "Model for commit messages"),
+    ("pr_template", "Model for PR/MR templates"),
+)
+
+
+def _profile_to_dict(profile: Any) -> Dict[str, Any]:
+    """Return a provider profile as a plain dictionary."""
+    if hasattr(profile, "model_dump"):
+        return profile.model_dump()
+    return dict(profile or {})
+
+
+def _profile_summary(profile: Any) -> str:
+    """Build the non-secret summary shown for a model provider profile."""
+    data = _profile_to_dict(profile)
+    provider = data.get("provider") or (
+        "vertex" if data.get("use_vertex") else "anthropic"
+    )
+    agent_backend = data.get("agent_backend") or "claude"
+    details = f"{provider} · {agent_backend}"
+    if data.get("use_vertex"):
+        details += f" · {data.get('vertex_region') or 'default region'}"
+    elif data.get("base_url"):
+        details += f" · {data['base_url']}"
+    if data.get("model_name"):
+        details += f" · default={data['model_name']}"
+    return details
+
+
+def _model_provider_enforcement_source(bridge: DataBridge) -> Optional[str]:
+    """Return the hierarchy layer that owns the model-provider configuration."""
+    for source, getter in (
+        ("enterprise", bridge.get_enterprise_config),
+        ("organization", bridge.get_organization_config),
+        ("team", bridge.get_team_config),
+    ):
+        try:
+            source_config = getter()
+        except Exception:  # noqa: BLE001 - hierarchy readers may be unavailable
+            source_config = None
+        if source_config and (
+            source_config.get("model_provider")
+            if isinstance(source_config, dict)
+            else getattr(source_config, "model_provider", None)
+        ):
+            return source
+    return None
+
+
+def _validate_profile_safely(
+    profile_name: str, profile: Any
+) -> ModelProviderValidationResult:
+    """Validate a profile without exposing unexpected provider or credential errors."""
+    try:
+        return validate_model_provider_profile(profile, verify_remote=True)
+    except Exception:
+        return ModelProviderValidationResult(
+            profile_name=profile_name,
+            issues=["Profile validation could not be completed safely."],
+        )
+
+
+def _path_validation_error(path: str, *, directory: bool) -> Optional[str]:
+    """Return a TUI-compatible local path validation error, if any."""
+    try:
+        expanded_path = Path(path).expanduser()
+        if not expanded_path.exists():
+            return f"Path does not exist: {path}"
+        if directory and not expanded_path.is_dir():
+            return f"Path is not a directory: {path}"
+        if not directory and not expanded_path.is_file():
+            return f"Path is not a file: {path}"
+    except Exception as exc:
+        return f"Invalid path: {exc}"
+    return None
+
+
 # -- Reusable form widgets ---------------------------------------------------
+
 
 def _field_row(label: str, help_text: str = "") -> ui.column:
     """Start a labelled field row and return the container for the widget."""
@@ -62,17 +160,22 @@ def _bool_select(label: str, value: bool, help_text: str = "") -> ui.select:
         ).classes("w-full")
 
 
-def _text_input(label: str, value: str = "", help_text: str = "", placeholder: str = "") -> ui.input:
+def _text_input(
+    label: str, value: str = "", help_text: str = "", placeholder: str = ""
+) -> ui.input:
     with _field_row(label, help_text):
         return ui.input(value=value, placeholder=placeholder).classes("w-full")
 
 
-def _select(label: str, options: List[str], value: str = "", help_text: str = "") -> ui.select:
+def _select(
+    label: str, options: List[str], value: str = "", help_text: str = ""
+) -> ui.select:
     with _field_row(label, help_text):
         return ui.select(options=options, value=value).classes("w-full")
 
 
 # -- Tab builders  -----------------------------------------------------------
+
 
 def _extract_component_choices(jira: Any) -> List[str]:
     """Extract component allowed values from field_mappings.
@@ -151,11 +254,13 @@ def _extract_custom_fields(jira: Any) -> List[Dict[str, Any]]:
             elif isinstance(val, str):
                 allowed.append(val)
 
-        fields.append({
-            "key": field_key,
-            "name": field_name,
-            "allowed_values": allowed,
-        })
+        fields.append(
+            {
+                "key": field_key,
+                "name": field_name,
+                "allowed_values": allowed,
+            }
+        )
 
     return sorted(fields, key=lambda f: f["name"])
 
@@ -169,7 +274,9 @@ def _build_jira_tab(config: Any) -> Dict[str, Any]:
         "JIRA URL", jira.url if jira else "", "Base URL of your JIRA instance"
     )
     widgets["jira_project"] = _text_input(
-        "Project Key", jira.project or "" if jira else "", "JIRA project key (e.g. PROJ)"
+        "Project Key",
+        jira.project or "" if jira else "",
+        "JIRA project key (e.g. PROJ)",
     )
 
     # --- Components: dropdown if allowed_values exist, else text input -------
@@ -177,7 +284,11 @@ def _build_jira_tab(config: Any) -> Dict[str, Any]:
 
     # Current value
     components_current = ""
-    if jira and jira.system_field_defaults and "components" in jira.system_field_defaults:
+    if (
+        jira
+        and jira.system_field_defaults
+        and "components" in jira.system_field_defaults
+    ):
         cval = jira.system_field_defaults["components"]
         if isinstance(cval, list) and cval:
             components_current = cval[0]  # dropdown: first item
@@ -194,7 +305,11 @@ def _build_jira_tab(config: Any) -> Dict[str, Any]:
         widgets["_components_is_select"] = True
     else:
         # Fallback to comma-separated text input
-        if jira and jira.system_field_defaults and "components" in jira.system_field_defaults:
+        if (
+            jira
+            and jira.system_field_defaults
+            and "components" in jira.system_field_defaults
+        ):
             cval = jira.system_field_defaults["components"]
             components_current = ",".join(cval) if isinstance(cval, list) else str(cval)
         widgets["jira_components"] = _text_input(
@@ -205,16 +320,20 @@ def _build_jira_tab(config: Any) -> Dict[str, Any]:
     # --- Custom Field Defaults (dynamic from field_mappings) -----------------
     ui.separator().classes("my-3")
     ui.label("Custom Field Defaults").classes("text-sm font-bold text-blue-300")
-    ui.label(
-        "Default values automatically applied when creating issues"
-    ).classes("text-xs text-gray-500 mb-2")
+    ui.label("Default values automatically applied when creating issues").classes(
+        "text-xs text-gray-500 mb-2"
+    )
 
     custom_fields = _extract_custom_fields(jira)
     current_defaults = (jira.custom_field_defaults or {}) if jira else {}
 
     if custom_fields:
         for cf in custom_fields:
-            current_value = str(current_defaults.get(cf["key"], "")) if current_defaults.get(cf["key"]) else ""
+            current_value = (
+                str(current_defaults.get(cf["key"], ""))
+                if current_defaults.get(cf["key"])
+                else ""
+            )
             if cf["allowed_values"]:
                 widgets[f"custom_{cf['key']}"] = _select(
                     cf["name"],
@@ -259,7 +378,9 @@ def _build_jira_tab(config: Any) -> Dict[str, Any]:
 
     # --- Issue Tracker Workflow Prompts --------------------------------------
     ui.separator().classes("my-3")
-    ui.label("Issue Tracker Workflow Prompts").classes("text-sm font-bold text-blue-300")
+    ui.label("Issue Tracker Workflow Prompts").classes(
+        "text-sm font-bold text-blue-300"
+    )
     prompts = config.prompts
     widgets["auto_add_issue_summary"] = _tri_select(
         "Auto-add issue summary on complete",
@@ -390,7 +511,11 @@ def _build_repo_tab(config: Any) -> Dict[str, Any]:
     return widgets
 
 
-def _build_workspaces_tab(config: Any, bridge: DataBridge) -> Dict[str, Any]:
+def _build_workspaces_tab(
+    config: Any,
+    bridge: DataBridge,
+    mark_dirty_fn: Optional[Callable[[], None]] = None,
+) -> Dict[str, Any]:
     """Build Workspaces tab with add/edit/remove."""
     widgets: Dict[str, Any] = {}
     workspaces = config.repos.workspaces if config.repos else []
@@ -399,6 +524,10 @@ def _build_workspaces_tab(config: Any, bridge: DataBridge) -> Dict[str, Any]:
     ws_container = ui.column().classes("w-full gap-2")
     widgets["_ws_container"] = ws_container
     widgets["_workspaces_list"] = workspaces  # mutable reference
+
+    def _mark_dirty() -> None:
+        if mark_dirty_fn:
+            mark_dirty_fn()
 
     def _render_workspaces() -> None:
         ws_container.clear()
@@ -413,7 +542,9 @@ def _build_workspaces_tab(config: Any, bridge: DataBridge) -> Dict[str, Any]:
                             with ui.row().classes("items-center gap-2"):
                                 ui.label(ws.name).classes("font-bold")
                                 if is_default:
-                                    ui.badge("Default").classes("bg-yellow-600 text-white")
+                                    ui.badge("Default").classes(
+                                        "bg-yellow-600 text-white"
+                                    )
                             ui.label(ws.path).classes("text-sm text-gray-400")
                         with ui.row().classes("gap-1"):
                             if not is_default:
@@ -424,55 +555,109 @@ def _build_workspaces_tab(config: Any, bridge: DataBridge) -> Dict[str, Any]:
                                     nonlocal last_used
                                     last_used = name
                                     _render_workspaces()
+                                    _mark_dirty()
 
-                                ui.button("Set Default", on_click=_set_default).props("flat dense")
+                                ui.button("Set Default", on_click=_set_default).props(
+                                    "flat dense"
+                                )
                             idx = i
 
-                            def _remove(index: int = idx) -> None:
-                                workspaces.pop(index)
-                                _render_workspaces()
+                            def _edit(index: int = idx) -> None:
+                                _open_workspace_dialog(index)
 
-                            ui.button("Remove", on_click=_remove).props("flat dense color=red")
+                            ui.button("Edit", on_click=_edit).props("flat dense")
+
+                            def _remove(index: int = idx) -> None:
+                                nonlocal last_used
+                                removed = workspaces.pop(index)
+                                if removed.name == last_used:
+                                    last_used = (
+                                        workspaces[0].name if workspaces else None
+                                    )
+                                    config.repos.last_used_workspace = last_used
+                                _render_workspaces()
+                                _mark_dirty()
+
+                            ui.button("Remove", on_click=_remove).props(
+                                "flat dense color=red"
+                            )
+
+    def _open_workspace_dialog(index: Optional[int] = None) -> None:
+        existing = workspaces[index] if index is not None else None
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
+            ui.label("Edit Workspace" if existing else "Add Workspace").classes(
+                "text-lg font-bold"
+            )
+            name_input = _text_input(
+                "Workspace Name",
+                existing.name if existing else "",
+                placeholder="e.g., primary, product-a, feat-caching",
+            )
+            path_input = _text_input(
+                "Workspace Path",
+                existing.path if existing else "",
+                placeholder="e.g., ~/development/project or /path/to/workspace",
+            )
+
+            def _save_workspace() -> None:
+                nonlocal last_used
+                name = (name_input.value or "").strip()
+                path = (path_input.value or "").strip()
+                if not name or not path:
+                    ui.notify("Workspace name and path are required.", type="warning")
+                    return
+                path_error = _path_validation_error(path, directory=True)
+                if path_error:
+                    ui.notify(path_error, type="negative")
+                    return
+
+                workspace = WorkspaceDefinition(name=name, path=path)
+                if index is None:
+                    workspaces.append(workspace)
+                    if len(workspaces) == 1:
+                        last_used = name
+                        config.repos.last_used_workspace = name
+                    message = f"Workspace '{name}' added."
+                else:
+                    old_workspace = workspaces[index]
+                    if old_workspace.name == last_used and old_workspace.name != name:
+                        last_used = name
+                        config.repos.last_used_workspace = name
+                    workspaces[index] = workspace
+                    message = f"Workspace '{name}' updated."
+                _render_workspaces()
+                _mark_dirty()
+                dialog.close()
+                ui.notify(message, type="positive")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Update" if existing else "Add", on_click=_save_workspace
+                ).classes("bg-blue-600")
+        dialog.open()
 
     _render_workspaces()
 
-    # Add workspace form
     ui.separator().classes("my-3")
-    ui.label("Add Workspace").classes("text-sm font-bold text-blue-300")
-    with ui.row().classes("w-full items-end gap-2"):
-        new_name = ui.input(placeholder="Name").classes("w-40")
-        new_path = ui.input(placeholder="Path (e.g. ~/development)").classes("flex-grow")
-
-        def _add_workspace() -> None:
-            from devflow.config.models import WorkspaceDefinition
-
-            name = new_name.value.strip()
-            path = new_path.value.strip()
-            if not name or not path:
-                ui.notify("Name and path are required.", type="warning")
-                return
-            workspaces.append(WorkspaceDefinition(name=name, path=path))
-            new_name.value = ""
-            new_path.value = ""
-            _render_workspaces()
-            ui.notify(f"Workspace '{name}' added.", type="positive")
-
-        ui.button("Add", on_click=_add_workspace).classes("bg-blue-600")
+    ui.button("Add Workspace", on_click=lambda: _open_workspace_dialog()).classes(
+        "bg-blue-600"
+    )
 
     return widgets
 
 
-def _build_ai_tab(config: Any) -> Dict[str, Any]:
+def _build_ai_tab(
+    config: Any,
+    mark_dirty_fn: Optional[Callable[[], None]] = None,
+) -> Dict[str, Any]:
     """Build AI tab fields."""
     widgets: Dict[str, Any] = {}
     from devflow.agent.factory import AGENT_DISPLAY_NAMES, AGENT_REGISTRY
 
     widgets["agent_backend"] = _select(
         "AI Agent Backend",
-        {
-            name: AGENT_DISPLAY_NAMES.get(name, name)
-            for name in AGENT_REGISTRY
-        },
+        {name: AGENT_DISPLAY_NAMES.get(name, name) for name in AGENT_REGISTRY},
         config.agent_backend or "claude",
         "Which AI agent to use",
     )
@@ -505,11 +690,13 @@ def _build_ai_tab(config: Any) -> Dict[str, Any]:
     ui.separator().classes("my-3")
     ui.label("Context Files").classes("text-sm font-bold text-blue-300")
     ctx_files = config.context_files.files if config.context_files else []
-    visible_files = [f for f in ctx_files if not getattr(f, "hidden", False)]
-
     ctx_container = ui.column().classes("w-full gap-1")
     widgets["_ctx_container"] = ctx_container
     widgets["_ctx_files"] = ctx_files
+
+    def _mark_dirty() -> None:
+        if mark_dirty_fn:
+            mark_dirty_fn()
 
     def _render_ctx_files() -> None:
         ctx_container.clear()
@@ -520,7 +707,9 @@ def _build_ai_tab(config: Any) -> Dict[str, Any]:
             for i, cf in enumerate(ctx_files):
                 if getattr(cf, "hidden", False):
                     continue
-                with ui.row().classes("w-full items-center gap-2 bg-gray-800 p-2 rounded"):
+                with ui.row().classes(
+                    "w-full items-center gap-2 bg-gray-800 p-2 rounded"
+                ):
                     ui.label(cf.path).classes("font-semibold flex-grow")
                     ui.label(cf.description).classes("text-sm text-gray-400")
                     idx = i
@@ -528,40 +717,86 @@ def _build_ai_tab(config: Any) -> Dict[str, Any]:
                     def _remove_ctx(index: int = idx) -> None:
                         ctx_files.pop(index)
                         _render_ctx_files()
+                        _mark_dirty()
 
-                    ui.button("Remove", on_click=_remove_ctx).props("flat dense color=red")
+                    def _edit_ctx(index: int = idx) -> None:
+                        _open_context_file_dialog(index)
+
+                    ui.button("Edit", on_click=_edit_ctx).props("flat dense")
+                    ui.button("Remove", on_click=_remove_ctx).props(
+                        "flat dense color=red"
+                    )
+
+    def _open_context_file_dialog(index: Optional[int] = None) -> None:
+        existing = ctx_files[index] if index is not None else None
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
+            ui.label("Edit Context File" if existing else "Add Context File").classes(
+                "text-lg font-bold"
+            )
+            path_input = _text_input(
+                "File Path or URL",
+                existing.path if existing else "",
+                placeholder="e.g., ARCHITECTURE.md or https://example.test/DESIGN.md",
+            )
+            description_input = _text_input(
+                "Description",
+                existing.description if existing else "",
+                placeholder="Brief description of what this file contains",
+            )
+
+            def _save_context_file() -> None:
+                path = (path_input.value or "").strip()
+                description = (description_input.value or "").strip()
+                if not path or not description:
+                    ui.notify("Path and description are required.", type="warning")
+                    return
+                if not path.startswith(("http://", "https://")):
+                    path_error = _path_validation_error(path, directory=False)
+                    if path_error and "does not exist" not in path_error:
+                        ui.notify(path_error, type="negative")
+                        return
+                    if path_error:
+                        ui.notify(path_error, type="warning")
+
+                context_file = ContextFile(path=path, description=description)
+                if index is None:
+                    ctx_files.append(context_file)
+                    message = "Context file added."
+                else:
+                    ctx_files[index] = context_file
+                    message = "Context file updated."
+                _render_ctx_files()
+                _mark_dirty()
+                dialog.close()
+                ui.notify(message, type="positive")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Update" if existing else "Add", on_click=_save_context_file
+                ).classes("bg-blue-600")
+        dialog.open()
 
     _render_ctx_files()
 
-    with ui.row().classes("w-full items-end gap-2 mt-2"):
-        ctx_path = ui.input(placeholder="File path or URL").classes("flex-grow")
-        ctx_desc = ui.input(placeholder="Description").classes("w-48")
-
-        def _add_ctx() -> None:
-            from devflow.config.models import ContextFile
-
-            path = ctx_path.value.strip()
-            desc = ctx_desc.value.strip()
-            if not path or not desc:
-                ui.notify("Path and description are required.", type="warning")
-                return
-            ctx_files.append(ContextFile(path=path, description=desc))
-            ctx_path.value = ""
-            ctx_desc.value = ""
-            _render_ctx_files()
-            ui.notify("Context file added.", type="positive")
-
-        ui.button("Add", on_click=_add_ctx).classes("bg-blue-600")
+    ui.button("Add Context File", on_click=lambda: _open_context_file_dialog()).classes(
+        "bg-blue-600"
+    )
 
     return widgets
 
 
-def _build_model_providers_tab(config: Any) -> Dict[str, Any]:
-    """Build Model Providers tab."""
+def _build_model_providers_tab(
+    config: Any,
+    bridge: Optional[DataBridge] = None,
+    mark_dirty_fn: Optional[Callable[[], None]] = None,
+) -> Dict[str, Any]:
+    """Build Model Providers tab with the TUI's profile actions."""
     widgets: Dict[str, Any] = {}
     mp = config.model_provider
     profiles = mp.profiles if mp else {}
     default_profile = mp.default_profile if mp else "anthropic"
+    enforcement_source = _model_provider_enforcement_source(bridge) if bridge else None
 
     widgets["_profiles"] = profiles
     widgets["_default_profile"] = default_profile
@@ -569,11 +804,297 @@ def _build_model_providers_tab(config: Any) -> Dict[str, Any]:
     profiles_container = ui.column().classes("w-full gap-2")
     widgets["_profiles_container"] = profiles_container
 
+    def _mark_dirty() -> None:
+        if mark_dirty_fn:
+            mark_dirty_fn()
+
+    def _ensure_model_provider() -> ModelProviderConfig:
+        nonlocal mp, profiles
+        if mp is None:
+            mp = ModelProviderConfig(profiles=profiles)
+            config.model_provider = mp
+            profiles = mp.profiles
+        return mp
+
+    def _show_validation_result(
+        profile_name: str, result: ModelProviderValidationResult
+    ) -> None:
+        with (
+            ui.dialog() as dialog,
+            ui.card().classes("w-full max-w-2xl max-h-[85vh] overflow-auto"),
+        ):
+            ui.label(f"Validate Profile: {profile_name}").classes("text-lg font-bold")
+            if result.issues:
+                ui.label("Validation failed").classes("text-red-400 font-bold")
+            elif result.warnings:
+                ui.label("Validation completed with warnings").classes(
+                    "text-yellow-400 font-bold"
+                )
+            else:
+                ui.label("Profile configuration is valid").classes(
+                    "text-green-400 font-bold"
+                )
+
+            if result.checks:
+                ui.label("Checks").classes("font-bold mt-3")
+                for check in result.checks:
+                    ui.label(f"✓ {check}").classes("text-green-300")
+            if result.issues:
+                ui.label("Errors").classes("font-bold text-red-400 mt-3")
+                for issue in result.issues:
+                    ui.label(f"• {issue}").classes("text-red-300")
+            if result.warnings:
+                ui.label("Warnings").classes("font-bold text-yellow-400 mt-3")
+                for warning in result.warnings:
+                    ui.label(f"• {warning}").classes("text-yellow-300")
+            ui.label(
+                "No profile values were changed. Credential values are never displayed."
+            ).classes("text-xs text-gray-500 mt-4")
+            ui.button("Close", on_click=dialog.close).props("flat")
+        dialog.open()
+
+    def _validate_profile(profile_name: str, profile: Any) -> None:
+        ui.notify(f"Validating profile '{profile_name}'...", type="info")
+        result = _validate_profile_safely(profile_name, profile)
+        _show_validation_result(profile_name, result)
+
+    def _show_profile_dialog(
+        template_id: Optional[str] = None,
+        existing_name: Optional[str] = None,
+        existing_profile: Any = None,
+    ) -> None:
+        profile_data = _profile_to_dict(existing_profile)
+        selected_template_id = (
+            detect_template_from_profile(profile_data)
+            if existing_name
+            else (template_id or "anthropic")
+        )
+        template = get_template_registry().get(selected_template_id)
+        if template is None:
+            ui.notify(
+                f"Unknown model provider template: {selected_template_id}",
+                type="negative",
+            )
+            return
+
+        is_edit_mode = existing_name is not None
+        with (
+            ui.dialog() as dialog,
+            ui.card().classes("w-full max-w-5xl max-h-[90vh] overflow-auto"),
+        ):
+            title = (
+                f"Edit Profile: {existing_name}"
+                if is_edit_mode
+                else f"Add {template.get_name()} Profile"
+            )
+            ui.label(title).classes("text-lg font-bold")
+            ui.label(f"Provider: {template.get_name()}").classes(
+                "text-sm text-gray-400"
+            )
+            ui.label(template.get_description()).classes("text-xs text-gray-500 mb-2")
+
+            template_widgets: Dict[str, Any] = {}
+            for field in template.get_fields():
+                current_value = (
+                    existing_name
+                    if field.field_id == "profile_name" and is_edit_mode
+                    else profile_data.get(field.field_id, field.default_value)
+                )
+                label = f"{field.label}{' *' if field.required else ''}"
+                if field.field_type == "input":
+                    template_widgets[field.field_id] = _text_input(
+                        label,
+                        str(current_value) if current_value is not None else "",
+                        field.help_text,
+                        field.placeholder,
+                    )
+                    if is_edit_mode and field.field_id == "profile_name":
+                        template_widgets[field.field_id].props("disable")
+                elif field.field_type == "select":
+                    with _field_row(label, field.help_text):
+                        template_widgets[field.field_id] = ui.select(
+                            options=field.options or [],
+                            value=(
+                                current_value
+                                if current_value is not None
+                                else field.default_value
+                            ),
+                        ).classes("w-full")
+                elif field.field_type == "checkbox":
+                    with _field_row(label, field.help_text):
+                        template_widgets[field.field_id] = ui.checkbox(
+                            value=bool(current_value)
+                        )
+
+            from devflow.agent.factory import AGENT_DISPLAY_NAMES, AGENT_REGISTRY
+
+            default_agent_backend = profile_data.get("agent_backend")
+            if not default_agent_backend:
+                default_agent_backend = getattr(template, "default_agent_backend", None)
+            if not default_agent_backend:
+                default_agent_backend = {"codex": "codex", "ollama": "ollama"}.get(
+                    selected_template_id, "claude"
+                )
+            agent_options = {
+                name: AGENT_DISPLAY_NAMES.get(name, name) for name in AGENT_REGISTRY
+            }
+            if default_agent_backend not in agent_options:
+                agent_options[default_agent_backend] = (
+                    f"{default_agent_backend} (custom/legacy)"
+                )
+            with _field_row(
+                "Agent / IDE adapter *", "The adapter used to launch this profile"
+            ):
+                agent_widget = ui.select(
+                    options=agent_options,
+                    value=default_agent_backend,
+                ).classes("w-full")
+
+            arguments_widget = ui.textarea(
+                label="Adapter arguments (one argv token per line)",
+                value="\n".join(
+                    str(argument) for argument in (profile_data.get("arguments") or [])
+                ),
+            ).classes("w-full")
+
+            ui.label("Command models").classes("font-bold mt-3")
+            ui.label(
+                "Utility models are used for commit messages and PR/MR templates and ignore --model."
+            ).classes("text-xs text-gray-500")
+            model_widgets: Dict[str, Any] = {}
+            reasoning_widgets: Dict[str, Any] = {}
+            existing_models = profile_data.get("models") or {}
+            existing_reasoning = profile_data.get("reasoning_efforts") or {}
+            for command, label in _PROFILE_MODEL_FIELDS:
+                current_model = existing_models.get(command, "")
+                if command == "commit_message":
+                    current_model = current_model or profile_data.get(
+                        "commit_message_model", ""
+                    )
+                elif command == "pr_template":
+                    current_model = current_model or profile_data.get(
+                        "pr_template_model", ""
+                    )
+                model_widgets[command] = _text_input(
+                    label,
+                    str(current_model) if current_model else "",
+                    placeholder="Leave empty to use the profile default model",
+                )
+                reasoning_widgets[command] = _text_input(
+                    f"{label} reasoning strength",
+                    (
+                        str(existing_reasoning.get(command, ""))
+                        if existing_reasoning.get(command)
+                        else ""
+                    ),
+                    placeholder="Optional: low, medium, high, max",
+                )
+
+            def _save_profile() -> None:
+                form_data: Dict[str, Any] = {}
+                for field in template.get_fields():
+                    value = template_widgets[field.field_id].value
+                    form_data[field.field_id] = (
+                        value.strip() if isinstance(value, str) else value
+                    )
+                validation_errors = template.validate(form_data)
+                if validation_errors:
+                    ui.notify(
+                        "Validation errors: " + "; ".join(validation_errors),
+                        type="negative",
+                    )
+                    return
+
+                agent_backend = agent_widget.value
+                if not isinstance(agent_backend, str) or not agent_backend:
+                    ui.notify("Agent / IDE adapter is required.", type="negative")
+                    return
+
+                command_models = {
+                    command: (widget.value or "").strip()
+                    for command, widget in model_widgets.items()
+                    if isinstance(widget.value, str) and widget.value.strip()
+                }
+                reasoning_efforts = {
+                    command: (widget.value or "").strip()
+                    for command, widget in reasoning_widgets.items()
+                    if isinstance(widget.value, str) and widget.value.strip()
+                }
+                try:
+                    generated = template.generate_config(form_data)
+                    generated["agent_backend"] = agent_backend
+                    generated["arguments"] = (arguments_widget.value or "").splitlines()
+                    generated["models"] = command_models
+                    generated["reasoning_efforts"] = reasoning_efforts
+                    generated.setdefault("provider", selected_template_id)
+                    profile_name = str(form_data.get("profile_name") or "").strip()
+                    profile = ModelProviderProfile(**generated)
+                except Exception:
+                    ui.notify(
+                        "Error generating profile configuration.", type="negative"
+                    )
+                    return
+
+                target = _ensure_model_provider()
+                target.profiles[profile_name] = profile
+                if not target.default_profile or len(target.profiles) == 1:
+                    target.default_profile = profile_name
+                nonlocal default_profile
+                default_profile = target.default_profile
+                _render_profiles()
+                _mark_dirty()
+                dialog.close()
+                ui.notify(
+                    f"Profile '{profile_name}' {'updated' if is_edit_mode else 'added'}.",
+                    type="positive",
+                )
+
+            with ui.row().classes("w-full justify-end gap-2 mt-3"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Update" if is_edit_mode else "Add", on_click=_save_profile
+                ).classes("bg-blue-600")
+        dialog.open()
+
+    def _show_template_selection() -> None:
+        with (
+            ui.dialog() as dialog,
+            ui.card().classes("w-full max-w-3xl max-h-[85vh] overflow-auto"),
+        ):
+            ui.label("Select Provider Type").classes("text-lg font-bold")
+            ui.label("Choose the provider template for the new profile.").classes(
+                "text-sm text-gray-400 mb-2"
+            )
+            for template_id, template in get_template_registry().items():
+                with ui.card().classes("w-full bg-gray-800"):
+                    with ui.row().classes("w-full items-center justify-between"):
+                        with ui.column().classes("gap-0"):
+                            ui.label(template.get_name()).classes("font-semibold")
+                            ui.label(template.get_description()).classes(
+                                "text-xs text-gray-400"
+                            )
+
+                        def _select_template(selected_id: str = template_id) -> None:
+                            dialog.close()
+                            _show_profile_dialog(template_id=selected_id)
+
+                        ui.button("Select", on_click=_select_template).props(
+                            "flat dense"
+                        )
+            ui.button("Cancel", on_click=dialog.close).props("flat")
+        dialog.open()
+
     def _render_profiles() -> None:
         profiles_container.clear()
         with profiles_container:
+            if enforcement_source:
+                ui.label(
+                    f"Model provider configuration is enforced by {enforcement_source}."
+                ).classes("text-yellow-400")
             if not profiles:
-                ui.label("No model provider profiles configured.").classes("text-gray-400")
+                ui.label("No model provider profiles configured.").classes(
+                    "text-gray-400"
+                )
             for name, profile in profiles.items():
                 is_default = name == default_profile
                 with ui.card().classes("w-full bg-gray-800"):
@@ -582,26 +1103,88 @@ def _build_model_providers_tab(config: Any) -> Dict[str, Any]:
                             with ui.row().classes("items-center gap-2"):
                                 ui.label(name).classes("font-bold")
                                 if is_default:
-                                    ui.badge("Default").classes("bg-yellow-600 text-white")
-                            hint = ""
-                            if hasattr(profile, "use_vertex") and profile.use_vertex:
-                                hint = f"Vertex AI ({profile.vertex_region or 'default'})"
-                            elif hasattr(profile, "base_url") and profile.base_url:
-                                hint = f"Custom ({profile.base_url})"
-                            else:
-                                hint = "Anthropic API"
-                            ui.label(hint).classes("text-sm text-gray-400")
+                                    ui.badge("Default").classes(
+                                        "bg-yellow-600 text-white"
+                                    )
+                            ui.label(_profile_summary(profile)).classes(
+                                "text-sm text-gray-400"
+                            )
                         with ui.row().classes("gap-1"):
                             if not is_default:
-                                def _set_mp_default(n: str = name) -> None:
-                                    mp.default_profile = n
-                                    nonlocal default_profile
-                                    default_profile = n
-                                    _render_profiles()
 
-                                ui.button("Set Default", on_click=_set_mp_default).props("flat dense")
+                                def _set_mp_default(profile_name: str = name) -> None:
+                                    target = _ensure_model_provider()
+                                    if enforcement_source:
+                                        ui.notify(
+                                            f"Cannot change default profile: model provider is enforced by {enforcement_source}.",
+                                            type="negative",
+                                        )
+                                        return
+                                    target.default_profile = profile_name
+                                    nonlocal default_profile
+                                    default_profile = profile_name
+                                    _render_profiles()
+                                    _mark_dirty()
+
+                                default_button = ui.button(
+                                    "Set Default", on_click=_set_mp_default
+                                ).props("flat dense")
+                                if enforcement_source:
+                                    default_button.disable()
+
+                            ui.button(
+                                "Validate",
+                                on_click=lambda n=name, p=profile: _validate_profile(
+                                    n, p
+                                ),
+                            ).props("flat dense")
+
+                            def _edit_profile(
+                                profile_name: str = name, profile_data: Any = profile
+                            ) -> None:
+                                if enforcement_source:
+                                    ui.notify(
+                                        f"Cannot edit profile: model provider is enforced by {enforcement_source}.",
+                                        type="negative",
+                                    )
+                                    return
+                                _show_profile_dialog(
+                                    existing_name=profile_name,
+                                    existing_profile=profile_data,
+                                )
+
+                            edit_button = ui.button(
+                                "Edit", on_click=_edit_profile
+                            ).props("flat dense")
+                            if enforcement_source:
+                                edit_button.disable()
+
+                            if not is_default and name != "anthropic":
+
+                                def _remove_profile(profile_name: str = name) -> None:
+                                    if enforcement_source:
+                                        ui.notify(
+                                            f"Cannot remove profile: model provider is enforced by {enforcement_source}.",
+                                            type="negative",
+                                        )
+                                        return
+                                    profiles.pop(profile_name, None)
+                                    _render_profiles()
+                                    _mark_dirty()
+
+                                remove_button = ui.button(
+                                    "Delete", on_click=_remove_profile
+                                ).props("flat dense color=red")
+                                if enforcement_source:
+                                    remove_button.disable()
 
     _render_profiles()
+    ui.separator().classes("my-3")
+    add_button = ui.button("Add Profile", on_click=_show_template_selection).classes(
+        "bg-blue-600"
+    )
+    if enforcement_source:
+        add_button.disable()
     return widgets
 
 
@@ -647,6 +1230,7 @@ def _build_advanced_tab(config: Any) -> Dict[str, Any]:
 
 # -- Collect values back into Config ------------------------------------------
 
+
 def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None:
     """Update config object from widget values.
 
@@ -672,7 +1256,10 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
                     config.jira.system_field_defaults["components"] = [val]
                 else:
                     # Cleared selection
-                    if config.jira.system_field_defaults and "components" in config.jira.system_field_defaults:
+                    if (
+                        config.jira.system_field_defaults
+                        and "components" in config.jira.system_field_defaults
+                    ):
                         del config.jira.system_field_defaults["components"]
             else:
                 # Text input: comma-separated
@@ -680,17 +1267,23 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
                 if val:
                     if config.jira.system_field_defaults is None:
                         config.jira.system_field_defaults = {}
-                    config.jira.system_field_defaults["components"] = [c.strip() for c in val.split(",") if c.strip()]
+                    config.jira.system_field_defaults["components"] = [
+                        c.strip() for c in val.split(",") if c.strip()
+                    ]
         if "comment_visibility_type" in jira_w:
-            config.jira.comment_visibility_type = jira_w["comment_visibility_type"].value or None
+            config.jira.comment_visibility_type = (
+                jira_w["comment_visibility_type"].value or None
+            )
         if "comment_visibility_value" in jira_w:
-            config.jira.comment_visibility_value = jira_w["comment_visibility_value"].value.strip() or None
+            config.jira.comment_visibility_value = (
+                jira_w["comment_visibility_value"].value.strip() or None
+            )
         # Custom field defaults -- collect from all custom_ widgets
         if config.jira.custom_field_defaults is None:
             config.jira.custom_field_defaults = {}
         for wkey, widget in jira_w.items():
             if wkey.startswith("custom_") and hasattr(widget, "value"):
-                field_key = wkey[len("custom_"):]
+                field_key = wkey[len("custom_") :]
                 raw = widget.value
                 val_str = raw.strip() if isinstance(raw, str) else (raw or "")
                 if val_str:
@@ -702,14 +1295,19 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
     # Prompts from JIRA tab
     prompts = config.prompts
     if "auto_add_issue_summary" in jira_w:
-        prompts.auto_add_issue_summary = _choice_to_bool(jira_w["auto_add_issue_summary"].value)
+        prompts.auto_add_issue_summary = _choice_to_bool(
+            jira_w["auto_add_issue_summary"].value
+        )
     if "auto_update_jira_pr_url" in jira_w:
-        prompts.auto_update_jira_pr_url = _choice_to_bool(jira_w["auto_update_jira_pr_url"].value)
+        prompts.auto_update_jira_pr_url = _choice_to_bool(
+            jira_w["auto_update_jira_pr_url"].value
+        )
 
     # GitHub tab
     gh_w = all_widgets.get("github", {})
     if config.github is None:
         from devflow.config.models import GitHubConfig
+
         config.github = GitHubConfig()
     gh = config.github
     if "github_api_url" in gh_w:
@@ -718,7 +1316,9 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
         gh.repository = gh_w["github_repository"].value.strip() or None
     if "github_default_labels" in gh_w:
         val = gh_w["github_default_labels"].value.strip()
-        gh.default_labels = [l.strip() for l in val.split(",") if l.strip()] if val else []
+        gh.default_labels = (
+            [l.strip() for l in val.split(",") if l.strip()] if val else []
+        )
     if "github_auto_close" in gh_w:
         gh.auto_close_on_complete = _strict_bool(gh_w["github_auto_close"].value)
     if "github_add_status_labels" in gh_w:
@@ -734,28 +1334,44 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
         if "detection_fallback" in repo_w:
             config.repos.detection.fallback = repo_w["detection_fallback"].value
     if "auto_checkout_branch" in repo_w:
-        prompts.auto_checkout_branch = _choice_to_bool(repo_w["auto_checkout_branch"].value)
+        prompts.auto_checkout_branch = _choice_to_bool(
+            repo_w["auto_checkout_branch"].value
+        )
     if "auto_sync_with_base" in repo_w:
         val = repo_w["auto_sync_with_base"].value
         prompts.auto_sync_with_base = val if val != "prompt" else None
     if "default_branch_strategy" in repo_w:
-        prompts.default_branch_strategy = repo_w["default_branch_strategy"].value or None
+        prompts.default_branch_strategy = (
+            repo_w["default_branch_strategy"].value or None
+        )
     if "use_issue_key_as_branch" in repo_w:
-        prompts.use_issue_key_as_branch = _strict_bool(repo_w["use_issue_key_as_branch"].value)
+        prompts.use_issue_key_as_branch = _strict_bool(
+            repo_w["use_issue_key_as_branch"].value
+        )
     if "auto_commit_on_complete" in repo_w:
-        prompts.auto_commit_on_complete = _choice_to_bool(repo_w["auto_commit_on_complete"].value)
+        prompts.auto_commit_on_complete = _choice_to_bool(
+            repo_w["auto_commit_on_complete"].value
+        )
     if "auto_accept_ai_commit_message" in repo_w:
-        prompts.auto_accept_ai_commit_message = _choice_to_bool(repo_w["auto_accept_ai_commit_message"].value)
+        prompts.auto_accept_ai_commit_message = _choice_to_bool(
+            repo_w["auto_accept_ai_commit_message"].value
+        )
     if "pr_template_url" in repo_w:
         config.pr_template_url = repo_w["pr_template_url"].value.strip() or None
     if "auto_create_pr_on_complete" in repo_w:
-        prompts.auto_create_pr_on_complete = _choice_to_bool(repo_w["auto_create_pr_on_complete"].value)
+        prompts.auto_create_pr_on_complete = _choice_to_bool(
+            repo_w["auto_create_pr_on_complete"].value
+        )
     if "auto_create_pr_status" in repo_w:
         prompts.auto_create_pr_status = repo_w["auto_create_pr_status"].value
     if "auto_push_to_remote" in repo_w:
-        prompts.auto_push_to_remote = _choice_to_bool(repo_w["auto_push_to_remote"].value)
+        prompts.auto_push_to_remote = _choice_to_bool(
+            repo_w["auto_push_to_remote"].value
+        )
     if "auto_select_target_branch" in repo_w:
-        prompts.auto_select_target_branch = _choice_to_bool(repo_w["auto_select_target_branch"].value)
+        prompts.auto_select_target_branch = _choice_to_bool(
+            repo_w["auto_select_target_branch"].value
+        )
 
     # AI tab
     ai_w = all_widgets.get("ai", {})
@@ -768,14 +1384,20 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
     if "auto_launch_agent" in ai_w:
         prompts.auto_launch_agent = _choice_to_bool(ai_w["auto_launch_agent"].value)
     if "show_prompt_unit_tests" in ai_w:
-        prompts.show_prompt_unit_tests = _strict_bool(ai_w["show_prompt_unit_tests"].value)
+        prompts.show_prompt_unit_tests = _strict_bool(
+            ai_w["show_prompt_unit_tests"].value
+        )
     if "auto_load_related_conversations" in ai_w:
-        prompts.auto_load_related_conversations = _strict_bool(ai_w["auto_load_related_conversations"].value)
+        prompts.auto_load_related_conversations = _strict_bool(
+            ai_w["auto_load_related_conversations"].value
+        )
 
     # Workflow tab
     wf_w = all_widgets.get("workflow", {})
     if "auto_complete_on_exit" in wf_w:
-        prompts.auto_complete_on_exit = _choice_to_bool(wf_w["auto_complete_on_exit"].value)
+        prompts.auto_complete_on_exit = _choice_to_bool(
+            wf_w["auto_complete_on_exit"].value
+        )
     if "time_tracking" in wf_w and config.jira:
         config.jira.time_tracking = _strict_bool(wf_w["time_tracking"].value)
 
@@ -789,10 +1411,13 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
     if "issue_tracker_backend" in adv_w:
         config.issue_tracker_backend = adv_w["issue_tracker_backend"].value
     if "hierarchical_config_source" in adv_w and config.repos:
-        config.repos.hierarchical_config_source = adv_w["hierarchical_config_source"].value.strip() or None
+        config.repos.hierarchical_config_source = (
+            adv_w["hierarchical_config_source"].value.strip() or None
+        )
 
 
 # -- Advanced Mode tab builders -----------------------------------------------
+
 
 def _build_enterprise_tab(bridge: DataBridge) -> Dict[str, Any]:
     """Build Enterprise tab (read-only)."""
@@ -806,7 +1431,10 @@ def _build_enterprise_tab(bridge: DataBridge) -> Dict[str, Any]:
         return {}
 
     if ec.get("agent_backend"):
-        with _field_row("AI Agent Backend (enforced)", "This setting is enforced by your organization"):
+        with _field_row(
+            "AI Agent Backend (enforced)",
+            "This setting is enforced by your organization",
+        ):
             ui.label(ec["agent_backend"]).classes("text-white font-semibold")
 
     if ec.get("backend_overrides"):
@@ -820,11 +1448,13 @@ def _build_enterprise_tab(bridge: DataBridge) -> Dict[str, Any]:
             )
 
     if ec.get("model_provider"):
-        ui.label("Model Provider: enforced by enterprise").classes("text-sm text-gray-400 mt-2")
+        ui.label("Model Provider: enforced by enterprise").classes(
+            "text-sm text-gray-400 mt-2"
+        )
 
-    ui.label("Enterprise settings are read-only and managed by administrators.").classes(
-        "text-sm text-yellow-500 mt-4"
-    )
+    ui.label(
+        "Enterprise settings are read-only and managed by administrators."
+    ).classes("text-sm text-yellow-500 mt-4")
     return {}
 
 
@@ -842,7 +1472,9 @@ def _build_organization_tab(bridge: DataBridge) -> Dict[str, Any]:
     github_types = ""
     if oc and oc.get("github_issue_types"):
         types_list = oc["github_issue_types"]
-        github_types = ",".join(types_list) if isinstance(types_list, list) else str(types_list)
+        github_types = (
+            ",".join(types_list) if isinstance(types_list, list) else str(types_list)
+        )
     widgets["org_github_issue_types"] = _text_input(
         "GitHub Issue Types",
         github_types,
@@ -856,9 +1488,13 @@ def _build_organization_tab(bridge: DataBridge) -> Dict[str, Any]:
         sf = oc["sync_filters"]["sync"]
         if isinstance(sf, dict):
             if sf.get("status"):
-                ui.label(f"Status: {', '.join(sf['status'])}").classes("text-sm text-gray-400")
+                ui.label(f"Status: {', '.join(sf['status'])}").classes(
+                    "text-sm text-gray-400"
+                )
             if sf.get("required_fields"):
-                ui.label(f"Required fields: {', '.join(sf['required_fields'])}").classes("text-sm text-gray-400")
+                ui.label(
+                    f"Required fields: {', '.join(sf['required_fields'])}"
+                ).classes("text-sm text-gray-400")
             if sf.get("assignee"):
                 ui.label(f"Assignee: {sf['assignee']}").classes("text-sm text-gray-400")
     else:
@@ -869,11 +1505,13 @@ def _build_organization_tab(bridge: DataBridge) -> Dict[str, Any]:
     if oc and oc.get("transitions"):
         t = oc["transitions"]
         names = list(t.keys()) if isinstance(t, dict) else []
-        ui.label(f"Configured transitions: {', '.join(names) if names else 'none'}").classes(
-            "text-sm text-gray-400"
-        )
+        ui.label(
+            f"Configured transitions: {', '.join(names) if names else 'none'}"
+        ).classes("text-sm text-gray-400")
     else:
-        ui.label("No custom transitions configured (using defaults).").classes("text-sm text-gray-500")
+        ui.label("No custom transitions configured (using defaults).").classes(
+            "text-sm text-gray-500"
+        )
 
     ui.label(
         "To edit transitions or sync filters, edit organization.json directly."
@@ -887,10 +1525,14 @@ def _build_team_tab_advanced(bridge: DataBridge) -> Dict[str, Any]:
     tc = bridge.get_team_config()
 
     if tc and tc.get("agent_backend"):
-        with _field_row("AI Agent Backend (enforced)", "This setting is enforced by your team"):
+        with _field_row(
+            "AI Agent Backend (enforced)", "This setting is enforced by your team"
+        ):
             ui.label(tc["agent_backend"]).classes("text-white font-semibold")
     else:
-        ui.label("No team-specific agent backend enforcement.").classes("text-sm text-gray-500")
+        ui.label("No team-specific agent backend enforcement.").classes(
+            "text-sm text-gray-500"
+        )
 
     ui.separator().classes("my-3")
     ui.label("Team Custom Field Defaults").classes("text-sm font-bold text-blue-300")
@@ -899,12 +1541,16 @@ def _build_team_tab_advanced(bridge: DataBridge) -> Dict[str, Any]:
         for field, value in defaults.items():
             ui.label(f"{field}: {value}").classes("text-sm text-gray-400")
     else:
-        ui.label("No team custom field defaults configured.").classes("text-sm text-gray-500")
+        ui.label("No team custom field defaults configured.").classes(
+            "text-sm text-gray-500"
+        )
 
     sys_defaults = tc.get("jira_system_field_defaults") if tc else None
     if sys_defaults and isinstance(sys_defaults, dict):
         ui.separator().classes("my-2")
-        ui.label("Team System Field Defaults").classes("text-sm font-bold text-blue-300")
+        ui.label("Team System Field Defaults").classes(
+            "text-sm font-bold text-blue-300"
+        )
         for field, value in sys_defaults.items():
             display = ", ".join(value) if isinstance(value, list) else str(value)
             ui.label(f"{field}: {display}").classes("text-sm text-gray-400")
@@ -941,12 +1587,15 @@ def _build_user_tab(config: Any) -> Dict[str, Any]:
                 f"Personal default for {field}",
             )
     else:
-        ui.label("No personal field defaults configured.").classes("text-sm text-gray-500")
+        ui.label("No personal field defaults configured.").classes(
+            "text-sm text-gray-500"
+        )
 
     return widgets
 
 
 # -- Main page ----------------------------------------------------------------
+
 
 def _attach_dirty_tracking(
     all_widgets: Dict[str, Dict[str, Any]],
@@ -987,6 +1636,7 @@ def _attach_dirty_tracking(
                         mark_dirty_fn()
                         for btn in undo_buttons:
                             btn.enable()
+
                 return _handler
 
             try:
@@ -1011,7 +1661,9 @@ def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> Non
     if config is None:
         with ui.column().classes("w-full max-w-5xl mx-auto p-4"):
             ui.label("No configuration found.").classes("text-red-400 text-xl")
-            ui.label("Run 'daf init' to create a configuration.").classes("text-gray-400")
+            ui.label("Run 'daf init' to create a configuration.").classes(
+                "text-gray-400"
+            )
         return
 
     all_widgets: Dict[str, Dict[str, Any]] = {}
@@ -1068,7 +1720,9 @@ def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> Non
                     else:
                         ui.notify("Failed to save configuration.", type="negative")
 
-                ui.button("Confirm & Save", on_click=_confirm_save).classes("bg-green-600")
+                ui.button("Confirm & Save", on_click=_confirm_save).classes(
+                    "bg-green-600"
+                )
         dialog.open()
 
     async def _do_save() -> None:
@@ -1098,15 +1752,21 @@ def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> Non
         _save_buttons.append(btn)
 
     with ui.column().classes("w-full max-w-5xl mx-auto p-4 gap-4"):
-        ui.link("<< Back to Dashboard", "/").classes("text-blue-400 hover:text-blue-300")
+        ui.link("<< Back to Dashboard", "/").classes(
+            "text-blue-400 hover:text-blue-300"
+        )
 
         # Header row with title and mode toggle
         with ui.row().classes("w-full items-center justify-between"):
             mode_label = "Advanced" if advanced else "Simple"
-            ui.label(f"Configuration Editor ({mode_label} Mode)").classes("text-2xl font-bold")
+            ui.label(f"Configuration Editor ({mode_label} Mode)").classes(
+                "text-2xl font-bold"
+            )
 
             toggle_target = "/config" if advanced else "/config/advanced"
-            toggle_text = "Switch to Simple Mode" if advanced else "Switch to Advanced Mode"
+            toggle_text = (
+                "Switch to Simple Mode" if advanced else "Switch to Advanced Mode"
+            )
             ui.link(toggle_text, toggle_target).classes(
                 "text-blue-400 hover:text-blue-300 text-sm"
             )
@@ -1135,11 +1795,15 @@ def create_config_editor_page(bridge: DataBridge, advanced: bool = False) -> Non
                 with ui.tab_panel(tab_repo):
                     all_widgets["repo"] = _build_repo_tab(config)
                 with ui.tab_panel(tab_workspaces):
-                    all_widgets["workspaces"] = _build_workspaces_tab(config, bridge)
+                    all_widgets["workspaces"] = _build_workspaces_tab(
+                        config, bridge, _mark_dirty
+                    )
                 with ui.tab_panel(tab_ai):
-                    all_widgets["ai"] = _build_ai_tab(config)
+                    all_widgets["ai"] = _build_ai_tab(config, _mark_dirty)
                 with ui.tab_panel(tab_providers):
-                    all_widgets["providers"] = _build_model_providers_tab(config)
+                    all_widgets["providers"] = _build_model_providers_tab(
+                        config, bridge, _mark_dirty
+                    )
                 with ui.tab_panel(tab_workflow):
                     all_widgets["workflow"] = _build_workflow_tab(config)
                 with ui.tab_panel(tab_advanced):
