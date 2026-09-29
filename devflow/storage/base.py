@@ -117,7 +117,8 @@ class StorageBackend(ABC):
             filters: Filter criteria
 
         Returns:
-            List of Session objects matching the filters
+            List of Session objects matching the filters, ordered by the
+            canonical session activity timestamp (newest first)
 
         Raises:
             Exception: If filtering fails

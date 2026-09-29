@@ -5,6 +5,7 @@ configuration, and notes without duplicating business logic. It wraps
 SessionManager, ConfigLoader, and StorageBackend with web-friendly methods.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,6 +15,18 @@ from devflow.config.loader import ConfigLoader
 from devflow.config.models import Config, Session
 from devflow.session.manager import SessionManager
 from devflow.utils.paths import get_cs_home
+
+
+@dataclass
+class DashboardSnapshot:
+    """Single session-index read reused by one dashboard refresh cycle."""
+
+    sessions: List[Session]
+    status_counts: Dict[str, int]
+    workspace_options: List[str]
+    issue_tracker_options: List[str]
+    issue_tracker_backend: str
+    issue_tracker_config: Any
 
 
 class DataBridge:
@@ -77,6 +90,131 @@ class DataBridge:
                 if session["issue_tracker"] == issue_tracker
             ]
         return session_dicts
+
+    def get_dashboard_snapshot(self) -> DashboardSnapshot:
+        """Load the session data needed by the dashboard once.
+
+        The dashboard uses this snapshot for its status cards, filter options,
+        and paginated table rows. A refresh replaces the snapshot, while filter
+        and page changes reuse it without rereading the session index.
+        """
+        manager = self._get_manager()
+        sessions = manager.list_sessions()
+        issue_tracker_backend, issue_tracker_config = self._get_issue_tracker_context()
+
+        status_counts: Dict[str, int] = {}
+        for session in sessions:
+            status = session.status or "unknown"
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+        workspace_options = sorted({session.workspace_name or "Unassigned" for session in sessions})
+        issue_tracker_options = sorted(
+            {
+                issue_tracker_backend if session.issue_key else "unlinked"
+                for session in sessions
+            }
+        )
+
+        return DashboardSnapshot(
+            sessions=sessions,
+            status_counts=status_counts,
+            workspace_options=workspace_options,
+            issue_tracker_options=issue_tracker_options,
+            issue_tracker_backend=issue_tracker_backend,
+            issue_tracker_config=issue_tracker_config,
+        )
+
+    def get_dashboard_page(
+        self,
+        snapshot: DashboardSnapshot,
+        status: Optional[str] = None,
+        workspace: Optional[str] = None,
+        issue_tracker: Optional[str] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 25,
+    ) -> Dict[str, Any]:
+        """Filter and paginate a dashboard snapshot before serializing rows.
+
+        Args:
+            snapshot: Session data loaded by :meth:`get_dashboard_snapshot`.
+            status: Optional session status filter.
+            workspace: Workspace name, or an empty string for unassigned sessions.
+            issue_tracker: Configured backend name, or ``unlinked``.
+            search: Case-insensitive text search across table fields.
+            page: One-based page number.
+            page_size: Number of rows to serialize for the page.
+
+        Returns:
+            Page rows and pagination metadata for the dashboard.
+
+        Raises:
+            ValueError: If page or page_size is less than one.
+        """
+        if page < 1:
+            raise ValueError("page must be 1 or greater")
+        if page_size < 1:
+            raise ValueError("page_size must be 1 or greater")
+
+        sessions = snapshot.sessions
+        if status:
+            status_values = {value.strip() for value in status.split(",")}
+            sessions = [session for session in sessions if session.status in status_values]
+
+        if workspace is not None:
+            sessions = [
+                session
+                for session in sessions
+                if (session.workspace_name or "") == workspace
+            ]
+
+        if issue_tracker is not None:
+            sessions = [
+                session
+                for session in sessions
+                if (
+                    snapshot.issue_tracker_backend if session.issue_key else "unlinked"
+                ) == issue_tracker
+            ]
+
+        if search and search.strip():
+            search_term = search.strip().casefold()
+            sessions = [
+                session
+                for session in sessions
+                if search_term in " ".join(
+                    [
+                        session.name,
+                        session.status or "",
+                        session.goal or "",
+                        session.issue_key or "",
+                        session.workspace_name or "",
+                        session.session_type or "",
+                    ]
+                ).casefold()
+            ]
+
+        total_count = len(sessions)
+        total_pages = (total_count + page_size - 1) // page_size
+        current_page = min(page, total_pages) if total_pages else 1
+        start = (current_page - 1) * page_size
+        page_sessions = sessions[start : start + page_size]
+
+        rows = [
+            self._session_to_dict(
+                session,
+                issue_tracker_backend=snapshot.issue_tracker_backend,
+                issue_tracker_config=snapshot.issue_tracker_config,
+            )
+            for session in page_sessions
+        ]
+        return {
+            "sessions": rows,
+            "page": current_page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": total_pages,
+        }
 
     def get_session(self, identifier: str) -> Optional[Dict[str, Any]]:
         """Get a single session by name or issue key.
@@ -189,7 +327,12 @@ class DataBridge:
             counts[status] = counts.get(status, 0) + 1
         return counts
 
-    def _session_to_dict(self, session: Session) -> Dict[str, Any]:
+    def _session_to_dict(
+        self,
+        session: Session,
+        issue_tracker_backend: Optional[str] = None,
+        issue_tracker_config: Any = None,
+    ) -> Dict[str, Any]:
         """Convert a Session to a display-friendly dictionary.
 
         Args:
@@ -216,9 +359,12 @@ class DataBridge:
         # Get workspace name
         workspace = session.workspace_name or ""
 
+        if issue_tracker_backend is None:
+            issue_tracker_backend, issue_tracker_config = self._get_issue_tracker_context()
+
         # Get issue key
         issue_key = session.issue_key or ""
-        issue_tracker = self._get_issue_tracker_backend() if issue_key else "unlinked"
+        issue_tracker = issue_tracker_backend if issue_key else "unlinked"
 
         # Format last active
         last_active_str = ""
@@ -231,7 +377,11 @@ class DataBridge:
             "workspace": workspace,
             "issue_key": issue_key,
             "issue_tracker": issue_tracker,
-            "issue_url": self.get_issue_url(issue_key) if issue_key else None,
+            "issue_url": (
+                self._build_issue_url(issue_key, issue_tracker_backend, issue_tracker_config)
+                if issue_key
+                else None
+            ),
             "goal": session.goal or "",
             "time": time_str,
             "last_active": last_active_str,
@@ -295,8 +445,6 @@ class DataBridge:
         base["created"] = (
             session.created.strftime("%Y-%m-%d %H:%M") if session.created else ""
         )
-        base["issue_url"] = self.get_issue_url(session.issue_key or "")
-
         return base
 
     @staticmethod
@@ -306,28 +454,33 @@ class DataBridge:
 
     def _get_issue_tracker_backend(self) -> str:
         """Return the configured issue tracker backend for display and calls."""
+        return self._get_issue_tracker_context()[0]
+
+    def _get_issue_tracker_context(self) -> tuple[str, Any]:
+        """Load the configured issue tracker backend and section together."""
         try:
             config = self.config_loader.load_config()
             backend = getattr(config, "issue_tracker_backend", "jira")
-            return backend.lower() if isinstance(backend, str) else "jira"
+            backend = backend.lower() if isinstance(backend, str) else "jira"
+            return backend, getattr(config, backend, None)
         except Exception:
-            return "jira"
+            return "jira", None
 
     def _get_issue_tracker_config(self) -> Any:
         """Return the configured backend section, if available."""
-        try:
-            config = self.config_loader.load_config()
-            return getattr(config, self._get_issue_tracker_backend(), None)
-        except Exception:
-            return None
+        return self._get_issue_tracker_context()[1]
 
     def get_issue_url(self, issue_key: str) -> Optional[str]:
         """Build an external issue URL without making a network request."""
         if not issue_key:
             return None
 
-        backend = self._get_issue_tracker_backend()
-        tracker_config = self._get_issue_tracker_config()
+        backend, tracker_config = self._get_issue_tracker_context()
+        return self._build_issue_url(issue_key, backend, tracker_config)
+
+    @staticmethod
+    def _build_issue_url(issue_key: str, backend: str, tracker_config: Any) -> Optional[str]:
+        """Build an issue URL from an already loaded tracker configuration."""
         if backend == "jira":
             base_url = getattr(tracker_config, "url", "")
             if not isinstance(base_url, str) or not base_url:

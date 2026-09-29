@@ -337,6 +337,21 @@ def test_session_index_list_sessions_sorted_by_last_active():
     assert result[2].name == "oldest"
 
 
+def test_session_index_list_sessions_tie_breaks_by_name():
+    """Test equal activity timestamps produce deterministic name ordering."""
+    index = SessionIndex()
+    timestamp = datetime.now()
+
+    for name in ("zeta", "alpha"):
+        session = Session(name=name, goal=name)
+        session.last_active = timestamp
+        index.sessions[name] = session
+
+    result = index.list_sessions()
+
+    assert [session.name for session in result] == ["alpha", "zeta"]
+
+
 def test_conversation_context_get_repo_name_with_temp_directory():
     """Test that get_repo_name() prioritizes original_project_path over temp directory."""
     # Case 1: With temp directory - should use original_project_path

@@ -1770,6 +1770,20 @@ class Session(BaseModel):
   - Examples: daf investigate PROJ-12345, daf investigate owner/repo#123, daf investigate #123
   - Comprehensive test coverage (7 new tests)
   - All 22 investigate tests pass
+- ✓ Paginated session listings sorted newest first (itdove/devaiflow#603)
+   - Uses Session.last_active as the canonical ordering and terminal Last Activity timestamp
+   - Applies filters before deterministic newest-first sorting and pagination
+   - Uses ascending session name as the equal-timestamp tie-breaker
+   - Aligns terminal, JSON, --page, --limit, and --all output ordering
+   - Adds complete JSON pagination metadata, including empty results
+   - Regression coverage for ordering, filtering, pagination, ties, and activity display
+   - All 151 focused session-listing and session-management tests pass
+- ✓ Optimized NiceGUI dashboard session loading
+   - Reads the session index once per dashboard refresh cycle
+   - Reuses a snapshot for status cards, filter options, search, and pagination
+   - Serializes only the visible 25-row page for the session table
+   - Preserves canonical newest-first ordering from SessionIndex.list_sessions()
+   - Focused web dashboard suite passes (123 tests)
 
 ## Release Management
 
