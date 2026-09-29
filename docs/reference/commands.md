@@ -647,6 +647,10 @@ daf open <NAME-or-JIRA> [OPTIONS]
 - `--model-profile` - Model provider profile to use (overrides session default; stored in session for future use)
 - `--json` - Return JSON output (non-interactive mode). Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Suitable for automation, CI/CD pipelines, and integration tests.
 
+**Agent launch failures:**
+
+If the configured agent exits unsuccessfully, `daf open` reports the resolved backend, launch or resume phase, exit code, and sanitized diagnostics provided by the agent. Missing executables include the executable name and a PATH/install hint. The same sanitized details are written to `$DEVAIFLOW_HOME/logs/open.log`. With `--json`, failures are returned as a structured `success: false` error without Rich output.
+
 **Examples:**
 ```bash
 # Open by JIRA key
