@@ -300,6 +300,7 @@ JIRA Board                   ▼
 - **Features:**
   - Automatic PR/MR creation with template support
   - AI-powered template filling using session context and git changes
+  - Deterministic fallback filling for structured templates, including explicit issue, testing, command, and checklist status
   - Automatic issue linking in PR/MR description
   - Support for both GitHub (via `gh` CLI) and GitLab (via `glab` CLI)
 

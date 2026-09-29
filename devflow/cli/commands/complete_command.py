@@ -3044,6 +3044,17 @@ def _generate_pr_description(session, working_dir: Path, config_loader: ConfigLo
         'current_branch': current_branch
     }
 
+    # Include captured commands when session metadata is available so custom
+    # templates can show concrete testing and verification evidence.
+    try:
+        from devflow.session.summary import generate_session_summary
+
+        session_summary = generate_session_summary(session)
+        if session_summary.commands_run:
+            git_context['commands_run'] = session_summary.commands_run
+    except Exception:
+        pass
+
     # If we have a template, use AI to fill it; otherwise use default format
     if template_content:
         # Report which template source is being used

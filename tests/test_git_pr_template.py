@@ -60,6 +60,58 @@ def git_context():
     }
 
 
+@pytest.fixture
+def structured_template():
+    """Structured template with issue, checkbox, evidence, and attribution sections."""
+    return """## Description
+
+<!-- Summarize the change and the problem it solves. -->
+
+## Related issue (if applicable)
+
+<!-- Link the related issue or write N/A. -->
+
+## Type of change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Security fix or detection change
+- [ ] Documentation or workflow change
+- [ ] Refactoring or maintenance
+
+## Security impact
+
+Select exactly one of the following mutually exclusive options:
+
+- [ ] This change has no security impact.
+- [ ] This change affects security behavior; describe the impact below.
+
+<!-- Include relevant threat model, compatibility considerations, or UX details. -->
+
+## Testing
+
+<!-- List tests and manual verification. -->
+
+- [ ] Tests added or updated where needed.
+- [ ] Related tests pass locally.
+- [ ] Manual verification completed, if applicable.
+
+## Commands run
+
+```text
+# Record command evidence here
+```
+
+## Checklist
+
+- [ ] The change is limited to this PR's purpose.
+- [ ] Documentation is updated where needed.
+- [ ] CHANGELOG.md is updated for notable changes, or no update is needed.
+
+Assisted-by: <!-- Name of code assistant -->
+"""
+
+
 class TestFillPrTemplateWithAi:
     """Tests for fill_pr_template_with_ai function."""
 
@@ -659,6 +711,83 @@ More content
 
             assert "https://jira.example.com/browse/PROJ-12345" in result
             assert "//browse" not in result
+
+    def test_fallback_populates_structured_template(self, structured_template):
+        """Fallback should replace every applicable structured-template placeholder."""
+        session = Mock()
+        session.issue_key = "owner/repo#42"
+        session.issue_tracker = "github"
+        session.goal = "Fix the broken parser"
+
+        git_context = {
+            "commit_log": "fix: handle malformed input",
+            "changed_files": ["src/parser.py", "tests/test_parser.py"],
+            "commands_run": [{"command": "pytest tests/test_parser.py", "exit_code": 0}],
+        }
+
+        result = _fill_template_fallback(
+            structured_template,
+            session,
+            git_context,
+            agent_display_name="OpenCode",
+        )
+
+        assert "Closes owner/repo#42" in result
+        assert "https://github.com/owner/repo/issues/42" in result
+        assert "Fix the broken parser" in result
+        assert "- [x] Bug fix" in result
+        assert "- [x] This change has no security impact." in result
+        assert "- [x] Tests added or updated where needed." in result
+        assert "- [x] Related tests pass locally." in result
+        assert "pytest tests/test_parser.py (exit code: 0)" in result
+        assert "Assisted-by: OpenCode" in result
+        assert "<!--" not in result
+        assert "Select exactly one" not in result
+        assert "Include relevant" not in result
+        assert "# Record command evidence here" not in result
+
+    def test_incomplete_ai_output_uses_structured_fallback(
+        self, structured_template, tmp_path, monkeypatch
+    ):
+        """A successful AI call returning a skeleton must not be submitted unchanged."""
+        monkeypatch.chdir(tmp_path)
+        session = Mock()
+        session.issue_key = "owner/repo#42"
+        session.issue_tracker = "github"
+        session.goal = "Fix the broken parser"
+        session.agent_backend = "claude"
+        session.model_profile = None
+        session.active_conversation = None
+
+        git_context = {
+            "commit_log": "fix: handle malformed input",
+            "changed_files": ["src/parser.py", "tests/test_parser.py"],
+        }
+
+        with patch("devflow.git.pr_template.ConfigLoader") as mock_config_loader_class:
+            with patch("devflow.agent.factory.resolve_agent_backend", return_value="claude"):
+                with patch("devflow.agent.create_agent_client") as mock_create:
+                    mock_agent = Mock()
+                    mock_agent.generate_text.return_value = structured_template
+                    mock_agent.get_agent_name.return_value = "claude"
+                    mock_create.return_value = mock_agent
+
+                    mock_loader = Mock()
+                    mock_loader.config_file.exists.return_value = False
+                    mock_config_loader_class.return_value = mock_loader
+
+                    result = fill_pr_template_with_ai(
+                        structured_template,
+                        session,
+                        tmp_path,
+                        git_context,
+                    )
+
+        assert "Fix the broken parser" in result
+        assert "- [x] Bug fix" in result
+        assert "<!--" not in result
+        assert "# Record command evidence here" not in result
+        mock_agent.generate_text.assert_called_once()
 
 
 class TestBackendDetectionInTemplates:
