@@ -127,7 +127,16 @@ class MarkdownExporter:
                 all_sessions.extend(session_list)
 
         if since is not None or before is not None:
-            date_filtered_sessions = sessions_index.list_sessions(since=since, before=before)
+            # Session listing treats ``before`` as an exclusive boundary. Markdown
+            # export documents its upper bound as inclusive, so apply that final
+            # comparison here without changing the shared listing semantics.
+            date_filtered_sessions = sessions_index.list_sessions(since=since)
+            if before is not None:
+                date_filtered_sessions = [
+                    session
+                    for session in date_filtered_sessions
+                    if session.last_active <= before
+                ]
             if identifiers:
                 date_filtered_names = {session.name for session in date_filtered_sessions}
                 all_sessions = [
