@@ -1451,13 +1451,12 @@ def test_prompt_for_complete_on_exit_handles_exception(temp_daf_home, monkeypatc
 
 
 def test_temp_directory_conversation_file_persistence(temp_daf_home, monkeypatch, tmp_path):
-    """Test that conversation files are preserved when reopening temp directory sessions (PROJ-60881).
+    """Test that reopening reuses the recorded clone path (PROJ-605).
 
-    This test verifies the fix for PROJ-60881 where reopening a daf jira new session
-    would generate a new session ID instead of resuming the existing conversation.
+    Reopening must not replace the clone because database-backed agents associate
+    conversations with the absolute project path.
     """
     from devflow.session.capture import SessionCapture
-    import tempfile
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -1513,14 +1512,7 @@ def test_temp_directory_conversation_file_persistence(temp_daf_home, monkeypatch
     monkeypatch.setattr(GitUtils, "get_remote_url", mock_get_remote_url)
     monkeypatch.setattr(GitUtils, "clone_repository", mock_clone_repository)
     monkeypatch.setattr(GitUtils, "get_default_branch", mock_get_default_branch)
-
-    # Mock tempfile.mkdtemp to return a predictable path
-    new_temp_dir = tmp_path / "new-temp-dir"
-    def mock_mkdtemp(prefix="", dir=None):
-        new_temp_dir.mkdir(exist_ok=True)
-        return str(new_temp_dir)
-
-    monkeypatch.setattr(tempfile, "mkdtemp", mock_mkdtemp)
+    monkeypatch.setattr(GitUtils, "get_current_branch", lambda path: "main")
 
     # Mock subprocess.run to avoid actually launching Claude
     def mock_subprocess_run(*args, **kwargs):
@@ -1544,14 +1536,13 @@ def test_temp_directory_conversation_file_persistence(temp_daf_home, monkeypatch
     # Call the handler (this simulates what happens in daf open)
     _handle_temp_directory_for_ticket_creation(session, session_manager)
 
-    # Verify:
-    # 1. Session project_path was updated to new temp directory (with repo name subdirectory)
-    # The remote URL is https://git.example.com/test/repo.git, so repo name is "repo"
-    expected_clone_dir = str((new_temp_dir / "repo").resolve())
+    # Verify the clone was restored at the exact path recorded in session metadata.
+    expected_clone_dir = str(old_temp_dir.resolve())
     reloaded_session = session_manager.get_session("test-ticket-creation")
     reloaded_active_conv = reloaded_session.active_conversation
     assert reloaded_active_conv is not None
     assert reloaded_active_conv.project_path == expected_clone_dir
+    assert reloaded_active_conv.temp_directory == expected_clone_dir
 
     # 2. Conversation file exists in new temp directory
     new_session_dir = capture.get_session_dir(expected_clone_dir)
@@ -1567,15 +1558,61 @@ def test_temp_directory_conversation_file_persistence(temp_daf_home, monkeypatch
     assert reloaded_active_conv.ai_agent_session_id == session_id, "Session ID should not change"
 
 
-def test_temp_directory_conversation_file_persistence_when_temp_dir_deleted(temp_daf_home, monkeypatch, tmp_path):
-    """Test that conversation files are preserved even when temp directory is deleted (PROJ-60881).
+def test_reopen_does_not_overwrite_surviving_temp_conversation(temp_daf_home, monkeypatch, tmp_path):
+    """Reopen must preserve temp conversation data newer than stable capture."""
+    from devflow.session.capture import SessionCapture
 
-    This test verifies that conversation history is preserved even when the temp directory
-    itself has been deleted (e.g., by system cleanup). The conversation file is stored in
-    ~/.claude/projects/<encoded-path>/ which persists independently of the temp directory.
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    temp_dir = tmp_path / "recorded-clone"
+    original_dir = tmp_path / "original-repo"
+    temp_dir.mkdir()
+    original_dir.mkdir()
+
+    session_id = "test-uuid-surviving-temp"
+    session = session_manager.create_session(
+        name="test-surviving-temp-conversation",
+        goal="Test surviving temp conversation",
+        working_directory="test-repo",
+        project_path=str(temp_dir),
+        ai_agent_session_id=session_id,
+    )
+    session.session_type = "ticket_creation"
+    conv = session.active_conversation
+    conv.temp_directory = str(temp_dir)
+    conv.original_project_path = str(original_dir)
+    session_manager.update_session(session)
+
+    capture = SessionCapture()
+    stable_dir = capture.get_session_dir(str(original_dir))
+    stable_dir.mkdir(parents=True, exist_ok=True)
+    (stable_dir / f"{session_id}.jsonl").write_text("stable copy\n")
+
+    temp_session_dir = capture.get_session_dir(str(temp_dir))
+    temp_session_dir.mkdir(parents=True, exist_ok=True)
+    temp_conversation = temp_session_dir / f"{session_id}.jsonl"
+    temp_conversation.write_text("newer temp copy\n")
+
+    monkeypatch.setattr(GitUtils, "is_git_repository", lambda path: True)
+    monkeypatch.setattr(
+        "devflow.cli.commands.open_command.console.print",
+        lambda *args, **kwargs: None,
+    )
+
+    from devflow.cli.commands.open_command import _handle_temp_directory_for_ticket_creation
+
+    _handle_temp_directory_for_ticket_creation(session, session_manager)
+
+    assert temp_conversation.read_text() == "newer temp copy\n"
+
+
+def test_temp_directory_conversation_file_persistence_when_temp_dir_deleted(temp_daf_home, monkeypatch, tmp_path):
+    """Test that a missing clone is recreated at its recorded path (PROJ-605).
+
+    Conversation history is stored independently of the clone, while the clone
+    itself must be recreated at the same path for agent session resumption.
     """
     from devflow.session.capture import SessionCapture
-    import tempfile
 
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -1636,14 +1673,7 @@ def test_temp_directory_conversation_file_persistence_when_temp_dir_deleted(temp
     monkeypatch.setattr(GitUtils, "get_remote_url", mock_get_remote_url)
     monkeypatch.setattr(GitUtils, "clone_repository", mock_clone_repository)
     monkeypatch.setattr(GitUtils, "get_default_branch", mock_get_default_branch)
-
-    # Mock tempfile.mkdtemp to return a predictable path
-    new_temp_dir = tmp_path / "new-temp-dir"
-    def mock_mkdtemp(prefix="", dir=None):
-        new_temp_dir.mkdir(exist_ok=True)
-        return str(new_temp_dir)
-
-    monkeypatch.setattr(tempfile, "mkdtemp", mock_mkdtemp)
+    monkeypatch.setattr(GitUtils, "get_current_branch", lambda path: "main")
 
     # Mock subprocess.run to avoid actually launching Claude
     def mock_subprocess_run(*args, **kwargs):
@@ -1667,10 +1697,8 @@ def test_temp_directory_conversation_file_persistence_when_temp_dir_deleted(temp
     # Call the handler (this simulates what happens in daf open)
     _handle_temp_directory_for_ticket_creation(session, session_manager)
 
-    # Verify:
-    # 1. Conversation file was backed up and restored even though temp dir was deleted
-    # With nested structure, the clone dir is new_temp_dir/repo (from remote URL)
-    expected_clone_dir = str((new_temp_dir / "repo").resolve())
+    # Verify the clone was restored at its original recorded path.
+    expected_clone_dir = str(old_temp_dir.resolve())
     new_session_dir = capture.get_session_dir(expected_clone_dir)
     new_conversation_file = new_session_dir / f"{session_id}.jsonl"
     assert new_conversation_file.exists(), "Conversation file should exist in new temp directory"
@@ -1685,6 +1713,8 @@ def test_temp_directory_conversation_file_persistence_when_temp_dir_deleted(temp
     reloaded_active_conv = reloaded_session.active_conversation
     assert reloaded_active_conv is not None
     assert reloaded_active_conv.ai_agent_session_id == session_id, "Session ID should not change"
+    assert reloaded_active_conv.project_path == expected_clone_dir
+    assert reloaded_active_conv.temp_directory == expected_clone_dir
 
 
 def test_set_terminal_title_with_issue_key(temp_daf_home, capsys):

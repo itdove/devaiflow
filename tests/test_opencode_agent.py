@@ -408,6 +408,7 @@ class TestOpenCodeAgentLaunch:
         mock_require.assert_called_once()
         call_args = mock_popen.call_args
         assert call_args[0][0] == ["opencode", "--session", "test-session-uuid"]
+        assert call_args[1]["cwd"] == "/home/user/project"
         assert result == mock_process
 
 

@@ -1778,12 +1778,18 @@ class Session(BaseModel):
    - Adds complete JSON pagination metadata, including empty results
    - Regression coverage for ordering, filtering, pagination, ties, and activity display
    - All 151 focused session-listing and session-management tests pass
-- ✓ Optimized NiceGUI dashboard session loading
-   - Reads the session index once per dashboard refresh cycle
-   - Reuses a snapshot for status cards, filter options, search, and pagination
-   - Serializes only the visible 25-row page for the session table
-   - Preserves canonical newest-first ordering from SessionIndex.list_sessions()
-   - Focused web dashboard suite passes (123 tests)
+ - ✓ Optimized NiceGUI dashboard session loading
+    - Reads the session index once per dashboard refresh cycle
+    - Reuses a snapshot for status cards, filter options, search, and pagination
+    - Serializes only the visible 25-row page for the session table
+    - Preserves canonical newest-first ordering from SessionIndex.list_sessions()
+    - Focused web dashboard suite passes (123 tests)
+- ✓ Preserved resumable session clones (itdove/devaiflow#605)
+   - Keeps temporary clones available while sessions are paused and resumable
+   - Reuses the recorded clone path across reopen and restart
+   - Restores missing clones at the recorded path for OpenCode and other agents
+   - Limits clone cleanup to explicit `daf complete` or `daf delete`
+   - Added regression coverage for clone recovery, conversation preservation, and OpenCode `cwd`
 
 ## Release Management
 

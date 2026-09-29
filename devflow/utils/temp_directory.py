@@ -321,6 +321,48 @@ def clone_to_temp_directory(current_path: Path) -> Optional[tuple[str, str]]:
     return (clone_dir, original_path)
 
 
+def clone_repository_at_path(
+    remote_url: str,
+    target_path: Path,
+    branch: Optional[str] = None,
+) -> bool:
+    """Clone a repository at a previously recorded path.
+
+    Reopen recovery must keep the project path stable because some agent
+    backends associate a conversation with the absolute working directory.
+    Empty interrupted clone directories are safe to replace; non-empty
+    directories that are not repositories are left untouched.
+
+    Args:
+        remote_url: Git remote URL to clone from.
+        target_path: Exact path where the repository must be restored.
+        branch: Optional branch to checkout after cloning.
+
+    Returns:
+        True when the repository was restored or already exists at the path.
+    """
+    target_path = target_path.expanduser()
+
+    try:
+        if target_path.exists():
+            if GitUtils.is_git_repository(target_path):
+                return True
+
+            if not target_path.is_dir() or any(target_path.iterdir()):
+                console_print(
+                    f"[yellow]⚠[/yellow] Cannot restore clone over non-empty path: {target_path}"
+                )
+                return False
+
+            target_path.rmdir()
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        return GitUtils.clone_repository(remote_url, target_path, branch=branch)
+    except OSError as e:
+        console_print(f"[yellow]⚠[/yellow] Could not restore clone at {target_path}: {e}")
+        return False
+
+
 def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
     """Prompt user and clone repository to temporary directory.
 

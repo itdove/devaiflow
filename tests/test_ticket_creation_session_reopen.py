@@ -698,9 +698,9 @@ def test_daf_jira_open_resumes_existing_conversation(temp_daf_home, mock_git_rep
             assert "Generating new session ID" not in result.output, \
                 f"Should not generate new session ID when conversation exists. Got:\n{result.output}"
 
-            # CRITICAL: Verify it found the session at stable location
-            assert "session at stable location" in result.output, \
-                f"Expected to check stable location for ticket_creation session. Got:\n{result.output}"
+            # CRITICAL: Verify it checked the recorded agent project path.
+            assert "Checking for existing" in result.output, \
+                f"Expected to check the recorded project path. Got:\n{result.output}"
             assert "found" in result.output.lower(), \
                 f"Expected to find conversation file. Got:\n{result.output}"
 

@@ -249,7 +249,7 @@ Clone project to ~/.cache/devaiflow/clones/... and start session? [Y/n]
 }
 ```
 
-**Auto-clones vs Workspaces:** Auto-clones are ephemeral — created automatically on conflict detection, stored in `~/.cache/devaiflow/clones/`, and cleaned up on `daf complete`. Workspaces are persistent, user-managed directories for long-lived parallel development. Auto-clones do not appear in `daf workspace list`.
+**Auto-clones vs Workspaces:** Auto-clones are session-scoped - created automatically on conflict detection, stored in `~/.cache/devaiflow/clones/`, and kept at the same path while the session is resumable. They are cleaned up only after explicit `daf complete` or `daf delete` (unless `cleanup_on_complete` is disabled). Workspaces are persistent, user-managed directories for long-lived parallel development. Auto-clones do not appear in `daf workspace list`.
 
 **Config hierarchy:** Enterprise can enforce `strict` mode via `enterprise.json` (`concurrency_mode: "strict"`) to prevent teams from using more permissive modes.
 

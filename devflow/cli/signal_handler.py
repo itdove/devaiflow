@@ -50,7 +50,7 @@ def _cleanup_on_signal(signum, frame):
     2. Handle session renaming (for ticket_creation sessions)
     3. End work session
     4. Save conversation files
-    5. Clean up temporary directories
+    5. Leave temporary directories in place for session resumption
     6. Prompt for session completion
     """
     global _cleanup_done
@@ -129,19 +129,10 @@ def _cleanup_on_signal(signum, frame):
                 from devflow.cli.commands.open_command import _copy_conversation_from_temp
                 _copy_conversation_from_temp(session_to_update, session_to_update.active_conversation.temp_directory)
 
-            # Call the complete prompt BEFORE cleaning up temp directory
-            # so daf complete can commit and push changes from the clone
+            # Prompt before returning. Temporary directories remain available
+            # unless the user explicitly completes or deletes the session.
             from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
             _prompt_for_complete_on_exit(session_to_update, _cleanup_config)
-
-            # Clean up temporary directory AFTER daf complete
-            if session_to_update.active_conversation and session_to_update.active_conversation.temp_directory:
-                try:
-                    from devflow.utils.temp_directory import cleanup_temp_directory
-                    cleanup_temp_directory(session_to_update.active_conversation.temp_directory)
-                except ImportError:
-                    from devflow.cli.commands.open_command import _cleanup_temp_directory_on_exit
-                    _cleanup_temp_directory_on_exit(session_to_update.active_conversation.temp_directory)
 
             # Mark cleanup as done so finally block doesn't repeat it
             _cleanup_done = True
