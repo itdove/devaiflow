@@ -194,31 +194,23 @@ def _display_page(
         # AAP-63377: Display workspace name
         workspace_display = session.workspace_name or "-"
 
-        # Get most recent conversation activity (last opened/closed time)
+        # Session.last_active is the canonical timestamp used for ordering and
+        # JSON output, so the terminal display must use the same value.
         last_session_display = "-"
-        if session.conversations:
-            # Find the most recent last_active across all conversations
-            most_recent_activity = None
-            for conv_data in session.conversations.values():
-                # Handle both Conversation (new format) and ConversationContext (old format)
-                conv = conv_data.active_session if hasattr(conv_data, 'active_session') else conv_data
-                if conv and conv.last_active:
-                    if most_recent_activity is None or conv.last_active > most_recent_activity:
-                        most_recent_activity = conv.last_active
+        most_recent_activity = session.last_active
+        if most_recent_activity:
+            # Calculate time ago
+            time_diff = datetime.now() - most_recent_activity
+            hours_ago = int(time_diff.total_seconds() // 3600)
+            days_ago = hours_ago // 24
 
-            if most_recent_activity:
-                # Calculate time ago
-                time_diff = datetime.now() - most_recent_activity
-                hours_ago = int(time_diff.total_seconds() // 3600)
-                days_ago = hours_ago // 24
-
-                if days_ago > 0:
-                    last_session_display = f"{days_ago}d ago"
-                elif hours_ago > 0:
-                    last_session_display = f"{hours_ago}h ago"
-                else:
-                    minutes_ago = int((time_diff.total_seconds() % 3600) // 60)
-                    last_session_display = f"{minutes_ago}m ago" if minutes_ago > 0 else "just now"
+            if days_ago > 0:
+                last_session_display = f"{days_ago}d ago"
+            elif hours_ago > 0:
+                last_session_display = f"{hours_ago}h ago"
+            else:
+                minutes_ago = int((time_diff.total_seconds() % 3600) // 60)
+                last_session_display = f"{minutes_ago}m ago" if minutes_ago > 0 else "just now"
 
         # Get token usage for all conversations (sum across all repos)
         token_display = "-"
@@ -341,6 +333,27 @@ def list_sessions(
                 console.print("[dim]Examples: 'last week', '3 days ago', '2025-01-01'[/dim]")
             return
 
+    # Validate pagination arguments before querying or handling an empty result.
+    if limit < 1:
+        if output_json:
+            json_output(
+                success=False,
+                error={"message": "Limit must be 1 or greater", "code": "INVALID_LIMIT"}
+            )
+        else:
+            console.print("[red]✗[/red] Limit must be 1 or greater")
+        return
+
+    if page is not None and page < 1:
+        if output_json:
+            json_output(
+                success=False,
+                error={"message": "Page number must be 1 or greater", "code": "INVALID_PAGE"}
+            )
+        else:
+            console.print("[red]✗[/red] Page number must be 1 or greater")
+        return
+
     sessions = session_manager.list_sessions(
         status=status,
         working_directory=working_directory,
@@ -349,6 +362,12 @@ def list_sessions(
         since=since_dt,
         before=before_dt,
     )
+
+    total_sessions = len(sessions)
+    current_page = page if page is not None else 1
+    total_pages = (total_sessions + limit - 1) // limit
+    if show_all:
+        total_pages = 1 if total_sessions else 0
 
     if not sessions:
         if output_json:
@@ -363,7 +382,14 @@ def list_sessions(
                         "issue_status": issue_status,
                         "since": since,
                         "before": before,
-                    }
+                    },
+                    "pagination": {
+                        "page": current_page,
+                        "limit": limit,
+                        "page_size": limit,
+                        "total_count": 0,
+                        "total_pages": total_pages,
+                    },
                 }
             )
         else:
@@ -372,33 +398,13 @@ def list_sessions(
                 console.print("[dim]Try removing filters or use 'daf sync' to fetch issue tracker tickets[/dim]")
         return
 
-    # Store total count before pagination
-    total_sessions = len(sessions)
-
     # JSON output mode
     if output_json:
         # Calculate pagination info
         if show_all:
             sessions_to_output = sessions
             current_page = 1
-            total_pages = 1
         elif page is not None:
-            # Validate limit
-            if limit < 1:
-                json_output(
-                    success=False,
-                    error={"message": "Limit must be 1 or greater", "code": "INVALID_LIMIT"}
-                )
-                return
-
-            total_pages = (total_sessions + limit - 1) // limit
-            if page < 1:
-                json_output(
-                    success=False,
-                    error={"message": "Page number must be 1 or greater", "code": "INVALID_PAGE"}
-                )
-                return
-
             # Check if page is out of range
             if (page - 1) * limit >= total_sessions:
                 json_output(
@@ -413,7 +419,6 @@ def list_sessions(
             sessions_to_output = sessions[start_idx:end_idx]
         else:
             # Default to page 1 for JSON output (no interactive mode in JSON)
-            total_pages = (total_sessions + limit - 1) // limit
             current_page = 1
             start_idx = 0
             end_idx = limit
@@ -442,15 +447,12 @@ def list_sessions(
                 "pagination": {
                     "page": current_page,
                     "limit": limit,
+                    "page_size": limit,
+                    "total_count": total_sessions,
                     "total_pages": total_pages,
                 }
             }
         )
-        return
-
-    # Validate limit
-    if limit < 1:
-        console.print("[red]✗[/red] Limit must be 1 or greater")
         return
 
     # Determine mode: interactive, non-interactive single page, or show all
@@ -463,12 +465,6 @@ def list_sessions(
         _display_page(sessions, current_page, total_pages, total_sessions, limit, show_all=True)
     elif page is not None:
         # Non-interactive mode: show specific page only (existing behavior)
-        if page < 1:
-            console.print("[red]✗[/red] Page number must be 1 or greater")
-            return
-
-        total_pages = (total_sessions + limit - 1) // limit  # Ceiling division
-
         # Check if page is out of range
         if (page - 1) * limit >= total_sessions:
             console.print(f"[red]✗[/red] Page {page} is out of range (total pages: {total_pages})")
@@ -489,7 +485,6 @@ def list_sessions(
             console.print(f"[dim]Use --page {current_page - 1} to go back[/dim]")
     else:
         # Interactive mode: display pages one by one
-        total_pages = (total_sessions + limit - 1) // limit  # Ceiling division
         current_page = 1
 
         while current_page <= total_pages:

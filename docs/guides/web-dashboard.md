@@ -62,8 +62,9 @@ The main page shows:
 
 - **Status summary cards** -- total, in-progress, paused, complete, and created session counts
 - **Filter controls** -- filter sessions by status, workspace, and issue tracker
-- **Session table** -- sortable, searchable table with columns: Status, Name, Workspace, Issue Key, Goal, Time, Last Active
-- **Auto-refresh** -- session data and status cards refresh every 10 seconds
+- **Session table** -- server-filtered, searchable table with columns: Status, Name, Workspace, Issue Key, Goal, Time, Last Active
+- **Pagination** -- displays 25 sessions per page while preserving newest-first activity ordering
+- **Auto-refresh** -- session data and status cards refresh every 10 seconds; each refresh reads the session index once
 
 Click any session row to navigate to its detail page.
 
@@ -157,7 +158,8 @@ devflow/web/
 **Key design principles:**
 
 - **No business logic duplication** -- all data access goes through `DataBridge`, which wraps `SessionManager`, `ConfigLoader`, and `StorageBackend`
-- **Fresh reads** -- each page load creates a fresh `SessionManager` to read latest data from disk
+- **Fresh reads** -- each dashboard refresh creates one fresh `SessionManager` snapshot; filter, search, and page changes reuse it
+- **Bounded rendering** -- only the visible page is converted to web rows, avoiding serialization of the entire session index
 - **Lazy page imports** -- page modules are imported inside route handlers for fast startup
 - **Presentation layer only** -- the web module is purely UI; data operations use existing layers
 

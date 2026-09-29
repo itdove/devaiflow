@@ -32,7 +32,7 @@ from devflow.config.models import (
     WorkSession,
 )
 from devflow.session.manager import SessionManager
-from devflow.web.utils.data_bridge import DataBridge
+from devflow.web.utils.data_bridge import DashboardSnapshot, DataBridge
 
 # ============================================================================
 # Helper functions
@@ -386,6 +386,110 @@ class TestDataBridgeListSessions:
             result = bridge.list_sessions(issue_tracker="unlinked")
 
         assert [session["name"] for session in result] == ["unlinked"]
+
+    @patch("devflow.web.utils.data_bridge.SessionManager")
+    def test_dashboard_snapshot_reads_sessions_once(self, mock_manager_cls):
+        """Test dashboard metadata and rows share one session-index read."""
+        bridge = DataBridge.__new__(DataBridge)
+        config_loader = Mock()
+        config_loader.load_config.return_value = SimpleNamespace(
+            issue_tracker_backend="github",
+            github=SimpleNamespace(repository="example/project"),
+        )
+        bridge.config_loader = config_loader
+
+        sessions = [
+            _make_session(
+                name="active-session",
+                status="in_progress",
+                workspace_name="workspace-a",
+                issue_key="#12",
+            ),
+            _make_session(name="unlinked-session", status="complete"),
+        ]
+        mock_manager = Mock()
+        mock_manager.list_sessions.return_value = sessions
+        mock_manager_cls.return_value = mock_manager
+
+        snapshot = bridge.get_dashboard_snapshot()
+
+        mock_manager.list_sessions.assert_called_once_with()
+        assert snapshot.status_counts == {"in_progress": 1, "complete": 1}
+        assert snapshot.workspace_options == ["Unassigned", "workspace-a"]
+        assert snapshot.issue_tracker_options == ["github", "unlinked"]
+
+    def test_dashboard_page_filters_before_pagination(self):
+        """Test dashboard pages serialize only matching, ordered rows."""
+        bridge = DataBridge.__new__(DataBridge)
+        bridge.config_loader = Mock()
+        tracker_config = SimpleNamespace(
+            repository="example/project",
+            api_url="https://api.github.com",
+        )
+        now = datetime(2026, 6, 3, 14, 30, 0)
+
+        sessions = []
+        for name, hours_ago in (
+            ("complete-new", 0),
+            ("complete-middle", 1),
+            ("complete-old", 2),
+        ):
+            session = _make_session(
+                name=name,
+                status="complete",
+                issue_key=f"#{hours_ago + 1}",
+                workspace_name="workspace-a",
+            )
+            session.last_active = now.replace(hour=14 - hours_ago)
+            sessions.append(session)
+
+        excluded = _make_session(
+            name="excluded-new",
+            status="created",
+            issue_key="#99",
+            workspace_name="workspace-b",
+        )
+        excluded.last_active = now
+        sessions.insert(0, excluded)
+
+        snapshot = DashboardSnapshot(
+            sessions=sessions,
+            status_counts={"complete": 3, "created": 1},
+            workspace_options=["workspace-a", "workspace-b"],
+            issue_tracker_options=["github"],
+            issue_tracker_backend="github",
+            issue_tracker_config=tracker_config,
+        )
+
+        with patch.object(bridge, "_session_to_dict", wraps=bridge._session_to_dict) as convert:
+            page_one = bridge.get_dashboard_page(
+                snapshot,
+                status="complete",
+                workspace="workspace-a",
+                issue_tracker="github",
+                page=1,
+                page_size=2,
+            )
+            page_two = bridge.get_dashboard_page(
+                snapshot,
+                status="complete",
+                workspace="workspace-a",
+                issue_tracker="github",
+                page=2,
+                page_size=2,
+            )
+
+        assert [session["name"] for session in page_one["sessions"]] == [
+            "complete-new",
+            "complete-middle",
+        ]
+        assert [session["name"] for session in page_two["sessions"]] == [
+            "complete-old",
+        ]
+        assert page_one["total_count"] == 3
+        assert page_one["total_pages"] == 2
+        assert page_two["page"] == 2
+        assert convert.call_count == 3
 
 
 class TestDataBridgeGetSession:
@@ -1593,6 +1697,62 @@ async def test_config_editor_renders_tui_profile_and_workspace_actions(tmp_path)
         )
         UserInteraction(user, {edit_buttons[-1]}, "Edit").click()
         await user.should_see("Edit Profile: anthropic")
+
+
+@pytest.mark.anyio
+async def test_dashboard_renders_paginated_snapshot():
+    """Test the dashboard renders rows from one snapshot page request."""
+    from nicegui import ui
+    from nicegui.testing import user_simulation
+
+    from devflow.web.pages.dashboard import create_dashboard_page
+
+    session = _make_session(
+        name="dashboard-session",
+        status="in_progress",
+        workspace_name="workspace-a",
+    )
+    snapshot = DashboardSnapshot(
+        sessions=[session],
+        status_counts={"in_progress": 1},
+        workspace_options=["workspace-a"],
+        issue_tracker_options=["unlinked"],
+        issue_tracker_backend="jira",
+        issue_tracker_config=None,
+    )
+    bridge = Mock()
+    bridge.get_dashboard_snapshot.return_value = snapshot
+    bridge.get_dashboard_page.return_value = {
+        "sessions": [
+            {
+                "name": "dashboard-session",
+                "status": "in_progress",
+                "workspace": "workspace-a",
+                "issue_key": "",
+                "issue_tracker": "unlinked",
+                "issue_url": None,
+                "goal": "Test dashboard rendering",
+                "time": "0m",
+                "last_active": "2026-06-03 14:30",
+                "session_type": "development",
+            }
+        ],
+        "page": 1,
+        "page_size": 25,
+        "total_count": 1,
+        "total_pages": 1,
+    }
+
+    def root():
+        create_dashboard_page(bridge)
+
+    async with user_simulation(root=root) as user:
+        await user.open("/")
+        await user.should_see("Showing 1-1 of 1 sessions")
+        assert user.find(kind=ui.table).elements
+
+    bridge.get_dashboard_snapshot.assert_called_once_with()
+    bridge.get_dashboard_page.assert_called_once()
 
 
 # ============================================================================

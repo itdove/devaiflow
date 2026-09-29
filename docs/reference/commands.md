@@ -844,6 +844,15 @@ daf list [OPTIONS]
 - `--page <N>` - Page number to display (activates non-interactive mode)
 - `--all` - Show all sessions without pagination
 
+**Ordering and Pagination:**
+
+- Filters are applied before ordering and pagination.
+- Sessions are ordered newest first by the session-level `last_active` timestamp.
+- Sessions with the same `last_active` timestamp are ordered by session name in ascending order.
+- The terminal `Last Activity` value uses the same `last_active` timestamp as ordering and JSON output.
+- JSON pagination metadata includes the current `page`, requested `limit`/`page_size`, `total_count`, and `total_pages`.
+- This applies to `daf list`; the separate conversation-listing command has its own ordering.
+
 **Interactive Pagination (Default Behavior):**
 
 By default (when `--page` is not specified), `daf list` uses **interactive mode** that allows you to browse through pages by pressing Enter. This provides a better user experience for exploring large session lists:
@@ -4377,7 +4386,7 @@ daf dashboard stop
 ```
 
 **Pages:**
-- **Dashboard** (`/`) - Session overview with status cards, filterable table
+- **Dashboard** (`/`) - Session overview with status cards and a server-filtered, paginated session table (25 rows per page)
 - **Session Detail** (`/session/{name}`) - Full metadata, conversations, notes, time tracking
 - **Config Editor** (`/config`) - All 8 configuration tabs (mirrors TUI)
 - **Issues** (`/issues`) - Sessions linked to JIRA/GitHub/GitLab tickets

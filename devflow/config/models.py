@@ -1005,6 +1005,8 @@ class Session(BaseModel):
     """A Claude Code session, optionally mapped to a issue tracker ticket.
 
     Each session has a unique name (identifier).
+    ``last_active`` is the canonical activity timestamp used for session listing
+    order and the terminal ``Last Activity`` column.
 
     Multi-Conversation Architecture :
     - A session can have multiple conversations (one per repository)
@@ -1632,9 +1634,11 @@ class SessionIndex(BaseModel):
             all_sessions = [s for s in all_sessions if s.last_active >= since]
 
         if before:
-            all_sessions = [s for s in all_sessions if s.last_active <= before]
+            all_sessions = [s for s in all_sessions if s.last_active < before]
 
-        # Sort by last_active (most recent first)
+        # Sort by the canonical activity timestamp, then by name for deterministic
+        # ordering when multiple sessions have the same timestamp.
+        all_sessions.sort(key=lambda s: s.name)
         all_sessions.sort(key=lambda s: s.last_active, reverse=True)
         return all_sessions
 

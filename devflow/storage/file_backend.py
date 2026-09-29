@@ -252,47 +252,16 @@ class FileBackend(StorageBackend):
         Returns:
             List of Session objects matching the filters
         """
-        # Get all sessions
-        all_sessions = list(index.sessions.values())
-
-        # Apply filters
-        filtered_sessions = all_sessions
-
-        if filters.status:
-            # Support comma-separated status values
-            status_list = [s.strip() for s in filters.status.split(",")]
-            filtered_sessions = [s for s in filtered_sessions if s.status in status_list]
-
-        if filters.working_directory:
-            filtered_sessions = [s for s in filtered_sessions if s.working_directory == filters.working_directory]
-
-        if filters.issue_metadata_filters:
-            for field_name, field_value in filters.issue_metadata_filters.items():
-                filtered_sessions = [
-                    s
-                    for s in filtered_sessions
-                    if s.issue_metadata and s.issue_metadata.get(field_name) == field_value
-                ]
-
-        if filters.issue_status:
-            # Support comma-separated JIRA status values
-            issue_status_list = [s.strip() for s in filters.issue_status.split(",")]
-            filtered_sessions = [
-                s
-                for s in filtered_sessions
-                if s.issue_metadata and s.issue_metadata.get("status") in issue_status_list
-            ]
-
-        if filters.since:
-            filtered_sessions = [s for s in filtered_sessions if s.last_active >= filters.since]
-
-        if filters.before:
-            filtered_sessions = [s for s in filtered_sessions if s.last_active < filters.before]
-
-        # Sort by last_active (most recent first) to match SessionIndex.get_all_sessions() behavior
-        filtered_sessions.sort(key=lambda s: s.last_active, reverse=True)
-
-        return filtered_sessions
+        # Keep filtering and canonical ordering in one place so every storage
+        # caller observes the same result before the CLI applies pagination.
+        return index.list_sessions(
+            status=filters.status,
+            working_directory=filters.working_directory,
+            issue_metadata_filters=filters.issue_metadata_filters,
+            issue_status=filters.issue_status,
+            since=filters.since,
+            before=filters.before,
+        )
 
     def rename_session(self, old_name: str, new_name: str, session: Session) -> None:
         """Rename a session and its directory.

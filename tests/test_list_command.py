@@ -1,5 +1,6 @@
 """Tests for daf list command."""
 
+import json
 import os
 from datetime import datetime, timedelta
 
@@ -495,6 +496,122 @@ def test_list_pagination_few_sessions_no_pagination_info(temp_daf_home):
     assert "Showing" not in result.output
 
 
+def test_list_json_orders_filtered_sessions_before_pagination(temp_daf_home):
+    """Test filtering, newest-first ordering, and page metadata in JSON output."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    now = datetime.now()
+
+    session_data = [
+        ("ignored-newest", "created", now + timedelta(hours=1)),
+        ("complete-new", "complete", now),
+        ("complete-middle", "complete", now - timedelta(hours=1)),
+        ("complete-old", "complete", now - timedelta(hours=2)),
+        ("ignored-old", "created", now - timedelta(hours=3)),
+    ]
+    for name, _, _ in session_data:
+        session_manager.create_session(name=name, goal=name)
+    for name, status, last_active in session_data:
+        session = session_manager.index.sessions[name]
+        session.status = status
+        session.last_active = last_active
+
+    session_manager.storage.save_index(session_manager.index)
+
+    runner = CliRunner()
+    page_one = runner.invoke(
+        cli,
+        ["list", "--status", "complete", "--limit", "2", "--page", "1", "--json"],
+    )
+    page_two = runner.invoke(
+        cli,
+        ["list", "--status", "complete", "--limit", "2", "--page", "2", "--json"],
+    )
+
+    assert page_one.exit_code == 0
+    assert page_two.exit_code == 0
+    page_one_data = json.loads(page_one.output)
+    page_two_data = json.loads(page_two.output)
+
+    assert [session["name"] for session in page_one_data["data"]["sessions"]] == [
+        "complete-new",
+        "complete-middle",
+    ]
+    assert [session["name"] for session in page_two_data["data"]["sessions"]] == [
+        "complete-old",
+    ]
+    assert page_two_data["metadata"]["pagination"]["page"] == 2
+    assert page_two_data["metadata"]["pagination"]["total_count"] == 3
+
+    pagination = page_one_data["metadata"]["pagination"]
+    assert pagination == {
+        "page": 1,
+        "limit": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_pages": 2,
+    }
+
+
+def test_list_terminal_uses_canonical_activity_timestamp(temp_daf_home):
+    """Test terminal ordering and Last Activity use Session.last_active."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    now = datetime.now()
+
+    recent = session_manager.create_session(
+        name="recent-session",
+        goal="Recent work",
+        working_directory="recent-repo",
+        project_path="/path/to/recent",
+        ai_agent_session_id="uuid-recent",
+    )
+    old = session_manager.create_session(
+        name="old-session",
+        goal="Old work",
+        working_directory="old-repo",
+        project_path="/path/to/old",
+        ai_agent_session_id="uuid-old",
+    )
+
+    recent = session_manager.index.sessions["recent-session"]
+    old = session_manager.index.sessions["old-session"]
+
+    # Deliberately make conversation timestamps disagree with the canonical
+    # session timestamps to verify terminal output follows listing order.
+    if recent.active_conversation:
+        recent.active_conversation.last_active = now - timedelta(days=5)
+    if old.active_conversation:
+        old.active_conversation.last_active = now
+    recent.last_active = now - timedelta(hours=2)
+    old.last_active = now - timedelta(days=3)
+    session_manager.storage.save_index(session_manager.index)
+
+    result = CliRunner().invoke(cli, ["list", "--all"])
+
+    assert result.exit_code == 0
+    assert result.output.index("recent-session") < result.output.index("old-session")
+    assert "2h" in result.output
+    assert "3d" in result.output
+
+
+def test_list_json_empty_includes_pagination_metadata(temp_daf_home):
+    """Test empty JSON results still report complete pagination metadata."""
+    result = CliRunner().invoke(cli, ["list", "--limit", "5", "--page", "1", "--json"])
+
+    assert result.exit_code == 0
+    output = json.loads(result.output)
+    assert output["data"]["sessions"] == []
+    assert output["data"]["total_count"] == 0
+    assert output["metadata"]["pagination"] == {
+        "page": 1,
+        "limit": 5,
+        "page_size": 5,
+        "total_count": 0,
+        "total_pages": 0,
+    }
+
+
 def test_list_pagination_invalid_page_number(temp_daf_home):
     """Test pagination with invalid page number (less than 1)."""
     config_loader = ConfigLoader()
@@ -769,7 +886,7 @@ def test_list_interactive_mode_with_filters(temp_daf_home):
 
 
 def test_list_last_activity_column(temp_daf_home):
-    """Test that Last Activity column shows conversation last_active time."""
+    """Test that Last Activity column shows session last_active time."""
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
@@ -783,13 +900,8 @@ def test_list_last_activity_column(temp_daf_home):
         ai_agent_session_id="uuid-recent",
     )
 
-    # Update the conversation's last_active to be very recent (within minutes)
-    if recent_session.active_conversation:
-        recent_session.active_conversation.last_active = now - timedelta(minutes=5)
-        session_manager.update_session(recent_session)
-
     # Create an older session
-    old_session = session_manager.create_session(
+    session_manager.create_session(
         name="old-session",
         goal="Old work",
         working_directory="old-dir",
@@ -797,10 +909,11 @@ def test_list_last_activity_column(temp_daf_home):
         ai_agent_session_id="uuid-old",
     )
 
-    # Update the conversation's last_active to be days ago
-    if old_session.active_conversation:
-        old_session.active_conversation.last_active = now - timedelta(days=3)
-        session_manager.update_session(old_session)
+    recent_session = session_manager.index.sessions["recent-session"]
+    old_session = session_manager.index.sessions["old-session"]
+    recent_session.last_active = now - timedelta(minutes=5)
+    old_session.last_active = now - timedelta(days=3)
+    session_manager.storage.save_index(session_manager.index)
 
     runner = CliRunner()
     result = runner.invoke(cli, ["list", "--all"])
@@ -818,7 +931,7 @@ def test_list_last_activity_column(temp_daf_home):
 
 
 def test_list_last_activity_multi_conversation(temp_daf_home):
-    """Test that Last Activity shows most recent activity across multiple conversations."""
+    """Test that Last Activity uses the canonical session timestamp."""
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
@@ -850,7 +963,8 @@ def test_list_last_activity_multi_conversation(temp_daf_home):
     if second_conv:
         second_conv.last_active = now - timedelta(hours=1)
 
-    session_manager.update_session(session)
+    session.last_active = now - timedelta(hours=1)
+    session_manager.storage.save_index(session_manager.index)
 
     runner = CliRunner()
     result = runner.invoke(cli, ["list", "--all"])

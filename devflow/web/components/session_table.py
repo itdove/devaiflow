@@ -61,35 +61,46 @@ COLUMNS = [
 def create_session_table(
     sessions: List[Dict[str, Any]],
     on_row_click: Optional[Callable[[str], None]] = None,
+    show_search: bool = True,
+    server_ordered: bool = False,
 ) -> ui.table:
     """Create a sortable, filterable session table.
 
     Args:
         sessions: List of session dictionaries from DataBridge.
         on_row_click: Optional callback when a row is clicked (receives session name).
+        show_search: Whether to add the built-in client-side search field.
+        server_ordered: Preserve the row order supplied by the server.
 
     Returns:
         NiceGUI table element.
     """
+    pagination = {"rowsPerPage": 25}
+    if not server_ordered:
+        pagination.update({"sortBy": "last_active", "descending": True})
+
     table = ui.table(
         columns=COLUMNS,
         rows=sessions,
         row_key="name",
-        pagination={"rowsPerPage": 25, "sortBy": "last_active", "descending": True},
+        pagination=pagination,
     ).classes("w-full")
 
-    # Add search/filter input
-    table.add_slot(
-        "top-left",
-        r"""
-        <q-input dense outlined debounce="300" v-model="props.filter" placeholder="Search sessions...">
-            <template v-slot:append>
-                <q-icon name="search" />
-            </template>
-        </q-input>
-        """,
-    )
-    table.props("filter='' dense")
+    if show_search:
+        # Add search/filter input
+        table.add_slot(
+            "top-left",
+            r"""
+            <q-input dense outlined debounce="300" v-model="props.filter" placeholder="Search sessions...">
+                <template v-slot:append>
+                    <q-icon name="search" />
+                </template>
+            </q-input>
+            """,
+        )
+        table.props("filter='' dense")
+    else:
+        table.props("dense")
 
     # Make rows clickable
     if on_row_click:
