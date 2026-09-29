@@ -915,11 +915,6 @@ def create_git_issue_session(
                 from devflow.cli.commands.open_command import _copy_conversation_from_temp
                 _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory)
 
-            # Clean up temporary directory if present
-            if temp_directory:
-                from devflow.utils.temp_directory import cleanup_temp_directory
-                cleanup_temp_directory(temp_directory)
-
             # Check if we should run 'daf complete' on exit
             from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
             if current_session:

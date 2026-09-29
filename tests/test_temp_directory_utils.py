@@ -17,6 +17,7 @@ from devflow.utils.temp_directory import (
     should_clone_to_temp,
     prompt_and_clone_to_temp,
     clone_to_temp_directory,
+    clone_repository_at_path,
     cleanup_temp_directory,
     extract_repo_name,
     get_clone_base_dir,
@@ -358,6 +359,54 @@ class TestPromptAndCloneToTemp:
             result = prompt_and_clone_to_temp(mock_git_repo)
             assert result is not None
             mock_fallback.assert_called_once_with("/tmp/daf-session-abc/repo")
+
+
+class TestCloneRepositoryAtPath:
+    """Test stable-path clone recovery."""
+
+    def test_reuses_existing_repository_without_cloning(self, tmp_path):
+        target_path = tmp_path / "session" / "repo"
+        target_path.mkdir(parents=True)
+
+        with patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.clone_repository") as mock_clone:
+            assert clone_repository_at_path("https://example.com/repo.git", target_path) is True
+
+        mock_clone.assert_not_called()
+        assert target_path.exists()
+
+    def test_restores_missing_repository_at_recorded_path(self, tmp_path):
+        target_path = tmp_path / "session" / "repo"
+
+        def mock_clone(url, path, branch=None):
+            path.mkdir(parents=True)
+            (path / ".git").mkdir()
+            return True
+
+        with patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=False), \
+             patch(
+                 "devflow.utils.temp_directory.GitUtils.clone_repository",
+                 side_effect=mock_clone,
+             ) as mock_clone_call:
+            assert clone_repository_at_path("https://example.com/repo.git", target_path) is True
+
+        mock_clone_call.assert_called_once_with(
+            "https://example.com/repo.git", target_path, branch=None
+        )
+        assert (target_path / ".git").exists()
+
+    def test_does_not_delete_non_empty_invalid_path(self, tmp_path):
+        target_path = tmp_path / "session" / "repo"
+        target_path.mkdir(parents=True)
+        marker = target_path / "uncommitted.txt"
+        marker.write_text("preserve")
+
+        with patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=False), \
+             patch("devflow.utils.temp_directory.GitUtils.clone_repository") as mock_clone:
+            assert clone_repository_at_path("https://example.com/repo.git", target_path) is False
+
+        mock_clone.assert_not_called()
+        assert marker.read_text() == "preserve"
 
 
 class TestCleanupTempDirectory:

@@ -775,11 +775,6 @@ def create_jira_ticket_session(
                 from devflow.cli.commands.open_command import _copy_conversation_from_temp
                 _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory)
 
-            # Clean up temporary directory if present
-            if temp_directory:
-                from devflow.utils.temp_directory import cleanup_temp_directory
-                cleanup_temp_directory(temp_directory)
-
             # Check if we should run 'daf complete' on exit
             # Import here to avoid circular dependency
             # IMPORTANT: Do NOT wrap this in a broad exception handler

@@ -2630,6 +2630,7 @@ def test_complete_ticket_creation_session_skips_git_operations(temp_daf_home, tm
 
     # Set session_type to ticket_creation
     session.session_type = "ticket_creation"
+    session.active_conversation.temp_directory = str(repo_dir)
     session_manager.update_session(session)
 
     # Add work session with meaningful time (at least 5 minutes)
@@ -2664,6 +2665,7 @@ def test_complete_ticket_creation_session_skips_git_operations(temp_daf_home, tm
 
     # Should mark session as complete
     assert "marked as complete" in captured.out
+    assert not repo_dir.exists(), "Explicit daf complete should remove the session clone"
 
     # Should NOT prompt for commit (commit block skipped for ticket_creation)
     assert "Commit these changes now?" not in "\n".join(confirm_prompts)

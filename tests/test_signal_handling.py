@@ -284,8 +284,8 @@ def test_file_flush_and_fsync_on_save(temp_daf_home):
     assert "fsync" in save_metadata_source, "FileBackend.save_session_metadata should call os.fsync()"
 
 
-def test_signal_handler_cleanup_temp_directory(temp_daf_home):
-    """Test that signal handler cleans up temporary directory for ticket_creation sessions."""
+def test_signal_handler_preserves_temp_directory_for_resume(temp_daf_home):
+    """Test that a paused ticket_creation session keeps its clone for resume."""
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
 
@@ -321,8 +321,14 @@ def test_signal_handler_cleanup_temp_directory(temp_daf_home):
             except SystemExit:
                 pass
 
-    # Verify temp directory was cleaned up
-    assert not Path(temp_dir).exists(), "Temp directory should be removed after cleanup"
+    # A signal only pauses the session. Explicit daf complete/delete owns
+    # cleanup so the same agent project path remains available after restart.
+    assert Path(temp_dir).exists(), "Temp directory should remain available for resume"
+
+    # Keep the test isolated because this directory is intentionally not
+    # removed by the signal handler anymore.
+    import shutil
+    shutil.rmtree(temp_dir)
 
 
 def test_signal_handler_logging(temp_daf_home, monkeypatch):

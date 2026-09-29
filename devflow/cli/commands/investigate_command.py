@@ -333,7 +333,7 @@ def _prompt_investigation_location(
     cwd = os.getcwd()
     console_print("\nWhere would you like to run this investigation?\n")
     console_print(f"  1. Current directory ({cwd})")
-    console_print("  2. Temporary directory (clone project if git repo, auto-cleaned on exit)")
+    console_print("  2. Temporary directory (clone project if git repo, kept until completion or deletion)")
     console_print("  3. Specify a custom path")
     console_print("  4. Select from workspace repositories")
     console_print()
@@ -906,11 +906,6 @@ def create_investigation_session(
             if current_session and current_session.active_conversation and current_session.active_conversation.temp_directory:
                 from devflow.cli.commands.open_command import _copy_conversation_from_temp
                 _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory)
-
-            # Clean up temporary directory
-            if temp_directory:
-                from devflow.utils.temp_directory import cleanup_temp_directory
-                cleanup_temp_directory(temp_directory)
 
             # Prompt for complete on exit
             from devflow.cli.commands.open_command import _prompt_for_complete_on_exit

@@ -613,13 +613,11 @@ def open_session(
         agent = create_agent_client(effective_agent_backend)
         agent_name = agent.get_agent_name()
 
-        # Determine the correct project path to check for session existence
-        if session.session_type in ("ticket_creation", "investigation") and active_conv and active_conv.original_project_path:
-            check_path = active_conv.original_project_path
-            console.print(f"[dim]Checking for existing {agent_name} session at stable location ({session.session_type} session)...[/dim]")
-        else:
-            check_path = active_conv.project_path
-            console.print(f"[dim]Checking for existing {agent_name} session...[/dim]")
+        # Agent sessions are scoped to the project directory where the agent
+        # was launched. Temporary clones must therefore be checked at their
+        # recorded path, not at the stable source repository path.
+        check_path = active_conv.temp_directory or active_conv.project_path
+        console.print(f"[dim]Checking for existing {agent_name} session...[/dim]")
 
         conversation_exists = agent.session_exists(active_conv.ai_agent_session_id, check_path)
         console.print(f"[dim]  {'found' if conversation_exists else 'not found'}[/dim]")
@@ -714,19 +712,32 @@ def open_session(
                 session_manager.update_session(session)
                 console.print(f"[dim]Generated new session ID: {new_session_id}[/dim]")
 
-    # Re-clone if this session's auto-clone directory was deleted (#518)
+    # Restore a deleted auto-clone at its recorded path (#518, #605). Do not
+    # create a new random path because agent session databases may use the
+    # absolute project path as part of their conversation identity.
     if active_conv and active_conv.temp_directory and not Path(active_conv.temp_directory).exists():
         if active_conv.original_project_path:
-            console.print(f"[yellow]⚠ Auto-clone directory was deleted, re-cloning...[/yellow]")
-            from devflow.utils.temp_directory import clone_to_temp_directory
-            re_clone_result = clone_to_temp_directory(Path(active_conv.original_project_path))
-            if re_clone_result:
-                active_conv.temp_directory = re_clone_result[0]
-                active_conv.project_path = re_clone_result[0]
+            console.print(f"[yellow]⚠ Auto-clone directory was deleted, restoring at its recorded path...[/yellow]")
+            from devflow.utils.temp_directory import (
+                _checkout_default_branch,
+                clone_repository_at_path,
+            )
+            recorded_path = Path(active_conv.temp_directory).expanduser()
+            remote_url = active_conv.remote_url or GitUtils.get_remote_url(
+                Path(active_conv.original_project_path)
+            )
+            restored = bool(remote_url) and clone_repository_at_path(remote_url, recorded_path)
+            if restored:
+                restored_path = str(recorded_path.resolve())
+                _checkout_default_branch(restored_path)
+                active_conv.temp_directory = restored_path
+                active_conv.project_path = restored_path
                 session_manager.update_session(session)
-                console.print(f"[green]✓[/green] Re-cloned to: {re_clone_result[0]}")
+                if active_conv.ai_agent_session_id:
+                    _copy_conversation_to_temp(session, restored_path, config)
+                console.print(f"[green]✓[/green] Restored clone at: {restored_path}")
             else:
-                console.print(f"[red]Failed to re-clone. Using original path.[/red]")
+                console.print(f"[red]Failed to restore clone. Using original path.[/red]")
                 active_conv.project_path = active_conv.original_project_path
                 active_conv.temp_directory = None
                 session_manager.update_session(session)
@@ -1227,12 +1238,12 @@ def open_session(
                     if current_session.active_conversation and current_session.active_conversation.temp_directory:
                         _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory, config)
 
-                    # Check if we should run 'daf complete' on exit (BEFORE temp dir cleanup)
+                    # Offer explicit completion while the clone remains available.
                     _prompt_for_complete_on_exit(current_session, config)
 
-                    # Clean up temporary directory AFTER daf complete has had a chance to commit/push
-                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
-                        _cleanup_temp_directory_on_exit(current_session.active_conversation.temp_directory)
+                    # Keep temporary directories while the session is paused.
+                    # Explicit `daf complete` or `daf delete` owns cleanup so a
+                    # restart can resume from the same agent project path.
         else:
             # Resume existing session
             # Use effective agent backend (session-stored > config > "claude")
@@ -1434,12 +1445,12 @@ def open_session(
                     if current_session.active_conversation and current_session.active_conversation.temp_directory:
                         _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory, config)
 
-                    # Check if we should run 'daf complete' on exit (BEFORE temp dir cleanup)
+                    # Offer explicit completion while the clone remains available.
                     _prompt_for_complete_on_exit(current_session, config)
 
-                    # Clean up temporary directory AFTER daf complete has had a chance to commit/push
-                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
-                        _cleanup_temp_directory_on_exit(current_session.active_conversation.temp_directory)
+                    # Keep temporary directories while the session is paused.
+                    # Explicit `daf complete` or `daf delete` owns cleanup so a
+                    # restart can resume from the same agent project path.
 
     except Exception as e:
         console.print(f"\n[red]Error launching {_display_agent_name}:[/red] {e}")
@@ -3476,7 +3487,7 @@ def _log_error(message: str) -> None:
 
 
 def _cleanup_temp_directory_on_exit(temp_dir: Optional[str]) -> None:
-    """Clean up a temporary directory when exiting a session."""
+    """Explicitly clean up a temporary directory when requested by a caller."""
     from devflow.utils.temp_directory import cleanup_temp_directory
     cleanup_temp_directory(temp_dir)
 
@@ -3551,6 +3562,13 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None, old_temp_dir
     temp_session_dir = capture.get_session_dir(temp_path_resolved)
     temp_session_dir.mkdir(parents=True, exist_ok=True)
     temp_conversation_file = temp_session_dir / stable_conversation_file.name
+
+    # A surviving temp clone may contain newer conversation data than the
+    # stable copy if the previous process ended before capture completed.
+    # Never overwrite that resumable data during reopen.
+    if temp_conversation_file.exists():
+        console.print(f"[dim]Conversation already exists in the recorded temp directory[/dim]")
+        return True
 
     try:
         shutil.copy2(stable_conversation_file, temp_conversation_file)
@@ -3628,10 +3646,10 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
 
     This function:
     1. Checks if session has temp_directory metadata
-    2. If yes, deletes old temp directory and re-clones to fresh location
-    3. If no, prompts user to clone to temp directory
-    4. Updates session with new temp directory path
-    5. Copies conversation file from stable location to temp directory
+    2. Reuses it when available or restores it at the recorded path
+    3. If no metadata exists, prompts user to clone to a temp directory
+    4. Updates session metadata without changing the agent project path
+    5. Copies file-based conversation data from stable storage when needed
 
     Args:
         session: Session object (ticket_creation or investigation type)
@@ -3645,110 +3663,75 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
     if not conv:
         return
 
-    # Case 1: Session was previously created with temp_directory
+    # Case 1: Session was previously created with temp_directory. Keep the
+    # recorded path stable so database-backed agents (notably OpenCode) can
+    # resolve the existing conversation after a restart.
     if conv.temp_directory:
-        old_temp_directory = conv.temp_directory
+        recorded_temp_directory = conv.temp_directory
+        recorded_path = Path(recorded_temp_directory).expanduser()
         console.print(f"\n[cyan]This session was created with a temporary directory[/cyan]")
-        console.print(f"[dim]Previous temp directory: {conv.temp_directory}[/dim]")
+        console.print(f"[dim]Recorded temp directory: {recorded_temp_directory}[/dim]")
 
-        # Preserve conversation file using stable storage location
-        # Conversation files are stored at stable location based on original_project_path
-        # This allows conversation to persist even when temp directory changes
+        # Investigations without a source repository use an empty temporary
+        # directory. It is still a valid resumable agent project and must not
+        # be replaced with a new path.
+        is_existing_project = recorded_path.is_dir() and (
+            not conv.original_project_path or GitUtils.is_git_repository(recorded_path)
+        )
 
-        # Delete old temp directory if it exists (handles nested structure)
-        old_temp_path = Path(conv.temp_directory)
-        if old_temp_path.exists():
-            console.print(f"[dim]Deleting old temporary directory...[/dim]")
-            try:
-                # Check if nested structure: clean parent session dir
-                old_parent = old_temp_path.parent
-                from devflow.utils.temp_directory import get_clone_base_dir
-                clone_base = get_clone_base_dir().resolve()
-                system_temp = Path(tempfile.gettempdir())
-                if old_parent.name.startswith("daf-session-") and (
-                    old_parent.parent == system_temp or old_parent.parent == clone_base
-                ):
-                    shutil.rmtree(str(old_parent))
-                else:
-                    shutil.rmtree(conv.temp_directory)
-                console.print(f"[green]✓[/green] Old temporary directory removed")
-            except Exception as e:
-                console.print(f"[yellow]⚠[/yellow] Could not delete old temp directory: {e}")
+        if is_existing_project:
+            stable_path = str(recorded_path.resolve())
+            conv.temp_directory = stable_path
+            conv.project_path = stable_path
+            session_manager.update_session(session)
+            console.print(f"[green]✓[/green] Reusing temporary directory: {stable_path}")
 
-        # Get remote URL from original project path
+            if conv.ai_agent_session_id:
+                _copy_conversation_to_temp(session, stable_path, config)
+            return
+
         original_path = Path(conv.original_project_path) if conv.original_project_path else Path.cwd()
-        remote_url = GitUtils.get_remote_url(original_path)
+        remote_url = conv.remote_url or GitUtils.get_remote_url(original_path)
 
         if not remote_url:
-            console.print(f"[yellow]⚠[/yellow] Could not detect git remote URL from original path")
+            console.print(f"[yellow]⚠[/yellow] Could not detect git remote URL for clone recovery")
             console.print(f"[yellow]Falling back to existing project path[/yellow]")
-            # Clear temp directory metadata
             conv.temp_directory = None
             conv.original_project_path = None
+            conv.project_path = str(original_path)
             session_manager.update_session(session)
             return
 
-        # Re-clone to fresh temp directory with nested structure
-        console.print(f"[cyan]Re-cloning repository to get latest version from main branch...[/cyan]")
+        console.print(f"[cyan]Restoring repository at its recorded temporary path...[/cyan]")
         console.print(f"[dim]Remote URL: {remote_url}[/dim]")
 
-        from devflow.utils.temp_directory import extract_repo_name, get_clone_base_dir
-        repo_name = extract_repo_name(remote_url)
+        from devflow.utils.temp_directory import (
+            _checkout_default_branch,
+            clone_repository_at_path,
+        )
 
-        try:
-            clone_base = get_clone_base_dir()
-            clone_base.mkdir(parents=True, exist_ok=True)
-            new_session_dir = tempfile.mkdtemp(prefix="daf-session-", dir=str(clone_base))
-            new_clone_dir = os.path.join(new_session_dir, repo_name)
-            os.makedirs(new_clone_dir, exist_ok=True)
-            console.print(f"[dim]Created new temporary directory: {new_clone_dir}[/dim]")
-        except Exception as e:
-            console.print(f"[red]✗[/red] Failed to create temporary directory: {e}")
+        if not clone_repository_at_path(remote_url, recorded_path):
+            console.print(f"[red]✗[/red] Failed to restore repository at {recorded_path}")
             console.print(f"[yellow]Falling back to existing project path[/yellow]")
             conv.temp_directory = None
             conv.original_project_path = None
+            conv.project_path = str(original_path)
             session_manager.update_session(session)
             return
 
-        console.print(f"[dim]Cloning... (this may take a moment)[/dim]")
-        if not GitUtils.clone_repository(remote_url, Path(new_clone_dir), branch=None):
-            console.print(f"[red]✗[/red] Failed to clone repository")
-            console.print(f"[yellow]Falling back to existing project path[/yellow]")
-            try:
-                shutil.rmtree(new_session_dir)
-            except Exception:
-                pass
-            conv.temp_directory = None
-            conv.original_project_path = None
-            session_manager.update_session(session)
-            return
-
-        # Checkout default branch
-        default_branch = GitUtils.get_default_branch(Path(new_clone_dir))
-        if default_branch:
-            console.print(f"[dim]Checked out default branch: {default_branch}[/dim]")
-        else:
-            # Try common default branches
-            for branch in ["main", "master", "develop"]:
-                if GitUtils.branch_exists(Path(new_clone_dir), branch):
-                    success, error_msg = GitUtils.checkout_branch(Path(new_clone_dir), branch)
-                    if success:
-                        console.print(f"[dim]Checked out branch: {branch}[/dim]")
-                        break
-                    # Silently continue to next branch if checkout fails
-
-        # Update session with new temp directory (clone dir with repo name)
-        # IMPORTANT: Store the resolved path (handles macOS /var -> /private/var)
-        # This ensures the path matches what Claude Code will see
-        resolved_temp_dir = str(Path(new_clone_dir).resolve())
-        conv.temp_directory = resolved_temp_dir
-        conv.project_path = resolved_temp_dir
+        _checkout_default_branch(str(recorded_path))
+        restored_path = str(recorded_path.resolve())
+        conv.temp_directory = restored_path
+        conv.project_path = restored_path
         session_manager.update_session(session)
-        console.print(f"[green]✓[/green] Using fresh clone in temporary directory")
+        console.print(f"[green]✓[/green] Restored clone at: {restored_path}")
 
-        # Restore conversation file from stable location to new temp directory
-        # This uses original_project_path as stable identifier
-        if _copy_conversation_to_temp(session, new_clone_dir, config, old_temp_dir=old_temp_directory):
+        if _copy_conversation_to_temp(
+            session,
+            restored_path,
+            config,
+            old_temp_dir=recorded_temp_directory,
+        ):
             console.print(f"[green]✓[/green] Restored conversation history from stable storage")
         else:
             console.print(f"[dim]No previous conversation to restore (this may be first launch)[/dim]")
