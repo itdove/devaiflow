@@ -1,7 +1,9 @@
 """Tests for daf open command."""
 
+import json
 import shutil
 import subprocess
+from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -2216,3 +2218,65 @@ class TestOpenCommandOpenCodeResume:
             captured_id = loaded.active_conversation.ai_agent_session_id
             assert captured_id == "ses_captured_id_456", \
                 f"Expected ses_captured_id_456, got {captured_id}"
+
+
+def test_open_json_reports_agent_failure_without_human_output(
+    temp_daf_home, tmp_path
+):
+    """JSON mode returns sanitized backend diagnostics for a failed resume."""
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    project_path = tmp_path / "project-a"
+    project_path.mkdir()
+
+    session = session_manager.create_session(
+        name="agent-failure",
+        goal="Test agent failure reporting",
+        working_directory="project-a",
+        project_path=str(project_path),
+        ai_agent_session_id="ses_existing",
+        agent_backend="opencode",
+    )
+    session.active_conversation.branch = None
+    session_manager.update_session(session)
+
+    process = Mock(
+        returncode=7,
+        stderr=StringIO("Provider rejected api_key=secret-api-key"),
+        stdout=None,
+    )
+    mock_agent = Mock()
+    mock_agent.get_agent_name.return_value = "opencode"
+    mock_agent.supports_permission_prompts.return_value = True
+    mock_agent.resume_session.return_value = process
+    mock_agent.get_manual_resume_command.return_value = "opencode --session ses_existing"
+    mock_agent.wait_for_exit.return_value = None
+
+    runner = CliRunner()
+    with patch(
+        "devflow.cli.commands.open_command._detect_working_directory_from_cwd",
+        return_value=None,
+    ), patch("devflow.cli.commands.open_command.setup_signal_handlers"), patch(
+        "devflow.cli.commands.open_command._validate_context_files",
+        return_value=True,
+    ), patch("devflow.agent.create_agent_client", return_value=mock_agent):
+        result = runner.invoke(cli, ["open", "agent-failure", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["success"] is False
+    error = payload["error"]
+    assert error["backend"] == "opencode"
+    assert error["phase"] == "resume"
+    assert error["exit_code"] == 7
+    assert "Provider rejected" in error["diagnostics"]
+    assert "secret-api-key" not in result.output
+    assert "Error launching" not in result.output
+
+    log_file = Path(temp_daf_home) / "logs" / "open.log"
+    log_text = log_file.read_text()
+    assert "Provider rejected" in log_text
+    assert "secret-api-key" not in log_text
+
+    reloaded = SessionManager(ConfigLoader()).get_session("agent-failure")
+    assert reloaded.status == "paused"

@@ -19,6 +19,7 @@ from devflow.agent.claude_agent import ClaudeAgent
 from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.cursor_agent import CursorAgent
+from devflow.agent.diagnostics import AgentLaunchError, failure_from_process
 from devflow.agent.github_copilot_agent import GitHubCopilotAgent
 from devflow.agent.interface import AgentInterface
 from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
@@ -471,6 +472,7 @@ def capture_agent_session_id(
     launch_dir: str,
     active_conv,
     sessions_before: Set[str],
+    quiet: bool = False,
 ) -> bool:
     """Capture the real session ID after agent launch.
 
@@ -486,6 +488,7 @@ def capture_agent_session_id(
         launch_dir: Directory where the agent was launched
         active_conv: Active conversation object to update
         sessions_before: Session snapshot taken before launch
+        quiet: Suppress capture messages when the agent launch already failed
 
     Returns:
         True if a new session ID was captured and stored
@@ -524,28 +527,34 @@ def capture_agent_session_id(
 
         if new_sessions:
             if len(new_sessions) > 1:
-                console.print(
-                    f"[yellow]Warning: Multiple new {agent.get_agent_name()} sessions detected "
-                    f"({len(new_sessions)}). Unable to identify the current session safely. "
-                    f"Leaving the session ID as {PENDING_CAPTURE_PLACEHOLDER}; "
-                    "reopen after verifying the active agent session.[/yellow]"
-                )
+                if not quiet:
+                    console.print(
+                        f"[yellow]Warning: Multiple new {agent.get_agent_name()} sessions detected "
+                        f"({len(new_sessions)}). Unable to identify the current session safely. "
+                        f"Leaving the session ID as {PENDING_CAPTURE_PLACEHOLDER}; "
+                        "reopen after verifying the active agent session.[/yellow]"
+                    )
                 return False
 
             real_session_id = next(iter(new_sessions))
             active_conv.ai_agent_session_id = real_session_id
-            console.print(f"[dim]Captured {agent.get_agent_name()} session ID: {real_session_id}[/dim]")
+            if not quiet:
+                console.print(
+                    f"[dim]Captured {agent.get_agent_name()} session ID: {real_session_id}[/dim]"
+                )
             return True
         else:
-            console.print(
-                f"[yellow]Warning: Could not capture {agent.get_agent_name()} session ID. "
-                f"Session will be captured on next open.[/yellow]"
-            )
+            if not quiet:
+                console.print(
+                    f"[yellow]Warning: Could not capture {agent.get_agent_name()} session ID. "
+                    f"Session will be captured on next open.[/yellow]"
+                )
             return False
     except Exception as e:
-        console.print(
-            f"[yellow]Warning: Failed to capture {agent.get_agent_name()} session ID: {e}[/yellow]"
-        )
+        if not quiet:
+            console.print(
+                f"[yellow]Warning: Failed to capture {agent.get_agent_name()} session ID: {e}[/yellow]"
+            )
         return False
 
 
@@ -567,6 +576,7 @@ def launch_and_capture(
     model_override: str = None,
     display_name: str = None,
     session=None,
+    phase: str = "launch",
 ) -> None:
     """Snapshot sessions, launch agent, wait for exit, capture session ID.
 
@@ -578,6 +588,7 @@ def launch_and_capture(
     post-exit cleanup (updating session status, ending work sessions, etc.).
     """
     sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
+    launch_failed = False
     try:
         launch_kwargs = dict(
             project_path=project_path,
@@ -602,17 +613,35 @@ def launch_and_capture(
         agent.wait_for_exit(process, headless)
         return_code = getattr(process, "returncode", None)
         if isinstance(return_code, int) and return_code != 0:
-            from rich.console import Console
-
-            Console().print(
-                f"[red]✗ {agent.get_agent_name()} exited with status {return_code}.[/red]"
+            launch_failed = True
+            executable = get_agent_metadata(agent_backend).get(
+                "cli_command", agent.get_agent_name()
             )
+            raise AgentLaunchError(
+                failure_from_process(
+                    process,
+                    backend=agent_backend,
+                    display_name=get_agent_display_name(agent_backend),
+                    phase=phase,
+                    executable=executable,
+                    env=env,
+                    profile=model_provider_profile,
+                )
+            )
+    except Exception:
+        launch_failed = True
+        raise
     finally:
         capture_agent_session_id(
             agent, agent_backend, project_path,
-            active_conversation, sessions_before,
+            active_conversation, sessions_before, quiet=launch_failed,
         )
-        if session and active_conversation and is_self_id_backend(agent_backend):
+        if (
+            not launch_failed
+            and session
+            and active_conversation
+            and is_self_id_backend(agent_backend)
+        ):
             sid = active_conversation.ai_agent_session_id
             if sid and sid != "pending-capture" and not session.model_id:
                 detected_model = agent.get_session_model_id(sid, project_path)

@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 from typing import Optional
 
@@ -14,7 +15,20 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from devflow.cli.commands.new_command import _generate_initial_prompt
-from devflow.cli.utils import check_concurrent_session, extract_repository_from_issue_key, get_session_with_prompt, get_status_display, get_workspace_path, require_outside_claude, scan_workspace_repositories, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
+from devflow.cli.utils import (
+    check_concurrent_session,
+    extract_repository_from_issue_key,
+    get_session_with_prompt,
+    get_status_display,
+    get_workspace_path,
+    is_json_mode,
+    output_json as emit_json,
+    require_outside_claude,
+    scan_workspace_repositories,
+    should_launch_claude_code,
+    sync_captured_agent_session,
+    unified_project_selection,
+)
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import WorkspaceDefinition
 from devflow.git.utils import GitUtils
@@ -28,6 +42,11 @@ from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.capture import SessionCapture
 from devflow.session.manager import SessionManager
 from devflow.session.summary import generate_session_summary
+from devflow.agent.diagnostics import (
+    AgentLaunchError,
+    failure_from_exception,
+    failure_from_process,
+)
 
 # Import unified utilities
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
@@ -41,7 +60,39 @@ from devflow.utils.daf_agents_validation import (
     _check_and_upgrade_daf_agents
 )
 
-console = Console()
+
+
+class _JsonAwareConsole:
+    """Suppress Rich output while a command is producing JSON."""
+
+    def __init__(self) -> None:
+        self._console = Console()
+        self._json_override = False
+
+    def print(self, *args, **kwargs) -> None:
+        if not self._json_override and not is_json_mode():
+            self._console.print(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._console, name)
+
+
+console = _JsonAwareConsole()
+
+
+def _json_output_scope(function):
+    """Apply the explicit ``open_session`` JSON flag to the local console."""
+
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        previous = console._json_override
+        console._json_override = bool(kwargs.get("output_json", False))
+        try:
+            return function(*args, **kwargs)
+        finally:
+            console._json_override = previous
+
+    return wrapper
 
 
 def prompt_session_selection(session_manager: SessionManager, status_filter: Optional[str] = None) -> Optional[str]:
@@ -222,6 +273,7 @@ def _set_terminal_title(session) -> None:
 
 
 @require_outside_claude
+@_json_output_scope
 def open_session(
     identifier: str,
     output_json: bool = False,
@@ -1033,8 +1085,18 @@ def open_session(
 
     # Resolve the display name before entering the guarded launch block so the
     # error handler can always identify the selected backend.
-    from devflow.agent.factory import get_agent_display_name as _get_display_name
+    from devflow.agent.factory import (
+        get_agent_display_name as _get_display_name,
+        get_agent_metadata,
+    )
     _display_agent_name = _get_display_name(effective_agent_backend)
+    _agent_executable = get_agent_metadata(effective_agent_backend).get(
+        "cli_command", effective_agent_backend
+    )
+    agent = None
+    model_provider_profile = None
+    env = None
+    launch_phase = "launch" if is_first_launch else "resume"
 
     try:
         # Get active model provider profile
@@ -1190,10 +1252,12 @@ def open_session(
                 )
 
             # Set terminal window/tab title before launching Claude Code
-            _set_terminal_title(session)
+            if not output_json:
+                _set_terminal_title(session)
 
             # Launch agent with snapshot/capture lifecycle
             from devflow.agent.factory import launch_and_capture
+            launch_failed = False
             try:
                 if active_conv and launch_dir:
                     launch_and_capture(
@@ -1210,7 +1274,11 @@ def open_session(
                         model_override=effective_model_id,
                         display_name=session.name,
                         session=session,
+                        phase="launch",
                     )
+            except Exception:
+                launch_failed = True
+                raise
             finally:
                 session_manager.index = session_manager.config_loader.load_sessions()
                 current_session = sync_captured_agent_session(
@@ -1222,7 +1290,7 @@ def open_session(
                 if current_session is None:
                     current_session = session_manager.get_session(session.name) or session
 
-                if not is_cleanup_done():
+                if not is_cleanup_done() and not launch_failed:
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
                     # Update session status to paused
@@ -1347,6 +1415,7 @@ def open_session(
                 if oc_project_path:
                     sid = active_conv.ai_agent_session_id
                     if sid and sid != "pending-capture" and not sid.startswith("pending"):
+                        launch_phase = "resume"
                         process = agent.resume_session(
                             session_id=sid,
                             project_path=oc_project_path,
@@ -1355,6 +1424,7 @@ def open_session(
                         )
                     else:
                         # Fallback: launch new session and capture ID
+                        launch_phase = "launch"
                         _resume_sessions_before = _snap_resume(agent, agent_backend, oc_project_path)
                         _resume_needs_capture = True
                         process = agent.launch_session(
@@ -1374,6 +1444,7 @@ def open_session(
 
                 # Launch new session
                 if project_path:
+                    launch_phase = "launch"
                     process = agent.launch_session(
                         project_path,
                         env=env,
@@ -1383,7 +1454,8 @@ def open_session(
                     cmd = None  # Signal that we've already launched
 
             # Set terminal window/tab title before launching Claude Code
-            _set_terminal_title(session)
+            if not output_json:
+                _set_terminal_title(session)
 
             # Determine working directory for Claude Code
             # For multi-project sessions, use workspace_path
@@ -1395,16 +1467,44 @@ def open_session(
             else:
                 launch_dir = None
 
+            resume_launch_failed = False
             try:
                 if cmd and launch_dir:
-                    subprocess.run(
+                    result = subprocess.run(
                         cmd,
                         cwd=launch_dir,
                         env=env,
                     )
                     agent.cleanup_after_exit(headless)
+                    if isinstance(getattr(result, "returncode", None), int) and result.returncode != 0:
+                        raise AgentLaunchError(
+                            failure_from_process(
+                                result,
+                                backend=agent_backend,
+                                display_name=_display_agent_name,
+                                phase=launch_phase,
+                                executable=_agent_executable,
+                                env=env,
+                                profile=model_provider_profile,
+                            )
+                        )
                 elif not cmd and 'process' in locals():
                     agent.wait_for_exit(process, headless)
+                    if isinstance(getattr(process, "returncode", None), int) and process.returncode != 0:
+                        raise AgentLaunchError(
+                            failure_from_process(
+                                process,
+                                backend=agent_backend,
+                                display_name=_display_agent_name,
+                                phase=launch_phase,
+                                executable=_agent_executable,
+                                env=env,
+                                profile=model_provider_profile,
+                            )
+                        )
+            except Exception:
+                resume_launch_failed = True
+                raise
             finally:
                 # The fallback launch creates a new self-identifying agent
                 # session.  Capture it before the cleanup guard, because a
@@ -1414,7 +1514,9 @@ def open_session(
                     _cap_resume(
                         agent, agent_backend,
                         oc_project_path,
-                        active_conv, _resume_sessions_before,
+                        active_conv,
+                        _resume_sessions_before,
+                        quiet=resume_launch_failed,
                     )
 
                 session_manager.index = session_manager.config_loader.load_sessions()
@@ -1429,7 +1531,7 @@ def open_session(
                 if current_session is None:
                     current_session = session_manager.get_session(session.name) or session
 
-                if not is_cleanup_done():
+                if not is_cleanup_done() and not resume_launch_failed:
                     console.print(f"\n[green]✓[/green] {_display_agent_name} session completed")
 
                     # Update session status to paused
@@ -1453,7 +1555,24 @@ def open_session(
                     # restart can resume from the same agent project path.
 
     except Exception as e:
-        console.print(f"\n[red]Error launching {_display_agent_name}:[/red] {e}")
+        if isinstance(e, AgentLaunchError):
+            failure = e.failure
+        else:
+            failure = failure_from_exception(
+                e,
+                backend=effective_agent_backend,
+                display_name=_display_agent_name,
+                phase=launch_phase,
+                executable=_agent_executable,
+                env=env,
+                profile=model_provider_profile,
+            )
+
+        _log_error(failure.log_message())
+        if output_json:
+            emit_json(success=False, error=failure.as_error())
+        else:
+            console.print(f"\n[red]✗[/red] {failure.display_message}")
 
         # Update session status to paused on error
         session.status = "paused"
@@ -1466,7 +1585,7 @@ def open_session(
             # Silently ignore if work session wasn't started
             pass
 
-        if active_conv and active_conv.ai_agent_session_id:
+        if active_conv and active_conv.ai_agent_session_id and agent is not None:
             # Show agent-specific manual resume instructions
             resume_cmd = agent.get_manual_resume_command(active_conv.ai_agent_session_id, active_conv.project_path)
             console.print(f"\n[yellow]You can manually resume with:[/yellow]")
