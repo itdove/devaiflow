@@ -1,15 +1,17 @@
 """Tests for OpenCode agent implementation."""
 
 import json
-import os
-import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 
-from devflow.agent.opencode_agent import OpenCodeAgent
 from devflow.agent import create_agent_client
+from devflow.agent.opencode_agent import (
+    OpenCodeAgent,
+    OpenCodeCompatibilityError,
+    OpenCodeVersionError,
+)
 
 
 class TestOpenCodeAgentInit:
@@ -53,8 +55,60 @@ class TestOpenCodeAgentInit:
         assert agent.encode_project_path(path) == path
 
 
+class TestOpenCodeAgentVersion:
+    """Test OpenCode CLI version detection."""
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_detects_v1(self, mock_run):
+        """Detect a v1 release from the version command output."""
+        mock_run.return_value = Mock(returncode=0, stdout="opencode v1.18.34\n", stderr="")
+
+        agent = OpenCodeAgent()
+
+        assert agent.get_opencode_version() == 1
+        mock_run.assert_called_once_with(
+            ["opencode", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_detects_v2_from_stderr(self, mock_run):
+        """Detect v2 when the CLI writes its version to stderr."""
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="opencode 2.0.22")
+
+        assert OpenCodeAgent().get_opencode_version() == 2
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_rejects_unsupported_major_version(self, mock_run):
+        """Reject versions whose launch syntax is not known."""
+        mock_run.return_value = Mock(returncode=0, stdout="opencode 3.0.0", stderr="")
+
+        with pytest.raises(OpenCodeVersionError, match="supports OpenCode v1 and v2"):
+            OpenCodeAgent().get_opencode_version()
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_reports_unparseable_version_actionably(self, mock_run):
+        """Explain how to recover when version detection cannot parse the output."""
+        mock_run.return_value = Mock(returncode=1, stdout="", stderr="version unavailable")
+
+        with pytest.raises(OpenCodeVersionError, match="opencode --version"):
+            OpenCodeAgent().get_opencode_version()
+
+
 class TestOpenCodeAgentLaunch:
     """Test OpenCodeAgent launch and resume operations."""
+
+    @pytest.fixture(autouse=True)
+    def _use_v1_cli(self, monkeypatch):
+        """Keep the legacy launch tests deterministic and explicitly v1."""
+        monkeypatch.setattr(
+            OpenCodeAgent,
+            "get_opencode_version",
+            lambda self: self._opencode_major_version or 1,
+        )
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
@@ -127,7 +181,7 @@ class TestOpenCodeAgentLaunch:
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
     def test_launch_with_prompt_auto_approve(self, mock_popen, mock_require, tmp_path):
-        """Test launching OpenCode with auto-approve adds --dangerously-skip-permissions."""
+        """Test v1 launching with auto-approve keeps its existing flag."""
         agent = OpenCodeAgent()
         mock_popen.return_value = Mock()
 
@@ -410,6 +464,140 @@ class TestOpenCodeAgentLaunch:
         assert call_args[0][0] == ["opencode", "--session", "test-session-uuid"]
         assert call_args[1]["cwd"] == "/home/user/project"
         assert result == mock_process
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_v2_interactive_without_model_keeps_root_command(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """v2 root supports prompt and session when no model flag is needed."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path=str(tmp_path),
+            initial_prompt="Read the project instructions",
+            session_id="ses_v2_root",
+        )
+
+        assert mock_popen.call_args.args[0] == [
+            "opencode",
+            "--session",
+            "ses_v2_root",
+            "--prompt",
+            "Read the project instructions",
+        ]
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_v2_model_interactive_uses_mini_command(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """v2 uses mini because the root command rejects --model."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path=str(tmp_path),
+            initial_prompt="Fix the login bug",
+            session_id="ses_v2_mini",
+            model_provider_profile={
+                "provider": "openai",
+                "model_name": "gpt-5.6-sol",
+            },
+        )
+
+        command = mock_popen.call_args.args[0]
+        assert command[:2] == ["opencode", "mini"]
+        assert command[command.index("--session") + 1] == "ses_v2_mini"
+        assert command[command.index("--model") + 1] == "openai/gpt-5.6-sol"
+        assert command[command.index("--prompt") + 1] == "Fix the login bug"
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_v2_headless_preserves_model_session_and_auto_approve(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """v2 run supports all generated headless options."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+        mock_popen.return_value = Mock()
+
+        agent.launch_with_prompt(
+            project_path=str(tmp_path),
+            initial_prompt="Run the checks",
+            session_id="ses_v2_run",
+            model_provider_profile={
+                "provider": "openai",
+                "model_name": "gpt-5.6-sol",
+            },
+            headless=True,
+            auto_approve=True,
+        )
+
+        assert mock_popen.call_args.args[0] == [
+            "opencode",
+            "run",
+            "--session",
+            "ses_v2_run",
+            "--model",
+            "openai/gpt-5.6-sol",
+            "--auto",
+            "Run the checks",
+        ]
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_v2_model_interactive_auto_approve_has_actionable_error(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """Do not launch v2 mini with the unsupported auto-approval option."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+
+        with pytest.raises(OpenCodeCompatibilityError, match="mini.*does not support auto-approval"):
+            agent.launch_with_prompt(
+                project_path=str(tmp_path),
+                initial_prompt="Fix the bug",
+                session_id="ses_v2_auto",
+                model_provider_profile={
+                    "provider": "openai",
+                    "model_name": "gpt-5.6-sol",
+                },
+                auto_approve=True,
+            )
+
+        mock_popen.assert_not_called()
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_v2_resume_with_model_uses_mini(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        """Resume keeps a configured model by selecting v2's mini interface."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+        mock_popen.return_value = Mock()
+
+        agent.resume_session(
+            "ses_v2_resume",
+            str(tmp_path),
+            model_provider_profile={
+                "provider": "openai",
+                "model_name": "gpt-5.6-sol",
+            },
+        )
+
+        assert mock_popen.call_args.args[0] == [
+            "opencode",
+            "mini",
+            "--session",
+            "ses_v2_resume",
+            "--model",
+            "openai/gpt-5.6-sol",
+        ]
 
 
 class TestOpenCodeAgentSessions:
