@@ -1,4 +1,4 @@
-"""Tests for OpenCode session ID lifecycle fix (#464).
+"""Tests for OpenCode session ID lifecycle fixes (#464, #614).
 
 Validates the fix for the UUID/ses_ mismatch that prevented OpenCode sessions
 from resuming. Tests cover:
@@ -8,7 +8,9 @@ from resuming. Tests cover:
 - End-to-end open_command flow with OpenCode backend
 """
 
+import json
 import uuid
+from types import SimpleNamespace
 from unittest.mock import Mock, MagicMock, patch
 
 import pytest
@@ -157,6 +159,56 @@ class TestCaptureAgentSessionId:
 
         assert result is True
         assert active_conv.ai_agent_session_id == "ses_new"
+
+    def test_cross_project_session_does_not_make_capture_ambiguous(self, tmp_path):
+        """Only the new session in the launch project is captured."""
+        from devflow.agent.opencode_agent import OpenCodeAgent
+
+        project_path = tmp_path / "project-a"
+        other_project_path = tmp_path / "project-b"
+        project_path.mkdir()
+        other_project_path.mkdir()
+
+        before = [
+            {"id": "ses-existing", "directory": str(project_path)},
+            {"id": "ses-other", "directory": str(other_project_path)},
+        ]
+        after = [
+            {"id": "ses-existing", "directory": str(project_path)},
+            {"id": "ses-captured", "directory": str(project_path)},
+            {"id": "ses-other", "directory": str(other_project_path)},
+        ]
+        responses = [
+            Mock(returncode=0, stdout=json.dumps(before)),
+            Mock(returncode=0, stdout=json.dumps(after)),
+        ]
+
+        def session_list(*_args, **_kwargs):
+            return responses.pop(0) if responses else Mock(
+                returncode=0, stdout=json.dumps(after)
+            )
+
+        agent = OpenCodeAgent()
+        active_conv = SimpleNamespace(ai_agent_session_id=PENDING_CAPTURE_PLACEHOLDER)
+
+        with patch(
+            "devflow.agent.opencode_agent.subprocess.run",
+            side_effect=session_list,
+        ), patch("devflow.agent.factory.time.sleep"):
+            sessions_before = snapshot_agent_sessions(
+                agent, "opencode", str(project_path)
+            )
+            result = capture_agent_session_id(
+                agent,
+                "opencode",
+                str(project_path),
+                active_conv,
+                sessions_before,
+            )
+
+        assert sessions_before == {"ses-existing"}
+        assert result is True
+        assert active_conv.ai_agent_session_id == "ses-captured"
 
     def test_file_backed_capture_retries_after_delayed_flush(self):
         agent = Mock()

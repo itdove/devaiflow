@@ -470,13 +470,22 @@ class OpenCodeAgent(AgentInterface):
         """Get set of existing session IDs from OpenCode.
 
         Parses ``opencode session list --format json`` output.
+        OpenCode returns the global session list even when the command is run
+        with ``project_path`` as its working directory, so only records whose
+        ``directory`` metadata matches the requested project are returned.
+        Paths are compared after resolving symlinks.  Records without usable
+        directory metadata are ignored because they cannot be safely
+        associated with the requested project.
 
         Args:
-            project_path: Absolute path to project (passed as cwd)
+            project_path: Absolute path to project used to scope the global list
 
         Returns:
             Set of session UUIDs
         """
+        if not project_path:
+            return set()
+
         try:
             result = subprocess.run(
                 ["opencode", "session", "list", "--format", "json"],
@@ -490,10 +499,45 @@ class OpenCodeAgent(AgentInterface):
 
             sessions_data = json.loads(result.stdout)
             if isinstance(sessions_data, list):
-                return {s.get("id", "") for s in sessions_data if s.get("id")}
+                sessions: Set[str] = set()
+                for session in sessions_data:
+                    if not isinstance(session, dict):
+                        continue
+
+                    session_id = session.get("id")
+                    recorded_directory = session.get("directory")
+                    if (
+                        isinstance(session_id, str)
+                        and session_id
+                        and isinstance(recorded_directory, str)
+                        and recorded_directory
+                        and self._paths_match(recorded_directory, project_path)
+                    ):
+                        sessions.add(session_id)
+                return sessions
             return set()
         except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError):
             return set()
+
+    @staticmethod
+    def _paths_match(first: str, second: str) -> bool:
+        """Compare paths after resolving symlinks and relative components.
+
+        ``Path.resolve()`` normally provides the canonical comparison needed
+        for OpenCode's recorded project directories.  If the filesystem cannot
+        resolve one of the paths (for example, a broken symlink), fall back to
+        a normalized absolute comparison rather than allowing an exception to
+        discard the entire session listing.
+        """
+        try:
+            return Path(first).expanduser().resolve() == Path(second).expanduser().resolve()
+        except (OSError, RuntimeError, TypeError, ValueError):
+            try:
+                return os.path.normcase(os.path.abspath(os.path.expanduser(first))) == os.path.normcase(
+                    os.path.abspath(os.path.expanduser(second))
+                )
+            except (TypeError, ValueError):
+                return False
 
     def get_session_message_count(self, session_id: str, project_path: str) -> int:
         """Get the number of messages in an OpenCode session.

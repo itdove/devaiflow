@@ -1790,6 +1790,12 @@ class Session(BaseModel):
    - Restores missing clones at the recorded path for OpenCode and other agents
    - Limits clone cleanup to explicit `daf complete` or `daf delete`
    - Added regression coverage for clone recovery, conversation preservation, and OpenCode `cwd`
+- ✓ Scoped OpenCode session capture to the requested project directory (itdove/devaiflow#614)
+   - Filters OpenCode's global session list by canonical `directory` metadata
+   - Resolves symlinked project paths and ignores records without usable ownership metadata
+   - Keeps same-project ambiguity fail-closed while excluding sessions from other repositories
+   - Added regression coverage for global lists, cross-project concurrency, and reopen/resume
+   - Focused lifecycle tests and the isolated integration suite pass
 
 ## Release Management
 

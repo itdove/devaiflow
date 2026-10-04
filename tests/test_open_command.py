@@ -2172,16 +2172,18 @@ class TestOpenCommandOpenCodeResume:
         mock_process = Mock()
         mock_process.wait = Mock()
 
+        mock_config = Mock()
+        mock_config.agent_backend = "opencode"
+        mock_config.repos = None
+        mock_config.gcp_vertex_region = None
+
         with patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
              patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
-             patch('devflow.cli.commands.open_command.ConfigLoader') as mock_config_cls, \
+             patch('devflow.cli.commands.open_command._handle_branch_checkout', return_value=True), \
+             patch('devflow.cli.commands.open_command._check_and_sync_with_base_branch', return_value=True), \
+             patch('devflow.cli.commands.open_command.ConfigLoader', return_value=config_loader), \
+             patch.object(config_loader, 'load_config', return_value=mock_config), \
              patch('devflow.agent.create_agent_client') as mock_create_agent:
-
-            mock_config = Mock()
-            mock_config.agent_backend = "opencode"
-            mock_config.repos = None
-            mock_config.gcp_vertex_region = None
-            mock_config_cls.return_value.load.return_value = mock_config
 
             mock_agent = Mock()
             mock_agent.resume_session.return_value = mock_process
@@ -2191,11 +2193,10 @@ class TestOpenCommandOpenCodeResume:
 
             result = runner.invoke(cli, ["open", "oc-resume-test"])
 
-        # resume_session should be called with ses_ ID
-        if mock_agent.resume_session.called:
-            call_kwargs = mock_agent.resume_session.call_args
-            assert call_kwargs[1]["session_id"] == "ses_abc123def" or \
-                   call_kwargs[0][0] == "ses_abc123def"
+        assert result.exit_code == 0, result.output
+        mock_agent.resume_session.assert_called_once()
+        call_kwargs = mock_agent.resume_session.call_args
+        assert call_kwargs.kwargs["session_id"] == "ses_abc123def"
 
     def test_open_resume_opencode_with_uuid_fallback(self, temp_daf_home, tmp_path):
         """When reopening OpenCode session with UUID (no captured ses_ ID), falls back to launch_session()."""
