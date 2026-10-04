@@ -1028,6 +1028,51 @@ def test_handle_conversation_selection_select_existing(tmp_path, temp_daf_home, 
     assert session.working_directory == "backend-api"
 
 
+def test_handle_conversation_selection_without_detection_accepts_default_string(
+    tmp_path, temp_daf_home
+):
+    """Test the conversation prompt handles Rich returning a string default."""
+    from devflow.cli.commands.open_command import (
+        _handle_conversation_selection_without_detection,
+    )
+    from devflow.config.loader import ConfigLoader
+    from devflow.session.manager import SessionManager
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+
+    first_repo = tmp_path / "repo-a"
+    second_repo = tmp_path / "repo-b"
+    first_repo.mkdir()
+    second_repo.mkdir()
+
+    session = session_manager.create_session(
+        name="multi-repo-session",
+        goal="Test conversation selection",
+        working_directory="repo-a",
+        project_path=str(first_repo),
+        ai_agent_session_id="uuid-a",
+    )
+    session.add_conversation(
+        working_dir="repo-b",
+        ai_agent_session_id="uuid-b",
+        project_path=str(second_repo),
+        branch="main",
+    )
+    session_manager.update_session(session)
+
+    with patch("rich.prompt.IntPrompt.ask", return_value="1") as prompt:
+        result = _handle_conversation_selection_without_detection(
+            session,
+            session_manager,
+            config_loader,
+        )
+
+    assert result is True
+    assert session.working_directory == "repo-a"
+    assert prompt.call_args.kwargs["default"] == 1
+
+
 def test_handle_conversation_selection_user_cancels(tmp_path, temp_daf_home, monkeypatch):
     """Test _handle_conversation_selection returns False when user cancels."""
     from devflow.cli.commands.open_command import _handle_conversation_selection
