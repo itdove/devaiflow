@@ -2428,8 +2428,17 @@ def _handle_conversation_selection_without_detection(
     choice = IntPrompt.ask(
         "Which conversation?",
         choices=choices,
-        default="1"
+        default=1
     )
+
+    # Rich returns the default value as-is when the user presses Enter. Keep
+    # the comparison and list indexing below safe for older Rich versions or
+    # test doubles that return the choice as a string.
+    try:
+        choice = int(choice)
+    except (TypeError, ValueError):
+        console.print("[red]Invalid selection[/red]")
+        return False
 
     # Check if user selected "Create new conversation"
     if choice == new_option_number:
