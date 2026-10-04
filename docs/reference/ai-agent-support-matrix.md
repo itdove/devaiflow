@@ -830,7 +830,7 @@ unsupported command.
 
 **Known Limitations:**
 - **⚠️  No permission prompts:** OpenCode auto-approves all tool calls (file edits, shell commands) without user confirmation. Unlike Claude Code, there is no built-in permission system. DevAIFlow displays a warning banner before launching OpenCode sessions. For ticket creation sessions (`daf git new`, `daf jira new`), an additional safety constraint is injected into the prompt to enforce read-only behavior.
-- Session detection relies on `opencode session list` CLI polling
+- Session detection relies on `opencode session list --format json` polling. OpenCode returns a global list, so DevAIFlow filters records by their canonical `directory` metadata; records without usable directory metadata are ignored. If more than one new session remains for the same project, capture stays pending rather than selecting an arbitrary session.
 - Skills support is TBD (uses `.opencode/` directory structure)
 - Token extraction depends on `opencode stats` availability
 

@@ -605,19 +605,27 @@ class TestOpenCodeAgentSessions:
 
     @patch("subprocess.run")
     def test_get_existing_sessions(self, mock_run):
-        """Test getting existing sessions from CLI."""
+        """Test getting project-scoped sessions from the global CLI list."""
         agent = OpenCodeAgent()
         mock_run.return_value = Mock(
             returncode=0,
             stdout=json.dumps([
-                {"id": "session-1", "name": "Test 1"},
-                {"id": "session-2", "name": "Test 2"},
+                {
+                    "id": "session-1",
+                    "name": "Test 1",
+                    "directory": "/home/user/project",
+                },
+                {
+                    "id": "session-2",
+                    "name": "Test 2",
+                    "directory": "/home/user/other-project",
+                },
             ]),
         )
 
         sessions = agent.get_existing_sessions("/home/user/project")
 
-        assert sessions == {"session-1", "session-2"}
+        assert sessions == {"session-1"}
         mock_run.assert_called_once_with(
             ["opencode", "session", "list", "--format", "json"],
             capture_output=True,
@@ -625,6 +633,48 @@ class TestOpenCodeAgentSessions:
             timeout=10,
             cwd="/home/user/project",
         )
+
+    @patch("subprocess.run")
+    def test_get_existing_sessions_ignores_records_without_directory_metadata(
+        self, mock_run
+    ):
+        """Unknown project ownership is excluded rather than captured unsafely."""
+        agent = OpenCodeAgent()
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {"id": "session-known", "directory": "/home/user/project"},
+                    {"id": "session-missing"},
+                    {"id": "session-null", "directory": None},
+                ]
+            ),
+        )
+
+        assert agent.get_existing_sessions("/home/user/project") == {"session-known"}
+
+    @patch("subprocess.run")
+    def test_get_existing_sessions_matches_symlinked_project_directory(
+        self, mock_run, tmp_path
+    ):
+        """A symlinked launch path matches OpenCode's canonical directory."""
+        agent = OpenCodeAgent()
+        project_path = tmp_path / "project-a"
+        project_path.mkdir()
+        symlink_path = tmp_path / "project-link"
+        try:
+            symlink_path.symlink_to(project_path, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("The test platform does not support directory symlinks")
+
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout=json.dumps(
+                [{"id": "session-symlink", "directory": str(project_path)}]
+            ),
+        )
+
+        assert agent.get_existing_sessions(str(symlink_path)) == {"session-symlink"}
 
     @patch("subprocess.run")
     def test_get_existing_sessions_empty(self, mock_run):
@@ -659,7 +709,9 @@ class TestOpenCodeAgentSessions:
         agent = OpenCodeAgent()
         mock_run.return_value = Mock(
             returncode=0,
-            stdout=json.dumps([{"id": "test-uuid"}]),
+            stdout=json.dumps(
+                [{"id": "test-uuid", "directory": "/home/user/project"}]
+            ),
         )
 
         assert agent.session_exists("test-uuid", "/home/user/project") is True
@@ -670,7 +722,9 @@ class TestOpenCodeAgentSessions:
         agent = OpenCodeAgent()
         mock_run.return_value = Mock(
             returncode=0,
-            stdout=json.dumps([{"id": "other-uuid"}]),
+            stdout=json.dumps(
+                [{"id": "other-uuid", "directory": "/home/user/other-project"}]
+            ),
         )
 
         assert agent.session_exists("test-uuid", "/home/user/project") is False
@@ -834,7 +888,17 @@ class TestOpenCodeAgentCaptureSession:
         # First call: no sessions, second call: one new session
         mock_run.side_effect = [
             Mock(returncode=0, stdout=json.dumps([])),
-            Mock(returncode=0, stdout=json.dumps([{"id": "new-session-123"}])),
+            Mock(
+                returncode=0,
+                stdout=json.dumps(
+                    [
+                        {
+                            "id": "new-session-123",
+                            "directory": "/home/user/project",
+                        }
+                    ]
+                ),
+            ),
         ]
 
         session_id = agent.capture_session_id("/home/user/project")
