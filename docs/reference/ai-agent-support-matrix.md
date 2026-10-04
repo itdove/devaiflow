@@ -791,16 +791,26 @@ Crush (formerly OpenCode by Kujtim Hoxha) was later acquired by Charmbracelet. I
 
 **CLI Commands:**
 ```bash
-opencode                    # Launch new interactive session
-opencode run <prompt>       # Non-interactive single prompt
-opencode --session <id>     # Resume specific session
-opencode --continue         # Resume last session
+opencode                    # Launch new interactive session (v1 and v2)
+opencode --session <id>     # Resume specific session (v1 and v2)
+opencode run <prompt>       # Non-interactive single prompt (v1 and v2)
+opencode mini --model provider/model  # v2 model-backed interactive session
+opencode --model provider/model      # v1 model-backed interactive session
+opencode --continue         # Resume the last session
 opencode session list       # List all sessions (supports --format json)
 opencode export <id>        # Export session data
 opencode stats              # Token/cost statistics
 opencode db path            # Show database location
 opencode serve --port N     # Start headless server
 ```
+
+DevAIFlow detects the installed major version with `opencode --version`. For
+OpenCode v2, it keeps the root command when no model flag is required and uses
+`opencode mini` for model-backed interactive launches because the v2 root
+command does not accept `--model`. Headless launches use `opencode run` for
+both versions. OpenCode v2 does not expose auto-approval on `mini`; DevAIFlow
+reports that combination with a remediation message instead of launching an
+unsupported command.
 
 **Session Storage:**
 - Location: `~/.config/opencode/` (default, follows XDG spec)

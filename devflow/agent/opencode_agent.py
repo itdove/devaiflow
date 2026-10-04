@@ -13,13 +13,22 @@ OpenAI, Google, etc.), session management, MCP support, and JSON output capabili
 
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional, Set, List, Dict, Any
+from typing import Any, Dict, List, Optional, Set
 
 from devflow.agent.interface import AgentInterface
 from devflow.utils.dependencies import require_tool
+
+
+class OpenCodeCompatibilityError(RuntimeError):
+    """Raised when an installed OpenCode version cannot support a launch option."""
+
+
+class OpenCodeVersionError(OpenCodeCompatibilityError):
+    """Raised when the installed OpenCode major version cannot be detected."""
 
 
 class OpenCodeAgent(AgentInterface):
@@ -65,6 +74,139 @@ class OpenCodeAgent(AgentInterface):
                 opencode_dir = Path.home() / ".config" / "opencode"
 
         self.opencode_dir = Path(opencode_dir)
+        self._opencode_major_version: Optional[int] = None
+
+    def get_opencode_version(self) -> int:
+        """Return the installed OpenCode major version.
+
+        OpenCode v1 and v2 expose different launch command shapes.  Detect the
+        version lazily so constructing an agent remains side-effect free and so
+        commands that only inspect OpenCode's database do not need a version
+        check first.
+
+        Returns:
+            ``1`` or ``2``.
+
+        Raises:
+            OpenCodeVersionError: If the version cannot be read or is not v1/v2.
+        """
+        if self._opencode_major_version is not None:
+            return self._opencode_major_version
+
+        try:
+            result = subprocess.run(
+                ["opencode", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (FileNotFoundError, OSError) as exc:
+            raise OpenCodeVersionError(
+                "Unable to detect the OpenCode version. Run `opencode --version` "
+                "to verify that OpenCode is installed, then use OpenCode v1 or v2."
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise OpenCodeVersionError(
+                "OpenCode did not respond to `opencode --version` within 5 seconds. "
+                "Verify the installation and use OpenCode v1 or v2."
+            ) from exc
+
+        output = "\n".join(
+            value.strip()
+            for value in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
+            if isinstance(value, str) and value.strip()
+        )
+        match = re.search(r"(?:^|[^0-9])v?(\d+)\.(\d+)(?:\.(\d+))?", output)
+        if not match:
+            detail = f" Output: {output}" if output else ""
+            raise OpenCodeVersionError(
+                "Could not determine the OpenCode major version from "
+                f"`opencode --version`.{detail} Install OpenCode v1 or v2, "
+                "or update DevAIFlow for a newer OpenCode release."
+            )
+
+        major_version = int(match.group(1))
+        if major_version not in (1, 2):
+            raise OpenCodeVersionError(
+                f"Unsupported OpenCode major version {major_version}. "
+                "DevAIFlow supports OpenCode v1 and v2; install a supported "
+                "release or update DevAIFlow."
+            )
+
+        self._opencode_major_version = major_version
+        return major_version
+
+    def _get_profile_model(
+        self,
+        model_provider_profile: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        """Resolve and qualify a model supplied by a provider profile."""
+        if not model_provider_profile:
+            return None
+
+        from devflow.utils.model_provider import (
+            get_model_name_from_profile,
+            qualify_model_for_agent,
+        )
+
+        model = get_model_name_from_profile(model_provider_profile)
+        return qualify_model_for_agent(
+            model,
+            self.get_agent_name(),
+            model_provider_profile,
+        )
+
+    def _interactive_command_prefix(
+        self,
+        major_version: int,
+        model_name: Optional[str],
+        profile_arguments: List[str],
+    ) -> List[str]:
+        """Build the version-aware prefix for an interactive OpenCode launch.
+
+        v2 retains the root command for launches that do not need a model.  Its
+        root command does not accept ``--model``, so model-backed launches use
+        the ``mini`` subcommand, which exposes the model/session/prompt flags.
+        """
+        if major_version == 1:
+            return ["opencode", *profile_arguments]
+
+        if major_version == 2:
+            command = ["opencode"]
+            if model_name:
+                command.append("mini")
+            command.extend(profile_arguments)
+            return command
+
+        # get_opencode_version() currently prevents this path.  Keep the
+        # guard here so future callers cannot accidentally construct a command
+        # for an unsupported version.
+        raise OpenCodeVersionError(
+            f"Unsupported OpenCode major version {major_version}. "
+            "DevAIFlow supports OpenCode v1 and v2."
+        )
+
+    @staticmethod
+    def _append_auto_approve(
+        command: List[str],
+        major_version: int,
+        *,
+        interactive: bool,
+        model_name: Optional[str],
+    ) -> None:
+        """Append the supported auto-approval flag or explain why it is unavailable."""
+        if major_version == 2 and interactive and model_name:
+            raise OpenCodeCompatibilityError(
+                "OpenCode v2's `mini` command does not support auto-approval "
+                "when a model is selected. Remove `--auto-approve`, use a "
+                "profile without a model, or run the session headlessly."
+            )
+        # Keep the existing v1 spelling.  It is a supported hidden alias in
+        # v1, while v2 exposes the shorter public --auto flag.
+        command.append(
+            "--dangerously-skip-permissions" if major_version == 1 else "--auto"
+        )
 
     def launch_session(
         self,
@@ -89,9 +231,18 @@ class OpenCodeAgent(AgentInterface):
         final_env = env if env is not None else os.environ.copy()
         from devflow.utils.model_provider import get_profile_arguments
         profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
+        major_version = self.get_opencode_version()
+        model_name = self._get_profile_model(model_provider_profile)
+        command = self._interactive_command_prefix(
+            major_version,
+            model_name,
+            profile_arguments,
+        )
+        if model_name:
+            command.extend(["--model", model_name])
 
         return subprocess.Popen(
-            ["opencode", *profile_arguments],
+            command,
             cwd=project_path,
             env=final_env,
         )
@@ -146,14 +297,6 @@ class OpenCodeAgent(AgentInterface):
         from devflow.utils.model_provider import get_profile_arguments
         profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
 
-        if headless:
-            cmd = ["opencode", "run", *profile_arguments]
-        else:
-            cmd = ["opencode", *profile_arguments]
-
-        if session_id and session_id.startswith("ses"):
-            cmd.extend(["--session", session_id])
-
         from devflow.agent.model_config import get_agent_model_config
         from devflow.utils.model_provider import (
             get_model_name_from_profile,
@@ -173,11 +316,30 @@ class OpenCodeAgent(AgentInterface):
             self.get_agent_name(),
             model_provider_profile,
         )
+
+        major_version = self.get_opencode_version()
+        if headless:
+            cmd = ["opencode", "run", *profile_arguments]
+        else:
+            cmd = self._interactive_command_prefix(
+                major_version,
+                model_name,
+                profile_arguments,
+            )
+
+        if session_id and session_id.startswith("ses"):
+            cmd.extend(["--session", session_id])
+
         if model_name:
             cmd.extend(["--model", model_name])
 
         if auto_approve:
-            cmd.append("--dangerously-skip-permissions")
+            self._append_auto_approve(
+                cmd,
+                major_version,
+                interactive=not headless,
+                model_name=model_name,
+            )
 
         if headless:
             if initial_prompt:
@@ -216,8 +378,17 @@ class OpenCodeAgent(AgentInterface):
         final_env = env if env is not None else os.environ.copy()
         from devflow.utils.model_provider import get_profile_arguments
         profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
+        major_version = self.get_opencode_version()
+        model_name = self._get_profile_model(model_provider_profile)
 
-        cmd = ["opencode", *profile_arguments, "--session", session_id]
+        cmd = self._interactive_command_prefix(
+            major_version,
+            model_name,
+            profile_arguments,
+        )
+        cmd.extend(["--session", session_id])
+        if model_name:
+            cmd.extend(["--model", model_name])
 
         return subprocess.Popen(
             cmd,

@@ -416,6 +416,17 @@ class TestOpenCommandIsFirstLaunch:
 class TestOpenCodeLaunchWithPromptGuard:
     """Test that OpenCodeAgent.launch_with_prompt correctly handles session IDs."""
 
+    @pytest.fixture(autouse=True)
+    def _use_v1_cli(self, monkeypatch):
+        """Keep session-ID assertions independent of the installed CLI version."""
+        from devflow.agent.opencode_agent import OpenCodeAgent
+
+        monkeypatch.setattr(
+            OpenCodeAgent,
+            "get_opencode_version",
+            lambda self: self._opencode_major_version or 1,
+        )
+
     def test_ses_id_passes_session_flag(self):
         """Session IDs starting with 'ses' should be passed via --session flag."""
         from devflow.agent.opencode_agent import OpenCodeAgent

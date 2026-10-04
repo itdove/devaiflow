@@ -2066,6 +2066,44 @@ def test_handle_branch_creation_uncommitted_changes_auto_mode(tmp_path):
 class TestOpenCommandOpenCodeResume:
     """Test OpenCode session resume and session ID capture in daf open (#419)."""
 
+    def test_automatic_opencode_launch_uses_v2_compatible_command(self, tmp_path):
+        """The shared automatic launch lifecycle uses v2's model-capable interface."""
+        from types import SimpleNamespace
+
+        from devflow.agent.factory import launch_and_capture
+        from devflow.agent.opencode_agent import OpenCodeAgent
+
+        agent = OpenCodeAgent()
+        process = Mock(returncode=0)
+        active_conversation = SimpleNamespace(ai_agent_session_id="pending-capture")
+
+        with patch.object(agent, "get_opencode_version", return_value=2), \
+             patch.object(agent, "get_existing_sessions", side_effect=[set(), {"ses_auto_v2"}]), \
+             patch.object(agent, "wait_for_exit"), \
+             patch("devflow.agent.opencode_agent.require_tool"), \
+             patch("devflow.agent.opencode_agent.subprocess.Popen", return_value=process) as mock_popen:
+            launch_and_capture(
+                agent,
+                "opencode",
+                str(tmp_path),
+                active_conversation,
+                initial_prompt="Read the project instructions",
+                session_id="pending-capture",
+                model_provider_profile={
+                    "provider": "openai",
+                    "model_name": "gpt-5.6-sol",
+                },
+            )
+
+        assert mock_popen.call_args.args[0] == [
+            "opencode",
+            "mini",
+            "--model",
+            "openai/gpt-5.6-sol",
+            "--prompt",
+            "Read the project instructions",
+        ]
+
     def test_open_resume_opencode_with_ses_session_id(self, temp_daf_home, tmp_path):
         """When reopening OpenCode session with ses_ ID, agent.resume_session() is called."""
         config_loader = ConfigLoader()

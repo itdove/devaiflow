@@ -83,6 +83,9 @@ For this profile, DevAIFlow passes `openai/gpt-5.6-sol` to OpenCode. A model
 already written as `openai/gpt-5.6-luna` is preserved without adding a second
 provider prefix. Bare OpenCode models require the profile's `provider` field;
 otherwise validation stops the launch with an actionable configuration error.
+DevAIFlow detects the installed OpenCode major version: v1 receives the model
+on the root command, while v2 uses `opencode mini --model ...` for interactive
+sessions and `opencode run --model ...` for headless sessions.
 
 ## Adapter arguments
 
