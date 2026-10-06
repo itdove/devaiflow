@@ -194,10 +194,13 @@ Analysis-only session for creating a GitHub/GitLab issue.
    glab issue create --title "..." --description "<your analysis>"
    ```
 5. Include detailed description and acceptance criteria based on analysis
+6. Report the created issue URL and key in the final response. GitHub/GitLab
+   ticket-creation sessions do not currently have a supported DAF session-link
+   operation.
+7. After leaving the agent session, reopen it with the session name printed by
+   `daf git new`, for example: `daf open <session-name>`.
 
 Read the **daf-git skill** for correct command syntax.
-
-After creating the issue, the session is automatically renamed to `creation-<issue_number>`.
 
 ---
 

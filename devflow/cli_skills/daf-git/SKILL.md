@@ -1,6 +1,6 @@
 ---
 name: daf-git
-description: GitHub/GitLab issue operations (update, link) with Markdown syntax reference and gh/glab CLI guide
+description: GitHub/GitLab issue operations (create, view, update, comments) with Markdown syntax reference and gh/glab CLI guide
 user-invocable: true
 argument-hint: "[ISSUE-NUMBER|owner/repo#number]"
 ---
@@ -24,19 +24,25 @@ glab issue view 123 --comments
 
 ### Creating Issues
 
-Use `gh` or `glab` CLI directly to create issues, then link to your session:
+Use `gh` or `glab` CLI directly to create issues. The issue URL and key returned by
+the CLI are the canonical record for the new ticket:
 
 ```bash
 # GitHub
 gh issue create --title "Add caching" --body "Description here" --label "enhancement"
-# Then link to session:
-daf link <issue_url>
 
 # GitLab
 glab issue create --title "Add caching" --description "Description here" --label "enhancement"
-# Then link to session:
-daf link <issue_url>
 ```
+
+**After creating an issue in a `daf git new` session:**
+
+- Include the issue URL and key in the final response.
+- Do not attempt to associate the issue with the session using a DAF command.
+  GitHub/GitLab ticket-creation sessions do not currently have a supported
+  session-link operation.
+- After leaving the agent session, reopen the ticket-creation session by the
+  name printed by `daf git new`, for example: `daf open <session-name>`.
 
 ### Issue Body Templates
 
@@ -191,7 +197,8 @@ well-formed issues with acceptance criteria.
 - DO NOT modify code or files
 - DO NOT run git commands
 - ONLY read files, search code, analyze architecture
-- Create issue when analysis is complete using `gh issue create` / `glab issue create`, then link with `daf link`
+- Create the issue when analysis is complete using `gh issue create` /
+  `glab issue create`, then report its URL and key
 
 **See also:** daf-workflow skill for complete ticket creation workflow.
 
