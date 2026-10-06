@@ -2101,6 +2101,7 @@ class TestGenerateText:
     def test_opencode_generate_text_uses_opencode_run(self, mock_run):
         mock_run.return_value = Mock(returncode=0, stdout="opencode result\n")
         agent = OpenCodeAgent()
+        agent._opencode_major_version = 1
         result = agent.generate_text("test prompt")
         assert result == "opencode result"
         mock_run.assert_called_once_with(
@@ -2108,6 +2109,7 @@ class TestGenerateText:
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
 
 
