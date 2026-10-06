@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Use `daf skills` instead, which provides the same functionality with additional features
   - All internal references updated from `daf upgrade` to `daf skills`
 
+### Fixed
+- **Transactional configuration persistence and centralized backups** (#622)
+  - Uses atomic, fsynced writes with rollback and crash recovery for legacy and split configuration saves
+  - Serializes concurrent configuration readers and writers with a dedicated lock
+  - Stores collision-resistant seven-day configuration snapshots under the active configuration directory
+  - Routes CLI, TUI, web, import, initialization, migration, and hierarchical configuration updates through the shared persistence layer
+
 ## [2.2.0] - 2026-05-31
 
 ### Added

@@ -1,8 +1,16 @@
 """Configuration file loading and management."""
 
 import json
+import os
+import shutil
+import stat
+import sys
+import tempfile
+import uuid
+from contextlib import contextmanager, nullcontext
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Mapping, Optional, Tuple, Union
 
 from pydantic import ValidationError
 from rich.console import Console
@@ -28,6 +36,15 @@ console = Console(stderr=True)
 class ConfigLoader:
     """Load and manage configuration files."""
 
+    CONFIG_BACKUP_RETENTION_DAYS = 7
+    _CONFIG_FILE_RELATIVE_PATHS = (
+        Path("config.json"),
+        Path("enterprise.json"),
+        Path("organization.json"),
+        Path("team.json"),
+        Path("backends") / "jira.json",
+    )
+
     # Class-level flag to track if validation warnings have been shown
     _validation_warnings_shown = False
 
@@ -46,6 +63,9 @@ class ConfigLoader:
             self.config_dir = config_dir
             session_home = config_dir
         self.config_file = self.config_dir / "config.json"
+        self.backup_dir = self.config_dir / "backups"
+        self._config_lock_file = self.config_dir / ".config.json.lock"
+        self._config_transaction_file = self.config_dir / ".config-save.json"
         self.sessions_file = session_home / "sessions.json"
         self.sessions_dir = session_home / "sessions"
         self.session_home = session_home
@@ -53,6 +73,395 @@ class ConfigLoader:
         # Ensure directories exist
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        self._recover_pending_transaction()
+
+    def _configuration_file_paths(self) -> Tuple[Path, ...]:
+        """Return all configuration files managed by the split format."""
+        return tuple(self.config_dir / relative for relative in self._CONFIG_FILE_RELATIVE_PATHS)
+
+    @contextmanager
+    def _configuration_lock(self) -> Iterator[None]:
+        """Serialize configuration reads and writes across DAF processes.
+
+        The lock is kept in a separate file so replacing any configuration file
+        does not invalidate the lock held by another process. Unix uses
+        ``fcntl.flock`` and Windows uses ``msvcrt.locking``.
+        """
+        with open(self._config_lock_file, "a+") as lock_file:
+            if sys.platform != "win32":
+                import fcntl
+
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            else:
+                import msvcrt
+
+                lock_file.seek(0, 2)
+                if lock_file.tell() == 0:
+                    lock_file.write(" ")
+                    lock_file.flush()
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+
+            try:
+                yield
+            finally:
+                if sys.platform != "win32":
+                    import fcntl
+
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                else:
+                    import msvcrt
+
+                    lock_file.seek(0)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+
+    def _managed_config_path(self, path: Union[str, Path]) -> Path:
+        """Resolve and validate a path beneath the configured config directory."""
+        candidate = Path(path)
+        if not candidate.is_absolute():
+            candidate = self.config_dir / candidate
+
+        candidate = candidate.resolve()
+        config_root = self.config_dir.resolve()
+        try:
+            candidate.relative_to(config_root)
+        except ValueError as e:
+            raise ValueError(f"Configuration path must be inside {config_root}: {path}") from e
+        return candidate
+
+    def _normalize_json_files(
+        self, files: Mapping[Any, Any]
+    ) -> Dict[Path, Any]:
+        """Normalize and validate paths supplied to the persistence helpers."""
+        if not files:
+            raise ValueError("At least one configuration file is required")
+        return {self._managed_config_path(path): data for path, data in files.items()}
+
+    def save_json_files(
+        self, files: Mapping[Any, Any]
+    ) -> Optional[Path]:
+        """Safely persist one or more managed JSON configuration files.
+
+        Files are backed up before any replacement, written through fsynced
+        temporary files, and replaced as one transaction under the configuration
+        lock. If a later replacement fails, every file in the transaction is
+        restored to its pre-save state.
+
+        Args:
+            files: Mapping of absolute or config-directory-relative paths to
+                JSON-serializable values.
+
+        Returns:
+            The backup path for ``config.json`` when it existed, or the first
+            backup created for the transaction. ``None`` means no input file
+            existed before the save.
+        """
+        normalized_files = self._normalize_json_files(files)
+        with self._configuration_lock():
+            self._recover_pending_transaction_locked()
+            return self._persist_json_files(normalized_files, lock_held=True)
+
+    def create_config_backup(self) -> Optional[Path]:
+        """Create a recoverable snapshot of the existing split configuration.
+
+        The snapshot is stored in ``<config_dir>/backups``. Each file uses the
+        same unique snapshot identifier, so the files can be restored together.
+        Backups older than :attr:`CONFIG_BACKUP_RETENTION_DAYS` are removed.
+
+        Returns:
+            The backup path for ``config.json`` or the first existing config file.
+        """
+        with self._configuration_lock():
+            self._recover_pending_transaction_locked()
+            existing_paths = [
+                path for path in self._configuration_file_paths() if path.exists()
+            ]
+            backups = self._create_config_backups(existing_paths)
+            self._cleanup_old_backups()
+            return self._first_backup_path(backups)
+
+    def _first_backup_path(self, backups: Mapping[Path, Path]) -> Optional[Path]:
+        """Return the primary backup path for a transaction."""
+        if self.config_file in backups:
+            return backups[self.config_file]
+        return next(iter(backups.values()), None)
+
+    def _new_backup_id(self) -> str:
+        """Create a collision-resistant identifier for one backup snapshot."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+        return f"{timestamp}-{uuid.uuid4().hex[:12]}"
+
+    def _backup_name(self, path: Path, backup_id: str) -> str:
+        """Return a flat, readable backup name for a config-relative path."""
+        relative = path.relative_to(self.config_dir)
+        stem = "-".join(relative.with_suffix("").parts)
+        return f"{stem}-{backup_id}{path.suffix}"
+
+    def _copy_backup(self, source: Path, destination: Path) -> None:
+        """Copy a backup file and fail rather than continuing without recovery."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        # Backups are retained by creation time, not by the source file's
+        # potentially old modification time copied by ``copy2``.
+        os.utime(destination, None)
+
+        # Ensure the completed backup is pushed through the OS before the
+        # original file is eligible for replacement.
+        # ``fsync`` works with a read-only descriptor on supported POSIX
+        # filesystems. Keep the copied mode intact so read-only configurations
+        # can still be backed up safely.
+        with open(destination, "rb") as backup_file:
+            os.fsync(backup_file.fileno())
+        self._fsync_directory(destination.parent)
+
+    def _write_transaction_journal(
+        self,
+        existed_before: Mapping[Path, bool],
+        backups: Mapping[Path, Path],
+    ) -> None:
+        """Durably record enough state to recover an interrupted save."""
+        entries = []
+        for target_path, existed in existed_before.items():
+            backup_path = backups.get(target_path)
+            entries.append(
+                {
+                    "target": target_path.relative_to(self.config_dir).as_posix(),
+                    "existed": existed,
+                    "backup": (
+                        backup_path.relative_to(self.backup_dir).as_posix()
+                        if backup_path
+                        else None
+                    ),
+                }
+            )
+
+        self._atomic_write_json(
+            self._config_transaction_file,
+            {"version": 1, "files": entries},
+        )
+
+    def _remove_transaction_journal(self) -> None:
+        """Remove the completed-save journal and persist that removal."""
+        try:
+            self._config_transaction_file.unlink()
+        except FileNotFoundError:
+            return
+        self._fsync_directory(self.config_dir)
+
+    def _recover_pending_transaction(self) -> None:
+        """Recover a save interrupted after its journal was committed."""
+        with self._configuration_lock():
+            self._recover_pending_transaction_locked()
+
+    def _recover_pending_transaction_locked(self) -> None:
+        """Recover a pending save while the configuration lock is held."""
+        if not self._config_transaction_file.exists():
+            return
+
+        try:
+            with open(self._config_transaction_file, "r", encoding="utf-8") as journal_file:
+                journal = json.load(journal_file)
+            if journal.get("version") != 1 or not isinstance(journal.get("files"), list):
+                raise ValueError("Unsupported configuration save journal")
+
+            for entry in journal["files"]:
+                if not isinstance(entry, dict):
+                    raise ValueError("Invalid configuration save journal entry")
+                target_path = self._managed_config_path(entry["target"])
+                if entry.get("existed"):
+                    backup_name = entry.get("backup")
+                    if not isinstance(backup_name, str) or Path(backup_name).name != backup_name:
+                        raise ValueError("Invalid configuration backup reference")
+                    backup_path = self.backup_dir / backup_name
+                    if not backup_path.exists():
+                        raise FileNotFoundError(f"Configuration backup not found: {backup_path}")
+                    self._restore_file(backup_path, target_path)
+                elif target_path.exists():
+                    target_path.unlink()
+                    self._fsync_directory(target_path.parent)
+        except Exception as e:
+            raise RuntimeError(
+                "An interrupted configuration save could not be recovered; "
+                f"inspect backups in {self.backup_dir}"
+            ) from e
+
+        self._remove_transaction_journal()
+
+    def _create_config_backups(self, paths: list[Path]) -> Dict[Path, Path]:
+        """Back up existing files for one save transaction."""
+        existing_paths = [path for path in paths if path.exists()]
+        if not existing_paths:
+            return {}
+
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_id = self._new_backup_id()
+        while any(
+            (self.backup_dir / self._backup_name(source, backup_id)).exists()
+            for source in existing_paths
+        ):
+            backup_id = f"{backup_id}-{uuid.uuid4().hex[:12]}"
+        backups: Dict[Path, Path] = {}
+        current_backup_path: Optional[Path] = None
+        try:
+            for source in existing_paths:
+                backup_path = self.backup_dir / self._backup_name(source, backup_id)
+                current_backup_path = backup_path
+                self._copy_backup(source, backup_path)
+                backups[source] = backup_path
+                current_backup_path = None
+        except BaseException:
+            for backup_path in backups.values():
+                try:
+                    backup_path.unlink()
+                except FileNotFoundError:
+                    pass
+            if current_backup_path is not None:
+                try:
+                    current_backup_path.unlink()
+                except FileNotFoundError:
+                    pass
+            self._fsync_directory(self.backup_dir)
+            raise
+
+        return backups
+
+    def _fsync_directory(self, directory: Path) -> None:
+        """Fsync a directory after an atomic replacement where supported."""
+        if sys.platform == "win32":
+            return
+
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        try:
+            directory_fd = os.open(directory, flags)
+        except OSError:
+            return
+
+        try:
+            try:
+                os.fsync(directory_fd)
+            except OSError:
+                # Some filesystems do not support directory fsync. The file
+                # itself was already fsynced and atomically replaced.
+                pass
+        finally:
+            os.close(directory_fd)
+
+    def _atomic_write_json(self, path: Path, data: Any) -> None:
+        """Write JSON to a temporary file and atomically replace the target."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path: Optional[Path] = None
+        original_mode: Optional[int] = None
+        if path.exists():
+            original_mode = stat.S_IMODE(path.stat().st_mode)
+
+        try:
+            file_descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+            )
+            temporary_path = Path(temporary_name)
+            with os.fdopen(file_descriptor, "w", encoding="utf-8") as temporary_file:
+                json.dump(data, temporary_file, indent=2)
+                temporary_file.write("\n")
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+
+            if original_mode is not None:
+                os.chmod(temporary_path, original_mode)
+            os.replace(temporary_path, path)
+            temporary_path = None
+            self._fsync_directory(path.parent)
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink()
+                except FileNotFoundError:
+                    pass
+
+    def _restore_file(self, backup_path: Path, target_path: Path) -> None:
+        """Restore a backup through a temporary file and atomic replacement."""
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path: Optional[Path] = None
+        try:
+            file_descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{target_path.name}.restore.",
+                suffix=".tmp",
+                dir=target_path.parent,
+            )
+            temporary_path = Path(temporary_name)
+            with os.fdopen(file_descriptor, "wb") as temporary_file:
+                with open(backup_path, "rb") as source_file:
+                    shutil.copyfileobj(source_file, temporary_file)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            shutil.copystat(backup_path, temporary_path)
+            os.replace(temporary_path, target_path)
+            temporary_path = None
+            self._fsync_directory(target_path.parent)
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink()
+                except FileNotFoundError:
+                    pass
+
+    def _rollback_json_files(
+        self,
+        existed_before: Mapping[Path, bool],
+        backups: Mapping[Path, Path],
+    ) -> None:
+        """Restore every target to its state before a failed transaction."""
+        for path, existed in existed_before.items():
+            if existed:
+                self._restore_file(backups[path], path)
+            elif path.exists():
+                path.unlink()
+                self._fsync_directory(path.parent)
+
+    def _persist_json_files(
+        self,
+        files: Mapping[Path, Any],
+        *,
+        lock_held: bool = False,
+    ) -> Optional[Path]:
+        """Persist normalized files, optionally assuming the config lock is held."""
+        def persist() -> Optional[Path]:
+            # Callers that already hold the lock can enter this helper from
+            # import, initialization, or migration code. Recover here as a
+            # final guard against a journal created after loader construction.
+            self._recover_pending_transaction_locked()
+            existed_before = {path: path.exists() for path in files}
+            existing_paths = [path for path, existed in existed_before.items() if existed]
+            backups = self._create_config_backups(existing_paths)
+
+            try:
+                self._write_transaction_journal(existed_before, backups)
+                for path, data in files.items():
+                    self._atomic_write_json(path, data)
+            except BaseException:
+                try:
+                    self._rollback_json_files(existed_before, backups)
+                except BaseException as rollback_error:
+                    raise RuntimeError(
+                        "Configuration save failed and rollback was unsuccessful; "
+                        f"recover files from {self.backup_dir}"
+                    ) from rollback_error
+                try:
+                    self._remove_transaction_journal()
+                except BaseException as journal_error:
+                    raise RuntimeError(
+                        "Configuration save rolled back but its recovery journal "
+                        f"could not be removed; inspect {self._config_transaction_file}"
+                    ) from journal_error
+                raise
+
+            self._remove_transaction_journal()
+            self._cleanup_old_backups()
+            return self._first_backup_path(backups)
+
+        if lock_held:
+            return persist()
+        with self._configuration_lock():
+            return persist()
 
     def validate_config_dict(self, config_dict: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """Validate a configuration dictionary against the Pydantic model.
@@ -90,25 +499,28 @@ class ConfigLoader:
             - is_valid: True if validation passed
             - error_message: None if valid, error message string if invalid
         """
-        if not self.config_file.exists():
-            return (False, f"Config file not found: {self.config_file}")
+        with self._configuration_lock():
+            self._recover_pending_transaction_locked()
+            if not self.config_file.exists():
+                return (False, f"Config file not found: {self.config_file}")
 
-        try:
-            with open(self.config_file, "r") as f:
-                config_dict = json.load(f)
-        except json.JSONDecodeError as e:
-            return (False, f"Invalid JSON in config file: {e}")
-        except Exception as e:
-            return (False, f"Error reading config file: {e}")
+            try:
+                with open(self.config_file, "r") as f:
+                    config_dict = json.load(f)
+            except json.JSONDecodeError as e:
+                return (False, f"Invalid JSON in config file: {e}")
+            except Exception as e:
+                return (False, f"Error reading config file: {e}")
 
         return self.validate_config_dict(config_dict)
 
     def load_config(self, validate: bool = True) -> Optional[Config]:
-        """Load configuration from config.json or 4 separate files.
+        """Load configuration from legacy config.json or split files.
 
         Automatically detects format:
         - Old format: Single config.json with 'jira' section (backward compatible)
-        - New format: Split into config.json + organization.json + team.json + backends/jira.json
+        - New format: Split into config.json, enterprise.json,
+          organization.json, team.json, and backends/jira.json
 
         Args:
             validate: If True, validate config against schema before loading (default: True)
@@ -120,16 +532,20 @@ class ConfigLoader:
         Raises:
             ValueError: If config file is invalid or validation fails
         """
-        if not self.config_file.exists():
-            return None
+        with self._configuration_lock():
+            self._recover_pending_transaction_locked()
+            if not self.config_file.exists():
+                return None
 
-        # Detect format and route to appropriate loader
-        if self._is_old_format():
-            # OLD FORMAT: Load from single config.json
-            return self._load_old_format_config(validate)
-        else:
-            # NEW FORMAT: Load from 4 separate files
-            return self._load_new_format_config()
+            # Detect format and route to the appropriate loader while holding
+            # the writer lock. This prevents a reader from observing a mixed
+            # set of split files during a multi-file save.
+            if self._is_old_format():
+                # OLD FORMAT: Load from single config.json
+                return self._load_old_format_config(validate)
+
+            # NEW FORMAT: Load from the managed split files
+            return self._load_new_format_config(lock_held=True)
 
     def _load_old_format_config(self, validate: bool = True) -> Optional[Config]:
         """Load configuration from old single config.json format.
@@ -170,14 +586,19 @@ class ConfigLoader:
         except Exception as e:
             raise ValueError(f"Failed to load config: {e}")
 
-    def save_config(self, config: Config, validate: bool = True) -> None:
+    def save_config(
+        self,
+        config: Config,
+        validate: bool = True,
+        additional_files: Optional[Mapping[Any, Any]] = None,
+    ) -> Optional[Path]:
         """Save configuration (triggers migration from old to new format if needed).
 
         On first save after upgrade:
         - Detects old format
-        - Creates timestamped backup
-        - Moves local patches to .deprecated/ with warning
-        - Splits config into 4 files (config.json, organization.json, team.json, backends/jira.json)
+        - Creates a centralized recoverable backup
+        - Splits config into the managed files (config.json, enterprise.json,
+          organization.json, team.json, and backends/jira.json)
 
         On subsequent saves:
         - Saves to appropriate format (old or new)
@@ -186,9 +607,16 @@ class ConfigLoader:
             config: Config object to save
             validate: If True, validate config before saving (default: True)
                      Set to False to skip validation (use with caution)
+            additional_files: Optional managed JSON files to include in the same
+                locked transaction. This is used by editors that maintain
+                fields outside the merged ``Config`` model.
 
         Raises:
             ValueError: If validation fails (when validate=True)
+
+        Returns:
+            The backup path created for the save, or ``None`` when no existing
+            configuration file needed a backup.
         """
         # Validate before saving (prevent writing invalid configs)
         if validate:
@@ -197,17 +625,38 @@ class ConfigLoader:
             if not is_valid:
                 raise ValueError(f"Cannot save invalid configuration:\n{error_message}")
 
-        # Check if migration is needed
-        if self.config_file.exists() and self._is_old_format():
-            # Old format exists - trigger migration to new format
-            self._migrate_to_new_format(config)
-        elif self.config_file.exists() and not self._is_old_format():
-            # Already new format - save normally
-            self._save_new_format_config(config)
-        else:
-            # No config file exists - save as old format for backward compatibility
-            # (Tests and existing workflows expect old format by default)
-            self._save_old_format_config(config)
+        normalized_additional_files = (
+            self._normalize_json_files(additional_files) if additional_files else {}
+        )
+
+        # Hold the lock while detecting the format, constructing the split
+        # payload, creating backups, and replacing every file. This prevents two
+        # processes from building payloads from different configuration states.
+        with self._configuration_lock():
+            self._recover_pending_transaction_locked()
+            if self.config_file.exists() and self._is_old_format():
+                # Old format exists - trigger migration to new format
+                return self._migrate_to_new_format(
+                    config,
+                    lock_held=True,
+                    additional_files=normalized_additional_files,
+                )
+            if self.config_file.exists():
+                # Already new format - save normally
+                return self._save_new_format_config(
+                    config,
+                    lock_held=True,
+                    additional_files=normalized_additional_files,
+                )
+
+            # No config file exists - save as old format for backward
+            # compatibility (tests and existing workflows expect old format by
+            # default).
+            return self._save_old_format_config(
+                config,
+                lock_held=True,
+                additional_files=normalized_additional_files,
+            )
 
     def update_last_used_workspace(self, workspace_name: str) -> None:
         """Persist only the last-used workspace preference.
@@ -257,65 +706,37 @@ class ConfigLoader:
         the raw user config so fields unknown to the current process remain
         untouched.
         """
-        import os
-        import sys
-        import tempfile
+        with self._configuration_lock():
+            self._recover_pending_transaction_locked()
+            if not self.config_file.exists():
+                return
 
-        if not self.config_file.exists():
-            return
+            with open(self.config_file, "r", encoding="utf-8") as config_file:
+                data = json.load(config_file)
+            if not isinstance(data, dict):
+                raise ValueError("Configuration root must be an object")
 
-        lock_file = self.config_dir / ".config.json.lock"
-        temporary_path = None
-        with open(lock_file, "a+") as lock:
-            if sys.platform != "win32":
-                import fcntl
+            update(data)
+            self._persist_json_files({self.config_file: data}, lock_held=True)
 
-                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-
-            try:
-                with open(self.config_file, "r") as config_file:
-                    data = json.load(config_file)
-                if not isinstance(data, dict):
-                    raise ValueError("Configuration root must be an object")
-
-                update(data)
-
-                file_descriptor, temporary_path = tempfile.mkstemp(
-                    prefix=".config.json.", suffix=".tmp", dir=self.config_dir
-                )
-                with os.fdopen(file_descriptor, "w") as temporary_file:
-                    json.dump(data, temporary_file, indent=2)
-                    temporary_file.flush()
-                    os.fsync(temporary_file.fileno())
-                os.replace(temporary_path, self.config_file)
-                temporary_path = None
-            finally:
-                if temporary_path:
-                    try:
-                        os.unlink(temporary_path)
-                    except FileNotFoundError:
-                        pass
-                if sys.platform != "win32":
-                    import fcntl
-
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-
-    def _save_old_format_config(self, config: Config) -> None:
+    def _save_old_format_config(
+        self,
+        config: Config,
+        *,
+        lock_held: bool = False,
+        additional_files: Optional[Mapping[Path, Any]] = None,
+    ) -> Optional[Path]:
         """Save configuration in old single-file format.
 
         Args:
             config: Config object to save
         """
-        # Create backup before saving
-        self._backup_config()
-
-        with open(self.config_file, "w") as f:
-            # Use exclude_none=False to preserve ALL fields including None values
-            # This prevents data loss when fields are explicitly set to None
-            json.dump(config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
-
-        # Clean up old backups (keep only last 7 days)
-        self._cleanup_old_backups(days=7)
+        files: Dict[Path, Any] = {
+            self.config_file: config.model_dump(by_alias=True, exclude_none=False)
+        }
+        if additional_files:
+            files.update(additional_files)
+        return self._persist_json_files(files, lock_held=lock_held)
 
     def load_sessions(self) -> SessionIndex:
         """Load session index from sessions.json.
@@ -454,56 +875,46 @@ class ConfigLoader:
         self.save_config(default_config)
         return default_config
 
-    def _backup_config(self) -> None:
-        """Create a timestamped backup of config.json before saving.
+    def _backup_config(self) -> Optional[Path]:
+        """Compatibility wrapper for callers of the former single-file helper."""
+        return self.create_config_backup()
 
-        Backups are stored as config.json.YYYYMMDD_HHMMSS in the same directory.
+    def _cleanup_old_backups(
+        self, days: Optional[int] = None
+    ) -> None:
+        """Delete managed config backups older than the retention window.
+
+        Only files produced by the centralized config backup naming scheme are
+        removed. Session backups and hierarchical skill backups in nested or
+        separately named locations are left untouched.
         """
-        from datetime import datetime
-        import shutil
-
-        if not self.config_file.exists():
-            return  # No config to backup
-
-        # Create timestamp: YYYYMMDD_HHMMSS
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = self.config_dir / f"config.json.{timestamp}"
-
-        try:
-            shutil.copy2(self.config_file, backup_file)
-        except Exception as e:
-            # Don't fail the save if backup fails, just warn
-            console.print(f"[yellow]⚠[/yellow] [dim]Could not create config backup: {e}[/dim]")
-
-    def _cleanup_old_backups(self, days: int = 7) -> None:
-        """Delete config backups older than specified number of days.
-
-        Args:
-            days: Number of days to keep backups (default: 7)
-        """
-        from datetime import datetime, timedelta
-
-        if not self.config_dir.exists():
+        retention_days = (
+            self.CONFIG_BACKUP_RETENTION_DAYS if days is None else days
+        )
+        if not self.backup_dir.exists():
             return
 
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_timestamp = (
+            datetime.now(timezone.utc) - timedelta(days=retention_days)
+        ).timestamp()
+        managed_prefixes = (
+            "config-",
+            "enterprise-",
+            "organization-",
+            "team-",
+            "backends-jira-",
+        )
 
-        # Find all backup files
-        backup_pattern = "config.json.*"
-        for backup_file in self.config_dir.glob(backup_pattern):
-            # Skip the main config file
-            if backup_file.name == "config.json":
+        for backup_file in self.backup_dir.iterdir():
+            if not backup_file.is_file() or not backup_file.name.endswith(".json"):
                 continue
-
+            if not backup_file.name.startswith(managed_prefixes):
+                continue
             try:
-                # Get file modification time
-                mtime = datetime.fromtimestamp(backup_file.stat().st_mtime)
-
-                # Delete if older than cutoff
-                if mtime < cutoff_date:
+                if backup_file.stat().st_mtime < cutoff_timestamp:
                     backup_file.unlink()
-            except Exception:
-                # Ignore errors when cleaning up backups
+            except OSError:
+                # Cleanup is best effort and must not make a valid save fail.
                 pass
 
     def _is_old_format(self) -> bool:
@@ -511,7 +922,7 @@ class ConfigLoader:
 
         Returns:
             True if old format (single config.json with 'jira' section)
-            False if new format (split into 4 files) or no config exists
+            False if new format (split into 5 managed files) or no config exists
         """
         if not self.config_file.exists():
             return False
@@ -834,7 +1245,7 @@ class ConfigLoader:
             issue_types=issue_types,
         )
 
-    def _load_new_format_config(self) -> Config:
+    def _load_new_format_config(self, lock_held: bool = False) -> Config:
         """Load configuration from 5 separate files (new format).
 
         Returns:
@@ -935,32 +1346,50 @@ class ConfigLoader:
         # Auto-migrate hierarchical_config_source from organization.json to config.json
         # This was moved in v3.0 to enable better bootstrap workflow (#314)
         if org_config.hierarchical_config_source and not user_config.repos.hierarchical_config_source:
-            # Migrate from old location to new location
-            config.repos.hierarchical_config_source = org_config.hierarchical_config_source
-            user_config.repos.hierarchical_config_source = org_config.hierarchical_config_source
+            # Read and update both files under the same lock as the atomic
+            # transaction. Re-read the source while holding the lock so a
+            # concurrent writer cannot be overwritten by a stale migration.
+            migrated_source: Optional[str] = None
+            lock_context = nullcontext() if lock_held else self._configuration_lock()
+            with lock_context:
+                with open(self.config_file, "r", encoding="utf-8") as f:
+                    user_config_data = json.load(f)
 
-            # Save updated user config
-            with open(self.config_file, 'r') as f:
-                user_config_data = json.load(f)
+                org_config_path = self.config_dir / "organization.json"
+                org_data: Dict[str, Any] = {}
+                if org_config_path.exists():
+                    with open(org_config_path, "r", encoding="utf-8") as f:
+                        loaded_org_data = json.load(f)
+                    if isinstance(loaded_org_data, dict):
+                        org_data = loaded_org_data
 
-            # Update the repos.hierarchical_config_source field
-            if 'repos' not in user_config_data:
-                user_config_data['repos'] = {}
-            user_config_data['repos']['hierarchical_config_source'] = org_config.hierarchical_config_source
+                current_user_repos = user_config_data.get("repos", {})
+                current_source = org_data.get("hierarchical_config_source")
+                if (
+                    isinstance(current_user_repos, dict)
+                    and isinstance(current_source, str)
+                    and current_source
+                    and not current_user_repos.get("hierarchical_config_source")
+                ):
+                    current_user_repos["hierarchical_config_source"] = current_source
+                    files_to_update: Dict[Path, Any] = {
+                        self.config_file: user_config_data,
+                    }
+                    org_data.pop("hierarchical_config_source", None)
+                    files_to_update[org_config_path] = org_data
 
-            with open(self.config_file, 'w') as f:
-                json.dump(user_config_data, f, indent=2)
+                    # The migration is a configuration save too: create
+                    # backups for every file it changes and replace both files
+                    # atomically.
+                    self._persist_json_files(files_to_update, lock_held=True)
+                    migrated_source = current_source
 
-            # Clear from organization config
-            org_config_path = self.config_dir / "organization.json"
-            if org_config_path.exists():
-                with open(org_config_path, 'r') as f:
-                    org_data = json.load(f)
-                org_data.pop('hierarchical_config_source', None)
-                with open(org_config_path, 'w') as f:
-                    json.dump(org_data, f, indent=2)
-
-            console.print("[cyan]ℹ Migrated hierarchical_config_source from organization.json to config.json[/cyan]")
+            if migrated_source:
+                config.repos.hierarchical_config_source = migrated_source
+                console.print(
+                    "[cyan]ℹ Migrated hierarchical_config_source from "
+                    "organization.json to config.json[/cyan]"
+                )
 
         # Validate configuration and show warnings (only once per command execution)
         from .validator import ConfigValidator
@@ -974,21 +1403,23 @@ class ConfigLoader:
 
         return config
 
-    def _migrate_to_new_format(self, config: Config) -> None:
-        """Migrate from old single-file format to new 4-file format.
+    def _migrate_to_new_format(
+        self,
+        config: Config,
+        *,
+        lock_held: bool = False,
+        additional_files: Optional[Mapping[Path, Any]] = None,
+    ) -> Optional[Path]:
+        """Migrate from old single-file format to new split format.
 
         Steps:
         1. Create backup of old config.json
-        2. Split config into 4 files
+        2. Split config into the managed configuration files
         3. Display migration summary
 
         Args:
             config: Config object to migrate and save
         """
-        from datetime import datetime
-        import shutil
-        import sys
-
         # Check if in JSON mode - suppress output if so
         show_output = True
 
@@ -1006,31 +1437,41 @@ class ConfigLoader:
 
         if show_output:
             console.print("\n[cyan]━━━ Configuration Migration ━━━[/cyan]")
-            console.print("[yellow]Migrating from old format to new 4-file format...[/yellow]")
+            console.print("[yellow]Migrating from old format to new split format...[/yellow]")
 
-        # STEP 1: Create backup
-        backup_dir = self.config_dir / ".deprecated"
-        backup_dir.mkdir(exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = backup_dir / f"config.json.{timestamp}"
-
-        shutil.copy2(self.config_file, backup_file)
+        # The split-format save creates one centralized snapshot of every
+        # existing file before replacing any of them.
+        backup_file = self._save_new_format_config(
+            config,
+            lock_held=lock_held,
+            additional_files=additional_files,
+        )
         if show_output:
-            console.print(f"[green]✓[/green] Backed up old config to: [dim]{backup_file}[/dim]")
-
-        # STEP 3: Split config into 4 files
-        self._save_new_format_config(config)
+            if backup_file:
+                console.print(
+                    f"[green]✓[/green] Backed up existing config to: [dim]{backup_file}[/dim]"
+                )
+            else:
+                console.print("[green]✓[/green] No existing configuration backup was needed")
 
         if show_output:
-            console.print("[green]✓[/green] Migration complete! Configuration split into 4 files:")
+            console.print("[green]✓[/green] Migration complete! Configuration split into 5 files:")
             console.print(f"  [dim]• {self.config_file} (user preferences)[/dim]")
+            console.print(f"  [dim]• {self.config_dir / 'enterprise.json'} (enterprise settings)[/dim]")
             console.print(f"  [dim]• {self.config_dir / 'organization.json'} (organization settings)[/dim]")
             console.print(f"  [dim]• {self.config_dir / 'team.json'} (team settings)[/dim]")
             console.print(f"  [dim]• {self.config_dir / 'backends' / 'jira.json'} (JIRA backend)[/dim]")
             console.print()
 
-    def _save_new_format_config(self, config: Config) -> None:
+        return backup_file
+
+    def _save_new_format_config(
+        self,
+        config: Config,
+        *,
+        lock_held: bool = False,
+        additional_files: Optional[Mapping[Path, Any]] = None,
+    ) -> Optional[Path]:
         """Save configuration in new 5-file format.
 
         Splits Config object into:
@@ -1091,10 +1532,6 @@ class ConfigLoader:
             agent_models=config.agent_models,
         )
 
-        # Save user config (config.json)
-        with open(self.config_file, "w") as f:
-            json.dump(user_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
-
         # Extract backend config (only API metadata and technical settings)
         backend_config = JiraBackendConfig(
             url=config.jira.url,
@@ -1104,12 +1541,7 @@ class ConfigLoader:
             field_cache_max_age_hours=config.jira.field_cache_max_age_hours,
         )
 
-        # Save backend config (backends/jira.json)
         backends_dir = self.config_dir / "backends"
-        backends_dir.mkdir(exist_ok=True)
-
-        with open(backends_dir / "jira.json", "w") as f:
-            json.dump(backend_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
 
         # Extract enterprise config — preserve existing values, never overwrite with user choices
         enterprise_file = self.config_dir / "enterprise.json"
@@ -1127,10 +1559,6 @@ class ConfigLoader:
             agent_models=existing_enterprise_data.get("agent_models"),
             model_provider=existing_enterprise_data.get("model_provider"),
         )
-
-        # Save enterprise config (enterprise.json)
-        with open(self.config_dir / "enterprise.json", "w") as f:
-            json.dump(enterprise_config_to_save.model_dump(by_alias=True, exclude_none=False), f, indent=2)
 
         # Extract organization config (workflow policies and project settings)
         org_config = OrganizationConfig(
@@ -1163,10 +1591,6 @@ class ConfigLoader:
             except Exception:
                 pass  # Ignore errors, will use default
 
-        # Save organization config (organization.json)
-        with open(self.config_dir / "organization.json", "w") as f:
-            json.dump(org_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
-
         # Extract team config
         team_config = TeamConfig(
             jira_custom_field_defaults=config.jira.custom_field_defaults,
@@ -1188,6 +1612,24 @@ class ConfigLoader:
             except Exception:
                 pass
 
-        # Save team config (team.json)
-        with open(self.config_dir / "team.json", "w") as f:
-            json.dump(team_config.model_dump(by_alias=True, exclude_none=False), f, indent=2)
+        files: Dict[Path, Any] = {
+            self.config_file: user_config.model_dump(
+                by_alias=True, exclude_none=False
+            ),
+            backends_dir / "jira.json": backend_config.model_dump(
+                by_alias=True, exclude_none=False
+            ),
+            self.config_dir / "enterprise.json": enterprise_config_to_save.model_dump(
+                by_alias=True, exclude_none=False
+            ),
+            self.config_dir / "organization.json": org_config.model_dump(
+                by_alias=True, exclude_none=False
+            ),
+            self.config_dir / "team.json": team_config.model_dump(
+                by_alias=True, exclude_none=False
+            ),
+        }
+        if additional_files:
+            files.update(additional_files)
+
+        return self._persist_json_files(files, lock_held=lock_held)

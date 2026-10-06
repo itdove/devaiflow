@@ -6,8 +6,8 @@ DevAIFlow follows the [XDG Base Directory Specification](https://specifications.
 
 | Category | XDG Variable | Default Path | Contents |
 |----------|-------------|--------------|----------|
-| Data | `XDG_DATA_HOME` | `~/.local/share/devaiflow` | Sessions, backups, logs, features |
-| Config | `XDG_CONFIG_HOME` | `~/.config/devaiflow` | config.json, backends/, templates/, skills, context .md files |
+| Data | `XDG_DATA_HOME` | `~/.local/share/devaiflow` | Sessions, session backups, logs, features |
+| Config | `XDG_CONFIG_HOME` | `~/.config/devaiflow` | config files, configuration backups, templates, skills, context .md files |
 | State | `XDG_STATE_HOME` | `~/.local/state/devaiflow` | audit.log, cache, dashboard state, suggestions |
 | Cache | `XDG_CACHE_HOME` | `~/.cache/devaiflow` | Session clones (`clones/`), reproducible cached artifacts |
 
@@ -34,7 +34,7 @@ If you have an existing `~/.daf-sessions` directory and want to adopt XDG layout
 # Create XDG directories
 mkdir -p ~/.local/share/devaiflow ~/.config/devaiflow ~/.local/state/devaiflow ~/.cache/devaiflow
 
-# DATA — sessions, backups, logs, features, mocks
+# DATA — sessions, session backups, logs, features, mocks
 cp -a ~/.daf-sessions/sessions ~/.daf-sessions/sessions.json ~/.local/share/devaiflow/ 2>/dev/null
 cp -a ~/.daf-sessions/backups ~/.daf-sessions/logs ~/.daf-sessions/mocks ~/.local/share/devaiflow/ 2>/dev/null
 cp -a ~/.daf-sessions/features ~/.daf-sessions/features.json ~/.local/share/devaiflow/ 2>/dev/null
@@ -46,6 +46,9 @@ cp -a ~/.daf-sessions/backends ~/.daf-sessions/templates ~/.daf-sessions/templat
 cp -a ~/.daf-sessions/.claude ~/.config/devaiflow/ 2>/dev/null
 cp -a ~/.daf-sessions/ENTERPRISE.md ~/.daf-sessions/ORGANIZATION.md ~/.config/devaiflow/ 2>/dev/null
 cp -a ~/.daf-sessions/TEAM.md ~/.daf-sessions/USER.md ~/.config/devaiflow/ 2>/dev/null
+# Legacy backups may contain both session and configuration backups; retain
+# them in both new roots during migration.
+cp -a ~/.daf-sessions/backups ~/.config/devaiflow/ 2>/dev/null
 
 # STATE — audit, cache, suggestions, dashboard
 cp -a ~/.daf-sessions/audit.log ~/.local/state/devaiflow/ 2>/dev/null
@@ -94,8 +97,8 @@ Four functions in `devflow.utils.paths`:
 
 | Function | Returns | Used for |
 |----------|---------|----------|
-| `get_cs_home()` | Data directory | Sessions, backups, logs |
-| `get_cs_config_home()` | Config directory | Configuration files, skills, templates |
+| `get_cs_home()` | Data directory | Sessions, session backups, logs |
+| `get_cs_config_home()` | Config directory | Configuration files, configuration backups, skills, templates |
 | `get_cs_state_home()` | State directory | Audit logs, caches, runtime state |
 | `get_cs_cache_home()` | Cache directory | Session clones, reproducible artifacts |
 

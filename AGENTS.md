@@ -1801,6 +1801,10 @@ class Session(BaseModel):
    - Keeps same-project ambiguity fail-closed while excluding sessions from other repositories
    - Added regression coverage for global lists, cross-project concurrency, and reopen/resume
    - Focused lifecycle tests and the isolated integration suite pass
+- ✓ Transactional configuration persistence and centralized backups (itdove/devaiflow#622)
+   - Uses atomic, fsynced writes, rollback, locking, and crash-journal recovery for legacy and split configuration
+   - Shares collision-resistant seven-day configuration backups across CLI, TUI, web, import, initialization, migration, and hierarchy sync paths
+   - Added regression coverage and documentation for retention, recovery, and safe configuration saves
 
 ## Release Management
 

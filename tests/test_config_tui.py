@@ -417,6 +417,10 @@ def test_config_tui_create_backup(mock_config_loader, mock_config, tmp_path):
 
     # Create a dummy config file
     mock_loader_instance.config_file.write_text('{"test": "data"}')
+    backup_path = tmp_path / "backups" / "config-test.json"
+    backup_path.parent.mkdir()
+    backup_path.write_text('{"test": "data"}')
+    mock_loader_instance.create_config_backup.return_value = backup_path
 
     tui = ConfigTUI()
 
@@ -427,6 +431,7 @@ def test_config_tui_create_backup(mock_config_loader, mock_config, tmp_path):
     assert backup_path.parent == tmp_path / "backups"
     assert backup_path.name.startswith("config-")
     assert backup_path.name.endswith(".json")
+    mock_loader_instance.create_config_backup.assert_called_once_with()
 
 
 # ============================================================================

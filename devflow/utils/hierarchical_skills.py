@@ -9,7 +9,7 @@ to guarantee load order.
 """
 
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from rich.console import Console
 from enum import Enum
 import re
@@ -958,6 +958,7 @@ def install_hierarchical_skills(
             if not quiet:
                 console.print("\n[bold cyan]Syncing JSON configuration files...[/bold cyan]")
 
+            pending_json_files: Dict[Path, Any] = {}
             for json_file in json_configs:
                 try:
                     # Download JSON config
@@ -979,18 +980,9 @@ def install_hierarchical_skills(
                                 console.print(f"[yellow]Would update:[/yellow] {json_file}")
                             changed.append(json_file)
                         else:
-                            # Create backup before overwriting
-                            if target_path.exists():
-                                backup_path = create_backup(target_path)
-                                if not quiet and backup_path:
-                                    console.print(f"[dim]Backed up to: {backup_path.name}[/dim]")
-
-                            # Write updated JSON
-                            target_path.write_text(json_str, encoding='utf-8')
-
-                            if not quiet:
-                                console.print(f"[green]✓[/green] Updated {json_file}")
-                            changed.append(json_file)
+                            # Defer all changed JSON files to one centralized,
+                            # transactional save after the download pass.
+                            pending_json_files[target_path] = json_data
                     else:
                         if not quiet:
                             console.print(f"[dim]{json_file} is up-to-date[/dim]")
@@ -1000,6 +992,29 @@ def install_hierarchical_skills(
                     if not quiet:
                         console.print(f"[red]✗[/red] Failed to sync {json_file}: {e}")
                     failed.append(json_file)
+
+            if pending_json_files:
+                try:
+                    config_loader = ConfigLoader(config_dir=cs_home)
+                    backup_path = config_loader.save_json_files(pending_json_files)
+                    if not quiet and backup_path:
+                        console.print(
+                            f"[dim]Configuration backup created: {backup_path.name}[/dim]"
+                        )
+                    for json_file in pending_json_files:
+                        file_name = json_file.relative_to(cs_home).as_posix()
+                        if not quiet:
+                            console.print(f"[green]✓[/green] Updated {file_name}")
+                        changed.append(file_name)
+                except Exception as e:
+                    if not quiet:
+                        console.print(
+                            f"[red]✗[/red] Failed to save downloaded configuration: {e}"
+                        )
+                    failed.extend(
+                        path.relative_to(cs_home).as_posix()
+                        for path in pending_json_files
+                    )
 
         # ============================================================
         # STEP 2: Download context files (.md)

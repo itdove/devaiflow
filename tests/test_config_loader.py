@@ -1,12 +1,25 @@
 """Tests for ConfigLoader."""
 
 import json
+import os
+import threading
+import time
 from pathlib import Path
 
 import pytest
 
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Config, SessionIndex, Session
+
+
+def _create_split_config(loader: ConfigLoader) -> Config:
+    """Create a valid split-format configuration for persistence tests."""
+    config = loader.create_default_config()
+    loader.save_config(config)
+    assert all(path.exists() for path in loader._configuration_file_paths())
+    for backup in loader.backup_dir.glob("*.json"):
+        backup.unlink()
+    return config
 
 
 def test_config_loader_initialization(temp_daf_home):
@@ -930,6 +943,187 @@ def test_agent_backend_enterprise_overrides_user(temp_daf_home):
     config = loader.load_config()
     assert config is not None
     assert config.agent_backend == "claude"
+
+
+def test_split_save_backs_up_every_existing_configuration_file(temp_daf_home):
+    """A split save snapshots each file before replacing any file."""
+    loader = ConfigLoader()
+    config = _create_split_config(loader)
+
+    original_contents = {}
+    for path in loader._configuration_file_paths():
+        content = {"sentinel": path.relative_to(loader.config_dir).as_posix()}
+        path.write_text(json.dumps(content), encoding="utf-8")
+        original_contents[path] = content
+
+    backup_path = loader.save_config(config)
+
+    assert backup_path is not None
+    assert backup_path.name.startswith("config-")
+    backups = list(loader.backup_dir.glob("*.json"))
+    assert len(backups) == len(loader._configuration_file_paths())
+
+    for path, content in original_contents.items():
+        relative = path.relative_to(loader.config_dir)
+        stem = "-".join(relative.with_suffix("").parts)
+        matching = list(loader.backup_dir.glob(f"{stem}-*.json"))
+        assert len(matching) == 1
+        assert json.loads(matching[0].read_text(encoding="utf-8")) == content
+
+
+def test_config_backup_names_are_unique_for_same_second_saves(temp_daf_home):
+    """Multiple saves in one second must not overwrite their backups."""
+    loader = ConfigLoader()
+    config = _create_split_config(loader)
+
+    loader.save_config(config)
+    loader.save_config(config)
+
+    config_backups = list(loader.backup_dir.glob("config-*.json"))
+    assert len(config_backups) == 2
+    assert len({path.name for path in config_backups}) == 2
+
+
+def test_failed_split_save_restores_the_complete_previous_configuration(
+    temp_daf_home, monkeypatch
+):
+    """A failure midway through a split save rolls every file back."""
+    loader = ConfigLoader()
+    config = _create_split_config(loader)
+    before = {
+        path: path.read_bytes() for path in loader._configuration_file_paths()
+    }
+
+    original_write = loader._atomic_write_json
+    write_count = 0
+
+    def fail_on_second_file_write(path, data):
+        nonlocal write_count
+        write_count += 1
+        if write_count == 3:
+            raise OSError("injected configuration write failure")
+        original_write(path, data)
+
+    monkeypatch.setattr(loader, "_atomic_write_json", fail_on_second_file_write)
+    config.repos.last_used_workspace = "secondary"
+
+    with pytest.raises(OSError, match="injected configuration write failure"):
+        loader.save_config(config)
+
+    assert write_count == 3
+    for path, content in before.items():
+        assert path.read_bytes() == content
+    assert list(loader.config_dir.glob(".*.tmp")) == []
+    assert len(list(loader.backup_dir.glob("*.json"))) == 5
+    assert not loader._config_transaction_file.exists()
+
+
+def test_next_loader_recovers_after_transaction_completion_is_interrupted(
+    temp_daf_home, monkeypatch
+):
+    """A durable journal restores the prior snapshot after a process interruption."""
+    loader = ConfigLoader()
+    config = _create_split_config(loader)
+    before = {
+        path: path.read_bytes() for path in loader._configuration_file_paths()
+    }
+
+    def leave_journal_in_place():
+        raise OSError("injected interruption after replacement")
+
+    monkeypatch.setattr(loader, "_remove_transaction_journal", leave_journal_in_place)
+    config.repos.last_used_workspace = "secondary"
+    with pytest.raises(OSError, match="injected interruption"):
+        loader.save_config(config)
+
+    recovered_loader = ConfigLoader(config_dir=loader.config_dir)
+    for path, content in before.items():
+        assert path.read_bytes() == content
+    assert not recovered_loader._config_transaction_file.exists()
+
+
+def test_targeted_preference_update_uses_central_backup_and_atomic_write(temp_daf_home):
+    """Targeted user-config updates use the same safe persistence path."""
+    loader = ConfigLoader()
+    _create_split_config(loader)
+    original = loader.config_file.read_bytes()
+
+    loader.update_last_used_workspace("secondary")
+
+    config_backups = list(loader.backup_dir.glob("config-*.json"))
+    assert len(config_backups) == 1
+    assert config_backups[0].read_bytes() == original
+    updated = json.loads(loader.config_file.read_text(encoding="utf-8"))
+    assert updated["repos"]["last_used_workspace"] == "secondary"
+
+
+def test_split_migration_uses_central_backup_directory(temp_daf_home):
+    """Legacy-to-split migration keeps its recoverable copy with other backups."""
+    loader = ConfigLoader()
+    config = loader.create_default_config()
+    legacy_contents = loader.config_file.read_bytes()
+
+    loader.save_config(config)
+
+    config_backups = list(loader.backup_dir.glob("config-*.json"))
+    assert len(config_backups) == 1
+    assert config_backups[0].read_bytes() == legacy_contents
+    assert not (loader.config_dir / ".deprecated").exists()
+
+
+def test_configuration_lock_serializes_concurrent_writers(temp_daf_home):
+    """The config lock prevents a second writer entering a save transaction."""
+    loader = ConfigLoader()
+    entered = threading.Event()
+    waiter_started = threading.Event()
+    release = threading.Event()
+    acquired = threading.Event()
+
+    def hold_lock():
+        with loader._configuration_lock():
+            entered.set()
+            release.wait(timeout=5)
+
+    def wait_for_lock():
+        waiter_started.set()
+        with loader._configuration_lock():
+            acquired.set()
+
+    holder = threading.Thread(target=hold_lock)
+    waiter = threading.Thread(target=wait_for_lock)
+    holder.start()
+    assert entered.wait(timeout=5)
+    waiter.start()
+    assert waiter_started.wait(timeout=5)
+    time.sleep(0.05)
+    assert not acquired.is_set()
+    release.set()
+    assert acquired.wait(timeout=5)
+    holder.join(timeout=5)
+    waiter.join(timeout=5)
+
+
+def test_backup_retention_uses_backup_creation_time(temp_daf_home):
+    """An old source file still receives a fresh retained backup."""
+    loader = ConfigLoader()
+    config = _create_split_config(loader)
+    old_timestamp = time.time() - (loader.CONFIG_BACKUP_RETENTION_DAYS + 1) * 86400
+    os.utime(loader.config_file, (old_timestamp, old_timestamp))
+
+    loader.save_config(config)
+
+    assert len(list(loader.backup_dir.glob("config-*.json"))) == 1
+
+
+def test_config_backup_cleanup_has_explicit_retention_behavior(temp_daf_home):
+    """Managed backups can be cleaned using the documented retention window."""
+    loader = ConfigLoader()
+    config = _create_split_config(loader)
+    loader.save_config(config)
+
+    assert list(loader.backup_dir.glob("*.json"))
+    loader._cleanup_old_backups(days=0)
+    assert list(loader.backup_dir.glob("*.json")) == []
 
 
 def test_agent_backend_defaults_to_claude(temp_daf_home):
