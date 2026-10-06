@@ -605,7 +605,7 @@ class ReleaseManager:
             subprocess.TimeoutExpired: If git command times out
             FileNotFoundError: If git is not installed
         """
-        analysis = {
+        analysis: Dict[str, List[str]] = {
             'breaking': [],
             'features': [],
             'fixes': [],
@@ -910,7 +910,7 @@ class ReleaseManager:
         Returns:
             Formatted changelog content string following Keep a Changelog format
         """
-        categories = {
+        categories: Dict[str, List[str]] = {
             'Added': [],
             'Changed': [],
             'Fixed': [],
@@ -1289,6 +1289,8 @@ class ReleaseManager:
         try:
             # Save current branch to return to it later
             current_branch = self.get_current_branch()
+            if current_branch is None:
+                return False, "Could not determine the current git branch"
 
             # Checkout default branch
             success, msg = self.checkout_branch(self.default_branch)

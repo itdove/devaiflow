@@ -7,7 +7,7 @@ Uses persistent storage via MockDataStore to maintain tickets across
 command invocations during integration testing.
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from devflow.issue_tracker.interface import IssueTrackerClient
 from devflow.jira.exceptions import JiraNotFoundError
@@ -131,7 +131,7 @@ class MockIssueTrackerClient(IssueTrackerClient):
         ticket_num = len(all_tickets) + 1
         key = f"{project}-{ticket_num}"
 
-        ticket = {
+        ticket: Dict[str, Any] = {
             "key": key,
             "summary": summary,
             "description": description,

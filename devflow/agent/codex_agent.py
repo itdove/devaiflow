@@ -207,8 +207,10 @@ class CodexAgent(AgentInterface):
             model_name = model_override or model_provider_profile.get("model_name")
             if model_name:
                 cmd.extend(["--model", model_name])
-        elif model_override or settings["model"]:
-            cmd.extend(["--model", model_override or settings["model"]])
+        else:
+            effective_model = model_override or settings["model"]
+            if effective_model:
+                cmd.extend(["--model", effective_model])
 
         effective_reasoning = reasoning_effort or settings["reasoning_effort"]
         if effective_reasoning:
@@ -648,7 +650,11 @@ class CodexAgent(AgentInterface):
             if reasoning:
                 cmd.extend(["-c", f'model_reasoning_effort="{reasoning}"'])
             cmd.append(prompt)
-            run_kwargs = {"capture_output": True, "text": True, "timeout": timeout}
+            run_kwargs: Dict[str, Any] = {
+                "capture_output": True,
+                "text": True,
+                "timeout": timeout,
+            }
             if model_provider_profile:
                 run_kwargs["env"] = build_env_from_profile(model_provider_profile)
             result = subprocess.run(cmd, **run_kwargs)

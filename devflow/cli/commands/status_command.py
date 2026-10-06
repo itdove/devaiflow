@@ -1,6 +1,6 @@
 """Implementation of 'daf status' command."""
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -60,7 +60,7 @@ def show_status(output_json: bool = False) -> None:
 
     # Group sessions by configured field (e.g., sprint, iteration, release)
     sessions_by_group: Dict[str, List[Session]] = {}
-    ungrouped_sessions = []
+    ungrouped_sessions: List[Session] = []
 
     # Only group if a grouping field is configured
     if grouping_field:
@@ -108,7 +108,7 @@ def show_status(output_json: bool = False) -> None:
         # Build groups data (generic - works with any field)
         groups_data = {}
         for group_name, group_sessions in sessions_by_group.items():
-            group_data = {
+            group_data: Dict[str, Any] = {
                 "sessions": serialize_sessions(group_sessions)
             }
 
@@ -161,7 +161,12 @@ def show_status(output_json: bool = False) -> None:
     # Display grouped status (by sprint, iteration, release, etc.)
     if sessions_by_group:
         for group_name, group_sessions in sorted(sessions_by_group.items(), reverse=True):
-            _display_group_status(group_name, group_sessions, grouping_field, totals_field)
+            _display_group_status(
+                group_name,
+                group_sessions,
+                grouping_field or "",
+                totals_field,
+            )
             console.print()
 
     # Display ungrouped sessions

@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from devflow.agent.factory import resolve_agent_backend
 from devflow.archive.base import ArchiveManagerBase
 from devflow.config.loader import ConfigLoader
-from devflow.config.models import Session
+from devflow.config.models import Session, SessionIndex
 from devflow.utils.paths import get_cs_home
 
 
@@ -121,11 +121,6 @@ class ExportManager(ArchiveManagerBase):
                             remote_url = GitUtils.get_remote_url(Path(conv.project_path))
                             if remote_url:
                                 conv.remote_url = remote_url
-            # Fallback: Support legacy single-conversation sessions
-            elif session.project_path and not hasattr(session, 'remote_url'):
-                remote_url = GitUtils.get_remote_url(Path(session.project_path))
-                if remote_url:
-                    session.remote_url = remote_url
 
         # Create export data (always includes conversations for team handoff)
         export_data = self._create_export_data(sessions_to_export)
@@ -167,17 +162,8 @@ class ExportManager(ArchiveManagerBase):
                                     skipped_conversations.append(
                                         f"{session_name} ({working_dir})"
                                     )
-                # Fallback: Support legacy single-conversation sessions
-                elif session.ai_agent_session_id:
-                    jsonl_path = self._find_conversation_file(
-                        session.ai_agent_session_id,
-                        agent_backend=agent_backend,
-                    )
-                    if jsonl_path and jsonl_path.exists():
-                        arcname = f"conversations/{session_name}-{session.ai_agent_session_id}.jsonl"
-                        tar.add(jsonl_path, arcname=arcname)
-                    elif not self._is_conversation_backupable(agent_backend):
-                        skipped_conversations.append(session_name)
+                elif not self._is_conversation_backupable(agent_backend):
+                    skipped_conversations.append(session_name)
 
             if skipped_conversations:
                 self._conversation_warnings.append(
@@ -555,7 +541,7 @@ class ExportManager(ArchiveManagerBase):
                         conv.repo_name = project_path.name
 
     def _check_missing_repositories(
-        self, sessions_index: "SessionsIndex", workspace: Optional[str]
+        self, sessions_index: SessionIndex, workspace: Optional[str]
     ) -> List[Dict]:
         """Check which repositories are missing from workspace.
 

@@ -44,7 +44,7 @@ class MockClaudeCode:
         session_id = str(uuid.uuid4())
 
         # Create session data
-        session_data = {
+        session_data: Dict[str, Any] = {
             "session_id": session_id,
             "project_path": project_path,
             "created_at": datetime.now().isoformat(),

@@ -86,7 +86,7 @@ def log_model_provider_usage(
     _ensure_audit_log_handler()
 
     # Build structured log entry
-    log_entry = {
+    log_entry: Dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "event_type": event_type,
         "category": "model_provider",

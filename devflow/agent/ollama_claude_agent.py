@@ -61,11 +61,11 @@ class OllamaClaudeAgent(AgentInterface):
     def launch_session(
         self,
         project_path: str,
+        env: Optional[Dict[str, str]] = None,
         model_provider_profile: Optional[Dict[str, Any]] = None,
         session_name: Optional[str] = None,
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with a local model.
 
@@ -129,12 +129,12 @@ class OllamaClaudeAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
-        session_name: Optional[str] = None,
-        profile_name: Optional[str] = None,
-        enforcement_source: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        session_name: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        enforcement_source: Optional[str] = None,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch Claude Code via Ollama with initial prompt (for new sessions).
@@ -218,8 +218,8 @@ class OllamaClaudeAgent(AgentInterface):
         self,
         session_id: str,
         project_path: str,
-        model_provider_profile: Optional[Dict[str, Any]] = None,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> subprocess.Popen:
         """Resume an existing Claude Code session via Ollama.
 

@@ -461,8 +461,8 @@ class MarkdownExporter:
                     lines.append(f"  - Cache Efficiency: {cache_efficiency:.1f}%")
 
             # Estimated cost (if model provider profile configured)
-            if active_conv and active_conv.model_provider_profile:
-                profile = active_conv.model_provider_profile
+            profile = getattr(active_conv, "model_provider_profile", None)
+            if isinstance(profile, dict):
                 input_cost = profile.get("cost_per_million_input_tokens")
                 output_cost = profile.get("cost_per_million_output_tokens")
 

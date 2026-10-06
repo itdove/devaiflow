@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
 
 from pydantic import ValidationError
 from rich.console import Console
@@ -10,6 +10,17 @@ from rich.console import Console
 from devflow.utils.paths import get_cs_home, get_cs_config_home
 
 from .models import Config, SessionIndex
+
+if TYPE_CHECKING:
+    from .models import (
+        EnterpriseConfig,
+        GitHubConfig,
+        JiraBackendConfig,
+        JiraConfig,
+        OrganizationConfig,
+        TeamConfig,
+        UserConfig,
+    )
 
 console = Console(stderr=True)
 
@@ -409,15 +420,11 @@ class ConfigLoader:
                 url="https://jira.example.com",
                 project=None,
                 transitions={
-                    "on_start": JiraTransitionConfig(
-                        from_status=["New", "To Do"],
-                        to="In Progress",
-                        prompt=False,
+                    "on_start": JiraTransitionConfig.model_validate(
+                        {"from": ["New", "To Do"], "to": "In Progress", "prompt": False}
                     ),
-                    "on_complete": JiraTransitionConfig(
-                        from_status=["In Progress"],
-                        to="",
-                        prompt=True,
+                    "on_complete": JiraTransitionConfig.model_validate(
+                        {"from": ["In Progress"], "to": "", "prompt": True}
                     ),
                 },
                 filters={
@@ -518,7 +525,7 @@ class ConfigLoader:
             # If we can't read the file, assume old format for safety
             return True
 
-    def _load_backend_config(self) -> Optional["JiraBackendConfig"]:
+    def _load_backend_config(self) -> "JiraBackendConfig":
         """Load JIRA backend configuration from backends/jira.json.
 
         Returns:
@@ -548,7 +555,7 @@ class ConfigLoader:
                 url="https://jira.example.com",
             )
 
-    def _load_enterprise_config(self) -> Optional["EnterpriseConfig"]:
+    def _load_enterprise_config(self) -> "EnterpriseConfig":
         """Load enterprise configuration from enterprise.json.
 
         Returns:
@@ -573,7 +580,7 @@ class ConfigLoader:
                 console.print("[dim]  Using default enterprise configuration[/dim]")
             return EnterpriseConfig()
 
-    def _load_organization_config(self) -> Optional["OrganizationConfig"]:
+    def _load_organization_config(self) -> "OrganizationConfig":
         """Load organization configuration from organization.json.
 
         Returns:
@@ -587,15 +594,11 @@ class ConfigLoader:
             # Return default organization config with default workflow transitions
             return OrganizationConfig(
                 transitions={
-                    "on_start": JiraTransitionConfig(
-                        from_status=["New", "To Do"],
-                        to="In Progress",
-                        prompt=False,
+                    "on_start": JiraTransitionConfig.model_validate(
+                        {"from": ["New", "To Do"], "to": "In Progress", "prompt": False}
                     ),
-                    "on_complete": JiraTransitionConfig(
-                        from_status=["In Progress"],
-                        to="",
-                        prompt=True,
+                    "on_complete": JiraTransitionConfig.model_validate(
+                        {"from": ["In Progress"], "to": "", "prompt": True}
                     ),
                 },
             )
@@ -612,7 +615,7 @@ class ConfigLoader:
             return OrganizationConfig()
 
 
-    def _load_team_config(self) -> Optional["TeamConfig"]:
+    def _load_team_config(self) -> "TeamConfig":
         """Load team configuration from team.json.
 
         Returns:
@@ -637,18 +640,25 @@ class ConfigLoader:
                 console.print("[dim]  Using default team configuration[/dim]")
             return TeamConfig()
 
-    def _load_user_config(self) -> Optional["UserConfig"]:
+    def _load_user_config(self) -> "UserConfig":
         """Load user configuration from config.json (new format).
 
         Returns:
             UserConfig object with defaults if file doesn't exist
         """
-        from .models import UserConfig, RepoConfig
+        from .models import UserConfig, RepoConfig, WorkspaceDefinition
 
         if not self.config_file.exists():
             # Return default user config
             return UserConfig(
-                repos=RepoConfig(workspace=str(Path.home() / "development"))
+                repos=RepoConfig(
+                    workspaces=[
+                        WorkspaceDefinition(
+                            name="default",
+                            path=str(Path.home() / "development"),
+                        )
+                    ]
+                )
             )
 
         try:
@@ -661,7 +671,14 @@ class ConfigLoader:
                 console.print(f"[yellow]⚠[/yellow] Failed to load user config: {e}")
                 console.print("[dim]  Using default user configuration[/dim]")
             return UserConfig(
-                repos=RepoConfig(workspace=str(Path.home() / "development"))
+                repos=RepoConfig(
+                    workspaces=[
+                        WorkspaceDefinition(
+                            name="default",
+                            path=str(Path.home() / "development"),
+                        )
+                    ]
+                )
             )
 
     def _deep_merge_dicts(self, base: Any, override: Any) -> Any:
@@ -817,7 +834,7 @@ class ConfigLoader:
             issue_types=issue_types,
         )
 
-    def _load_new_format_config(self) -> Optional[Config]:
+    def _load_new_format_config(self) -> Config:
         """Load configuration from 5 separate files (new format).
 
         Returns:
@@ -879,7 +896,7 @@ class ConfigLoader:
         # Merge per-backend model settings, allowing higher levels to override
         # individual values while preserving unspecified lower-level values.
         from .models import AgentModelConfig
-        agent_models = {}
+        agent_models: Dict[str, AgentModelConfig] = {}
         for source in (
             user_config.agent_models,
             team_config.agent_models or {},
@@ -1032,6 +1049,7 @@ class ConfigLoader:
             OrganizationConfig,
             TeamConfig,
             JiraBackendConfig,
+            ModelProviderConfig,
         )
 
         # Check if model_provider is enforced by enterprise, organization, or team
@@ -1039,14 +1057,14 @@ class ConfigLoader:
         enterprise_config = self._load_enterprise_config()
         organization_config = self._load_organization_config()
         team_config = self._load_team_config()
-        user_model_provider = config.model_provider
+        user_model_provider: Optional[ModelProviderConfig] = config.model_provider
         if enterprise_config.model_provider or organization_config.model_provider or team_config.model_provider:
             # Model provider is enforced - don't save user override
             user_model_provider = None
 
         # Check if agent_backend is enforced by enterprise or team
         # If enforced, don't save it in user config (prevent user override)
-        user_agent_backend = config.agent_backend
+        user_agent_backend: Optional[str] = config.agent_backend
         if enterprise_config.agent_backend or team_config.agent_backend:
             # agent_backend is enforced - don't save user override
             user_agent_backend = None

@@ -8,7 +8,7 @@ import sys
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional, Set
 
 from rich.console import Console
 from rich.prompt import Confirm
@@ -31,6 +31,7 @@ from devflow.cli.utils import (
 )
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import WorkspaceDefinition
+from devflow.agent.interface import AgentInterface
 from devflow.git.utils import GitUtils
 from devflow.jira import transition_on_start as jira_transition_on_start
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
@@ -241,6 +242,8 @@ def prompt_session_selection(session_manager: SessionManager, status_filter: Opt
             console.print()
             return None
 
+    return None
+
 
 def _extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[str]) -> Optional[str]:
     """Deprecated: use extract_repository_from_issue_key from devflow.cli.utils."""
@@ -321,7 +324,7 @@ def open_session(
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
-    config = config_loader.load_config()
+    config: Any = config_loader.load_config()
 
     # Get session using common utility (handles multi-session selection)
     session = get_session_with_prompt(session_manager, identifier, error_if_not_found=False)
@@ -401,6 +404,9 @@ def open_session(
     workspace_path = None
     if selected_workspace_name:
         workspace_path = get_workspace_path(config, selected_workspace_name)
+        if workspace_path is None:
+            console.print(f"[red]Workspace '{selected_workspace_name}' has no configured path.[/red]")
+            return
 
         # Auto-upgrade skills and commands for this workspace if needed
         from devflow.utils.workspace_utils import ensure_workspace_skills_and_commands
@@ -463,6 +469,9 @@ def open_session(
             if selected_workspace_name:
 
                 workspace_path = get_workspace_path(config, selected_workspace_name)
+                if workspace_path is None:
+                    console.print(f"[red]Workspace '{selected_workspace_name}' has no configured path.[/red]")
+                    return
 
     # Check if session is part of a feature orchestration
     # Warn user and confirm before continuing (unless called from feature run/resume)
@@ -481,10 +490,16 @@ def open_session(
         # Delegate to add_project_to_session function
         from devflow.cli.commands.session_project_command import add_project_to_session
 
+        if selected_workspace_name is None:
+            console.print("[red]A workspace is required when adding projects.[/red]")
+            return
         add_project_to_session(session.name, project_list, selected_workspace_name, branch=None)
 
         # Reload session after adding projects
         session = session_manager.get_session(session.name)
+        if session is None:
+            console.print("[red]Session disappeared while adding projects.[/red]")
+            return
 
         console.print(f"\n[bold]To work on added projects, run:[/bold]")
         console.print(f"  daf open {session.name} --path <project-name>\n")
@@ -514,6 +529,10 @@ def open_session(
             console.print(f"[dim]This flag requires an existing conversation in the session[/dim]")
             return
 
+        if not active_conv.project_path or not active_conv.branch:
+            console.print("[red]Active conversation is missing project or branch information.[/red]")
+            return
+
         # Get the working directory and project path
         working_dir = session.working_directory
         if not working_dir:
@@ -527,7 +546,7 @@ def open_session(
             working_dir=working_dir,
             project_path=active_conv.project_path,
             branch=active_conv.branch,
-            base_branch=active_conv.base_branch,
+            base_branch=active_conv.base_branch or "main",
             remote_url=active_conv.remote_url,
             workspace=workspace_path,
         )
@@ -550,7 +569,7 @@ def open_session(
     # Check if this is a multi-project session (one conversation, multiple projects)
     active_conv = session.active_conversation
     is_multi_project_session = active_conv and active_conv.is_multi_project
-    if is_multi_project_session:
+    if active_conv and is_multi_project_session:
         # Multi-project session: skip conversation selection
         # The single conversation already has access to all projects
         console.print(f"[dim]Multi-project session detected: {len(active_conv.get_all_repo_names())} projects[/dim]")
@@ -662,8 +681,8 @@ def open_session(
         # Check if the session exists using the agent-aware check
         # This handles both Claude (.jsonl file) and OpenCode (database query) correctly
         from devflow.agent import create_agent_client
-        agent = create_agent_client(effective_agent_backend)
-        agent_name = agent.get_agent_name()
+        agent_client = create_agent_client(effective_agent_backend)
+        agent_name = agent_client.get_agent_name()
 
         # Agent sessions are scoped to the project directory where the agent
         # was launched. Temporary clones must therefore be checked at their
@@ -671,7 +690,7 @@ def open_session(
         check_path = active_conv.temp_directory or active_conv.project_path
         console.print(f"[dim]Checking for existing {agent_name} session...[/dim]")
 
-        conversation_exists = agent.session_exists(active_conv.ai_agent_session_id, check_path)
+        conversation_exists = agent_client.session_exists(active_conv.ai_agent_session_id, check_path)
         console.print(f"[dim]  {'found' if conversation_exists else 'not found'}[/dim]")
 
         if not conversation_exists:
@@ -742,10 +761,10 @@ def open_session(
         # If not, we need to treat this as a first launch
         if not is_first_launch and active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
             from devflow.agent import create_agent_client
-            agent = create_agent_client(effective_agent_backend)
-            agent_name = agent.get_agent_name()
+            agent_client = create_agent_client(effective_agent_backend)
+            agent_name = agent_client.get_agent_name()
 
-            conversation_exists = agent.session_exists(active_conv.ai_agent_session_id, active_conv.project_path)
+            conversation_exists = agent_client.session_exists(active_conv.ai_agent_session_id, active_conv.project_path)
 
             if not conversation_exists:
                 # Session was not restored - this means user quit the session early
@@ -778,7 +797,7 @@ def open_session(
             remote_url = active_conv.remote_url or GitUtils.get_remote_url(
                 Path(active_conv.original_project_path)
             )
-            restored = bool(remote_url) and clone_repository_at_path(remote_url, recorded_path)
+            restored = bool(remote_url) and clone_repository_at_path(remote_url, recorded_path) if remote_url else False
             if restored:
                 restored_path = str(recorded_path.resolve())
                 _checkout_default_branch(restored_path)
@@ -833,7 +852,7 @@ def open_session(
                 # Pattern 1: Multi-conversation (separate conversations per repo)
                 # Pattern 2: Single multi-project conversation (one conversation, multiple projects)
                 for working_dir, conversation in session.conversations.items():
-                    conv_context = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+                    conv_context = conversation.active_session
 
                     if not conv_context:
                         continue
@@ -928,10 +947,13 @@ def open_session(
 
         # Handle return value: could be tuple (branch, source_branch) or just branch name
         source_branch_for_base = None
+        branch: Optional[str]
         if isinstance(branch_result, tuple):
             branch, source_branch_for_base = branch_result
-        else:
+        elif isinstance(branch_result, str):
             branch = branch_result
+        else:
+            branch = None
 
         # A skipped branch creation still needs the current branch persisted.
         if branch is None and active_conv.project_path:
@@ -1093,9 +1115,11 @@ def open_session(
     _agent_executable = get_agent_metadata(effective_agent_backend).get(
         "cli_command", effective_agent_backend
     )
-    agent = None
-    model_provider_profile = None
-    env = None
+    from devflow.agent import create_agent_client
+
+    agent_client = create_agent_client(effective_agent_backend)
+    model_provider_profile: Optional[Dict[str, Any]] = None
+    env: Dict[str, str] = {}
     launch_phase = "launch" if is_first_launch else "resume"
 
     try:
@@ -1109,7 +1133,7 @@ def open_session(
         ) if config else None
         profile_model_id = get_model_name_from_profile(model_provider_profile, command="open")
         if model is not None:
-            effective_model_id = model
+            effective_model_id: Optional[str] = model
         elif model_profile is not None:
             # An explicit profile is an intentional selection, so use its
             # model instead of carrying an override from the previous profile.
@@ -1218,9 +1242,6 @@ def open_session(
             else:
                 initial_prompt = "Read your daf-workflow skill and follow the Session Initialization instructions."
 
-            # Get agent backend from config
-            from devflow.agent import create_agent_client
-
             # Get workspace path for skills discovery
             # AAP-XXXXX: Use selected workspace instead of default workspace
             workspace_path_for_cmd = None
@@ -1241,13 +1262,12 @@ def open_session(
 
             # Use effective agent backend (session-stored > config > "claude")
             agent_backend = effective_agent_backend
-            agent = create_agent_client(agent_backend)
 
             # Warn if agent does not support permission prompts
-            if not agent.supports_permission_prompts():
+            if not agent_client.supports_permission_prompts():
                 console.print(
                     "\n[bold yellow]⚠  Warning:[/bold yellow] [yellow]"
-                    f"{agent.get_agent_name()} does not support permission prompts. "
+                    f"{agent_client.get_agent_name()} does not support permission prompts. "
                     "Code may be modified without confirmation.[/yellow]"
                 )
 
@@ -1261,7 +1281,7 @@ def open_session(
             try:
                 if active_conv and launch_dir:
                     launch_and_capture(
-                        agent, agent_backend, launch_dir, active_conv,
+                        agent_client, agent_backend, launch_dir, active_conv,
                         initial_prompt=initial_prompt,
                         session_id=active_conv.ai_agent_session_id,
                         model_provider_profile=model_provider_profile,
@@ -1315,18 +1335,18 @@ def open_session(
         else:
             # Resume existing session
             # Use effective agent backend (session-stored > config > "claude")
-            from devflow.agent import create_agent_client
-
             agent_backend = effective_agent_backend
-            agent = create_agent_client(agent_backend)
 
             # Initialize self-ID capture state (used by self-identifying agents)
             _resume_needs_capture = False
-            _resume_sessions_before = set()
+            _resume_sessions_before: Set[str] = set()
             oc_project_path = None
 
             # For Claude and Ollama agents, use resume with skills directories
             # Other agents may not support resume in the same way
+            if active_conv is None:
+                raise RuntimeError("Session has no active conversation to launch")
+
             if agent_backend in ("claude", "ollama", "ollama-claude"):
                 # Build resume command with --model flag if using alternative provider
                 from devflow.utils.model_provider import get_profile_arguments
@@ -1412,11 +1432,11 @@ def open_session(
                 _resume_needs_capture = False
                 _resume_sessions_before = set()
 
-                if oc_project_path:
+                if oc_project_path and active_conv:
                     sid = active_conv.ai_agent_session_id
                     if sid and sid != "pending-capture" and not sid.startswith("pending"):
                         launch_phase = "resume"
-                        process = agent.resume_session(
+                        process = getattr(agent_client, "resume_session")(
                             session_id=sid,
                             project_path=oc_project_path,
                             env=env,
@@ -1425,9 +1445,9 @@ def open_session(
                     else:
                         # Fallback: launch new session and capture ID
                         launch_phase = "launch"
-                        _resume_sessions_before = _snap_resume(agent, agent_backend, oc_project_path)
+                        _resume_sessions_before = _snap_resume(agent_client, agent_backend, oc_project_path)
                         _resume_needs_capture = True
-                        process = agent.launch_session(
+                        process = getattr(agent_client, "launch_session")(
                             oc_project_path,
                             env=env,
                             model_provider_profile=model_provider_profile,
@@ -1445,7 +1465,7 @@ def open_session(
                 # Launch new session
                 if project_path:
                     launch_phase = "launch"
-                    process = agent.launch_session(
+                    process = getattr(agent_client, "launch_session")(
                         project_path,
                         env=env,
                         model_provider_profile=model_provider_profile,
@@ -1475,7 +1495,7 @@ def open_session(
                         cwd=launch_dir,
                         env=env,
                     )
-                    agent.cleanup_after_exit(headless)
+                    agent_client.cleanup_after_exit(headless)
                     if isinstance(getattr(result, "returncode", None), int) and result.returncode != 0:
                         raise AgentLaunchError(
                             failure_from_process(
@@ -1489,7 +1509,7 @@ def open_session(
                             )
                         )
                 elif not cmd and 'process' in locals():
-                    agent.wait_for_exit(process, headless)
+                    agent_client.wait_for_exit(process, headless)
                     if isinstance(getattr(process, "returncode", None), int) and process.returncode != 0:
                         raise AgentLaunchError(
                             failure_from_process(
@@ -1511,13 +1531,15 @@ def open_session(
                 # signal may have already caused the command to exit.
                 if _resume_needs_capture:
                     from devflow.agent.factory import capture_agent_session_id as _cap_resume
-                    _cap_resume(
-                        agent, agent_backend,
-                        oc_project_path,
-                        active_conv,
-                        _resume_sessions_before,
-                        quiet=resume_launch_failed,
-                    )
+                    if oc_project_path and active_conv:
+                        _cap_resume(
+                            agent_client,
+                            agent_backend,
+                            oc_project_path,
+                            active_conv,
+                            _resume_sessions_before,
+                            quiet=resume_launch_failed,
+                        )
 
                 session_manager.index = session_manager.config_loader.load_sessions()
                 current_session = None
@@ -1585,9 +1607,9 @@ def open_session(
             # Silently ignore if work session wasn't started
             pass
 
-        if active_conv and active_conv.ai_agent_session_id and agent is not None:
+        if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
             # Show agent-specific manual resume instructions
-            resume_cmd = agent.get_manual_resume_command(active_conv.ai_agent_session_id, active_conv.project_path)
+            resume_cmd = agent_client.get_manual_resume_command(active_conv.ai_agent_session_id, active_conv.project_path)
             console.print(f"\n[yellow]You can manually resume with:[/yellow]")
             console.print(f"  cd {active_conv.project_path}")
             console.print(f"  {resume_cmd}")
@@ -1849,6 +1871,7 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
         ["git", "fetch", remote_name],
         cwd=path,
         capture_output=True,
+        text=True,
         timeout=30,
     )
     if result.returncode != 0:
@@ -1961,7 +1984,7 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
     return True
 
 
-def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[any] = None, base_branch: Optional[str] = None) -> bool:
+def _handle_branch_checkout(project_path: str, branch_name: str, config: Optional[Any] = None, base_branch: Optional[str] = None) -> bool:
     """Handle git branch checkout.
 
     Args:
@@ -2583,7 +2606,7 @@ def _create_conversation_from_workspace_selection(
 
             console.print("[yellow]⚠[/yellow] No default workspace configured")
 
-            return None
+            return False
 
         workspace = Path(workspace_path).expanduser()
 
@@ -2922,7 +2945,7 @@ def _create_multi_project_conversation_for_open(
     backend = None
     if session.issue_key:
         from devflow.utils.backend_detection import detect_backend_from_key
-        backend = detect_backend_from_key(session.issue_key, config)
+        backend = detect_backend_from_key(session.issue_key, config) or "jira"
 
     # Get use_issue_key_only setting
     use_issue_key_only = True
@@ -2933,7 +2956,7 @@ def _create_multi_project_conversation_for_open(
         branch_identifier,
         session.goal,
         use_issue_key_only=use_issue_key_only,
-        backend=backend
+        backend=backend or "jira"
     )
 
     # Determine if non-interactive mode
@@ -2960,6 +2983,7 @@ def _create_multi_project_conversation_for_open(
         default_base = _get_default_source_branch(proj_path)
 
         # Use source_branch parameter if provided, otherwise prompt or use default
+        selected_base: Optional[str]
         if source_branch:
             selected_base = source_branch
         elif non_interactive:
@@ -2984,7 +3008,7 @@ def _create_multi_project_conversation_for_open(
     # Create branches in all projects
     console.print(f"\n[bold]Creating branches...[/bold]")
 
-    branch_creation_results = {}
+    branch_creation_results: Dict[str, Dict[str, str]] = {}
     for proj_name in project_names:
         proj_path = workspace_path_obj / proj_name
         base_branch = project_base_branches[proj_name]
@@ -3016,8 +3040,11 @@ def _create_multi_project_conversation_for_open(
         # Extract branch name and source branch
         if isinstance(branch_result, tuple):
             created_branch, source_branch = branch_result
-        else:
+        elif isinstance(branch_result, str):
             created_branch = branch_result
+            source_branch = base_branch
+        else:
+            created_branch = None
             source_branch = base_branch
 
         branch_creation_results[proj_name] = {
@@ -3229,7 +3256,7 @@ def _check_and_sync_with_base_branch(
     branch: str,
     base_branch: str,
     identifier: str,
-    config: Optional[any] = None,
+    config: Optional[Any] = None,
     sync_upstream: Optional[bool] = None,
     sync_strategy: Optional[str] = None,
 ) -> bool:
@@ -3533,7 +3560,7 @@ def _handle_closed_ticket_reopen(session, jira_client) -> bool:
         return False
 
 
-def _prompt_for_complete_on_exit(session, config: Optional[any] = None) -> None:
+def _prompt_for_complete_on_exit(session, config: Optional[Any] = None) -> None:
     """Prompt user to run 'daf complete' when Claude Code session ends.
 
     This function checks the configuration setting and either:

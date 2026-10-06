@@ -41,7 +41,11 @@ def _install_bundled_cs_agents(destination: Path) -> tuple[bool, list[str]]:
     method1_path = None
     try:
         if hasattr(importlib.resources, 'files'):
-            daf_agents_resource = importlib.resources.files('devflow').parent / 'DAF_AGENTS.md'
+            package_resource = importlib.resources.files('devflow')
+            package_parent = getattr(package_resource, 'parent', None)
+            if package_parent is None:
+                raise FileNotFoundError("Package parent is unavailable")
+            daf_agents_resource = package_parent / 'DAF_AGENTS.md'
             method1_path = str(daf_agents_resource)
             if daf_agents_resource is not None:
                 with daf_agents_resource.open('rb') as src:
@@ -89,7 +93,11 @@ def _get_bundled_daf_agents_content() -> tuple[str | None, list[str]]:
     # Method 1: Try importlib.resources (works for installed package)
     try:
         if hasattr(importlib.resources, 'files'):
-            daf_agents_resource = importlib.resources.files('devflow').parent / 'DAF_AGENTS.md'
+            package_resource = importlib.resources.files('devflow')
+            package_parent = getattr(package_resource, 'parent', None)
+            if package_parent is None:
+                raise FileNotFoundError("Package parent is unavailable")
+            daf_agents_resource = package_parent / 'DAF_AGENTS.md'
             if daf_agents_resource is not None:
                 with daf_agents_resource.open('r', encoding='utf-8') as src:
                     return src.read(), []
@@ -361,7 +369,7 @@ def validate_daf_agents_md(session: 'Session', config_loader: 'ConfigLoader') ->
 
         if not workspace_path:
             console.print("[yellow]⚠[/yellow] No default workspace configured")
-            return None
+            return False
 
         workspace_path = Path(workspace_path).expanduser()
         cs_agents_workspace = workspace_path / "DAF_AGENTS.md"

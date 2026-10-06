@@ -28,7 +28,7 @@ def parse_field_options(
     Raises:
         SystemExit: If any system field is used via --field
     """
-    custom_fields = {}
+    custom_fields: Dict[str, Any] = {}
 
     if not field_options:
         return custom_fields

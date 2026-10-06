@@ -40,11 +40,11 @@ class ClaudeAgent(AgentInterface):
     def launch_session(
         self,
         project_path: str,
-        model_provider_profile: Optional[Dict[str, any]] = None,
+        env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
         session_name: Optional[str] = None,
         profile_name: Optional[str] = None,
         enforcement_source: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
         display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch a new Claude Code session in a project directory.
@@ -110,15 +110,16 @@ class ClaudeAgent(AgentInterface):
         skills_dirs: Optional[List[str]] = None,
         workspace_path: Optional[str] = None,
         config = None,
-        session_name: Optional[str] = None,
-        profile_name: Optional[str] = None,
-        enforcement_source: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
         headless: bool = False,
         auto_approve: bool = False,
+        session_name: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        enforcement_source: Optional[str] = None,
         reasoning_effort: Optional[str] = None,
         model_override: Optional[str] = None,
         display_name: Optional[str] = None,
+        **kwargs: Any,
     ) -> subprocess.Popen:
         """Launch Claude Code with initial prompt (for new sessions).
 
@@ -188,8 +189,9 @@ class ClaudeAgent(AgentInterface):
         model_name = model_override or (model_provider_profile or {}).get("model_name") or settings["model"]
         if model_name:
             cmd.extend(["--model", model_name])
-        if reasoning_effort or settings["reasoning_effort"]:
-            cmd.extend(["--effort", reasoning_effort or settings["reasoning_effort"]])
+        effective_reasoning = reasoning_effort or settings["reasoning_effort"]
+        if effective_reasoning:
+            cmd.extend(["--effort", effective_reasoning])
 
         cmd.extend(["--session-id", session_id])
         if initial_prompt:
@@ -220,8 +222,8 @@ class ClaudeAgent(AgentInterface):
         self,
         session_id: str,
         project_path: str,
-        model_provider_profile: Optional[Dict[str, any]] = None,
         env: Optional[Dict[str, str]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
         display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Resume an existing Claude Code session.
@@ -434,7 +436,7 @@ class ClaudeAgent(AgentInterface):
 
     def _build_env_and_cmd(
         self,
-        model_provider_profile: Optional[Dict[str, any]] = None,
+        model_provider_profile: Optional[Dict[str, Any]] = None,
         base_env: Optional[Dict[str, str]] = None
     ) -> tuple[Dict[str, str], list[str]]:
         """Build environment variables and command from model provider profile.

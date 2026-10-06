@@ -47,7 +47,7 @@ def export_sessions(
     if all_sessions:
         console.print("[cyan]Exporting all sessions[/cyan]")
     else:
-        console.print(f"[cyan]Exporting sessions: {', '.join(issue_keys)}[/cyan]")
+        console.print(f"[cyan]Exporting sessions: {', '.join(issue_keys or [])}[/cyan]")
 
     console.print("[dim]Including ALL conversations and conversation history[/dim]")
 

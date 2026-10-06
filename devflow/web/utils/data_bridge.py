@@ -287,17 +287,19 @@ class DataBridge:
             }
 
         # GitHub config
-        if getattr(config, "github", None):
+        github_config = getattr(config, "github", None)
+        if github_config is not None:
             summary["github"] = {
-                "enabled": bool(config.github.repository),
-                "repository": config.github.repository or "Not configured",
+                "enabled": bool(github_config.repository),
+                "repository": github_config.repository or "Not configured",
             }
 
         # GitLab config
-        if getattr(config, "gitlab", None):
+        gitlab_config = getattr(config, "gitlab", None)
+        if gitlab_config is not None:
             summary["gitlab"] = {
-                "enabled": bool(config.gitlab.repository),
-                "repository": config.gitlab.repository or "Not configured",
+                "enabled": bool(gitlab_config.repository),
+                "repository": gitlab_config.repository or "Not configured",
             }
 
         # Repos config

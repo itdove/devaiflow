@@ -53,7 +53,7 @@ class TemplateConfig(BaseModel):
     name_extraction: NameExtractionConfig = Field(
         default_factory=NameExtractionConfig, description="Configuration for template name extraction"
     )
-    defaults: Dict[str, bool] = Field(
+    defaults: Dict[str, object] = Field(
         default_factory=lambda: {
             "auto_create_branch": True,
             "branch_strategy": "from_default",

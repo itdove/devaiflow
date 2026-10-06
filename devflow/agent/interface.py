@@ -360,7 +360,7 @@ class AgentInterface(ABC):
                 cmd.extend(["--effort", settings["reasoning_effort"]])
             if display_name:
                 cmd.extend(["--name", display_name])
-            run_kwargs = {
+            run_kwargs: Dict[str, Any] = {
                 "input": prompt,
                 "capture_output": True,
                 "text": True,

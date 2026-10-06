@@ -6,7 +6,7 @@ All JIRA operations are performed via the REST API.
 
 import base64
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 import yaml
@@ -42,14 +42,14 @@ class JiraClient(IssueTrackerClient):
             timeout: Default timeout for API requests in seconds
         """
         self.timeout = timeout
-        self._jira_url = None
-        self._jira_token = None
-        self._jira_auth_type = None
-        self._jira_username = None
-        self._field_cache = None  # Cache for field ID to name mapping
-        self._comment_visibility_type = None  # Default visibility type (from config)
-        self._comment_visibility_value = None  # Default visibility value (from config)
-        self._search_api_version = None  # Cache for search API version (2 or 3)
+        self._jira_url: Optional[str] = None
+        self._jira_token: Optional[str] = None
+        self._jira_auth_type: Optional[str] = None
+        self._jira_username: Optional[str] = None
+        self._field_cache: Optional[Dict[str, str]] = None  # Cache for field ID to name mapping
+        self._comment_visibility_type: Optional[str] = None  # Default visibility type (from config)
+        self._comment_visibility_value: Optional[str] = None  # Default visibility value (from config)
+        self._search_api_version: Optional[int] = None  # Cache for search API version (2 or 3)
         self._load_jira_config()
 
     def _load_jira_config(self) -> None:
@@ -208,7 +208,7 @@ class JiraClient(IssueTrackerClient):
             JiraAuthError: Always raises with appropriate expiration details
         """
         token_expired = False
-        status_code = None
+        status_code: Optional[int] = None
 
         if response is not None:
             status_code = response.status_code
@@ -222,7 +222,7 @@ class JiraClient(IssueTrackerClient):
         )
 
     def _add_custom_fields_to_payload(
-        self, payload: Dict, custom_fields: Dict[str, any], field_mapper
+        self, payload: Dict[str, Any], custom_fields: Dict[str, Any], field_mapper
     ) -> None:
         """Add custom fields to JIRA API payload with proper formatting.
 
@@ -669,7 +669,7 @@ class JiraClient(IssueTrackerClient):
             JiraConnectionError: If connection fails
         """
         # Comment body with optional visibility restriction
-        payload = {"body": comment}
+        payload: Dict[str, Any] = {"body": comment}
 
         # Add visibility restriction unless public flag is set
         if not public:
@@ -1216,23 +1216,34 @@ class JiraClient(IssueTrackerClient):
 
     def list_tickets(
         self,
+        jql: Optional[str] = None,
+        project: Optional[str] = None,
         assignee: Optional[str] = None,
-        status: Optional[str] = None,
-        sprint: Optional[str] = None,  # Deprecated: use field_filters instead
+        status: Optional[List[str]] = None,
+        issue_type: Optional[List[str]] = None,
+        sprint: Optional[str] = None,
+        max_results: int = 50,
+        start_at: int = 0,
+        field_mappings: Optional[Dict] = None,
+        *,
         ticket_type: Optional[str] = None,
         status_list: Optional[List[str]] = None,
-        field_mappings: Optional[Dict] = None,
         field_filters: Optional[Dict[str, str]] = None,
     ) -> List[Dict]:
         """List issue tracker tickets with filters using REST API.
 
         Args:
+            jql: Optional raw JQL prefix to include in the query
+            project: Project key to filter by
             assignee: Filter by assignee (use "currentUser()" for current user, will be auto-resolved)
-            status: Filter by status (single value, deprecated in favor of status_list)
+            status: Filter by statuses
+            issue_type: Filter by issue types
             sprint: Filter by sprint name (deprecated - use field_filters instead)
-            ticket_type: Filter by ticket type (Story, Bug, etc.)
-            status_list: Filter by multiple status values (takes precedence over status)
+            max_results: Maximum number of tickets to return
+            start_at: Pagination offset
             field_mappings: Optional field mappings dict from config to resolve custom field IDs
+            ticket_type: Legacy single issue-type filter
+            status_list: Legacy status-list alias
             field_filters: Filter by custom fields (e.g., {"sprint": "Sprint 1", "severity": "Critical"})
 
         Returns:
@@ -1245,7 +1256,10 @@ class JiraClient(IssueTrackerClient):
         """
         try:
             # Build JQL query
-            jql_parts = []
+            jql_parts: List[str] = [jql] if jql else []
+
+            if project:
+                jql_parts.append(f'project = "{project}"')
 
             # Resolve currentUser() or $(jira me) to actual username
             if assignee:
@@ -1255,13 +1269,15 @@ class JiraClient(IssueTrackerClient):
                     jql_parts.append(f'assignee = "{assignee}"')
 
             # Support both single status and list of statuses
-            if status_list:
+            effective_statuses = status_list or status
+            legacy_status: Optional[str] = status if isinstance(status, str) else None
+            if effective_statuses:
                 # Multiple statuses - use IN clause
-                statuses_str = ", ".join([f'"{s}"' for s in status_list])
+                statuses_str = ", ".join([f'"{s}"' for s in effective_statuses])
                 jql_parts.append(f"status IN ({statuses_str})")
-            elif status:
+            elif legacy_status:
                 # Single status - legacy support
-                jql_parts.append(f'status = "{status}"')
+                jql_parts.append(f'status = "{legacy_status}"')
 
             # Generic custom field filtering
             if field_filters:
@@ -1285,8 +1301,9 @@ class JiraClient(IssueTrackerClient):
                 else:
                     jql_parts.append(f'sprint = "{sprint}"')
 
-            if ticket_type:
-                jql_parts.append(f'type = "{ticket_type}"')
+            effective_ticket_type = ticket_type or (issue_type[0] if issue_type else None)
+            if effective_ticket_type:
+                jql_parts.append(f'type = "{effective_ticket_type}"')
 
             jql = " AND ".join(jql_parts) if jql_parts else "assignee = currentUser()"
 
@@ -1315,7 +1332,7 @@ class JiraClient(IssueTrackerClient):
             # Make API request with automatic v2/v3 detection
             # (Cloud JIRA requires v3, self-hosted uses v2)
             response = self._search_api_request(
-                jql=jql, max_results=100, fields_list=fields_list_parts
+                jql=jql, max_results=max_results, fields_list=fields_list_parts
             )
 
             if response.status_code == 401 or response.status_code == 403:
@@ -1441,7 +1458,7 @@ class JiraClient(IssueTrackerClient):
             JiraAuthError: If authentication fails
             JiraConnectionError: If connection fails
         """
-        relationships = {}
+        relationships: Dict[str, Dict[str, List[str]]] = {}
         issue_keys_set = set(issue_keys)
 
         for issue_key in issue_keys:
@@ -1481,6 +1498,7 @@ class JiraClient(IssueTrackerClient):
     def get_child_issues(
         self,
         parent_key: str,
+        issue_types: Optional[List[str]] = None,
         field_mappings: Optional[Dict] = None,
         include_links: bool = False,
     ) -> List[Dict]:
@@ -1493,6 +1511,7 @@ class JiraClient(IssueTrackerClient):
 
         Args:
             parent_key: issue key of the parent issue (e.g., PROJ-12345)
+            issue_types: Optional issue types to include
             field_mappings: Optional field mappings dict from config to resolve field display names
             include_links: If True, include blocking relationships (blocks/blocked_by)
 
@@ -1875,6 +1894,8 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to get PR links for {issue_key}: {e}")
 
+        return ""
+
     def _get_parent_field_id(self, issue_type: str, field_mapper) -> Optional[str]:
         """Get the parent field ID for a given issue type using parent_field_mapping.
 
@@ -2061,6 +2082,8 @@ class JiraClient(IssueTrackerClient):
             # Wrap unexpected errors
             raise JiraApiError(f"Failed to create {issue_type.lower()}: {e}")
 
+        return ""
+
     def _set_required_fields(
         self, payload: Dict, issue_type: str, field_mapper
     ) -> None:
@@ -2147,6 +2170,7 @@ class JiraClient(IssueTrackerClient):
             field_schema = field_info.get("schema", "")
 
             # Generate appropriate placeholder based on field type
+            placeholder: Any
             if field_type == "string" or "string" in str(field_schema):
                 placeholder = f"TBD: Define {field_name.replace('_', ' ')} for this {issue_type.lower()}"
             elif field_type == "number":

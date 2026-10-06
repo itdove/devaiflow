@@ -72,7 +72,7 @@ def add_project_to_session(
     active_conv = session.active_conversation
     is_multi_project = active_conv and active_conv.is_multi_project
 
-    if not is_multi_project:
+    if active_conv is None or not is_multi_project:
         console.print("[red]✗[/red] This session does not support multi-project mode")
         console.print("[yellow]Only sessions created with --projects flag support adding/removing projects[/yellow]")
         sys.exit(1)
@@ -114,9 +114,12 @@ def add_project_to_session(
         # Extract branch name and base branch
         if isinstance(branch_result, tuple):
             created_branch, base_branch = branch_result
-        else:
+        elif isinstance(branch_result, str):
             created_branch = branch_result
             base_branch = None
+        else:
+            skipped_count += 1
+            continue
 
         # Add project to multi-project conversation's projects dict
         from devflow.config.models import ProjectInfo

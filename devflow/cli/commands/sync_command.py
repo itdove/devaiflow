@@ -398,7 +398,7 @@ def sync_jira(
 
     # JSON output mode
     if output_json:
-        filters_metadata = {
+        filters_metadata: Dict[str, Any] = {
             "assignee": sync_filters.assignee,
             "status": sync_filters.status if sync_filters.status else None,
             "ticket_type": ticket_type,
@@ -438,7 +438,7 @@ def sync_jira(
     console_print(f"[dim]Use 'daf open <JIRA-KEY>' to start work[/dim]")
 
 
-def scan_workspace_for_repositories(workspace_path: str) -> List[Dict[str, str]]:
+def scan_workspace_for_repositories(workspace_path: str) -> List[Dict[str, Any]]:
     """Scan workspace directory for git repositories.
 
     Scans ALL remotes (origin, upstream, etc.) so you can sync issues from
@@ -455,7 +455,7 @@ def scan_workspace_for_repositories(workspace_path: str) -> List[Dict[str, str]]
         - backend: Platform (github, gitlab)
         - repository: owner/repo format
     """
-    repositories = []
+    repositories: List[Dict[str, Any]] = []
     workspace_path = Path(workspace_path).expanduser().resolve()
 
     if not workspace_path.exists():
@@ -1131,7 +1131,7 @@ def sync_multi_backend(
                 console_print("[dim]JIRA not configured, skipping JIRA sync[/dim]")
 
     # Phase 2: Scan workspaces for git repositories (if sync_workspaces=True)
-    all_repositories = []
+    all_repositories: List[Dict[str, Any]] = []
     seen_repos = set()  # Track unique repositories by owner/repo
 
     if sync_workspaces:

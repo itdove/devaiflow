@@ -5,7 +5,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from rich.console import Console
 
@@ -81,7 +81,7 @@ def is_valid_uuid(uuid_str: str) -> bool:
     return bool(uuid_pattern.match(uuid_str))
 
 
-def detect_corruption(conversation_file: Path) -> Dict[str, any]:
+def detect_corruption(conversation_file: Path) -> Dict[str, Any]:
     """Detect corruption issues in a conversation file.
 
     Args:
@@ -177,7 +177,7 @@ def remove_invalid_surrogates(text: str) -> str:
     return text.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
 
 
-def truncate_content(content: any, max_size: int = 10000) -> Tuple[any, bool]:
+def truncate_content(content: Any, max_size: int = 10000) -> Tuple[Any, bool]:
     """Truncate large content to max_size.
 
     Args:
@@ -217,7 +217,7 @@ def repair_conversation_file(
     conversation_file: Path,
     max_size: int = 10000,
     dry_run: bool = False
-) -> Dict[str, any]:
+) -> Dict[str, Any]:
     """Repair a corrupted conversation file.
 
     Args:
@@ -354,7 +354,7 @@ def repair_conversation_file(
         raise ConversationRepairError(f"Repair failed: {e}")
 
 
-def scan_all_conversations(agent_backend: str = "claude") -> List[Tuple[str, Path, Dict[str, any]]]:
+def scan_all_conversations(agent_backend: str = "claude") -> List[Tuple[str, Path, Dict[str, Any]]]:
     """Scan all file-backed agent conversation files for corruption.
 
     Returns:
@@ -362,7 +362,7 @@ def scan_all_conversations(agent_backend: str = "claude") -> List[Tuple[str, Pat
     """
     try:
         agent = create_agent_client(agent_backend)
-        session_files = agent.get_session_files()
+        session_files = getattr(agent, "get_session_files")()
     except (AttributeError, OSError, TypeError, ValueError):
         claude_home = get_claude_config_dir()
         projects_dir = claude_home / "projects"

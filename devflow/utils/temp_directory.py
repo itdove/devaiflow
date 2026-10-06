@@ -200,8 +200,10 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
                 show_default=True
             )
 
+            choice_text = choice or ""
+
             # Allow cancel
-            if choice.lower() in ['cancel', 'q']:
+            if choice_text.lower() in ['cancel', 'q']:
                 console_print(f"[dim]Using default branch: {default_branch}[/dim]")
                 return default_branch
 
@@ -210,19 +212,19 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
 
             # Try to parse as number first
             try:
-                selection_num = int(choice)
+                selection_num = int(choice_text)
                 if 1 <= selection_num <= len(branches):
                     selected_branch = branches[selection_num - 1]
                 else:
-                    console_print(f"[red]✗[/red] Invalid selection: {choice}")
+                    console_print(f"[red]✗[/red] Invalid selection: {choice_text}")
                     console_print("[dim]Please try again or type 'cancel' to use default[/dim]")
                     continue
             except ValueError:
                 # Not a number, treat as branch name
-                if choice in branches:
-                    selected_branch = choice
+                if choice_text in branches:
+                    selected_branch = choice_text
                 else:
-                    console_print(f"[red]✗[/red] Branch '{choice}' not found in available branches")
+                    console_print(f"[red]✗[/red] Branch '{choice_text}' not found in available branches")
                     console_print("[dim]Please try again or type 'cancel' to use default[/dim]")
                     continue
 

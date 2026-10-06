@@ -1,7 +1,7 @@
 """Implementation of 'daf jira create' command."""
 
 import sys
-from typing import Optional
+from typing import Any, Dict, Optional, Set
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 
@@ -96,7 +96,7 @@ def _get_required_custom_fields(
     field_mapper,
     issue_type: str,
     flag_values: Optional[dict] = None
-) -> dict:
+) -> Optional[Dict[str, Any]]:
     """Get all required custom field values for the given issue type.
 
     This function loops through all custom fields in field_mappings and collects
@@ -121,7 +121,7 @@ def _get_required_custom_fields(
     from rich.prompt import Prompt, Confirm
 
     flag_values = flag_values or {}
-    custom_fields = {}
+    custom_fields: Dict[str, Any] = {}
 
     # Get custom field defaults from config
     config_defaults = config.jira.custom_field_defaults or {}
@@ -140,7 +140,7 @@ def _get_required_custom_fields(
     # JIRA system fields that are handled separately by create_issue function
     # These should NOT be prompted for in _get_required_custom_fields
     # Only include: API mandatory fields (summary, project) + issuetype + special system fields
-    system_fields = {
+    system_fields: Set[str] = {
         "summary", "project",
         "issue_type", "issuetype", "reporter", "assignee",
         "affected_version", "fixVersions", "versions", "affects_version/s", "affects_versions",  # Version fields (server & cloud)
@@ -289,7 +289,7 @@ def _get_required_system_fields(
     field_mapper,
     issue_type: str,
     flag_values: Optional[dict] = None
-) -> dict:
+) -> Optional[Dict[str, Any]]:
     """Get all required system field values for the given issue type.
 
     This function checks field_mappings for system fields (non-custom fields like
@@ -313,7 +313,7 @@ def _get_required_system_fields(
     from rich.prompt import Prompt, Confirm
 
     flag_values = flag_values or {}
-    system_fields = {}
+    system_fields: Dict[str, Any] = {}
 
     # Get system field defaults from config
     config_defaults = config.jira.system_field_defaults or {}
@@ -612,7 +612,7 @@ def create_issue(
             sys.exit(1)
 
         # Map issue type to configuration (templates loaded only when needed)
-        ISSUE_TYPE_CONFIG = {
+        ISSUE_TYPE_CONFIG: Dict[str, Dict[str, Any]] = {
             "epic": {
                 "label": "Epic",
                 "uses_affected_version": False,
@@ -746,7 +746,7 @@ def create_issue(
         jira_client = JiraClient()
 
         # Build kwargs for generic create_issue method
-        create_kwargs = {
+        create_kwargs: Dict[str, Any] = {
             "issue_type": type_config["jira_issue_type"],
             "summary": summary,
             "description": issue_description,
@@ -1357,5 +1357,3 @@ def create_issue(
             console.print(f"[red]✗[/red] Unexpected error: {e}")
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
-
-

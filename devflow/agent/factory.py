@@ -566,16 +566,16 @@ def launch_and_capture(
     *,
     initial_prompt: str,
     session_id: str,
-    model_provider_profile=None,
-    workspace_path: str = None,
-    config=None,
-    env: dict = None,
+    model_provider_profile: Optional[Dict[str, Any]] = None,
+    workspace_path: Optional[str] = None,
+    config: Any = None,
+    env: Optional[Dict[str, str]] = None,
     headless: bool = False,
     auto_approve: bool = False,
-    reasoning_effort: str = None,
-    model_override: str = None,
-    display_name: str = None,
-    session=None,
+    reasoning_effort: Optional[str] = None,
+    model_override: Optional[str] = None,
+    display_name: Optional[str] = None,
+    session: Any = None,
     phase: str = "launch",
 ) -> None:
     """Snapshot sessions, launch agent, wait for exit, capture session ID.
@@ -590,7 +590,7 @@ def launch_and_capture(
     sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
     launch_failed = False
     try:
-        launch_kwargs = dict(
+        launch_kwargs: Dict[str, Any] = dict(
             project_path=project_path,
             initial_prompt=initial_prompt,
             session_id=session_id,

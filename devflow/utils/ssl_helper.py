@@ -46,7 +46,7 @@ def get_ssl_verify_setting() -> Union[bool, str]:
         config = config_loader.load_config()
 
         # Check if http_client config exists
-        if hasattr(config, 'http_client') and config.http_client:
+        if config is not None and hasattr(config, 'http_client') and config.http_client:
             return config.http_client.ssl_verify
 
     except Exception:
@@ -83,7 +83,7 @@ def get_request_timeout() -> int:
         config = config_loader.load_config()
 
         # Check if http_client config exists
-        if hasattr(config, 'http_client') and config.http_client:
+        if config is not None and hasattr(config, 'http_client') and config.http_client:
             return config.http_client.timeout
 
     except Exception:

@@ -7,6 +7,7 @@ from rich.prompt import Prompt
 
 if TYPE_CHECKING:
     from devflow.jira.field_mapper import JiraFieldMapper
+    from devflow.jira.client import JiraClient
 
 console = Console()
 

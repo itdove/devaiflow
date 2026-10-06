@@ -147,7 +147,7 @@ def _get_timeout_from_config() -> int:
 
         config_loader = ConfigLoader()
         config = config_loader.load_config()
-        return config.update_checker_timeout
+        return config.update_checker_timeout if config is not None else 10
     except Exception:
         # If config loading fails, use default timeout
         return 10

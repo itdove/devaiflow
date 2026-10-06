@@ -13,7 +13,7 @@ Features:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 import json
 import shutil
 import os
@@ -44,11 +44,18 @@ from rich.markup import escape
 from rich.text import Text
 
 from devflow.config.loader import ConfigLoader
-from devflow.config.models import Config, JiraTransitionConfig, ContextFile, WorkspaceDefinition
+from devflow.config.models import (
+    Config,
+    ContextFile,
+    JiraTransitionConfig,
+    ModelProviderProfile,
+    WorkspaceDefinition,
+)
 from devflow.config.templates.model_providers import (
     get_template_registry,
     detect_template_from_profile,
     FormField,
+    ProviderTemplate,
 )
 from devflow.jira.client import JiraClient
 from devflow.jira.utils import get_field_with_alias
@@ -173,7 +180,7 @@ def _bool_to_choice(value: Optional[bool]) -> str:
         return "prompt"
 
 
-def _choice_to_bool(choice: str) -> Optional[bool]:
+def _choice_to_bool(choice: object) -> Optional[bool]:
     """Convert tri-state choice string to Optional[bool].
 
     Args:
@@ -448,14 +455,16 @@ class ConfigSelect(Container):
         """Compose the select widgets."""
         yield Label(self._label)
 
-        select_kwargs = {
-            "options": self._choices,
-            "allow_blank": self._allow_blank,
-            "id": f"select_{_sanitize_widget_id(self.config_key)}",
-        }
+        select_id = f"select_{_sanitize_widget_id(self.config_key)}"
         if self._value and self._value in {v for _, v in self._choices}:
-            select_kwargs["value"] = self._value
-        yield Select(**select_kwargs)
+            yield Select(
+                self._choices,
+                value=self._value,
+                allow_blank=self._allow_blank,
+                id=select_id,
+            )
+        else:
+            yield Select(self._choices, allow_blank=self._allow_blank, id=select_id)
 
         if self._help_text:
             yield Label(self._help_text, classes="help-text")
@@ -536,9 +545,9 @@ class ContextFileEntry(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         event.stop()  # Prevent event bubbling
-        if event.button.id.startswith("edit_"):
+        if (event.button.id or "").startswith("edit_"):
             self.post_message(self.EditPressed(self.index, self.context_file))
-        elif event.button.id.startswith("remove_"):
+        elif (event.button.id or "").startswith("remove_"):
             self.post_message(self.RemovePressed(self.index))
 
 
@@ -641,11 +650,11 @@ class WorkspaceEntry(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         event.stop()  # Prevent event bubbling
-        if event.button.id.startswith("edit_"):
+        if (event.button.id or "").startswith("edit_"):
             self.post_message(self.EditPressed(self.index, self.workspace))
-        elif event.button.id.startswith("remove_"):
+        elif (event.button.id or "").startswith("remove_"):
             self.post_message(self.RemovePressed(self.index))
-        elif event.button.id.startswith("use_"):
+        elif (event.button.id or "").startswith("use_"):
             self.post_message(self.SetAsLastUsedPressed(self.workspace.name))
 
 
@@ -1116,13 +1125,13 @@ class ModelProviderProfileEntry(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         event.stop()  # Prevent event bubbling
-        if event.button.id.startswith("edit_"):
+        if (event.button.id or "").startswith("edit_"):
             self.post_message(self.EditPressed(self.profile_name, self.profile_data))
-        elif event.button.id.startswith("remove_"):
+        elif (event.button.id or "").startswith("remove_"):
             self.post_message(self.RemovePressed(self.profile_name))
-        elif event.button.id.startswith("default_"):
+        elif (event.button.id or "").startswith("default_"):
             self.post_message(self.SetAsDefaultPressed(self.profile_name))
-        elif event.button.id.startswith("validate_"):
+        elif (event.button.id or "").startswith("validate_"):
             self.post_message(self.ValidatePressed(self.profile_name, self.profile_data))
 
 
@@ -1222,8 +1231,8 @@ class TemplateSelectionScreen(ModalScreen):
         """Handle button press."""
         if event.button.id == "cancel":
             self.dismiss(None)
-        elif event.button.id.startswith("select_"):
-            widget_id = event.button.id.replace("select_", "", 1)
+        elif (event.button.id or "").startswith("select_"):
+            widget_id = (event.button.id or "").replace("select_", "", 1)
             template_id = next(
                 (
                     candidate
@@ -1301,7 +1310,7 @@ class AddEditProfileScreen(ModalScreen):
         self,
         template_id: Optional[str] = None,
         existing_name: Optional[str] = None,
-        existing_profile: Optional[Dict[str, Any]] = None
+        existing_profile: Optional[Union[Dict[str, Any], ModelProviderProfile]] = None,
     ):
         """Initialize add/edit profile screen.
 
@@ -1312,11 +1321,10 @@ class AddEditProfileScreen(ModalScreen):
         """
         super().__init__()
         self.existing_name = existing_name
-        self.existing_profile = (
-            existing_profile.model_dump()
-            if hasattr(existing_profile, "model_dump")
-            else existing_profile or {}
-        )
+        if isinstance(existing_profile, ModelProviderProfile):
+            self.existing_profile: Dict[str, Any] = existing_profile.model_dump()
+        else:
+            self.existing_profile = existing_profile or {}
         self.is_edit_mode = existing_name is not None
 
         # Detect template from existing profile or use provided template
@@ -1327,7 +1335,10 @@ class AddEditProfileScreen(ModalScreen):
 
         # Get the template instance
         templates = get_template_registry()
-        self.template = templates.get(self.template_id)
+        template = templates.get(self.template_id)
+        if template is None:
+            raise ValueError(f"Unknown model provider template: {self.template_id}")
+        self.template: ProviderTemplate = template
 
     def compose(self) -> ComposeResult:
         """Compose add/edit profile screen using template fields."""
@@ -1466,7 +1477,7 @@ class AddEditProfileScreen(ModalScreen):
         """Handle button press using template-based validation and config generation."""
         if event.button.id == "save":
             # Collect form data from all template fields
-            form_data = {}
+            form_data: Dict[str, Any] = {}
             for field in self.template.get_fields():
                 try:
                     if field.field_type == "input":
@@ -1799,10 +1810,11 @@ class ConfigTUI(App):
         """
         super().__init__()
         self.config_loader = ConfigLoader()
-        self.config = self.config_loader.load_config()
-        if not self.config:
+        loaded_config = self.config_loader.load_config()
+        if loaded_config is None:
             console.print("[red]Error: Could not load configuration[/red]")
             raise RuntimeError("Failed to load configuration")
+        self.config: Config = loaded_config
         self.original_config = self.config.model_copy(deep=True)
         self.modified = False
         self.advanced_mode = advanced_mode
@@ -2000,8 +2012,9 @@ class ConfigTUI(App):
 
             # Get available custom fields from field_mappings
             custom_field_choices = []
-            if self.config.jira.field_mappings:
-                for field_key, field_info in self.config.jira.field_mappings.items():
+            field_mappings = self.config.jira.field_mappings or {}
+            if field_mappings:
+                for field_key, field_info in field_mappings.items():
                     # Skip system fields (those without customfield_ id)
                     if isinstance(field_info, dict) and "id" in field_info:
                         field_id = field_info["id"]
@@ -2020,8 +2033,8 @@ class ConfigTUI(App):
                     current_value = current_defaults.get(field_key, "")
 
                     # Get allowed values if they exist
-                    field_info = self.config.jira.field_mappings.get(field_key)
-                    allowed_values = field_info.get("allowed_values", []) if field_info else []
+                    field_info = field_mappings.get(field_key, {})
+                    allowed_values = field_info.get("allowed_values", [])
 
                     # If field has allowed values, use dropdown; otherwise use text input
                     if allowed_values and len(allowed_values) > 0:
@@ -2629,7 +2642,12 @@ class ConfigTUI(App):
                     default_profile = get_default_profile_name(self.config)
                     for profile_name, profile_data in self.config.model_provider.profiles.items():
                         is_default = (profile_name == default_profile)
-                        yield ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default, enforced=bool(provider_enforced_by))
+                        yield ModelProviderProfileEntry(
+                            profile_name,
+                            profile_data.model_dump(),
+                            is_default=is_default,
+                            enforced=bool(provider_enforced_by),
+                        )
                 else:
                     yield Static(
                         "[dim]No profiles configured. Add your first profile below.[/dim]",
@@ -2854,7 +2872,7 @@ class ConfigTUI(App):
         except Exception as e:
             self.notify(f"Toggle mode failed: {e}", severity="error")
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         """Quit the application."""
         if self.modified:
             # TODO: Add confirmation dialog
@@ -3019,7 +3037,7 @@ class ConfigTUI(App):
         Args:
             message: The validate pressed message containing profile name/data.
         """
-        profile = None
+        profile: Optional[Union[ModelProviderProfile, Dict[str, Any]]] = None
         if self.config.model_provider:
             profile = self.config.model_provider.profiles.get(message.profile_name)
         profile = profile or message.profile_data
@@ -3110,7 +3128,8 @@ class ConfigTUI(App):
         """
         # Check if it's the summary mode select
         if event.select.id == "select_session_summary_mode":
-            self._on_summary_mode_changed(event.value)
+            if isinstance(event.value, str):
+                self._on_summary_mode_changed(event.value)
 
     def _on_agent_backend_changed(self, agent_backend: str) -> None:
         """Handle agent backend selection changes.
@@ -3418,7 +3437,13 @@ class ConfigTUI(App):
                 default_profile = get_default_profile_name(self.config)
                 for profile_name, profile_data in self.config.model_provider.profiles.items():
                     is_default = (profile_name == default_profile)
-                    list_container.mount(ModelProviderProfileEntry(profile_name, profile_data, is_default=is_default))
+                    list_container.mount(
+                        ModelProviderProfileEntry(
+                            profile_name,
+                            profile_data.model_dump(),
+                            is_default=is_default,
+                        )
+                    )
             else:
                 list_container.mount(
                     Static(

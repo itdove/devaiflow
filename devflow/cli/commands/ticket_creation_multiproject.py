@@ -3,13 +3,14 @@
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from rich.console import Console
 
 from devflow.agent.factory import resolve_agent_backend
 from devflow.cli.utils import console_print
 from devflow.git.utils import GitUtils
+from devflow.config.models import Session
 from devflow.session.manager import SessionManager
 
 console = Console()
@@ -29,7 +30,7 @@ def create_multi_project_ticket_creation_session(
     model_profile: Optional[str] = None,
     model: Optional[str] = None,
     command: str = "git_new",
-) -> tuple[object, str]:
+) -> Tuple[Session, str]:
     """Create a multi-project ticket creation session (analysis-only, no branches).
 
     Similar to create_multi_project_session but skips branch creation since

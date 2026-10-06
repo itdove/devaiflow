@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -520,10 +520,8 @@ class SessionSummaryConfig(BaseModel):
 class TemplateConfig(BaseModel):
     """Template auto-creation and auto-use configuration."""
 
-    auto_create: bool = Field(
-        True, description="Automatically create templates when creating sessions in new directories"
-    )
-    auto_use: bool = Field(True, description="Automatically use matching templates when creating sessions")
+    auto_create: bool = True
+    auto_use: bool = True
 
 
 class ContextFile(BaseModel):
@@ -676,7 +674,9 @@ class UserConfig(BaseModel):
     repos: RepoConfig
     time_tracking: TimeTrackingConfig = Field(default_factory=TimeTrackingConfig)
     session_summary: SessionSummaryConfig = Field(default_factory=SessionSummaryConfig)
-    templates: TemplateConfig = Field(default_factory=TemplateConfig)
+    templates: TemplateConfig = Field(
+        default_factory=lambda: TemplateConfig(auto_create=True, auto_use=True)
+    )
     context_files: ContextFilesConfig = Field(default_factory=ContextFilesConfig)
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     pr_template_url: Optional[str] = None  # URL to PR/MR template
@@ -713,7 +713,9 @@ class Config(BaseModel):
     repos: RepoConfig
     time_tracking: TimeTrackingConfig = Field(default_factory=TimeTrackingConfig)
     session_summary: SessionSummaryConfig = Field(default_factory=SessionSummaryConfig)
-    templates: TemplateConfig = Field(default_factory=TemplateConfig)
+    templates: TemplateConfig = Field(
+        default_factory=lambda: TemplateConfig(auto_create=True, auto_use=True)
+    )
     context_files: ContextFilesConfig = Field(default_factory=ContextFilesConfig)
     http_client: HttpClientConfig = Field(default_factory=HttpClientConfig)
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
@@ -1036,8 +1038,9 @@ class Session(BaseModel):
 
     # Multi-conversation support
     # Dict maps working_dir to Conversation (contains active + archived sessions)
-    # During deserialization, accepts both old format (ConversationContext) and new format (Conversation)
-    conversations: Dict[str, Union[ConversationContext, Conversation]] = Field(default_factory=dict)
+    # Legacy ConversationContext values are wrapped in Conversation objects by
+    # migrate_legacy_conversations before Pydantic validates this field.
+    conversations: Dict[str, Conversation] = Field(default_factory=dict)
     working_directory: Optional[str] = None  # Tracks active conversation
 
     # Workspace support (AAP-63377)
@@ -1091,10 +1094,11 @@ class Session(BaseModel):
         Note: Direct access to active_session in Conversation object.
         """
         if self.working_directory and self.working_directory in self.conversations:
-            return self.conversations[self.working_directory].active_session
+            conversation = cast(Conversation, self.conversations[self.working_directory])
+            return conversation.active_session
         # Fallback: if only one repository exists, return its active session
         if len(self.conversations) == 1:
-            conversation = list(self.conversations.values())[0]
+            conversation = cast(Conversation, list(self.conversations.values())[0])
             return conversation.active_session
         return None
 
@@ -1110,14 +1114,16 @@ class Session(BaseModel):
         Note: Direct access to active_session.
         """
         conversation = self.conversations.get(working_dir)
-        return conversation.active_session if conversation else None
+        if conversation is None:
+            return None
+        return cast(Conversation, conversation).active_session
 
     def add_conversation(
         self,
         working_dir: str,
         ai_agent_session_id: str,
         project_path: str,
-        branch: str,
+        branch: Optional[str],
         base_branch: str = "main",
         remote_url: Optional[str] = None,
         temp_directory: Optional[str] = None,
@@ -1271,8 +1277,9 @@ class Session(BaseModel):
 
         Note: Returns conversations from all repositories in chronological order.
         """
-        all_convs = []
-        for conversation in self.conversations.values():
+        all_convs: List[ConversationContext] = []
+        for value in self.conversations.values():
+            conversation = cast(Conversation, value)
             all_convs.extend(conversation.get_all_sessions())
         # Sort by created date (oldest first)
         all_convs.sort(key=lambda c: c.created)
@@ -1289,7 +1296,8 @@ class Session(BaseModel):
 
         Note: Searches across all repositories and all conversations.
         """
-        for conversation in self.conversations.values():
+        for value in self.conversations.values():
+            conversation = cast(Conversation, value)
             for conv in conversation.get_all_sessions():
                 if conv.ai_agent_session_id == ai_agent_session_id:
                     return conv
@@ -1373,7 +1381,7 @@ class Session(BaseModel):
 
         # Auto-generate summary for the conversation being archived
         # This helps users understand what work was done in archived sessions
-        current_active = self.conversations[working_dir].active_session
+        current_active = cast(Conversation, self.conversations[working_dir]).active_session
         if current_active and not current_active.summary:
             # Attempt to auto-generate summary using helper method
             summary = self._generate_conversation_summary(current_active)
@@ -1381,7 +1389,9 @@ class Session(BaseModel):
                 current_active.summary = summary
 
         # Archive current active and set new one
-        self.conversations[working_dir].archive_active_and_set_new(new_conversation_context)
+        cast(Conversation, self.conversations[working_dir]).archive_active_and_set_new(
+            new_conversation_context
+        )
 
         return new_conversation_context
 
@@ -1402,7 +1412,8 @@ class Session(BaseModel):
         # Find which working directory contains this conversation
         target_working_dir = None
 
-        for working_dir, conversation in self.conversations.items():
+        for working_dir, value in self.conversations.items():
+            conversation = cast(Conversation, value)
             # Check if this conversation (active or archived) contains the UUID
             for conv in conversation.get_all_sessions():
                 if conv.ai_agent_session_id == ai_agent_session_id:
@@ -1415,7 +1426,9 @@ class Session(BaseModel):
             return False
 
         # Swap the active session using Conversation's method
-        success = self.conversations[target_working_dir].swap_active_session(ai_agent_session_id)
+        success = cast(Conversation, self.conversations[target_working_dir]).swap_active_session(
+            ai_agent_session_id
+        )
 
         if success:
             # Update working_directory to point to this conversation
@@ -1464,38 +1477,65 @@ class Session(BaseModel):
             # User can manually add summary later
             return None
 
-    @model_validator(mode='after')
-    def migrate_conversations(self) -> 'Session':
-        """Auto-migrate old conversation format to new Conversation class format.
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_conversations(cls, data: Any) -> Any:
+        """Wrap legacy conversation values before Pydantic validates the model.
 
-        Old format: Dict[str, ConversationContext]
-        New format: Dict[str, Conversation]
-
-        This validator ensures backward compatibility by detecting old sessions
-        and converting them to the new format automatically on load.
+        Older session files stored a ``ConversationContext`` directly under
+        each repository key. The current schema stores a ``Conversation``
+        container so archived sessions can be retained.
         """
-        migrated = False
-        new_conversations = {}
+        if not isinstance(data, dict):
+            return data
 
-        for working_dir, value in list(self.conversations.items()):
+        conversations = data.get("conversations")
+        if not isinstance(conversations, dict):
+            return data
+
+        normalized: Dict[str, Any] = {}
+        for working_dir, value in conversations.items():
             if isinstance(value, ConversationContext):
-                # Old format detected - migrate to Conversation object
-                conversation = Conversation(
+                normalized[working_dir] = Conversation(
                     active_session=value,
-                    archived_sessions=[]
+                    archived_sessions=[],
                 )
-                new_conversations[working_dir] = conversation
-                migrated = True
-            elif isinstance(value, Conversation):
-                # Already in new format
-                new_conversations[working_dir] = value
+            elif isinstance(value, dict) and "active_session" not in value:
+                normalized[working_dir] = {
+                    "active_session": value,
+                    "archived_sessions": [],
+                }
             else:
-                # Unexpected format - keep as-is (will likely fail validation)
-                new_conversations[working_dir] = value
+                normalized[working_dir] = value
+
+        normalized_data = dict(data)
+        normalized_data["conversations"] = normalized
+        return normalized_data
+
+    @model_validator(mode="after")
+    def migrate_conversations(self) -> "Session":
+        """Normalize legacy conversation values assigned after model creation.
+
+        Pydantic does not validate assignment by default, and older callers may
+        still attach a ``ConversationContext`` directly to ``conversations``.
+        Keep the explicit migration method useful for those callers as well as
+        for sessions loaded through the ``before`` validator.
+        """
+        normalized: Dict[str, Conversation] = {}
+        migrated = False
+        for working_dir, value in self.conversations.items():
+            raw_value: Any = value
+            if isinstance(raw_value, ConversationContext):
+                normalized[working_dir] = Conversation(
+                    active_session=raw_value,
+                    archived_sessions=[],
+                )
+                migrated = True
+            else:
+                normalized[working_dir] = cast(Conversation, raw_value)
 
         if migrated:
-            self.conversations = new_conversations
-
+            self.conversations = normalized
         return self
 
     class Config:

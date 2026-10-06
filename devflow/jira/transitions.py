@@ -76,6 +76,8 @@ def transition_on_start(
 
     # Perform transition
     try:
+        if not session.issue_key:
+            return True
         if jira_client is None:
             jira_client = JiraClient()
 

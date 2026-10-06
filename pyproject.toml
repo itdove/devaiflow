@@ -54,6 +54,8 @@ dev = [
     "black>=23.12.1",
     "ruff>=0.1.9",
     "mypy>=1.8.0",
+    "types-requests>=2.31.0.20240106",
+    "types-PyYAML>=6.0.12.20240808",
 ]
 
 [project.scripts]
@@ -75,6 +77,12 @@ include = ["devflow*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md"]
+
+[tool.mypy]
+python_version = "3.12"
+implicit_optional = true
+ignore_missing_imports = true
+allow_redefinition = true
 
 [tool.pytest.ini_options]
 # Test discovery patterns

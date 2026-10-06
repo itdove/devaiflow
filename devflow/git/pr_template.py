@@ -3,7 +3,7 @@
 import re
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from rich.console import Console
 
@@ -363,7 +363,7 @@ def _fill_template_with_api(prompt: str, profile: Optional[dict] = None) -> str:
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
-        client_kwargs = {"api_key": api_key}
+        client_kwargs: Dict[str, Any] = {"api_key": api_key}
         api_url = (profile or {}).get("api_url") or (profile or {}).get("base_url")
         if api_url:
             client_kwargs["base_url"] = api_url
@@ -382,7 +382,10 @@ def _fill_template_with_api(prompt: str, profile: Optional[dict] = None) -> str:
         )
 
         if message.content and len(message.content) > 0:
-            filled_template = message.content[0].text.strip()
+            block_text = getattr(message.content[0], "text", None)
+            if not isinstance(block_text, str):
+                raise RuntimeError("No text content in API response")
+            filled_template = block_text.strip()
 
             filled_template = strip_code_fences(filled_template)
 
@@ -518,8 +521,9 @@ def _fill_template_fallback(
     security_keywords = ("security", "affects", "threat", "protection", "behavior", "impact")
     no_security_keywords = ("no security", "no impact", "unaffected", "none")
 
+    lines = filled.splitlines()
+
     def update_sections(predicate, updater) -> None:
-        nonlocal lines
         for start, end, level, title in reversed(_markdown_sections(lines)):
             if predicate(title, level):
                 lines[start + 1:end] = updater(lines[start + 1:end], title)
@@ -679,7 +683,6 @@ def _fill_template_fallback(
                 annotate_checkbox(updated, index, match, note)
         return updated
 
-    lines = filled.splitlines()
     update_sections(
         lambda title, level: level <= 2 and bool(re.search(r"\b(issue|ticket|tracking|jira|github|gitlab)\b", title, re.IGNORECASE)),
         update_issue,

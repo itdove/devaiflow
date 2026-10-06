@@ -5,7 +5,7 @@ Repository & VCS, Workspaces, AI, Model Providers, Session Workflow, Advanced.
 """
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from nicegui import ui
 
@@ -168,7 +168,10 @@ def _text_input(
 
 
 def _select(
-    label: str, options: List[str], value: str = "", help_text: str = ""
+    label: str,
+    options: Union[List[str], Dict[str, str]],
+    value: str = "",
+    help_text: str = "",
 ) -> ui.select:
     with _field_row(label, help_text):
         return ui.select(options=options, value=value).classes("w-full")
@@ -371,7 +374,7 @@ def _build_jira_tab(config: Any) -> Dict[str, Any]:
         "Group example: 'jira-users' | Role example: 'Administrators'",
     )
     # Show current state
-    if vis_type:
+    if vis_type and jira is not None:
         ui.label(
             f"Current: {vis_type} = '{jira.comment_visibility_value or 'not set'}'"
         ).classes("text-xs text-gray-500")

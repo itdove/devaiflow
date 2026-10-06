@@ -84,3 +84,26 @@ jobs:
         run: |
           ruff check devflow/ tests/
         continue-on-error: true
+
+  mypy:
+    name: Mypy Type Checking
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install package and type-checking dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run mypy
+        run: |
+          mypy --no-incremental devflow/

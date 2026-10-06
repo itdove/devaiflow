@@ -10,7 +10,7 @@ Acceptance criteria are stored in the issue description with HTML comment delimi
 """
 
 import re
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional, Set
 
 
 class GitLabFieldMapper:
@@ -63,7 +63,7 @@ class GitLabFieldMapper:
             >>> mapper.parse_labels_to_fields(['bug', 'priority: high', 'points: 3'])
             {'issue_type': 'bug', 'priority': 'high', 'points': 3}
         """
-        fields = {}
+        fields: Dict[str, Any] = {}
 
         for label in labels:
             label_lower = label.lower()
@@ -360,8 +360,13 @@ class GitLabFieldMapper:
             labels.extend(additional_labels)
 
         # Remove duplicates while preserving order
-        seen = set()
-        labels = [x for x in labels if not (x in seen or seen.add(x))]
+        seen: Set[str] = set()
+        unique_labels: List[str] = []
+        for label in labels:
+            if label not in seen:
+                seen.add(label)
+                unique_labels.append(label)
+        labels = unique_labels
 
         # Inject acceptance criteria into description
         description = ticket_data.get('description', '')

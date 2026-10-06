@@ -288,6 +288,11 @@ def check_release_permission(repo_path: Path) -> Tuple[bool, str]:
             "Supported platforms: GitHub, GitLab"
         )
 
+    if owner is None or repo is None:
+        raise ValueError(
+            f"Could not determine repository owner and name from remote URL: {remote_url}"
+        )
+
     # Check permissions based on platform
     if platform == Platform.GITHUB:
         has_perm, level, msg = check_github_permission(owner, repo)
