@@ -253,6 +253,7 @@ def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: 
         field_mappings = config.jira.field_mappings if config else None
 
         from devflow.utils import is_mock_mode
+        jira_client: Any
         if is_mock_mode():
             from devflow.mocks.jira_mock import MockJiraClient
             jira_client = MockJiraClient(config=config)
@@ -333,7 +334,7 @@ def view_jira_ticket(issue_key: str, show_history: bool = False, show_children: 
         # JSON output mode
         if output_json:
             # Prepare changelog data for JSON
-            changelog_data = None
+            changelog_data: Optional[List[Dict[str, Any]]] = None
             if show_history and ticket_data.get("changelog"):
                 histories = ticket_data["changelog"].get("histories", [])
                 # Limit to last 15 entries as per acceptance criteria

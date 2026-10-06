@@ -114,6 +114,7 @@ def update_jira_issue(
 
         # Initialize JIRA client and field mapper
         from devflow.utils import is_mock_mode
+        jira_client: Any
         if is_mock_mode():
             from devflow.mocks.jira_mock import MockJiraClient
             jira_client = MockJiraClient(config=config)
@@ -129,7 +130,7 @@ def update_jira_issue(
             field_mapper = JiraFieldMapper(jira_client, {})
 
         # Build update payload
-        payload = {"fields": {}}
+        payload: Dict[str, Any] = {"fields": {}}
 
         # Handle description (file takes precedence)
         if description_file:

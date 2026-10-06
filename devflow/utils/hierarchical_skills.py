@@ -9,7 +9,7 @@ to guarantee load order.
 """
 
 from pathlib import Path
-from typing import Optional, List, Tuple, Literal
+from typing import List, Literal, Optional, Tuple, Union
 from rich.console import Console
 from enum import Enum
 import re
@@ -480,7 +480,7 @@ def list_remote_skills(
 
                 # Build API URL
                 api_url = f"https://gitlab.com/api/v4/projects/{project_path}/repository/tree"
-                params = {'path': skills_path, 'per_page': 100}
+                params: dict[str, Union[str, int]] = {'path': skills_path, 'per_page': 100}
 
                 response = requests.get(api_url, params=params, timeout=timeout, verify=ssl_verify)
 

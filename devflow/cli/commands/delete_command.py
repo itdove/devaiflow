@@ -72,9 +72,10 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
 
         # Clean up clone directories for all sessions in group
         for s in sessions:
-            for conv in (s.conversations or []):
-                if getattr(conv, "temp_directory", None):
-                    cleanup_temp_directory(conv.temp_directory)
+            for conversation in (s.conversations or {}).values():
+                for conv in conversation.get_all_sessions():
+                    if conv.temp_directory:
+                        cleanup_temp_directory(conv.temp_directory)
 
         session_manager.delete_session(identifier)
 
@@ -117,9 +118,10 @@ def delete_session(identifier: Optional[str] = None, delete_all: bool = False, f
             return
 
     # Clean up clone directories
-    for conv in (session.conversations or []):
-        if getattr(conv, "temp_directory", None):
-            cleanup_temp_directory(conv.temp_directory)
+    for conversation in (session.conversations or {}).values():
+        for conv in conversation.get_all_sessions():
+            if conv.temp_directory:
+                cleanup_temp_directory(conv.temp_directory)
 
     # Delete specific session
     session_manager.delete_session(identifier)
@@ -185,9 +187,10 @@ def _delete_all_sessions(session_manager: SessionManager, config_loader: ConfigL
 
     # Clean up clone directories for all sessions
     for s in all_sessions:
-        for conv in (s.conversations or []):
-            if getattr(conv, "temp_directory", None):
-                cleanup_temp_directory(conv.temp_directory)
+        for conversation in (s.conversations or {}).values():
+            for conv in conversation.get_all_sessions():
+                if conv.temp_directory:
+                    cleanup_temp_directory(conv.temp_directory)
 
     # Delete all session groups from index
     for group_name in session_groups:

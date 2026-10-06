@@ -1008,6 +1008,11 @@ This ensures Claude has all necessary context before starting work on your task.
 
 **IMPORTANT**: This project uses pip for installation. The `daf` command is installed globally via pip.
 
+Before completing code changes or opening a pull request, run the package-wide
+type check in addition to the focused tests for the affected code:
+`mypy devflow/`. Type-checking is required; do not treat mypy failures as
+advisory.
+
 ```bash
 # Install locally for development (from project root)
 pip install -e .
@@ -1027,7 +1032,7 @@ black devflow/ tests/
 # Lint
 ruff check devflow/ tests/
 
-# Type check
+# Required package-wide type check
 mypy devflow/
 
 # Run CLI (after pip install)

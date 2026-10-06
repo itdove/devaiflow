@@ -5,7 +5,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import urllib.request
 
 from rich.console import Console
@@ -186,7 +186,7 @@ def complete_session(
             return
 
     # End current work session (use session.name if we got it via --latest)
-    session_identifier = session.name if latest else identifier
+    session_identifier = session.name if latest else (identifier or session.name)
     session_manager.end_work_session(session_identifier)
 
     # Load config for prompt settings
@@ -486,7 +486,7 @@ def complete_session(
 
         # Iterate through all conversations
         for working_dir_name, conversation in session.conversations.items():
-            conv = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+            conv = conversation.active_session
 
             if not conv or not conv.project_path or not conv.branch:
                 continue
@@ -1190,6 +1190,8 @@ def _handle_feature_completion(
         # Verification error - return False to prevent JIRA transition
         return False
 
+    return False
+
 
 def _add_session_summary_to_issue(session, config, session_name: str, hours: int, minutes: int, config_loader) -> None:
     """Add session summary to issue tracker (backend-agnostic).
@@ -1579,7 +1581,8 @@ def _export_and_attach_to_jira(issue_key: str, session_name: str, config_loader,
 
             # Add comment with import instructions
             session_list = "\n".join([
-                f"  #{s.session_id} {s.working_directory} ({s.message_count or 0} messages)"
+                f"  {s.name} {s.working_directory} "
+                f"({s.active_conversation.message_count if s.active_conversation else 0} messages)"
                 for s in sessions
             ])
 
@@ -2071,7 +2074,7 @@ def _create_story_prs(session, feature, config_loader) -> List[str]:
     """
     from rich.prompt import Confirm
 
-    pr_urls = []
+    pr_urls: List[str] = []
     feature_branch = feature.branch
 
     if not session.conversations:
@@ -2083,7 +2086,7 @@ def _create_story_prs(session, feature, config_loader) -> List[str]:
 
     # Iterate over all conversations in this session
     for working_dir_name, conversation in session.conversations.items():
-        conv_context = conversation.active_session if hasattr(conversation, 'active_session') else conversation
+        conv_context = conversation.active_session
 
         if not conv_context:
             continue
@@ -3365,7 +3368,7 @@ def _generate_pr_summary_with_api(
         context = "\n\n".join(context_parts)
 
         # Call Anthropic API
-        client_kwargs = {"api_key": api_key}
+        client_kwargs: Dict[str, Any] = {"api_key": api_key}
         api_url = (profile or {}).get("api_url") or (profile or {}).get("base_url")
         if api_url:
             client_kwargs["base_url"] = api_url
@@ -3393,7 +3396,10 @@ Format as markdown bullets. Return ONLY the bullet points, nothing else."""
         )
 
         if message.content and len(message.content) > 0:
-            summary = message.content[0].text.strip()
+            block_text = getattr(message.content[0], "text", None)
+            if not isinstance(block_text, str):
+                return None
+            summary = block_text.strip()
             console.print("[dim]Generated PR summary using Anthropic API[/dim]")
             return summary
 
@@ -4021,7 +4027,7 @@ def _generate_commit_message_from_diff_api(
         if len(diff_content) > 5000:
             truncated_diff += "\n\n... (diff truncated for analysis)"
 
-        client_kwargs = {"api_key": api_key}
+        client_kwargs: Dict[str, Any] = {"api_key": api_key}
         api_url = (profile or {}).get("api_url") or (profile or {}).get("base_url")
         if api_url:
             client_kwargs["base_url"] = api_url
@@ -4056,7 +4062,10 @@ Return ONLY the commit message."""
         )
 
         if message.content and len(message.content) > 0:
-            commit_text = strip_code_fences(message.content[0].text.strip())
+            block_text = getattr(message.content[0], "text", None)
+            if not isinstance(block_text, str):
+                return None
+            commit_text = strip_code_fences(block_text.strip())
             return commit_text
 
         return None
@@ -4065,7 +4074,12 @@ Return ONLY the commit message."""
         return None
 
 
-def _generate_commit_with_agent_cli(summary_data, agent_backend: Optional[str] = None, display_name: Optional[str] = None) -> Optional[str]:
+def _generate_commit_with_agent_cli(
+    summary_data,
+    agent_backend: Optional[str] = None,
+    display_name: Optional[str] = None,
+    config: Any = None,
+) -> Optional[str]:
     """Generate commit message using the AI agent's CLI.
 
     Args:
@@ -4247,7 +4261,10 @@ Return ONLY the commit message in this exact format, nothing else."""
             }]
         )
 
-        commit_text = strip_code_fences(message.content[0].text.strip())
+        block_text = getattr(message.content[0], "text", None)
+        if not isinstance(block_text, str):
+            return None
+        commit_text = strip_code_fences(block_text.strip())
         return commit_text
 
     except Exception as e:

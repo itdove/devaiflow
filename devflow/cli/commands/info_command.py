@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import click
 from rich.console import Console
@@ -111,9 +111,9 @@ def _output_json_session_info(
                 sys.exit(1)
 
             # Flatten all conversations into a single list
-            all_conversations = []
+            all_conversations: List[ConversationContext] = []
             for conv_list in session.conversations.values():
-                all_conversations.extend(conv_list)
+                all_conversations.extend(conv_list.get_all_sessions())
 
             if conversation_id < 1 or conversation_id > len(all_conversations):
                 json_output(
@@ -133,7 +133,7 @@ def _output_json_session_info(
             if session.active_conversation:
                 json_output(success=True, data={"uuid": session.active_conversation.ai_agent_session_id})
             elif session.conversations:
-                first_conv = list(session.conversations.values())[0]
+                first_conv = list(session.conversations.values())[0].active_session
                 json_output(success=True, data={"uuid": first_conv.ai_agent_session_id})
             else:
                 json_output(
@@ -158,7 +158,11 @@ def _output_json_session_info(
                     conv_data = conv.model_dump(mode="json")
                     conv_data["conversation_number"] = conv_number
                     conv_data["working_directory"] = working_dir
-                    conv_data["conversation_file"] = _get_conversation_file_path(conv.project_path, conv.ai_agent_session_id, _ab)
+                    path_for_conv_file = conv.workspace_path if conv.is_multi_project else conv.project_path
+                    if path_for_conv_file:
+                        conv_data["conversation_file"] = _get_conversation_file_path(
+                            path_for_conv_file, conv.ai_agent_session_id, _ab
+                        )
                     # Check if this is the active conversation
                     is_active = (
                         session.active_conversation and
@@ -204,7 +208,9 @@ def _output_json_session_info(
         # Filter to specific conversation if requested
         if conversation_id is not None:
             # Count total conversations across all repositories
-            total_convs = sum(len(conv_list) for conv_list in session.conversations.values())
+            total_convs = sum(
+                len(conv_list.get_all_sessions()) for conv_list in session.conversations.values()
+            )
             if conversation_id < 1 or conversation_id > total_convs:
                 json_output(
                     success=False,
@@ -231,19 +237,18 @@ def _print_uuid_only(session: Session, conversation_id: Optional[int]) -> None:
     if conversation_id is not None:
         # Get specific conversation by index
         if not session.conversations:
-            console.print("[red]No conversations found in this session[/red]", err=True)
+            console.print("[red]No conversations found in this session[/red]")
             import sys
             sys.exit(1)
 
         # Flatten all conversations into a single list
-        all_conversations = []
+        all_conversations: List[ConversationContext] = []
         for conversation in session.conversations.values():
             all_conversations.extend(conversation.get_all_sessions())
 
         if conversation_id < 1 or conversation_id > len(all_conversations):
             console.print(
                 f"[red]Invalid conversation ID. Session has {len(all_conversations)} conversation(s)[/red]",
-                err=True,
             )
             import sys
             sys.exit(1)
@@ -259,7 +264,7 @@ def _print_uuid_only(session: Session, conversation_id: Optional[int]) -> None:
             first_conversation = list(session.conversations.values())[0]
             console.print(first_conversation.active_session.ai_agent_session_id)
         else:
-            console.print("[red]No conversations found in this session[/red]", err=True)
+            console.print("[red]No conversations found in this session[/red]")
 
 
 def _display_full_session_info(
@@ -477,22 +482,19 @@ def _display_token_usage(conv: ConversationContext, config_loader: ConfigLoader,
         console.print(f"    Total: {total_tokens:,} tokens")
 
         # Estimate cost if model provider profile is configured
-        if hasattr(config, "model_provider") and config.model_provider:
-            default_profile_name = config.model_provider.get("default_profile")
-            if default_profile_name:
-                profiles = config.model_provider.get("profiles", {})
-                profile = profiles.get(default_profile_name)
-                if profile:
-                    input_cost = profile.get("cost_per_million_input_tokens")
-                    output_cost = profile.get("cost_per_million_output_tokens")
-                    if input_cost is not None and output_cost is not None:
-                        # Calculate cost
-                        regular_input_cost = (input_tokens / 1_000_000) * input_cost
-                        regular_output_cost = (output_tokens / 1_000_000) * output_cost
-                        cache_write_cost = (cache_creation / 1_000_000) * input_cost * 1.25
-                        cache_read_cost = (cache_read / 1_000_000) * input_cost * 0.1
-                        total_cost = regular_input_cost + regular_output_cost + cache_write_cost + cache_read_cost
-                        console.print(f"    [bold]Estimated Cost:[/bold] [green]${total_cost:.4f}[/green]")
+        if config is not None and config.model_provider:
+            profile = config.model_provider.profiles.get(config.model_provider.default_profile)
+            if profile:
+                input_cost = profile.cost_per_million_input_tokens
+                output_cost = profile.cost_per_million_output_tokens
+                if input_cost is not None and output_cost is not None:
+                    # Calculate cost
+                    regular_input_cost = (input_tokens / 1_000_000) * input_cost
+                    regular_output_cost = (output_tokens / 1_000_000) * output_cost
+                    cache_write_cost = (cache_creation / 1_000_000) * input_cost * 1.25
+                    cache_read_cost = (cache_read / 1_000_000) * input_cost * 0.1
+                    total_cost = regular_input_cost + regular_output_cost + cache_write_cost + cache_read_cost
+                    console.print(f"    [bold]Estimated Cost:[/bold] [green]${total_cost:.4f}[/green]")
 
     except Exception:
         # Silently skip if token extraction fails

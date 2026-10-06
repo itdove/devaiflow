@@ -264,7 +264,7 @@ class AiderAgent(AgentInterface):
             Set of session identifiers
         """
         encoded_path = self.encode_project_path(project_path)
-        sessions = set()
+        sessions: Set[str] = set()
 
         if not self.chat_history_dir.exists():
             return sessions

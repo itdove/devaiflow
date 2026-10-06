@@ -56,7 +56,7 @@ class SessionCapture:
         """
         agent_session_dir = getattr(type(self.agent), "get_session_dir", None)
         if callable(agent_session_dir):
-            return self.agent.get_session_dir(project_path)
+            return agent_session_dir(self.agent, project_path)
 
         encoded = self.encode_project_path(project_path)
         return self.projects_dir / encoded

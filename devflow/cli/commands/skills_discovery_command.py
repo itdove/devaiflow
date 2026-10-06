@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import re
 
 import click
@@ -101,7 +101,10 @@ def skills(
 
         # Keep ``daf skills`` compatible with the installer command while plain
         # ``daf skills`` remains the discovery/inspection command.
-        assets.callback(
+        callback = assets.callback
+        if callback is None:
+            raise RuntimeError("The skills installer callback is not available")
+        callback(
             skill_name=skill_name,
             install=install,
             upgrade=upgrade,
@@ -158,7 +161,7 @@ def _discover_all_skills(
     Returns:
         Dict mapping level name to list of skill info dicts
     """
-    skills_by_level = {
+    skills_by_level: Dict[str, List[Dict[str, Any]]] = {
         "user": [],
         "workspace": [],
         "hierarchical": [],
@@ -253,7 +256,7 @@ def _parse_skill_file(skill_file: Path) -> Tuple[Dict, str]:
     Returns:
         Tuple of (frontmatter_dict, first_line_description)
     """
-    frontmatter = {}
+    frontmatter: Dict[str, Any] = {}
     description = ""
 
     try:
@@ -297,7 +300,7 @@ def _parse_skill_file(skill_file: Path) -> Tuple[Dict, str]:
                 break
 
     except Exception as e:
-        console.print(f"[yellow]Warning:[/yellow] Failed to parse {skill_file}: {e}", err=True)
+        console.print(f"[yellow]Warning:[/yellow] Failed to parse {skill_file}: {e}")
 
     return frontmatter, description
 
@@ -316,7 +319,7 @@ def _list_skills_json(skills_by_level: Dict[str, List[Dict]]) -> None:
     level_counts = {level: len(skills) for level, skills in skills_by_level.items()}
     total_skills = sum(level_counts.values())
 
-    output = {
+    output: Dict[str, Any] = {
         "skills": [],
         "total": total_skills,
         "levels": level_counts
@@ -349,7 +352,7 @@ def _list_skills_table(skills_by_level: Dict[str, List[Dict]]) -> None:
     console.print("\n[bold cyan]Available Skills (sorted by name)[/bold cyan]\n")
 
     # Collect all skills for sorted display
-    all_skills = []
+    all_skills: List[Dict[str, Any]] = []
     for level, skills in skills_by_level.items():
         all_skills.extend(skills)
 

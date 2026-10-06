@@ -460,7 +460,7 @@ def rename_workspace(old_name: str, new_name: str) -> None:
     for session in session_manager.index.sessions.values():
         if session.workspace_name == old_name:
             session.workspace_name = new_name
-            session_manager.save_session(session)
+            session_manager.update_session(session)
             sessions_updated += 1
 
     # Save config

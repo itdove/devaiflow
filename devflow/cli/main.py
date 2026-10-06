@@ -3,7 +3,7 @@
 import functools
 import os
 import sys
-from typing import Optional
+from typing import Any, Dict, List, Optional
 import click
 from rich.console import Console
 
@@ -187,14 +187,16 @@ def _check_and_refresh_jira_fields() -> None:
         config.jira.field_cache_timestamp = datetime.now().isoformat()
 
         # Save WITHOUT patches to persist the discovered field IDs
-        config_loader.save_config(config)
+        if config is not None:
+            config_loader.save_config(config)
 
         # Reload config WITH patches to reapply patch-provided metadata like required_for
         # This ensures that patch-provided field metadata is not lost after auto-refresh
         config = config_loader.load_config()
 
         # Save again with patches applied to merge discovered fields + patch metadata
-        config_loader.save_config(config)
+        if config is not None:
+            config_loader.save_config(config)
 
         if not is_json_mode:
             console.print("[dim]✓ Field mappings refreshed[/dim]")
@@ -627,7 +629,7 @@ def session_add_project(session_name: str, project_name: Optional[str], workspac
         sys.exit(1)
 
     # Build project list
-    project_list = [project_name] if project_name else projects.split(',')
+    project_list = [project_name] if project_name else (projects or "").split(',')
     project_list = [p.strip() for p in project_list]
 
     add_project_to_session(session_name, project_list, workspace, branch)
@@ -2092,7 +2094,7 @@ def config_show(ctx: click.Context, format: str, validate: bool, fields: bool, p
         # Check if using old or new format and validate accordingly
         is_old_format = config_loader._is_old_format()
         if is_old_format:
-            validation_result = validator.validate_merged_config(config)
+            validation_result = validator.validate_split_config_files()
         else:
             validation_result = validator.validate_split_config_files()
 
@@ -2456,7 +2458,7 @@ def config_validate(ctx: click.Context) -> None:
 
     if output_json:
         import json as json_module
-        result = {"valid": is_valid}
+        result: Dict[str, Any] = {"valid": is_valid}
         if error_message:
             result["error"] = error_message
         print(json_module.dumps(result))
@@ -3105,8 +3107,9 @@ def init(ctx: click.Context, check: bool, refresh: bool, reset: bool, skip_jira_
             _discover_and_cache_jira_fields(new_config, config_loader)
         else:
             # Save config without field discovery - preserve existing field mappings
-            new_config.jira.field_mappings = current_config.jira.field_mappings
-            new_config.jira.field_cache_timestamp = current_config.jira.field_cache_timestamp
+            if current_config is not None:
+                new_config.jira.field_mappings = current_config.jira.field_mappings
+                new_config.jira.field_cache_timestamp = current_config.jira.field_cache_timestamp
             config_loader.save_config(new_config)
 
         _install_configured_skills_after_init(new_config)
@@ -3326,7 +3329,7 @@ def _setup_shell_completion_if_desired() -> None:
     else:
         if shell_file.exists():
             content = shell_file.read_text()
-            if completion_line in content:
+            if completion_line is not None and completion_line in content:
                 console.print(f"\n[dim]{shell.capitalize()} shell completion already configured[/dim]")
                 return
 
@@ -3434,7 +3437,7 @@ def _discover_and_cache_jira_fields(config, config_loader) -> None:
         console.print("  You can refresh field mappings later with: [cyan]daf config refresh-jira-fields[/cyan]")
 
 
-def _get_config_changes(old_config, new_config) -> list:
+def _get_config_changes(old_config, new_config) -> List[str]:
     """Get list of configuration changes between old and new config.
 
     Args:
@@ -3444,7 +3447,7 @@ def _get_config_changes(old_config, new_config) -> list:
     Returns:
         List of change description strings
     """
-    changes = []
+    changes: List[str] = []
 
     # Compare JIRA settings
     if old_config.jira.url != new_config.jira.url:

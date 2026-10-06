@@ -137,7 +137,7 @@ class GitLabClient(IssueTrackerClient):
                 "GitLab CLI (glab) not found. Install it from https://gitlab.com/gitlab-org/cli"
             )
 
-    def _parse_issue_number(self, issue_key: str) -> tuple[str, int]:
+    def _parse_issue_number(self, issue_key: str) -> tuple[Optional[str], int]:
         """Parse issue key into repository and issue number.
 
         Args:

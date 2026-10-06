@@ -5,9 +5,10 @@ integrated verification.
 """
 
 import os
+import subprocess
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import click
 from rich.console import Console
@@ -209,7 +210,7 @@ def _create_story_branch(project_path: str, story_branch: str, feature_branch: s
     elif choice == "2":
         # Use current branch
         console.print(f"[green]✓[/green] Using current branch: {current_branch}")
-        return (True, current_branch)
+        return (True, current_branch or feature_branch)
 
     elif choice == "3":
         # Use feature branch
@@ -377,6 +378,12 @@ def create(
           --auto-order
     """
     try:
+        config_loader = ConfigLoader()
+        config = config_loader.load_config()
+        if config is None:
+            console.print("[red]Error:[/red] Could not load configuration")
+            return
+
         # Validate: must have either --sessions or --parent-url
         if not sessions and not parent_url:
             console.print("[red]Error:[/red] Must provide either --sessions or --parent-url")
@@ -412,9 +419,7 @@ def create(
             from devflow.utils.url_parser import parse_issue_url, get_hostname_from_url
             from devflow.issue_tracker.factory import create_issue_tracker_client
 
-            config_loader = ConfigLoader()
             session_manager = SessionManager(config_loader=config_loader)
-            config = config_loader.load_config()
 
             parsed = parse_issue_url(parent_url)
 
@@ -570,31 +575,39 @@ def create(
 
             # Discover ALL children (no assignee filter for team collaboration)
             # Remove assignee from sync_filters to get everyone's stories
-            sync_filters_no_assignee = sync_filters.copy() if sync_filters else {}
+            sync_filters_no_assignee: Dict[str, Any] = sync_filters.copy() if sync_filters else {}
             current_user_assignee = sync_filters_no_assignee.pop('assignee', None) if sync_filters_no_assignee else None
 
             # Also remove assignee from required_fields since we're using it for separation, not validation
             if 'required_fields' in sync_filters_no_assignee:
-                required_fields = sync_filters_no_assignee['required_fields']
+                required_fields_value: Any = sync_filters_no_assignee['required_fields']
                 try:
                     # Check type by name to avoid isinstance issues with typing module
-                    type_name = type(required_fields).__name__
+                    type_name = type(required_fields_value).__name__
                     if type_name in ('list', 'tuple'):
                         # GitHub/GitLab format: ['assignee'] → []
-                        sync_filters_no_assignee['required_fields'] = [f for f in required_fields if f != 'assignee']
-                    elif type_name == 'dict':
+                        sync_filters_no_assignee['required_fields'] = [
+                            f for f in required_fields_value if f != 'assignee'
+                        ]
+                    elif type_name == 'dict' and isinstance(required_fields_value, dict):
                         # JIRA format: {Story: [sprint, assignee]} → {Story: [sprint]}
                         sync_filters_no_assignee['required_fields'] = {
                             issue_type: [f for f in fields if f != 'assignee']
-                            for issue_type, fields in required_fields.items()
+                            for issue_type, fields in required_fields_value.items()
                         }
                 except Exception as e:
                     console.print(f"[yellow]Warning:[/yellow] Could not process required_fields: {e}")
-                    console.print(f"[dim]Type: {type(required_fields)}, Value: {required_fields}[/dim]")
+                    console.print(
+                        f"[dim]Type: {type(required_fields_value)}, Value: {required_fields_value}[/dim]"
+                    )
                     # Keep original value if we can't process it
                     pass
 
             console.print(f"[dim]Discovering all children (team collaboration mode)...[/dim]")
+
+            if parent is None:
+                console.print("[red]Error:[/red] A parent issue is required")
+                return
 
             try:
                 children = discovery.discover_children(parent, sync_filters_no_assignee)
@@ -642,7 +655,7 @@ def create(
                     if hasattr(issue_tracker_client, 'is_assigned_to'):
                         # Use JIRA client method for proper currentUser() handling
                         is_mine = issue_tracker_client.is_assigned_to(child_assignee, current_user_assignee)
-                    elif child_assignee and resolved_assignee:
+                    elif isinstance(child_assignee, str) and isinstance(resolved_assignee, str):
                         # Fallback for non-JIRA backends
                         is_mine = (resolved_assignee.lower() in child_assignee.lower())
 
@@ -854,11 +867,11 @@ def create(
             if parent_url and backend in ['github', 'gitlab']:
                 try:
                     if backend == 'github':
-                        repo_info = issue_tracker_client.get_repository_info(repository)
+                        repo_info = getattr(issue_tracker_client, "get_repository_info")(repository)
                         base_branch = repo_info['default_branch']
                         console.print(f"[dim]Detected default branch from API: {base_branch}[/dim]")
                     elif backend == 'gitlab':
-                        project_info = issue_tracker_client.get_project_info(repository)
+                        project_info = getattr(issue_tracker_client, "get_project_info")(repository)
                         base_branch = project_info['default_branch']
                         console.print(f"[dim]Detected default branch from API: {base_branch}[/dim]")
                 except Exception as e:
@@ -910,7 +923,7 @@ def create(
             name=name,
             sessions=session_list,
             branch=branch,
-            base_branch=base_branch,
+            base_branch=base_branch or "main",
             verification_mode=verify,
             workspace_name=workspace,
             parent_issue_key=parent if parent else None,
@@ -1155,17 +1168,21 @@ def delete(name: str, delete_sessions: bool, delete_branch: bool):
             from pathlib import Path
             try:
                 # Check if branch exists
-                result = GitUtils.run_git_command(
+                result = subprocess.run(
                     ["git", "rev-parse", "--verify", feature.branch],
                     cwd=Path.cwd(),
-                    check=False
+                    check=False,
+                    capture_output=True,
+                    text=True,
                 )
 
                 if result.returncode == 0:
                     # Check if we're on the branch
-                    current_branch_result = GitUtils.run_git_command(
+                    current_branch_result = subprocess.run(
                         ["git", "branch", "--show-current"],
-                        cwd=Path.cwd()
+                        cwd=Path.cwd(),
+                        capture_output=True,
+                        text=True,
                     )
                     current_branch = current_branch_result.stdout.strip()
 
@@ -1174,9 +1191,10 @@ def delete(name: str, delete_sessions: bool, delete_branch: bool):
                         console.print(f"[dim]Please checkout a different branch first[/dim]")
                     else:
                         # Delete branch
-                        GitUtils.run_git_command(
+                        subprocess.run(
                             ["git", "branch", "-D", feature.branch],
-                            cwd=Path.cwd()
+                            cwd=Path.cwd(),
+                            check=False,
                         )
                         console.print(f"  [dim]Deleted branch: {feature.branch}[/dim]")
                 else:
@@ -1267,6 +1285,9 @@ def sync(name: str, parent_url: Optional[str], auto_order: bool, dry_run: bool):
         from devflow.utils.backend_detection import detect_backend_from_key
 
         config = config_loader.load_config()
+        if config is None:
+            console.print("[red]Error:[/red] Could not load configuration")
+            return
         parent = None
         backend = None
         repository = None
@@ -1310,6 +1331,9 @@ def sync(name: str, parent_url: Optional[str], auto_order: bool, dry_run: bool):
                 sys.exit(1)
 
             # Detect backend from stored parent key
+            if parent is None:
+                console.print("[red]Error:[/red] A parent issue is required")
+                return
             backend = detect_backend_from_key(parent, config)
             issue_tracker_client = create_issue_tracker_client(backend=backend)
 
@@ -1350,30 +1374,38 @@ def sync(name: str, parent_url: Optional[str], auto_order: bool, dry_run: bool):
 
         # Remove assignee from sync_filters for team collaboration
         # Also remove assignee from required_fields since we're using it for separation
-        sync_filters_no_assignee = sync_filters.copy() if sync_filters else {}
+        sync_filters_no_assignee: Dict[str, Any] = sync_filters.copy() if sync_filters else {}
         if 'required_fields' in sync_filters_no_assignee:
-            required_fields = sync_filters_no_assignee['required_fields']
+            required_fields_value: Any = sync_filters_no_assignee['required_fields']
             try:
                 # Check type by name to avoid isinstance issues with typing module
-                type_name = type(required_fields).__name__
+                type_name = type(required_fields_value).__name__
                 if type_name in ('list', 'tuple'):
                     # GitHub/GitLab format: ['assignee'] → []
-                    sync_filters_no_assignee['required_fields'] = [f for f in required_fields if f != 'assignee']
-                elif type_name == 'dict':
+                    sync_filters_no_assignee['required_fields'] = [
+                        f for f in required_fields_value if f != 'assignee'
+                    ]
+                elif type_name == 'dict' and isinstance(required_fields_value, dict):
                     # JIRA format: {Story: [sprint, assignee]} → {Story: [sprint]}
                     sync_filters_no_assignee['required_fields'] = {
                         issue_type: [f for f in fields if f != 'assignee']
-                        for issue_type, fields in required_fields.items()
+                    for issue_type, fields in required_fields_value.items()
                     }
             except Exception as e:
                 console.print(f"[yellow]Warning:[/yellow] Could not process required_fields: {e}")
-                console.print(f"[dim]Type: {type(required_fields)}, Value: {required_fields}[/dim]")
+                console.print(
+                    f"[dim]Type: {type(required_fields_value)}, Value: {required_fields_value}[/dim]"
+                )
                 # Keep original value if we can't process it
                 pass
 
         # Discover children (all, not filtered by assignee)
         from devflow.orchestration.parent_discovery import ParentTicketDiscovery
         discovery = ParentTicketDiscovery(issue_tracker_client)
+
+        if parent is None:
+            console.print("[red]Error:[/red] A parent issue is required")
+            return
 
         try:
             all_children = discovery.discover_children(parent, sync_filters_no_assignee)
@@ -1524,7 +1556,7 @@ def sync(name: str, parent_url: Optional[str], auto_order: bool, dry_run: bool):
 
             # Fetch blocking relationships for all
             try:
-                relationships = issue_tracker_client.get_blocking_relationships(feature.sessions)
+                relationships = getattr(issue_tracker_client, "get_blocking_relationships")(feature.sessions)
                 for child in all_session_children:
                     rel = relationships.get(child["key"], {"blocks": [], "blocked_by": []})
                     child["blocks"] = rel["blocks"]

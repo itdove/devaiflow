@@ -1,7 +1,7 @@
 """Implementation of 'daf git update' command."""
 
 import sys
-from typing import Optional
+from typing import Any, Dict, Optional
 from rich.console import Console
 
 from devflow.cli.utils import output_json as json_output, console_print
@@ -44,7 +44,7 @@ def git_update(
         output_json: Output in JSON format
     """
     # Build update payload
-    payload = {}
+    payload: Dict[str, Any] = {}
 
     if state:
         state_lower = state.lower()
@@ -139,8 +139,9 @@ def git_update(
         if parent_to_link:
             try:
                 # Parse parent to get full repository info
-                parent_repo, parent_number = client._parse_issue_number(parent_to_link)
-                parent_repo = client._get_repository(parent_repo)
+                tracker_client: Any = client
+                parent_repo, parent_number = tracker_client._parse_issue_number(parent_to_link)
+                parent_repo = tracker_client._get_repository(parent_repo)
 
                 # Add comment to child issue mentioning parent
                 client.add_comment(
@@ -160,7 +161,7 @@ def git_update(
 
         # JSON output mode
         if output_json:
-            result_data = {"issue_key": issue_key}
+            result_data: Dict[str, Any] = {"issue_key": issue_key}
             if payload:
                 result_data["updated_fields"] = payload
             if parent_to_link:
@@ -187,21 +188,21 @@ def git_update(
     except IssueTrackerNotFoundError as e:
         console.print(f"[red]✗[/red] Issue not found: {issue_key}")
         if output_json:
-            json_output(success=False, error=str(e))
+            json_output(success=False, error={"message": str(e)})
         sys.exit(1)
     except IssueTrackerAuthError as e:
         console.print(f"[red]✗[/red] Authentication failed")
         console.print(f"[dim]Run 'gh auth login' or 'glab auth login' to authenticate[/dim]")
         if output_json:
-            json_output(success=False, error=str(e))
+            json_output(success=False, error={"message": str(e)})
         sys.exit(1)
     except IssueTrackerApiError as e:
         console.print(f"[red]✗[/red] API error: {e}")
         if output_json:
-            json_output(success=False, error=str(e))
+            json_output(success=False, error={"message": str(e)})
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]✗[/red] Unexpected error: {e}")
         if output_json:
-            json_output(success=False, error=str(e))
+            json_output(success=False, error={"message": str(e)})
         sys.exit(1)

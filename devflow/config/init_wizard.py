@@ -188,7 +188,7 @@ def _run_github_preset(current_config: Optional["Config"] = None) -> "Config":
     # Workspace path (required)
     suggested_workspace = _suggest_workspace_path()
     default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
-    workspace_path = Prompt.ask("Workspace path", default=default_workspace)
+    workspace_path = Prompt.ask("Workspace path", default=default_workspace) or str(default_workspace)
 
     console.print("\n[bold]=== Optional Configuration ===[/bold]")
     console.print("[dim]Press Enter to skip these settings[/dim]\n")
@@ -316,7 +316,7 @@ def _run_gitlab_preset(current_config: Optional["Config"] = None) -> "Config":
     # Workspace path (required)
     suggested_workspace = _suggest_workspace_path()
     default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
-    workspace_path = Prompt.ask("Workspace path", default=default_workspace)
+    workspace_path = Prompt.ask("Workspace path", default=default_workspace) or str(default_workspace)
 
     console.print("\n[bold]=== Optional Configuration ===[/bold]")
     console.print("[dim]Press Enter to skip these settings[/dim]\n")
@@ -456,7 +456,7 @@ def _run_jira_preset(current_config: Optional["Config"] = None) -> "Config":
     # Workspace path (required)
     suggested_workspace = _suggest_workspace_path()
     default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
-    workspace_path = Prompt.ask("\nWorkspace path", default=default_workspace)
+    workspace_path = Prompt.ask("\nWorkspace path", default=default_workspace) or str(default_workspace)
 
     console.print("\n[bold]=== Optional Configuration ===[/bold]")
     console.print("[dim]Press Enter to use defaults[/dim]\n")
@@ -541,7 +541,7 @@ def _run_local_preset(current_config: Optional["Config"] = None) -> "Config":
     # Workspace path (required)
     suggested_workspace = _suggest_workspace_path()
     default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else suggested_workspace
-    workspace_path = Prompt.ask("Workspace path", default=default_workspace)
+    workspace_path = Prompt.ask("Workspace path", default=default_workspace) or str(default_workspace)
 
     # Build minimal config
     config = Config(
@@ -750,7 +750,7 @@ def run_init_wizard(current_config: Optional[Config] = None) -> Config:
 
     # Workspace path
     default_workspace = current_config.repos.get_default_workspace_path() if current_config and current_config.repos else str(Path.home() / "development")
-    workspace_path = Prompt.ask("Workspace path", default=default_workspace)
+    workspace_path = Prompt.ask("Workspace path", default=default_workspace) or str(default_workspace)
 
     # Validate workspace path contains git repositories
     workspace_path_obj = Path(workspace_path).expanduser()
@@ -1025,7 +1025,9 @@ def _prompt_for_keywords(existing_keywords: dict) -> dict:
     return keywords
 
 
-def _save_organization_config(jira_project: Optional[str], hierarchical_config_source: str) -> None:
+def _save_organization_config(
+    jira_project: Optional[str], hierarchical_config_source: Optional[str]
+) -> None:
     """Save organization-level configuration to organization.json.
 
     Args:

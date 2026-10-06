@@ -3,7 +3,7 @@
 import logging
 import subprocess
 import sys
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from rich.console import Console
 from rich.prompt import Confirm
@@ -71,6 +71,8 @@ def link_jira(
     try:
         console_print(f"\n[cyan]Fetching issue tracker ticket {issue_key}...[/cyan]")
         issue_metadata_dict = _fetch_issue_metadata_dict(issue_key)
+        if issue_metadata_dict is None:
+            raise RuntimeError(f"Could not fetch issue tracker ticket {issue_key}")
         console_print(f"[green]✓[/green] issue tracker ticket {issue_key} exists")
         console_print(f"[dim]Status: {issue_metadata_dict.get('status')}, Type: {issue_metadata_dict.get('type')}[/dim]")
     except RuntimeError as e:

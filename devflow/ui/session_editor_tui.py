@@ -49,6 +49,20 @@ from devflow.config.loader import ConfigLoader
 console = Console()
 
 
+def _get_active_conversation(conversation: Any) -> ConversationContext:
+    """Return the active context from current or legacy conversation data.
+
+    Session metadata written by older versions may contain a
+    ``ConversationContext`` directly, while current metadata stores a
+    ``Conversation`` wrapper.  Assignment to a Pydantic model is intentionally
+    permissive for backwards compatibility, so the editor must support both
+    representations when handling in-memory sessions as well.
+    """
+    if isinstance(conversation, ConversationContext):
+        return conversation
+    return conversation.active_session
+
+
 # ============================================================================
 # Validators
 # ============================================================================
@@ -286,7 +300,8 @@ class SessionSelect(Container):
     def get_value(self) -> Optional[str]:
         """Get current select value."""
         select = self.query_one(f"#select_{self.field_key}", Select)
-        return select.value if select.value != Select.BLANK else None
+        value = select.value
+        return value if isinstance(value, str) and value != Select.BLANK else None
 
 
 class ConversationEntry(Container):
@@ -368,9 +383,9 @@ class ConversationEntry(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         event.stop()  # Prevent event bubbling
-        if event.button.id.startswith("edit_"):
+        if (event.button.id or "").startswith("edit_"):
             self.post_message(self.EditPressed(self.conv_key, self.conversation))
-        elif event.button.id.startswith("remove_"):
+        elif (event.button.id or "").startswith("remove_"):
             self.post_message(self.RemovePressed(self.conv_key))
 
 
@@ -569,6 +584,8 @@ class AddConversationScreen(ModalScreen):
             # Create or update conversation context
             if self.is_edit_mode:
                 # Update existing conversation
+                if self.existing_conv is None:
+                    raise RuntimeError("Edit mode requires an existing conversation")
                 self.existing_conv.ai_agent_session_id = ai_agent_session_id
                 self.existing_conv.project_path = project_path
                 self.existing_conv.branch = branch
@@ -732,10 +749,11 @@ class SessionEditorTUI(App):
 
         # Load session
         try:
-            self.session = self.session_manager.get_session(session_identifier)
-            if not self.session:
+            loaded_session = self.session_manager.get_session(session_identifier)
+            if loaded_session is None:
                 console.print(f"[red]Error: Session not found: {session_identifier}[/red]")
                 raise RuntimeError(f"Session not found: {session_identifier}")
+            self.session: Session = loaded_session
         except Exception as e:
             console.print(f"[red]Error loading session: {e}[/red]")
             raise
@@ -847,7 +865,7 @@ class SessionEditorTUI(App):
             with Vertical(id="conversations_list"):
                 if self.session.conversations:
                     for conv_key, conv in self.session.conversations.items():
-                        yield ConversationEntry(conv_key, conv)
+                        yield ConversationEntry(conv_key, _get_active_conversation(conv))
                 else:
                     yield Static("[dim]No conversations configured[/dim]", id="empty_message")
 
@@ -939,7 +957,7 @@ class SessionEditorTUI(App):
         except Exception as e:
             self.notify(f"Failed to save session: {e}", severity="error")
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         """Quit the application."""
         if self.modified:
             self.notify("Unsaved changes will be lost!", severity="warning")
@@ -1011,7 +1029,9 @@ class SessionEditorTUI(App):
             # Re-add the conversation entries
             if self.session.conversations:
                 for conv_key, conv in self.session.conversations.items():
-                    list_container.mount(ConversationEntry(conv_key, conv))
+                    list_container.mount(
+                        ConversationEntry(conv_key, _get_active_conversation(conv))
+                    )
             else:
                 list_container.mount(Static("[dim]No conversations configured[/dim]", id="empty_message"))
 
@@ -1032,7 +1052,8 @@ class SessionEditorTUI(App):
         def get_select_value(field_key: str) -> Optional[str]:
             try:
                 select = self.query_one(f"#select_{field_key}", Select)
-                return select.value if select.value != Select.BLANK else None
+                value = select.value
+                return value if isinstance(value, str) and value != Select.BLANK else None
             except:
                 return None
 
@@ -1092,16 +1113,19 @@ class SessionEditorTUI(App):
 
         # Validate conversations
         for conv_key, conv in self.session.conversations.items():
+            active_conv = _get_active_conversation(conv)
             # Validate UUID format
-            if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', conv.ai_agent_session_id.lower()):
+            if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', active_conv.ai_agent_session_id.lower()):
                 errors.append(f"Conversation {conv_key}: Invalid UUID format")
 
             # Validate project path exists
-            if conv.project_path:
+            if active_conv.project_path:
                 try:
-                    path = Path(conv.project_path).expanduser()
+                    path = Path(active_conv.project_path).expanduser()
                     if not path.exists():
-                        errors.append(f"Conversation {conv_key}: Project path does not exist: {conv.project_path}")
+                        errors.append(
+                            f"Conversation {conv_key}: Project path does not exist: {active_conv.project_path}"
+                        )
                 except Exception as e:
                     errors.append(f"Conversation {conv_key}: Invalid project path: {e}")
 

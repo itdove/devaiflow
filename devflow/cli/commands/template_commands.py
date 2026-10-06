@@ -77,6 +77,8 @@ def save_template(
         tags=session.tags if session.tags else [],
         issue_key=session.issue_key,
         created_at=datetime.now(),
+        last_used=None,
+        usage_count=0,
     )
 
     # Check if template already exists

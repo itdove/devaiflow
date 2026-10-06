@@ -807,7 +807,7 @@ def get_active_conversation(session_manager: SessionManager) -> Optional[Tuple[S
     else:
         sessions = list(session_manager.index.sessions.values())
 
-    matches = []
+    matches: List[Tuple[Session, ConversationContext, str]] = []
     for session in sessions:
         if not session or session.status not in {"created", "in_progress"}:
             continue
@@ -816,7 +816,7 @@ def get_active_conversation(session_manager: SessionManager) -> Optional[Tuple[S
             # Only the active conversation can be the current destination.
             # ``get_all_sessions()`` also includes archived conversations,
             # which may retain an old or placeholder agent session ID.
-            conv_ctx = getattr(conversation, "active_session", conversation)
+            conv_ctx = conversation.active_session
             if (
                 not conv_ctx.archived
                 and conv_ctx.ai_agent_session_id == agent_session_id
@@ -881,6 +881,7 @@ def output_json(
     data: Optional[Any] = None,
     metadata: Optional[Dict[str, Any]] = None,
     error: Optional[Dict[str, Any]] = None,
+    message: Optional[str] = None,
 ) -> None:
     """Output standardized JSON format to stdout.
 
@@ -910,7 +911,7 @@ def output_json(
             error={"message": "Session not found", "code": "SESSION_NOT_FOUND"}
         )
     """
-    output = {"success": success}
+    output: Dict[str, Any] = {"success": success}
 
     if data is not None:
         output["data"] = data
@@ -920,6 +921,9 @@ def output_json(
 
     if error is not None:
         output["error"] = error
+
+    if message is not None:
+        output["message"] = message
 
     # Output to stdout only
     print(json.dumps(output, indent=2, default=json_serializer))

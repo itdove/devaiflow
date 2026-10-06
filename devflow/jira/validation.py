@@ -169,7 +169,7 @@ class JiraFieldValidator:
             - is_valid: True if all validations pass
             - error_messages: List of validation error messages
         """
-        errors = []
+        errors: List[str] = []
 
         # Guard against Mock objects in tests
         if not isinstance(self.field_mappings, dict):
@@ -212,7 +212,7 @@ class JiraFieldValidator:
         Returns:
             List of error messages (empty if valid)
         """
-        errors = []
+        errors: List[str] = []
 
         # Check if field exists in mappings
         field_info = self.field_mappings.get(field_name)
@@ -262,7 +262,7 @@ class JiraFieldValidator:
         Returns:
             List of error messages (empty if valid)
         """
-        errors = []
+        errors: List[str] = []
 
         # Find field info by field_id
         field_info = None

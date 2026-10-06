@@ -75,7 +75,7 @@ def create_session_table(
     Returns:
         NiceGUI table element.
     """
-    pagination = {"rowsPerPage": 25}
+    pagination: Dict[str, Any] = {"rowsPerPage": 25}
     if not server_ordered:
         pagination.update({"sortBy": "last_active", "descending": True})
 

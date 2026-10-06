@@ -5,7 +5,7 @@ import shutil
 import tarfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from devflow.agent.factory import resolve_agent_backend
 from devflow.archive.base import ArchiveManagerBase
@@ -303,7 +303,7 @@ class BackupManager(ArchiveManagerBase):
         """
         sessions_index = self.config_loader.load_sessions()
 
-        backup_data = {
+        backup_data: Dict[str, Any] = {
             "version": "1.0",
             "archive_type": "backup",
             "created": datetime.now().isoformat(),

@@ -94,7 +94,7 @@ class MockJiraClient:
         key = f"{project}-{ticket_num}"
 
         # Create ticket data
-        ticket_data = {
+        ticket_data: Dict[str, Any] = {
             "key": key,
             "fields": {
                 "issuetype": {"name": issue_type},

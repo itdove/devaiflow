@@ -303,21 +303,26 @@ We follow [PEP 8](https://pep8.org/) with some modifications:
 - **Docstrings**: Use Google-style docstrings
 - **Type hints**: Use type hints for function signatures
 
-### Linting and Formatting
+### Linting, Formatting, and Type Checking
 
 ```bash
 # Format code with black
 black devflow/ tests/
 
-# Check code style with flake8
-flake8 devflow/ tests/
+# Check code style with ruff
+ruff check devflow/ tests/
 
-# Type checking with mypy (optional)
-mypy devflow/
+# Run the package-wide type check (required)
+mypy --no-incremental devflow/
 
 # Sort imports
 isort devflow/ tests/
 ```
+
+The package-wide mypy check is required for pull requests. Install the development
+extras first (`pip install -e ".[dev]"`); they include the third-party type stubs
+used by the check. The repository configuration in `pyproject.toml` is the source
+of truth, so contributors should run the command above from the repository root.
 
 ### Pre-commit Hooks (Recommended)
 

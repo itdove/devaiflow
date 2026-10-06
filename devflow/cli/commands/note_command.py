@@ -9,7 +9,7 @@ from rich.prompt import Prompt
 
 from devflow.cli.utils import get_session_with_prompt, add_jira_comment
 from devflow.config.loader import ConfigLoader
-from devflow.config.models import ConversationContext, Session
+from devflow.config.models import Conversation, ConversationContext, Session
 from devflow.session.manager import SessionManager
 
 console = Console()
@@ -50,7 +50,11 @@ def _get_managed_active_conversation(
         return None
 
     conversation_entry = session.conversations[working_dir]
-    conversation = getattr(conversation_entry, "active_session", conversation_entry)
+    conversation = (
+        conversation_entry.active_session
+        if isinstance(conversation_entry, Conversation)
+        else conversation_entry
+    )
     if conversation is None or conversation.archived:
         return None
 

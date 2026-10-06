@@ -143,6 +143,9 @@ def create_release(
 
     # Step 5: Create branch (if needed)
     if context.release_type in ["minor", "major"]:
+        if context.release_branch is None:
+            console.print("[red]✗[/red] Release branch was not determined")
+            return
         console.print(f"[bold]Step 5:[/bold] Creating release branch '{context.release_branch}'...")
         success, msg = manager.create_branch(context.release_branch, from_branch=context.current_branch, dry_run=dry_run)
         if not success:
@@ -152,6 +155,9 @@ def create_release(
     elif context.release_type == "patch":
         # For patches, user should already be on hotfix branch or we create it
         if from_tag:
+            if context.hotfix_branch is None:
+                console.print("[red]✗[/red] Hotfix branch was not determined")
+                return
             console.print(f"[bold]Step 5:[/bold] Creating hotfix branch from '{from_tag}'...")
             success, msg = manager.create_branch(context.hotfix_branch, from_branch=from_tag, dry_run=dry_run)
             if not success:
@@ -222,6 +228,9 @@ Prepare for v{context.target_version} release:
     console.print()
 
     # Step 9: Create git tag
+    if context.tag_name is None:
+        console.print("[red]✗[/red] Release tag was not determined")
+        return
     console.print(f"[bold]Step 9:[/bold] Creating git tag '{context.tag_name}'...")
     tag_msg = f"Release version {context.target_version}\n\nSee CHANGELOG.md for details."
     success, msg = manager.create_tag(context.tag_name, tag_msg, dry_run=dry_run)
@@ -235,6 +244,9 @@ Prepare for v{context.target_version} release:
     # Step 10: Bump to next dev version
     if context.release_type in ["minor", "major"]:
         # Bump release branch to next patch dev version
+        if context.next_dev_version is None:
+            console.print("[red]✗[/red] Next development version was not determined")
+            return
         console.print(f"[bold]Step 10:[/bold] Bumping release branch to {context.next_dev_version}...")
         try:
             manager.update_version_files(context.next_dev_version, dry_run=dry_run)

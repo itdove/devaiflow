@@ -1,5 +1,7 @@
 """Implementation of 'daf maintenance discover' command."""
 
+from typing import Dict, Tuple
+
 from rich.console import Console
 from rich.table import Table
 
@@ -33,9 +35,27 @@ def discover_sessions() -> None:
         console.print(f"[dim]{agent_name} sessions stored in its data directory[/dim]")
         return
 
-    # Get list of UUIDs already managed by daf tool
+    # Get list of UUIDs already managed by daf tool.
     managed_sessions = session_manager.list_sessions()
-    managed_uuids = {s.ai_agent_session_id for s in managed_sessions if s.ai_agent_session_id}
+    uuid_to_session: Dict[str, Tuple[str, str]] = {}
+    for managed_session in managed_sessions:
+        # Keep compatibility with pre-multi-conversation session objects.
+        legacy_uuid = getattr(managed_session, "ai_agent_session_id", None)
+        if legacy_uuid:
+            uuid_to_session[str(legacy_uuid)] = (
+                str(getattr(managed_session, "issue_key", None) or "unknown"),
+                str(getattr(managed_session, "name", "unknown")),
+            )
+        conversations = getattr(managed_session, "conversations", None)
+        if isinstance(conversations, dict):
+            for conversation in conversations.values():
+                for context in conversation.get_all_sessions():
+                    if context.ai_agent_session_id:
+                        uuid_to_session[context.ai_agent_session_id] = (
+                            str(managed_session.issue_key or "unknown"),
+                            managed_session.name,
+                        )
+    managed_uuids = set(uuid_to_session)
 
     # Separate managed and unmanaged sessions
     unmanaged = [s for s in discovered if s.uuid not in managed_uuids]
@@ -90,12 +110,6 @@ def discover_sessions() -> None:
         table.add_column("Messages", justify="right", style="white")
         table.add_column("Last Active", style="dim white", width=20)
 
-        # Find JIRA keys for managed sessions
-        uuid_to_jira = {}
-        for s in managed_sessions:
-            if s.ai_agent_session_id:
-                uuid_to_jira[s.ai_agent_session_id] = (s.issue_key, s.session_id)
-
         for session in managed:
             last_active = session.last_active.strftime("%Y-%m-%d %H:%M")
             working_dir = session.working_directory or "unknown"
@@ -103,9 +117,9 @@ def discover_sessions() -> None:
                 working_dir = "..." + working_dir[-24:]
 
             issue_key= "unknown"
-            if session.uuid in uuid_to_jira:
-                key, sid = uuid_to_jira[session.uuid]
-                issue_key= f"{key} (#{sid})"
+            if session.uuid in uuid_to_session:
+                key, session_name = uuid_to_session[session.uuid]
+                issue_key = f"{key} ({session_name})"
 
             table.add_row(
                 session.uuid,

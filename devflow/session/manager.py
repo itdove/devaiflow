@@ -26,6 +26,7 @@ class SessionManager:
         self.config_loader = config_loader or ConfigLoader()
 
         # Initialize storage backend
+        self.storage: StorageBackend
         if storage is None:
             # Default to FileBackend
             self.storage = FileBackend(
@@ -170,6 +171,18 @@ class SessionManager:
             # Get the updated session from index to ensure we have the correct name
             updated_session = self.index.sessions[actual_name]
             self._save_session_metadata(updated_session)
+
+    def save_session(self, session: Session) -> None:
+        """Save an existing session.
+
+        This compatibility alias preserves the session-manager API used by the
+        session editor and older integrations while routing all updates through
+        the canonical update path.
+
+        Args:
+            session: Session object to save.
+        """
+        self.update_session(session)
 
     def delete_session(self, identifier: str) -> None:
         """Delete a session.

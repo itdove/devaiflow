@@ -110,7 +110,7 @@ def parse_conversation_jsonl(jsonl_path: Path) -> List[Dict]:
     Returns:
         List of parsed message dictionaries
     """
-    messages = []
+    messages: List[Dict] = []
     if not jsonl_path.exists():
         return messages
 
@@ -309,7 +309,9 @@ def extract_todo_history(messages: List[Dict]) -> TodoHistory:
                     status = todo_dict.get("status")
                     active_form = todo_dict.get("activeForm", content)
 
-                    if content and status:
+                    if isinstance(content, str) and isinstance(status, str):
+                        if not isinstance(active_form, str):
+                            active_form = content
                         # Create TodoItem
                         todo_item = TodoItem(
                             content=content,
@@ -709,7 +711,8 @@ Focus on what was built, fixed, or changed - not just statistics. Be specific an
 
         # Extract text from response
         if message.content and len(message.content) > 0:
-            return message.content[0].text
+            text = getattr(message.content[0], "text", None)
+            return text if isinstance(text, str) else None
 
         return None
 

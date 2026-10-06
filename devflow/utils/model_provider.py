@@ -550,14 +550,12 @@ def _extract_model_ids(payload: Any) -> List[str]:
         if isinstance(candidate, str):
             value = candidate.strip()
         elif isinstance(candidate, dict):
-            value = next(
-                (
-                    candidate.get(key)
-                    for key in ("id", "name", "model", "model_name")
-                    if isinstance(candidate.get(key), str) and candidate.get(key).strip()
-                ),
-                "",
-            ).strip()
+            value = ""
+            for key in ("id", "name", "model", "model_name"):
+                candidate_value = candidate.get(key)
+                if isinstance(candidate_value, str) and candidate_value.strip():
+                    value = candidate_value.strip()
+                    break
         else:
             value = ""
         if value and value not in model_ids:
@@ -846,7 +844,7 @@ def validate_model_provider_profile(
 
         ModelProviderProfile.model_validate(profile_data)
     except Exception as exc:
-        errors = getattr(exc, "errors", lambda: [])()
+        errors: List[Any] = getattr(exc, "errors", lambda: [])()
         if errors:
             for error in errors:
                 location = error.get("loc", ()) if isinstance(error, dict) else ()
@@ -894,10 +892,12 @@ def validate_model_provider_profile(
     elif base_url and has_valid_url:
         _add_validation_message(result.checks, "Configured provider URL is usable.")
 
-    profile_credential = any(
-        isinstance(profile_data.get(field_name), str) and profile_data.get(field_name).strip()
-        for field_name in ("api_key", "auth_token")
-    )
+    profile_credential = False
+    for field_name in ("api_key", "auth_token"):
+        credential = profile_data.get(field_name)
+        if isinstance(credential, str) and credential.strip():
+            profile_credential = True
+            break
     env_credential = _credential_value(profile_data, provider, environ) is not None
     if profile_data.get("api_key") and profile_data.get("auth_token"):
         _add_validation_message(
@@ -1213,8 +1213,9 @@ def build_env_from_profile(profile: Optional[Dict[str, Any]], base_env: Optional
         env.pop("CLAUDE_CODE_USE_VERTEX", None)
 
     # Apply additional environment variables
-    if profile.get("env_vars"):
-        env.update(profile["env_vars"])
+    env_vars = profile.get("env_vars")
+    if isinstance(env_vars, dict):
+        env.update({str(key): str(value) for key, value in env_vars.items()})
 
     return env
 
@@ -1234,6 +1235,8 @@ def apply_model_override(profile: Optional[Dict[str, Any]], model: Optional[str]
     if profile is None:
         return {"model_name": model}
     profile = _profile_to_dict(profile)
+    if profile is None:
+        return {"model_name": model}
     profile["model_name"] = model
     return profile
 

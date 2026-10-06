@@ -16,7 +16,7 @@ def _command_model(mapping: Any, command: Optional[str]) -> Optional[str]:
         return None
 
     for field_name in ("command_models", "models"):
-        command_models = _value(mapping, field_name) or {}
+        command_models: Any = _value(mapping, field_name) or {}
         if isinstance(command_models, dict):
             model = command_models.get(command)
             if model:

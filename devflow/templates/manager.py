@@ -137,6 +137,9 @@ class TemplateManager:
             branch=None,
             tags=[],
             issue_key=default_jira_project,
+            created_at=None,
+            last_used=None,
+            usage_count=0,
         )
 
         # Save template

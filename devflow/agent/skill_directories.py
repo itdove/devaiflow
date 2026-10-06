@@ -314,6 +314,10 @@ def get_skill_install_paths(
 
     if level in ('project', 'both') and project_path is None:
         raise ValueError(f"project_path is required for level='{level}'")
+    if project_path is None:
+        # The guard above handles project-only levels; this keeps the type
+        # narrowed for the branches below as well.
+        project_path = Path.cwd()
 
     install_paths = []
 
@@ -509,7 +513,9 @@ def _configured_agents_from_config(config: Any) -> List[str]:
         from devflow.utils.model_provider import get_agent_backend_from_profile
 
         for profile in profiles.values():
-            configured.append(get_agent_backend_from_profile(profile))
+            backend = get_agent_backend_from_profile(profile)
+            if backend:
+                configured.append(backend)
 
     agents: List[str] = []
     for agent in configured:

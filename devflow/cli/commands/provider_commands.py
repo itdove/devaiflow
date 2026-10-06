@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
@@ -199,7 +199,7 @@ def add_profile(name: Optional[str] = None, interactive: bool = True, output_jso
         use_vertex = False
         vertex_project_id = None
         vertex_region = None
-        env_vars = {}
+        env_vars: Dict[str, str] = {}
         provider = "anthropic"
 
         if provider_type == "1":

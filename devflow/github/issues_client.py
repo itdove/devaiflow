@@ -161,7 +161,7 @@ class GitHubClient(IssueTrackerClient):
                 "GitHub CLI (gh) not found. Install it from https://cli.github.com/"
             )
 
-    def _parse_issue_number(self, issue_key: str) -> tuple[str, int]:
+    def _parse_issue_number(self, issue_key: str) -> tuple[Optional[str], int]:
         """Parse issue key into repository and issue number.
 
         Args:

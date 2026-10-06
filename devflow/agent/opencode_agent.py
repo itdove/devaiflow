@@ -757,7 +757,7 @@ class OpenCodeAgent(AgentInterface):
             if major_version == 1 and settings["reasoning_effort"]:
                 cmd.extend(["--reasoning-effort", settings["reasoning_effort"]])
             cmd.append(prompt)
-            run_kwargs = {
+            run_kwargs: Dict[str, Any] = {
                 "capture_output": True,
                 "text": True,
                 "timeout": timeout,

@@ -268,13 +268,15 @@ class ParentTicketDiscovery:
         # Build dependency graph
         # in_degree: count of unresolved dependencies (how many issues block this one)
         # graph: maps issue_key -> list of issues it blocks
-        in_degree = {}
-        graph = {}
-        key_to_child = {}
+        in_degree: Dict[str, int] = {}
+        graph: Dict[str, List[str]] = {}
+        key_to_child: Dict[str, Dict] = {}
 
         # Initialize structures
         for child in children:
             child_key = child.get('key')
+            if not isinstance(child_key, str):
+                continue
             key_to_child[child_key] = child
             in_degree[child_key] = 0
             graph[child_key] = []
@@ -282,10 +284,14 @@ class ParentTicketDiscovery:
         # Build graph from blocking relationships
         for child in children:
             child_key = child.get('key')
+            if not isinstance(child_key, str):
+                continue
             blocked_by = child.get('blocked_by', [])
+            if not isinstance(blocked_by, list):
+                blocked_by = []
 
             # Only count blockers that are in our children list (ignore external dependencies)
-            internal_blockers = [b for b in blocked_by if b in key_to_child]
+            internal_blockers = [b for b in blocked_by if isinstance(b, str) and b in key_to_child]
 
             in_degree[child_key] = len(internal_blockers)
 

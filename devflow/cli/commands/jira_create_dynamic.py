@@ -179,7 +179,7 @@ def create_jira_create_command():
             priority=priority,
             project=project,
             parent=parent,
-            affected_version=affected_version,
+            affected_version=str(affected_version or ""),
             description=description,
             description_file=description_file,
             interactive=interactive,

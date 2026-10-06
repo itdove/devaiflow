@@ -7,7 +7,7 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
@@ -349,7 +349,7 @@ def create_new_session(
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
-    config = config_loader.load_config()
+    config: Any = config_loader.load_config()
 
     # Determine if in non-interactive mode
     non_interactive = is_non_interactive(output_json)
@@ -375,8 +375,6 @@ def create_new_session(
                 console.print(f"[dim]{template.description}[/dim]")
     else:
         # Auto-detect template based on current directory (if auto_use is enabled)
-        config = config_loader.load_config()
-
         if config and config.templates.auto_use:
             current_dir = Path.cwd()
             template = template_manager.find_matching_template(current_dir)
@@ -458,6 +456,9 @@ def create_new_session(
         if not workspace_path:
             console.print("[red]✗[/red] Internal error: workspace_path not set (should have been validated)")
             raise click.Abort()
+        if selected_workspace_name is None:
+            console.print("[red]✗[/red] A workspace must be selected for multi-project sessions")
+            raise click.Abort()
 
         workspace_path_obj = Path(workspace_path)
         missing_projects = []
@@ -536,6 +537,9 @@ def create_new_session(
                 selected_paths, is_multi = result
                 if is_multi and selected_paths:
                     # Multi-project selected via unified UI
+                    if workspace_path is None or selected_workspace_name is None:
+                        console.print("[red]✗[/red] A workspace must be selected for multi-project sessions")
+                        raise click.Abort()
                     multi_names = [Path(p).name for p in selected_paths]
                     from devflow.cli.commands.new_command_multiproject import create_multi_project_session
                     create_multi_project_session(
@@ -656,8 +660,10 @@ def create_new_session(
         # Handle return value: could be tuple (branch, source_branch) or just branch name
         if isinstance(branch_result, tuple):
             branch, source_branch_for_base = branch_result
-        else:
+        elif isinstance(branch_result, str):
             branch = branch_result
+        else:
+            branch = None
 
         # Persist the current branch when the user skips creating a new one.
         if branch is None:
@@ -740,7 +746,7 @@ def create_new_session(
                     console_print(f"[dim]Using session index {session_index}: creating new conversation[/dim]")
                 else:
                     session = existing_sessions[session_index - 1]
-                    console_print(f"[dim]Using session index {session_index}: adding to session #{session.session_id}[/dim]")
+                    console_print(f"[dim]Using session index {session_index}: adding to session {session.name}[/dim]")
             elif non_interactive:
                 # Non-interactive mode without session_index - error
                 console.print(f"[red]✗[/red] Multiple sessions found for '{name}' - must specify --session-index")
@@ -754,7 +760,7 @@ def create_new_session(
 
                 console.print(f"\n[yellow]Found {len(existing_sessions)} existing sessions for '{name}':[/yellow]\n")
                 for i, sess in enumerate(existing_sessions, 1):
-                    console.print(f"  {i}. Session #{sess.session_id}")
+                    console.print(f"  {i}. Session {sess.name}")
                     console.print(f"     Goal: {sess.goal}")
                     console.print(f"     Conversations: {len(sess.conversations)}")
                     if sess.conversations:
@@ -765,11 +771,11 @@ def create_new_session(
                 console.print(f"  {new_option}. → Create new conversation (separate work stream)")
                 console.print()
 
-                choice = IntPrompt.ask(
+                choice = int(IntPrompt.ask(
                     "Add to which session? (or create new conversation)",
                     choices=[str(i) for i in range(1, new_option + 1)],
-                    default="1"
-                )
+                    default=1,
+                ))
 
                 if choice == new_option:
                     # User wants to create new session - set session to None to fall through
@@ -779,30 +785,31 @@ def create_new_session(
                     session = existing_sessions[choice - 1]
 
                 # Check if conversation already exists
-                if session.get_conversation(working_directory):
+                if session is not None and session.get_conversation(working_directory):
                     console.print(f"\n[yellow]⚠ A conversation already exists for {working_directory} in session [/yellow]")
                     console.print(f"[dim]Use 'daf open {name}' to resume the existing conversation[/dim]")
                     sys.exit(1)
 
-                console.print(f"\n[cyan]Adding conversation to session [/cyan]")
+                if session is not None:
+                    console.print(f"\n[cyan]Adding conversation to session [/cyan]")
 
-                # AAP-63377: Use selected workspace path
-                # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
-                session.add_conversation(
-                    working_dir=working_directory,
-                    ai_agent_session_id=session_id,
-                    project_path=project_path,
-                    branch=branch,
-                    base_branch=source_branch_for_base or "main",
-                    workspace=workspace_path,
-                )
-                session.working_directory = working_directory
+                    # AAP-63377: Use selected workspace path
+                    # Set base_branch to source_branch if available (fixes #139 - no sync prompt after creating branch)
+                    session.add_conversation(
+                        working_dir=working_directory,
+                        ai_agent_session_id=session_id,
+                        project_path=project_path,
+                        branch=branch or "",
+                        base_branch=source_branch_for_base or "main",
+                        workspace=workspace_path,
+                    )
+                    session.working_directory = working_directory
 
-                # AAP-63377: Update session's workspace if not already set
-                if not session.workspace_name and selected_workspace_name:
-                    session.workspace_name = selected_workspace_name
+                    # AAP-63377: Update session's workspace if not already set
+                    if not session.workspace_name and selected_workspace_name:
+                        session.workspace_name = selected_workspace_name
 
-                session_manager.update_session(session)
+                    session_manager.update_session(session)
 
     # Create session if we didn't add to an existing one
     if session is None:
@@ -832,7 +839,7 @@ def create_new_session(
         session = session_manager.create_session(
             name=name,
             issue_key=issue_key,
-            goal=storage_goal,
+            goal=storage_goal or "",
             working_directory=working_directory,
             project_path=project_path,
             branch=branch,
@@ -903,7 +910,16 @@ def create_new_session(
 
         # Display session context - use session.goal which now contains the concatenated value
         jira_url = config.jira.url if config and config.jira else None
-        _display_session_banner(name, session.goal, working_directory, branch, project_path, session_id, issue_key, jira_url)
+        _display_session_banner(
+            name,
+            session.goal,
+            working_directory,
+            branch or "",
+            project_path,
+            session_id,
+            issue_key,
+            jira_url,
+        )
 
     # Resolve agent backend and display name
     agent_name = get_agent_display_name(_agent_backend)
@@ -1086,6 +1102,8 @@ def _suggest_and_select_repository(
         Tuple of (selected_paths, is_multi_project) or None if cancelled/no workspace
     """
     config = config_loader.load_config()
+    if config is None:
+        return None
 
     # Get available repositories from workspace
     available_repos = []
@@ -1173,6 +1191,9 @@ def _suggest_and_select_repository(
                 config_updated = True
             if config_updated:
                 config_loader.save_config(config)
+
+    if workspace_path_str is None:
+        return None
 
     # Delegate to unified project selection
     return unified_project_selection(
@@ -1355,8 +1376,8 @@ def _handle_existing_branch(
     path: Path,
     branch_name: str,
     default_source: str,
-    config: Optional[any] = None
-) -> Optional[str]:
+    config: Optional[Any] = None
+) -> Optional[str] | bool:
     """Handle case where branch already exists.
 
     Args:
@@ -1545,7 +1566,7 @@ def _handle_branch_creation(
     issue_key: str,
     goal: Optional[str],
     auto_from_default: bool = False,
-    config: Optional[any] = None,
+    config: Optional[Any] = None,
     source_branch: Optional[str] = None,
     branch_name: Optional[str] = None,
     project_name: Optional[str] = None,
@@ -1749,7 +1770,7 @@ def _handle_branch_creation(
                         selected_branch = current_branch
 
                     # Checkout selected branch if different from current
-                    if selected_branch != current_branch:
+                    if selected_branch and selected_branch != current_branch:
                         msg = f"Switching to branch: {selected_branch}"
                         if project_name:
                             msg = f"[{project_name}] {msg}"

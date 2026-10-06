@@ -120,10 +120,11 @@ def create_multi_project_session(
         branch_identifier,
         goal,
         use_issue_key_only=use_issue_key_only,
-        backend=backend
+        backend=backend or "jira"
     )
 
     # Prompt for branch name (shared across all projects)
+    shared_branch_name: str
     if non_interactive or output_json:
         shared_branch_name = suggested_branch
     else:
@@ -171,7 +172,7 @@ def create_multi_project_session(
     if not output_json:
         console.print(f"\n[bold]Creating branches...[/bold]")
 
-    branch_creation_results = {}
+    branch_creation_results: Dict[str, Dict[str, str]] = {}
     for proj_name in project_names:
         proj_path = workspace_path_obj / proj_name
         base_branch = project_base_branches[proj_name]
@@ -204,8 +205,11 @@ def create_multi_project_session(
         # Extract branch name and source branch
         if isinstance(branch_result, tuple):
             created_branch, source_branch = branch_result
-        else:
+        elif isinstance(branch_result, str):
             created_branch = branch_result
+            source_branch = base_branch
+        else:
+            created_branch = None
             source_branch = base_branch
 
         branch_creation_results[proj_name] = {
@@ -219,7 +223,7 @@ def create_multi_project_session(
         if actual_branch != shared_branch_name:
             if not output_json:
                 console.print(f"\n[cyan]ℹ Using updated branch name for remaining projects: {actual_branch}[/cyan]")
-            shared_branch_name = actual_branch
+            shared_branch_name = str(actual_branch)
 
     # Check if session already exists (multi-conversation support)
     existing_sessions = session_manager.index.get_sessions(name)
@@ -246,7 +250,7 @@ def create_multi_project_session(
     session_id = generate_agent_session_id(_agent_backend_for_id)
 
     # Build projects_info dict for multi-project conversation
-    projects_info = {}
+    projects_info: Dict[str, Dict[str, str]] = {}
     for proj_name in project_names:
         proj_path = workspace_path_obj / proj_name
         branch_info = branch_creation_results[proj_name]
@@ -285,7 +289,7 @@ def create_multi_project_session(
     session = session_manager.create_session(
         name=name,
         issue_key=issue_key,
-        goal=storage_goal,
+        goal=storage_goal or "",
         working_directory=None,  # Will be set by add_multi_project_conversation
         project_path=None,
         branch=None,
