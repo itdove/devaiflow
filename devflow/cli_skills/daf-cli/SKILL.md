@@ -21,7 +21,8 @@ user-invocable: false
 ### GitHub/GitLab Operations
 **See `daf-git` skill** for complete GitHub/GitLab documentation:
 - View issues: `gh issue view` (GitHub) / `glab issue view` (GitLab)
-- Create issues: `gh issue create` / `glab issue create` + `daf link`
+- Create issues: `gh issue create` / `glab issue create`; report the issue URL
+  and key, then reopen the ticket-creation session by its session name
 - Update issues: `daf git update`
 - Add comments: `gh issue comment` / `glab issue note`
 - **CRITICAL**: GitHub/GitLab use Markdown syntax (see daf-git skill)
@@ -108,6 +109,9 @@ Running these commands inside an active agent session can cause:
 - Lost work from conflicting updates
 
 **If you need these commands:** Exit the active agent or IDE and run them from a regular terminal.
+
+`daf link` is the JIRA session-association command (`daf link <session> --jira <JIRA-KEY>`).
+It is not used with GitHub/GitLab issue URLs.
 
 ## Skills Management
 

@@ -251,6 +251,31 @@ class TestMultiProjectGitPromptBuilder:
         assert "READ-ONLY" in prompt
         assert "Do NOT modify" in prompt or "DO NOT modify" in prompt
 
+    def test_multiproject_prompt_does_not_request_session_link(self, tmp_path):
+        """GitHub/GitLab issue creation must not use the JIRA session linker."""
+        from devflow.cli.commands.git_new_command import (
+            _build_multiproject_issue_creation_prompt,
+        )
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        project_path = workspace / "project-a"
+        project_path.mkdir()
+
+        prompt = _build_multiproject_issue_creation_prompt(
+            issue_type="task",
+            goal="Document the workflow",
+            config=MagicMock(),
+            name="test-session",
+            project_paths=[str(project_path)],
+            workspace=str(workspace),
+            target_repo_path=str(project_path),
+        )
+
+        assert "daf link" not in prompt
+        assert "issue URL and key" in prompt
+        assert "daf open test-session" in prompt
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -941,7 +941,7 @@ def _build_issue_creation_prompt(
         issue_type: Optional type of issue (bug, enhancement, task). If None, no type label is added
         goal: Goal/description for the issue
         config: Configuration object
-        session_name: Name of the session (unused, kept for backward compatibility)
+        session_name: Name of the session used in post-creation reopen guidance
         project_path: Unused, kept for backward compatibility
         workspace: Workspace path for skill discovery
         parent: Optional parent issue key (owner/repo#123 or #123)
@@ -1080,15 +1080,14 @@ def _build_issue_creation_prompt(
         f"3. Create the GitHub/GitLab issue{' (' + issue_type + ')' if issue_type else ''} using `gh issue create` (GitHub) or `glab issue create` (GitLab)",
         "4. Include detailed description and acceptance criteria based on your analysis",
         f"5. Configured defaults: {defaults_str}",
-        "6. After creating the issue, link it to this session: `daf link <issue_url>`",
+        "6. After creating the issue, include the issue URL and key in your final response",
         "",
     ])
 
     prompt_parts.extend([
-        "⚠️  CRITICAL: Read the daf-git skill to understand how to create issues with gh/glab CLI and link them with daf link.",
+        "⚠️  CRITICAL: Read the daf-git skill to understand how to create issues with the gh/glab CLI. The GitHub/GitLab workflow ends after issue creation and reporting the issue URL and key.",
         "",
-        "After you create and link the issue, the session will be automatically renamed to 'creation-<issue_number>'",
-        "for easy identification. Users can reopen with: daf open creation-<issue_number>",
+        f"Keep this ticket-creation session under its current name ({session_name}). After leaving the agent session, users can reopen it with: daf open {session_name}",
         "",
         "Remember: This is READ-ONLY analysis. Do not modify any files.",
     ])
@@ -1193,12 +1192,11 @@ def _build_multiproject_issue_creation_prompt(
         "2. Identify what needs to be implemented/fixed across all projects",
         "3. Determine clear, testable acceptance criteria considering all projects",
         f"4. Create the GitHub/GitLab issue in {target_repo_name} using `gh issue create` (GitHub) or `glab issue create` (GitLab)",
-        "5. Link the issue to this session: `daf link <issue_url>`",
+        "5. Include the created issue URL and key in your final response",
         "",
-        "⚠️  CRITICAL: Read the daf-git skill to understand how to create issues with gh/glab CLI and link them with daf link.",
+        "⚠️  CRITICAL: Read the daf-git skill to understand how to create issues with the gh/glab CLI. Do not attempt to associate the GitHub/GitLab issue with the session using a DAF command.",
         "",
-        "After you create and link the issue, the session will be automatically renamed to 'creation-<issue_number>'",
-        "for easy identification. Users can reopen with: daf open creation-<issue_number>",
+        f"Keep this ticket-creation session under its current name ({name}). After leaving the agent session, users can reopen it with: daf open {name}",
         "",
         f"Remember: This is READ-ONLY analysis across {len(project_paths)} projects. Do not modify any files.",
     ]

@@ -246,14 +246,16 @@ class TestBuildIssueCreationPrompt:
         )
         assert "no defaults configured" in prompt
 
-    def test_daf_link_instruction_present(self, mock_config):
+    def test_issue_prompt_documents_supported_post_creation_behavior(self, mock_config):
         prompt = _build_issue_creation_prompt(
             issue_type="bug",
             goal="Fix it",
             config=mock_config,
             session_name="test-session",
         )
-        assert "daf link" in prompt
+        assert "daf link" not in prompt
+        assert "issue URL and key" in prompt
+        assert "daf open test-session" in prompt
 
     def test_daf_git_skill_reference(self, mock_config):
         prompt = _build_issue_creation_prompt(
