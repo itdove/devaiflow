@@ -2115,7 +2115,7 @@ def config_show(ctx: click.Context, format: str, validate: bool, fields: bool, p
     if is_old_format:
         console.print("[dim](legacy single-file format)[/dim]")
     else:
-        console.print("[dim](new 4-file format)[/dim]")
+        console.print("[dim](new split format)[/dim]")
 
     console.print()
 
@@ -2125,6 +2125,9 @@ def config_show(ctx: click.Context, format: str, validate: bool, fields: bool, p
         console.print(f"  • {config_loader.config_file} [dim](legacy format)[/dim]")
     else:
         console.print(f"  • {config_loader.config_file} [dim](user preferences)[/dim]")
+        console.print(
+            f"  • {config_loader.config_dir / 'enterprise.json'} [dim](enterprise settings)[/dim]"
+        )
         console.print(f"  • {config_loader.config_dir / 'organization.json'} [dim](organization settings)[/dim]")
         console.print(f"  • {config_loader.config_dir / 'team.json'} [dim](team settings)[/dim]")
         console.print(f"  • {config_loader.config_dir / 'backends' / 'jira.json'} [dim](JIRA backend)[/dim]")

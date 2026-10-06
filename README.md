@@ -519,8 +519,8 @@ DevAIFlow supports the following environment variables for customization:
 
 | Category | XDG Variable | Default Path | Contents |
 |----------|-------------|--------------|----------|
-| Data | `XDG_DATA_HOME` | `~/.local/share/devaiflow` | sessions, backups, logs, features |
-| Config | `XDG_CONFIG_HOME` | `~/.config/devaiflow` | config.json, backends/, templates/, skills, context .md files |
+| Data | `XDG_DATA_HOME` | `~/.local/share/devaiflow` | sessions, session backups, logs, features |
+| Config | `XDG_CONFIG_HOME` | `~/.config/devaiflow` | config files, configuration backups, templates, skills, context .md files |
 | State | `XDG_STATE_HOME` | `~/.local/state/devaiflow` | audit.log, cache, dashboard state |
 
 **Resolution priority**:
@@ -540,6 +540,9 @@ DevAIFlow supports the following environment variables for customization:
   cp -a ~/.daf-sessions/organization.json ~/.daf-sessions/team.json ~/.config/devaiflow/ 2>/dev/null
   cp -a ~/.daf-sessions/backends ~/.daf-sessions/templates ~/.config/devaiflow/ 2>/dev/null
   cp -a ~/.daf-sessions/.claude ~/.daf-sessions/*.md ~/.config/devaiflow/ 2>/dev/null
+  # Legacy backups may contain both session and configuration backups; retain
+  # them in both new roots during migration.
+  cp -a ~/.daf-sessions/backups ~/.config/devaiflow/ 2>/dev/null
   # Move state
   cp -a ~/.daf-sessions/audit.log ~/.daf-sessions/version_check_cache.json ~/.local/state/devaiflow/ 2>/dev/null
   cp -a ~/.daf-sessions/suggestions.json ~/.daf-sessions/state ~/.local/state/devaiflow/ 2>/dev/null

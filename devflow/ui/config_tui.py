@@ -15,9 +15,7 @@ Features:
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import json
-import shutil
 import os
-from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -1816,6 +1814,7 @@ class ConfigTUI(App):
             raise RuntimeError("Failed to load configuration")
         self.config: Config = loaded_config
         self.original_config = self.config.model_copy(deep=True)
+        self._pending_config_files: Dict[Path, Any] = {}
         self.modified = False
         self.advanced_mode = advanced_mode
 
@@ -2806,10 +2805,12 @@ class ConfigTUI(App):
             )
 
             # Note: Patches section removed - patch system deprecated
-            # Configuration now uses 4-file format (backends/jira.json, organization.json, team.json, config.json)
+            # Configuration now uses the split format (backends/jira.json,
+            # enterprise.json, organization.json, team.json, config.json)
 
     # Note: _compose_patches_tab() removed - patch system deprecated
-    # Configuration now uses 4-file format (backends/jira.json, organization.json, team.json, config.json)
+    # Configuration now uses the split format (backends/jira.json,
+    # enterprise.json, organization.json, team.json, config.json)
 
     def action_help(self) -> None:
         """Show help screen."""
@@ -2833,17 +2834,17 @@ class ConfigTUI(App):
             self.notify(error_msg, severity="error", timeout=10)
             return
 
-        # Create backup
-        try:
-            backup_path = self._create_backup()
-            self.notify(f"Backup created: {backup_path.name}", severity="information")
-        except Exception as e:
-            self.notify(f"Failed to create backup: {e}", severity="warning")
-
         # Save
         try:
-            self.config_loader.save_config(self.config)
+            if self._pending_config_files:
+                self.config_loader.save_config(
+                    self.config,
+                    additional_files=self._pending_config_files,
+                )
+            else:
+                self.config_loader.save_config(self.config)
             self.notify("Configuration saved successfully!", severity="information")
+            self._pending_config_files.clear()
             self.modified = False
             self.original_config = self.config.model_copy(deep=True)
         except Exception as e:
@@ -2858,8 +2859,15 @@ class ConfigTUI(App):
             # Save current config if modified
             if self.modified:
                 try:
-                    self.config_loader.save_config(self.config)
+                    if self._pending_config_files:
+                        self.config_loader.save_config(
+                            self.config,
+                            additional_files=self._pending_config_files,
+                        )
+                    else:
+                        self.config_loader.save_config(self.config)
                     self.notify("Configuration saved", severity="information")
+                    self._pending_config_files.clear()
                 except Exception as e:
                     self.notify(f"Failed to save before mode switch: {e}", severity="error")
                     return
@@ -3755,15 +3763,13 @@ class ConfigTUI(App):
                 self.notify(f"Error collecting update checker values: {e}", severity="error")
 
         # Note: Patches settings removed - patch system deprecated
-        # Configuration now uses 4-file format (backends/jira.json, organization.json, team.json, config.json)
+        # Configuration now uses the split format (backends/jira.json,
+        # enterprise.json, organization.json, team.json, config.json)
 
         # Organization-level fields (Advanced Mode only)
         # These are saved directly to organization.json, not the merged Config
         if self.advanced_mode:
             try:
-                import json
-                from pathlib import Path
-
                 # Read current organization.json
                 org_file = self.config_loader.config_dir / "organization.json"
                 if org_file.exists():
@@ -3797,10 +3803,9 @@ class ConfigTUI(App):
                 except NoMatches:
                     pass  # Field not found, skip
 
-                # Save updated organization.json
-                org_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(org_file, 'w') as f:
-                    json.dump(org_data, f, indent=2)
+                # Stage organization.json so the final save writes it in the
+                # same locked transaction as the merged Config files.
+                self._pending_config_files[org_file] = org_data
 
             except Exception as e:
                 self.notify(f"Error collecting organization values: {e}", severity="error")
@@ -4081,18 +4086,14 @@ class ConfigTUI(App):
             yield Static("\n[yellow]💡 See USER.md for personal customization options[/yellow]")
 
     def _create_backup(self) -> Path:
-        """Create backup of current config file.
+        """Create a centralized backup of the current configuration.
 
         Returns:
             Path to backup file
         """
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        backup_dir = self.config_loader.session_home / "backups"
-        backup_dir.mkdir(exist_ok=True)
-
-        backup_path = backup_dir / f"config-{timestamp}.json"
-        shutil.copy2(self.config_loader.config_file, backup_path)
-
+        backup_path = self.config_loader.create_config_backup()
+        if backup_path is None:
+            raise FileNotFoundError("No existing configuration files to back up")
         return backup_path
 
 

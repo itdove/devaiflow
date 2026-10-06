@@ -3,12 +3,13 @@
 import json
 import shutil
 import tarfile
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List
 
 from rich.console import Console
 from rich.table import Table
+
+from .loader import ConfigLoader
 
 console = Console()
 
@@ -23,6 +24,7 @@ class ConfigImporter:
             config_dir: Configuration directory (typically ~/.daf-sessions)
         """
         self.config_dir = config_dir
+        self.config_loader = ConfigLoader(config_dir=config_dir)
 
     def peek_config_export(self, export_path: Path) -> Dict:
         """Peek at export file metadata without full extraction.
@@ -168,34 +170,40 @@ class ConfigImporter:
         temp_dir.mkdir(exist_ok=True)
 
         imported_files = []
+        files_to_save: Dict[Path, Any] = {}
 
         try:
-            with tarfile.open(export_path, "r:gz") as tar:
-                tar.extractall(temp_dir)
+            with self.config_loader._configuration_lock():
+                self.config_loader._recover_pending_transaction_locked()
+                with tarfile.open(export_path, "r:gz") as tar:
+                    tar.extractall(temp_dir)
 
-            # Import each config file
-            files = metadata.get("files", [])
-            for file in files:
-                source_path = temp_dir / file
-                target_path = self.config_dir / file
+                # Import each config file while holding the same lock used by
+                # the persistence layer, so merge reads cannot race a save.
+                files = metadata.get("files", [])
+                for file in files:
+                    source_path = temp_dir / file
+                    target_path = self.config_dir / file
 
-                if not source_path.exists():
-                    console.print(f"[yellow]⚠[/yellow] File missing in archive: {file}")
-                    continue
+                    if not source_path.exists():
+                        console.print(f"[yellow]⚠[/yellow] File missing in archive: {file}")
+                        continue
 
-                # Create parent directory if needed (for backends/jira.json)
-                target_path.parent.mkdir(parents=True, exist_ok=True)
+                    if merge and target_path.exists():
+                        # Merge mode: merge JSON objects
+                        merged_data = self._merge_configs(target_path, source_path)
+                        files_to_save[target_path] = merged_data
+                    else:
+                        # Replace mode or new file: parse the source and let the
+                        # centralized writer handle the atomic replacement.
+                        with open(source_path, "r", encoding="utf-8") as source_file:
+                            files_to_save[target_path] = json.load(source_file)
 
-                if merge and target_path.exists():
-                    # Merge mode: merge JSON objects
-                    merged_data = self._merge_configs(target_path, source_path)
-                    with open(target_path, "w") as f:
-                        json.dump(merged_data, f, indent=2)
-                else:
-                    # Replace mode or new file: copy directly
-                    shutil.copy2(source_path, target_path)
+                    imported_files.append(file)
 
-                imported_files.append(file)
+                if files_to_save:
+                    normalized_files = self.config_loader._normalize_json_files(files_to_save)
+                    self.config_loader._persist_json_files(normalized_files, lock_held=True)
 
         finally:
             # Clean up temp directory

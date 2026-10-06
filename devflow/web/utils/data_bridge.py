@@ -590,19 +590,8 @@ class DataBridge:
             True on success, False on error.
         """
         try:
-            # Create backup before saving
-            import shutil
-
-            config_file = self.config_loader.config_file
-            if config_file.exists():
-                config_dir = getattr(self.config_loader, "config_dir", None)
-                if not isinstance(config_dir, Path):
-                    config_dir = get_cs_home()
-                backup_dir = config_dir / "backups"
-                backup_dir.mkdir(parents=True, exist_ok=True)
-                ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-                shutil.copy2(config_file, backup_dir / f"config-{ts}.json")
-
+            # ConfigLoader owns backups, locking, atomic replacement, and
+            # rollback for both legacy and split-format saves.
             self.config_loader.save_config(config)
             return True
         except Exception:

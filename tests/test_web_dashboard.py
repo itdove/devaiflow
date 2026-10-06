@@ -1139,29 +1139,24 @@ class TestDataBridgeConfigMethods:
         assert result is True
         mock_loader.save_config.assert_called_once_with(mock_config)
 
-    def test_save_config_creates_backup(self, tmp_path):
-        """Test that save_config creates a backup."""
+    def test_save_config_delegates_backup_and_persistence_to_loader(self, tmp_path):
+        """Config persistence, including backups, belongs to ConfigLoader."""
         bridge = DataBridge.__new__(DataBridge)
         mock_loader = Mock()
 
-        # Create existing config file so backup is created
         config_file = tmp_path / "config.json"
         config_file.write_text("{}")
         mock_loader.config_file = config_file
         bridge.config_loader = mock_loader
 
         mock_config = Mock()
-        with patch("devflow.web.utils.data_bridge.get_cs_home", return_value=tmp_path):
-            result = bridge.save_config(mock_config)
+        result = bridge.save_config(mock_config)
 
         assert result is True
-        backup_dir = tmp_path / "backups"
-        assert backup_dir.exists()
-        backups = list(backup_dir.glob("config-*.json"))
-        assert len(backups) == 1
+        mock_loader.save_config.assert_called_once_with(mock_config)
 
-    def test_save_config_uses_config_directory_for_backup(self, tmp_path):
-        """Test that XDG config backups stay beside the configured file."""
+    def test_save_config_does_not_duplicate_loader_backups(self, tmp_path):
+        """The web bridge must not create a second, partial backup."""
         bridge = DataBridge.__new__(DataBridge)
         mock_loader = Mock()
         config_dir = tmp_path / "config"
@@ -1173,7 +1168,7 @@ class TestDataBridgeConfigMethods:
         bridge.config_loader = mock_loader
 
         assert bridge.save_config(Mock()) is True
-        assert list((config_dir / "backups").glob("config-*.json"))
+        mock_loader.save_config.assert_called_once()
 
     def test_save_config_failure(self):
         """Test save_config returns False on error."""

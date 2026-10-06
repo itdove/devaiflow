@@ -1035,30 +1035,34 @@ def _save_organization_config(
         hierarchical_config_source: URL to hierarchical config files
     """
     from devflow.config.loader import ConfigLoader
-    from devflow.config.models import OrganizationConfig
     import json
 
     config_loader = ConfigLoader()
     org_config_path = config_loader.config_dir / "organization.json"
 
-    # Load existing organization config if it exists
-    if org_config_path.exists():
-        try:
-            with open(org_config_path, 'r') as f:
-                org_data = json.load(f)
-        except Exception:
+    # Read and persist under the same lock so initialization cannot overwrite
+    # organization changes made by another config-management process.
+    with config_loader._configuration_lock():
+        config_loader._recover_pending_transaction_locked()
+        if org_config_path.exists():
+            try:
+                with open(org_config_path, "r", encoding="utf-8") as f:
+                    org_data = json.load(f)
+            except Exception:
+                org_data = {}
+        else:
             org_data = {}
-    else:
-        org_data = {}
 
-    # Update with new values
-    if jira_project:
-        org_data['jira_project'] = jira_project
-    if hierarchical_config_source:
-        org_data['hierarchical_config_source'] = hierarchical_config_source
+        # Update with new values
+        if jira_project:
+            org_data["jira_project"] = jira_project
+        if hierarchical_config_source:
+            org_data["hierarchical_config_source"] = hierarchical_config_source
 
-    # Save organization config
-    with open(org_config_path, 'w') as f:
-        json.dump(org_data, f, indent=2)
+        # Use the centralized config persistence path so initialization gets
+        # the same backup, lock, fsync, and atomic replacement guarantees as
+        # all other configuration management commands.
+        normalized_files = config_loader._normalize_json_files({org_config_path: org_data})
+        config_loader._persist_json_files(normalized_files, lock_held=True)
 
     console.print(f"[green]✓[/green] Organization config saved to: {org_config_path}")

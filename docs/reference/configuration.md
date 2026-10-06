@@ -2388,7 +2388,7 @@ DevAIFlow uses a multi-file configuration system for better organization, securi
 
 ### Configuration Files
 
-Configuration is split across 4 separate files based on purpose:
+Configuration is split across 5 separate files based on purpose:
 
 **backends/jira.json** - JIRA Backend Configuration
 - JIRA instance URL and authentication
@@ -2404,6 +2404,10 @@ Configuration is split across 4 separate files based on purpose:
 - Affected version defaults
 - Field requirements and enforcement
 
+**enterprise.json** - Enterprise Settings
+- Organization-wide agent and model enforcement
+- Backend overrides and centrally managed policies
+
 **team.json** - Team-Specific Settings
 - Default custom field values (e.g., workstream, team, component)
 - Comment visibility restrictions
@@ -2416,6 +2420,51 @@ Configuration is split across 4 separate files based on purpose:
 - Context files for Claude sessions
 - Templates and summaries
 - Personal workflow preferences
+
+### Safe Saves and Configuration Backups
+
+All configuration-management paths use the same persistence layer, including
+the CLI, Textual TUI, web dashboard, configuration import, hierarchical
+configuration sync, migrations, and targeted workspace updates. Existing files
+are copied to a recoverable backup before they are changed. Split-format saves
+backup every existing file that the transaction can replace:
+
+- `config.json`
+- `enterprise.json`
+- `organization.json`
+- `team.json`
+- `backends/jira.json`
+
+Backups are stored in the `backups/` directory below the active configuration
+directory. Find that directory with:
+
+```bash
+daf config show --paths
+```
+
+In XDG mode this is normally `~/.config/devaiflow/backups/`. In unified mode
+(when `DEVAIFLOW_HOME` or the legacy `~/.daf-sessions` layout is active) it is
+`$DEVAIFLOW_HOME/backups/`. A single save gives all files a shared,
+collision-resistant timestamp/unique suffix. The backend backup is flattened
+to `backends-jira-<snapshot>.json` and represents `backends/jira.json`.
+
+Writes are serialized with a configuration lock and use fsynced temporary
+files followed by atomic replacement. If a multi-file save fails, the files
+already replaced are restored from that save's backups. Backups are retained
+for **7 days** and cleanup runs after successful configuration persistence;
+cleanup never removes the active configuration files.
+
+To recover a previous snapshot, copy each file with the same snapshot suffix
+back to its original location while DevAIFlow is stopped. For example:
+
+```bash
+cp ~/.config/devaiflow/backups/config-<snapshot>.json ~/.config/devaiflow/config.json
+cp ~/.config/devaiflow/backups/backends-jira-<snapshot>.json \
+  ~/.config/devaiflow/backends/jira.json
+```
+
+Restore the other `enterprise-`, `organization-`, and `team-` files from the
+same snapshot when they were part of the save.
 
 ### Configuration Discovery
 

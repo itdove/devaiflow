@@ -331,6 +331,20 @@ class TestConfigImporter:
         # Should have the exported workspace paths, not Bob's
         assert result["repos"]["workspaces"][0]["path"] != "/Users/bob/code"
 
+    def test_import_creates_centralized_backup_before_replacement(self, tmp_path, export_file):
+        """Import uses the same recoverable config backup path as normal saves."""
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        old_config = {"repos": {"last_used_workspace": "old"}}
+        (target_dir / "config.json").write_text(json.dumps(old_config), encoding="utf-8")
+
+        importer = ConfigImporter(target_dir)
+        importer.import_config(export_file, merge=False, force=True)
+
+        backups = list((target_dir / "backups").glob("config-*.json"))
+        assert len(backups) == 1
+        assert json.loads(backups[0].read_text(encoding="utf-8")) == old_config
+
     def test_import_creates_new_files(self, tmp_path, export_file):
         """Test that import creates new files that don't exist."""
         target_dir = tmp_path / "target"
