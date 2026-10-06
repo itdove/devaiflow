@@ -812,6 +812,11 @@ both versions. OpenCode v2 does not expose auto-approval on `mini`; DevAIFlow
 reports that combination with a remediation message instead of launching an
 unsupported command.
 
+Commit-message generation also adapts the `run` flags by major version: v1
+uses its quiet and reasoning-effort options, while v2 omits those v1-only
+flags and uses its default text format. Failed CLI runs include sanitized
+stderr in the `complete.log` diagnostics when available.
+
 **Session Storage:**
 - Location: `~/.config/opencode/` (default, follows XDG spec)
 - Database accessible via `opencode db path` and `opencode db <query>`

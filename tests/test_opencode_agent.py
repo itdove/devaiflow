@@ -1,6 +1,7 @@
 """Tests for OpenCode agent implementation."""
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -821,12 +822,16 @@ class TestOpenCodeAgentTextGeneration:
         """Test command-specific utility models use the configured provider."""
         mock_run.return_value = Mock(returncode=0, stdout="Generated result\n")
         agent = OpenCodeAgent()
+        agent._opencode_major_version = 1
 
         result = agent.generate_text(
             "Write a short summary",
             model_provider_profile={
                 "provider": "openai",
-                "models": {"pr_template": "gpt-5.6-terra"},
+                "models": {
+                    "commit_message": "gpt-5.6-terra",
+                    "pr_template": "gpt-5.6-wrong-model",
+                },
             },
         )
 
@@ -840,6 +845,64 @@ class TestOpenCodeAgentTextGeneration:
             "openai/gpt-5.6-terra",
             "Write a short summary",
         ]
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_generate_text_v2_uses_supported_flags_and_profile_settings(self, mock_run):
+        """Test v2 generation uses commit-message settings without v1-only flags."""
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout="Generated result\n",
+            stderr="",
+        )
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+
+        profile = {
+            "provider": "openai",
+            "models": {
+                "commit_message": "gpt-5.6-terra",
+                "pr_template": "gpt-5.6-wrong-model",
+            },
+            "reasoning_efforts": {"commit_message": "high"},
+            "arguments": ["--config", "custom.json"],
+            "env_vars": {"OPENAI_ORGANIZATION": "test-org"},
+        }
+
+        result = agent.generate_text(
+            "Write a short summary", model_provider_profile=profile
+        )
+
+        assert result == "Generated result"
+        command = mock_run.call_args.args[0]
+        assert command == [
+            "opencode",
+            "run",
+            "--config",
+            "custom.json",
+            "--model",
+            "openai/gpt-5.6-terra",
+            "Write a short summary",
+        ]
+        assert "-q" not in command
+        assert "--reasoning-effort" not in command
+        assert mock_run.call_args.kwargs["env"]["OPENAI_ORGANIZATION"] == "test-org"
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_generate_text_logs_cli_stderr_on_failure(self, mock_run, caplog):
+        """Test failed OpenCode runs expose stderr to completion diagnostics."""
+        mock_run.return_value = Mock(
+            returncode=2,
+            stdout="",
+            stderr="unknown option: --unsupported-flag",
+        )
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+
+        with caplog.at_level(logging.WARNING, logger="devflow.agent.opencode_agent"):
+            result = agent.generate_text("Write a short summary")
+
+        assert result is None
+        assert "unknown option: --unsupported-flag" in caplog.text
 
 
 class TestOpenCodeAgentDbPath:

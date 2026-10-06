@@ -12,6 +12,7 @@ OpenAI, Google, etc.), session management, MCP support, and JSON output capabili
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -19,8 +20,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from devflow.agent.diagnostics import sanitize_agent_diagnostics
 from devflow.agent.interface import AgentInterface
 from devflow.utils.dependencies import require_tool
+
+logger = logging.getLogger(__name__)
 
 
 class OpenCodeCompatibilityError(RuntimeError):
@@ -703,14 +707,15 @@ class OpenCodeAgent(AgentInterface):
         config=None,
         model_provider_profile: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
-        """Generate text using opencode run (non-interactive mode)."""
+        """Generate text using a version-compatible ``opencode run`` command."""
+        run_env = os.environ.copy()
         try:
             from devflow.agent.model_config import get_agent_model_config
             settings = get_agent_model_config(
                 config,
                 self.get_agent_name(),
                 utility=True,
-                command="pr_template",
+                command="commit_message",
                 provider_profile=model_provider_profile,
             )
             from devflow.utils.model_provider import (
@@ -720,11 +725,25 @@ class OpenCodeAgent(AgentInterface):
                 qualify_model_for_agent,
             )
 
-            profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
-            cmd = ["opencode", "run", "-q", *profile_arguments]
+            profile_arguments = get_profile_arguments(
+                model_provider_profile, self.get_agent_name()
+            )
+            major_version = self.get_opencode_version()
+            if major_version == 1:
+                # OpenCode v1 uses -q to keep non-interactive output parseable.
+                cmd = ["opencode", "run", "-q", *profile_arguments]
+            elif major_version == 2:
+                # OpenCode v2 removed -q. Its default run format is plain text.
+                cmd = ["opencode", "run", *profile_arguments]
+            else:
+                raise OpenCodeVersionError(
+                    f"Unsupported OpenCode major version {major_version}. "
+                    "DevAIFlow supports OpenCode v1 and v2."
+                )
+
             model = get_model_name_from_profile(
                 model_provider_profile,
-                command="pr_template",
+                command="commit_message",
                 utility=True,
             ) or settings["model"]
             model = qualify_model_for_agent(
@@ -734,17 +753,61 @@ class OpenCodeAgent(AgentInterface):
             )
             if model:
                 cmd.extend(["--model", model])
-            if settings["reasoning_effort"]:
+            # v2.0.22 does not expose --reasoning-effort on `run`; v1 does.
+            if major_version == 1 and settings["reasoning_effort"]:
                 cmd.extend(["--reasoning-effort", settings["reasoning_effort"]])
             cmd.append(prompt)
-            run_kwargs = {"capture_output": True, "text": True, "timeout": timeout}
+            run_kwargs = {
+                "capture_output": True,
+                "text": True,
+                "timeout": timeout,
+                "check": False,
+            }
             if model_provider_profile:
-                run_kwargs["env"] = build_env_from_profile(model_provider_profile)
+                run_env = build_env_from_profile(model_provider_profile)
+                run_kwargs["env"] = run_env
             result = subprocess.run(cmd, **run_kwargs)
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
+            stdout = result.stdout if isinstance(result.stdout, str) else ""
+            if result.returncode == 0:
+                if stdout.strip():
+                    return stdout.strip()
+                logger.warning("OpenCode CLI returned empty output")
+                return None
+
+            output = "\n".join(
+                value.strip()
+                for value in (getattr(result, "stderr", ""), stdout)
+                if isinstance(value, str) and value.strip()
+            )
+            diagnostics = sanitize_agent_diagnostics(
+                output,
+                env=run_env,
+                profile=model_provider_profile,
+            )
+            logger.warning(
+                "OpenCode CLI failed (exit %s): %s",
+                result.returncode,
+                diagnostics or "(no diagnostics)",
+            )
             return None
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except OpenCodeCompatibilityError as exc:
+            logger.warning(
+                "OpenCode text generation is unavailable: %s",
+                sanitize_agent_diagnostics(
+                    str(exc),
+                    env=run_env,
+                    profile=model_provider_profile,
+                ),
+            )
+            return None
+        except FileNotFoundError as exc:
+            logger.warning("OpenCode CLI binary not found: %s", exc)
+            return None
+        except subprocess.TimeoutExpired:
+            logger.warning("OpenCode CLI timed out after %ds", timeout)
+            return None
+        except OSError as exc:
+            logger.warning("OpenCode CLI could not be started: %s", exc)
             return None
 
     def get_manual_resume_command(self, session_id: str, project_path: str) -> str:
