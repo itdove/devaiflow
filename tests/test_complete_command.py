@@ -3817,7 +3817,9 @@ def test_complete_no_duplicate_push_when_creating_pr(temp_daf_home, tmp_path, mo
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.push_branch", track_push)
 
     # Mock Confirm.ask to accept commit, push, and PR creation
+    confirm_prompts = []
     def mock_confirm(prompt, **kwargs):
+        confirm_prompts.append(prompt)
         if "Commit these changes" in prompt:
             return True
         if "Use this commit message" in prompt:
@@ -3830,8 +3832,13 @@ def test_complete_no_duplicate_push_when_creating_pr(temp_daf_home, tmp_path, mo
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", mock_confirm)
 
-    # Mock PR creation to avoid needing gh/glab CLI
-    monkeypatch.setattr("devflow.cli.commands.complete_command._create_pr_mr", lambda s, w, sm, **kwargs: "https://example.com/pr/1")
+    # Exercise the real PR push check while avoiding external repository APIs.
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.detect_repo_type", lambda *args, **kwargs: "github")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_pr_description", lambda *args, **kwargs: "Test description")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_pr_title", lambda *args, **kwargs: "Test title")
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_fork_upstream_info", lambda *args, **kwargs: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command._select_target_branch", lambda *args, **kwargs: "main")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._create_github_pr", lambda *args, **kwargs: "https://example.com/pr/1")
     monkeypatch.setattr("devflow.cli.commands.complete_command._get_pr_for_branch", lambda w, b: None)
 
     # Complete the session
@@ -3840,6 +3847,7 @@ def test_complete_no_duplicate_push_when_creating_pr(temp_daf_home, tmp_path, mo
     # Verify push was called only ONCE (not duplicated)
     # After my fix, push happens once after commit, and PR creation skips push if no unpushed commits
     assert push_count == 1, f"Expected push to be called once, but was called {push_count} times"
+    assert not any("Push branch" in prompt for prompt in confirm_prompts)
 
     # Verify commits were pushed to remote
     result = subprocess.run(

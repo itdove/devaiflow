@@ -1093,7 +1093,8 @@ Select [1-4]: 1
    - If no PR/MR exists, prompts to create one
    - Auto-detects GitHub or GitLab repository
    - **Auto-detects fork and targets upstream repository** (see Fork Support below)
-   - Pushes branch to remote if not already pushed
+   - Pushes branch only when it is missing from the remote or has local commits
+     ahead of the remote branch; a successful earlier push is not repeated
    - Creates draft PR/MR with auto-generated description
    - Updates JIRA Git Pull Request field with PR URL
 6. **Generates AI-powered summary** from conversation history (optional)

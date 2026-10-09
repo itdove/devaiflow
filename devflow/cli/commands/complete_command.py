@@ -411,7 +411,7 @@ def complete_session(
                 console.print(f"  [dim]Open PR/MR: {pr_status['url']}[/dim]")
 
                 # Push unpushed commits if any
-                if GitUtils.has_unpushed_commits(working_dir, proj_info.branch):
+                if GitUtils.has_unpushed_branch_commits(working_dir, proj_info.branch):
                     should_push = not no_pr
                     if should_push and (yes or is_non_interactive()):
                         should_push = True
@@ -587,7 +587,7 @@ def complete_session(
                 console.print(f"  [dim]Open PR/MR: {pr_status['url']}[/dim]")
 
                 # Push unpushed commits if any
-                if GitUtils.has_unpushed_commits(working_dir, conv.branch):
+                if GitUtils.has_unpushed_branch_commits(working_dir, conv.branch):
                     should_push = not no_pr
                     if should_push and (yes or is_non_interactive()):
                         should_push = True
@@ -777,7 +777,7 @@ def complete_session(
                     console.print(f"  {pr_status['url']}")
 
                     # Check if there are unpushed commits
-                    if GitUtils.has_unpushed_commits(working_dir, active_conv.branch):
+                    if GitUtils.has_unpushed_branch_commits(working_dir, active_conv.branch):
                         # Offer to push commits to update the PR
                         should_push = True
                         if no_pr:
@@ -2039,7 +2039,7 @@ def _update_existing_story_pr(
     console.print(f"\n[dim]Existing PR found{' for ' + repo_name if repo_name else ''}: {pr_url}[/dim]")
 
     # Check if there are new commits to push
-    if GitUtils.has_unpushed_commits(working_dir, story_branch):
+    if GitUtils.has_unpushed_branch_commits(working_dir, story_branch):
         console.print(f"[cyan]Pushing latest commits to update PR...[/cyan]")
         success, error = GitUtils.push_branch(working_dir, story_branch)
         if success:
@@ -2310,7 +2310,7 @@ def _create_pr_mr_for_project(session, proj_info, working_dir: Path, session_man
 
     # Push branch to remote if there are unpushed commits
     current_branch = proj_info.branch
-    if GitUtils.has_unpushed_commits(working_dir, current_branch):
+    if GitUtils.has_unpushed_branch_commits(working_dir, current_branch):
         success, error_msg = GitUtils.push_branch(working_dir, current_branch)
         if success:
             console.print(f"    [dim]Pushed {current_branch} to remote[/dim]")
@@ -2369,7 +2369,7 @@ def _create_pr_mr_for_conversation(session, conversation, working_dir: Path, ses
 
     # Push branch to remote if there are unpushed commits
     current_branch = conversation.branch
-    if GitUtils.has_unpushed_commits(working_dir, current_branch):
+    if GitUtils.has_unpushed_branch_commits(working_dir, current_branch):
         success, error_msg = GitUtils.push_branch(working_dir, current_branch)
         if success:
             console.print(f"    [dim]Pushed {current_branch} to remote[/dim]")
@@ -2437,7 +2437,7 @@ def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False
 
     # Push branch to remote if there are unpushed commits
     current_branch = active_conv.branch
-    if GitUtils.has_unpushed_commits(working_dir, current_branch):
+    if GitUtils.has_unpushed_branch_commits(working_dir, current_branch):
         # Check if auto_push_to_remote is configured
         should_push = True
         if yes or is_non_interactive():
