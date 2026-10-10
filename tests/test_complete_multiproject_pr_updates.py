@@ -7,9 +7,14 @@ import subprocess
 
 import pytest
 
-from devflow.cli.commands.complete_command import complete_session
+from devflow.cli.commands.complete_command import (
+    _create_pr_mr_for_conversation,
+    _create_pr_mr_for_project,
+    complete_session,
+)
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import ProjectInfo
+from devflow.git.utils import GitUtils
 from devflow.session.manager import SessionManager
 
 
@@ -456,3 +461,97 @@ def test_no_issue_update_flag_respected_in_multiproject(temp_daf_home, git_repo,
 
     # The function should have been called (for consistent behavior)
     # but the flag will be checked inside _update_issue_pr_field to skip actual update
+
+
+def _push_feature_branch_to_remote(repo_dir: Path, remote_dir: Path) -> None:
+    """Create an origin remote and publish the repository's current branch."""
+    subprocess.run(["git", "init", "--bare", str(remote_dir)], capture_output=True, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote_dir)], cwd=repo_dir, capture_output=True, check=True)
+    branch = GitUtils.get_current_branch(repo_dir)
+    subprocess.run(["git", "push", "-u", "origin", branch], cwd=repo_dir, capture_output=True, check=True)
+
+
+def _mock_pr_creation_dependencies(monkeypatch) -> None:
+    """Keep helper tests focused on branch push decisions."""
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.detect_repo_type", lambda *args, **kwargs: "github")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_pr_description", lambda *args, **kwargs: "Test description")
+    monkeypatch.setattr("devflow.cli.commands.complete_command._generate_pr_title", lambda *args, **kwargs: "Test title")
+    monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_fork_upstream_info", lambda *args, **kwargs: None)
+    monkeypatch.setattr("devflow.cli.commands.complete_command._create_github_pr", lambda *args, **kwargs: "https://example.com/pull/1")
+
+
+def test_multiproject_pr_helper_does_not_repush_up_to_date_branch(
+    temp_daf_home, git_repo, tmp_path, monkeypatch
+):
+    """An already-pushed project branch should not be pushed again for PR creation."""
+    _push_feature_branch_to_remote(git_repo, tmp_path / "project-remote.git")
+    _mock_pr_creation_dependencies(monkeypatch)
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    session = session_manager.create_session(
+        name="multiproject-push-check",
+        goal="Test project PR push check",
+        working_directory="backend-api",
+        project_path=str(git_repo),
+        ai_agent_session_id="uuid-project-push-check",
+        branch="feature-test",
+    )
+    project = ProjectInfo(
+        project_path=str(git_repo),
+        branch="feature-test",
+        base_branch="main",
+        repo_name="backend-api",
+    )
+
+    push_calls = []
+    original_push = GitUtils.push_branch
+
+    def track_push(*args, **kwargs):
+        push_calls.append(args[1])
+        return original_push(*args, **kwargs)
+
+    monkeypatch.setattr(GitUtils, "push_branch", track_push)
+
+    result = _create_pr_mr_for_project(session, project, git_repo, session_manager)
+
+    assert result == "https://example.com/pull/1"
+    assert push_calls == []
+
+
+def test_multiconversation_pr_helper_does_not_repush_up_to_date_branch(
+    temp_daf_home, git_repo, tmp_path, monkeypatch
+):
+    """An already-pushed conversation branch should not be pushed for PR creation."""
+    _push_feature_branch_to_remote(git_repo, tmp_path / "conversation-remote.git")
+    _mock_pr_creation_dependencies(monkeypatch)
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    session = session_manager.create_session(
+        name="multiconversation-push-check",
+        goal="Test conversation PR push check",
+        working_directory="backend-api",
+        project_path=str(git_repo),
+        ai_agent_session_id="uuid-conversation-push-check",
+        branch="feature-test",
+    )
+
+    push_calls = []
+    original_push = GitUtils.push_branch
+
+    def track_push(*args, **kwargs):
+        push_calls.append(args[1])
+        return original_push(*args, **kwargs)
+
+    monkeypatch.setattr(GitUtils, "push_branch", track_push)
+
+    result = _create_pr_mr_for_conversation(
+        session,
+        session.active_conversation,
+        git_repo,
+        session_manager,
+    )
+
+    assert result == "https://example.com/pull/1"
+    assert push_calls == []

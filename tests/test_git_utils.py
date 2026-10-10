@@ -1527,6 +1527,105 @@ def test_has_unpushed_commits_fresh_branch_no_remote_ref(tmp_path):
     assert result is True
 
 
+@pytest.mark.parametrize("branch_name", [None, "", "   "])
+def test_has_unpushed_branch_commits_missing_branch_returns_false(tmp_path, branch_name):
+    """A missing branch must not be treated as needing a push."""
+    assert GitUtils.has_unpushed_branch_commits(tmp_path, branch_name) is False
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_has_unpushed_branch_commits_without_remote_returns_true(tmp_path):
+    """A local branch without an origin branch needs to be pushed."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    branch_name = GitUtils.get_current_branch(tmp_path)
+
+    assert GitUtils.has_unpushed_branch_commits(tmp_path, branch_name) is True
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_has_unpushed_branch_commits_for_branch_missing_on_remote(tmp_path):
+    """A branch absent from an otherwise configured remote needs a push."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    default_branch = GitUtils.get_current_branch(tmp_path)
+    remote_path = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "push", "-u", "origin", default_branch], cwd=tmp_path, capture_output=True)
+
+    subprocess.run(["git", "checkout", "-b", "feature-unpublished"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "feature.txt").write_text("feature")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Feature commit"], cwd=tmp_path, capture_output=True)
+
+    assert GitUtils.has_unpushed_branch_commits(tmp_path, "feature-unpublished") is True
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_has_unpushed_branch_commits_up_to_date_with_remote(tmp_path):
+    """A local branch at the remote tip does not need another push."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    branch_name = GitUtils.get_current_branch(tmp_path)
+    remote_path = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "push", "-u", "origin", branch_name], cwd=tmp_path, capture_output=True)
+
+    assert GitUtils.has_unpushed_branch_commits(tmp_path, branch_name) is False
+
+
+@pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git not available"
+)
+def test_has_unpushed_branch_commits_detects_commits_ahead_of_remote(tmp_path):
+    """A local commit beyond the remote branch requires a push."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+    branch_name = GitUtils.get_current_branch(tmp_path)
+    remote_path = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_path)], capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote_path)], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "push", "-u", "origin", branch_name], cwd=tmp_path, capture_output=True)
+
+    (tmp_path / "second.txt").write_text("second")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Second commit"], cwd=tmp_path, capture_output=True)
+
+    assert GitUtils.has_unpushed_branch_commits(tmp_path, branch_name) is True
+
+
 def test_list_remote_branches_with_mock(monkeypatch, tmp_path):
     """Test list_remote_branches with mocked git output."""
     from unittest.mock import Mock

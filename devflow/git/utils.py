@@ -618,6 +618,77 @@ class GitUtils:
             return False
 
     @staticmethod
+    def has_unpushed_branch_commits(path: Path, branch_name: Optional[str]) -> bool:
+        """Check if a local branch is ahead of its same-named origin branch.
+
+        This check is for deciding whether ``git push`` is needed.  It is
+        intentionally separate from :meth:`has_unpushed_commits`, which
+        compares a feature branch with the default branch to determine whether
+        a PR would contain changes.
+
+        Args:
+            path: Repository path
+            branch_name: Local branch name to check
+
+        Returns:
+            True if the branch is not on origin or has local commits that are
+            not present on the remote branch. False when the branch is missing
+            locally or the local branch is up to date.
+        """
+        if not branch_name or not branch_name.strip():
+            return False
+
+        try:
+            if not GitUtils.branch_exists(path, branch_name):
+                return False
+
+            remote_result = subprocess.run(
+                ["git", "ls-remote", "--heads", "origin", branch_name],
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+
+            # A local branch without a remote counterpart needs to be pushed.
+            # Treat a failed remote lookup the same way so callers can report
+            # the push error instead of silently skipping the operation.
+            if remote_result.returncode != 0 or not remote_result.stdout.strip():
+                return True
+
+            remote_lines = [
+                line.split()
+                for line in remote_result.stdout.splitlines()
+                if line.split()
+            ]
+            if not remote_lines:
+                return True
+            remote_commit = remote_lines[0][0]
+            result = subprocess.run(
+                [
+                    "git",
+                    "rev-list",
+                    "--count",
+                    f"{remote_commit}..refs/heads/{branch_name}",
+                ],
+                cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if result.returncode == 0:
+                try:
+                    return int(result.stdout.strip() or "0") > 0
+                except ValueError:
+                    return False
+
+            return False
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    @staticmethod
     def has_commits_ahead(path: Path, source_branch: str, target_branch: str) -> bool:
         """Check if source branch has commits not in target branch.
 
