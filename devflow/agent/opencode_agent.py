@@ -11,14 +11,18 @@ OpenCode is a terminal-based AI coding agent with multi-provider support (Anthro
 OpenAI, Google, etc.), session management, MCP support, and JSON output capabilities.
 """
 
+import base64
 import json
 import logging
 import os
 import re
+import socket
 import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from devflow.agent.diagnostics import sanitize_agent_diagnostics
 from devflow.agent.interface import AgentInterface
@@ -212,6 +216,139 @@ class OpenCodeAgent(AgentInterface):
             "--dangerously-skip-permissions" if major_version == 1 else "--auto"
         )
 
+    @staticmethod
+    def _extract_created_session_id(output: str) -> Optional[str]:
+        """Extract an OpenCode session ID from either server API response shape."""
+        try:
+            response = json.loads(output)
+        except (TypeError, json.JSONDecodeError):
+            return None
+
+        if isinstance(response, dict) and isinstance(response.get("data"), dict):
+            response = response["data"]
+        if not isinstance(response, dict):
+            return None
+
+        session_id = response.get("id")
+        if isinstance(session_id, str) and session_id.startswith("ses"):
+            return session_id
+        return None
+
+    def _create_session_with_title(
+        self,
+        title: str,
+        project_path: str,
+        env: Dict[str, str],
+        major_version: int,
+    ) -> Optional[str]:
+        """Create a titled interactive session without relying on TUI title flags.
+
+        OpenCode v1 exposes session creation through its local HTTP server. OpenCode
+        v2 provides an API CLI command that can run against a private server. The
+        returned ID is then passed to the TUI, which continues that exact session.
+        """
+        try:
+            if major_version == 1:
+                return self._create_v1_session_with_title(title, project_path, env)
+            return self._create_v2_session_with_title(title, project_path, env)
+        except Exception:
+            # Naming is best-effort: an unavailable local API must not prevent the
+            # user's OpenCode session from launching.
+            logger.warning(
+                "Unable to pre-create a titled OpenCode session; "
+                "OpenCode will choose the title from the prompt"
+            )
+            logger.debug("OpenCode named-session creation failed", exc_info=True)
+            return None
+
+    def _create_v1_session_with_title(
+        self, title: str, project_path: str, env: Dict[str, str]
+    ) -> Optional[str]:
+        """Create a v1 session through a short-lived local OpenCode server."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_socket:
+            port_socket.bind(("127.0.0.1", 0))
+            port = port_socket.getsockname()[1]
+
+        server = subprocess.Popen(
+            ["opencode", "serve", "--hostname", "127.0.0.1", "--port", str(port)],
+            cwd=project_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        base_url = f"http://127.0.0.1:{port}"
+        auth_headers: Dict[str, str] = {}
+        server_password = env.get("OPENCODE_SERVER_PASSWORD")
+        if server_password:
+            server_username = env.get("OPENCODE_SERVER_USERNAME", "opencode")
+            credentials = base64.b64encode(
+                f"{server_username}:{server_password}".encode("utf-8")
+            ).decode("ascii")
+            auth_headers["Authorization"] = f"Basic {credentials}"
+
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if server.poll() is not None:
+                    return None
+                try:
+                    health_request = Request(
+                        f"{base_url}/global/health", headers=auth_headers
+                    )
+                    with urlopen(health_request, timeout=0.25):
+                        break
+                except (OSError, URLError, TimeoutError):
+                    time.sleep(0.1)
+            else:
+                return None
+
+            headers = {"Content-Type": "application/json", **auth_headers}
+            request = Request(
+                f"{base_url}/session",
+                data=json.dumps({"title": title}).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            with urlopen(request, timeout=5) as response:
+                body = response.read().decode("utf-8")
+            return self._extract_created_session_id(body)
+        finally:
+            if server.poll() is None:
+                server.terminate()
+                try:
+                    server.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    server.kill()
+                    server.wait(timeout=2)
+
+    def _create_v2_session_with_title(
+        self, title: str, project_path: str, env: Dict[str, str]
+    ) -> Optional[str]:
+        """Create a v2 session through OpenCode's standalone API command."""
+        result = subprocess.run(
+            [
+                "opencode",
+                "api",
+                "--standalone",
+                "session.create",
+                "--data",
+                json.dumps(
+                    {"title": title, "location": {"directory": project_path}},
+                    ensure_ascii=False,
+                ),
+            ],
+            cwd=project_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return self._extract_created_session_id(result.stdout)
+
     def launch_session(
         self,
         project_path: str,
@@ -264,6 +401,7 @@ class OpenCodeAgent(AgentInterface):
         headless: bool = False,
         auto_approve: bool = False,
         model_override: Optional[str] = None,
+        display_name: Optional[str] = None,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
@@ -288,6 +426,7 @@ class OpenCodeAgent(AgentInterface):
             headless: Run non-interactively (opencode run), exits after completion
             auto_approve: Auto-approve all tool permissions
             model_override: Override the selected profile model for this session
+            display_name: DAF session title for a newly created OpenCode conversation
 
         Returns:
             Subprocess handle for OpenCode process
@@ -313,7 +452,9 @@ class OpenCodeAgent(AgentInterface):
             provider_profile=model_provider_profile,
             model_override=model_override,
         )
-        model_name = model_override or get_model_name_from_profile(model_provider_profile)
+        model_name = model_override or get_model_name_from_profile(
+            model_provider_profile
+        )
         model_name = model_name or settings.get("model")
         model_name = qualify_model_for_agent(
             model_name,
@@ -322,8 +463,24 @@ class OpenCodeAgent(AgentInterface):
         )
 
         major_version = self.get_opencode_version()
+        if (
+            not headless
+            and display_name
+            and not (session_id and session_id.startswith("ses"))
+        ):
+            titled_session_id = self._create_session_with_title(
+                display_name,
+                project_path,
+                final_env,
+                major_version,
+            )
+            if titled_session_id:
+                session_id = titled_session_id
+
         if headless:
             cmd = ["opencode", "run", *profile_arguments]
+            if display_name and not (session_id and session_id.startswith("ses")):
+                cmd.extend(["--title", display_name])
         else:
             cmd = self._interactive_command_prefix(
                 major_version,

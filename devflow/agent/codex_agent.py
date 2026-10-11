@@ -166,7 +166,8 @@ class CodexAgent(AgentInterface):
             auto_approve: Auto-approve all tool permissions via --approve-for-me
             reasoning_effort: Model reasoning effort (e.g., "low", "high", "max")
             model_override: Override default model (e.g., "codex/o3")
-            display_name: Display name for the session (passed to --name flag)
+            display_name: Accepted for the shared agent interface; Codex CLI
+                currently has no supported launch flag for setting a session title.
 
         Returns:
             Subprocess handle for Codex process

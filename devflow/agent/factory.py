@@ -63,6 +63,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "message_counting": True,
             "resume_support": True,
             "skills_support": True,
+            "session_title": True,
         },
         "profile_arguments": "pass-through",
     },
@@ -214,6 +215,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "message_counting": True,
             "resume_support": True,
             "skills_support": False,
+            "session_title": True,
         },
         "profile_arguments": "pass-through",
     },
@@ -251,6 +253,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "message_counting": True,
             "resume_support": True,
             "skills_support": True,
+            "session_title": True,
         },
         "profile_arguments": "pass-through",
         "notes": "Requires the 'pi' CLI from pi.dev",
@@ -558,6 +561,45 @@ def capture_agent_session_id(
         return False
 
 
+def _get_agent_conversation_title(
+    display_name: str,
+    project_path: str,
+    active_conversation: Any,
+    session: Any = None,
+) -> str:
+    """Build a recognizable, unique agent title for a DAF conversation."""
+    repo_label = (
+        getattr(active_conversation, "relative_path", None)
+        or getattr(active_conversation, "repo_name", None)
+        or Path(project_path).name
+    )
+    repo_label = str(repo_label).strip().strip("/\\") or Path(project_path).name
+    title = f"{display_name} [{repo_label}]"
+
+    history = getattr(active_conversation, "conversation_history", None) or []
+    previous_sessions = [
+        session_id
+        for session_id in history
+        if isinstance(session_id, str)
+        and session_id
+        and session_id != "pending-capture"
+    ]
+    archived_count = 0
+    conversations = getattr(session, "conversations", None)
+    if isinstance(conversations, dict):
+        for conversation in conversations.values():
+            if getattr(conversation, "active_session", None) is active_conversation:
+                archived_count = len(
+                    getattr(conversation, "archived_sessions", None) or []
+                )
+                break
+
+    previous_count = max(len(previous_sessions), archived_count)
+    if previous_count:
+        title += f" #{previous_count + 1}"
+    return title
+
+
 def launch_and_capture(
     agent: AgentInterface,
     agent_backend: str,
@@ -590,6 +632,17 @@ def launch_and_capture(
     sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
     launch_failed = False
     try:
+        launch_display_name = None
+        supports_session_title = get_agent_metadata(agent_backend).get(
+            "features", {}
+        ).get("session_title", False)
+        if display_name and supports_session_title:
+            launch_display_name = _get_agent_conversation_title(
+                display_name,
+                project_path,
+                active_conversation,
+                session,
+            )
         launch_kwargs: Dict[str, Any] = dict(
             project_path=project_path,
             initial_prompt=initial_prompt,
@@ -601,7 +654,7 @@ def launch_and_capture(
             env=env,
             headless=headless,
             auto_approve=auto_approve,
-            display_name=display_name,
+            display_name=launch_display_name,
         )
         if not reasoning_effort and model_provider_profile:
             reasoning_effort = model_provider_profile.get("reasoning_effort")

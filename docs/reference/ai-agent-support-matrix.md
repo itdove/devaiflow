@@ -329,6 +329,25 @@ daf assets --agent cursor
 
 **Note:** Only Claude Code and Ollama have native skill support. Other agents may be able to use the skill files as context/documentation, but functionality is not guaranteed.
 
+## DAF-Derived Conversation Titles
+
+For agents with a documented native title mechanism, DevAIFlow names each new
+conversation from the DAF session name and repository. Replacement conversations
+receive an ordinal, and existing conversations keep their current title when
+resumed.
+
+| Agent | Title mechanism |
+|-------|-----------------|
+| Claude Code | `--name` on new-session launches |
+| Pi | `--name` on new-session launches |
+| OpenCode | Version-compatible session creation API; `run --title` for headless launches |
+
+Other adapters (including Ollama, Codex, Aider, Crush, Continue, Copilot,
+Cursor, and Windsurf) do not currently expose a stable title-setting mechanism
+through DevAIFlow's supported launch interfaces. They retain their normal
+agent-managed titles; DevAIFlow does not add undocumented flags or mutate
+backend storage to rename them.
+
 ## Feature Support Matrix
 
 ### Core Features
@@ -811,6 +830,12 @@ command does not accept `--model`. Headless launches use `opencode run` for
 both versions. OpenCode v2 does not expose auto-approval on `mini`; DevAIFlow
 reports that combination with a remediation message instead of launching an
 unsupported command.
+
+New OpenCode conversations use the shared DAF-derived title convention: the
+DAF session name, repository, and an ordinal for replacements. OpenCode v1 uses
+its local session API; v2 uses the standalone API CLI. Headless launches use
+`opencode run --title`. Existing OpenCode sessions are resumed by ID and are
+not renamed or duplicated.
 
 Commit-message generation also adapts the `run` flags by major version: v1
 uses its quiet and reasoning-effort options, while v2 omits those v1-only
