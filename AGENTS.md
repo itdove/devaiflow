@@ -1805,6 +1805,11 @@ class Session(BaseModel):
    - Uses atomic, fsynced writes, rollback, locking, and crash-journal recovery for legacy and split configuration
    - Shares collision-resistant seven-day configuration backups across CLI, TUI, web, import, initialization, migration, and hierarchy sync paths
    - Added regression coverage and documentation for retention, recovery, and safe configuration saves
+- ✓ Name OpenCode conversations after their DevAIFlow session (itdove/devaiflow#626)
+   - Creates new interactive OpenCode sessions with a title derived from the DAF session name and repository
+   - Adds an ordinal to replacement conversations and preserves existing OpenCode session IDs on resume
+   - Uses version-compatible v1/v2 session APIs and `opencode run --title` for headless launches
+   - Added regression coverage for title propagation, repository/replacement uniqueness, and launch compatibility
 
 ## Release Management
 

@@ -812,6 +812,12 @@ both versions. OpenCode v2 does not expose auto-approval on `mini`; DevAIFlow
 reports that combination with a remediation message instead of launching an
 unsupported command.
 
+New interactive conversations launched by DevAIFlow are created with a title
+derived from the DAF session name and repository. Replacement conversations
+receive an additional ordinal. OpenCode v1 uses its local session API; v2 uses
+the standalone API CLI. Headless launches use `opencode run --title`. Existing
+OpenCode sessions are resumed by ID and are not renamed or duplicated.
+
 Commit-message generation also adapts the `run` flags by major version: v1
 uses its quiet and reasoning-effort options, while v2 omits those v1-only
 flags and uses its default text format. Failed CLI runs include sanitized

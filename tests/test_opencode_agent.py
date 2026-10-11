@@ -2,6 +2,7 @@
 
 import json
 import logging
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -157,6 +158,237 @@ class TestOpenCodeAgentLaunch:
         assert "run" not in cmd
         assert call_args[1]["cwd"] == str(project_dir)
         assert result == mock_process
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_creates_titled_interactive_session(
+        self, mock_popen, mock_require
+    ):
+        """A new interactive session uses a titled OpenCode session ID."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+        mock_popen.return_value = Mock()
+
+        with patch.object(
+            agent, "_create_session_with_title", return_value="ses_named"
+        ) as create:
+            agent.launch_with_prompt(
+                project_path="/workspace/repo-a",
+                initial_prompt="Read the project instructions",
+                session_id="pending-capture",
+                display_name="session-a [repo-a]",
+            )
+
+        create.assert_called_once_with(
+            "session-a [repo-a]",
+            "/workspace/repo-a",
+            mock_popen.call_args.kwargs["env"],
+            2,
+        )
+        command = mock_popen.call_args.args[0]
+        assert command[0] == "opencode"
+        assert "--session" in command
+        assert "ses_named" in command
+        assert "--title" not in command
+        assert "--prompt" in command
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_titled_interactive_session_stays_v1_compatible(
+        self, mock_popen, mock_require
+    ):
+        """Named sessions retain the v1 root-command launch shape."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        with patch.object(
+            agent, "_create_session_with_title", return_value="ses_v1_named"
+        ):
+            agent.launch_with_prompt(
+                project_path="/workspace/repo-a",
+                initial_prompt="Read the project instructions",
+                session_id="pending-capture",
+                display_name="session-a [repo-a]",
+            )
+
+        command = mock_popen.call_args.args[0]
+        assert command[0] == "opencode"
+        assert "mini" not in command
+        assert "--session" in command
+        assert "ses_v1_named" in command
+        assert "--title" not in command
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_sets_title_for_new_headless_session(
+        self, mock_popen, mock_require
+    ):
+        """Headless launches use OpenCode's supported run --title option."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+        mock_popen.return_value = Mock()
+
+        with patch.object(agent, "_create_session_with_title") as create:
+            agent.launch_with_prompt(
+                project_path="/workspace/repo-a",
+                initial_prompt="Read the project instructions",
+                session_id="pending-capture",
+                display_name="session-a [repo-a]",
+                headless=True,
+            )
+
+        create.assert_not_called()
+        command = mock_popen.call_args.args[0]
+        assert command[:2] == ["opencode", "run"]
+        assert "--title" in command
+        assert command[command.index("--title") + 1] == "session-a [repo-a]"
+        assert "Read the project instructions" in command
+
+    @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("subprocess.Popen")
+    def test_launch_with_prompt_does_not_retitle_existing_session(
+        self, mock_popen, mock_require
+    ):
+        """Resuming an OpenCode ID neither creates nor renames a session."""
+        agent = OpenCodeAgent()
+        mock_popen.return_value = Mock()
+
+        with patch.object(agent, "_create_session_with_title") as create:
+            agent.launch_with_prompt(
+                project_path="/workspace/repo-a",
+                initial_prompt="Continue working",
+                session_id="ses_existing",
+                display_name="session-a [repo-a]",
+            )
+
+        create.assert_not_called()
+        command = mock_popen.call_args.args[0]
+        assert "--session" in command
+        assert command[command.index("--session") + 1] == "ses_existing"
+        assert "--title" not in command
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_create_v2_session_with_title_uses_standalone_api(self, mock_run):
+        """OpenCode v2 creates a titled session using its API CLI."""
+        agent = OpenCodeAgent()
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout='{"data":{"id":"ses_v2_named"}}',
+        )
+
+        session_id = agent._create_v2_session_with_title(
+            "session-a [repo-a]", "/workspace/repo-a", {"PATH": "/usr/bin"}
+        )
+
+        assert session_id == "ses_v2_named"
+        command = mock_run.call_args.args[0]
+        assert command[:5] == [
+            "opencode",
+            "api",
+            "--standalone",
+            "session.create",
+            "--data",
+        ]
+        payload = json.loads(command[5])
+        assert payload == {
+            "title": "session-a [repo-a]",
+            "location": {"directory": "/workspace/repo-a"},
+        }
+        mock_run.assert_called_once_with(
+            command,
+            cwd="/workspace/repo-a",
+            env={"PATH": "/usr/bin"},
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+
+    @patch("devflow.agent.opencode_agent.subprocess.run")
+    def test_create_v2_session_with_title_handles_api_failure(self, mock_run):
+        """A failed API request does not return an invalid session ID."""
+        agent = OpenCodeAgent()
+        mock_run.return_value = Mock(returncode=1, stdout="", stderr="API unavailable")
+
+        session_id = agent._create_v2_session_with_title(
+            "session-a [repo-a]", "/workspace/repo-a", {"PATH": "/usr/bin"}
+        )
+
+        assert session_id is None
+
+    def test_create_session_with_title_falls_back_when_api_raises(self, caplog):
+        """Title setup remains best-effort when OpenCode's local API is unavailable."""
+        agent = OpenCodeAgent()
+
+        with patch.object(
+            agent,
+            "_create_v2_session_with_title",
+            side_effect=OSError("local API unavailable"),
+        ):
+            session_id = agent._create_session_with_title(
+                "session-a [repo-a]", "/workspace/repo-a", {}, 2
+            )
+
+        assert session_id is None
+        assert "Unable to pre-create a titled OpenCode session" in caplog.text
+
+    def test_extract_created_session_id_returns_none_for_invalid_response(self):
+        """Malformed API data does not get treated as a resumable session ID."""
+        assert OpenCodeAgent._extract_created_session_id("not JSON") is None
+
+    @patch("devflow.agent.opencode_agent.urlopen")
+    @patch("devflow.agent.opencode_agent.subprocess.Popen")
+    def test_create_v1_session_with_title_uses_local_server_api(
+        self, mock_popen, mock_urlopen
+    ):
+        """OpenCode v1 creates a titled session through its local HTTP API."""
+        agent = OpenCodeAgent()
+        mock_server = Mock()
+        mock_server.poll.return_value = None
+        mock_popen.return_value = mock_server
+        mock_urlopen.side_effect = [
+            BytesIO(b'{"healthy":true}'),
+            BytesIO(b'{"id":"ses_v1_named"}'),
+        ]
+
+        session_id = agent._create_v1_session_with_title(
+            "session-a [repo-a]", "/workspace/repo-a", {"PATH": "/usr/bin"}
+        )
+
+        assert session_id == "ses_v1_named"
+        command = mock_popen.call_args.args[0]
+        assert command[:5] == [
+            "opencode",
+            "serve",
+            "--hostname",
+            "127.0.0.1",
+            "--port",
+        ]
+        assert mock_popen.call_args.kwargs["cwd"] == "/workspace/repo-a"
+        request = mock_urlopen.call_args_list[1].args[0]
+        assert request.full_url.endswith("/session")
+        assert json.loads(request.data) == {"title": "session-a [repo-a]"}
+        mock_server.terminate.assert_called_once()
+        mock_server.wait.assert_called_once_with(timeout=2)
+
+    @patch("devflow.agent.opencode_agent.urlopen")
+    @patch("devflow.agent.opencode_agent.subprocess.Popen")
+    def test_create_v1_session_with_title_handles_server_start_failure(
+        self, mock_popen, mock_urlopen
+    ):
+        """If the local API process exits early, no session is fabricated."""
+        agent = OpenCodeAgent()
+        mock_server = Mock()
+        mock_server.poll.return_value = 1
+        mock_popen.return_value = mock_server
+
+        session_id = agent._create_v1_session_with_title(
+            "session-a [repo-a]", "/workspace/repo-a", {"PATH": "/usr/bin"}
+        )
+
+        assert session_id is None
+        mock_urlopen.assert_not_called()
+        mock_server.terminate.assert_not_called()
 
     @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
