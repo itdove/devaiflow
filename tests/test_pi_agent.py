@@ -169,6 +169,27 @@ class TestPiAgent:
             "Inspect the project",
         ]
 
+    @patch("devflow.agent.pi_agent.require_tool")
+    @patch("devflow.agent.pi_agent.subprocess.Popen")
+    def test_launch_with_prompt_uses_daf_derived_session_title(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        mock_popen.return_value = Mock()
+        agent = PiAgent(tmp_path / "pi-agent")
+        title = "session-a [repo-a]"
+
+        agent.launch_with_prompt(
+            project_path=PROJECT_PATH,
+            initial_prompt="Inspect the project",
+            session_id=PENDING_CAPTURE_PLACEHOLDER,
+            display_name=title,
+        )
+
+        command = mock_popen.call_args.args[0]
+        assert command[command.index("--name") + 1] == title
+        assert "--name" in command
+        mock_require.assert_called_once_with("pi", "launch Pi AI assistant")
+
     def test_session_storage_and_usage(self, tmp_path):
         agent = PiAgent(tmp_path / "pi-agent")
         path = _session_file(agent)

@@ -79,6 +79,8 @@ class AgentInterface(ABC):
             env: Environment variables dict (optional, defaults to os.environ)
             headless: Run without interactive UI (agent processes prompt and exits)
             auto_approve: Auto-approve all tool permissions (file edits, commands)
+            display_name: Optional DAF-derived session title, used only when the
+                backend exposes a native title mechanism.
 
         Returns:
             Subprocess handle for the launched agent

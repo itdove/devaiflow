@@ -63,6 +63,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "message_counting": True,
             "resume_support": True,
             "skills_support": True,
+            "session_title": True,
         },
         "profile_arguments": "pass-through",
     },
@@ -214,6 +215,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "message_counting": True,
             "resume_support": True,
             "skills_support": False,
+            "session_title": True,
         },
         "profile_arguments": "pass-through",
     },
@@ -251,6 +253,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "message_counting": True,
             "resume_support": True,
             "skills_support": True,
+            "session_title": True,
         },
         "profile_arguments": "pass-through",
         "notes": "Requires the 'pi' CLI from pi.dev",
@@ -558,13 +561,13 @@ def capture_agent_session_id(
         return False
 
 
-def _get_opencode_session_title(
+def _get_agent_conversation_title(
     display_name: str,
     project_path: str,
     active_conversation: Any,
     session: Any = None,
 ) -> str:
-    """Build a recognizable, unique OpenCode title for a DAF conversation."""
+    """Build a recognizable, unique agent title for a DAF conversation."""
     repo_label = (
         getattr(active_conversation, "relative_path", None)
         or getattr(active_conversation, "repo_name", None)
@@ -629,9 +632,12 @@ def launch_and_capture(
     sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
     launch_failed = False
     try:
-        launch_display_name = display_name
-        if isinstance(agent, OpenCodeAgent) and display_name:
-            launch_display_name = _get_opencode_session_title(
+        launch_display_name = None
+        supports_session_title = get_agent_metadata(agent_backend).get(
+            "features", {}
+        ).get("session_title", False)
+        if display_name and supports_session_title:
+            launch_display_name = _get_agent_conversation_title(
                 display_name,
                 project_path,
                 active_conversation,

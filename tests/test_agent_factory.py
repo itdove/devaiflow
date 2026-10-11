@@ -3,14 +3,15 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import pytest
+
 from devflow.agent.factory import (
-    _get_opencode_session_title,
+    _get_agent_conversation_title,
     launch_and_capture,
 )
-from devflow.agent.opencode_agent import OpenCodeAgent
 
 
-def test_opencode_session_titles_are_distinct_across_repositories_and_replacements():
+def test_agent_session_titles_are_distinct_across_repositories_and_replacements():
     """Titles retain the DAF name and distinguish repository/history contexts."""
     repo_a = SimpleNamespace(
         repo_name="repo-a",
@@ -37,9 +38,9 @@ def test_opencode_session_titles_are_distinct_across_repositories_and_replacemen
         conversations={"repo-a": archived},
     )
 
-    title_a = _get_opencode_session_title("session-a", "/workspace/repo-a", repo_a)
-    title_b = _get_opencode_session_title("session-a", "/workspace/repo-b", repo_b)
-    replacement_title = _get_opencode_session_title(
+    title_a = _get_agent_conversation_title("session-a", "/workspace/repo-a", repo_a)
+    title_b = _get_agent_conversation_title("session-a", "/workspace/repo-b", repo_b)
+    replacement_title = _get_agent_conversation_title(
         "session-a", "/workspace/repo-a", replacement, session
     )
 
@@ -49,9 +50,29 @@ def test_opencode_session_titles_are_distinct_across_repositories_and_replacemen
     assert len({title_a, title_b, replacement_title}) == 3
 
 
-def test_launch_and_capture_passes_conversation_specific_opencode_title():
-    """Shared launch orchestration forwards the derived title to OpenCode."""
-    agent = OpenCodeAgent()
+@pytest.mark.parametrize(
+    ("backend", "expected_title"),
+    [
+        ("claude", "session-a [repo-a]"),
+        ("opencode", "session-a [repo-a]"),
+        ("opencode-ai", "session-a [repo-a]"),
+        ("pi", "session-a [repo-a]"),
+        ("pi-coding-agent", "session-a [repo-a]"),
+        ("ollama", None),
+        ("ollama-claude", None),
+        ("github-copilot", None),
+        ("copilot", None),
+        ("cursor", None),
+        ("windsurf", None),
+        ("aider", None),
+        ("continue", None),
+        ("crush", None),
+        ("codex", None),
+    ],
+)
+def test_launch_and_capture_uses_native_title_support(backend, expected_title):
+    """Only backends with native title support receive a generated title."""
+    agent = Mock()
     active_conversation = SimpleNamespace(
         ai_agent_session_id="pending-capture",
         repo_name="repo-a",
@@ -68,7 +89,7 @@ def test_launch_and_capture_passes_conversation_specific_opencode_title():
     ):
         launch_and_capture(
             agent,
-            "opencode",
+            backend,
             "/workspace/repo-a",
             active_conversation,
             initial_prompt="Read the project instructions",
@@ -76,4 +97,4 @@ def test_launch_and_capture_passes_conversation_specific_opencode_title():
             display_name="session-a",
         )
 
-    assert launch.call_args.kwargs["display_name"] == "session-a [repo-a]"
+    assert launch.call_args.kwargs["display_name"] == expected_title
