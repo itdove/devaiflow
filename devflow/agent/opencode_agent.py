@@ -254,11 +254,11 @@ class OpenCodeAgent(AgentInterface):
         except Exception:
             # Naming is best-effort: an unavailable local API must not prevent the
             # user's OpenCode session from launching.
-            logger.warning(
+            logger.debug(
                 "Unable to pre-create a titled OpenCode session; "
-                "OpenCode will choose the title from the prompt"
+                "continuing without a pre-created title",
+                exc_info=True,
             )
-            logger.debug("OpenCode named-session creation failed", exc_info=True)
             return None
 
     def _create_v1_session_with_title(

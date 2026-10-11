@@ -193,6 +193,46 @@ class TestOpenCodeAgentLaunch:
         assert "--prompt" in command
 
     @patch("devflow.agent.opencode_agent.require_tool")
+    @patch("devflow.agent.opencode_agent.subprocess.Popen")
+    def test_launch_with_prompt_continues_when_title_creation_fails(
+        self, mock_popen, mock_require, caplog
+    ):
+        """A failed best-effort title setup does not prevent the TUI launch."""
+        agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
+        mock_process = Mock()
+        mock_popen.return_value = mock_process
+
+        with (
+            patch.object(
+                agent,
+                "_create_v2_session_with_title",
+                side_effect=OSError("local API unavailable"),
+            ),
+            caplog.at_level(
+                logging.WARNING, logger="devflow.agent.opencode_agent"
+            ),
+        ):
+            result = agent.launch_with_prompt(
+                project_path="/workspace/repo-a",
+                initial_prompt="Read the project instructions",
+                session_id="pending-capture",
+                display_name="session-a [repo-a]",
+            )
+
+        assert result is mock_process
+        mock_popen.assert_called_once()
+        command = mock_popen.call_args.args[0]
+        assert command[0] == "opencode"
+        assert "--prompt" in command
+        assert "--session" not in command
+        assert not any(
+            record.levelno >= logging.WARNING
+            for record in caplog.records
+            if record.name == "devflow.agent.opencode_agent"
+        )
+
+    @patch("devflow.agent.opencode_agent.require_tool")
     @patch("subprocess.Popen")
     def test_launch_with_prompt_titled_interactive_session_stays_v1_compatible(
         self, mock_popen, mock_require
@@ -317,13 +357,16 @@ class TestOpenCodeAgentLaunch:
         assert session_id is None
 
     def test_create_session_with_title_falls_back_when_api_raises(self, caplog):
-        """Title setup remains best-effort when OpenCode's local API is unavailable."""
+        """Title setup failures are non-alarming but retain debug diagnostics."""
         agent = OpenCodeAgent()
 
-        with patch.object(
-            agent,
-            "_create_v2_session_with_title",
-            side_effect=OSError("local API unavailable"),
+        with (
+            caplog.at_level(logging.DEBUG, logger="devflow.agent.opencode_agent"),
+            patch.object(
+                agent,
+                "_create_v2_session_with_title",
+                side_effect=OSError("local API unavailable"),
+            ),
         ):
             session_id = agent._create_session_with_title(
                 "session-a [repo-a]", "/workspace/repo-a", {}, 2
@@ -331,6 +374,9 @@ class TestOpenCodeAgentLaunch:
 
         assert session_id is None
         assert "Unable to pre-create a titled OpenCode session" in caplog.text
+        assert "continuing without a pre-created title" in caplog.text
+        assert "local API unavailable" in caplog.text
+        assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
     def test_extract_created_session_id_returns_none_for_invalid_response(self):
         """Malformed API data does not get treated as a resumable session ID."""
