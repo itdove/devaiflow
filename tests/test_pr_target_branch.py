@@ -2,13 +2,14 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from devflow.cli.commands.complete_command import (
     _create_github_pr,
     _create_gitlab_mr,
+    _generate_pr_description,
     _select_target_branch,
 )
 from devflow.config.models import PromptsConfig
@@ -870,3 +871,123 @@ def test_select_target_branch_interactive_defaults_to_base_branch(monkeypatch, t
     # develop is at index 2 in the branch list (main=1, develop=2, staging=3)
     assert captured_default["value"] == "2"
     assert result == "develop"
+
+
+@pytest.mark.parametrize(
+    ("repo_type", "create_pr_mr", "body_option", "pr_url"),
+    [
+        ("github", _create_github_pr, "--body", "https://github.com/owner/repo/pull/42"),
+        ("gitlab", _create_gitlab_mr, "--description", "https://gitlab.com/owner/repo/-/merge_requests/42"),
+    ],
+)
+def test_headingless_ai_output_reaches_github_and_gitlab_cli_as_filled_template(
+    monkeypatch, tmp_path, repo_type, create_pr_mr, body_option, pr_url
+):
+    """Completion must pass the deterministic template fallback to either host CLI."""
+    template = """## Description
+<!-- Summarize the change. -->
+
+## Related issue
+<!-- Link the related issue or write N/A. -->
+
+## Testing
+<!-- Describe test evidence. -->
+
+## Commands run
+```text
+# Record command evidence here
+```
+"""
+    template_path = tmp_path / ".github" / "PULL_REQUEST_TEMPLATE.md"
+    template_path.parent.mkdir()
+    template_path.write_text(template, encoding="utf-8")
+
+    session = Mock()
+    session.name = "session-42"
+    session.issue_key = "owner/repo#42"
+    session.issue_tracker = repo_type
+    session.goal = "Fix the parser regression"
+    session.agent_backend = "claude"
+    session.model_profile = None
+    session.active_conversation = Mock(branch="fix/parser")
+
+    config_loader = Mock()
+    config_loader.load_config.return_value = None
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._try_discover_org_template",
+        lambda _working_dir: None,
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.get_commit_log",
+        lambda *_args: "fix: handle malformed input",
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.get_changed_files",
+        lambda *_args: ["src/parser.py", "tests/test_parser.py"],
+    )
+
+    captured_commands = []
+
+    def mock_run(command, *args, **kwargs):
+        captured_commands.append(command)
+        result = Mock()
+        result.returncode = 0
+        result.stdout = pr_url
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.subprocess.run", mock_run
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.require_tool",
+        lambda *_args: None,
+    )
+
+    with (
+        patch("devflow.git.pr_template.ConfigLoader") as mock_config_loader_class,
+        patch("devflow.agent.factory.resolve_agent_backend", return_value="claude"),
+        patch("devflow.agent.create_agent_client") as mock_create_agent,
+    ):
+        mock_agent = Mock()
+        mock_agent.generate_text.return_value = (
+            "Test command evidence was not captured."
+        )
+        mock_agent.get_agent_name.return_value = "claude"
+        mock_create_agent.return_value = mock_agent
+
+        mock_loader = Mock()
+        mock_loader.config_file.exists.return_value = False
+        mock_config_loader_class.return_value = mock_loader
+
+        description = _generate_pr_description(
+            session,
+            tmp_path,
+            config_loader,
+            target_branch="main",
+            display_name="session-42_pr",
+        )
+
+    config = _create_minimal_config_mock(
+        prompts_config=PromptsConfig(auto_create_pr_status="draft")
+    )
+    result = create_pr_mr(
+        session=session,
+        title="Fix the parser regression",
+        description=description,
+        working_dir=tmp_path,
+        config=config,
+        target_branch="main",
+        upstream_info={},
+    )
+
+    assert result == pr_url
+    assert len(captured_commands) == 1
+    command = captured_commands[0]
+    assert command[command.index(body_option) + 1] == description
+    assert "## Description" in description
+    assert "## Related issue" in description
+    assert "## Testing" in description
+    assert "## Commands run" in description
+    assert "Fix the parser regression" in description
+    assert "<!--" not in description

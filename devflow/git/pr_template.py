@@ -83,10 +83,16 @@ def _template_needs_fallback(template_content: str, filled_content: str) -> bool
     if not filled_content.strip():
         return True
 
+    template_lines = template_content.splitlines()
+    filled_lines = filled_content.splitlines()
+    template_sections = _markdown_sections(template_lines)
+    filled_sections = _markdown_sections(filled_lines)
+
     # Preserve the historical contract for callers that use this helper with a
-    # short, already-generated response instead of a complete markdown body.
-    if not re.search(r"^\s*#{1,6}\s+", filled_content, flags=re.MULTILINE):
-        return False
+    # short response only when the supplied template has no section structure to
+    # validate. A headingless answer cannot fill a sectioned PR/MR template.
+    if not filled_sections:
+        return bool(template_sections)
 
     if re.search(r"<!--.*?-->", filled_content, flags=re.DOTALL):
         return True
@@ -98,10 +104,6 @@ def _template_needs_fallback(template_content: str, filled_content: str) -> bool
     ):
         return True
 
-    template_lines = template_content.splitlines()
-    filled_lines = filled_content.splitlines()
-    template_sections = _markdown_sections(template_lines)
-    filled_sections = _markdown_sections(filled_lines)
     filled_titles = {(level, title.lower()) for _, _, level, title in filled_sections}
 
     for start, end, level, title in template_sections:
