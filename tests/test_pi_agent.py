@@ -130,6 +130,20 @@ class TestPiAgent:
 
     @patch("devflow.agent.pi_agent.require_tool")
     @patch("devflow.agent.pi_agent.subprocess.Popen")
+    def test_resume_session_syncs_exact_daf_title(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        agent = PiAgent(tmp_path / "pi-agent")
+        agent.resume_session(
+            SESSION_ID, PROJECT_PATH, display_name="session-a"
+        )
+
+        command = mock_popen.call_args.args[0]
+        assert command[command.index("--session") + 1] == SESSION_ID
+        assert command[command.index("--name") + 1] == "session-a"
+
+    @patch("devflow.agent.pi_agent.require_tool")
+    @patch("devflow.agent.pi_agent.subprocess.Popen")
     def test_launch_session_uses_project_session_dir(
         self, mock_popen, mock_require, tmp_path
     ):
@@ -144,6 +158,17 @@ class TestPiAgent:
             "--session-dir",
             str(agent.get_session_dir(PROJECT_PATH)),
         ]
+
+    @patch("devflow.agent.pi_agent.require_tool")
+    @patch("devflow.agent.pi_agent.subprocess.Popen")
+    def test_launch_session_uses_exact_daf_title(
+        self, mock_popen, mock_require, tmp_path
+    ):
+        agent = PiAgent(tmp_path / "pi-agent")
+        agent.launch_session(PROJECT_PATH, display_name="session-a")
+
+        command = mock_popen.call_args.args[0]
+        assert command[command.index("--name") + 1] == "session-a"
 
     @patch("devflow.agent.pi_agent.require_tool")
     @patch("devflow.agent.pi_agent.subprocess.Popen")
@@ -176,7 +201,7 @@ class TestPiAgent:
     ):
         mock_popen.return_value = Mock()
         agent = PiAgent(tmp_path / "pi-agent")
-        title = "session-a [repo-a]"
+        title = "session-a"
 
         agent.launch_with_prompt(
             project_path=PROJECT_PATH,

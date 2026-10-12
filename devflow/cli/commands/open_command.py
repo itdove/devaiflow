@@ -1422,7 +1422,10 @@ def open_session(
                         cmd.extend(["--add-dir", str(cs_config)])
             elif agent_backend in ("opencode", "opencode-ai", "codex", "pi", "pi-coding-agent"):
                 # Self-identifying agents support session resume.
-                from devflow.agent.factory import snapshot_agent_sessions as _snap_resume, is_self_id_backend
+                from devflow.agent.factory import (
+                    get_agent_metadata,
+                    snapshot_agent_sessions,
+                )
                 if active_conv and active_conv.is_multi_project:
                     oc_project_path = active_conv.workspace_path or workspace_path
                 else:
@@ -1436,21 +1439,36 @@ def open_session(
                     sid = active_conv.ai_agent_session_id
                     if sid and sid != "pending-capture" and not sid.startswith("pending"):
                         launch_phase = "resume"
+                        resume_kwargs: Dict[str, Any] = {
+                            "session_id": sid,
+                            "project_path": oc_project_path,
+                            "env": env,
+                            "model_provider_profile": model_provider_profile,
+                        }
+                        if get_agent_metadata(agent_backend).get(
+                            "features", {}
+                        ).get("session_title", False):
+                            resume_kwargs["display_name"] = session.name
                         process = getattr(agent_client, "resume_session")(
-                            session_id=sid,
-                            project_path=oc_project_path,
-                            env=env,
-                            model_provider_profile=model_provider_profile,
+                            **resume_kwargs
                         )
                     else:
                         # Fallback: launch new session and capture ID
                         launch_phase = "launch"
-                        _resume_sessions_before = _snap_resume(agent_client, agent_backend, oc_project_path)
+                        _resume_sessions_before = snapshot_agent_sessions(
+                            agent_client, agent_backend, oc_project_path
+                        )
                         _resume_needs_capture = True
+                        launch_kwargs: Dict[str, Any] = {
+                            "env": env,
+                            "model_provider_profile": model_provider_profile,
+                        }
+                        if get_agent_metadata(agent_backend).get(
+                            "features", {}
+                        ).get("session_title", False):
+                            launch_kwargs["display_name"] = session.name
                         process = getattr(agent_client, "launch_session")(
-                            oc_project_path,
-                            env=env,
-                            model_provider_profile=model_provider_profile,
+                            oc_project_path, **launch_kwargs
                         )
                     cmd = None
             else:

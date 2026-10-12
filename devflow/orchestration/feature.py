@@ -5,7 +5,7 @@ Manages multi-session workflows with integrated verification between sessions.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import FeatureOrchestration, VerificationResult
@@ -463,7 +463,8 @@ class FeatureManager:
         """
         import time
         import uuid
-        from devflow.agent.factory import create_agent_client
+
+        from devflow.agent.factory import create_agent_client, get_agent_metadata
 
         start_time = time.time()
 
@@ -524,12 +525,19 @@ class FeatureManager:
 
         # Launch AI agent with verification prompt
         try:
-            process = agent.launch_with_prompt(
-                project_path=project_path,
-                initial_prompt=verification_prompt,
-                session_id=verification_session_id,
-                config=config,
-            )
+            launch_kwargs: Dict[str, Any] = {
+                "project_path": project_path,
+                "initial_prompt": verification_prompt,
+                "session_id": verification_session_id,
+                "config": config,
+            }
+            if get_agent_metadata(agent_backend).get("features", {}).get(
+                "session_title", False
+            ):
+                launch_kwargs["display_name"] = (
+                    getattr(session, "name", None) or session_name
+                )
+            process = agent.launch_with_prompt(**launch_kwargs)
 
             # Wait for agent to complete
             # Note: This blocks until user exits the agent

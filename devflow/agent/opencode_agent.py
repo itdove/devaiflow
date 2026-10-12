@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 from urllib.error import URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from devflow.agent.diagnostics import sanitize_agent_diagnostics
@@ -349,11 +350,141 @@ class OpenCodeAgent(AgentInterface):
             return None
         return self._extract_created_session_id(result.stdout)
 
+    def update_session_title(
+        self,
+        session_id: str,
+        title: str,
+        project_path: str,
+        env: Optional[Dict[str, str]] = None,
+        major_version: Optional[int] = None,
+    ) -> bool:
+        """Best-effort sync of an existing session title to its DAF name."""
+        final_env = env if env is not None else os.environ.copy()
+        try:
+            detected_version = major_version or self.get_opencode_version()
+            if detected_version == 1:
+                updated = self._update_v1_session_title(
+                    session_id, title, project_path, final_env
+                )
+            else:
+                updated = self._update_v2_session_title(
+                    session_id, title, project_path, final_env
+                )
+            if not updated:
+                logger.debug(
+                    "OpenCode did not update the title for session %s",
+                    session_id,
+                )
+            return updated
+        except Exception:
+            # Title synchronization must never prevent an existing session from
+            # resuming. Keep details in debug logs for troubleshooting.
+            logger.debug(
+                "Unable to sync the OpenCode session title for %s",
+                session_id,
+                exc_info=True,
+            )
+            return False
+
+    def _update_v1_session_title(
+        self,
+        session_id: str,
+        title: str,
+        project_path: str,
+        env: Dict[str, str],
+    ) -> bool:
+        """Update a v1 session through a short-lived local OpenCode server."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_socket:
+            port_socket.bind(("127.0.0.1", 0))
+            port = port_socket.getsockname()[1]
+
+        server = subprocess.Popen(
+            ["opencode", "serve", "--hostname", "127.0.0.1", "--port", str(port)],
+            cwd=project_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        base_url = f"http://127.0.0.1:{port}"
+        auth_headers: Dict[str, str] = {}
+        server_password = env.get("OPENCODE_SERVER_PASSWORD")
+        if server_password:
+            server_username = env.get("OPENCODE_SERVER_USERNAME", "opencode")
+            credentials = base64.b64encode(
+                f"{server_username}:{server_password}".encode("utf-8")
+            ).decode("ascii")
+            auth_headers["Authorization"] = f"Basic {credentials}"
+
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if server.poll() is not None:
+                    return False
+                try:
+                    health_request = Request(
+                        f"{base_url}/global/health", headers=auth_headers
+                    )
+                    with urlopen(health_request, timeout=0.25):
+                        break
+                except (OSError, URLError, TimeoutError):
+                    time.sleep(0.1)
+            else:
+                return False
+
+            headers = {"Content-Type": "application/json", **auth_headers}
+            encoded_session_id = quote(session_id, safe="")
+            request = Request(
+                f"{base_url}/session/{encoded_session_id}",
+                data=json.dumps({"title": title}).encode("utf-8"),
+                headers=headers,
+                method="PATCH",
+            )
+            with urlopen(request, timeout=5):
+                return True
+        finally:
+            if server.poll() is None:
+                server.terminate()
+                try:
+                    server.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    server.kill()
+                    server.wait(timeout=2)
+
+    def _update_v2_session_title(
+        self,
+        session_id: str,
+        title: str,
+        project_path: str,
+        env: Dict[str, str],
+    ) -> bool:
+        """Update a v2 session through OpenCode's standalone API CLI."""
+        result = subprocess.run(
+            [
+                "opencode",
+                "api",
+                "--standalone",
+                "session.update",
+                "--param",
+                f"sessionID={session_id}",
+                "--data",
+                json.dumps({"title": title}, ensure_ascii=False),
+            ],
+            cwd=project_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        return result.returncode == 0
+
     def launch_session(
         self,
         project_path: str,
         env: Optional[Dict[str, str]] = None,
         model_provider_profile: Optional[Dict[str, Any]] = None,
+        display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Launch a new OpenCode session in a project directory.
 
@@ -379,6 +510,12 @@ class OpenCodeAgent(AgentInterface):
             model_name,
             profile_arguments,
         )
+        if display_name:
+            titled_session_id = self._create_session_with_title(
+                display_name, project_path, final_env, major_version
+            )
+            if titled_session_id:
+                command.extend(["--session", titled_session_id])
         if model_name:
             command.extend(["--model", model_name])
 
@@ -520,6 +657,7 @@ class OpenCodeAgent(AgentInterface):
         project_path: str,
         env: Optional[Dict[str, str]] = None,
         model_provider_profile: Optional[Dict[str, Any]] = None,
+        display_name: Optional[str] = None,
     ) -> subprocess.Popen:
         """Resume an existing OpenCode session.
 
@@ -541,6 +679,14 @@ class OpenCodeAgent(AgentInterface):
         profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         major_version = self.get_opencode_version()
         model_name = self._get_profile_model(model_provider_profile)
+        if display_name:
+            self.update_session_title(
+                session_id,
+                display_name,
+                project_path,
+                env=final_env,
+                major_version=major_version,
+            )
 
         cmd = self._interactive_command_prefix(
             major_version,

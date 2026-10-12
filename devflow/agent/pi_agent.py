@@ -151,6 +151,7 @@ class PiAgent(AgentInterface):
         project_path: str,
         env: dict[str, str] | None = None,
         model_provider_profile: dict[str, Any] | None = None,
+        display_name: str | None = None,
     ) -> subprocess.Popen:
         """Launch a new interactive Pi session."""
         require_tool("pi", "launch Pi AI assistant")
@@ -162,6 +163,8 @@ class PiAgent(AgentInterface):
             "--session-dir",
             str(self.get_session_dir(project_path)),
         ]
+        if display_name:
+            command.extend(["--name", display_name])
         return subprocess.Popen(command, cwd=project_path, env=self._build_env(env))
 
     def launch_with_prompt(
@@ -220,20 +223,24 @@ class PiAgent(AgentInterface):
         project_path: str,
         env: dict[str, str] | None = None,
         model_provider_profile: dict[str, Any] | None = None,
+        display_name: str | None = None,
     ) -> subprocess.Popen:
         """Resume an existing Pi session."""
         require_tool("pi", "resume Pi AI assistant")
         from devflow.utils.model_provider import get_profile_arguments
         profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
+        command = [
+            "pi",
+            *profile_arguments,
+            "--session-dir",
+            str(self.get_session_dir(project_path)),
+            "--session",
+            session_id,
+        ]
+        if display_name:
+            command.extend(["--name", display_name])
         return subprocess.Popen(
-            [
-                "pi",
-                *profile_arguments,
-                "--session-dir",
-                str(self.get_session_dir(project_path)),
-                "--session",
-                session_id,
-            ],
+            command,
             cwd=project_path,
             env=self._build_env(env),
         )

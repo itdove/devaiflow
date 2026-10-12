@@ -331,16 +331,16 @@ daf assets --agent cursor
 
 ## DAF-Derived Conversation Titles
 
-For agents with a documented native title mechanism, DevAIFlow names each new
-conversation from the DAF session name and repository. Replacement conversations
-receive an ordinal, and existing conversations keep their current title when
-resumed.
+For agents with a documented native title mechanism, DevAIFlow uses the exact
+current DAF session name as the conversation title. Repository names and
+replacement ordinals are not added. When resuming a session, DevAIFlow
+synchronizes the title where the agent supports it.
 
 | Agent | Title mechanism |
 |-------|-----------------|
-| Claude Code | `--name` on new-session launches |
-| Pi | `--name` on new-session launches |
-| OpenCode | Version-compatible session creation API; `run --title` for headless launches |
+| Claude Code | `--name` on new-session launches and `daf open` resumes |
+| Pi | `--name` on new-session launches and resumes |
+| OpenCode | Version-compatible session create/update API; `run --title` for headless launches |
 
 Other adapters (including Ollama, Codex, Aider, Crush, Continue, Copilot,
 Cursor, and Windsurf) do not currently expose a stable title-setting mechanism
@@ -831,11 +831,10 @@ both versions. OpenCode v2 does not expose auto-approval on `mini`; DevAIFlow
 reports that combination with a remediation message instead of launching an
 unsupported command.
 
-New OpenCode conversations use the shared DAF-derived title convention: the
-DAF session name, repository, and an ordinal for replacements. OpenCode v1 uses
-its local session API; v2 uses the standalone API CLI. Headless launches use
-`opencode run --title`. Existing OpenCode sessions are resumed by ID and are
-not renamed or duplicated.
+OpenCode conversations use the exact DAF session name. OpenCode v1 uses its
+local session API to create or update titles; v2 uses the standalone API CLI.
+Headless launches use `opencode run --title`. Existing sessions are resumed by
+ID after their title is synchronized to the current DAF session name.
 
 Commit-message generation also adapts the `run` flags by major version: v1
 uses its quiet and reasoning-effort options, while v2 omits those v1-only
