@@ -336,5 +336,55 @@ class TestVerificationResult:
         assert result.verified_criteria < result.total_criteria
 
 
+@pytest.mark.parametrize(
+    ("agent_backend", "expected_title"),
+    [("opencode", "verify-session"), ("codex", None)],
+)
+def test_ai_verification_uses_daf_title_only_for_native_title_backends(
+    agent_backend, expected_title, tmp_path, monkeypatch
+):
+    """Feature verification uses the DAF session name when titles are supported."""
+    from types import SimpleNamespace
+
+    import devflow.orchestration.feature as feature_module
+    from devflow.orchestration.feature import FeatureManager
+
+    manager = FeatureManager.__new__(FeatureManager)
+    session = SimpleNamespace(name="verify-session", issue_key="TEST-632")
+    manager.session_manager = Mock()
+    manager.session_manager.get_session.return_value = session
+    manager._get_ticket_description = Mock(return_value="ticket description")
+
+    criteria_checker = Mock()
+    criteria_checker.parse_criteria_from_ticket.return_value = ["criterion-a"]
+    monkeypatch.setattr(
+        feature_module, "AcceptanceCriteriaChecker", lambda _path: criteria_checker
+    )
+
+    config = SimpleNamespace(agent_backend=agent_backend)
+    config_loader = Mock()
+    config_loader.load_config.return_value = config
+    monkeypatch.setattr(feature_module, "ConfigLoader", lambda: config_loader)
+
+    agent = Mock()
+    agent.launch_with_prompt.return_value = Mock()
+    agent.get_session_file_path.return_value = tmp_path / "missing-session.jsonl"
+    monkeypatch.setattr(
+        "devflow.agent.factory.create_agent_client", lambda _backend: agent
+    )
+
+    manager._run_ai_verification(
+        feature=Mock(),
+        session_name="verify-session",
+        project_path=str(tmp_path),
+    )
+
+    launch_kwargs = agent.launch_with_prompt.call_args.kwargs
+    if expected_title:
+        assert launch_kwargs["display_name"] == expected_title
+    else:
+        assert "display_name" not in launch_kwargs
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

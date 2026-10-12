@@ -11,7 +11,7 @@ def test_launch_with_prompt_uses_daf_derived_session_title(
     mock_popen, mock_require_tool
 ):
     mock_popen.return_value = Mock()
-    title = "session-a [repo-a]"
+    title = "session-a"
 
     ClaudeAgent().launch_with_prompt(
         project_path="/tmp/project-a",

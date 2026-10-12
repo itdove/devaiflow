@@ -2197,6 +2197,7 @@ class TestOpenCommandOpenCodeResume:
         mock_agent.resume_session.assert_called_once()
         call_kwargs = mock_agent.resume_session.call_args
         assert call_kwargs.kwargs["session_id"] == "ses_abc123def"
+        assert call_kwargs.kwargs["display_name"] == "oc-resume-test"
 
     def test_open_resume_opencode_with_uuid_fallback(self, temp_daf_home, tmp_path):
         """When reopening OpenCode session with UUID (no captured ses_ ID), falls back to launch_session()."""
@@ -2243,6 +2244,7 @@ class TestOpenCommandOpenCodeResume:
         # launch_session should be called (not resume_session) when UUID stored
         if mock_agent.launch_session.called:
             assert not mock_agent.resume_session.called
+            assert mock_agent.launch_session.call_args.kwargs["display_name"] == "oc-uuid-test"
 
     def test_open_first_launch_captures_opencode_session_id(self, temp_daf_home, tmp_path):
         """On first launch with OpenCode, real ses_ session ID is captured and saved."""
