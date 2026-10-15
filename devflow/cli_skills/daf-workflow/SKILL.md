@@ -41,6 +41,24 @@ daf info $DAF_SESSION_NAME
 
 This shows: session name, goal, issue key, status, working directory, branch, workspace, session type, and conversation history.
 
+#### DAF-managed conversation titles
+
+The **DAF session name** (`Name` in `daf info`) identifies the session; the
+**goal** (`--goal`) describes the work; the backend's **LLM conversation title**
+is separate display metadata.
+
+For **Claude Code, Pi, and OpenCode**, DAF manages native title setting at launch
+and on supported resume paths. The title is the **exact current DAF session
+name** from metadata, not the goal, issue summary, or an agent-generated task
+summary. This applies to `daf new`, `daf open`, `daf git new`, `daf jira new`,
+and `daf investigate`; read-only and ticket-creation constraints still apply.
+
+Do not independently rename the conversation from `--goal`, rename the DAF
+session, or duplicate DAF's launch/resume title-setting operations. Other
+backends retain their normal agent-managed titles. If a supported backend's
+title does not match, report a **title-propagation problem**; do not invent
+rename commands, edit backend storage, or use an unverified skill-level fallback.
+
 ### 2. Read Issue Tracker Ticket
 
 If `daf info` shows an issue key (e.g., `owner/repo#123` or `PROJ-456`), read the
