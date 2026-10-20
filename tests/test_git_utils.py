@@ -323,6 +323,78 @@ def test_get_default_branch_not_git(tmp_path):
     assert result is None
 
 
+@pytest.mark.parametrize("remote", ["origin", "upstream", "parent"])
+def test_get_default_branch_scoped_to_remote_preserves_branch_path(monkeypatch, tmp_path, remote):
+    """Use the requested remote's HEAD and preserve slashes in its branch name."""
+    commands = []
+
+    def mock_run(command, **kwargs):
+        commands.append(command)
+        assert kwargs["cwd"] == tmp_path
+        return subprocess.CompletedProcess(
+            command, 0, f"refs/remotes/{remote}/release/stable\n", ""
+        )
+
+    monkeypatch.setattr("devflow.git.utils.subprocess.run", mock_run)
+
+    assert GitUtils.get_default_branch(tmp_path, remote=remote) == "release/stable"
+    assert commands == [["git", "symbolic-ref", f"refs/remotes/{remote}/HEAD"]]
+
+
+@pytest.mark.parametrize("remote", ["parent", "https://example.com/parent/repo.git"])
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        ("ref: refs/heads/release/stable\tHEAD\nabc123\tHEAD\n", "release/stable"),
+        ("ref: refs/heads/trunk\tHEAD\n", "trunk"),
+        ("abc123\tHEAD\n", None),
+        ("ref: refs/heads/trunk\trefs/heads/trunk\n", None),
+        ("ref: refs/heads/\tHEAD\n", None),
+        ("", None),
+    ],
+)
+def test_get_default_branch_remote_head_without_local_symbolic_ref(
+    monkeypatch, tmp_path, remote, output, expected
+):
+    """Missing remote HEAD metadata must not fall back to another repository."""
+    commands = []
+
+    def mock_run(command, **kwargs):
+        commands.append(command)
+        if command[1] == "symbolic-ref":
+            return subprocess.CompletedProcess(command, 1, "", "")
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr("devflow.git.utils.subprocess.run", mock_run)
+
+    assert GitUtils.get_default_branch(tmp_path, remote=remote) == expected
+    assert commands == [
+        ["git", "symbolic-ref", f"refs/remotes/{remote}/HEAD"],
+        ["git", "ls-remote", "--symref", remote, "HEAD"],
+    ]
+
+
+@pytest.mark.parametrize("failure", ["nonzero", "timeout", "missing_git"])
+def test_get_default_branch_remote_failure_does_not_guess(monkeypatch, tmp_path, failure):
+    """An unavailable remote must fail gracefully rather than guess a local base."""
+    commands = []
+
+    def mock_run(command, **kwargs):
+        commands.append(command)
+        if command[1] == "ls-remote":
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(command, 10)
+            if failure == "missing_git":
+                raise FileNotFoundError("git")
+        return subprocess.CompletedProcess(command, 1, "", "")
+
+    monkeypatch.setattr("devflow.git.utils.subprocess.run", mock_run)
+
+    assert GitUtils.get_default_branch(tmp_path, remote="parent") is None
+    assert len(commands) == 2
+    assert commands[1] == ["git", "ls-remote", "--symref", "parent", "HEAD"]
+
+
 def test_branch_exists_not_git(tmp_path):
     """Test branch_exists with non-git directory."""
     result = GitUtils.branch_exists(tmp_path, "main")

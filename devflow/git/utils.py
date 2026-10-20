@@ -82,7 +82,7 @@ class GitUtils:
             return None
 
     @staticmethod
-    def get_default_branch(path: Path) -> Optional[str]:
+    def get_default_branch(path: Path, remote: str | None = None) -> str | None:
         """Get the default branch (main/master/develop).
 
         Checks remotes in priority order:
@@ -92,11 +92,47 @@ class GitUtils:
 
         Args:
             path: Repository path
+            remote: If provided, resolve only this remote's HEAD, without falling
+                back to other remotes or common local branch names. A URL is
+                accepted when the target repository has no configured remote.
 
         Returns:
             Default branch name or None if not found
         """
         try:
+            if remote is not None:
+                prefix = f"refs/remotes/{remote}/"
+                result = subprocess.run(
+                    ["git", "symbolic-ref", f"{prefix}HEAD"],
+                    cwd=path,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    ref = result.stdout.strip()
+                    if ref.startswith(prefix) and ref[len(prefix) :]:
+                        return ref[len(prefix) :]
+
+                # A fork parent may not have a local remote HEAD (or even a
+                # named remote). Ask that repository, never a different remote.
+                result = subprocess.run(
+                    ["git", "ls-remote", "--symref", remote, "HEAD"],
+                    cwd=path,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.splitlines():
+                        ref, _, name = line.partition("\t")
+                        prefix = "ref: refs/heads/"
+                        if name == "HEAD" and ref.startswith(prefix) and ref[len(prefix) :]:
+                            return ref[len(prefix) :]
+                return None
+
             # Priority 1: Try upstream remote (for fork workflows)
             result = subprocess.run(
                 ["git", "symbolic-ref", "refs/remotes/upstream/HEAD"],
