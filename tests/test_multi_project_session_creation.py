@@ -305,7 +305,16 @@ def test_branch_name_updates_across_projects_when_changed(temp_daf_home, tmp_pat
                 f"Bug: Second project received original name '{kwargs.get('branch_name')}' instead of updated 'multi-project-test-2'"
             return ('multi-project-test-2', 'origin/main')
 
-    with patch('devflow.cli.commands.new_command._handle_branch_creation', side_effect=mock_handle_branch_creation):
+    with (
+        patch(
+            "devflow.cli.commands.new_command._handle_branch_creation",
+            side_effect=mock_handle_branch_creation,
+        ),
+        patch(
+            "devflow.cli.commands.new_command._get_default_source_branch",
+            return_value="origin/main",
+        ),
+    ):
         # Create multi-project session in JSON mode (simpler mocking)
         create_multi_project_session(
             session_manager=session_manager,

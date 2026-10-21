@@ -770,6 +770,26 @@ Which project? [1-3]: 2
 
 **Note:** Sessions created via `daf sync` or imported from teammates may not have a branch yet. When you first open such a session, it will create a branch and handle any conflicts using the same resolution flow as `daf new` (see Branch Conflict Resolution above).
 
+**Default source branch selection:** Initial branch creation in `daf open`, `daf new`,
+and multi-project sessions resolves the source remote's actual default branch, including
+names such as `release/stable`. Remote priority is `upstream`, then `origin`, then other
+configured remotes alphabetically. The numbered menu lists branches from that same remote;
+the resolved default is marked `(default)` and selected by Enter, even without a local
+branch of that name. Selected remote branches remain remote-qualified (for example,
+`upstream/release/stable`) so they cannot accidentally use another remote's or a local
+branch's commits. The selected remote is fetched before branch creation.
+
+- If the default cannot be resolved or is missing from the menu, Enter selects **Cancel**,
+  not the first alphabetical branch. You can still explicitly select another row or enter
+  a custom local or remote-qualified branch.
+- If remote branches cannot be listed, the picker falls back to validated text input.
+  Without a resolved default, empty input cancels.
+- With no configured remotes, the local fallback is `main`, `master`, or `develop`, then
+  the current attached branch; detached HEAD is not a source default.
+- Automatic/non-interactive modes do not prompt. If no source default can be resolved,
+  no branch is created; supply `--source-branch` explicitly. Multi-project creation cancels
+  before creating any branches if a project has no selected base.
+
 4. **When Claude Code exits (PROJ-60241):**
    - **Prompts to run `daf complete`** (configurable via `prompts.auto_complete_on_exit`)
      - `true` - Automatically runs `daf complete` workflow

@@ -224,6 +224,9 @@ def test_daf_new_sets_status_paused_after_claude_exits(temp_daf_home, clean_ci_e
         return CompletedProcess()
 
     monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+    monkeypatch.setattr(
+        "devflow.git.utils.GitUtils.get_default_branch", lambda path, remote=None: "main"
+    )
 
     # Execute: Create session and launch Claude Code
     # Input sequence:

@@ -1811,6 +1811,12 @@ class Session(BaseModel):
    - Uses version-compatible v1/v2 session APIs and `opencode run --title` for headless launches
    - Added regression coverage for title propagation, repository/replacement uniqueness, and launch compatibility
 
+- ✓ Correct default source selection for initial branch creation (itdove/devaiflow#638)
+   - Resolves the actual source remote HEAD and selects it on Enter, including remote-only and slash-named branches
+   - Preserves remote identity across discovery, selection, fetch, and branch creation
+   - Cancels unavailable menu defaults instead of selecting an unrelated first branch
+   - Covers fork remotes, explicit/custom sources, local-only fallbacks, and automatic modes
+
 ## Release Management
 
 ### Overview

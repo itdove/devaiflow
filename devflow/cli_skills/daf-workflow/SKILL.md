@@ -152,6 +152,17 @@ Use the `DAF_COMMAND` value from the output above and follow the matching sectio
 
 Standard development session. Resume or start work on a task.
 
+**Initial branch selection:** When DAF needs to create a branch, its source picker
+chooses `upstream` when configured, otherwise `origin`, otherwise the first
+configured remote alphabetically, and resolves that remote's actual default.
+It marks that branch `(default)` and Enter selects it;
+remote-qualified selections preserve the source repository's identity. If the
+default is unresolved or unavailable in the menu, Enter cancels rather than
+selecting an unrelated branch. Explicit selection and custom entry remain available.
+With no remotes, DAF uses a common local base or the current attached branch.
+Automatic modes do not prompt or create a branch without a resolved or explicitly
+provided source. Multi-project creation cancels if any project has no selected base.
+
 **Workflow:**
 1. Read the issue tracker ticket and identify acceptance criteria
 2. Plan your work to address each criterion

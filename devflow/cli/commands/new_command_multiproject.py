@@ -152,16 +152,24 @@ def create_multi_project_session(
             selected_base = default_base
         else:
             # Prompt for base branch
-            console.print(f"\n[cyan]{proj_name}[/cyan] (default: {default_base})")
+            console_print(f"\n[cyan]{proj_name}[/cyan] (default: {default_base or 'unresolved'})")
 
             # Offer common base branch options
             from devflow.cli.commands.new_command import _prompt_for_source_branch
             selected_base = _prompt_for_source_branch(proj_path, default_base)
 
-            if not selected_base:
-                # User cancelled
-                console.print("[yellow]Multi-project session creation cancelled[/yellow]")
-                sys.exit(1)
+        if not selected_base:
+            message = (
+                f"No source branch selected for {proj_name}. "
+                "Specify --source-branch or select a branch interactively."
+            )
+            if output_json:
+                json_output(success=False, error={"code": "NO_SOURCE_BRANCH", "message": message})
+            else:
+                console_print(
+                    f"[yellow]{message} Multi-project session creation cancelled.[/yellow]"
+                )
+            sys.exit(1)
 
         project_base_branches[proj_name] = selected_base
 

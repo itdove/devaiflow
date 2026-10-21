@@ -278,9 +278,22 @@ class GitUtils:
             - (True, None) if successful
             - (False, error_message) if failed
         """
+        return GitUtils.fetch_remote(path, "origin")
+
+    @staticmethod
+    def fetch_remote(path: Path, remote: str) -> tuple[bool, str | None]:
+        """Fetch a specific configured remote.
+
+        Args:
+            path: Repository path
+            remote: Remote name
+
+        Returns:
+            Success flag and an optional error message.
+        """
         try:
             result = subprocess.run(
-                ["git", "fetch", "origin"],
+                ["git", "fetch", remote],
                 cwd=path,
                 capture_output=True,
                 text=True,
@@ -289,7 +302,9 @@ class GitUtils:
             if result.returncode == 0:
                 return (True, None)
             else:
-                error_msg = result.stderr.strip() if result.stderr else "Failed to fetch from origin"
+                error_msg = (
+                    result.stderr.strip() if result.stderr else f"Failed to fetch from {remote}"
+                )
                 return (False, error_msg)
         except subprocess.TimeoutExpired:
             return (False, "Git command timed out")
