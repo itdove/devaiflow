@@ -1912,7 +1912,7 @@ daf config unset-prompts --show-prompt-unit-tests
 When creating a PR/MR during `daf complete`, this setting controls whether you're prompted to select which branch to target (e.g., `main`, `release/2.5`, `release/3.0`) or whether the default branch is automatically used.
 
 **Values:**
-- `true` - Always use the default branch without prompting
+- `true` - Use the resolved session base, or the detected default when no base is supplied, without prompting
 - `false` - Skip target branch selection entirely (backward compatible, no `--base`/`--target-branch` flag)
 - `null` - Prompt to select target branch each time (default)
 
@@ -1931,9 +1931,11 @@ When creating a PR/MR during `daf complete`, this setting controls whether you'r
 ```
 
 **Workflow:**
-- When `null` (default): Lists all remote branches and prompts you to select one
-- When `true`: Automatically uses the repository's default branch (same as `false` but more explicit)
+- When `null` (default): Lists remote branches, excludes the source branch, and proposes a selectable session base or else the repository default. The `(default)` marker and Enter choice agree. If neither is selectable, Enter chooses **Skip** rather than an unrelated branch.
+- When `true`: Automatically uses the resolved session base or detected repository default, without interactive remote-availability validation. Unlike `false`, it supplies an explicit target flag.
 - When `false`: Creates PR/MR without `--base` or `--target-branch` flag (relies on CLI default)
+
+For forks, interactive recommendations use the upstream target remote's branches and default, including when branch lists were prefetched. The repository default is labelled `(repository default)` even when a valid non-default session base is proposed. Non-interactive completion retains its existing behavior of using the resolved session base or detected default without prompting.
 
 **Note:** This setting only applies when `auto_create_pr_on_complete` is enabled or when you confirm to create a PR/MR during `daf complete`.
 

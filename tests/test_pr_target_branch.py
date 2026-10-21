@@ -7,8 +7,10 @@ from unittest.mock import Mock, patch
 import pytest
 
 from devflow.cli.commands.complete_command import (
+    BranchPrefetchResult,
     _create_github_pr,
     _create_gitlab_mr,
+    _create_pr_mr,
     _generate_pr_description,
     _select_target_branch,
 )
@@ -409,7 +411,7 @@ def test_select_target_branch_config_false(monkeypatch, tmp_path):
 
 def test_select_target_branch_config_true(monkeypatch, tmp_path):
     """Test _select_target_branch with auto_select_target_branch=True (auto-select default)."""
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
@@ -448,7 +450,7 @@ def test_select_target_branch_filters_current_branch(monkeypatch, tmp_path):
     def mock_list_remote_branches(path, remote):
         return ["main", "develop", "feature-branch", "release/2.5"]
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.list_remote_branches", mock_list_remote_branches)
@@ -480,7 +482,7 @@ def test_select_target_branch_filters_current_when_default(monkeypatch, tmp_path
     def mock_list_remote_branches(path, remote):
         return ["main", "develop", "release/2.5"]
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
@@ -537,7 +539,7 @@ def test_select_target_branch_fork_filters_current(monkeypatch, tmp_path, clean_
             return ["main", "develop", "release/2.5"]
         return []
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     def mock_get_remote_name_for_url(path, url):
@@ -693,7 +695,7 @@ def test_select_target_branch_shows_both_upstream_and_origin(monkeypatch, tmp_pa
             return ["main", "develop", "feature-a", "feature-b"]
         return []
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     def mock_get_remote_name_for_url(path, url):
@@ -752,7 +754,7 @@ def test_select_target_branch_origin_only_no_prefix(monkeypatch, tmp_path, clean
             return ["main", "develop", "feature-a"]
         return []
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
@@ -785,7 +787,7 @@ def test_select_target_branch_non_interactive_uses_base_branch(monkeypatch, tmp_
     """Test non-interactive mode prefers base_branch over detected default."""
     monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: True)
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
@@ -800,7 +802,7 @@ def test_select_target_branch_non_interactive_falls_back_without_base_branch(mon
     """Test non-interactive mode falls back to detected default when no base_branch."""
     monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: True)
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
@@ -813,7 +815,7 @@ def test_select_target_branch_non_interactive_falls_back_without_base_branch(mon
 
 def test_select_target_branch_auto_select_uses_base_branch(monkeypatch, tmp_path):
     """Test auto_select_target_branch=True prefers base_branch over detected default."""
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
@@ -828,7 +830,7 @@ def test_select_target_branch_auto_select_uses_base_branch(monkeypatch, tmp_path
 
 def test_select_target_branch_auto_select_falls_back_without_base_branch(monkeypatch, tmp_path):
     """Test auto_select_target_branch=True falls back to detected default when no base_branch."""
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.GitUtils.get_default_branch", mock_get_default_branch)
@@ -846,7 +848,7 @@ def test_select_target_branch_interactive_defaults_to_base_branch(monkeypatch, t
     def mock_list_remote_branches(path, remote):
         return ["main", "develop", "staging"]
 
-    def mock_get_default_branch(path):
+    def mock_get_default_branch(path, remote=None):
         return "main"
 
     monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda **kw: False)
@@ -871,6 +873,240 @@ def test_select_target_branch_interactive_defaults_to_base_branch(monkeypatch, t
     # develop is at index 2 in the branch list (main=1, develop=2, staging=3)
     assert captured_default["value"] == "2"
     assert result == "develop"
+
+
+@pytest.mark.parametrize(
+    ("base_branch", "repo_default", "expected", "default_choice"),
+    [
+        (None, "main", "main", "2"),
+        ("release/old", "main", "main", "2"),
+        ("release/current", "main", "release/current", "3"),
+        ("feature/current", "main", "main", "2"),
+        ("release/current", None, "release/current", "3"),
+        ("release/old", "feature/current", None, "4"),
+        ("release/old", "missing", None, "4"),
+        (None, None, None, "4"),
+    ],
+)
+def test_select_target_branch_recommends_available_target(
+    monkeypatch, tmp_path, capsys, base_branch, repo_default, expected, default_choice
+):
+    """The highlighted option and Enter choice must resolve to an available target."""
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.list_remote_branches",
+        lambda path, remote: ["bugfix/other", "feature/current", "main", "release/current"],
+    )
+    detect_default = Mock(return_value=repo_default)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.get_default_branch", detect_default
+    )
+    prompt = Mock(side_effect=lambda *args, **kwargs: kwargs["default"])
+    monkeypatch.setattr("rich.prompt.Prompt.ask", prompt)
+    config = _create_minimal_config_mock(PromptsConfig(auto_select_target_branch=None))
+
+    result = _select_target_branch(
+        tmp_path, config, current_branch="feature/current", base_branch=base_branch
+    )
+
+    assert result == expected
+    assert prompt.call_args.kwargs["default"] == default_choice
+    detect_default.assert_called_once_with(tmp_path, remote="origin")
+    output = capsys.readouterr().out
+    assert "feature/current" not in output
+    recommended = [line for line in output.splitlines() if "(default)" in line]
+    if expected is None:
+        assert recommended == []
+        assert "No recommended target branch is available" in output
+    else:
+        assert len(recommended) == 1
+        assert f"{default_choice}. {expected} (default)" in recommended[0]
+    if repo_default == "main":
+        assert "main" in output
+        assert "(repository default)" in output
+
+
+@pytest.mark.parametrize("upstream_remote", ["upstream", "parent"])
+@pytest.mark.parametrize("base_branch", ["release/old", "release/current"])
+def test_select_target_branch_fork_recommends_destination_remote(
+    monkeypatch, tmp_path, capsys, upstream_remote, base_branch
+):
+    """A saved base found only in the fork must not override the upstream default."""
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    branch_lists = {
+        "origin": ["bugfix/other", "release/current", "trunk"],
+        upstream_remote: ["bugfix/other", "feature/current", "trunk"],
+    }
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.list_remote_branches",
+        lambda path, remote: branch_lists[remote],
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.get_remote_name_for_url",
+        lambda path, url: upstream_remote,
+    )
+    detect_default = Mock(return_value="trunk")
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.get_default_branch", detect_default
+    )
+    prompt = Mock(side_effect=lambda *args, **kwargs: kwargs["default"])
+    monkeypatch.setattr("rich.prompt.Prompt.ask", prompt)
+    config = _create_minimal_config_mock(PromptsConfig(auto_select_target_branch=None))
+
+    result = _select_target_branch(
+        tmp_path,
+        config,
+        upstream_info={"upstream_url": "https://github.com/parent/repo.git"},
+        current_branch="feature/current",
+        base_branch=base_branch,
+    )
+
+    assert result == f"{upstream_remote}/trunk"
+    detect_default.assert_called_once_with(tmp_path, remote=upstream_remote)
+    recommended = [line for line in capsys.readouterr().out.splitlines() if "(default)" in line]
+    assert len(recommended) == 1
+    assert f"{upstream_remote}/trunk" in recommended[0]
+
+
+@pytest.mark.parametrize(
+    ("non_interactive", "auto_select", "expected"),
+    [
+        (False, False, None),
+        (False, True, "release/old"),
+        (True, False, "release/old"),
+        (True, None, "release/old"),
+    ],
+)
+def test_select_target_branch_automatic_modes_do_not_validate_remote_targets(
+    monkeypatch, tmp_path, non_interactive, auto_select, expected
+):
+    """Preserve the existing automatic/skip contracts without interactive discovery."""
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.is_non_interactive", lambda: non_interactive
+    )
+    list_branches = Mock()
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.list_remote_branches", list_branches
+    )
+    prompt = Mock()
+    monkeypatch.setattr("rich.prompt.Prompt.ask", prompt)
+    config = _create_minimal_config_mock(PromptsConfig(auto_select_target_branch=auto_select))
+
+    result = _select_target_branch(tmp_path, config, base_branch="release/old")
+
+    assert result == expected
+    list_branches.assert_not_called()
+    prompt.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("create_pr_mr", "target_option", "repo_option", "result_url"),
+    [
+        (_create_github_pr, "--base", "--repo", "https://github.com/parent/repo/pull/42"),
+        (
+            _create_gitlab_mr,
+            "--target-branch",
+            "--target-project",
+            "https://gitlab.com/parent/repo/-/merge_requests/42",
+        ),
+    ],
+)
+@pytest.mark.parametrize("upstream_remote", ["upstream", "parent"])
+@pytest.mark.parametrize("branch", ["main", "release/2.5"])
+def test_create_pr_mr_resolves_upstream_remote_prefix(
+    monkeypatch,
+    tmp_path,
+    create_pr_mr,
+    target_option,
+    repo_option,
+    result_url,
+    upstream_remote,
+    branch,
+):
+    """A recommendation on a custom-named parent remote must target that branch."""
+    run = Mock(return_value=subprocess.CompletedProcess([], 0, result_url, ""))
+    monkeypatch.setattr("devflow.cli.commands.complete_command.subprocess.run", run)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.require_tool", lambda *args: None)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.GitUtils.get_remote_name_for_url",
+        lambda path, url: upstream_remote,
+    )
+    config = _create_minimal_config_mock(PromptsConfig(auto_create_pr_status="draft"))
+
+    result = create_pr_mr(
+        session=Mock(),
+        title="Test change",
+        description="Test description",
+        working_dir=tmp_path,
+        config=config,
+        target_branch=f"{upstream_remote}/{branch}",
+        upstream_info={
+            "upstream_url": "https://example.com/parent/repo.git",
+            "upstream_owner": "parent",
+            "upstream_repo": "repo",
+            "detection_method": "gh_cli",
+        },
+    )
+
+    assert result == result_url
+    command = run.call_args.args[0]
+    assert command[command.index(target_option) + 1] == branch
+    assert command[command.index(repo_option) + 1] == "parent/repo"
+
+
+@pytest.mark.parametrize("repo_type", ["github", "gitlab"])
+@pytest.mark.parametrize("use_prefetch", [False, True])
+@pytest.mark.parametrize("stored_base", [None, "main", "master", "release/old", "release/current"])
+def test_create_pr_mr_proposes_destination_default_unless_base_is_explicit_and_available(
+    monkeypatch, tmp_path, repo_type, use_prefetch, stored_base
+):
+    """An inferred origin default is not an explicit base for a fork's parent."""
+    module = "devflow.cli.commands.complete_command"
+    monkeypatch.setattr(f"{module}.is_non_interactive", lambda: False)
+    monkeypatch.setattr(f"{module}.GitUtils.detect_repo_type", lambda path: repo_type)
+    monkeypatch.setattr(f"{module}.GitUtils.has_unpushed_branch_commits", lambda *args: False)
+    monkeypatch.setattr(f"{module}._generate_pr_description", lambda *args, **kwargs: "Description")
+    monkeypatch.setattr(f"{module}._generate_pr_title", lambda *args: "Test change")
+    upstream_info = {"upstream_url": "https://example.com/parent/repo.git"}
+    monkeypatch.setattr(
+        f"{module}.GitUtils.get_fork_upstream_info", lambda *args, **kwargs: upstream_info
+    )
+    monkeypatch.setattr(f"{module}.GitUtils.get_remote_name_for_url", lambda *args: "parent")
+    monkeypatch.setattr(
+        f"{module}.GitUtils.get_default_branch",
+        lambda path, remote=None: "trunk" if remote == "parent" else "main",
+    )
+    branches = {
+        "origin": ["bugfix/other", "main", "release/current"],
+        "parent": ["bugfix/other", "feature/current", "main", "release/current", "trunk"],
+    }
+    monkeypatch.setattr(
+        f"{module}.GitUtils.list_remote_branches", lambda path, remote: branches[remote]
+    )
+    monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: kwargs["default"])
+    create = Mock(return_value="https://example.com/parent/repo/pull/42")
+    monkeypatch.setattr(
+        f"{module}.{'_create_github_pr' if repo_type == 'github' else '_create_gitlab_mr'}", create
+    )
+    session = Mock()
+    session.name = "session-42"
+    session.active_conversation = Mock(branch="feature/current", base_branch=stored_base, prs=[])
+    session_manager = Mock()
+    session_manager.config_loader.load_config.return_value = _create_minimal_config_mock(
+        PromptsConfig(auto_select_target_branch=None)
+    )
+    prefetch = Mock() if use_prefetch else None
+    if prefetch:
+        prefetch.resolve.return_value = BranchPrefetchResult(
+            remote_branches=branches, upstream_info=upstream_info, completed=True
+        )
+
+    result = _create_pr_mr(session, tmp_path, session_manager, branch_prefetch=prefetch)
+
+    assert result == create.return_value
+    expected = "release/current" if stored_base == "release/current" else "trunk"
+    assert create.call_args.args[5] == f"parent/{expected}"
+    session_manager.update_session.assert_called_once_with(session)
 
 
 @pytest.mark.parametrize(

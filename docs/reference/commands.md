@@ -1189,8 +1189,8 @@ When creating a PR/MR, `daf complete` allows you to select which branch to targe
 **How it works:**
 
 1. Before creating the PR/MR, the tool lists all available remote branches
-2. The default branch is highlighted as recommended
-3. You select the target branch interactively
+2. A saved session base is proposed if it is still selectable on the target remote; otherwise the repository default is proposed
+3. The proposed option is marked `(default)` and selected by Enter; the repository default is also identified as `(repository default)`
 4. The appropriate flag is added to the `gh`/`glab` command:
    - **GitHub**: `--base <branch>` flag
    - **GitLab**: `--target-branch <branch>` flag
@@ -1205,7 +1205,7 @@ Repository type detected: GITHUB
 Select target branch for PR/MR (remote: origin):
 
 Available branches:
-1. main (default)
+1. main (default) (repository default)
 2. release/2.5
 3. release/3.0
 4. develop
@@ -1226,7 +1226,7 @@ Creating draft GITHUB PR...
 You can configure automatic target branch selection using the `prompts.auto_select_target_branch` setting:
 
 - **`null`** (default) - Always prompt to select target branch
-- **`true`** - Automatically use the default branch without prompting
+- **`true`** - Automatically use the resolved session base, or the detected default when no base is supplied, without prompting
 - **`false`** - Skip target branch selection entirely (backward compatible, no `--base`/`--target-branch` flag)
 
 **Example configuration:**
@@ -1244,8 +1244,12 @@ You can configure automatic target branch selection using the `prompts.auto_sele
 - Eliminates the need to manually change the target branch in GitHub/GitLab UI after PR creation
 
 **Edge cases:**
+- An unavailable saved base falls back to the available repository default, not an unrelated first branch.
+- If neither the saved base nor the repository default is selectable (including when it is the source branch), no branch is recommended. Enter selects **Skip**, leaving the target unspecified for the hosting CLI to resolve.
 - If the remote branch list is empty, the tool gracefully falls back to not specifying a target branch
-- For fork scenarios, branch selection happens after fork detection, so you can select from upstream branches
+- For forks, recommendations and default detection use the upstream repository's remote (including custom remote names), independent of branch-prefetch ordering. Branches from the fork remain available for explicit selection.
+- Legacy `main`/`master` model defaults and defaults inferred from another remote do not count as explicitly chosen session bases; valid saved non-default bases remain preferred.
+- Automatic/non-interactive selection retains the resolved session base without validating remote availability; interactive fallback does not change these modes. Setting `false` or choosing **Skip** omits the target flag.
 
 ---
 

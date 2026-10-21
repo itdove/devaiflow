@@ -1868,7 +1868,14 @@ def _start_branch_prefetch(working_dir: Path) -> BranchPrefetch:
     return BranchPrefetch(origin_future, upstream_future, fork_future, executor)
 
 
-def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dict] = None, current_branch: Optional[str] = None, base_branch: Optional[str] = None, prefetched_branches: Optional[Dict[str, List[str]]] = None) -> Optional[str]:
+def _select_target_branch(
+    working_dir: Path,
+    config: Any,
+    upstream_info: dict | None = None,
+    current_branch: str | None = None,
+    base_branch: str | None = None,
+    prefetched_branches: dict[str, list[str]] | None = None,
+) -> str | None:
     """Prompt user to select target branch for PR/MR.
 
     Args:
@@ -1876,7 +1883,7 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         config: Config object
         upstream_info: Upstream repository info if fork (optional)
         current_branch: Current branch name to filter out (cannot PR to same branch)
-        base_branch: Session's stored base branch (preferred over repo default)
+        base_branch: Session's base branch (preferred when selectable on the target remote)
         prefetched_branches: Pre-resolved remote branch data from async prefetch.
             When provided, skips synchronous git ls-remote calls.
 
@@ -1903,38 +1910,32 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
                 console.print(f"[dim]Automatically using target branch: {target} (configured in prompts)[/dim]")
                 return target
 
-    # Determine which remotes to query
+    # Resolve the PR destination independently of branch-list insertion order.
+    # Prefetch lists origin first; synchronous fork discovery used to list the
+    # upstream first. Neither order should decide the recommended repository.
+    target_remote = "origin"
+    target_remote_ref = "origin"
+    upstream_url = upstream_info.get("upstream_url") if upstream_info else None
+    if upstream_url:
+        upstream_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
+        target_remote = upstream_remote or "upstream"
+        target_remote_ref = upstream_remote or upstream_url
+
     if prefetched_branches is not None:
         remote_branches = dict(prefetched_branches)
-
-        # If fork detected but upstream remote has non-standard name not in prefetch,
-        # fall back to sync fetch for that specific remote
-        if upstream_info:
-            upstream_url = upstream_info.get('upstream_url')
-            if upstream_url:
-                upstream_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
-                if upstream_remote and upstream_remote not in remote_branches:
-                    upstream_branches = GitUtils.list_remote_branches(working_dir, upstream_remote)
-                    if upstream_branches:
-                        remote_branches[upstream_remote] = upstream_branches
-    elif upstream_info:
-        upstream_url = upstream_info.get('upstream_url')
-        upstream_remote = None
-        if upstream_url:
-            upstream_remote = GitUtils.get_remote_name_for_url(working_dir, upstream_url)
-
+    else:
         remote_branches = {}
-        if upstream_remote:
-            upstream_branches = GitUtils.list_remote_branches(working_dir, upstream_remote)
-            if upstream_branches:
-                remote_branches[upstream_remote] = upstream_branches
 
+    # Fetch only missing data, including a parent with a non-standard remote
+    # name or no locally configured remote at all.
+    if upstream_url and target_remote not in remote_branches:
+        upstream_branches = GitUtils.list_remote_branches(working_dir, target_remote_ref)
+        if upstream_branches:
+            remote_branches[target_remote] = upstream_branches
+    if prefetched_branches is None and "origin" not in remote_branches:
         origin_branches = GitUtils.list_remote_branches(working_dir, "origin")
         if origin_branches:
             remote_branches["origin"] = origin_branches
-    else:
-        origin_branches = GitUtils.list_remote_branches(working_dir, "origin")
-        remote_branches = {"origin": origin_branches} if origin_branches else {}
 
     # Build combined branch list with remote prefixes
     branches = []
@@ -1961,9 +1962,23 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
         console.print("[dim]Continuing without target branch selection[/dim]")
         return None
 
-    # Get default branch to highlight it; prefer session base_branch
-    default_branch = GitUtils.get_default_branch(working_dir)
-    preferred_default = base_branch or default_branch
+    # Recommend only a selectable branch on the destination remote. An
+    # unavailable saved base must not hide the real repository default.
+    default_branch = GitUtils.get_default_branch(working_dir, remote=target_remote_ref)
+    preferred_default = None
+    for candidate in (base_branch, default_branch):
+        if not candidate:
+            continue
+        preferred_default = next(
+            (
+                display
+                for display, (remote, branch) in branch_to_remote.items()
+                if remote == target_remote and branch == candidate
+            ),
+            None,
+        )
+        if preferred_default:
+            break
 
     # Show branch selection prompt
     if len(remote_branches) > 1:
@@ -1977,10 +1992,12 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     console.print("\n[bold]Available branches:[/bold]")
     for i, branch_display in enumerate(branches, 1):
         remote, actual_branch = branch_to_remote[branch_display]
-        if actual_branch == preferred_default:
-            console.print(f"{i}. {branch_display} [green](default)[/green]")
-        else:
-            console.print(f"{i}. {branch_display}")
+        labels = ""
+        if branch_display == preferred_default:
+            labels += " [green](default)[/green]"
+        if remote == target_remote and actual_branch == default_branch:
+            labels += " [dim](repository default)[/dim]"
+        console.print(f"{i}. {branch_display}{labels}")
 
     # Add "Skip" option
     skip_option_number = len(branches) + 1
@@ -1990,15 +2007,17 @@ def _select_target_branch(working_dir: Path, config, upstream_info: Optional[dic
     from rich.prompt import Prompt
     numeric_choices = [str(i) for i in range(1, skip_option_number + 1)]
 
-    # Find default choice number (preferred default if available, otherwise first branch)
-    default_choice = "1"
+    # The Enter choice must match the highlighted recommendation. If neither
+    # candidate is selectable, explicitly defer to the hosting CLI's default
+    # rather than silently recommending an unrelated first branch.
+    default_choice = str(skip_option_number)
     if preferred_default:
-        # Find the display name that corresponds to the preferred default branch
-        for i, branch_display in enumerate(branches, 1):
-            remote, actual_branch = branch_to_remote[branch_display]
-            if actual_branch == preferred_default:
-                default_choice = str(i)
-                break
+        default_choice = str(branches.index(preferred_default) + 1)
+    else:
+        console.print(
+            "[yellow]No recommended target branch is available; "
+            "press Enter to use the repository default.[/yellow]"
+        )
 
     # Prompt for selection
     choice = Prompt.ask("Select option", choices=numeric_choices, default=default_choice)
@@ -2480,7 +2499,17 @@ def _create_pr_mr(session, working_dir: Path, session_manager, yes: bool = False
         upstream_info = GitUtils.get_fork_upstream_info(working_dir, prompt_for_remote=False)
 
     # Select target branch (respects auto_select_target_branch configuration)
-    session_base_branch = _get_base_branch(active_conv, working_dir)
+    # Legacy main/master model defaults are not evidence of an explicit base.
+    # Let interactive selection resolve the actual destination's default rather
+    # than treating a default inferred from another remote as a user choice.
+    session_base_branch = getattr(active_conv, "base_branch", None)
+    if session_base_branch in {"main", "master"}:
+        session_base_branch = None
+    if is_non_interactive() or (
+        config and config.prompts and config.prompts.auto_select_target_branch is True
+    ):
+        # Preserve the existing resolved-base contract for automatic modes.
+        session_base_branch = _get_base_branch(active_conv, working_dir)
     target_branch = _select_target_branch(working_dir, config, upstream_info, current_branch, base_branch=session_base_branch, prefetched_branches=prefetched_branches)
 
     # Create PR/MR with retry logic
@@ -3464,6 +3493,15 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
             cmd.append("--draft")
         cmd.extend(["--title", title, "--body", description])
 
+        upstream_remotes = {"upstream"}
+        if upstream_info and target_branch and upstream_info.get("upstream_url"):
+            upstream_remote = GitUtils.get_remote_name_for_url(
+                working_dir, upstream_info["upstream_url"]
+            )
+            if upstream_remote:
+                upstream_remotes.add(upstream_remote)
+        remote_prefixes = {"origin", "upstream", "fork"} | upstream_remotes
+
         # If fork detected, determine target repository based on user's branch selection
         if upstream_info and target_branch:
             # Extract remote name from target_branch (e.g., "origin/main" -> "origin")
@@ -3471,10 +3509,10 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
             if '/' in target_branch:
                 parts = target_branch.split('/', 1)
                 # Check if first part is a known remote prefix
-                if parts[0] in ['origin', 'upstream', 'fork']:
+                if parts[0] in remote_prefixes:
                     remote_name = parts[0]
 
-            if remote_name == 'upstream':
+            if remote_name in upstream_remotes:
                 # User explicitly selected upstream branch - create PR to upstream
                 base_repo = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
                 cmd.extend(["--repo", base_repo])
@@ -3512,11 +3550,11 @@ def _create_github_pr(session, title: str, description: str, working_dir: Path, 
         if target_branch:
             # Strip remote prefix if present (e.g., "origin/main" -> "main")
             # GitHub's gh pr create --base expects branch name without remote prefix
-            # Only strip known remote prefixes (origin, upstream, fork), not branch paths like "release/2.5"
+            # Preserve branch paths such as "release/2.5", stripping only known remotes.
             base_branch_name = target_branch
             if '/' in target_branch:
                 parts = target_branch.split('/', 1)
-                if parts[0] in ['origin', 'upstream', 'fork']:
+                if parts[0] in remote_prefixes:
                     base_branch_name = parts[1]
             cmd.extend(["--base", base_branch_name])
             console.print(f"[dim]Target branch: {base_branch_name}[/dim]")
@@ -3649,6 +3687,15 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
             cmd.append("--draft")
         cmd.extend(["--title", title, "--description", description])
 
+        upstream_remotes = {"upstream"}
+        if upstream_info and target_branch and upstream_info.get("upstream_url"):
+            upstream_remote = GitUtils.get_remote_name_for_url(
+                working_dir, upstream_info["upstream_url"]
+            )
+            if upstream_remote:
+                upstream_remotes.add(upstream_remote)
+        remote_prefixes = {"origin", "upstream", "fork"} | upstream_remotes
+
         # If fork detected, determine target repository based on user's branch selection
         if upstream_info and target_branch:
             # Extract remote name from target_branch (e.g., "origin/main" -> "origin")
@@ -3656,10 +3703,10 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
             if '/' in target_branch:
                 parts = target_branch.split('/', 1)
                 # Check if first part is a known remote prefix
-                if parts[0] in ['origin', 'upstream', 'fork']:
+                if parts[0] in remote_prefixes:
                     remote_name = parts[0]
 
-            if remote_name == 'upstream':
+            if remote_name in upstream_remotes:
                 # User explicitly selected upstream branch - create MR to upstream
                 target_project = f"{upstream_info['upstream_owner']}/{upstream_info['upstream_repo']}"
                 cmd.extend(["--target-project", target_project])
@@ -3697,11 +3744,11 @@ def _create_gitlab_mr(session, title: str, description: str, working_dir: Path, 
         if target_branch:
             # Strip remote prefix if present (e.g., "origin/main" -> "main")
             # GitLab's glab mr create --target-branch expects branch name without remote prefix
-            # Only strip known remote prefixes (origin, upstream, fork), not branch paths like "release/3.0"
+            # Preserve branch paths such as "release/3.0", stripping only known remotes.
             base_branch_name = target_branch
             if '/' in target_branch:
                 parts = target_branch.split('/', 1)
-                if parts[0] in ['origin', 'upstream', 'fork']:
+                if parts[0] in remote_prefixes:
                     base_branch_name = parts[1]
             cmd.extend(["--target-branch", base_branch_name])
             console.print(f"[dim]Target branch: {base_branch_name}[/dim]")
