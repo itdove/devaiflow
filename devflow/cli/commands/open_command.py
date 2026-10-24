@@ -17,6 +17,7 @@ from rich.table import Table
 from devflow.cli.commands.new_command import _generate_initial_prompt
 from devflow.cli.utils import (
     check_concurrent_session,
+    console_print,
     extract_repository_from_issue_key,
     get_session_with_prompt,
     get_status_display,
@@ -3007,16 +3008,18 @@ def _create_multi_project_conversation_for_open(
         elif non_interactive:
             selected_base = default_base
         else:
-            console.print(f"\n[cyan]{proj_name}[/cyan] (default: {default_base})")
+            console_print(f"\n[cyan]{proj_name}[/cyan] (default: {default_base or 'unresolved'})")
 
             # Offer common base branch options
             from devflow.cli.commands.new_command import _prompt_for_source_branch
             selected_base = _prompt_for_source_branch(proj_path, default_base)
 
-            if not selected_base:
-                # User cancelled
-                console.print("[yellow]Multi-project session creation cancelled[/yellow]")
-                return False
+        if not selected_base:
+            console_print(
+                f"[yellow]No source branch selected for {proj_name}. Specify --source-branch "
+                "or select a branch interactively. Multi-project session creation cancelled.[/yellow]"
+            )
+            return False
 
         project_base_branches[proj_name] = selected_base
 

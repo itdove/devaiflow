@@ -9,6 +9,51 @@ import pytest
 from devflow.git.utils import GitUtils
 
 
+@pytest.mark.parametrize("remote", ["origin", "upstream", "parent"])
+def test_fetch_remote(monkeypatch, tmp_path, remote):
+    """Fetch the selected remote, not a hard-coded origin."""
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    assert GitUtils.fetch_remote(tmp_path, remote) == (True, None)
+    assert commands == [
+        (
+            ["git", "fetch", remote],
+            {"cwd": tmp_path, "capture_output": True, "text": True, "timeout": 30},
+        )
+    ]
+
+
+@pytest.mark.parametrize("failure", ["stderr", "empty", "timeout", "missing"])
+def test_fetch_remote_failure(monkeypatch, tmp_path, failure):
+    """Remote fetch errors retain actionable diagnostics."""
+
+    def run(command, **kwargs):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(command, 30)
+        if failure == "missing":
+            raise FileNotFoundError("git")
+        return subprocess.CompletedProcess(
+            command, 1, "", "Fetch failed" if failure == "stderr" else ""
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    success, error = GitUtils.fetch_remote(tmp_path, "upstream")
+    assert success is False
+    expected_errors = {
+        "stderr": "Fetch failed",
+        "empty": "Failed to fetch from upstream",
+        "timeout": "Git command timed out",
+        "missing": "Git command not found",
+    }
+    assert error == expected_errors[failure]
+
+
 def test_slugify_basic():
     """Test basic slugification."""
     result = GitUtils.slugify("Implement backup feature")

@@ -227,10 +227,15 @@ def test_handle_branch_creation_auto_mode_skips_confirmation(tmp_path):
 def test_handle_branch_creation_interactive_mode_asks_confirmation(tmp_path):
     """Test auto_from_default=False asks for user confirmation."""
     # Mock all git operations
-    with patch.object(GitUtils, 'is_git_repository', return_value=True), \
-         patch.object(GitUtils, 'has_uncommitted_changes', return_value=False), \
-         patch.object(GitUtils, 'generate_branch_name', return_value='aap-12345-test'), \
-         patch('devflow.cli.commands.new_command.Confirm.ask', side_effect=[False, False]) as mock_confirm:
+    with (
+        patch.object(GitUtils, "is_git_repository", return_value=True),
+        patch.object(GitUtils, "has_uncommitted_changes", return_value=False),
+        patch.object(GitUtils, "get_default_branch", return_value="main"),
+        patch.object(GitUtils, "generate_branch_name", return_value="aap-12345-test"),
+        patch(
+            "devflow.cli.commands.new_command.Confirm.ask", side_effect=[False, False]
+        ) as mock_confirm,
+    ):
 
         # Call with auto_from_default=False (default)
         branch = _handle_branch_creation(

@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Default source branch selection during session creation** (#638)
+  - Resolves the source remote's actual default, including custom names and remote-only branches
+  - Keeps discovery, menu matching, fetching, and branch creation scoped to the same remote
+  - Defaults unavailable selections to Cancel instead of an unrelated first branch
+  - Preserves explicit sources, custom entry, local-only fallbacks, and non-interactive workflows
 - **Transactional configuration persistence and centralized backups** (#622)
   - Uses atomic, fsynced writes with rollback and crash recovery for legacy and split configuration saves
   - Serializes concurrent configuration readers and writers with a dedicated lock

@@ -1209,48 +1209,55 @@ def _suggest_and_select_repository(
     )
 
 
-def _get_default_source_branch(path: Path) -> str:
-    """Determine the smart default source branch.
+def _get_source_remote(path: Path, branch: str | None = None) -> str | None:
+    """Resolve a qualified branch's remote, or prefer upstream, then origin.
 
-    Priority:
-    1. upstream/main (if upstream remote exists)
-    2. origin/main (if origin remote exists)
-    3. main (local)
+    Other configured remotes are considered in alphabetical order. Branch
+    paths are not split on arbitrary slashes: only configured remote prefixes
+    qualify a branch name.
+
+    Args:
+        path: Repository path
+        branch: Optional branch whose remote identity should be preserved
+
+    Returns:
+        Configured source remote, or None for a local-only repository.
+    """
+    remotes = GitUtils.get_remote_names(path)
+    if branch:
+        branch = branch.removeprefix("refs/remotes/")
+        for remote in sorted(remotes, key=len, reverse=True):
+            if branch.startswith(f"{remote}/"):
+                return remote
+
+    for remote in ["upstream", "origin", *sorted(remotes)]:
+        if remote in remotes:
+            return remote
+    return None
+
+
+def _get_default_source_branch(path: Path) -> str | None:
+    """Resolve the source remote's actual default, preserving its identity.
+
+    With no remotes, use a common local base or the current attached branch.
+    An unresolved remote HEAD has no implicit local or first-row fallback.
 
     Args:
         path: Repository path
 
     Returns:
-        Default source branch name
+        Remote-qualified default, local fallback, or None if unresolved
     """
-    # Check if upstream remote exists
-    remotes = GitUtils.get_remote_names(path)
+    remote = _get_source_remote(path)
+    if remote:
+        default = GitUtils.get_default_branch(path, remote=remote)
+        return f"{remote}/{default}" if default else None
 
-    if 'upstream' in remotes:
-        # Check if upstream/main exists
-        if GitUtils.branch_exists(path, 'upstream/main'):
-            return 'upstream/main'
-        # Try upstream/master
-        if GitUtils.branch_exists(path, 'upstream/master'):
-            return 'upstream/master'
-
-    if 'origin' in remotes:
-        # Check if origin/main exists
-        if GitUtils.branch_exists(path, 'origin/main'):
-            return 'origin/main'
-        # Try origin/master
-        if GitUtils.branch_exists(path, 'origin/master'):
-            return 'origin/master'
-
-    # Fallback to local main
-    if GitUtils.branch_exists(path, 'main'):
-        return 'main'
-    if GitUtils.branch_exists(path, 'master'):
-        return 'master'
-
-    # Last resort: return current branch
+    default = GitUtils.get_default_branch(path)
+    if default:
+        return default
     current = GitUtils.get_current_branch(path)
-    return current if current else 'main'
+    return current if current and current != "HEAD" else None
 
 
 def _show_branch_suggestions(path: Path, attempted_branch: str) -> None:
@@ -1295,12 +1302,12 @@ def _show_branch_suggestions(path: Path, attempted_branch: str) -> None:
                     console.print(f"  • {remote}/{branch}")
 
 
-def _prompt_for_source_branch(path: Path, default_base: str) -> Optional[str]:
+def _prompt_for_source_branch(path: Path, default_base: str | None) -> str | None:
     """Prompt user for source branch with numbered list selection.
 
-    Shows available remote branches as a numbered list (same UX as
-    target branch selection in daf complete). Falls back to text
-    input if branches cannot be fetched.
+    Discovery, default matching, and the selected ref all use the same remote.
+    If the suggested default is unavailable, Enter cancels instead of choosing
+    an unrelated branch. Falls back to text input if branches cannot be fetched.
 
     Args:
         path: Repository path
@@ -1309,26 +1316,37 @@ def _prompt_for_source_branch(path: Path, default_base: str) -> Optional[str]:
     Returns:
         Source branch name if valid, None if user cancelled
     """
-    branches = GitUtils.list_remote_branches(path, "origin")
+    remote = _get_source_remote(path, default_base)
+    branches = GitUtils.list_remote_branches(path, remote) if remote else []
 
     if not branches:
         return _prompt_for_source_branch_text(path, default_base)
 
-    console.print("\n[cyan]Create branch from which base?[/cyan]")
-    console.print("\n[bold]Available branches:[/bold]")
+    default_branch = (default_base or "").removeprefix("refs/remotes/")
+    if remote:
+        default_branch = default_branch.removeprefix(f"{remote}/")
 
-    default_choice = "1"
-    for i, branch in enumerate(branches, 1):
-        if branch == default_base:
-            console.print(f"  {i}. {branch} [green](default)[/green]")
-            default_choice = str(i)
-        else:
-            console.print(f"  {i}. {branch}")
+    console_print("\n[cyan]Create branch from which base?[/cyan]")
+    console_print(f"\n[bold]Available branches on {remote}:[/bold]")
 
     custom_option = len(branches) + 1
     cancel_option = len(branches) + 2
-    console.print(f"  {custom_option}. Enter custom branch name")
-    console.print(f"  {cancel_option}. Cancel")
+    default_choice = str(cancel_option)
+    for i, branch in enumerate(branches, 1):
+        if branch == default_branch:
+            console_print(f"  {i}. {branch} [green](default)[/green]")
+            default_choice = str(i)
+        else:
+            console_print(f"  {i}. {branch}")
+
+    console_print(f"  {custom_option}. Enter custom branch name")
+    cancel_marker = " [green](default)[/green]" if default_choice == str(cancel_option) else ""
+    console_print(f"  {cancel_option}. Cancel{cancel_marker}")
+    if default_choice == str(cancel_option):
+        console_print(
+            "[yellow]The default source branch is unresolved or unavailable on this remote. "
+            "Select a branch explicitly; Enter cancels.[/yellow]"
+        )
 
     numeric_choices = [str(i) for i in range(1, cancel_option + 1)]
     choice = Prompt.ask("Select option", choices=numeric_choices, default=default_choice)
@@ -1339,12 +1357,12 @@ def _prompt_for_source_branch(path: Path, default_base: str) -> Optional[str]:
     elif choice_num == custom_option:
         return _prompt_for_source_branch_text(path, default_base)
     else:
-        selected = branches[choice_num - 1]
-        console.print(f"[green]✓[/green] Using branch '{selected}'")
+        selected = f"{remote}/{branches[choice_num - 1]}"
+        console_print(f"[green]✓[/green] Using branch '{selected}'")
         return selected
 
 
-def _prompt_for_source_branch_text(path: Path, default_base: str) -> Optional[str]:
+def _prompt_for_source_branch_text(path: Path, default_base: str | None) -> str | None:
     """Text-input fallback for source branch selection.
 
     Args:
@@ -1354,30 +1372,40 @@ def _prompt_for_source_branch_text(path: Path, default_base: str) -> Optional[st
     Returns:
         Source branch name if valid, None if user cancelled
     """
-    console.print(f"\n[dim]Default: {default_base}[/dim]")
-    console.print(f"[dim]Or enter any branch name (e.g., upstream/develop, origin/feature/api)[/dim]")
+    if default_base:
+        console_print(f"\n[dim]Default: {default_base}[/dim]")
+    else:
+        console_print("\n[yellow]No default source branch is available. Enter cancels.[/yellow]")
+    console_print(
+        "[dim]Or enter any branch name (e.g., upstream/develop, origin/feature/api)[/dim]"
+    )
 
     while True:
-        source_branch = Prompt.ask("Enter source branch", default=default_base)
+        source_branch = Prompt.ask("Enter source branch", default=default_base or "")
 
-        if source_branch.lower() in ['cancel', 'q']:
+        if not source_branch or source_branch.lower() in ["cancel", "q"]:
             return None
 
-        if GitUtils.branch_exists(path, source_branch):
-            console.print(f"[green]✓[/green] Branch '{source_branch}' exists")
+        exists = GitUtils.branch_exists(path, source_branch)
+        if not exists:
+            remote = _get_source_remote(path, source_branch)
+            remote_branch = source_branch.removeprefix("refs/remotes/")
+            if remote and remote_branch.startswith(f"{remote}/"):
+                exists = remote_branch[len(remote) + 1 :] in GitUtils.list_remote_branches(
+                    path, remote
+                )
+        if exists:
+            console_print(f"[green]✓[/green] Branch '{source_branch}' exists")
             return source_branch
         else:
-            console.print(f"[red]✗[/red] Branch '{source_branch}' does not exist")
+            console_print(f"[red]✗[/red] Branch '{source_branch}' does not exist")
             _show_branch_suggestions(path, source_branch)
-            console.print("[dim]Please try again or type 'cancel' to quit[/dim]")
+            console_print("[dim]Please try again or type 'cancel' to quit[/dim]")
 
 
 def _handle_existing_branch(
-    path: Path,
-    branch_name: str,
-    default_source: str,
-    config: Optional[Any] = None
-) -> Optional[str] | bool:
+    path: Path, branch_name: str, default_source: str | None, config: Any | None = None
+) -> str | None | bool:
     """Handle case where branch already exists.
 
     Args:
@@ -1687,7 +1715,7 @@ def _handle_branch_creation(
     )
 
     # Get smart default source branch
-    default_source = _get_default_source_branch(path)
+    default_source = source_branch or _get_default_source_branch(path)
 
     # === STEP 1: Ask if user wants to create a branch ===
     if not auto_from_default and branch_name is None:
@@ -1789,6 +1817,12 @@ def _handle_branch_creation(
                 except Exception as e:
                     console_print(f"[yellow]Branch selection error: {e}. Using current branch ({current_branch})[/yellow]")
 
+            if default_source is None:
+                console_print(
+                    "[yellow]Cannot resolve a default source branch; skipping upstream sync.[/yellow]"
+                )
+                return None
+
             # Determine if should sync
             if sync_upstream is not None:
                 should_sync = sync_upstream
@@ -1815,7 +1849,11 @@ def _handle_branch_creation(
 
                 # Fetch first
                 console_print("[cyan]Fetching latest from remote...[/cyan]")
-                GitUtils.fetch_origin(path)  # Non-critical if fails - ignore return value
+                remote = _get_source_remote(path, default_source)
+                if remote and remote != "origin":
+                    GitUtils.fetch_remote(path, remote)
+                else:
+                    GitUtils.fetch_origin(path)  # Non-critical if fails
 
                 # Try to merge
                 success, error_msg = GitUtils.merge_branch(path, default_source)
@@ -1951,6 +1989,13 @@ def _handle_branch_creation(
         console_print(f"[dim]{msg}[/dim]")
 
     # === STEP 5: Create the branch from source ===
+    if not source_branch:
+        console_print(
+            "[yellow]Cannot resolve a default source branch. "
+            "Specify --source-branch to create a branch.[/yellow]"
+        )
+        return None
+
     try:
         msg = f"Creating branch '{branch_name}' from '{source_branch}'..."
         if project_name:
@@ -1962,7 +2007,15 @@ def _handle_branch_creation(
         if project_name:
             msg = f"[{project_name}] {msg}"
         console_print(f"[cyan]{msg}[/cyan]")
-        GitUtils.fetch_origin(path)
+        remote = _get_source_remote(path, source_branch)
+        if (
+            remote
+            and remote != "origin"
+            and source_branch.removeprefix("refs/remotes/").startswith(f"{remote}/")
+        ):
+            GitUtils.fetch_remote(path, remote)
+        else:
+            GitUtils.fetch_origin(path)
 
         # Checkout source branch first (if not already on it)
         current_branch = GitUtils.get_current_branch(path)
