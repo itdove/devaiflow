@@ -1817,6 +1817,12 @@ class Session(BaseModel):
    - Cancels unavailable menu defaults instead of selecting an unrelated first branch
    - Covers fork remotes, explicit/custom sources, local-only fallbacks, and automatic modes
 
+- ✓ Protect running agents' temporary clones during completion (itdove/devaiflow#643)
+   - Rejects completion before status or time-tracking changes when a clone is in use
+   - Uses directory-scoped process checks and cross-process launch/resume/removal locks, independent of native session-ID capture
+   - Rechecks the entire removal root before cleanup and explicitly defers cleanup on a late-starting agent
+   - Preserves post-exit default cleanup, configured clone retention, and independent resumable clones
+
 ## Release Management
 
 ### Overview

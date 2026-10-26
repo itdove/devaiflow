@@ -192,6 +192,14 @@ provided source. Multi-project creation cancels if any project has no selected b
 
 **When work is complete**, inform the user that all acceptance criteria are met and the session is ready for completion. The user runs `daf complete` outside the active agent session to commit, create PR/MR, and close.
 
+For sessions using temporary clones, the user must first **exit the agent** and
+move any terminals out of the clone. Completion from another terminal refuses
+to change session status or time tracking while the clone is in use, even if
+the native ID is `pending-capture` or time tracking is paused. If an agent starts
+during completion and cleanup is deferred, exit the agent and rerun completion
+from the original workspace; deferred cleanup is not automatically scheduled.
+Normal exit or pause alone preserves the clone for resumption.
+
 **Do NOT:**
 - Create git commits (handled by `daf complete`)
 - Create pull/merge requests (handled by `daf complete`)
