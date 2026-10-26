@@ -14,6 +14,7 @@ import json
 import re
 import subprocess
 from typing import Dict, List, Optional
+from urllib.parse import urlsplit
 
 from devflow.issue_tracker.interface import IssueTrackerClient
 from devflow.issue_tracker.exceptions import (
@@ -27,6 +28,24 @@ from devflow.issue_tracker.exceptions import (
 from devflow.github.field_mapper import GitHubFieldMapper
 from devflow.github.auth import check_gh_auth_for_repo, handle_auth_error
 from devflow.utils.git_remote import GitRemoteDetector
+
+
+def _text_has_pr_url(text: str, pr_url: str) -> bool:
+    """Match a complete PR URL in plain text or Markdown, not a URL prefix."""
+    target = urlsplit(pr_url)
+    if (
+        target.scheme.lower() not in {"http", "https"}
+        or not target.netloc
+        or not re.fullmatch(r"/[\w.-]+/[\w.-]+/pull/[1-9]\d*/?", target.path)
+    ):
+        raise ValueError("Invalid pull request URL")
+
+    identity = (target.netloc.lower(), target.path.rstrip("/").lower())
+    for url in re.findall(r"https?://[^\s<>\"'`\[\](){},;]+", text, re.IGNORECASE):
+        candidate = urlsplit(url.rstrip(".,;:!?)]}"))
+        if (candidate.netloc.lower(), candidate.path.rstrip("/").lower()) == identity:
+            return True
+    return False
 
 
 class GitHubClient(IssueTrackerClient):
@@ -675,47 +694,96 @@ class GitHubClient(IssueTrackerClient):
             raise
 
     def get_issue_comments(self, issue_key: str) -> List[Dict]:
-        """Get all comments for a GitHub issue.
+        """Get comments from every page for a GitHub issue.
 
         Args:
             issue_key: Issue key
 
         Returns:
             List of comment dictionaries with 'body' and 'created_at' fields
+
+        Raises:
+            IssueTrackerNotFoundError: If the issue does not exist.
+            IssueTrackerAuthError: If authentication fails.
+            IssueTrackerConnectionError: If the request fails to connect.
+            IssueTrackerApiError: If the API fails or returns malformed comments.
         """
         repo, number = self._parse_issue_number(issue_key)
         repo = self._get_repository(repo)
 
         try:
-            output = self._run_gh_command([
-                'api',
-                f'/repos/{repo}/issues/{number}/comments',
-                '--jq', '.'
-            ])
+            output = self._run_gh_command(
+                [
+                    "api",
+                    f"/repos/{repo}/issues/{number}/comments?per_page=100",
+                    "--paginate",
+                    "--slurp",
+                ]
+            )
 
-            comments = json.loads(output)
+            pages = json.loads(output)
+            if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+                raise ValueError("Expected an array of comment pages")
 
             # Return in simplified format expected by parent_discovery
-            return [
-                {
-                    'body': comment.get('body', ''),
-                    'created_at': comment.get('created_at', ''),
-                    'author': comment.get('user', {}).get('login', ''),
-                }
-                for comment in comments
-            ]
+            comments = []
+            for page in pages:
+                for comment in page:
+                    if not isinstance(comment, dict):
+                        raise TypeError("Expected a comment object")
+                    body = comment.get("body")
+                    user = comment.get("user")
+                    if user is None:
+                        user = {}
+                    if (body is not None and not isinstance(body, str)) or not isinstance(
+                        user, dict
+                    ):
+                        raise ValueError("Invalid comment body or author")
+                    comments.append(
+                        {
+                            "body": body or "",
+                            "created_at": comment.get("created_at", ""),
+                            "author": user.get("login", ""),
+                        }
+                    )
+            return comments
 
         except IssueTrackerApiError as e:
-            if 'Not Found' in str(e):
+            if "Not Found" in str(e):
                 raise IssueTrackerNotFoundError(
                     f"GitHub issue {repo}#{number} not found",
                     resource_type="issue",
-                    resource_id=issue_key
+                    resource_id=issue_key,
                 )
             raise
-        except Exception:
-            # Return empty list on any error
-            return []
+        except (ValueError, TypeError) as e:
+            raise IssueTrackerApiError(
+                f"Could not parse comments for GitHub issue {repo}#{number}"
+            ) from e
+
+    def has_pr_url(self, issue_key: str, pr_url: str) -> bool:
+        """Check the issue body and all comments for this PR's URL.
+
+        Repository-qualified issue keys override the client's default repository.
+        Lookup and parsing errors propagate so callers can distinguish an absent
+        link from an incomplete check. A link in the body needs no comment lookup.
+
+        Args:
+            issue_key: Issue key ("#123" or "owner/repo#123").
+            pr_url: Full URL identifying the pull request.
+
+        Returns:
+            Whether the same PR URL is already present as plain text or Markdown.
+        """
+        body = self.get_ticket(issue_key).get("description")
+        if body is not None and not isinstance(body, str):
+            raise IssueTrackerApiError("Invalid GitHub issue body")
+        if _text_has_pr_url(body or "", pr_url):
+            return True
+        return any(
+            _text_has_pr_url(comment["body"], pr_url)
+            for comment in self.get_issue_comments(issue_key)
+        )
 
     def transition_ticket(self, issue_key: str, status: str) -> None:
         """Transition a GitHub issue state.

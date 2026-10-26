@@ -1,11 +1,12 @@
 """Implementation of 'daf complete' command."""
 
+import logging
 import subprocess
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 import urllib.request
 
 from rich.console import Console
@@ -16,8 +17,16 @@ from devflow.agent.factory import (
     get_generated_with_line as _get_generated_with_line,
     resolve_agent_backend,
 )
-from devflow.cli.utils import add_jira_comment, get_session_with_prompt, get_status_display, is_non_interactive, require_outside_claude
+from devflow.cli.utils import (
+    add_jira_comment,
+    console_print,
+    get_session_with_prompt,
+    get_status_display,
+    is_non_interactive,
+    require_outside_claude,
+)
 from devflow.config.loader import ConfigLoader
+from devflow.config.models import Config, Session
 from devflow.exceptions import ToolNotFoundError
 from devflow.export.manager import ExportManager
 from devflow.git.pr_template import fill_pr_template_with_ai
@@ -27,6 +36,7 @@ from devflow.jira.client import JiraClient
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.jira.utils import merge_pr_urls
 from devflow.github import transition_on_complete as github_transition_on_complete
+from devflow.github.issues_client import GitHubClient
 from devflow.issue_tracker.factory import create_issue_tracker_client
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError, IssueTrackerValidationError
 from devflow.utils.backend_detection import get_issue_tracker_backend
@@ -36,6 +46,7 @@ from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 def _get_remote_aware_base_ref(working_dir: Path, base_branch: str) -> str:
     """Fetch origin and return remote ref for accurate diff comparison.
@@ -4319,7 +4330,9 @@ Return ONLY the commit message in this exact format, nothing else."""
         return None
 
 
-def _update_issue_pr_field(session, config, pr_url: str, no_issue_update: bool = False) -> None:
+def _update_issue_pr_field(
+    session: Session, config: Config | None, pr_url: str, no_issue_update: bool = False
+) -> None:
     """Update issue tracker with PR/MR URL (backend-agnostic).
 
     Args:
@@ -4338,20 +4351,46 @@ def _update_issue_pr_field(session, config, pr_url: str, no_issue_update: bool =
     backend = get_issue_tracker_backend(session, config)
     backend_name = get_backend_display_name(backend)
 
-    # Check if we should update (or use configured default)
-    should_update = True
-
     if no_issue_update:
-        should_update = False
-        console.print(f"\n[dim]Skipping {backend_name} PR update (--no-issue-update flag)[/dim]")
-    elif is_non_interactive():
+        console_print(f"\n[dim]Skipping {backend_name} PR update (--no-issue-update flag)[/dim]")
+        return
+
+    auto_update = config.prompts.auto_update_jira_pr_url if config and config.prompts else None
+    github_client = None
+    if backend == "github":
+        # Honor explicit opt-outs before making any remote lookup, even in CI.
+        if auto_update is False:
+            return
+        try:
+            github_client = cast(GitHubClient, create_issue_tracker_client("github"))
+            if github_client.has_pr_url(issue_key, pr_url):
+                console_print(
+                    f"[dim]PR URL already present on GitHub issue {issue_key}; "
+                    "skipping PR-link update[/dim]"
+                )
+                return
+        except Exception as e:
+            logger.debug("GitHub PR-link lookup failed for %s", issue_key, exc_info=True)
+            console_print(
+                f"[yellow]⚠[/yellow] Could not check GitHub issue {issue_key} "
+                f"for the PR URL: {e}. Continuing with the normal PR-link update behavior."
+            )
+
+    # Preserve the existing confirmation/automatic behavior when the URL is absent
+    # or the GitHub lookup failed. Other backends do not perform this lookup.
+    if is_non_interactive():
         should_update = True
-    elif config and config.prompts and config.prompts.auto_update_jira_pr_url is not None:
-        should_update = config.prompts.auto_update_jira_pr_url
+    elif auto_update is not None:
+        should_update = auto_update
         if should_update:
-            console.print(f"\n[dim]Automatically updating {backend_name} with PR URL (configured in prompts)[/dim]")
+            console_print(
+                f"\n[dim]Automatically updating {backend_name} with PR URL "
+                "(configured in prompts)[/dim]"
+            )
     else:
-        should_update = Confirm.ask(f"\nUpdate {backend_name} issue {issue_key} with PR URL?", default=True)
+        should_update = Confirm.ask(
+            f"\nUpdate {backend_name} issue {issue_key} with PR URL?", default=True
+        )
 
     if not should_update:
         return
@@ -4361,20 +4400,20 @@ def _update_issue_pr_field(session, config, pr_url: str, no_issue_update: bool =
     elif backend == "github":
         # GitHub auto-links PRs via mentions (e.g., "Fixes #123" in PR body)
         # No explicit field update needed - just add a comment with the PR link
-        console.print(f"[dim]GitHub auto-links PRs via mentions - adding comment with PR link[/dim]")
+        console_print("[dim]GitHub auto-links PRs via mentions - adding comment with PR link[/dim]")
         try:
-            client = create_issue_tracker_client('github')
+            client = github_client or create_issue_tracker_client("github")
             comment = f"Pull request created: {pr_url}"
             client.add_comment(issue_key, comment, public=True)
-            console.print(f"[green]✓[/green] Added PR link comment to GitHub issue")
+            console_print("[green]✓[/green] Added PR link comment to GitHub issue")
         except IssueTrackerAuthError as e:
-            console.print(f"[yellow]⚠[/yellow] GitHub authentication failed: {e}")
+            console_print(f"[yellow]⚠[/yellow] GitHub authentication failed: {e}")
         except IssueTrackerApiError as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to add comment: {e}")
+            console_print(f"[yellow]⚠[/yellow] Failed to add comment: {e}")
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Unexpected error: {e}")
+            console_print(f"[yellow]⚠[/yellow] Unexpected error: {e}")
     else:
-        console.print(f"[dim]PR linking not implemented for backend: {backend}[/dim]")
+        console_print(f"[dim]PR linking not implemented for backend: {backend}[/dim]")
 
 
 def _update_jira_pr_field(issue_key: str, pr_url: str, config) -> None:

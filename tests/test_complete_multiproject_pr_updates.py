@@ -1,6 +1,7 @@
 """Tests for multi-project PR URL updates to JIRA (PROJ-60247 / GitHub #183)."""
 
 from datetime import datetime
+import json
 from pathlib import Path
 from unittest.mock import Mock, patch, call
 import subprocess
@@ -13,8 +14,16 @@ from devflow.cli.commands.complete_command import (
     complete_session,
 )
 from devflow.config.loader import ConfigLoader
-from devflow.config.models import ProjectInfo
+from devflow.config.models import (
+    Config,
+    Conversation,
+    ConversationContext,
+    JiraConfig,
+    ProjectInfo,
+    RepoConfig,
+)
 from devflow.git.utils import GitUtils
+from devflow.github.issues_client import GitHubClient
 from devflow.session.manager import SessionManager
 
 
@@ -461,6 +470,138 @@ def test_no_issue_update_flag_respected_in_multiproject(temp_daf_home, git_repo,
 
     # The function should have been called (for consistent behavior)
     # but the flag will be checked inside _update_issue_pr_field to skip actual update
+
+
+@pytest.mark.parametrize("workflow", ["single", "multiproject", "multiconversation"])
+@pytest.mark.parametrize("new_pr", [False, True])
+@pytest.mark.parametrize("link_state", ["present", "absent", "flag", "disabled"])
+def test_github_pr_link_completion_paths(
+    temp_daf_home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    workflow: str,
+    new_pr: bool,
+    link_state: str,
+) -> None:
+    """All completion paths use the remote check and remain idempotent on repeat."""
+    from devflow.cli.commands import complete_command as command
+
+    loader = ConfigLoader()
+    config = Config(
+        jira=JiraConfig(url="https://jira.example.com", transitions={}),
+        repos=RepoConfig(),
+        issue_tracker_backend="github",
+    )
+    config.prompts.auto_update_jira_pr_url = False if link_state == "disabled" else None
+    config.prompts.auto_add_issue_summary = False
+    monkeypatch.setattr(ConfigLoader, "load_config", lambda self: config)
+    manager = SessionManager(loader)
+    paths = [tmp_path / "project-a"]
+    if workflow != "single":
+        paths.append(tmp_path / "project-b")
+    pr_urls = {
+        path: f"https://github.com/owner/{path.name}/pull/{123 + index}"
+        for index, path in enumerate(paths)
+    }
+    session = manager.create_session(
+        name="github-pr-links",
+        goal="Check GitHub PR links",
+        working_directory="project-a",
+        project_path=str(paths[0]),
+        ai_agent_session_id="uuid-project-a",
+        issue_key="owner/project-a#42",
+        branch="feature-test",
+    )
+    active = session.active_conversation
+    assert active is not None
+    if workflow == "multiproject":
+        active.is_multi_project = True
+        active.projects = {
+            path.name: ProjectInfo(
+                project_path=str(path),
+                branch="feature-test",
+                base_branch="main",
+                repo_name=path.name,
+            )
+            for path in paths
+        }
+    elif workflow == "multiconversation":
+        session.conversations["project-b"] = Conversation(
+            active_session=ConversationContext(
+                ai_agent_session_id="uuid-project-b",
+                project_path=str(paths[1]),
+                branch="feature-test",
+            )
+        )
+    manager.update_session(session)
+
+    comments = (
+        [{"body": f"Related: {url}"} for url in pr_urls.values()] if link_state == "present" else []
+    )
+    initial_comment_count = len(comments)
+    client = GitHubClient(repository="different/current-repository")
+
+    def read_issue(args: list[str]) -> str:
+        """Emulate remote reads while checking fully qualified issue ownership."""
+        if args[1] == "/repos/owner/project-a/issues/42":
+            return json.dumps({"number": 42, "body": "Issue description"})
+        assert args[1] == "/repos/owner/project-a/issues/42/comments?per_page=100"
+        assert "--paginate" in args and "--slurp" in args
+        return json.dumps([comments])
+
+    def write_comment(args: list[str], payload: str) -> str:
+        """Make subsequent remote checks observe the newly added link."""
+        assert args[1] == "/repos/owner/project-a/issues/42/comments"
+        comments.append(json.loads(payload))
+        return "{}"
+
+    read = Mock(side_effect=read_issue)
+    write = Mock(side_effect=write_comment)
+    monkeypatch.setattr(client, "_run_gh_command", read)
+    monkeypatch.setattr(client, "_run_gh_command_with_input", write)
+    factory = Mock(return_value=client)
+    monkeypatch.setattr(command, "create_issue_tracker_client", factory)
+    monkeypatch.setattr(command, "get_issue_tracker_backend", lambda *args: "github")
+    monkeypatch.setattr(command, "github_transition_on_complete", Mock())
+    monkeypatch.setattr(command, "is_non_interactive", lambda: False)
+    monkeypatch.setattr(command, "_start_branch_prefetch", lambda *args: None)
+    monkeypatch.setattr(command, "_get_remote_aware_base_ref", lambda *args: "main")
+    monkeypatch.setattr(GitUtils, "is_git_repository", lambda *args: True)
+    monkeypatch.setattr(GitUtils, "get_current_branch", lambda *args: "feature-test")
+    monkeypatch.setattr(GitUtils, "get_default_branch", lambda *args: "main")
+    monkeypatch.setattr(GitUtils, "has_uncommitted_changes", lambda *args: False)
+    monkeypatch.setattr(GitUtils, "has_unpushed_branch_commits", lambda *args: False)
+    monkeypatch.setattr(GitUtils, "get_changed_files", lambda *args: ["feature.txt"])
+
+    def existing_pr(working_dir: Path, branch: str) -> dict[str, str]:
+        """Return the appropriate repository's current open PR."""
+        return {"state": "open", "url": pr_urls[working_dir]}
+
+    monkeypatch.setattr(
+        command, "_get_pr_for_branch", (lambda *args: None) if new_pr else existing_pr
+    )
+    for helper in ("_create_pr_mr", "_create_pr_mr_for_project", "_create_pr_mr_for_conversation"):
+        monkeypatch.setattr(command, helper, Mock(side_effect=list(pr_urls.values())))
+    confirm = Mock(
+        side_effect=lambda prompt, **kwargs: "Create" in prompt or "with PR URL?" in prompt
+    )
+    monkeypatch.setattr(command.Confirm, "ask", confirm)
+
+    complete_session(session.name, no_issue_update=link_state == "flag")
+    monkeypatch.setattr(command, "_get_pr_for_branch", existing_pr)
+    complete_session(session.name, no_issue_update=link_state == "flag")
+
+    link_questions = [entry for entry in confirm.call_args_list if "with PR URL?" in entry.args[0]]
+    expected_updates = len(pr_urls) if link_state == "absent" else 0
+    assert len(link_questions) == expected_updates
+    assert write.call_count == expected_updates
+    assert len(comments) == initial_comment_count + expected_updates
+    if link_state in {"flag", "disabled"}:
+        factory.assert_not_called()
+        read.assert_not_called()
+    else:
+        for pr_url in pr_urls.values():
+            assert sum(pr_url in comment["body"] for comment in comments) == 1
 
 
 def _push_feature_branch_to_remote(repo_dir: Path, remote_dir: Path) -> None:

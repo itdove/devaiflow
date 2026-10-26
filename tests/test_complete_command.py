@@ -6,12 +6,270 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from devflow.cli.commands.complete_command import complete_session
+from devflow.cli.commands.complete_command import complete_session, _update_issue_pr_field
 from devflow.config.loader import ConfigLoader
 from devflow.session.manager import SessionManager
 from devflow.jira.exceptions import JiraApiError, JiraNotFoundError, JiraValidationError
 from devflow.git.utils import GitUtils
 from devflow.agent.factory import resolve_agent_backend
+from devflow.github.issues_client import GitHubClient
+from devflow.issue_tracker.exceptions import (
+    IssueTrackerApiError,
+    IssueTrackerAuthError,
+    IssueTrackerConnectionError,
+    IssueTrackerNotFoundError,
+)
+
+
+@pytest.fixture
+def github_pr_update(monkeypatch: pytest.MonkeyPatch) -> tuple[Mock, Mock, Mock, Mock, Mock]:
+    """Isolate the shared PR-link helper from remote services and prompts."""
+    session = Mock(issue_key="owner/project-a#42")
+    config = Mock()
+    config.prompts.auto_update_jira_pr_url = None
+    client = Mock(spec=GitHubClient)
+    client.has_pr_url.return_value = False
+    factory = Mock(return_value=client)
+    confirm = Mock(return_value=True)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.create_issue_tracker_client", factory
+    )
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", confirm)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.get_issue_tracker_backend", lambda *args: "github"
+    )
+    return session, config, client, factory, confirm
+
+
+@pytest.mark.parametrize("auto_update", [None, True])
+@pytest.mark.parametrize("non_interactive", [False, True])
+def test_github_pr_link_already_present(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    auto_update: bool | None,
+    non_interactive: bool,
+) -> None:
+    """Duplicate detection precedes both confirmation and automatic updates."""
+    session, config, client, factory, confirm = github_pr_update
+    config.prompts.auto_update_jira_pr_url = auto_update
+    client.has_pr_url.return_value = True
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.is_non_interactive", lambda: non_interactive
+    )
+    pr_url = "https://github.com/owner/project-a/pull/123"
+
+    _update_issue_pr_field(session, config, pr_url)
+
+    factory.assert_called_once_with("github")
+    client.has_pr_url.assert_called_once_with("owner/project-a#42", pr_url)
+    confirm.assert_not_called()
+    client.add_comment.assert_not_called()
+    assert "already present" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("accept", [False, True])
+def test_github_pr_link_absent_preserves_confirmation(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock], accept: bool
+) -> None:
+    """An absent URL still offers the existing accept/decline choice."""
+    session, config, client, factory, confirm = github_pr_update
+    confirm.return_value = accept
+    pr_url = "https://github.com/owner/project-a/pull/123"
+
+    _update_issue_pr_field(session, config, pr_url)
+
+    confirm.assert_called_once_with(
+        "\nUpdate GitHub Issues issue owner/project-a#42 with PR URL?", default=True
+    )
+    factory.assert_called_once_with("github")
+    if accept:
+        client.add_comment.assert_called_once_with(
+            session.issue_key, f"Pull request created: {pr_url}", public=True
+        )
+    else:
+        client.add_comment.assert_not_called()
+
+
+@pytest.mark.parametrize("auto_update,non_interactive", [(True, False), (None, True)])
+def test_github_pr_link_automatic_update(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+    monkeypatch: pytest.MonkeyPatch,
+    auto_update: bool | None,
+    non_interactive: bool,
+) -> None:
+    """Automatic modes check for duplicates and never introduce a prompt."""
+    session, config, client, _, confirm = github_pr_update
+    config.prompts.auto_update_jira_pr_url = auto_update
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.is_non_interactive", lambda: non_interactive
+    )
+
+    _update_issue_pr_field(session, config, "https://github.com/owner/project-a/pull/123")
+
+    client.has_pr_url.assert_called_once()
+    client.add_comment.assert_called_once()
+    confirm.assert_not_called()
+
+
+@pytest.mark.parametrize("opt_out", ["flag", "configured", "missing_issue"])
+@pytest.mark.parametrize("non_interactive", [False, True])
+def test_github_pr_link_opt_out_skips_lookup(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+    monkeypatch: pytest.MonkeyPatch,
+    opt_out: str,
+    non_interactive: bool,
+) -> None:
+    """Explicit opt-outs suppress remote reads as well as prompts and writes."""
+    session, config, client, factory, confirm = github_pr_update
+    if opt_out == "configured":
+        config.prompts.auto_update_jira_pr_url = False
+    elif opt_out == "missing_issue":
+        session.issue_key = None
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.is_non_interactive", lambda: non_interactive
+    )
+
+    _update_issue_pr_field(
+        session,
+        config,
+        "https://github.com/owner/project-a/pull/123",
+        no_issue_update=opt_out == "flag",
+    )
+
+    factory.assert_not_called()
+    client.has_pr_url.assert_not_called()
+    client.add_comment.assert_not_called()
+    confirm.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        IssueTrackerAuthError("Authentication failed"),
+        IssueTrackerApiError("API failed"),
+        IssueTrackerConnectionError("Connection failed"),
+        IssueTrackerNotFoundError("Issue not found"),
+        ValueError("Malformed response"),
+    ],
+)
+@pytest.mark.parametrize(
+    "auto_update,non_interactive", [(None, False), (True, False), (None, True)]
+)
+def test_github_pr_link_lookup_failure_falls_back(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error: Exception,
+    auto_update: bool | None,
+    non_interactive: bool,
+) -> None:
+    """Failed lookups warn and retain normal interactive/automatic behavior."""
+    session, config, client, _, confirm = github_pr_update
+    config.prompts.auto_update_jira_pr_url = auto_update
+    client.has_pr_url.side_effect = error
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.is_non_interactive", lambda: non_interactive
+    )
+
+    _update_issue_pr_field(session, config, "https://github.com/owner/project-a/pull/123")
+
+    assert confirm.call_count == (0 if auto_update or non_interactive else 1)
+    client.add_comment.assert_called_once()
+    output = capsys.readouterr().out
+    assert "Could not check GitHub issue" in output
+    assert "normal PR-link update behavior" in output
+    assert "already present" not in output
+
+
+def test_github_pr_link_failed_client_creation_falls_back(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Client setup failures do not abort completion or silently skip the update."""
+    session, config, client, factory, confirm = github_pr_update
+    factory.side_effect = [RuntimeError("Client setup failed"), client]
+
+    _update_issue_pr_field(session, config, "https://github.com/owner/project-a/pull/123")
+
+    confirm.assert_called_once()
+    client.add_comment.assert_called_once()
+    assert "Could not check GitHub issue" in capsys.readouterr().out
+
+
+def test_github_pr_link_without_config(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+) -> None:
+    """Sessions without configuration retain the normal interactive fallback."""
+    session, _, client, _, confirm = github_pr_update
+
+    _update_issue_pr_field(session, None, "https://github.com/owner/project-a/pull/123")
+
+    client.has_pr_url.assert_called_once()
+    confirm.assert_called_once()
+    client.add_comment.assert_called_once()
+
+
+def test_github_pr_link_failed_lookup_can_be_declined(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+) -> None:
+    """Fallback does not force a write if the user declines confirmation."""
+    session, config, client, _, confirm = github_pr_update
+    client.has_pr_url.side_effect = ValueError("Malformed response")
+    confirm.return_value = False
+
+    _update_issue_pr_field(session, config, "https://github.com/owner/project-a/pull/123")
+
+    confirm.assert_called_once()
+    client.add_comment.assert_not_called()
+
+
+@pytest.mark.parametrize("found", [False, True])
+def test_github_pr_link_check_respects_json_output(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    found: bool,
+) -> None:
+    """Duplicate notices and lookup warnings must not mix text into JSON output."""
+    session, config, client, _, confirm = github_pr_update
+    client.has_pr_url.return_value = found
+    if not found:
+        client.has_pr_url.side_effect = ValueError("Malformed response")
+    monkeypatch.setattr("devflow.cli.utils.is_json_mode", lambda: True)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: True)
+
+    _update_issue_pr_field(session, config, "https://github.com/owner/project-a/pull/123")
+
+    confirm.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("backend", ["jira", "gitlab"])
+@pytest.mark.parametrize("non_interactive", [False, True])
+def test_other_pr_link_backends_unchanged(
+    github_pr_update: tuple[Mock, Mock, Mock, Mock, Mock],
+    monkeypatch: pytest.MonkeyPatch,
+    backend: str,
+    non_interactive: bool,
+) -> None:
+    """The GitHub-only preflight must not alter JIRA/GitLab update behavior."""
+    session, config, _, factory, confirm = github_pr_update
+    config.prompts.auto_update_jira_pr_url = False
+    jira_update = Mock()
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.get_issue_tracker_backend", lambda *args: backend
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.is_non_interactive", lambda: non_interactive
+    )
+    monkeypatch.setattr("devflow.cli.commands.complete_command._update_jira_pr_field", jira_update)
+
+    _update_issue_pr_field(session, config, "https://github.com/owner/project-a/pull/123")
+
+    factory.assert_not_called()
+    confirm.assert_not_called()
+    assert jira_update.call_count == (1 if backend == "jira" and non_interactive else 0)
 
 
 def test_complete_session_basic(temp_daf_home, monkeypatch, capsys):

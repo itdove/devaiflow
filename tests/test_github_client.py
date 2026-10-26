@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import subprocess
 
-from devflow.github.issues_client import GitHubClient
+from devflow.github.issues_client import GitHubClient, _text_has_pr_url
 from devflow.issue_tracker.exceptions import (
     IssueTrackerApiError,
     IssueTrackerAuthError,
@@ -421,6 +421,191 @@ class TestAddComment:
         github_client.add_comment("#123", "Comment", public=False)
 
         mock_subprocess_run.assert_called_once()
+
+
+class TestPrUrlMatching:
+    """Recognize complete PR identities in text without substring matches."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Pull request created: https://github.com/owner/project-a/pull/123",
+            "[PR](https://github.com/owner/project-a/pull/123)",
+            "[PR](https://github.com/owner/project-a/pull/123),next",
+            "https://github.com/owner/project-a/pull/999,https://github.com/owner/project-a/pull/123",
+            "https://github.com/owner/project-a/pull/123;another PR",
+            "<https://github.com/owner/project-a/pull/123>",
+            "See https://github.com/owner/project-a/pull/123.",
+            "(https://github.com/owner/project-a/pull/123), ready for review",
+            "`https://github.com/owner/project-a/pull/123`",
+            "https://github.com/owner/project-a/pull/123/",
+            "https://github.com/owner/project-a/pull/123#discussion-1",
+            "https://github.com/owner/project-a/pull/123?view=all",
+            "HTTPS://GITHUB.COM/Owner/Project-A/pull/123",
+        ],
+    )
+    def test_matching_url(self, text: str) -> None:
+        """Plain and Markdown links identify the same PR despite presentation."""
+        assert _text_has_pr_url(text, "https://github.com/owner/project-a/pull/123")
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "",
+            "https://github.com/owner/project-a/pull/1234",
+            "https://github.com/owner/project-a/pull/12",
+            "https://github.com/owner/project-b/pull/123",
+            "https://github.com/other/project-a/pull/123",
+            "https://github.example.com/owner/project-a/pull/123",
+            "https://github.com/owner/project-a/issues/123",
+            "https://github.com/owner/project-a/pull/123/files",
+            "https://github.com/owner/project-a/pull/123-other",
+            "https://example.com/?next=https://github.com/owner/project-a/pull/123",
+            "https://github.com/owner/project-a/pull/123/456",
+        ],
+    )
+    def test_different_url(self, text: str) -> None:
+        """Another host, repository, number, or longer URL must not match."""
+        assert not _text_has_pr_url(text, "https://github.com/owner/project-a/pull/123")
+
+    @pytest.mark.parametrize("pr_url", ["invalid", "https://github.com/owner/project-a/issues/123"])
+    def test_invalid_target_url(self, pr_url: str) -> None:
+        """An invalid target cannot silently count as a successful lookup."""
+        with pytest.raises(ValueError, match="Invalid pull request URL"):
+            _text_has_pr_url("", pr_url)
+
+
+class TestGetIssueComments:
+    """Comment enumeration must be complete and distinguish errors from no comments."""
+
+    def test_all_pages_and_qualified_repository(self, github_client: GitHubClient) -> None:
+        """The CLI paginates and slurps arrays from the explicitly named repository."""
+        pages = [
+            [{"body": "First comment", "user": {"login": "user1"}, "created_at": "2026-01-01"}],
+            [{"body": "Later comment", "user": None, "created_at": "2026-01-02"}],
+        ]
+        with patch.object(github_client, "_run_gh_command", return_value=json.dumps(pages)) as run:
+            comments = github_client.get_issue_comments("other/project-a#42")
+
+        run.assert_called_once_with(
+            [
+                "api",
+                "/repos/other/project-a/issues/42/comments?per_page=100",
+                "--paginate",
+                "--slurp",
+            ]
+        )
+        assert comments == [
+            {"body": "First comment", "author": "user1", "created_at": "2026-01-01"},
+            {"body": "Later comment", "author": "", "created_at": "2026-01-02"},
+        ]
+
+    def test_empty_comments(self, github_client: GitHubClient) -> None:
+        """An empty page is a successful lookup with no comments."""
+        with patch.object(github_client, "_run_gh_command", return_value="[[]]"):
+            assert github_client.get_issue_comments("#42") == []
+
+    def test_null_comment_body(self, github_client: GitHubClient) -> None:
+        """A null body and deleted author are valid empty content."""
+        with patch.object(github_client, "_run_gh_command", return_value='[[{"body": null}]]'):
+            assert github_client.get_issue_comments("#42")[0]["body"] == ""
+
+    @pytest.mark.parametrize(
+        "output",
+        [
+            "invalid json",
+            "{}",
+            "[{}]",
+            '[["invalid"]]',
+            '[[{"body": 42}]]',
+            "[[], {}]",
+            '[[{"body": "Comment", "user": []}]]',
+        ],
+    )
+    def test_malformed_comments_raise(self, github_client: GitHubClient, output: str) -> None:
+        """Malformed or partially parsed pages are not treated as empty comments."""
+        with (
+            patch.object(github_client, "_run_gh_command", return_value=output),
+            pytest.raises(IssueTrackerApiError, match="Could not parse comments"),
+        ):
+            github_client.get_issue_comments("#42")
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            IssueTrackerAuthError("Authentication failed"),
+            IssueTrackerConnectionError("Connection failed"),
+            IssueTrackerApiError("API failed"),
+        ],
+    )
+    def test_lookup_errors_propagate(self, github_client: GitHubClient, error: Exception) -> None:
+        """Callers must be able to warn when enumeration did not succeed."""
+        with (
+            patch.object(github_client, "_run_gh_command", side_effect=error),
+            pytest.raises(type(error)),
+        ):
+            github_client.get_issue_comments("#42")
+
+    def test_missing_issue(self, github_client: GitHubClient) -> None:
+        """A missing remote issue retains the client's not-found contract."""
+        with (
+            patch.object(
+                github_client, "_run_gh_command", side_effect=IssueTrackerApiError("Not Found")
+            ),
+            pytest.raises(IssueTrackerNotFoundError),
+        ):
+            github_client.get_issue_comments("other/project-a#42")
+
+
+class TestHasPrUrl:
+    """Check remote issue text, not timeline references or local session PR metadata."""
+
+    def test_body_link_skips_comment_lookup(self, github_client: GitHubClient) -> None:
+        """A link in the issue body is sufficient even if comments are unavailable."""
+        pr_url = "https://github.com/owner/project-a/pull/123"
+        issue = {"number": 42, "body": f"[Implementation]({pr_url})"}
+        with patch.object(github_client, "_run_gh_command", return_value=json.dumps(issue)) as run:
+            assert github_client.has_pr_url("other/project-b#42", pr_url)
+        run.assert_called_once_with(["api", "/repos/other/project-b/issues/42", "--jq", "."])
+
+    def test_url_on_later_comment_page(self, github_client: GitHubClient) -> None:
+        """Find the current PR after a full first page of unrelated comments."""
+        pr_url = "https://github.com/owner/project-a/pull/123"
+        pages = [[{"body": "Unrelated comment"}] * 100, [{"body": f"PR: {pr_url}"}]]
+        responses = [json.dumps({"number": 42, "body": None}), json.dumps(pages)]
+        with patch.object(github_client, "_run_gh_command", side_effect=responses) as run:
+            assert github_client.has_pr_url("other/project-b#42", pr_url)
+        assert run.call_args_list[0].args[0][1] == "/repos/other/project-b/issues/42"
+        assert run.call_args_list[1].args[0][1] == (
+            "/repos/other/project-b/issues/42/comments?per_page=100"
+        )
+
+    def test_other_links_do_not_hide_current_pr(self, github_client: GitHubClient) -> None:
+        """A different PR in the body or comments is not the current PR."""
+        responses = [
+            json.dumps({"number": 42, "body": "https://github.com/owner/project-b/pull/123"}),
+            json.dumps([[{"body": "https://github.com/owner/project-a/pull/1234"}]]),
+        ]
+        with patch.object(github_client, "_run_gh_command", side_effect=responses):
+            assert not github_client.has_pr_url(
+                "#42", "https://github.com/owner/project-a/pull/123"
+            )
+
+    def test_no_body_or_comments(self, github_client: GitHubClient) -> None:
+        """Missing optional issue content is not a lookup failure."""
+        responses = [json.dumps({"number": 42}), "[[]]"]
+        with patch.object(github_client, "_run_gh_command", side_effect=responses):
+            assert not github_client.has_pr_url(
+                "#42", "https://github.com/owner/project-a/pull/123"
+            )
+
+    def test_malformed_issue_body(self, github_client: GitHubClient) -> None:
+        """Do not mistake an invalid issue body for an absent link."""
+        with (
+            patch.object(github_client, "get_ticket", return_value={"description": 42}),
+            pytest.raises(IssueTrackerApiError, match="Invalid GitHub issue body"),
+        ):
+            github_client.has_pr_url("#42", "https://github.com/owner/project-a/pull/123")
 
 
 class TestTransitionTicket:
