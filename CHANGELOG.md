@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Protect temporary clones while agents are running** (#643)
+  - Rejects completion before changing status or time tracking when a clone is still in use, including completion from another terminal and pending-capture sessions
+  - Coordinates agent launch/resume and clone removal with cross-process locks and checks working directories throughout the removal root
+  - Rechecks before deletion and explicitly defers cleanup if another agent starts during completion
+  - Preserves resumable and unrelated clones and retains normal post-exit cleanup and the cleanup opt-out
 - **Avoid duplicate GitHub PR-link prompts and comments during completion** (#641)
   - Checks the issue body and all comment pages before prompting or automatically adding a PR link
   - Matches complete PR identities in plain URLs and Markdown links, using repository-qualified issue keys

@@ -69,6 +69,8 @@ tests/*.md
 /test_*.sh
 integration-tests/*.bak
 
+.nicegui
+
 # OpenWolf (session-local tracking files)
 .wolf/
 

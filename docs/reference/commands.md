@@ -1092,6 +1092,25 @@ Select [1-4]: 1
 
 **What `daf complete` does:**
 
+Before changing session status or ending time tracking, checks that no running
+agent or terminal is using any of the session's temporary clones. This also
+protects the enclosing `daf-session-*` directory and sibling repositories.
+Native IDs such as `pending-capture`, paused time tracking, and session status
+are not evidence that an agent has exited. A rejected completion exits nonzero
+(`SESSION_IN_USE` in JSON mode) without modifying session state.
+
+Exit the agent, move terminals out of its clone, and run completion from the
+original workspace. Startup and removal share a cross-process directory lock;
+cleanup checks again immediately before deletion. If an agent starts during
+completion, the session can be marked complete while **clone cleanup is deferred**
+with an explicit warning. Cleanup is not automatically scheduled: exit the agent
+and run `daf complete <session-name>` again to remove the clone safely.
+
+Normal completion after agent exit removes the clone by default.
+`concurrency.cleanup_on_complete: false` preserves it. Ordinary agent exit,
+interrupt, and pause continue to preserve resumable clones, and unrelated
+sessions' clones are not removed.
+
 1. **Ends time tracking**
 2. **Verifies you're on the correct git branch (PROJ-60262)**
    - Checks if current branch matches the session's branch

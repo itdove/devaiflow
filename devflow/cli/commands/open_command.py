@@ -5,6 +5,7 @@ import os
 import signal
 import subprocess
 import sys
+from contextlib import ExitStack
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -53,6 +54,7 @@ from devflow.agent.diagnostics import (
 # Import unified utilities
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.utils.context_files import load_hierarchical_context_files
+from devflow.utils.clone_lifecycle import temporary_directory_lock
 from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
 from devflow.utils.paths import get_claude_config_dir
 from devflow.utils.daf_agents_validation import (
@@ -1122,6 +1124,7 @@ def open_session(
     model_provider_profile: Optional[Dict[str, Any]] = None
     env: Dict[str, str] = {}
     launch_phase = "launch" if is_first_launch else "resume"
+    clone_locks = ExitStack()
 
     try:
         # Get active model provider profile
@@ -1348,6 +1351,8 @@ def open_session(
             if active_conv is None:
                 raise RuntimeError("Session has no active conversation to launch")
 
+            clone_locks.enter_context(temporary_directory_lock(active_conv.temp_directory))
+
             if agent_backend in ("claude", "ollama", "ollama-claude"):
                 # Build resume command with --model flag if using alternative provider
                 from devflow.utils.model_provider import get_profile_arguments
@@ -1545,6 +1550,7 @@ def open_session(
                 resume_launch_failed = True
                 raise
             finally:
+                clone_locks.close()
                 # The fallback launch creates a new self-identifying agent
                 # session.  Capture it before the cleanup guard, because a
                 # signal may have already caused the command to exit.
@@ -1632,6 +1638,8 @@ def open_session(
             console.print(f"\n[yellow]You can manually resume with:[/yellow]")
             console.print(f"  cd {active_conv.project_path}")
             console.print(f"  {resume_cmd}")
+    finally:
+        clone_locks.close()
 
 
 def _check_and_warn_feature_orchestration(session, session_manager) -> bool:

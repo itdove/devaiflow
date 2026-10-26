@@ -26,6 +26,7 @@ from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
 from devflow.agent.pi_agent import PiAgent
 from devflow.agent.windsurf_agent import WindsurfAgent
+from devflow.utils.clone_lifecycle import temporary_directory_lock
 
 # ---------------------------------------------------------------------------
 # Unified agent metadata registry
@@ -592,6 +593,7 @@ def launch_and_capture(
     """
     sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
     launch_failed = False
+    launch_attempted = False
     try:
         launch_display_name = None
         supports_session_title = get_agent_metadata(agent_backend).get(
@@ -618,8 +620,13 @@ def launch_and_capture(
             launch_kwargs["reasoning_effort"] = reasoning_effort
         if model_override:
             launch_kwargs["model_override"] = model_override
-        process = agent.launch_with_prompt(**launch_kwargs)
-        agent.wait_for_exit(process, headless)
+        temp_directory = getattr(active_conversation, "temp_directory", None)
+        if not isinstance(temp_directory, str):
+            temp_directory = None
+        with temporary_directory_lock(temp_directory):
+            launch_attempted = True
+            process = agent.launch_with_prompt(**launch_kwargs)
+            agent.wait_for_exit(process, headless)
         return_code = getattr(process, "returncode", None)
         if isinstance(return_code, int) and return_code != 0:
             launch_failed = True
@@ -641,10 +648,11 @@ def launch_and_capture(
         launch_failed = True
         raise
     finally:
-        capture_agent_session_id(
-            agent, agent_backend, project_path,
-            active_conversation, sessions_before, quiet=launch_failed,
-        )
+        if launch_attempted:
+            capture_agent_session_id(
+                agent, agent_backend, project_path,
+                active_conversation, sessions_before, quiet=launch_failed,
+            )
         if (
             not launch_failed
             and session

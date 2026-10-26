@@ -17,6 +17,12 @@ from rich.prompt import Confirm, Prompt
 
 from devflow.cli.utils import console_print, is_json_mode
 from devflow.git.utils import GitUtils
+from devflow.utils.clone_lifecycle import (
+    TemporaryDirectoryInUseError,
+    assert_temp_directory_unused,
+    get_temp_directory_root,
+    temporary_directory_lock,
+)
 from devflow.utils.paths import get_cs_cache_home, is_mock_mode
 
 
@@ -79,7 +85,7 @@ def create_empty_temp_directory(prefix: str = "daf-investigation-") -> Optional[
     """Create an empty temporary directory for investigations without a specific project.
 
     Unlike clone_to_temp_directory(), this does NOT clone any repository.
-    It creates a bare directory that will be cleaned up on session exit.
+    It creates a bare directory retained until explicit completion or deletion.
 
     Args:
         prefix: Prefix for the temp directory name
@@ -418,7 +424,8 @@ def cleanup_temp_directory(temp_dir: Optional[str]) -> None:
     Handles both nested structure (/tmp/daf-session-xxx/repo-name/)
     and legacy flat structure (/tmp/daf-jira-analysis-xxx/).
 
-    For nested structures, cleans up the parent session directory.
+    For nested structures, cleans up the parent session directory. Refuses to
+    remove a directory still used by a process, including sibling repositories.
 
     Args:
         temp_dir: Path to temporary directory (can be None)
@@ -427,29 +434,16 @@ def cleanup_temp_directory(temp_dir: Optional[str]) -> None:
         return
 
     try:
-        temp_path = Path(temp_dir).resolve()
-        if not temp_path.exists():
-            return
-
-        # Check if this is a nested structure by examining the parent
-        parent = temp_path.parent
-        parent_name = parent.name
-
-        clone_base = get_clone_base_dir().resolve()
-        system_temp = Path(tempfile.gettempdir()).resolve()
-
-        if parent_name.startswith("daf-session-") and (
-            parent.parent == system_temp or parent.parent == clone_base
-        ):
-            # Nested structure: clean up the parent session directory
-            console_print(f"[dim]Cleaning up temporary directory: {parent}[/dim]")
-            shutil.rmtree(str(parent))
+        with temporary_directory_lock(temp_dir):
+            temp_path = get_temp_directory_root(temp_dir)
+            if not temp_path.exists():
+                return
+            assert_temp_directory_unused(temp_dir)
+            console_print(f"[dim]Cleaning up temporary directory: {temp_path}[/dim]")
+            shutil.rmtree(str(temp_path))
             console_print(f"[green]✓[/green] Temporary directory removed")
-        else:
-            # Legacy flat structure or direct temp dir
-            console_print(f"[dim]Cleaning up temporary directory: {temp_dir}[/dim]")
-            shutil.rmtree(temp_dir)
-            console_print(f"[green]✓[/green] Temporary directory removed")
+    except TemporaryDirectoryInUseError:
+        raise
     except Exception as e:
         console_print(f"[yellow]⚠[/yellow] Could not remove temporary directory: {e}")
         console_print(f"[dim]You may need to manually delete: {temp_dir}[/dim]")

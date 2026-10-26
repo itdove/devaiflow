@@ -412,6 +412,13 @@ class TestCloneRepositoryAtPath:
 class TestCleanupTempDirectory:
     """Test the cleanup_temp_directory function."""
 
+    @pytest.fixture(autouse=True)
+    def isolated_clone_locks(self, tmp_path, monkeypatch):
+        """Keep runtime lock files out of the user's actual DAF state directory."""
+        monkeypatch.setattr(
+            "devflow.utils.clone_lifecycle.get_cs_state_home", lambda: tmp_path / "state"
+        )
+
     def test_does_nothing_when_temp_dir_is_none(self):
         """Test that function does nothing when temp_dir is None."""
         cleanup_temp_directory(None)

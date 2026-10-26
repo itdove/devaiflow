@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 import urllib.request
 
+import click
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
@@ -22,7 +23,9 @@ from devflow.cli.utils import (
     console_print,
     get_session_with_prompt,
     get_status_display,
+    is_json_mode,
     is_non_interactive,
+    output_json,
     require_outside_claude,
 )
 from devflow.config.loader import ConfigLoader
@@ -44,6 +47,11 @@ from devflow.utils.model_provider import get_co_authored_by_line
 from devflow.session.manager import SessionManager
 from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
+from devflow.utils.clone_lifecycle import (
+    TemporaryDirectoryInUseError,
+    assert_temp_directory_unused,
+    temporary_directory_lock,
+)
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -172,13 +180,13 @@ def complete_session(
         # Show session details and confirm
         issue_display = f" ({session.issue_key})" if session.issue_key else ""
         status_text, status_color = get_status_display(session.status)
-        console.print(f"\n[bold]Completing most recently active session:[/bold]")
-        console.print(f"  Session: {session.name}{issue_display}")
-        console.print(f"  Working directory: {session.working_directory}")
-        console.print(f"  Status: [{status_color}]{status_text}[/{status_color}]")
+        console_print(f"\n[bold]Completing most recently active session:[/bold]")
+        console_print(f"  Session: {session.name}{issue_display}")
+        console_print(f"  Working directory: {session.working_directory}")
+        console_print(f"  Status: [{status_color}]{status_text}[/{status_color}]")
         if session.goal:
-            console.print(f"  Goal: {session.goal}")
-        console.print(f"  Last active: {session.last_active.strftime('%Y-%m-%d %H:%M:%S')}")
+            console_print(f"  Goal: {session.goal}")
+        console_print(f"  Last active: {session.last_active.strftime('%Y-%m-%d %H:%M:%S')}")
 
         if not yes and not is_non_interactive():
             if not Confirm.ask("\nContinue?", default=True):
@@ -195,6 +203,30 @@ def complete_session(
         session = get_session_with_prompt(session_manager, identifier)
         if not session:
             return
+
+    # A separate terminal can complete a session whose agent is still running.
+    # Reject that operation before changing time tracking, branches, or status.
+    try:
+        for conversation in session.conversations.values():
+            temp_directory = conversation.active_session.temp_directory
+            if temp_directory:
+                with temporary_directory_lock(temp_directory):
+                    assert_temp_directory_unused(temp_directory)
+    except TemporaryDirectoryInUseError as error:
+        message = (
+            f"Cannot complete session '{session.name}': {error}. "
+            "Exit its AI agent and move any terminals out of the clone, then run "
+            f"'daf complete {session.name}' again. "
+            "Session status and time tracking were not changed."
+        )
+        if is_json_mode():
+            output_json(
+                success=False,
+                error={"code": "SESSION_IN_USE", "message": message, "session": session.name},
+            )
+        else:
+            console_print(f"[red]✗[/red] {message}")
+        raise click.exceptions.Exit(1) from error
 
     # End current work session (use session.name if we got it via --latest)
     session_identifier = session.name if latest else (identifier or session.name)
@@ -989,7 +1021,15 @@ def complete_session(
             console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
             console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
         if should_cleanup:
-            _cleanup_temp_directory(session.active_conversation.temp_directory)
+            try:
+                _cleanup_temp_directory(session.active_conversation.temp_directory)
+            except TemporaryDirectoryInUseError as error:
+                console_print(
+                    f"[yellow]⚠[/yellow] Session '{session.name}' is complete, but temporary "
+                    f"directory cleanup was deferred: {error}. Exit the agent and move "
+                    f"terminals out of the clone, then run 'daf complete {session.name}' "
+                    "again to clean it up safely."
+                )
 
 
 def _handle_feature_completion(
