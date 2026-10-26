@@ -239,6 +239,14 @@ glab auth status
 
 ### PR Creation (daf complete pattern)
 
+When the user runs `daf complete` outside the agent session, GitHub PR-link
+updates check the issue body and all comment pages first. An existing matching
+PR URL (plain or Markdown) skips both confirmation and a duplicate comment;
+other PR URLs do not suppress the update. Explicit update opt-outs skip the
+lookup too, including in non-interactive mode. Lookup failures warn and fall
+back to normal confirmation/automatic updates, which cannot guarantee duplicate
+prevention while the issue cannot be checked. JIRA/GitLab behavior is unchanged.
+
 ```bash
 # Basic PR creation
 gh pr create --draft --title "Title" --body "Description"

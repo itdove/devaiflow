@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Avoid duplicate GitHub PR-link prompts and comments during completion** (#641)
+  - Checks the issue body and all comment pages before prompting or automatically adding a PR link
+  - Matches complete PR identities in plain URLs and Markdown links, using repository-qualified issue keys
+  - Respects explicit update opt-outs and warns before falling back to normal update behavior on lookup failure
+  - Covers existing/new PRs and single-project, multi-project, and multi-conversation completion
 - **Default source branch selection during session creation** (#638)
   - Resolves the source remote's actual default, including custom names and remote-only branches
   - Keeps discovery, menu matching, fetching, and branch creation scoped to the same remote

@@ -1125,6 +1125,22 @@ Select [1-4]: 1
    - Exports session and attaches to JIRA ticket
 9. **Transitions JIRA ticket** to new status (optional)
 
+**GitHub PR-link updates:**
+
+- Before asking to add a PR URL, checks the linked GitHub issue's body and **all
+  comment pages**, using the repository in a fully qualified `owner/repo#number` key.
+- If the current PR URL is already present as a plain URL or Markdown link, skips
+  both the confirmation and the duplicate PR-link comment. Another repository or
+  PR number (including a numeric-prefix match) does not count as the same PR.
+- Applies to existing and newly created PRs, single-project, multi-project, and
+  multi-conversation sessions, and automatic/non-interactive updates.
+- `--no-issue-update` or `prompts.auto_update_jira_pr_url: false` skips both the
+  GitHub lookup and the PR-link update, including in non-interactive mode.
+- If lookup, authentication, API, or parsing fails, warns and falls back to the
+  normal interactive confirmation or automatic update behavior. This fallback
+  cannot guarantee duplicate prevention while the issue cannot be checked.
+- JIRA and GitLab PR-link behavior is unchanged.
+
 **Fork Support for PR/MR Creation:**
 
 When working in a fork (e.g., you forked an organization's repository to your personal account), `daf complete` automatically detects this and creates the PR/MR targeting the **upstream repository** instead of within your fork.
