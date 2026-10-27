@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Bounded session clone cache and safe reopen recovery** (#640)
+  - Shares validated 30-day idle/10-GiB defaults across clone allocation and recovery, with independent disable settings and deterministic LRU eviction
+  - Protects live/in-progress clones, unknown paths, symlinks, and local-only Git/worktree data; warns when safety prevents meeting the budget
+  - Preserves clones on completion by default while respecting existing explicit cleanup settings and session deletion
+  - Restores missing clones from saved origins at the exact recorded path/branch without losing conversation identity or falling back to another repository
 - **OpenShell-compatible DevAIFlow container** (#584)
   - Adds a pinned AI Guardian OpenShell image build with optional local-wheel installation
   - Persists the four XDG directories through a narrow Podman/Docker mount contract
@@ -19,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documents legacy unified-home compatibility, the AI Guardian OpenShell lifecycle flow, and a container persistence smoke test
 - **Smart concurrent session conflict detection with auto-clone** (#518)
   - Three configurable concurrency modes: `strict` (default, backward compatible), `analyze` (file overlap detection), `permissive` (always offer clone)
-  - Auto-clone to XDG cache when concurrent work is safe — ephemeral clones cleaned up on `daf complete`
+  - Auto-clone to XDG cache when concurrent work is safe — shared retention bounds reproducible cached clones
   - Config hierarchy enforcement: enterprise can lock down to `strict` mode
   - TUI integration in Session Workflow tab
   - Auto-clones are separate from the workspace system (invisible to `daf workspace list`)
@@ -34,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Rejects completion before changing status or time tracking when a clone is still in use, including completion from another terminal and pending-capture sessions
   - Coordinates agent launch/resume and clone removal with cross-process locks and checks working directories throughout the removal root
   - Rechecks before deletion and explicitly defers cleanup if another agent starts during completion
-  - Preserves resumable and unrelated clones and retains normal post-exit cleanup and the cleanup opt-out
+  - Preserves resumable and unrelated clones and retains configured post-exit cleanup
 - **Avoid duplicate GitHub PR-link prompts and comments during completion** (#641)
   - Checks the issue body and all comment pages before prompting or automatically adding a PR link
   - Matches complete PR identities in plain URLs and Markdown links, using repository-qualified issue keys

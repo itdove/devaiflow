@@ -11,6 +11,7 @@ metadata.  Derived constants (``SUPPORTED_BACKENDS``, ``AGENT_DISPLAY_NAMES``,
 
 import time
 import uuid
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -26,7 +27,7 @@ from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
 from devflow.agent.pi_agent import PiAgent
 from devflow.agent.windsurf_agent import WindsurfAgent
-from devflow.utils.clone_lifecycle import temporary_directory_lock
+from devflow.utils.clone_lifecycle import TemporaryDirectoryInUseError, temporary_directory_lock
 
 # ---------------------------------------------------------------------------
 # Unified agent metadata registry
@@ -594,6 +595,7 @@ def launch_and_capture(
     sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
     launch_failed = False
     launch_attempted = False
+    temp_directory = None
     try:
         launch_display_name = None
         supports_session_title = get_agent_metadata(agent_backend).get(
@@ -623,7 +625,13 @@ def launch_and_capture(
         temp_directory = getattr(active_conversation, "temp_directory", None)
         if not isinstance(temp_directory, str):
             temp_directory = None
+        if temp_directory:
+            from devflow.utils.clone_cache import CloneCache
+
+            CloneCache(config).use(Path(temp_directory))
         with temporary_directory_lock(temp_directory):
+            if temp_directory and not Path(temp_directory).is_dir():
+                raise FileNotFoundError("Cached clone disappeared; retry daf open to restore it")
             launch_attempted = True
             process = agent.launch_with_prompt(**launch_kwargs)
             agent.wait_for_exit(process, headless)
@@ -648,6 +656,11 @@ def launch_and_capture(
         launch_failed = True
         raise
     finally:
+        if launch_attempted and temp_directory:
+            try:
+                CloneCache(config).use(Path(temp_directory))
+            except (OSError, TemporaryDirectoryInUseError):
+                logging.getLogger(__name__).warning("Could not refresh clone cache activity")
         if launch_attempted:
             capture_agent_session_id(
                 agent, agent_backend, project_path,

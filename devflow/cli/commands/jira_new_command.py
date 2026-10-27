@@ -455,7 +455,7 @@ def create_jira_ticket_session(
         from devflow.utils.temp_directory import should_clone_to_temp, clone_to_temp_directory
         if should_clone_to_temp(Path(project_path)):
             console_print(f"[dim]Cloning to temp directory (--temp-clone flag set)[/dim]")
-            temp_dir_result = clone_to_temp_directory(Path(project_path))
+            temp_dir_result = clone_to_temp_directory(Path(project_path), config=config)
             if temp_dir_result:
                 temp_directory, original_project_path = temp_dir_result
                 # Use temp directory as project_path for this session
@@ -475,7 +475,7 @@ def create_jira_ticket_session(
         # No flag provided: prompt user
         from devflow.utils.temp_directory import should_clone_to_temp, prompt_and_clone_to_temp
         if should_clone_to_temp(Path(project_path)):
-            temp_dir_result = prompt_and_clone_to_temp(Path(project_path))
+            temp_dir_result = prompt_and_clone_to_temp(Path(project_path), config=config)
             if temp_dir_result:
                 temp_directory, original_project_path = temp_dir_result
                 # Use temp directory as project_path for this session

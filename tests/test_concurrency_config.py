@@ -11,7 +11,7 @@ class TestConcurrencyConfig:
         config = ConcurrencyConfig()
         assert config.mode == "strict"
         assert config.auto_clone_path is None
-        assert config.cleanup_on_complete is True
+        assert config.cleanup_on_complete is False
 
     def test_valid_modes(self):
         for mode in ["strict", "analyze", "permissive"]:

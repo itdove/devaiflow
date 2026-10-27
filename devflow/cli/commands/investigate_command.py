@@ -333,7 +333,7 @@ def _prompt_investigation_location(
     cwd = os.getcwd()
     console_print("\nWhere would you like to run this investigation?\n")
     console_print(f"  1. Current directory ({cwd})")
-    console_print("  2. Temporary directory (clone project if git repo, kept until completion or deletion)")
+    console_print("  2. Temporary directory (clone project if git repo, managed by cache retention)")
     console_print("  3. Specify a custom path")
     console_print("  4. Select from workspace repositories")
     console_print()
@@ -351,7 +351,7 @@ def _prompt_investigation_location(
             should_clone_to_temp,
         )
         if should_clone_to_temp(Path(cwd)):
-            temp_result = clone_to_temp_directory(Path(cwd))
+            temp_result = clone_to_temp_directory(Path(cwd), config=config)
             if temp_result:
                 clone_dir, original_path = temp_result
                 console_print(f"[green]✓[/green] Cloned project to temporary directory: {clone_dir}")
@@ -360,7 +360,7 @@ def _prompt_investigation_location(
                 console_print("[red]✗[/red] Failed to clone project to temporary directory")
                 return None
         else:
-            temp_dir = create_empty_temp_directory()
+            temp_dir = create_empty_temp_directory(config=config)
             if temp_dir:
                 console_print(f"[green]✓[/green] Created temporary directory: {temp_dir}")
                 return (temp_dir, None, temp_dir, None)
@@ -629,7 +629,7 @@ def create_investigation_session(
         from devflow.utils.temp_directory import should_clone_to_temp, clone_to_temp_directory
         if should_clone_to_temp(Path(project_path)):
             console_print(f"[dim]Cloning to temp directory (--temp-clone flag set)[/dim]")
-            temp_dir_result = clone_to_temp_directory(Path(project_path))
+            temp_dir_result = clone_to_temp_directory(Path(project_path), config=config)
             if temp_dir_result:
                 temp_directory, original_project_path = temp_dir_result
                 # Use temp directory as project_path for this session
@@ -651,7 +651,7 @@ def create_investigation_session(
         # No flag provided: prompt user
         from devflow.utils.temp_directory import should_clone_to_temp, prompt_and_clone_to_temp
         if should_clone_to_temp(Path(project_path)):
-            temp_dir_result = prompt_and_clone_to_temp(Path(project_path))
+            temp_dir_result = prompt_and_clone_to_temp(Path(project_path), config=config)
             if temp_dir_result:
                 temp_directory, original_project_path = temp_dir_result
                 # Use temp directory as project_path for this session

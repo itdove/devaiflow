@@ -107,7 +107,7 @@ def jira_open_session(issue_key: str, headless: bool = False, auto_approve: bool
     else:
         from devflow.utils.temp_directory import should_clone_to_temp, prompt_and_clone_to_temp
         if should_clone_to_temp(Path(project_path)):
-            temp_dir_result = prompt_and_clone_to_temp(Path(project_path))
+            temp_dir_result = prompt_and_clone_to_temp(Path(project_path), config=config)
             if temp_dir_result:
                 temp_directory, original_project_path = temp_dir_result
                 # Use temp directory as project_path for this session

@@ -319,9 +319,9 @@ class TestConfigHierarchy:
 class TestCleanupOnComplete:
     """Tests for cleanup_on_complete config behavior."""
 
-    def test_cleanup_enabled_by_default(self):
+    def test_cleanup_disabled_by_default(self):
         config = ConcurrencyConfig()
-        assert config.cleanup_on_complete is True
+        assert config.cleanup_on_complete is False
 
     def test_cleanup_disabled(self):
         config = ConcurrencyConfig(cleanup_on_complete=False)

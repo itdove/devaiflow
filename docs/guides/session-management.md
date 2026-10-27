@@ -51,6 +51,43 @@ Status values (as displayed in `daf list` and other commands):
 
 **Note:** Status values are shown as-is in all outputs and match the filter values used with `--status` flag.
 
+## Temporary Clones and Safe Recovery
+
+Temporary session clones survive ordinary agent exit, pause, and **`daf complete`
+by default**. This keeps the same working directory available for resuming the
+saved conversation, including completed sessions. Explicit `daf delete` retains
+its clone cleanup behavior.
+
+New clone allocations/recoveries share [idle-age and aggregate-size retention](../reference/configuration.md#clone-cache-and-retention):
+30 days and 10 GiB by default, with independent disable settings. Expired eligible
+entries are considered first, then deterministic least-recently-used eviction
+under size pressure. Reopening/using a clone refreshes activity. Live agents,
+in-progress creation/recovery/reopen, terminals inside clones, and local-only work
+are protected independently of persisted session status. If safe eviction cannot
+meet the budget, DAF warns rather than discarding work.
+
+**Existing cleanup settings are respected:** an explicitly stored
+`concurrency.cleanup_on_complete: true` still requests immediate cleanup, including
+values previously saved as the old default. Set it to `false` to adopt preservation;
+DAF does not silently rewrite existing settings. An absent setting now defaults to
+`false`. Immediate cleanup/explicit deletion can discard clone-local work, so push
+or back it up first and exit any agents/terminals using the clone.
+
+When a recorded clone is missing, `daf open` warns **before launching the agent**
+and re-clones from its saved origin at the **same absolute path**, checking out
+the recorded branch where available. It reports retention as the cause only when
+an eviction record exists. Recovery also works without the original workspace
+checkout. Native conversation IDs, other conversations, session notes, and agent
+history are preserved; DAF does not silently fall back to the original workspace
+or start a different conversation because recovery failed.
+
+Offline/authentication errors, unavailable branches, non-empty invalid paths,
+replacement repositories, and symlink redirection stop reopen with an actionable
+error (`CLONE_RECOVERY_FAILED` in JSON). Recovery metadata stays intact for retry.
+A partial previous recovery is not accepted on the wrong default branch: inspect
+the recorded checkout and restore its saved branch before retrying. Do not remove
+local work to resolve a cache warning without first reviewing/backing it up.
+
 ## Workspaces: Concurrent Multi-Branch Development
 
 **Workspaces** enable you to work on the same project with different branches in parallel without conflicts. Each workspace is a named location (like VSCode workspaces) that can have its own active sessions.

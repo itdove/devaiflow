@@ -1015,9 +1015,8 @@ def complete_session(
 
     # Clean up temporary directory AFTER all commit/push/PR operations
     if session.active_conversation and session.active_conversation.temp_directory:
-        should_cleanup = True
-        if config and hasattr(config, 'concurrency') and not config.concurrency.cleanup_on_complete:
-            should_cleanup = False
+        should_cleanup = bool(config and config.concurrency.cleanup_on_complete)
+        if not should_cleanup:
             console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
             console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
         if should_cleanup:

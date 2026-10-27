@@ -139,7 +139,7 @@ git rebase "origin/$(git remote show origin | awk '/HEAD branch/{print $NF}')"
 ```
 
 - If rebase succeeds, proceed with analysis on the latest code
-- If rebase has conflicts, inform the user — the temp directory can be safely deleted and re-cloned by reopening the session
+- If rebase has conflicts, stop and inform the user; preserve local work before any manual clone removal or replacement
 - This does NOT apply to development sessions (`daf new`, `daf open`) which use the real workspace and handle branch sync during `daf open`
 
 ### 6. Follow Command-Specific Workflow
@@ -198,7 +198,25 @@ to change session status or time tracking while the clone is in use, even if
 the native ID is `pending-capture` or time tracking is paused. If an agent starts
 during completion and cleanup is deferred, exit the agent and rerun completion
 from the original workspace; deferred cleanup is not automatically scheduled.
-Normal exit or pause alone preserves the clone for resumption.
+Normal exit, pause, and completion preserve the clone by default. An existing
+saved `concurrency.cleanup_on_complete: true` retains immediate cleanup;
+`false` adopts preservation. Explicit session deletion still cleans up clones.
+
+All clone allocation/recovery paths share `clone_retention.max_idle_days` (30)
+and `clone_retention.max_size_mb` (10240 MiB) limits; `0` disables each independently.
+Retention uses the resolved `clone_dir`, legacy `concurrency.auto_clone_path`, or
+XDG/unified clone root. It removes eligible expired entries, then deterministic
+least-recently-used entries under size pressure, and reconciles usage after cloning.
+Live/in-progress clones and local-only Git/worktree data are protected; a warning
+explains when the budget cannot be met rather than discarding work. Paused/completed
+metadata and other conversation references do not permanently pin safe clones.
+
+Reopening a missing clone warns and restores its recorded origin, branch, and exact
+absolute path before agent launch, preserving native conversation identity even
+without the original workspace. Attribute a missing clone to retention only when
+an eviction record confirms it. A recovery failure must stop safely, preserve
+recovery metadata, and never silently switch repositories or replace a recoverable
+conversation. Do not delete local work to resolve retention/recovery warnings.
 
 **Do NOT:**
 - Create git commits (handled by `daf complete`)

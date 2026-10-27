@@ -1086,9 +1086,6 @@ def _offer_and_create_auto_clone(
 
     clone_base = get_clone_base_dir(config)
 
-    if config and config.concurrency.auto_clone_path:
-        clone_base = Path(config.concurrency.auto_clone_path)
-
     console.print(f"\n[cyan]Clone project to[/cyan] {clone_base / '...'} [cyan]and start session?[/cyan]", end=" ")
 
     prompt_default = "Y/n" if default_accept else "y/N"
@@ -1098,7 +1095,7 @@ def _offer_and_create_auto_clone(
     if not accepted:
         return None
 
-    result = clone_to_temp_directory(Path(project_path))
+    result = clone_to_temp_directory(Path(project_path), config=config)
     if result:
         clone_path, original_path = result
         console.print(f"[green]✓[/green] Cloned to: {clone_path}")

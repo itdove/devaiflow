@@ -9,6 +9,7 @@ Extracted from jira_new_command.py to be reused by other commands.
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,7 @@ from typing import Optional
 from rich.prompt import Confirm, Prompt
 
 from devflow.cli.utils import console_print, is_json_mode
+from devflow.config.models import Config
 from devflow.git.utils import GitUtils
 from devflow.utils.clone_lifecycle import (
     TemporaryDirectoryInUseError,
@@ -26,13 +28,13 @@ from devflow.utils.clone_lifecycle import (
 from devflow.utils.paths import get_cs_cache_home, is_mock_mode
 
 
-def get_clone_base_dir(config=None) -> Path:
+def get_clone_base_dir(config: Optional[Config] = None) -> Path:
     """Get base directory for session clones.
 
     Resolution priority:
         1. config.clone_dir (explicit override from config hierarchy)
-        2. $XDG_CACHE_HOME/devaiflow/clones (XDG cache)
-        3. ~/.cache/devaiflow/clones (default)
+        2. concurrency.auto_clone_path (legacy alias, shared by all clone paths)
+        3. XDG cache, or the unified DevAIFlow home, followed by /clones
 
     Args:
         config: Optional Config object with clone_dir field
@@ -40,10 +42,14 @@ def get_clone_base_dir(config=None) -> Path:
     Returns:
         Path to the base directory for session clones
     """
-    if config and getattr(config, "clone_dir", None):
-        return Path(config.clone_dir).expanduser().resolve()
+    override = getattr(config, "clone_dir", None)
+    if isinstance(override, (str, Path)) and override:
+        return Path(override).expanduser().resolve()
+    legacy = getattr(getattr(config, "concurrency", None), "auto_clone_path", None)
+    if isinstance(legacy, (str, Path)) and legacy:
+        return Path(legacy).expanduser().resolve()
 
-    return get_cs_cache_home() / "clones"
+    return (get_cs_cache_home() / "clones").resolve()
 
 
 def extract_repo_name(url: str) -> str:
@@ -75,17 +81,19 @@ def extract_repo_name(url: str) -> str:
     name = parts[-1] if parts else ""
 
     # Validate: allow alphanumeric, hyphens, dots, underscores
-    if name and re.match(r"^[\w.\-]+$", name):
+    if name and name not in {".", ".."} and re.match(r"^[\w.\-]+$", name):
         return name
 
     return "repo"
 
 
-def create_empty_temp_directory(prefix: str = "daf-investigation-") -> Optional[str]:
+def create_empty_temp_directory(
+    prefix: str = "daf-investigation-", config: Optional[Config] = None
+) -> Optional[str]:
     """Create an empty temporary directory for investigations without a specific project.
 
     Unlike clone_to_temp_directory(), this does NOT clone any repository.
-    It creates a bare directory retained until explicit completion or deletion.
+    It creates a directory covered by the shared clone-cache policy.
 
     Args:
         prefix: Prefix for the temp directory name
@@ -94,9 +102,15 @@ def create_empty_temp_directory(prefix: str = "daf-investigation-") -> Optional[
         Path to the created temporary directory, or None on failure
     """
     try:
-        base = get_clone_base_dir()
+        from devflow.utils.clone_cache import CloneCache
+
+        cache = CloneCache(config)
+        cache.prune()
+        base = get_clone_base_dir(config)
         base.mkdir(parents=True, exist_ok=True)
         temp_dir = tempfile.mkdtemp(prefix=prefix, dir=str(base))
+        cache.use(Path(temp_dir), created=True)
+        cache.prune()
         console_print(f"[dim]Created empty temporary directory: {temp_dir}[/dim]")
         return temp_dir
     except Exception as e:
@@ -118,7 +132,9 @@ def should_clone_to_temp(path: Path) -> bool:
     return GitUtils.is_git_repository(path)
 
 
-def _create_nested_temp_directory(remote_url: str) -> Optional[tuple[str, str]]:
+def _create_nested_temp_directory(
+    remote_url: str, config: Optional[Config] = None
+) -> Optional[tuple[str, str]]:
     """Create a nested temp directory structure with the repo name as subdirectory.
 
     Creates: /tmp/daf-session-<random>/<repo-name>/
@@ -132,11 +148,16 @@ def _create_nested_temp_directory(remote_url: str) -> Optional[tuple[str, str]]:
     repo_name = extract_repo_name(remote_url)
 
     try:
-        base = get_clone_base_dir()
+        from devflow.utils.clone_cache import CloneCache
+
+        cache = CloneCache(config)
+        cache.prune()
+        base = get_clone_base_dir(config)
         base.mkdir(parents=True, exist_ok=True)
         session_dir = tempfile.mkdtemp(prefix="daf-session-", dir=str(base))
         clone_dir = os.path.join(session_dir, repo_name)
         os.makedirs(clone_dir, exist_ok=True)
+        cache.use(Path(clone_dir), remote_url=remote_url)
         console_print(f"[dim]Created temporary directory: {clone_dir}[/dim]")
         return (session_dir, clone_dir)
     except Exception as e:
@@ -270,7 +291,9 @@ def _checkout_default_branch(clone_dir: str) -> None:
                     break
 
 
-def _clone_repo_to_temp(current_path: Path) -> Optional[tuple[str, str, str]]:
+def _clone_repo_to_temp(
+    current_path: Path, config: Optional[Config] = None
+) -> Optional[tuple[str, str, str]]:
     """Core clone logic shared by interactive and non-interactive paths.
 
     Returns:
@@ -285,7 +308,7 @@ def _clone_repo_to_temp(current_path: Path) -> Optional[tuple[str, str, str]]:
 
     console_print(f"[dim]Remote URL: {remote_url}[/dim]")
 
-    dir_result = _create_nested_temp_directory(remote_url)
+    dir_result = _create_nested_temp_directory(remote_url, config)
     if not dir_result:
         return None
 
@@ -294,21 +317,24 @@ def _clone_repo_to_temp(current_path: Path) -> Optional[tuple[str, str, str]]:
     console_print(f"[cyan]Cloning repository...[/cyan]")
     console_print(f"[dim]This may take a moment...[/dim]")
 
-    if not GitUtils.clone_repository(remote_url, Path(clone_dir), branch=None):
-        console_print(f"[red]✗[/red] Failed to clone repository")
-        console_print("[yellow]Falling back to current directory[/yellow]")
-        try:
-            shutil.rmtree(session_dir)
-        except Exception:
-            pass
-        return None
+    with temporary_directory_lock(clone_dir):
+        if not GitUtils.clone_repository(remote_url, Path(clone_dir), branch=None):
+            console_print(f"[red]✗[/red] Failed to clone repository")
+            console_print("[yellow]Falling back to current directory[/yellow]")
+            try:
+                shutil.rmtree(session_dir)
+            except Exception:
+                pass
+            return None
 
     console_print(f"[green]✓[/green] Repository cloned")
     original_path = str(current_path.absolute())
     return (clone_dir, original_path, session_dir)
 
 
-def clone_to_temp_directory(current_path: Path) -> Optional[tuple[str, str]]:
+def clone_to_temp_directory(
+    current_path: Path, config: Optional[Config] = None
+) -> Optional[tuple[str, str]]:
     """Clone repository to temporary directory without prompting (non-interactive).
 
     Used when --temp-clone flag is explicitly passed.
@@ -320,12 +346,17 @@ def clone_to_temp_directory(current_path: Path) -> Optional[tuple[str, str]]:
         Tuple of (temp_directory, original_project_path) if cloned,
         None if cloning failed
     """
-    result = _clone_repo_to_temp(current_path)
+    result = _clone_repo_to_temp(current_path, config)
     if not result:
         return None
 
     clone_dir, original_path, _ = result
     _checkout_default_branch(clone_dir)
+    from devflow.utils.clone_cache import CloneCache
+
+    cache = CloneCache(config)
+    cache.use(Path(clone_dir), created=True)
+    cache.prune()
     return (clone_dir, original_path)
 
 
@@ -333,6 +364,7 @@ def clone_repository_at_path(
     remote_url: str,
     target_path: Path,
     branch: Optional[str] = None,
+    config: Optional[Config] = None,
 ) -> bool:
     """Clone a repository at a previously recorded path.
 
@@ -350,28 +382,71 @@ def clone_repository_at_path(
         True when the repository was restored or already exists at the path.
     """
     target_path = target_path.expanduser()
+    if branch and branch.startswith("-"):
+        console_print("[yellow]⚠[/yellow] Invalid recorded branch for clone recovery")
+        return False
 
     try:
-        if target_path.exists():
-            if GitUtils.is_git_repository(target_path):
-                return True
+        from devflow.utils.clone_cache import CloneCache, _git
 
-            if not target_path.is_dir() or any(target_path.iterdir()):
-                console_print(
-                    f"[yellow]⚠[/yellow] Cannot restore clone over non-empty path: {target_path}"
-                )
-                return False
-
-            target_path.rmdir()
-
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        return GitUtils.clone_repository(remote_url, target_path, branch=branch)
-    except OSError as e:
+        cache = CloneCache(config)
+        # Recorded paths must not redirect recovery through a replacement symlink.
+        if Path(os.path.abspath(target_path)) != target_path.resolve():
+            console_print(f"[yellow]⚠[/yellow] Refusing symlinked clone recovery: {target_path}")
+            return False
+        restored = False
+        with temporary_directory_lock(cache.lock_path(target_path)):
+            cache.prune()
+            created = False
+            if target_path.exists():
+                if GitUtils.is_git_repository(target_path):
+                    if GitUtils.get_remote_url(target_path) != remote_url:
+                        console_print(
+                            "[yellow]⚠[/yellow] Existing repository does not match the saved clone origin"
+                        )
+                        return False
+                    restored = True
+                    if cache.pending_recovery(target_path):
+                        # A failed checkout can leave a valid repo on the wrong branch.
+                        # Do not silently accept it, or overwrite subsequent local work.
+                        restored = (
+                            _git(target_path, "config", "--get", "remote.origin.url") == remote_url
+                            and (not branch or GitUtils.get_current_branch(target_path) == branch)
+                            and bool(_git(target_path, "rev-parse", "--verify", "HEAD"))
+                            and not _git(target_path, "status", "--porcelain", "--untracked-files=all")
+                        )
+                        created = restored
+                        if not restored:
+                            console_print(
+                                "[yellow]⚠[/yellow] Previous clone recovery is incomplete. "
+                                "Inspect the recorded checkout and restore its saved branch before retrying."
+                            )
+                            return False
+                elif not target_path.is_dir() or any(target_path.iterdir()):
+                    console_print(
+                        f"[yellow]⚠[/yellow] Cannot restore clone over non-empty path: {target_path}"
+                    )
+                    return False
+                else:
+                    target_path.rmdir()
+            if not target_path.exists():
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                cache.begin_restore(target_path, remote_url, branch)
+                restored = GitUtils.clone_repository(remote_url, target_path, branch=branch)
+                created = True
+            if restored:
+                cache.use(target_path, created=created, remote_url=remote_url, locked=True)
+        if restored:
+            cache.prune()
+        return restored
+    except (OSError, TemporaryDirectoryInUseError, subprocess.SubprocessError) as e:
         console_print(f"[yellow]⚠[/yellow] Could not restore clone at {target_path}: {e}")
         return False
 
 
-def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
+def prompt_and_clone_to_temp(
+    current_path: Path, config: Optional[Config] = None
+) -> Optional[tuple[str, str]]:
     """Prompt user and clone repository to temporary directory.
 
     Creates a nested directory structure: /tmp/daf-session-<id>/<repo-name>/
@@ -392,7 +467,7 @@ def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
         console_print("[dim]Using current directory[/dim]")
         return None
 
-    result = _clone_repo_to_temp(current_path)
+    result = _clone_repo_to_temp(current_path, config)
     if not result:
         return None
 
@@ -415,6 +490,11 @@ def prompt_and_clone_to_temp(current_path: Path) -> Optional[tuple[str, str]]:
     if not selected_branch:
         _checkout_default_branch(clone_dir)
 
+    from devflow.utils.clone_cache import CloneCache
+
+    cache = CloneCache(config)
+    cache.use(Path(clone_dir), created=True)
+    cache.prune()
     return (clone_dir, original_path)
 
 

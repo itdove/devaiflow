@@ -369,6 +369,7 @@ class TestCloneRepositoryAtPath:
         target_path.mkdir(parents=True)
 
         with patch("devflow.utils.temp_directory.GitUtils.is_git_repository", return_value=True), \
+             patch("devflow.utils.temp_directory.GitUtils.get_remote_url", return_value="https://example.com/repo.git"), \
              patch("devflow.utils.temp_directory.GitUtils.clone_repository") as mock_clone:
             assert clone_repository_at_path("https://example.com/repo.git", target_path) is True
 
