@@ -1305,6 +1305,68 @@ The update checker runs automatically before each command to notify you of new v
 }
 ```
 
+## Clone Cache and Retention
+
+Session clones are a **best-effort bounded cache**, shared by ticket creation,
+investigations, concurrency auto-clones, and missing-clone recovery. In split
+configuration these are user preferences in `config.json`; legacy single-file
+configuration accepts the same fields. They are not overridden by enterprise/team
+`concurrency_mode` enforcement.
+
+```json
+{
+  "clone_dir": null,
+  "clone_retention": {
+    "max_idle_days": 30,
+    "max_size_mb": 10240
+  },
+  "concurrency": {
+    "cleanup_on_complete": false
+  }
+}
+```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `clone_retention.max_idle_days` | `30` | Evict eligible clones idle for **at least** this many 24-hour days. |
+| `clone_retention.max_size_mb` | `10240` | Aggregate apparent-byte budget in **MiB** (1,048,576 bytes): 10 GiB by default. Includes repository contents and `.git`. |
+| `concurrency.cleanup_on_complete` | `false` | Preserve clones on completion; `true` explicitly opts into immediate cleanup. |
+
+Limits must be non-negative integers (not strings, fractions, booleans, or null).
+`0` disables that limit independently; setting both to `0` disables automatic
+eviction, not activity tracking or explicit deletion. Activity is recorded at
+allocation, reopen, and agent use, not inferred from filesystem creation/access time.
+
+**Root precedence**, consistently applied to all clone paths:
+1. `clone_dir` (expanded, canonical absolute path).
+2. `concurrency.auto_clone_path` (legacy alias, now shared by all clone workflows).
+3. `get_cs_cache_home()/clones`: `$XDG_CACHE_HOME/devaiflow/clones` or
+   `~/.cache/devaiflow/clones`; in unified/legacy mode, `$DEVAIFLOW_HOME/clones`
+   or the resolved legacy home followed by `/clones`.
+
+Before allocation/recovery, retention removes eligible expired entries, then
+eligible least-recently-used entries if still over budget. Equal timestamps sort
+by managed directory name. It reconciles size again after cloning, while the new
+entry remains protected. Unknown data under the root counts toward usage, but is
+never automatically removed; symlink targets are neither followed nor counted.
+
+**Safety takes priority over limits.** Ownership records and matching markers,
+cross-process lifecycle locks, live CLI leases, process working-directory checks,
+and reproducibility checks protect clones. Dirty, untracked/ignored, unpushed,
+stashed, reflog-only/dangling, custom Git metadata, or otherwise uncertain local
+data prevents eviction. Current origin refs must be reachable and confirm that
+Git data is recoverable; offline/authentication errors preserve clones. Existing
+pre-retention clones without a clone-time metadata baseline are conservatively
+protected rather than assumed safe. Review/back up work and explicitly delete
+unneeded sessions, or increase the size limit, if a warning says the budget cannot
+be met. A single oversized new clone is preserved with the same warning.
+
+Paused/completed session metadata does **not** permanently pin reproducible clones.
+All cached roots/repositories are considered, not just the active conversation.
+Session metadata and agent conversation storage are never cache-eviction targets.
+See [session management](../guides/session-management.md#temporary-clones-and-safe-recovery)
+for reopen behavior and explicit cleanup compatibility.
+
 ## Hierarchical Context Files
 
 DevAIFlow supports hierarchical context files that are automatically loaded when creating or opening Claude Code sessions. These files provide context at different organizational levels and are only loaded if they physically exist on disk.

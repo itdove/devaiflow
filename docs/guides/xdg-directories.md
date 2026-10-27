@@ -8,7 +8,7 @@ DevAIFlow follows the [XDG Base Directory Specification](https://specifications.
 |----------|-------------|--------------|----------|
 | Data | `XDG_DATA_HOME` | `~/.local/share/devaiflow` | Sessions, session backups, logs, features |
 | Config | `XDG_CONFIG_HOME` | `~/.config/devaiflow` | config files, configuration backups, templates, skills, context .md files |
-| State | `XDG_STATE_HOME` | `~/.local/state/devaiflow` | audit.log, cache, dashboard state, suggestions |
+| State | `XDG_STATE_HOME` | `~/.local/state/devaiflow` | audit.log, cache, dashboard state, suggestions, clone ownership/activity/recovery records and lifecycle locks |
 | Cache | `XDG_CACHE_HOME` | `~/.cache/devaiflow` | Session clones (`clones/`), reproducible cached artifacts |
 
 ## Resolution Priority
@@ -108,7 +108,22 @@ Additionally, `devflow.utils.temp_directory` provides:
 
 | Function | Returns | Used for |
 |----------|---------|----------|
-| `get_clone_base_dir(config)` | Clone base directory | `get_cs_cache_home() / "clones"`, or `config.clone_dir` override |
+| `get_clone_base_dir(config)` | Clone base directory | `clone_dir`, then legacy `concurrency.auto_clone_path`, then `get_cs_cache_home() / "clones"` |
+
+Clone retention uses this resolved root for every allocation and recovery path,
+including unified/legacy layouts and explicit overrides. Defaults are 30 idle days
+and 10 GiB aggregate apparent bytes, including `.git`; each limit can independently
+be disabled with `0`. Protected/unknown data may keep usage above the budget, with
+an actionable warning rather than unsafe removal.
+
+Ownership/activity records and eviction/recovery state live under
+`get_cs_state_home()/clone-cache/`; directory locks live under `clone-locks/`.
+They remain outside removable cache entries. Each managed entry has a matching
+`.daf-managed-clone` marker. These records permit exact-path recovery even when
+the original source checkout has disappeared. Do not manually alter ownership
+markers or assume every `daf-*` directory is automatically safe to remove.
+Session metadata and native agent conversation storage are not evicted.
+See [clone-cache configuration](../reference/configuration.md#clone-cache-and-retention).
 
 ## Container use
 

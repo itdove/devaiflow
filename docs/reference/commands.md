@@ -1106,10 +1106,15 @@ completion, the session can be marked complete while **clone cleanup is deferred
 with an explicit warning. Cleanup is not automatically scheduled: exit the agent
 and run `daf complete <session-name>` again to remove the clone safely.
 
-Normal completion after agent exit removes the clone by default.
-`concurrency.cleanup_on_complete: false` preserves it. Ordinary agent exit,
-interrupt, and pause continue to preserve resumable clones, and unrelated
-sessions' clones are not removed.
+Normal completion after agent exit **preserves** the clone by default, as do
+ordinary exit, interrupt, and pause. `concurrency.cleanup_on_complete: true`
+explicitly opts into immediate cleanup; existing saved `true` values retain their
+old behavior. Set it to `false` to adopt preservation. Explicit `daf delete`
+still cleans up clones. Shared [clone-cache retention](configuration.md#clone-cache-and-retention)
+may later evict inactive, reproducible clones, including completed sessions.
+`daf open` warns and restores an evicted clone at the same path/branch without
+replacing the conversation. Recovery failures stop safely instead of launching
+in a different repository. Unrelated sessions' clones are not completion targets.
 
 1. **Ends time tracking**
 2. **Verifies you're on the correct git branch (PROJ-60262)**

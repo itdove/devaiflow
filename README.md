@@ -62,6 +62,7 @@ Each session is an **isolated workspace** with its own:
 - One session per task means your AI assistant has full context for that specific work
 - No more "Which ticket was that for?" confusion
 - Resume exactly where you left off with complete conversation history
+- Preserve session clones on completion, with [safe bounded cache retention and exact-path recovery](docs/guides/session-management.md#temporary-clones-and-safe-recovery)
 
 **⏱️ Save Time**
 - Auto-creates git branches from issue keys

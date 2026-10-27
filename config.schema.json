@@ -93,6 +93,25 @@
       "title": "AgentModelConfig",
       "type": "object"
     },
+    "CloneRetentionConfig": {
+      "description": "Limits for reproducible managed clones; zero disables each limit independently.",
+      "properties": {
+        "max_idle_days": {
+          "default": 30,
+          "minimum": 0,
+          "title": "Max Idle Days",
+          "type": "integer"
+        },
+        "max_size_mb": {
+          "default": 10240,
+          "minimum": 0,
+          "title": "Max Size Mb",
+          "type": "integer"
+        }
+      },
+      "title": "CloneRetentionConfig",
+      "type": "object"
+    },
     "ConcurrencyConfig": {
       "description": "Concurrent session conflict detection configuration.",
       "properties": {
@@ -114,7 +133,7 @@
           "title": "Auto Clone Path"
         },
         "cleanup_on_complete": {
-          "default": true,
+          "default": false,
           "title": "Cleanup On Complete",
           "type": "boolean"
         }
@@ -901,6 +920,14 @@
           "title": "Env Vars",
           "type": "object"
         },
+        "arguments": {
+          "description": "Additional adapter command-line arguments as argv tokens. Each list entry is passed as one token without shell parsing.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Arguments",
+          "type": "array"
+        },
         "cost_per_million_input_tokens": {
           "anyOf": [
             {
@@ -1286,13 +1313,11 @@
       "properties": {
         "auto_create": {
           "default": true,
-          "description": "Automatically create templates when creating sessions in new directories",
           "title": "Auto Create",
           "type": "boolean"
         },
         "auto_use": {
           "default": true,
-          "description": "Automatically use matching templates when creating sessions",
           "title": "Auto Use",
           "type": "boolean"
         }
@@ -1492,6 +1517,9 @@
       ],
       "default": null,
       "title": "Clone Dir"
+    },
+    "clone_retention": {
+      "$ref": "#/$defs/CloneRetentionConfig"
     },
     "concurrency": {
       "$ref": "#/$defs/ConcurrencyConfig"

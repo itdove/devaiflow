@@ -17,13 +17,22 @@ class TemporaryDirectoryInUseError(RuntimeError):
     """A temporary directory is in use or cannot safely be checked."""
 
 
+def clone_cache_record_path(root: Path) -> Path:
+    """Locate persistent ownership/recovery data outside a removable clone."""
+    key = hashlib.sha256(os.path.normcase(str(root)).encode()).hexdigest()
+    return get_cs_state_home() / "clone-cache" / f"{key}.json"
+
+
 def get_temp_directory_root(temp_dir: str) -> Path:
     """Return the directory that cleanup will remove, including a nested clone's parent."""
     path = Path(temp_dir).expanduser().resolve()
     parent = path.parent
-    if parent.name.startswith("daf-session-") and parent.parent in (
-        Path(tempfile.gettempdir()).resolve(),
-        (get_cs_cache_home() / "clones").resolve(),
+    if parent.name.startswith("daf-session-") and (
+        parent.parent in (
+            Path(tempfile.gettempdir()).resolve(),
+            (get_cs_cache_home() / "clones").resolve(),
+        )
+        or clone_cache_record_path(parent).is_file()
     ):
         return parent
     return path

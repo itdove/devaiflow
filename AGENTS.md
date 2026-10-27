@@ -1821,7 +1821,14 @@ class Session(BaseModel):
    - Rejects completion before status or time-tracking changes when a clone is in use
    - Uses directory-scoped process checks and cross-process launch/resume/removal locks, independent of native session-ID capture
    - Rechecks the entire removal root before cleanup and explicitly defers cleanup on a late-starting agent
-   - Preserves post-exit default cleanup, configured clone retention, and independent resumable clones
+   - Preserves configured post-exit cleanup, clone retention, and independent resumable clones
+
+- ✓ Bounded clone-cache retention and exact-path recovery (itdove/devaiflow#640)
+   - Shares validated 30-day idle and 10-GiB size defaults across clone allocation and recovery, with independent disable settings
+   - Uses managed ownership records, live process leases, lifecycle locks, current remote verification, and local-only Git protection before deterministic LRU eviction
+   - Preserves clones on completion by default while respecting existing explicit cleanup settings and deletion behavior
+   - Restores recorded origins/branches at the same absolute path without replacing native conversation identity or silently switching repositories on failure
+   - Documents legacy/unified/XDG/custom roots, protected-data budget warnings, and incomplete recovery retries
 
 ## Release Management
 

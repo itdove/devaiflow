@@ -494,12 +494,19 @@ class TimeTrackingConfig(BaseModel):
     reminder_interval: Optional[str] = "2h"
 
 
+class CloneRetentionConfig(BaseModel):
+    """Limits for reproducible managed clones; zero disables each limit independently."""
+
+    max_idle_days: int = Field(default=30, ge=0, strict=True)
+    max_size_mb: int = Field(default=10240, ge=0, strict=True)
+
+
 class ConcurrencyConfig(BaseModel):
     """Concurrent session conflict detection configuration."""
 
     mode: str = "strict"  # "strict" | "analyze" | "permissive"
     auto_clone_path: Optional[str] = None  # Override clone base dir (default: XDG cache)
-    cleanup_on_complete: bool = True  # Auto-cleanup auto-clones on daf complete
+    cleanup_on_complete: bool = False  # Explicit opt-in; existing saved values are respected
 
     @field_validator('mode')
     @classmethod
@@ -689,6 +696,7 @@ class UserConfig(BaseModel):
     model_provider: Optional[ModelProviderConfig] = None  # Model provider configuration (user-level profiles)
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration
     clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
+    clone_retention: CloneRetentionConfig = Field(default_factory=CloneRetentionConfig)
     concurrency: ConcurrencyConfig = Field(default_factory=ConcurrencyConfig)  # Concurrent session conflict detection
     agent_models: Dict[str, AgentModelConfig] = Field(default_factory=dict)
 
@@ -731,6 +739,7 @@ class Config(BaseModel):
     model_provider: ModelProviderConfig = Field(default_factory=ModelProviderConfig)  # Model provider configuration (merged from enterprise/org/team/user)
     agent: AgentConfig = Field(default_factory=AgentConfig)  # Multi-agent skill installation configuration (user-level)
     clone_dir: Optional[str] = None  # Override base directory for session clones (default: $XDG_CACHE_HOME/devaiflow/clones)
+    clone_retention: CloneRetentionConfig = Field(default_factory=CloneRetentionConfig)
     concurrency: ConcurrencyConfig = Field(default_factory=ConcurrencyConfig)  # Concurrent session conflict detection (merged from enterprise/team/user)
     agent_models: Dict[str, AgentModelConfig] = Field(default_factory=dict)
 

@@ -282,6 +282,21 @@ def test_complete_from_another_terminal_rejects_live_clone(clone_session):
     assert clone.exists()
 
 
+def test_complete_preserves_clones_by_default_and_explicit_delete_cleans_up(clone_session):
+    """Completion keeps a resumable clone; explicit session deletion still removes it."""
+    from devflow.cli.commands.delete_command import delete_session
+
+    loader, manager, session, clone = clone_session
+    assert loader.load_config().concurrency.cleanup_on_complete is False
+    result = _complete()
+    assert result.exit_code == 0, result.output
+    assert clone.exists()
+    assert SessionManager(loader).get_session(session.name).status == "complete"
+    delete_session(identifier=session.name, force=True)
+    assert not clone.exists()
+    assert not clone.parent.exists()
+
+
 @pytest.mark.parametrize("cleanup_enabled", [False, True])
 def test_complete_after_exit_respects_config_and_independent_clones(clone_session, cleanup_enabled):
     """Only the completed clone is removed; paused and other live clones survive."""
@@ -352,7 +367,10 @@ def test_complete_checks_other_conversations_before_mutation(clone_session):
 
 def test_complete_defers_cleanup_if_agent_starts_after_preflight(clone_session, monkeypatch):
     """The final locked check closes the race after the initial liveness check."""
-    _, _, _, clone = clone_session
+    loader, _, _, clone = clone_session
+    config = loader.load_config()
+    config.concurrency.cleanup_on_complete = True
+    loader.save_config(config)
     with ExitStack() as processes:
 
         def start_late_agent(*args):

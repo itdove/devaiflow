@@ -1339,6 +1339,8 @@ class ConfigLoader:
             model_provider=model_provider,  # Merged from user/team/org/enterprise hierarchy (user takes priority)
             gcp_vertex_region=user_config.gcp_vertex_region,
             update_checker_timeout=user_config.update_checker_timeout,
+            clone_dir=user_config.clone_dir,
+            clone_retention=user_config.clone_retention,
             concurrency=merged_concurrency,  # Merged from enterprise/team/user hierarchy
             agent_models=agent_models,
         )
@@ -1528,6 +1530,8 @@ class ConfigLoader:
             gcp_vertex_region=config.gcp_vertex_region,
             update_checker_timeout=config.update_checker_timeout,
             jira_affected_version=config.jira.affected_version,
+            clone_dir=config.clone_dir,
+            clone_retention=config.clone_retention,
             concurrency=config.concurrency,
             agent_models=config.agent_models,
         )

@@ -2923,7 +2923,8 @@ def test_complete_ticket_creation_session_skips_git_operations(temp_daf_home, tm
 
     # Should mark session as complete
     assert "marked as complete" in captured.out
-    assert not repo_dir.exists(), "Explicit daf complete should remove the session clone"
+    assert repo_dir.exists(), "Completion preserves resumable clones by default"
+    assert (repo_dir / "test.txt").read_text() == "modified"
 
     # Should NOT prompt for commit (commit block skipped for ticket_creation)
     assert "Commit these changes now?" not in "\n".join(confirm_prompts)
