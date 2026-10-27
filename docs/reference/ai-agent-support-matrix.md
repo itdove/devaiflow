@@ -844,6 +844,13 @@ local session API to create or update titles; v2 uses the standalone API CLI.
 Headless launches use `opencode run --title`. Existing sessions are resumed by
 ID after their title is synchronized to the current DAF session name.
 
+Native IDs returned by titled creation are retained instead of being rediscovered
+after exit. `daf open` persists that launch-proven ID before starting the child.
+Known IDs are never replaced by polling results. Fallback discovery has a
+two-second total deadline, including CLI execution and lazy version detection;
+query errors, empty results, and ambiguity have different content-free diagnostics.
+An unavailable pre-launch snapshot cannot be treated as an empty baseline.
+
 Commit-message generation also adapts the `run` flags by major version: v1
 uses its quiet and reasoning-effort options, while v2 omits those v1-only
 flags and uses its default text format. Failed CLI runs include sanitized
@@ -867,7 +874,7 @@ stderr in the `complete.log` diagnostics when available.
 
 **Known Limitations:**
 - **⚠️  No permission prompts:** OpenCode auto-approves all tool calls (file edits, shell commands) without user confirmation. Unlike Claude Code, there is no built-in permission system. DevAIFlow displays a warning banner before launching OpenCode sessions. For ticket creation sessions (`daf git new`, `daf jira new`), an additional safety constraint is injected into the prompt to enforce read-only behavior.
-- Session detection relies on `opencode session list --format json` polling. OpenCode returns a global list, so DevAIFlow filters records by their canonical `directory` metadata; records without usable directory metadata are ignored. If more than one new session remains for the same project, capture stays pending rather than selecting an arbitrary session.
+- Fallback session detection uses `opencode session list --format json` polling. OpenCode returns a global list, so DevAIFlow filters records by their canonical `directory` metadata; records without usable directory metadata are ignored. If more than one new session remains for the same project, capture stays pending rather than selecting an arbitrary session. Reopening a legacy `pending-capture` record stops with verification guidance rather than silently creating a different conversation; see [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
 - Skills support is TBD (uses `.opencode/` directory structure)
 - Token extraction depends on `opencode stats` availability
 

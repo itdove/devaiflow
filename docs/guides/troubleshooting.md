@@ -1860,6 +1860,42 @@ If you can't resolve the issue:
 
 **Note:** If you're on the wrong branch but have NO uncommitted changes, the tool will automatically checkout the session branch for you.
 
+### OpenCode session ID is unverified
+
+**Problem:** OpenCode exit reports a capture warning, or `daf open` refuses with
+`AGENT_SESSION_UNVERIFIED` (`--json`).
+
+DAF retains IDs returned by titled creation and `daf open` saves them before
+starting OpenCode. Known IDs are not rediscovered after exit. When fallback
+discovery is necessary, a two-second deadline covers queries, version detection,
+and polling sleeps, rather than allowing ten independent ten-second queries.
+This deadline does not bypass completion's directory-holder checks.
+
+Warnings distinguish a failed query (timeout, CLI exit, invalid JSON, or version
+detection), no new project-scoped sessions, and multiple new candidates. A failed
+pre-launch query cannot establish which sessions are new. DAF never resolves
+ambiguity by choosing the first, newest, or lexically largest ID.
+
+A legacy `pending-capture` record has no saved native identity or trustworthy
+pre-launch baseline. Automatic recovery cannot prove which conversation belongs
+to it, even if only one session is currently visible. DAF stops without launching
+a replacement. A missing saved native ID or failed verification also stops safely.
+
+From a regular terminal, after exiting the agent:
+
+1. Inspect `opencode session list --format json --standalone` on v2 (omit
+   `--standalone` on v1). Verify the intended ID and canonical project directory;
+   do not infer ownership from timestamps or titles alone.
+2. Restore a verified association with
+   `daf update <session-name> --session-id <verified-native-id>`, then reopen.
+3. If you deliberately want a fresh conversation instead, run
+   `daf open <session-name> --new-conversation`. This archives the previous
+   conversation; it is not recovery of the missing ID.
+
+Do not edit OpenCode storage, stop shared services, or weaken completion guards
+to resolve a capture warning. A successful native-ID save does not prove that
+clone-local processes have exited.
+
 ### Temporary clone still in use after agent exit
 
 **Problem:** `daf complete` reports `SESSION_IN_USE`, or post-exit completion is

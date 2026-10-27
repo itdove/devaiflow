@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, NoReturn, Optional, Set
 
 import click
 from rich.console import Console
@@ -42,7 +42,8 @@ from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, Jira
 from devflow.github import transition_on_start as github_transition_on_start
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError
 from devflow.agent import get_agent_display_name
-from devflow.agent.factory import resolve_agent_backend
+from devflow.agent.factory import OPENCODE_CAPTURE_TIMEOUT, resolve_agent_backend
+from devflow.agent.opencode_agent import OpenCodeAgent, OpenCodeSessionQueryError
 from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.capture import SessionCapture
 from devflow.session.manager import SessionManager
@@ -258,6 +259,23 @@ def prompt_session_selection(session_manager: SessionManager, status_filter: Opt
 def _extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[str]) -> Optional[str]:
     """Deprecated: use extract_repository_from_issue_key from devflow.cli.utils."""
     return extract_repository_from_issue_key(issue_key, issue_tracker)
+
+
+def _refuse_unverified_opencode_session(
+    session_name: str, reason: str, output_json: bool
+) -> NoReturn:
+    """Preserve unresolved native identity instead of silently launching a replacement."""
+    message = (
+        f"Cannot safely resume OpenCode: {reason}. No replacement conversation was launched. "
+        "Verify the native ID and project directory with OpenCode's session list, then run "
+        f"`daf update {session_name} --session-id VERIFIED_ID` outside the agent session. "
+        f"To intentionally start a new conversation, use `daf open {session_name} --new-conversation`."
+    )
+    if output_json:
+        emit_json(success=False, error={"code": "AGENT_SESSION_UNVERIFIED", "message": message})
+    else:
+        console.print(f"[yellow]{escape(message)}[/yellow]")
+    raise click.exceptions.Exit(1)
 
 
 def _set_terminal_title(session) -> None:
@@ -664,7 +682,7 @@ def open_session(
         and active_conv.ai_agent_session_id
         and not is_pending_capture(active_conv.ai_agent_session_id)
     )
-    is_first_launch = not has_real_session_id
+    is_first_launch = new_conversation or not has_real_session_id
 
     # Resolve the profile before the backend: an explicit --model-profile selects
     # the agent adapter for this launch and must beat the stored session backend.
@@ -693,7 +711,25 @@ def open_session(
         if not _restore_session_clone(session, session_manager, config):
             raise click.exceptions.Exit(1)
 
-    if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
+    if (
+        effective_agent_backend in ("opencode", "opencode-ai")
+        and active_conv
+        and is_pending_capture(active_conv.ai_agent_session_id)
+        and not new_conversation
+    ):
+        _refuse_unverified_opencode_session(
+            session.name,
+            "the saved ID is pending-capture and no verified launch ID or pre-launch "
+            "baseline was saved; automatic recovery is unavailable",
+            output_json,
+        )
+
+    if (
+        not is_first_launch
+        and active_conv
+        and active_conv.ai_agent_session_id
+        and active_conv.project_path
+    ):
         # Check if the session exists using the agent-aware check
         # This handles both Claude (.jsonl file) and OpenCode (database query) correctly
         from devflow.agent import create_agent_client
@@ -706,7 +742,21 @@ def open_session(
         check_path = active_conv.temp_directory or active_conv.project_path
         console.print(f"[dim]Checking for existing {agent_name} session...[/dim]")
 
-        conversation_exists = agent_client.session_exists(active_conv.ai_agent_session_id, check_path)
+        if isinstance(agent_client, OpenCodeAgent):
+            try:
+                conversation_exists = (
+                    active_conv.ai_agent_session_id in agent_client.get_existing_sessions(
+                        check_path, timeout=OPENCODE_CAPTURE_TIMEOUT, strict=True
+                    )
+                )
+            except OpenCodeSessionQueryError as exc:
+                _refuse_unverified_opencode_session(session.name, str(exc), output_json)
+            if not conversation_exists:
+                _refuse_unverified_opencode_session(
+                    session.name, "the saved native ID was not found in this project", output_json
+                )
+        else:
+            conversation_exists = agent_client.session_exists(active_conv.ai_agent_session_id, check_path)
         console.print(f"[dim]  {'found' if conversation_exists else 'not found'}[/dim]")
 
         if not conversation_exists:
@@ -777,7 +827,13 @@ def open_session(
 
         # After temp directory handling, verify if session was restored
         # If not, we need to treat this as a first launch
-        if not is_first_launch and active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
+        if (
+            not is_first_launch
+            and active_conv
+            and active_conv.ai_agent_session_id
+            and active_conv.project_path
+            and effective_agent_backend not in ("opencode", "opencode-ai")
+        ):
             from devflow.agent import create_agent_client
             agent_client = create_agent_client(effective_agent_backend)
             agent_name = agent_client.get_agent_name()
@@ -1111,6 +1167,15 @@ def open_session(
     launch_phase = "launch" if is_first_launch else "resume"
     clone_locks = ExitStack()
 
+    def persist_native_session_id(native_id: str) -> None:
+        """Save launch-proven identity before starting or waiting for OpenCode."""
+        if active_conv:
+            active_conv.ai_agent_session_id = native_id
+            session_manager.index = session_manager.config_loader.load_sessions()
+            sync_captured_agent_session(
+                session_manager, session, session.name, effective_agent_backend
+            )
+
     try:
         # Get active model provider profile
         from devflow.utils.model_provider import apply_model_override, get_model_name_from_profile
@@ -1284,6 +1349,7 @@ def open_session(
                         display_name=session.name,
                         session=session,
                         phase="launch",
+                        on_session_id=persist_native_session_id,
                     )
             except Exception:
                 launch_failed = True
@@ -1470,6 +1536,8 @@ def open_session(
                             "opencode-ai",
                         ):
                             launch_kwargs["isolated_workspace"] = True
+                        if agent_backend in ("opencode", "opencode-ai"):
+                            launch_kwargs["on_session_id"] = persist_native_session_id
                         if get_agent_metadata(agent_backend).get(
                             "features", {}
                         ).get("session_title", False):
