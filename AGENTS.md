@@ -1830,6 +1830,11 @@ class Session(BaseModel):
    - Restores recorded origins/branches at the same absolute path without replacing native conversation identity or silently switching repositories on failure
    - Documents legacy/unified/XDG/custom roots, protected-data budget warnings, and incomplete recovery retries
 
+- ✓ Safe OpenCode v2 clone workspace lifecycle and post-exit completion (itdove/devaiflow#646)
+   - Uses supported private-server launch/resume and v2 session-ID polling rather than retaining clone-local resources in the shared service
+   - Preflights prompted and automatic completion, reports holder/parent details in text and JSON, and handles expected completion refusals without opaque secondary errors
+   - Preserves ambiguous/shared holders, native identity, clone locks, full-root checks, and configured cleanup; never exempts processes by name or stops shared services
+
 ## Release Management
 
 ### Overview

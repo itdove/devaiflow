@@ -197,6 +197,33 @@ class OpenCodeAgent(AgentInterface):
         )
 
     @staticmethod
+    def _workspace_arguments(
+        major_version: int, isolated_workspace: bool, profile_arguments: List[str]
+    ) -> List[str]:
+        """Give a managed clone a private v2 server, never a shared-service teardown.
+
+        The CLI owns the private server's lifetime and disposes its workspace
+        resources on exit. V1 has no shared v2 service. An explicit remote server
+        cannot provide exclusive ownership, so reject it rather than silently
+        changing the user's connection or attempting to evict shared resources.
+        """
+        if major_version != 2 or not isolated_workspace:
+            return profile_arguments
+        if any(
+            arg == "--server" or arg.startswith("--server=") or arg.startswith("--standalone=")
+            for arg in profile_arguments
+        ):
+            raise OpenCodeCompatibilityError(
+                "OpenCode v2 temporary clones require a private server (--standalone). "
+                "Remove --server/--standalone= overrides from the model profile, "
+                "or use a non-cloned workspace for an explicitly shared server. "
+                "DAF will not stop or evict a shared server's workspace."
+            )
+        if "--standalone" in profile_arguments:
+            return profile_arguments
+        return [*profile_arguments, "--standalone"]
+
+    @staticmethod
     def _append_auto_approve(
         command: List[str],
         major_version: int,
@@ -485,12 +512,14 @@ class OpenCodeAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         model_provider_profile: Optional[Dict[str, Any]] = None,
         display_name: Optional[str] = None,
+        isolated_workspace: bool = False,
     ) -> subprocess.Popen:
         """Launch a new OpenCode session in a project directory.
 
         Args:
             project_path: Absolute path to project
             env: Environment variables dict (optional, defaults to os.environ)
+            isolated_workspace: Use a private v2 server for a managed temporary clone
 
         Returns:
             Subprocess handle for the launched OpenCode process
@@ -504,6 +533,9 @@ class OpenCodeAgent(AgentInterface):
         from devflow.utils.model_provider import get_profile_arguments
         profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         major_version = self.get_opencode_version()
+        profile_arguments = self._workspace_arguments(
+            major_version, isolated_workspace, profile_arguments
+        )
         model_name = self._get_profile_model(model_provider_profile)
         command = self._interactive_command_prefix(
             major_version,
@@ -539,6 +571,7 @@ class OpenCodeAgent(AgentInterface):
         auto_approve: bool = False,
         model_override: Optional[str] = None,
         display_name: Optional[str] = None,
+        isolated_workspace: bool = False,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
@@ -564,6 +597,7 @@ class OpenCodeAgent(AgentInterface):
             auto_approve: Auto-approve all tool permissions
             model_override: Override the selected profile model for this session
             display_name: DAF session title for a newly created OpenCode conversation
+            isolated_workspace: Use a private v2 server for a managed temporary clone
 
         Returns:
             Subprocess handle for OpenCode process
@@ -600,6 +634,9 @@ class OpenCodeAgent(AgentInterface):
         )
 
         major_version = self.get_opencode_version()
+        profile_arguments = self._workspace_arguments(
+            major_version, isolated_workspace, profile_arguments
+        )
         if (
             not headless
             and display_name
@@ -658,6 +695,7 @@ class OpenCodeAgent(AgentInterface):
         env: Optional[Dict[str, str]] = None,
         model_provider_profile: Optional[Dict[str, Any]] = None,
         display_name: Optional[str] = None,
+        isolated_workspace: bool = False,
     ) -> subprocess.Popen:
         """Resume an existing OpenCode session.
 
@@ -665,6 +703,7 @@ class OpenCodeAgent(AgentInterface):
             session_id: Session UUID to resume
             project_path: Absolute path to project
             env: Environment variables dict (optional, defaults to os.environ)
+            isolated_workspace: Use a private v2 server for a managed temporary clone
 
         Returns:
             Subprocess handle for the resumed OpenCode process
@@ -678,6 +717,9 @@ class OpenCodeAgent(AgentInterface):
         from devflow.utils.model_provider import get_profile_arguments
         profile_arguments = get_profile_arguments(model_provider_profile, self.get_agent_name())
         major_version = self.get_opencode_version()
+        profile_arguments = self._workspace_arguments(
+            major_version, isolated_workspace, profile_arguments
+        )
         model_name = self._get_profile_model(model_provider_profile)
         if display_name:
             self.update_session_title(
@@ -794,8 +836,13 @@ class OpenCodeAgent(AgentInterface):
             return set()
 
         try:
+            command = ["opencode", "session", "list", "--format", "json"]
+            if self.get_opencode_version() == 2:
+                # Snapshot/capture runs before AND after the UI. Do not let a
+                # metadata query reconnect the clone to the shared service.
+                command.append("--standalone")
             result = subprocess.run(
-                ["opencode", "session", "list", "--format", "json"],
+                command,
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -823,7 +870,12 @@ class OpenCodeAgent(AgentInterface):
                         sessions.add(session_id)
                 return sessions
             return set()
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError):
+        except (
+            subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+            OSError,
+            OpenCodeCompatibilityError,
+        ):
             return set()
 
     @staticmethod

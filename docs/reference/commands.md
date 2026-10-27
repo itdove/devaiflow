@@ -1099,6 +1099,22 @@ Native IDs such as `pending-capture`, paused time tracking, and session status
 are not evidence that an agent has exited. A rejected completion exits nonzero
 (`SESSION_IN_USE` in JSON mode) without modifying session state.
 
+The post-exit prompt and automatic-completion path run the same preflight before
+offering completion. A refusal reports the holder's name, PID, working directory,
+and parent PID/name/directory when accessible (`error.holder` in JSON). Missing
+details are marked unavailable; process arguments and environment are not printed.
+Expected refusals do not produce a secondary `Failed to complete session: 1` error.
+
+For OpenCode v2, DAF launches and resumes temporary-clone sessions with
+`--standalone`: OpenCode owns a private server and its resource teardown rather
+than leaving MCP processes in a shared background service. V2 session-ID polling
+also uses private requests. V1 launch behavior and non-cloned interactive
+workspaces are unchanged. Clone profiles cannot override this with `--server` or
+`--standalone=...`; use a non-cloned workspace for an explicitly shared connection.
+Existing shared-service holders are **not** automatically stopped or evicted:
+inactive sessions alone do not prove exclusive workspace ownership. See
+[temporary-clone troubleshooting](../guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit).
+
 Exit the agent, move terminals out of its clone, and run completion from the
 original workspace. Startup and removal share a cross-process directory lock;
 cleanup checks again immediately before deletion. If an agent starts during

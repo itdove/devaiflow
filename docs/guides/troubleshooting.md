@@ -1860,6 +1860,56 @@ If you can't resolve the issue:
 
 **Note:** If you're on the wrong branch but have NO uncommitted changes, the tool will automatically checkout the session branch for you.
 
+### Temporary clone still in use after agent exit
+
+**Problem:** `daf complete` reports `SESSION_IN_USE`, or post-exit completion is
+deferred even though the AI interface is closed.
+
+Closing an interface does not necessarily stop its backend. OpenCode v2 normally
+connects clients to a shared background service; that service can retain a local
+MCP process whose working directory is the clone. This is a real directory holder,
+not a stale session-ID or time-tracking warning.
+
+DAF reports the holder's **process name, PID, cwd, parent PID, parent name, and
+parent cwd**, where accessible. Process-exit races and inaccessible attributes
+show unavailable details rather than permitting unsafe completion. JSON refusals
+include the same fields in `error.holder`, without command arguments or environment.
+
+1. Move terminals outside the entire `daf-session-*` removal root, including
+   sibling repositories, and close agents still using it.
+2. If the UI is already closed, inspect the reported parent/owner. Verify whether
+   other clients or running tasks use **that workspace**; other OpenCode projects
+   can legitimately share the same service. An inactive session list alone does
+   not establish exclusive ownership.
+3. Release an inactive workspace only through lifecycle controls supported by
+   your backend/version, after establishing ownership. V2 versions exposing
+   `debug.location.evict` in their [API reference](https://opencode.ai/v2/docs/api)
+   can dispose a location's cached services; do not evict an actively shared or
+   ambiguously owned location. If safe release cannot be established, preserve
+   the clone and report the backend version and sanitized holder details.
+4. Retry `daf complete <session-name>` from the original workspace after the
+   holder has exited. Refusal preserves status, tracking, files, and conversation
+   identity. Configured cleanup still rechecks immediately before removal.
+
+New and reopened DAF temporary-clone OpenCode v2 launches use the documented
+`--standalone` private-server lifecycle (including Mini and headless launches).
+Session-ID polling also stays private, so it cannot recreate a shared workspace
+dependency after UI exit. OpenCode disposes its own private resources; DAF does
+not kill processes, exempt MCP/security tools by name, stop a shared service, or
+change security/MCP settings. Existing shared holders must be resolved separately;
+reopening privately does not terminate an older shared instance. Explicit profile
+`--server`/`--standalone=...` overrides are rejected for clones rather than silently
+changing connections. Non-cloned interactive workspaces and OpenCode v1 are unchanged.
+
+Both prompted and automatic post-exit completion preflight the clone before
+offering completion. If another process starts after that preflight, the normal
+completion guard still refuses safely without the secondary opaque
+`Failed to complete session: 1` message.
+
+See OpenCode's [service lifecycle](https://opencode.ai/v2/docs/troubleshooting),
+[private-server mode](https://opencode.ai/v2/docs/cli), and
+[local MCP working directories](https://opencode.ai/v2/docs/mcp-servers).
+
 ## Development and Testing
 
 ### Mock Services for Integration Testing

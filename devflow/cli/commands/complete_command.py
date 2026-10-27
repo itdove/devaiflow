@@ -11,6 +11,7 @@ import urllib.request
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.prompt import Confirm, Prompt
 
 from devflow.agent import get_agent_display_name
@@ -49,8 +50,8 @@ from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
 from devflow.utils.clone_lifecycle import (
     TemporaryDirectoryInUseError,
-    assert_temp_directory_unused,
-    temporary_directory_lock,
+    assert_session_clones_unused,
+    completion_refusal_message,
 )
 
 console = Console()
@@ -207,25 +208,23 @@ def complete_session(
     # A separate terminal can complete a session whose agent is still running.
     # Reject that operation before changing time tracking, branches, or status.
     try:
-        for conversation in session.conversations.values():
-            temp_directory = conversation.active_session.temp_directory
-            if temp_directory:
-                with temporary_directory_lock(temp_directory):
-                    assert_temp_directory_unused(temp_directory)
+        assert_session_clones_unused(session)
     except TemporaryDirectoryInUseError as error:
-        message = (
-            f"Cannot complete session '{session.name}': {error}. "
-            "Exit its AI agent and move any terminals out of the clone, then run "
-            f"'daf complete {session.name}' again. "
-            "Session status and time tracking were not changed."
-        )
+        message = completion_refusal_message(session.name, error)
         if is_json_mode():
+            details: Dict[str, Any] = {
+                "code": "SESSION_IN_USE",
+                "message": message,
+                "session": session.name,
+            }
+            if error.holder is not None:
+                details["holder"] = error.holder
             output_json(
                 success=False,
-                error={"code": "SESSION_IN_USE", "message": message, "session": session.name},
+                error=details,
             )
         else:
-            console_print(f"[red]✗[/red] {message}")
+            console_print(f"[red]✗[/red] {escape(message)}")
         raise click.exceptions.Exit(1) from error
 
     # End current work session (use session.name if we got it via --latest)

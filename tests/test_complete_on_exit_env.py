@@ -19,6 +19,7 @@ def test_prompt_for_complete_unsets_session_env_vars(temp_daf_home, monkeypatch)
     # Mock session
     session = Mock()
     session.name = "test-session"
+    session.conversations = {}
 
     # Mock config to auto-complete
     config = Mock()
@@ -61,6 +62,7 @@ def test_prompt_for_complete_handles_missing_env_vars(temp_daf_home, monkeypatch
     # Mock session
     session = Mock()
     session.name = "test-session"
+    session.conversations = {}
 
     # Mock config to auto-complete
     config = Mock()
@@ -87,6 +89,7 @@ def test_prompt_for_complete_restores_env_on_exception(temp_daf_home, monkeypatc
     # Mock session
     session = Mock()
     session.name = "test-session"
+    session.conversations = {}
 
     # Mock config to auto-complete
     config = Mock()

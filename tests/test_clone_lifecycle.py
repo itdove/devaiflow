@@ -286,7 +286,7 @@ def test_complete_preserves_clones_by_default_and_explicit_delete_cleans_up(clon
     """Completion keeps a resumable clone; explicit session deletion still removes it."""
     from devflow.cli.commands.delete_command import delete_session
 
-    loader, manager, session, clone = clone_session
+    loader, _, session, clone = clone_session
     assert loader.load_config().concurrency.cleanup_on_complete is False
     result = _complete()
     assert result.exit_code == 0, result.output
@@ -455,10 +455,13 @@ def test_open_resume_protects_clone_until_exit_and_releases_on_errors(
     assert result.exit_code == 0, result.output
     if session_id == "ses_existing":
         agent.resume_session.assert_called_once()
+        assert agent.resume_session.call_args.kwargs["isolated_workspace"] is True
     elif session_id == "pending-capture":
         agent.launch_with_prompt.assert_called_once()
+        assert agent.launch_with_prompt.call_args.kwargs["isolated_workspace"] is True
     else:
         agent.launch_session.assert_called_once()
+        assert agent.launch_session.call_args.kwargs["isolated_workspace"] is True
     if failure_phase != "spawn":
         agent.wait_for_exit.assert_called_once()
     if failure_phase is None:
@@ -466,3 +469,184 @@ def test_open_resume_protects_clone_until_exit_and_releases_on_errors(
     with temporary_directory_lock(str(clone)):
         pass
     assert clone.exists()
+
+
+@pytest.mark.parametrize("detail_error", [psutil.AccessDenied(1), psutil.NoSuchProcess(1)])
+def test_holder_diagnostics_preserve_verified_pid_and_cwd_on_detail_errors(
+    clone_session, monkeypatch, detail_error
+):
+    """Exit/permission races during extra detail reads never hide a verified holder."""
+    _, _, _, clone = clone_session
+    holder = Mock(pid=123)
+    holder.cwd.return_value = str(clone)
+    holder.name.side_effect = detail_error
+    holder.ppid.side_effect = detail_error
+    holder.parent.side_effect = detail_error
+    monkeypatch.setattr("psutil.process_iter", lambda: iter([holder]))
+
+    with pytest.raises(TemporaryDirectoryInUseError) as caught:
+        assert_temp_directory_unused(str(clone))
+
+    assert caught.value.holder == {
+        "pid": 123,
+        "name": None,
+        "cwd": str(clone),
+        "parent_pid": None,
+        "parent_name": None,
+        "parent_cwd": None,
+    }
+    assert "unavailable" in str(caught.value)
+    holder.cmdline.assert_not_called()
+    holder.environ.assert_not_called()
+
+
+def test_holder_diagnostics_include_parent_and_escape_rich_markup(clone_session, monkeypatch):
+    """Text/JSON retain process ownership details without interpreting process names as markup."""
+    loader, _, _, clone = clone_session
+    holder = Mock(pid=123)
+    holder.cwd.return_value = str(clone)
+    holder.name.return_value = "worker[red]"
+    holder.ppid.return_value = 456
+    parent = holder.parent.return_value
+    parent.name.return_value = "backend-service"
+    parent.cwd.return_value = str(clone.parent.parent)
+    monkeypatch.setattr("psutil.process_iter", lambda: iter([holder]))
+    original_index = loader.sessions_file.read_bytes()
+
+    result = _complete()
+    assert result.exit_code == 1, result.output
+    assert "worker[red]" in result.output
+    assert "parent PID: 456" in result.output
+    assert "backend-service" in result.output
+    data = json.loads(_complete("session-a", "--json").output)
+    assert data["error"]["holder"] == {
+        "pid": 123,
+        "name": "worker[red]",
+        "cwd": str(clone),
+        "parent_pid": 456,
+        "parent_name": "backend-service",
+        "parent_cwd": str(clone.parent.parent),
+    }
+    assert loader.sessions_file.read_bytes() == original_index
+
+
+@pytest.mark.parametrize("detail_error", [psutil.AccessDenied(1), psutil.NoSuchProcess(1)])
+def test_holder_diagnostics_keep_parent_pid_when_parent_details_disappear(
+    clone_session, monkeypatch, detail_error
+):
+    """A parent exiting between lookup and detail reads must not hide its child."""
+    _, _, _, clone = clone_session
+    holder = Mock(pid=123)
+    holder.cwd.return_value = str(clone)
+    holder.name.return_value = "worker"
+    holder.ppid.return_value = 456
+    parent = holder.parent.return_value
+    parent.name.side_effect = detail_error
+    parent.cwd.side_effect = detail_error
+    monkeypatch.setattr("psutil.process_iter", lambda: iter([holder]))
+    with pytest.raises(TemporaryDirectoryInUseError) as caught:
+        assert_temp_directory_unused(str(clone))
+    assert caught.value.holder["parent_pid"] == 456
+    assert caught.value.holder["parent_name"] is None
+    assert caught.value.holder["parent_cwd"] is None
+    assert caught.value.holder["name"] == "worker"
+
+
+@pytest.mark.parametrize("auto_complete", [None, True])
+@pytest.mark.parametrize("cleanup_enabled", [False, True])
+def test_exited_ui_with_shared_service_worker_refuses_until_resources_released(
+    clone_session, monkeypatch, tmp_path, capsys, auto_complete, cleanup_enabled
+):
+    """Reproduce the UI/service lifetime split using real processes, not stale PIDs.
+
+    A service outside the clone owns a worker inside it. An independent UI exits;
+    neither DAF's prompted nor automatic path may stop/evict the shared service.
+    The fixture's owner later releases the worker normally, allowing completion.
+    """
+    from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
+
+    loader, manager, session, clone = clone_session
+    config = loader.load_config()
+    config.prompts.auto_complete_on_exit = auto_complete
+    config.concurrency.cleanup_on_complete = cleanup_enabled
+    loader.save_config(config)
+    session.active_conversation.ai_agent_session_id = "ses_existing"
+    manager.update_session(session)
+    original_index = loader.sessions_file.read_bytes()
+    code = (
+        "import subprocess, sys\n"
+        "worker = subprocess.Popen([sys.executable, '-u', '-c', "
+        '"import sys; sys.stdin.read()"], '
+        f"cwd={str(clone)!r}, stdin=subprocess.PIPE)\n"
+        "print('ready', flush=True)\n"
+        "try:\n"
+        "    sys.stdin.read()\n"
+        "finally:\n"
+        "    worker.communicate(timeout=5)\n"
+    )
+    other = tmp_path / "project-b"
+    other.mkdir()
+    with _running_process(other) as other_backend:
+        with _running_process(tmp_path, code) as service:
+            ui = subprocess.run([sys.executable, "-c", "pass"], cwd=clone, timeout=5, check=True)
+            assert ui.returncode == 0 and service.poll() is None
+            confirm = Mock(side_effect=AssertionError("Do not offer completion while held"))
+            monkeypatch.setattr("devflow.cli.commands.open_command.Confirm.ask", confirm)
+            _prompt_for_complete_on_exit(session, config)
+            output = capsys.readouterr().out
+            assert "Cannot complete session" in output
+            assert "shared server" in output
+            assert "Failed to complete session: 1" not in output
+            confirm.assert_not_called()
+            result = _complete("session-a", "--json")
+            assert result.exit_code == 1, result.output
+            holder = json.loads(result.output)["error"]["holder"]
+            assert holder["cwd"] == str(clone)
+            assert holder["parent_pid"] == service.pid
+            assert holder["parent_cwd"] == str(tmp_path)
+            assert holder["name"] and holder["parent_name"]
+            assert loader.sessions_file.read_bytes() == original_index
+            with pytest.raises(TemporaryDirectoryInUseError):
+                cleanup_temp_directory(str(clone))
+            assert service.poll() is None
+            assert clone.exists()
+
+        # Only the test fixture's verified owner releases its service/worker.
+        # DAF must leave a different active project's backend alone.
+        result = _complete()
+        assert result.exit_code == 0, result.output
+        assert other_backend.poll() is None and other.exists()
+    completed = SessionManager(loader).get_session(session.name)
+    assert completed.status == "complete"
+    assert completed.active_conversation.ai_agent_session_id == "ses_existing"
+    assert clone.exists() is not cleanup_enabled
+
+
+@pytest.mark.parametrize("auto_complete", [None, True])
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_post_exit_expected_completion_exit_has_no_opaque_secondary_error(
+    clone_session, monkeypatch, capsys, auto_complete, exit_code
+):
+    """A late refusal after preflight is already reported, and env is restored."""
+    import os
+
+    import click
+
+    from devflow.cli.commands.open_command import _prompt_for_complete_on_exit
+
+    loader, _, session, _ = clone_session
+    config = loader.load_config()
+    config.prompts.auto_complete_on_exit = auto_complete
+    monkeypatch.setenv("DEVAIFLOW_IN_SESSION", "1")
+    monkeypatch.setenv("AI_AGENT_SESSION_ID", "ses_existing")
+    monkeypatch.setattr("devflow.cli.commands.open_command.Confirm.ask", lambda *a, **kw: True)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.complete_session",
+        Mock(side_effect=click.exceptions.Exit(exit_code)),
+    )
+    _prompt_for_complete_on_exit(session, config)
+    output = capsys.readouterr().out
+    assert "Failed to complete session" not in output
+    assert ("retry with" in output) is bool(exit_code)
+    assert os.environ["DEVAIFLOW_IN_SESSION"] == "1"
+    assert os.environ["AI_AGENT_SESSION_ID"] == "ses_existing"

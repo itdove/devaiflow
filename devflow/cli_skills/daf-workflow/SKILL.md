@@ -202,6 +202,16 @@ Normal exit, pause, and completion preserve the clone by default. An existing
 saved `concurrency.cleanup_on_complete: true` retains immediate cleanup;
 `false` adopts preservation. Explicit session deletion still cleans up clones.
 
+OpenCode v2 clone launches/resumes and session-ID polling use its supported
+`--standalone` private-server lifecycle. UI exit is not proof that an older shared
+backend's resources exited. Prompted and automatic completion preflight actual
+directory holders and report their PID/name/cwd and parent details when accessible.
+If shared workspace resources remain, preserve the clone, check ownership and other
+clients, and release only an exclusively owned inactive workspace through supported
+backend controls before retrying. Do not stop shared services, exempt MCP/security
+processes by name, or change security settings. Native conversation identity and
+session metadata are preserved on refusal.
+
 All clone allocation/recovery paths share `clone_retention.max_idle_days` (30)
 and `clone_retention.max_size_mb` (10240 MiB) limits; `0` disables each independently.
 Retention uses the resolved `clone_dir`, legacy `concurrency.auto_clone_path`, or
