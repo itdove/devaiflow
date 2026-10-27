@@ -1018,7 +1018,7 @@ class TestOpenCodeAgentSessions:
     @pytest.fixture(autouse=True)
     def _use_v1_cli(self, monkeypatch):
         """Keep legacy metadata tests independent of the installed CLI version."""
-        monkeypatch.setattr(OpenCodeAgent, "get_opencode_version", lambda self: 1)
+        monkeypatch.setattr(OpenCodeAgent, "get_opencode_version", lambda self, **kwargs: 1)
 
     @patch("subprocess.run")
     def test_get_existing_sessions(self, mock_run):
@@ -1047,9 +1047,10 @@ class TestOpenCodeAgentSessions:
             ["opencode", "session", "list", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=mock_run.call_args.kwargs["timeout"],
             cwd="/home/user/project",
         )
+        assert 0 < mock_run.call_args.kwargs["timeout"] <= 10
 
     @patch("subprocess.run")
     def test_get_existing_sessions_ignores_records_without_directory_metadata(
@@ -1361,7 +1362,7 @@ class TestOpenCodeAgentCaptureSession:
     @pytest.fixture(autouse=True)
     def _use_v2_cli(self, monkeypatch):
         """Session-list mocks are metadata responses, not version-command output."""
-        monkeypatch.setattr(OpenCodeAgent, "get_opencode_version", lambda self: 2)
+        monkeypatch.setattr(OpenCodeAgent, "get_opencode_version", lambda self, **kwargs: 2)
 
     @patch("devflow.agent.opencode_agent.time.sleep")
     @patch("subprocess.run")

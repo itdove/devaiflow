@@ -212,6 +212,16 @@ backend controls before retrying. Do not stop shared services, exempt MCP/securi
 processes by name, or change security settings. Native conversation identity and
 session metadata are preserved on refusal.
 
+OpenCode retains native IDs returned by titled launch rather than rediscovering
+them on exit; `daf open` saves that identity before starting the child. Fallback
+capture has a two-second total query deadline and fails closed on query errors or
+same-project ambiguity. A legacy `pending-capture` reopen cannot prove ownership
+without a saved launch ID/baseline, so it stops with verification guidance rather
+than silently replacing the conversation. The user can verify the native ID and
+canonical directory, then run `daf update <session-name> --session-id <verified-id>`
+outside the agent, or deliberately use `daf open <session-name> --new-conversation`.
+Do not guess an ID from ordering/titles or edit backend storage to recover it.
+
 All clone allocation/recovery paths share `clone_retention.max_idle_days` (30)
 and `clone_retention.max_size_mb` (10240 MiB) limits; `0` disables each independently.
 Retention uses the resolved `clone_dir`, legacy `concurrency.auto_clone_path`, or

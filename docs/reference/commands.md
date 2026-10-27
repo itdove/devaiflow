@@ -1115,6 +1115,16 @@ Existing shared-service holders are **not** automatically stopped or evicted:
 inactive sessions alone do not prove exclusive workspace ownership. See
 [temporary-clone troubleshooting](../guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit).
 
+OpenCode launch-proven native IDs are retained rather than rediscovered on exit;
+`daf open` saves them before starting the child. Fallback post-exit capture has a
+two-second total query deadline and distinguishes query failure, no new sessions,
+and ambiguous same-project candidates. Legacy `pending-capture` reopen, missing
+native IDs, and failed verification stop without selecting a replacement
+(`AGENT_SESSION_UNVERIFIED` in JSON). Verify the ID and directory before using
+`daf update <session-name> --session-id <verified-native-id>` outside the agent,
+or explicitly archive/start fresh with `daf open <session-name> --new-conversation`.
+See [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
+
 Exit the agent, move terminals out of its clone, and run completion from the
 original workspace. Startup and removal share a cross-process directory lock;
 cleanup checks again immediately before deletion. If an agent starts during

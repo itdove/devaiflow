@@ -12,6 +12,7 @@ metadata.  Derived constants (``SUPPORTED_BACKENDS``, ``AGENT_DISPLAY_NAMES``,
 import time
 import uuid
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -24,7 +25,7 @@ from devflow.agent.diagnostics import AgentLaunchError, failure_from_process
 from devflow.agent.github_copilot_agent import GitHubCopilotAgent
 from devflow.agent.interface import AgentInterface
 from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
-from devflow.agent.opencode_agent import OpenCodeAgent
+from devflow.agent.opencode_agent import OpenCodeAgent, OpenCodeSessionQueryError
 from devflow.agent.pi_agent import PiAgent
 from devflow.agent.windsurf_agent import WindsurfAgent
 from devflow.utils.clone_lifecycle import TemporaryDirectoryInUseError, temporary_directory_lock
@@ -291,6 +292,15 @@ SELF_ID_BACKENDS: tuple = tuple(
 PENDING_CAPTURE_PLACEHOLDER = "pending-capture"
 _SESSION_CAPTURE_POLL_ATTEMPTS = 10
 _SESSION_CAPTURE_POLL_INTERVAL = 0.1
+OPENCODE_CAPTURE_TIMEOUT = 2.0
+
+
+class _FailedSessionSnapshot(set[str]):
+    """An unavailable baseline must never be mistaken for an empty baseline."""
+
+    def __init__(self, error: str) -> None:
+        super().__init__()
+        self.error = error
 
 
 def _resolve_alias(backend: str) -> str:
@@ -466,8 +476,16 @@ def snapshot_agent_sessions(
     if not is_self_id_backend(agent_backend) or not launch_dir:
         return set()
     try:
+        if isinstance(agent, OpenCodeAgent):
+            return agent.get_existing_sessions(
+                launch_dir, timeout=OPENCODE_CAPTURE_TIMEOUT, strict=True
+            )
         return agent.get_existing_sessions(launch_dir)
+    except OpenCodeSessionQueryError as exc:
+        return _FailedSessionSnapshot(str(exc))
     except Exception:
+        if _resolve_alias(agent_backend) == "opencode":
+            return _FailedSessionSnapshot("OpenCode pre-launch session query failed")
         return set()
 
 
@@ -478,6 +496,7 @@ def capture_agent_session_id(
     active_conv,
     sessions_before: Set[str],
     quiet: bool = False,
+    timeout: float = OPENCODE_CAPTURE_TIMEOUT,
 ) -> bool:
     """Capture the real session ID after agent launch.
 
@@ -494,25 +513,54 @@ def capture_agent_session_id(
         active_conv: Active conversation object to update
         sessions_before: Session snapshot taken before launch
         quiet: Suppress capture messages when the agent launch already failed
+        timeout: Total OpenCode discovery budget, including query execution
 
     Returns:
         True if a new session ID was captured and stored
     """
     if not is_self_id_backend(agent_backend) or not launch_dir or not active_conv:
         return False
+    opencode_backend = _resolve_alias(agent_backend) == "opencode"
+    existing_id = active_conv.ai_agent_session_id
+    if opencode_backend and isinstance(existing_id, str) and existing_id.startswith("ses"):
+        # Explicit/pre-created native identity is stronger evidence than a list
+        # difference. Never rediscover it, overwrite it, or warn about capture.
+        return True
     from rich.console import Console
+
     console = Console()
 
     # File-backed agents can flush after exit, and OpenCode's database-backed
     # session list can show the same delay.  Keep the grace period scoped to
     # those backends so other self-ID adapters retain their existing lifecycle.
     file_backed = agent.uses_file_based_sessions() is True
-    opencode_backend = _resolve_alias(agent_backend) == "opencode"
     attempts = _SESSION_CAPTURE_POLL_ATTEMPTS if file_backed or opencode_backend else 1
     new_sessions: Set[str] = set()
+    observations = 0
+    started = time.monotonic()
+    deadline = started + timeout
+    observation_window = (_SESSION_CAPTURE_POLL_ATTEMPTS - 1) * _SESSION_CAPTURE_POLL_INTERVAL
+    observation_deadline = started + observation_window
     try:
+        if isinstance(sessions_before, _FailedSessionSnapshot):
+            raise OpenCodeSessionQueryError(
+                f"Pre-launch snapshot unavailable: {sessions_before.error}"
+            )
         for attempt in range(attempts):
-            sessions_after = agent.get_existing_sessions(launch_dir)
+            remaining = deadline - time.monotonic()
+            if opencode_backend and remaining <= 0:
+                break
+            if isinstance(agent, OpenCodeAgent):
+                sessions_after = agent.get_existing_sessions(
+                    launch_dir, timeout=remaining, strict=True
+                )
+            else:
+                sessions_after = agent.get_existing_sessions(launch_dir)
+            if opencode_backend and time.monotonic() > deadline:
+                raise OpenCodeSessionQueryError(
+                    "OpenCode session query exceeded the capture budget"
+                )
+            observations += 1
             current_new_sessions = sessions_after - sessions_before
             if opencode_backend:
                 # Keep scanning the short grace period so a second concurrent
@@ -526,9 +574,19 @@ def capture_agent_session_id(
             ):
                 break
 
+            if opencode_backend and attempt >= 1 and time.monotonic() >= observation_deadline:
+                # Query execution counts toward the ambiguity grace period too.
+                # Two slow successful observations can cover it without starting
+                # another expensive CLI just to reach a fixed query count.
+                break
+
             if attempt < attempts - 1:
                 # Agents may flush their session after the process exits.
-                time.sleep(_SESSION_CAPTURE_POLL_INTERVAL)
+                interval = _SESSION_CAPTURE_POLL_INTERVAL
+                if opencode_backend:
+                    interval = min(interval, max(0, deadline - time.monotonic()))
+                if interval:
+                    time.sleep(interval)
 
         if new_sessions:
             if len(new_sessions) > 1:
@@ -537,10 +595,14 @@ def capture_agent_session_id(
                         f"[yellow]Warning: Multiple new {agent.get_agent_name()} sessions detected "
                         f"({len(new_sessions)}). Unable to identify the current session safely. "
                         f"Leaving the session ID as {PENDING_CAPTURE_PLACEHOLDER}; "
-                        "reopen after verifying the active agent session.[/yellow]"
+                        "verify the native ID before reopening. No replacement was selected.[/yellow]"
                     )
                 return False
 
+            if opencode_backend and observations < 2:
+                raise OpenCodeSessionQueryError(
+                    "OpenCode capture budget expired before a second observation could verify identity"
+                )
             real_session_id = next(iter(new_sessions))
             active_conv.ai_agent_session_id = real_session_id
             if not quiet:
@@ -551,14 +613,19 @@ def capture_agent_session_id(
         else:
             if not quiet:
                 console.print(
-                    f"[yellow]Warning: Could not capture {agent.get_agent_name()} session ID. "
-                    f"Session will be captured on next open.[/yellow]"
+                    f"[yellow]Warning: No new {agent.get_agent_name()} sessions detected "
+                    "within the capture budget. The native ID remains unverified; "
+                    "verify it before reopening. No automatic recovery is promised.[/yellow]"
                 )
             return False
     except Exception as e:
         if not quiet:
+            detail = str(e)
+            if opencode_backend and not isinstance(e, OpenCodeSessionQueryError):
+                detail = "OpenCode session query failed; verify the session-list command"
             console.print(
-                f"[yellow]Warning: Failed to capture {agent.get_agent_name()} session ID: {e}[/yellow]"
+                f"[yellow]Warning: Failed to capture {agent.get_agent_name()} session ID: "
+                f"{detail}. Native identity was not changed.[/yellow]"
             )
         return False
 
@@ -582,6 +649,7 @@ def launch_and_capture(
     display_name: Optional[str] = None,
     session: Any = None,
     phase: str = "launch",
+    on_session_id: Callable[[str], None] | None = None,
 ) -> None:
     """Snapshot sessions, launch agent, wait for exit, capture session ID.
 
@@ -591,8 +659,17 @@ def launch_and_capture(
 
     Callers should wrap this in their own try/finally for command-specific
     post-exit cleanup (updating session status, ending work sessions, etc.).
+    OpenCode forwards its launch-proven ID before starting the child;
+    ``on_session_id`` can persist it before an interruption is possible.
     """
-    sessions_before = snapshot_agent_sessions(agent, agent_backend, project_path)
+    known_opencode_id = (
+        _resolve_alias(agent_backend) == "opencode"
+        and isinstance(session_id, str)
+        and session_id.startswith("ses")
+    )
+    sessions_before = (
+        set() if known_opencode_id else snapshot_agent_sessions(agent, agent_backend, project_path)
+    )
     launch_failed = False
     launch_attempted = False
     temp_directory = None
@@ -616,6 +693,25 @@ def launch_and_capture(
             auto_approve=auto_approve,
             display_name=launch_display_name,
         )
+        if _resolve_alias(agent_backend) == "opencode":
+
+            def remember_session_id(native_id: str) -> None:
+                """Associate only the ID explicitly used by this launch."""
+                if not isinstance(native_id, str) or not native_id.startswith("ses"):
+                    raise ValueError("Refusing an invalid OpenCode launch session ID")
+                if active_conversation:
+                    current_id = active_conversation.ai_agent_session_id
+                    if (
+                        isinstance(current_id, str)
+                        and current_id.startswith("ses")
+                        and current_id != native_id
+                    ):
+                        raise ValueError("Refusing to replace an already-known OpenCode session ID")
+                    active_conversation.ai_agent_session_id = native_id
+                if on_session_id:
+                    on_session_id(native_id)
+
+            launch_kwargs["on_session_id"] = remember_session_id
         if not reasoning_effort and model_provider_profile:
             reasoning_effort = model_provider_profile.get("reasoning_effort")
         if reasoning_effort:

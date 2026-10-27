@@ -1835,6 +1835,11 @@ class Session(BaseModel):
    - Preflights prompted and automatic completion, reports holder/parent details in text and JSON, and handles expected completion refusals without opaque secondary errors
    - Preserves ambiguous/shared holders, native identity, clone locks, full-root checks, and configured cleanup; never exempts processes by name or stops shared services
 
+- ✓ Bounded OpenCode capture and launch-proven native identity (itdove/devaiflow#648)
+   - Retains created IDs and persists them before `daf open` starts the child, avoiding post-exit rediscovery of known IDs
+   - Shares a two-second fallback query deadline across polling, version detection, and subprocess execution, with content-free failure diagnostics
+   - Refuses unresolved pending/missing-ID reopen instead of silently replacing conversations; preserves project scoping, ambiguity, and clone guards
+
 ## Release Management
 
 ### Overview

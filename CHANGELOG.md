@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Bounded OpenCode session capture and safe native identity** (#648)
+  - Retains launch-created IDs, persists them before `daf open` starts the child, and skips unnecessary post-exit rediscovery of known IDs
+  - Bounds fallback capture to a two-second total query deadline, including version detection and subprocess execution
+  - Distinguishes query failures, no new sessions, and ambiguity; a failed baseline never counts as an empty snapshot
+  - Stops unverified/pending reopen without silently replacing conversations and documents explicit verification or fresh-conversation choices
+  - Preserves canonical-directory filtering, late-ambiguity checks, private-server lifecycle, and clone-completion guards
 - **OpenCode v2 post-exit completion and workspace resources** (#646)
   - Uses private OpenCode servers for temporary-clone launch/resume and v2 session-ID polling, leaving shared services and other active projects untouched
   - Preflights prompted and automatic post-exit completion, preserving ambiguous/live holders and reporting process name, PID, cwd, and parent details in text/JSON

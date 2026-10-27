@@ -393,7 +393,7 @@ def test_complete_defers_cleanup_if_agent_starts_after_preflight(clone_session, 
     assert not clone.parent.exists()
 
 
-@pytest.mark.parametrize("session_id", ["ses_existing", "pending-capture", "pending-session"])
+@pytest.mark.parametrize("session_id", ["ses_existing", "", "pending-session"])
 @pytest.mark.parametrize("failure_phase", [None, "spawn", "wait"])
 def test_open_resume_protects_clone_until_exit_and_releases_on_errors(
     clone_session, monkeypatch, session_id, failure_phase
@@ -456,7 +456,7 @@ def test_open_resume_protects_clone_until_exit_and_releases_on_errors(
     if session_id == "ses_existing":
         agent.resume_session.assert_called_once()
         assert agent.resume_session.call_args.kwargs["isolated_workspace"] is True
-    elif session_id == "pending-capture":
+    elif not session_id:
         agent.launch_with_prompt.assert_called_once()
         assert agent.launch_with_prompt.call_args.kwargs["isolated_workspace"] is True
     else:

@@ -19,6 +19,7 @@ import re
 import socket
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 from urllib.error import URLError
@@ -38,6 +39,10 @@ class OpenCodeCompatibilityError(RuntimeError):
 
 class OpenCodeVersionError(OpenCodeCompatibilityError):
     """Raised when the installed OpenCode major version cannot be detected."""
+
+
+class OpenCodeSessionQueryError(RuntimeError):
+    """A session query failed; its message contains no native session contents."""
 
 
 class OpenCodeAgent(AgentInterface):
@@ -85,7 +90,7 @@ class OpenCodeAgent(AgentInterface):
         self.opencode_dir = Path(opencode_dir)
         self._opencode_major_version: Optional[int] = None
 
-    def get_opencode_version(self) -> int:
+    def get_opencode_version(self, *, timeout: float = 5) -> int:
         """Return the installed OpenCode major version.
 
         OpenCode v1 and v2 expose different launch command shapes.  Detect the
@@ -107,7 +112,7 @@ class OpenCodeAgent(AgentInterface):
                 ["opencode", "--version"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=timeout,
                 check=False,
             )
         except (FileNotFoundError, OSError) as exc:
@@ -117,7 +122,7 @@ class OpenCodeAgent(AgentInterface):
             ) from exc
         except subprocess.TimeoutExpired as exc:
             raise OpenCodeVersionError(
-                "OpenCode did not respond to `opencode --version` within 5 seconds. "
+                f"OpenCode did not respond to `opencode --version` within {timeout:g} seconds. "
                 "Verify the installation and use OpenCode v1 or v2."
             ) from exc
 
@@ -513,6 +518,7 @@ class OpenCodeAgent(AgentInterface):
         model_provider_profile: Optional[Dict[str, Any]] = None,
         display_name: Optional[str] = None,
         isolated_workspace: bool = False,
+        on_session_id: Callable[[str], None] | None = None,
     ) -> subprocess.Popen:
         """Launch a new OpenCode session in a project directory.
 
@@ -520,6 +526,7 @@ class OpenCodeAgent(AgentInterface):
             project_path: Absolute path to project
             env: Environment variables dict (optional, defaults to os.environ)
             isolated_workspace: Use a private v2 server for a managed temporary clone
+            on_session_id: Persist a pre-created native ID before starting the child
 
         Returns:
             Subprocess handle for the launched OpenCode process
@@ -548,6 +555,9 @@ class OpenCodeAgent(AgentInterface):
             )
             if titled_session_id:
                 command.extend(["--session", titled_session_id])
+                if on_session_id:
+                    on_session_id(titled_session_id)
+                    final_env = {**final_env, "AI_AGENT_SESSION_ID": titled_session_id}
         if model_name:
             command.extend(["--model", model_name])
 
@@ -572,6 +582,7 @@ class OpenCodeAgent(AgentInterface):
         model_override: Optional[str] = None,
         display_name: Optional[str] = None,
         isolated_workspace: bool = False,
+        on_session_id: Callable[[str], None] | None = None,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
@@ -598,6 +609,7 @@ class OpenCodeAgent(AgentInterface):
             model_override: Override the selected profile model for this session
             display_name: DAF session title for a newly created OpenCode conversation
             isolated_workspace: Use a private v2 server for a managed temporary clone
+            on_session_id: Persist launch-proven native identity before starting the child
 
         Returns:
             Subprocess handle for OpenCode process
@@ -681,6 +693,13 @@ class OpenCodeAgent(AgentInterface):
                 cmd.append(initial_prompt)
         elif initial_prompt:
             cmd.extend(["--prompt", initial_prompt])
+
+        # This ID comes from our scoped create request (or an explicit resume),
+        # not from ordering a global list. Persist it before the child starts so
+        # an interruption cannot turn a known conversation into pending-capture.
+        if on_session_id and session_id and session_id.startswith("ses"):
+            on_session_id(session_id)
+            final_env = {**final_env, "AI_AGENT_SESSION_ID": session_id}
 
         return subprocess.Popen(
             cmd,
@@ -815,7 +834,9 @@ class OpenCodeAgent(AgentInterface):
         except Exception:
             return False
 
-    def get_existing_sessions(self, project_path: str) -> Set[str]:
+    def get_existing_sessions(
+        self, project_path: str, *, timeout: float = 10, strict: bool = False
+    ) -> Set[str]:
         """Get set of existing session IDs from OpenCode.
 
         Parses ``opencode session list --format json`` output.
@@ -828,6 +849,8 @@ class OpenCodeAgent(AgentInterface):
 
         Args:
             project_path: Absolute path to project used to scope the global list
+            timeout: Total query budget, including lazy version detection
+            strict: Raise a content-free error instead of treating query failure as empty
 
         Returns:
             Set of session UUIDs
@@ -835,9 +858,18 @@ class OpenCodeAgent(AgentInterface):
         if not project_path:
             return set()
 
+        deadline = time.monotonic() + timeout
         try:
+            if timeout <= 0:
+                raise OpenCodeSessionQueryError(
+                    "OpenCode session query has no time budget remaining"
+                )
             command = ["opencode", "session", "list", "--format", "json"]
-            if self.get_opencode_version() == 2:
+            major_version = self.get_opencode_version(timeout=min(5, timeout))
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise OpenCodeSessionQueryError("OpenCode session query exceeded its time budget")
+            if major_version == 2:
                 # Snapshot/capture runs before AND after the UI. Do not let a
                 # metadata query reconnect the clone to the shared service.
                 command.append("--standalone")
@@ -845,11 +877,14 @@ class OpenCodeAgent(AgentInterface):
                 command,
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=remaining,
                 cwd=project_path,
             )
             if result.returncode != 0:
-                return set()
+                raise OpenCodeSessionQueryError(
+                    f"OpenCode session list failed (exit code {result.returncode}); "
+                    "check the OpenCode installation and session-list command"
+                )
 
             sessions_data = json.loads(result.stdout)
             if isinstance(sessions_data, list):
@@ -869,14 +904,25 @@ class OpenCodeAgent(AgentInterface):
                     ):
                         sessions.add(session_id)
                 return sessions
-            return set()
-        except (
-            subprocess.TimeoutExpired,
-            json.JSONDecodeError,
-            OSError,
-            OpenCodeCompatibilityError,
-        ):
-            return set()
+            raise OpenCodeSessionQueryError(
+                "OpenCode session list returned an unexpected JSON shape"
+            )
+        except subprocess.TimeoutExpired:
+            error = "OpenCode session query timed out within its time budget"
+        except json.JSONDecodeError:
+            error = "OpenCode session list returned invalid JSON"
+        except OSError:
+            error = (
+                "OpenCode session list could not run; check the executable and project directory"
+            )
+        except OpenCodeCompatibilityError:
+            error = "OpenCode version detection failed; verify the installed OpenCode version"
+        except OpenCodeSessionQueryError as exc:
+            error = str(exc)
+
+        if strict:
+            raise OpenCodeSessionQueryError(error) from None
+        return set()
 
     @staticmethod
     def _paths_match(first: str, second: str) -> bool:
