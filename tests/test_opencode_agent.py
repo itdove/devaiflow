@@ -1015,6 +1015,11 @@ class TestOpenCodeAgentLaunch:
 class TestOpenCodeAgentSessions:
     """Test OpenCodeAgent session management."""
 
+    @pytest.fixture(autouse=True)
+    def _use_v1_cli(self, monkeypatch):
+        """Keep legacy metadata tests independent of the installed CLI version."""
+        monkeypatch.setattr(OpenCodeAgent, "get_opencode_version", lambda self: 1)
+
     @patch("subprocess.run")
     def test_get_existing_sessions(self, mock_run):
         """Test getting project-scoped sessions from the global CLI list."""
@@ -1352,6 +1357,11 @@ class TestOpenCodeAgentDbPath:
 
 class TestOpenCodeAgentCaptureSession:
     """Test OpenCodeAgent session capture."""
+
+    @pytest.fixture(autouse=True)
+    def _use_v2_cli(self, monkeypatch):
+        """Session-list mocks are metadata responses, not version-command output."""
+        monkeypatch.setattr(OpenCodeAgent, "get_opencode_version", lambda self: 2)
 
     @patch("devflow.agent.opencode_agent.time.sleep")
     @patch("subprocess.run")

@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **OpenCode v2 post-exit completion and workspace resources** (#646)
+  - Uses private OpenCode servers for temporary-clone launch/resume and v2 session-ID polling, leaving shared services and other active projects untouched
+  - Preflights prompted and automatic post-exit completion, preserving ambiguous/live holders and reporting process name, PID, cwd, and parent details in text/JSON
+  - Retains clone locks, full-root process checks, native identity, and configured cleanup behavior; expected completion refusals no longer print the opaque secondary error `Failed to complete session: 1`
 - **Protect temporary clones while agents are running** (#643)
   - Rejects completion before changing status or time tracking when a clone is still in use, including completion from another terminal and pending-capture sessions
   - Coordinates agent launch/resume and clone removal with cross-process locks and checks working directories throughout the removal root

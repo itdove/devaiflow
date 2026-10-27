@@ -625,6 +625,10 @@ def launch_and_capture(
         temp_directory = getattr(active_conversation, "temp_directory", None)
         if not isinstance(temp_directory, str):
             temp_directory = None
+        if temp_directory and _resolve_alias(agent_backend) == "opencode":
+            # A v2 UI can exit while the shared service retains clone-local MCP
+            # processes. Let OpenCode own and dispose a private server instead.
+            launch_kwargs["isolated_workspace"] = True
         if temp_directory:
             from devflow.utils.clone_cache import CloneCache
 

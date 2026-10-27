@@ -831,6 +831,14 @@ both versions. OpenCode v2 does not expose auto-approval on `mini`; DevAIFlow
 reports that combination with a remediation message instead of launching an
 unsupported command.
 
+Temporary-clone launches and resumes use v2's `--standalone` private server,
+including Mini and headless runs, so OpenCode owns workspace-resource disposal
+on exit. V2 session-list polling is also standalone. Existing shared-service
+holders remain protected; DAF never assumes that an idle session means exclusive
+ownership or stops a shared service. See
+[completion troubleshooting](../guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit).
+Non-cloned interactive launches and v1 behavior are unchanged.
+
 OpenCode conversations use the exact DAF session name. OpenCode v1 uses its
 local session API to create or update titles; v2 uses the standalone API CLI.
 Headless launches use `opencode run --title`. Existing sessions are resumed by

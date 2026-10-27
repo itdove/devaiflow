@@ -189,6 +189,7 @@ class TestCaptureAgentSessionId:
             )
 
         agent = OpenCodeAgent()
+        agent._opencode_major_version = 2
         active_conv = SimpleNamespace(ai_agent_session_id=PENDING_CAPTURE_PLACEHOLDER)
 
         with patch(

@@ -7,14 +7,82 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import psutil
 
 from devflow.utils.paths import get_cs_cache_home, get_cs_state_home
 
+if TYPE_CHECKING:
+    from devflow.config.models import Session
+
 
 class TemporaryDirectoryInUseError(RuntimeError):
     """A temporary directory is in use or cannot safely be checked."""
+
+    def __init__(self, message: str, *, holder: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.holder = holder
+
+
+def _directory_holder(process: psutil.Process, cwd: str) -> dict[str, Any]:
+    """Describe a known holder without reading command arguments or credentials.
+
+    A process may exit or become inaccessible between any two attribute reads.
+    Keep the verified PID/cwd even when supplemental ownership details disappear.
+    """
+    holder: dict[str, Any] = {
+        "pid": process.pid,
+        "name": None,
+        "cwd": cwd,
+        "parent_pid": None,
+        "parent_name": None,
+        "parent_cwd": None,
+    }
+    for key, getter in (("name", process.name), ("parent_pid", process.ppid)):
+        try:
+            holder[key] = getter()
+        except (psutil.Error, OSError):
+            pass
+    try:
+        parent = process.parent()
+    except (psutil.Error, OSError):
+        parent = None
+    if parent is not None:
+        for key, getter in (("parent_name", parent.name), ("parent_cwd", parent.cwd)):
+            try:
+                holder[key] = getter()
+            except (psutil.Error, OSError):
+                pass
+    return holder
+
+
+def assert_session_clones_unused(session: "Session") -> None:
+    """Preflight every conversation before offering or performing completion.
+
+    This is not permission to delete later: removal must recheck under its lock.
+    """
+    for conversation in session.conversations.values():
+        temp_directory = conversation.active_session.temp_directory
+        if temp_directory:
+            with temporary_directory_lock(temp_directory):
+                assert_temp_directory_unused(temp_directory)
+
+
+def completion_refusal_message(session_name: str, error: TemporaryDirectoryInUseError) -> str:
+    """Explain live holders, including resources outliving a backend's UI."""
+    return (
+        f"Cannot complete session '{session_name}': {error}.\n"
+        "Exit active AI agents and move terminals out of the clone.\n"
+        "UI exit does not prove that backend workspace services exited.\n"
+        "OpenCode v2's shared server can retain MCP processes.\n"
+        "Check the reported parent/owner and other clients of this workspace before "
+        "releasing its resources through supported backend lifecycle controls.\n"
+        "DAF will not stop shared services or assume exclusive ownership.\n"
+        f"Retry from outside the clone:\n  daf complete {session_name}\n"
+        "Session status and time tracking were not changed.\n"
+        "See docs/guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit."
+    )
 
 
 def clone_cache_record_path(root: Path) -> Path:
@@ -28,7 +96,8 @@ def get_temp_directory_root(temp_dir: str) -> Path:
     path = Path(temp_dir).expanduser().resolve()
     parent = path.parent
     if parent.name.startswith("daf-session-") and (
-        parent.parent in (
+        parent.parent
+        in (
             Path(tempfile.gettempdir()).resolve(),
             (get_cs_cache_home() / "clones").resolve(),
         )
@@ -124,8 +193,15 @@ def assert_temp_directory_unused(temp_dir: str) -> None:
             if cwd:
                 process_path = Path(cwd).resolve()
                 if process_path == root or root in process_path.parents:
+                    holder = _directory_holder(process, cwd)
+                    parent_pid = holder["parent_pid"]
                     raise TemporaryDirectoryInUseError(
-                        f"Temporary directory {root} is in use by process {process.pid}"
+                        f"Temporary directory {root} is in use by process {process.pid} "
+                        f"({holder['name'] or 'name unavailable'}), cwd: {cwd}; "
+                        f"parent PID: {parent_pid if parent_pid is not None else 'unavailable'}, "
+                        f"name: {holder['parent_name'] or 'unavailable'}, "
+                        f"cwd: {holder['parent_cwd'] or 'unavailable'}",
+                        holder=holder,
                     )
     except (psutil.Error, OSError) as error:
         raise TemporaryDirectoryInUseError(

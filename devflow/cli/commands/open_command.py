@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional, Set
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.prompt import Confirm
 from rich.table import Table
 
@@ -55,7 +56,12 @@ from devflow.agent.diagnostics import (
 # Import unified utilities
 from devflow.cli.signal_handler import setup_signal_handlers, is_cleanup_done
 from devflow.utils.context_files import load_hierarchical_context_files
-from devflow.utils.clone_lifecycle import TemporaryDirectoryInUseError, temporary_directory_lock
+from devflow.utils.clone_lifecycle import (
+    TemporaryDirectoryInUseError,
+    assert_session_clones_unused,
+    completion_refusal_message,
+    temporary_directory_lock,
+)
 from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
 from devflow.utils.paths import get_claude_config_dir
 from devflow.utils.daf_agents_validation import (
@@ -1436,6 +1442,11 @@ def open_session(
                             "env": env,
                             "model_provider_profile": model_provider_profile,
                         }
+                        if active_conv.temp_directory and agent_backend in (
+                            "opencode",
+                            "opencode-ai",
+                        ):
+                            resume_kwargs["isolated_workspace"] = True
                         if get_agent_metadata(agent_backend).get(
                             "features", {}
                         ).get("session_title", False):
@@ -1454,6 +1465,11 @@ def open_session(
                             "env": env,
                             "model_provider_profile": model_provider_profile,
                         }
+                        if active_conv.temp_directory and agent_backend in (
+                            "opencode",
+                            "opencode-ai",
+                        ):
+                            launch_kwargs["isolated_workspace"] = True
                         if get_agent_metadata(agent_backend).get(
                             "features", {}
                         ).get("session_title", False):
@@ -3582,7 +3598,7 @@ def _handle_closed_ticket_reopen(session, jira_client) -> bool:
 
 
 def _prompt_for_complete_on_exit(session, config: Optional[Any] = None) -> None:
-    """Prompt user to run 'daf complete' when Claude Code session ends.
+    """Offer completion only after the agent and its clone resources have exited.
 
     This function checks the configuration setting and either:
     - Automatically runs 'daf complete' if auto_complete_on_exit is True
@@ -3597,18 +3613,30 @@ def _prompt_for_complete_on_exit(session, config: Optional[Any] = None) -> None:
     should_complete = None
     if config and config.prompts and config.prompts.auto_complete_on_exit is not None:
         should_complete = config.prompts.auto_complete_on_exit
-        if should_complete:
-            console.print("\n[dim]Automatically running 'daf complete' (configured in prompts)[/dim]")
-        else:
+        if not should_complete:
             console.print("\n[dim]Skipping 'daf complete' (configured in prompts)[/dim]")
             return
+
+    # UI exit is not proof that a shared backend's workspace resources exited.
+    # Do this for prompted AND automatic completion, before offering either.
+    try:
+        assert_session_clones_unused(session)
+    except TemporaryDirectoryInUseError as error:
+        message = completion_refusal_message(session.name, error)
+        console_print(f"[yellow]⚠[/yellow] {escape(message)}")
+        return
+
+    if should_complete:
+        console.print("\n[dim]Automatically running 'daf complete' (configured in prompts)[/dim]")
     else:
         # Prompt user
         console.print()
         should_complete = Confirm.ask("Run 'daf complete' now?", default=True)
 
     if not should_complete:
-        console.print("[dim]You can complete this session later with: daf complete {session.name}[/dim]")
+        console.print(
+            f"[dim]You can complete this session later with: daf complete {session.name}[/dim]"
+        )
         return
 
     # Import complete_session to avoid circular import
@@ -3627,6 +3655,15 @@ def _prompt_for_complete_on_exit(session, config: Optional[Any] = None) -> None:
         # Call complete_session directly with the session name
         # Use the session name as the identifier
         complete_session(identifier=session.name, status=None, attach_to_issue=False, latest=False)
+    except click.exceptions.Exit as error:
+        # Expected refusals (including an agent starting after preflight) were
+        # already explained by completion. Do not turn Exit(1) into the opaque
+        # secondary message "Failed to complete session: 1".
+        if error.exit_code:
+            console_print(
+                "[dim]Completion was not performed; retry with: "
+                f"daf complete {escape(session.name)}[/dim]"
+            )
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to complete session: {e}")
         console.print(f"[dim]You can complete manually with: daf complete {session.name}[/dim]")
