@@ -583,6 +583,7 @@ class OpenCodeAgent(AgentInterface):
         display_name: Optional[str] = None,
         isolated_workspace: bool = False,
         on_session_id: Callable[[str], None] | None = None,
+        on_launch: Callable[[], None] | None = None,
         **kwargs,
     ) -> subprocess.Popen:
         """Launch OpenCode with initial prompt.
@@ -610,6 +611,7 @@ class OpenCodeAgent(AgentInterface):
             display_name: DAF session title for a newly created OpenCode conversation
             isolated_workspace: Use a private v2 server for a managed temporary clone
             on_session_id: Persist launch-proven native identity before starting the child
+            on_launch: Persist launch intent before native creation or child startup
 
         Returns:
             Subprocess handle for OpenCode process
@@ -649,11 +651,15 @@ class OpenCodeAgent(AgentInterface):
         profile_arguments = self._workspace_arguments(
             major_version, isolated_workspace, profile_arguments
         )
+        launch_started = False
         if (
             not headless
             and display_name
             and not (session_id and session_id.startswith("ses"))
         ):
+            if on_launch:
+                on_launch()
+            launch_started = True
             titled_session_id = self._create_session_with_title(
                 display_name,
                 project_path,
@@ -662,6 +668,11 @@ class OpenCodeAgent(AgentInterface):
             )
             if titled_session_id:
                 session_id = titled_session_id
+
+        # Save a newly created identity even if later command validation fails.
+        if on_session_id and session_id and session_id.startswith("ses"):
+            on_session_id(session_id)
+            final_env = {**final_env, "AI_AGENT_SESSION_ID": session_id}
 
         if headless:
             cmd = ["opencode", "run", *profile_arguments]
@@ -694,12 +705,8 @@ class OpenCodeAgent(AgentInterface):
         elif initial_prompt:
             cmd.extend(["--prompt", initial_prompt])
 
-        # This ID comes from our scoped create request (or an explicit resume),
-        # not from ordering a global list. Persist it before the child starts so
-        # an interruption cannot turn a known conversation into pending-capture.
-        if on_session_id and session_id and session_id.startswith("ses"):
-            on_session_id(session_id)
-            final_env = {**final_env, "AI_AGENT_SESSION_ID": session_id}
+        if not launch_started and on_launch:
+            on_launch()
 
         return subprocess.Popen(
             cmd,

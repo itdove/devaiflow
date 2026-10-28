@@ -1123,6 +1123,12 @@ native IDs, and failed verification stop without selecting a replacement
 (`AGENT_SESSION_UNVERIFIED` in JSON). Verify the ID and directory before using
 `daf update <session-name> --session-id <verified-native-id>` outside the agent,
 or explicitly archive/start fresh with `daf open <session-name> --new-conversation`.
+This explicit start-over also supports OpenCode records without a saved branch;
+the old identity/history is archived and initial branch setup runs for the new
+conversation. New first-open setup records carry explicit never-launched
+provenance, so cancelling before native creation/launch remains retryable with
+ordinary `daf open`. Legacy pending records are not inferred safe from an empty
+branch or zero messages. See [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
 See [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
 
 Exit the agent, move terminals out of its clone, and run completion from the

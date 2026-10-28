@@ -267,9 +267,11 @@ def _refuse_unverified_opencode_session(
     """Preserve unresolved native identity instead of silently launching a replacement."""
     message = (
         f"Cannot safely resume OpenCode: {reason}. No replacement conversation was launched. "
-        "Verify the native ID and project directory with OpenCode's session list, then run "
+        "If a native conversation exists, verify its ID and project directory with "
+        "OpenCode's session list, then run "
         f"`daf update {session_name} --session-id VERIFIED_ID` outside the agent session. "
-        f"To intentionally start a new conversation, use `daf open {session_name} --new-conversation`."
+        "To explicitly archive this record and start over (even without a saved branch), "
+        f"use `daf open {session_name} --new-conversation`."
     )
     if output_json:
         emit_json(success=False, error={"code": "AGENT_SESSION_UNVERIFIED", "message": message})
@@ -557,7 +559,15 @@ def open_session(
             console.print(f"[dim]This flag requires an existing conversation in the session[/dim]")
             return
 
-        if not active_conv.project_path or not active_conv.branch:
+        replacement_backend = resolve_agent_backend(
+            cli_override=agent,
+            session=session,
+            config=config,
+            model_profile=model_profile or session.model_profile,
+        )
+        if not active_conv.project_path or (
+            not active_conv.branch and replacement_backend not in ("opencode", "opencode-ai")
+        ):
             console.print("[red]Active conversation is missing project or branch information.[/red]")
             return
 
@@ -573,11 +583,20 @@ def open_session(
         new_conv = session.create_new_conversation(
             working_dir=working_dir,
             project_path=active_conv.project_path,
-            branch=active_conv.branch,
+            branch=active_conv.branch or "",
             base_branch=active_conv.base_branch or "main",
             remote_url=active_conv.remote_url,
             workspace=workspace_path,
         )
+
+        # Only this freshly allocated context is proven never launched. Do not
+        # retrofit that proof onto legacy pending records, even with no branch.
+        new_conv.agent_launch_started = False
+        if replacement_backend in ("opencode", "opencode-ai"):
+            from devflow.agent.factory import generate_agent_session_id
+
+            new_conv.ai_agent_session_id = generate_agent_session_id(replacement_backend)
+            new_conv.conversation_history = [new_conv.ai_agent_session_id]
 
         agent_name = get_agent_display_name(
             resolve_agent_backend(
@@ -682,7 +701,6 @@ def open_session(
         and active_conv.ai_agent_session_id
         and not is_pending_capture(active_conv.ai_agent_session_id)
     )
-    is_first_launch = new_conversation or not has_real_session_id
 
     # Resolve the profile before the backend: an explicit --model-profile selects
     # the agent adapter for this launch and must beat the stored session backend.
@@ -694,6 +712,9 @@ def open_session(
         model_profile=effective_profile_name,
     )
     agent_name = get_agent_display_name(effective_agent_backend)
+    is_first_launch = not has_real_session_id or (
+        new_conversation and effective_agent_backend not in ("opencode", "opencode-ai")
+    )
 
     # Persist command profile/backend overrides for subsequent resumes.
     profile_changed = bool(model_profile and model_profile != session.model_profile)
@@ -714,13 +735,16 @@ def open_session(
     if (
         effective_agent_backend in ("opencode", "opencode-ai")
         and active_conv
-        and is_pending_capture(active_conv.ai_agent_session_id)
-        and not new_conversation
+        and (
+            not active_conv.ai_agent_session_id
+            or is_pending_capture(active_conv.ai_agent_session_id)
+        )
+        and active_conv.agent_launch_started is not False
     ):
         _refuse_unverified_opencode_session(
             session.name,
-            "the saved ID is pending-capture and no verified launch ID or pre-launch "
-            "baseline was saved; automatic recovery is unavailable",
+            "the saved ID is missing or pending-capture and there is no verified launch ID "
+            "or explicit never-launched provenance; automatic recovery is unavailable",
             output_json,
         )
 
@@ -1167,6 +1191,30 @@ def open_session(
     launch_phase = "launch" if is_first_launch else "resume"
     clone_locks = ExitStack()
 
+    def persist_launch_attempt() -> None:
+        """Consume never-launched proof before the adapter can create native state."""
+        if active_conv and active_conv.agent_launch_started is False:
+            # Merge only this transition into the latest metadata, not a setup
+            # snapshot that could overwrite notes, tags, or another conversation.
+            session_manager.index = session_manager.config_loader.load_sessions()
+            current_session = session_manager.get_session(session.name)
+            current_conv = current_session.active_conversation if current_session else None
+            if (
+                not current_session
+                or not current_conv
+                or current_conv.created != active_conv.created
+                or current_conv.ai_agent_session_id != active_conv.ai_agent_session_id
+                or current_conv.project_path != active_conv.project_path
+                or current_conv.workspace_path != active_conv.workspace_path
+                or current_conv.temp_directory != active_conv.temp_directory
+                or current_conv.branch != active_conv.branch
+                or current_conv.agent_launch_started is not False
+            ):
+                raise RuntimeError("Conversation changed during setup; retry daf open")
+            current_conv.agent_launch_started = True
+            session_manager.update_session(current_session)
+            active_conv.agent_launch_started = True
+
     def persist_native_session_id(native_id: str) -> None:
         """Save launch-proven identity before starting or waiting for OpenCode."""
         if active_conv:
@@ -1350,6 +1398,7 @@ def open_session(
                         session=session,
                         phase="launch",
                         on_session_id=persist_native_session_id,
+                        on_launch=persist_launch_attempt,
                     )
             except Exception:
                 launch_failed = True
@@ -1691,8 +1740,11 @@ def open_session(
             console.print(f"\n[red]✗[/red] {failure.display_message}")
 
         # Update session status to paused on error
-        session.status = "paused"
-        session_manager.update_session(session)
+        session_manager.index = session_manager.config_loader.load_sessions()
+        current_session = session_manager.get_session(session.name)
+        if current_session:
+            current_session.status = "paused"
+            session_manager.update_session(current_session)
 
         # Auto-pause: End work session even if agent launch failed
         try:
@@ -1701,7 +1753,15 @@ def open_session(
             # Silently ignore if work session wasn't started
             pass
 
-        if active_conv and active_conv.ai_agent_session_id and active_conv.project_path:
+        if (
+            active_conv
+            and active_conv.ai_agent_session_id
+            and active_conv.project_path
+            and not (
+                effective_agent_backend in ("opencode", "opencode-ai")
+                and is_pending_capture(active_conv.ai_agent_session_id)
+            )
+        ):
             # Show agent-specific manual resume instructions
             resume_cmd = agent_client.get_manual_resume_command(active_conv.ai_agent_session_id, active_conv.project_path)
             console.print(f"\n[yellow]You can manually resume with:[/yellow]")
@@ -2801,13 +2861,14 @@ def _create_conversation_from_workspace_selection(
 
     # Create the conversation
     try:
-        session.add_conversation(
+        new_conv = session.add_conversation(
             working_dir=repo_name,
             ai_agent_session_id=new_session_id,
             project_path=str(project_path),
             branch="",  # Leave empty so branch creation logic can run
             workspace=workspace_path,
         )
+        new_conv.agent_launch_started = False
     except ValueError as e:
         # This shouldn't happen due to check above, but handle gracefully
         console.print(f"[red]✗[/red] {e}")
@@ -2873,13 +2934,14 @@ def _create_conversation_for_path(
 
     # Create the conversation
     try:
-        session.add_conversation(
+        new_conv = session.add_conversation(
             working_dir=repo_name,
             ai_agent_session_id=new_session_id,
             project_path=str(project_path),
             branch="",  # Leave empty so branch creation logic can run
             workspace=workspace,
         )
+        new_conv.agent_launch_started = False
     except ValueError as e:
         # This shouldn't happen due to check above, but handle gracefully
         console.print(f"[red]✗[/red] {e}")
@@ -2959,13 +3021,14 @@ def _create_conversation_for_current_directory(
 
     # Create the conversation
     try:
-        session.add_conversation(
+        new_conv = session.add_conversation(
             working_dir=repo_name,
             ai_agent_session_id=new_session_id,
             project_path=project_path,
             branch="",  # Leave empty so branch creation logic can run
             workspace=workspace,
         )
+        new_conv.agent_launch_started = False
     except ValueError as e:
         # This shouldn't happen due to check above, but handle gracefully
         console.print(f"[red]✗[/red] {e}")
@@ -3183,11 +3246,12 @@ def _create_multi_project_conversation_for_open(
     session.conversations = {}
 
     # Add multi-project conversation (ONE conversation for all projects)
-    session.add_multi_project_conversation(
+    new_conv = session.add_multi_project_conversation(
         ai_agent_session_id=session_id,
         projects_info=projects_info,
         workspace_path=workspace_path,
     )
+    new_conv.agent_launch_started = False
 
     # Store workspace name
     if selected_workspace_name:
@@ -3322,13 +3386,14 @@ def _prompt_for_working_directory(
 
         from devflow.agent.factory import generate_agent_session_id
         _backend = resolve_agent_backend(session=session)
-        session.add_conversation(
+        new_conv = session.add_conversation(
             working_dir=project_path.name,
             ai_agent_session_id=generate_agent_session_id(_backend),
             project_path=str(project_path),
             branch="",  # Leave empty so branch creation logic can run
             workspace=workspace,
         )
+        new_conv.agent_launch_started = False
     session.working_directory = project_path.name
 
     # Auto-create template if enabled and this is the first time using this directory

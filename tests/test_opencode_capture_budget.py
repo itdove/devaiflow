@@ -308,6 +308,7 @@ def open_session_case(temp_daf_home, tmp_path, native_agent, monkeypatch):
         agent_backend="opencode",
     )
     session.active_conversation.ai_agent_session_id = ""
+    session.active_conversation.agent_launch_started = False
     manager.update_session(session)
     prefix = "devflow.cli.commands.open_command."
     for name in (
@@ -446,6 +447,7 @@ def test_unverified_reopen_never_replaces_identity(
     session.active_conversation.ai_agent_session_id = (
         PENDING_CAPTURE_PLACEHOLDER if state == "pending" else "ses_existing"
     )
+    session.active_conversation.agent_launch_started = None
     manager.update_session(session)
     query = Mock(return_value=set())
     if state == "query-failure":
