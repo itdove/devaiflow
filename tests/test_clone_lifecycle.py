@@ -401,6 +401,7 @@ def test_open_resume_protects_clone_until_exit_and_releases_on_errors(
     """Native resume, fresh reopen, and resume fallback protect the clone before spawning."""
     _, manager, session, clone = clone_session
     session.active_conversation.ai_agent_session_id = session_id
+    session.active_conversation.agent_launch_started = False if session_id == "" else None
     manager.update_session(session)
     prefix = "devflow.cli.commands.open_command."
     monkeypatch.setattr(prefix + "_detect_working_directory_from_cwd", lambda *args: None)

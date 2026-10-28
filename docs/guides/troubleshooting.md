@@ -1876,21 +1876,37 @@ detection), no new project-scoped sessions, and multiple new candidates. A faile
 pre-launch query cannot establish which sessions are new. DAF never resolves
 ambiguity by choosing the first, newest, or lexically largest ID.
 
-A legacy `pending-capture` record has no saved native identity or trustworthy
+When `daf open` initializes a conversation, DAF explicitly records
+`agent_launch_started: false` during repository/branch setup. Cancelling the
+dirty-worktree warning, declining launch, or failing another setup check leaves
+that record retryable with ordinary `daf open <session-name>`. Workspace and
+repository selections are retained; user files and existing native identities
+are not rolled back. DAF persists `true` immediately before the adapter may
+create a native session or launch an agent, including before titled creation.
+An interrupted or unresolved attempt cannot reuse the never-launched marker.
+Absent/null markers mean unknown provenance, not proof that nothing launched.
+
+A legacy `pending-capture` or empty-ID record has no saved native identity or trustworthy
 pre-launch baseline. Automatic recovery cannot prove which conversation belongs
 to it, even if only one session is currently visible. DAF stops without launching
 a replacement. A missing saved native ID or failed verification also stops safely.
 
 From a regular terminal, after exiting the agent:
 
-1. Inspect `opencode session list --format json --standalone` on v2 (omit
+1. If a native conversation exists, inspect `opencode session list --format json --standalone` on v2 (omit
    `--standalone` on v1). Verify the intended ID and canonical project directory;
    do not infer ownership from timestamps or titles alone.
 2. Restore a verified association with
    `daf update <session-name> --session-id <verified-native-id>`, then reopen.
 3. If you deliberately want a fresh conversation instead, run
    `daf open <session-name> --new-conversation`. This archives the previous
-   conversation; it is not recovery of the missing ID.
+   conversation and its identity/history metadata; it is not recovery of the
+   missing ID. This also works when first-open cancellation left no saved branch:
+   DAF retries initial branch setup for the new conversation. If that setup is
+   cancelled again, ordinary `daf open <session-name>` can retry it without
+   archiving another record. You do not need to supply a nonexistent native ID
+   or edit backend storage. An empty branch or zero messages alone never proves
+   that a legacy record was not launched.
 
 Do not edit OpenCode storage, stop shared services, or weaken completion guards
 to resolve a capture warning. A successful native-ID save does not prove that

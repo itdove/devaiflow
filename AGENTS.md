@@ -1840,6 +1840,12 @@ class Session(BaseModel):
    - Shares a two-second fallback query deadline across polling, version detection, and subprocess execution, with content-free failure diagnostics
    - Refuses unresolved pending/missing-ID reopen instead of silently replacing conversations; preserves project scoping, ambiguity, and clone guards
 
+- ✓ Retry cancelled first OpenCode setup without weakening identity guards (itdove/devaiflow#650)
+   - Persists explicit never-launched provenance through setup refusal/cancellation and consumes it before native creation or launch
+   - Preserves repository/workspace choices, user work, and existing native identities/history across ordinary retries
+   - Supports explicit archived start-over for legacy pending records without a saved branch; unknown/attempted identities remain fail-closed
+   - Adds persisted retry, equivalent-refusal, launch-boundary, and metadata-preservation regression coverage
+
 ## Release Management
 
 ### Overview

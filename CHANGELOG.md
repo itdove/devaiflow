@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Retry cancelled first OpenCode setup safely** (#650)
+  - Persists explicit never-launched provenance through setup cancellation/refusal and consumes it before native session creation or agent launch
+  - Preserves workspace/repository choices, user work, and existing identities/history while allowing ordinary first-open retries
+  - Supports explicit archived start-over without a saved branch; legacy or attempted unresolved identities still fail closed
+  - Adds persisted multi-invocation, cancellation, launch-ordering, metadata-preservation, and recovery regression coverage
 - **Bounded OpenCode session capture and safe native identity** (#648)
   - Retains launch-created IDs, persists them before `daf open` starts the child, and skips unnecessary post-exit rediscovery of known IDs
   - Bounds fallback capture to a two-second total query deadline, including version detection and subprocess execution

@@ -650,6 +650,7 @@ def launch_and_capture(
     session: Any = None,
     phase: str = "launch",
     on_session_id: Callable[[str], None] | None = None,
+    on_launch: Callable[[], None] | None = None,
 ) -> None:
     """Snapshot sessions, launch agent, wait for exit, capture session ID.
 
@@ -661,6 +662,9 @@ def launch_and_capture(
     post-exit cleanup (updating session status, ending work sessions, etc.).
     OpenCode forwards its launch-proven ID before starting the child;
     ``on_session_id`` can persist it before an interruption is possible.
+    ``on_launch`` persists launch intent after preflight, before native creation
+    or child startup. OpenCode defers it past read-only adapter validation. A
+    callback failure aborts launch.
     """
     known_opencode_id = (
         _resolve_alias(agent_backend) == "opencode"
@@ -673,6 +677,14 @@ def launch_and_capture(
     launch_failed = False
     launch_attempted = False
     temp_directory = None
+
+    def begin_launch() -> None:
+        """Persist intent before the first potentially stateful adapter operation."""
+        nonlocal launch_attempted
+        if on_launch:
+            on_launch()
+        launch_attempted = True
+
     try:
         launch_display_name = None
         supports_session_title = get_agent_metadata(agent_backend).get(
@@ -712,6 +724,8 @@ def launch_and_capture(
                     on_session_id(native_id)
 
             launch_kwargs["on_session_id"] = remember_session_id
+            if isinstance(agent, OpenCodeAgent):
+                launch_kwargs["on_launch"] = begin_launch
         if not reasoning_effort and model_provider_profile:
             reasoning_effort = model_provider_profile.get("reasoning_effort")
         if reasoning_effort:
@@ -732,7 +746,8 @@ def launch_and_capture(
         with temporary_directory_lock(temp_directory):
             if temp_directory and not Path(temp_directory).is_dir():
                 raise FileNotFoundError("Cached clone disappeared; retry daf open to restore it")
-            launch_attempted = True
+            if "on_launch" not in launch_kwargs:
+                begin_launch()
             process = agent.launch_with_prompt(**launch_kwargs)
             agent.wait_for_exit(process, headless)
         return_code = getattr(process, "returncode", None)

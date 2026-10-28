@@ -222,6 +222,14 @@ canonical directory, then run `daf update <session-name> --session-id <verified-
 outside the agent, or deliberately use `daf open <session-name> --new-conversation`.
 Do not guess an ID from ordering/titles or edit backend storage to recover it.
 
+Cancelled first-open setup is retryable with ordinary `daf open` when DAF saved
+explicit never-launched provenance. That proof is consumed before native creation
+or agent launch; unresolved launch attempts still stop safely. For legacy pending
+records, an empty branch or zero messages is not proof of no launch. The explicit
+`--new-conversation` start-over archives the old identity/history and works even
+without a saved branch, retrying initial setup. If that setup is cancelled again,
+ordinary reopen retries the new record; do not invent a verified native ID.
+
 All clone allocation/recovery paths share `clone_retention.max_idle_days` (30)
 and `clone_retention.max_size_mb` (10240 MiB) limits; `0` disables each independently.
 Retention uses the resolved `clone_dir`, legacy `concurrency.auto_clone_path`, or

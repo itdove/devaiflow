@@ -800,6 +800,13 @@ class ConversationContext(BaseModel):
     """
 
     ai_agent_session_id: str  # UUID for AI agent conversation (current/active)
+    agent_launch_started: bool | None = Field(
+        default=None,
+        description=(
+            "False only for newly initialized conversations before native creation/launch; "
+            "True once launch is attempted; None for legacy/unknown launch provenance"
+        ),
+    )
     project_path: Optional[str] = None  # Full path to repo (legacy, still used as fallback)
     branch: Optional[str] = None  # Git branch for this repo (None for ticket_creation sessions)
     base_branch: Optional[str] = "main"  # Base branch (None for old sessions)
