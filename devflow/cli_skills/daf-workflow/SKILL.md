@@ -159,6 +159,12 @@ It marks that branch `(default)` and Enter selects it;
 remote-qualified selections preserve the source repository's identity. If the
 default is unresolved or unavailable in the menu, Enter cancels rather than
 selecting an unrelated branch. Explicit selection and custom entry remain available.
+If branch discovery fails, DAF names the selected remote and gives a credential-safe
+explanation before manual entry; timeout, nonzero Git exit, and startup errors are
+distinct from a successful query with no branch heads. Diagnostics use Git transport,
+not `gh`/`glab` API authentication, and omit raw Git output and remote URLs. Manual
+entry and cancellation remain available; do not infer an affected machine's cause
+without its exact installed version, selected remote, and Git diagnostic outcome.
 With no remotes, DAF uses a common local base or the current attached branch.
 Automatic modes do not prompt or create a branch without a resolved or explicitly
 provided source. Multi-project creation cancels if any project has no selected base.

@@ -3,10 +3,11 @@
 import shutil
 import subprocess
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
-from devflow.git.utils import GitUtils
+from devflow.git.utils import GitUtils, RemoteBranchDiscoveryError
 
 
 @pytest.mark.parametrize("remote", ["origin", "upstream", "parent"])
@@ -1743,7 +1744,8 @@ def test_has_unpushed_branch_commits_detects_commits_ahead_of_remote(tmp_path):
     assert GitUtils.has_unpushed_branch_commits(tmp_path, branch_name) is True
 
 
-def test_list_remote_branches_with_mock(monkeypatch, tmp_path):
+@pytest.mark.parametrize("raise_on_error", [False, True])
+def test_list_remote_branches_with_mock(monkeypatch, tmp_path, raise_on_error):
     """Test list_remote_branches with mocked git output."""
     from unittest.mock import Mock
 
@@ -1756,18 +1758,26 @@ def test_list_remote_branches_with_mock(monkeypatch, tmp_path):
                 "def456\trefs/heads/release/2.5\n"
                 "ghi789\trefs/heads/release/3.0\n"
                 "jkl012\trefs/heads/develop\n"
+                "mno345\trefs/heads/feature/refs/heads/custom\n"
             )
             return mock_result
         return subprocess.run(cmd, *args, **kwargs)
 
     monkeypatch.setattr("subprocess.run", mock_run)
 
-    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+    branches = GitUtils.list_remote_branches(tmp_path, "origin", raise_on_error=raise_on_error)
 
-    assert branches == ["develop", "main", "release/2.5", "release/3.0"]
+    assert branches == [
+        "develop",
+        "feature/refs/heads/custom",
+        "main",
+        "release/2.5",
+        "release/3.0",
+    ]
 
 
-def test_list_remote_branches_empty(monkeypatch, tmp_path):
+@pytest.mark.parametrize("raise_on_error", [False, True])
+def test_list_remote_branches_empty(monkeypatch, tmp_path, raise_on_error):
     """Test list_remote_branches with no branches."""
     from unittest.mock import Mock
 
@@ -1781,7 +1791,7 @@ def test_list_remote_branches_empty(monkeypatch, tmp_path):
 
     monkeypatch.setattr("subprocess.run", mock_run)
 
-    branches = GitUtils.list_remote_branches(tmp_path, "origin")
+    branches = GitUtils.list_remote_branches(tmp_path, "origin", raise_on_error=raise_on_error)
 
     assert branches == []
 
@@ -1832,6 +1842,77 @@ def test_list_remote_branches_git_not_found(monkeypatch, tmp_path):
     branches = GitUtils.list_remote_branches(tmp_path, "origin")
 
     assert branches == []
+
+
+@pytest.mark.parametrize("returncode", [1, 128, -9])
+def test_list_remote_branches_strict_nonzero_exit(monkeypatch, tmp_path, returncode):
+    """Strict discovery reports failure without exposing partial output or stderr."""
+    run = Mock(
+        return_value=subprocess.CompletedProcess(
+            ["git", "ls-remote", "--heads", "upstream"],
+            returncode,
+            "PRIVATE_STDOUT\trefs/heads/main\n",
+            "PRIVATE_STDERR",
+        )
+    )
+    monkeypatch.setattr(subprocess, "run", run)
+
+    with pytest.raises(RemoteBranchDiscoveryError) as error:
+        GitUtils.list_remote_branches(tmp_path, "upstream", raise_on_error=True)
+
+    assert f"exit code {returncode}" in str(error.value)
+    assert "Git transport authentication/access" in str(error.value)
+    assert "PRIVATE_" not in str(error.value)
+    run.assert_called_once_with(
+        ["git", "ls-remote", "--heads", "upstream"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+
+def test_list_remote_branches_strict_timeout(monkeypatch, tmp_path):
+    """Timeout diagnostics omit captured streams and the original exception."""
+    failure = subprocess.TimeoutExpired(
+        ["git", "PRIVATE_COMMAND"], 10, output="PRIVATE_STDOUT", stderr="PRIVATE_STDERR"
+    )
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=failure))
+
+    with pytest.raises(RemoteBranchDiscoveryError) as error:
+        GitUtils.list_remote_branches(tmp_path, "origin", raise_on_error=True)
+
+    assert "timed out after 10 seconds" in str(error.value)
+    assert "network/VPN" in str(error.value)
+    assert "PRIVATE_" not in str(error.value)
+    assert error.value.__suppress_context__
+
+
+@pytest.mark.parametrize(
+    ("exception_type", "expected"),
+    [
+        (FileNotFoundError, "Git executable or repository directory not found"),
+        (PermissionError, "Git could not start"),
+        (OSError, "Git could not start"),
+    ],
+)
+@pytest.mark.parametrize("raise_on_error", [False, True])
+def test_list_remote_branches_spawn_failure(
+    monkeypatch, tmp_path, exception_type, expected, raise_on_error
+):
+    """Spawn errors remain empty for legacy callers and explicit for strict callers."""
+    monkeypatch.setattr(
+        subprocess, "run", Mock(side_effect=exception_type("PRIVATE_EXCEPTION_DETAIL"))
+    )
+
+    if raise_on_error:
+        with pytest.raises(RemoteBranchDiscoveryError) as error:
+            GitUtils.list_remote_branches(tmp_path, "origin", raise_on_error=True)
+        assert expected in str(error.value)
+        assert "PRIVATE_" not in str(error.value)
+        assert error.value.__suppress_context__
+    else:
+        assert GitUtils.list_remote_branches(tmp_path, "origin") == []
 
 
 @pytest.mark.skipif(

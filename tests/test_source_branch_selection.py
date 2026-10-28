@@ -1,4 +1,4 @@
-"""Tests for source branch selection and remote default discovery (#524, #638)."""
+"""Tests for source branch selection and discovery diagnostics (#524, #638, #651)."""
 
 import io
 import json
@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -17,7 +17,7 @@ from devflow.cli.commands.new_command import (
     _prompt_for_source_branch,
     _prompt_for_source_branch_text,
 )
-from devflow.git.utils import GitUtils
+from devflow.git.utils import GitUtils, RemoteBranchDiscoveryError
 
 
 class TestPromptForSourceBranch:
@@ -132,6 +132,141 @@ class TestPromptForSourceBranch:
         ):
             assert _prompt_for_source_branch(Path("/repo"), None) == "origin/develop"
 
+    def test_explains_empty_remote_before_manual_input(self, monkeypatch, capsys):
+        """A successful empty result is explained before showing the text prompt."""
+        branches = Mock(return_value=[])
+        monkeypatch.setattr(GitUtils, "list_remote_branches", branches)
+        monkeypatch.setattr(GitUtils, "branch_exists", Mock(return_value=True))
+        monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+
+        assert _prompt_for_source_branch(Path("/repo"), "origin/main") == "origin/main"
+
+        output = " ".join(capsys.readouterr().out.split())
+        assert "Remote 'origin' returned no branch heads" in output
+        assert "Could not list source branches" not in output
+        assert output.index("no branch heads") < output.index("Enter source branch")
+        assert "Type 'cancel' to stop" in output
+        branches.assert_called_once_with(Path("/repo"), "origin", raise_on_error=True)
+
+    @pytest.mark.parametrize(
+        ("failure", "expected"),
+        [
+            ("timeout", "timed out after 10 seconds"),
+            ("nonzero", "exit code 128"),
+            ("missing-git", "Git executable or repository directory not found"),
+            ("spawn-error", "Git could not start"),
+        ],
+    )
+    def test_discovery_failure_explained_before_manual_input(
+        self, monkeypatch, capsys, failure, expected
+    ):
+        """Real discovery failures explain the selected remote without leaking Git output."""
+        monkeypatch.setattr(
+            GitUtils, "get_remote_names", Mock(return_value=["origin", "upstream"])
+        )
+        monkeypatch.setattr(GitUtils, "branch_exists", Mock(return_value=True))
+        monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+
+        def run(command, **kwargs):
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(
+                    command, 10, output="PRIVATE_STDOUT", stderr="PRIVATE_STDERR"
+                )
+            if failure == "missing-git":
+                raise FileNotFoundError("PRIVATE_EXCEPTION_DETAIL")
+            if failure == "spawn-error":
+                raise PermissionError("PRIVATE_EXCEPTION_DETAIL")
+            return subprocess.CompletedProcess(command, 128, "PRIVATE_STDOUT", "PRIVATE_STDERR")
+
+        git = Mock(side_effect=run)
+        monkeypatch.setattr(subprocess, "run", git)
+
+        result = _prompt_for_source_branch(Path("/repo"), "upstream/release/stable")
+
+        assert result == "upstream/release/stable"
+        output = " ".join(capsys.readouterr().out.split())
+        assert "Could not list source branches on remote 'upstream'" in output
+        assert expected in output
+        assert "git ls-remote --heads upstream" in output
+        assert "no branch heads" not in output
+        assert "PRIVATE_" not in output
+        assert output.index("Could not list source branches") < output.index("Enter source branch")
+        git.assert_called_once_with(
+            ["git", "ls-remote", "--heads", "upstream"],
+            cwd=Path("/repo"),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+    def test_failed_discovery_accepts_explicit_remote_only_branch(self, monkeypatch):
+        """Manual recovery can select another remote explicitly without a local branch."""
+        path = Path("/repo")
+        monkeypatch.setattr(
+            GitUtils, "get_remote_names", Mock(return_value=["origin", "upstream"])
+        )
+        branches = Mock(
+            side_effect=[RemoteBranchDiscoveryError("Git discovery failed."), ["feature/custom"]]
+        )
+        monkeypatch.setattr(GitUtils, "list_remote_branches", branches)
+        monkeypatch.setattr(GitUtils, "branch_exists", Mock(return_value=False))
+        monkeypatch.setattr("sys.stdin", io.StringIO("upstream/feature/custom\n"))
+
+        assert _prompt_for_source_branch(path, "origin/main") == "upstream/feature/custom"
+        assert branches.call_args_list == [
+            call(path, "origin", raise_on_error=True),
+            call(path, "upstream"),
+        ]
+
+    @pytest.mark.parametrize(
+        ("default_base", "text"),
+        [(None, "\n"), ("origin/main", "cancel\n"), ("origin/main", "q\n")],
+    )
+    def test_failed_discovery_allows_cancellation(self, monkeypatch, default_base, text):
+        """Manual fallback preserves empty-input and explicit cancellation rules."""
+        monkeypatch.setattr(
+            GitUtils,
+            "list_remote_branches",
+            Mock(side_effect=RemoteBranchDiscoveryError("Git discovery failed.")),
+        )
+        exists = Mock(side_effect=AssertionError("Cancellation must not validate a branch"))
+        monkeypatch.setattr(GitUtils, "branch_exists", exists)
+        monkeypatch.setattr("sys.stdin", io.StringIO(text))
+
+        assert _prompt_for_source_branch(Path("/repo"), default_base) is None
+        exists.assert_not_called()
+
+    def test_no_remote_explains_manual_input(self, monkeypatch, capsys):
+        """Local-only repositories explain manual entry without attempting remote discovery."""
+        monkeypatch.setattr(GitUtils, "get_remote_names", Mock(return_value=[]))
+        branches = Mock(side_effect=AssertionError("No remote to query"))
+        monkeypatch.setattr(GitUtils, "list_remote_branches", branches)
+        monkeypatch.setattr(GitUtils, "branch_exists", Mock(return_value=True))
+        monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+
+        assert _prompt_for_source_branch(Path("/repo"), "main") == "main"
+
+        output = " ".join(capsys.readouterr().out.split())
+        assert "No source remote is configured" in output
+        assert output.index("No source remote") < output.index("Enter source branch")
+        branches.assert_not_called()
+
+    def test_discovery_diagnostics_respect_json_mode(self, monkeypatch, capsys):
+        """Discovery diagnostics use the JSON-aware console wrapper."""
+        monkeypatch.setattr("devflow.cli.utils.is_json_mode", lambda: True)
+        monkeypatch.setattr("devflow.cli.commands.new_command.is_json_mode", lambda: True)
+        monkeypatch.setattr(
+            GitUtils,
+            "list_remote_branches",
+            Mock(side_effect=RemoteBranchDiscoveryError("Git discovery failed.")),
+        )
+        monkeypatch.setattr(
+            "devflow.cli.commands.new_command.Prompt.ask", Mock(return_value="cancel")
+        )
+
+        assert _prompt_for_source_branch(Path("/repo"), None) is None
+        assert capsys.readouterr().out == ""
+
 
 class TestPromptForSourceBranchText:
     """Tests for _prompt_for_source_branch_text fallback."""
@@ -228,7 +363,7 @@ def test_default_discovery_through_selection(monkeypatch, capsys, remote_default
 
     assert suggested == selected == f"origin/{remote_default}"
     default.assert_called_once_with(path, remote="origin")
-    branches.assert_called_once_with(path, "origin")
+    branches.assert_called_once_with(path, "origin", raise_on_error=True)
     local_exists.assert_not_called()
     assert f"{remote_default} (default)" in capsys.readouterr().out
 
@@ -241,7 +376,7 @@ def test_fork_defaults_and_menu_use_same_remote(monkeypatch, qualified_default, 
     defaults = {"upstream": "release/stable", "origin": "main"}
     default = Mock(side_effect=lambda path, remote: defaults[remote])
     monkeypatch.setattr(GitUtils, "get_default_branch", default)
-    branches = Mock(side_effect=lambda path, remote: ["develop", defaults[remote]])
+    branches = Mock(side_effect=lambda path, remote, **kwargs: ["develop", defaults[remote]])
     monkeypatch.setattr(GitUtils, "list_remote_branches", branches)
     monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
 
@@ -250,7 +385,7 @@ def test_fork_defaults_and_menu_use_same_remote(monkeypatch, qualified_default, 
 
     assert selected == suggested
     remote = suggested.split("/", 1)[0]
-    branches.assert_called_once_with(path, remote)
+    branches.assert_called_once_with(path, remote, raise_on_error=True)
     assert f"Available branches on {remote}" in capsys.readouterr().out
     if qualified_default is None:
         default.assert_called_once_with(path, remote="upstream")
@@ -451,6 +586,61 @@ def test_multi_project_missing_default_cancels_before_creating_any_branch(
     create.assert_not_called()
     manager.create_session.assert_not_called()
     assert selection.call_count == (2 if interactive else 0)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+@pytest.mark.parametrize("remote_name", ["origin", "upstream", "primary"])
+@pytest.mark.parametrize(
+    "remote_url",
+    [
+        "https://gitlab.example.com/group/project-a.git",
+        "git@gitlab.example.com:group/project-a.git",
+    ],
+)
+def test_gitlab_discovery_shows_numbered_menu(
+    tmp_path, monkeypatch, capsys, remote_name, remote_url
+):
+    """GitLab HTTPS/SSH remotes use the normal numbered menu, not hosting API access."""
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "remote", "add", remote_name, remote_url], cwd=tmp_path, check=True
+    )
+    real_run = subprocess.run
+    discovery_commands = []
+
+    def run(command, **kwargs):
+        if command[:3] == ["git", "ls-remote", "--heads"]:
+            discovery_commands.append(command)
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                "abc123\trefs/heads/main\n"
+                "def456\trefs/heads/release/stable\n"
+                "ghi789\trefs/heads/develop\n",
+                "PRIVATE_STDERR",
+            )
+        return real_run(command, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+    monkeypatch.setattr(
+        GitUtils, "branch_exists", Mock(side_effect=AssertionError("No local branch needed"))
+    )
+
+    result = _prompt_for_source_branch(tmp_path, f"{remote_name}/release/stable")
+
+    assert result == f"{remote_name}/release/stable"
+    assert discovery_commands == [["git", "ls-remote", "--heads", remote_name]]
+    output = " ".join(capsys.readouterr().out.split())
+    assert f"Available branches on {remote_name}" in output
+    assert "1. develop" in output
+    assert "2. main" in output
+    assert "3. release/stable (default)" in output
+    assert "manual source branch entry" not in output
+    assert "PRIVATE_" not in output
+    assert remote_url not in output
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
