@@ -8,6 +8,13 @@ from typing import Optional
 from devflow.utils.dependencies import require_tool
 
 
+_REMOTE_BRANCH_TIMEOUT_SECONDS = 10
+
+
+class RemoteBranchDiscoveryError(RuntimeError):
+    """Remote branch lookup failure with credential-safe diagnostic text."""
+
+
 class GitUtils:
     """Utilities for git operations."""
 
@@ -1516,7 +1523,9 @@ class GitUtils:
             return []
 
     @staticmethod
-    def list_remote_branches(path: Path, remote: str = "origin") -> list[str]:
+    def list_remote_branches(
+        path: Path, remote: str = "origin", *, raise_on_error: bool = False
+    ) -> list[str]:
         """List all branches from a remote repository.
 
         Uses `git ls-remote --heads <remote>` to fetch remote branches.
@@ -1524,9 +1533,16 @@ class GitUtils:
         Args:
             path: Repository path
             remote: Remote name (default: "origin")
+            raise_on_error: Raise a credential-safe error on discovery failure
+                instead of returning an empty list. Successful empty results
+                still return an empty list.
 
         Returns:
             Sorted list of branch names (empty list if error or no branches)
+
+        Raises:
+            RemoteBranchDiscoveryError: If discovery fails and raise_on_error
+                is True. Raw Git output and exception details are omitted.
 
         Example:
             branches = GitUtils.list_remote_branches(Path("/path/to/repo"), "origin")
@@ -1538,22 +1554,46 @@ class GitUtils:
                 cwd=path,
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=_REMOTE_BRANCH_TIMEOUT_SECONDS,
             )
-            if result.returncode == 0:
-                # Parse output: "commit_sha\trefs/heads/branch_name"
-                branches = []
-                for line in result.stdout.strip().split('\n'):
-                    if line and '\t' in line:
-                        # Extract branch name from "refs/heads/branch_name"
-                        ref = line.split('\t')[1]
-                        if ref.startswith('refs/heads/'):
-                            branch_name = ref.replace('refs/heads/', '')
-                            branches.append(branch_name)
-                return sorted(branches)
+        except subprocess.TimeoutExpired:
+            if raise_on_error:
+                raise RemoteBranchDiscoveryError(
+                    f"Git branch discovery timed out after {_REMOTE_BRANCH_TIMEOUT_SECONDS} "
+                    "seconds. Check network/VPN access to the selected remote."
+                ) from None
             return []
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except FileNotFoundError:
+            if raise_on_error:
+                raise RemoteBranchDiscoveryError(
+                    "Git executable or repository directory not found. "
+                    "Check Git is installed on PATH and the repository path exists."
+                ) from None
             return []
+        except OSError:
+            if raise_on_error:
+                raise RemoteBranchDiscoveryError(
+                    "Git could not start. Check repository access and Git executable permissions."
+                ) from None
+            return []
+
+        if result.returncode != 0:
+            if raise_on_error:
+                raise RemoteBranchDiscoveryError(
+                    f"git ls-remote failed (exit code {result.returncode}). "
+                    "Check the selected remote's configuration and "
+                    "Git transport authentication/access."
+                )
+            return []
+
+        # Parse output: "commit_sha\trefs/heads/branch_name"
+        branches = []
+        for line in result.stdout.strip().split('\n'):
+            if line and '\t' in line:
+                ref = line.split('\t')[1]
+                if ref.startswith('refs/heads/'):
+                    branches.append(ref.removeprefix('refs/heads/'))
+        return sorted(branches)
 
     @staticmethod
     def has_upstream_remote(path: Path) -> bool:

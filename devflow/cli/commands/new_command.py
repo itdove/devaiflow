@@ -2,6 +2,7 @@
 
 import click
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -10,11 +11,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from rich.console import Console
+from rich.markup import escape
 from rich.prompt import Confirm, Prompt
 
 from devflow.cli.utils import check_concurrent_session, console_print, get_status_display, is_json_mode, is_non_interactive, output_json as json_output, require_outside_claude, resolve_workspace_path, scan_workspace_repositories, serialize_session, should_launch_claude_code, sync_captured_agent_session, unified_project_selection
 from devflow.config.loader import ConfigLoader
-from devflow.git.utils import GitUtils
+from devflow.git.utils import GitUtils, RemoteBranchDiscoveryError
 from devflow.jira import JiraClient
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.session.manager import SessionManager
@@ -1307,7 +1309,7 @@ def _prompt_for_source_branch(path: Path, default_base: str | None) -> str | Non
 
     Discovery, default matching, and the selected ref all use the same remote.
     If the suggested default is unavailable, Enter cancels instead of choosing
-    an unrelated branch. Falls back to text input if branches cannot be fetched.
+    an unrelated branch. Explains failed or empty discovery before text fallback.
 
     Args:
         path: Repository path
@@ -1317,9 +1319,31 @@ def _prompt_for_source_branch(path: Path, default_base: str | None) -> str | Non
         Source branch name if valid, None if user cancelled
     """
     remote = _get_source_remote(path, default_base)
-    branches = GitUtils.list_remote_branches(path, remote) if remote else []
+    branches = []
+    if remote:
+        try:
+            branches = GitUtils.list_remote_branches(path, remote, raise_on_error=True)
+        except RemoteBranchDiscoveryError as error:
+            console_print(
+                f"\n[yellow]Could not list source branches on remote '{escape(remote)}': "
+                f"{escape(str(error))}[/yellow]"
+            )
+            command = shlex.join(["git", "ls-remote", "--heads", remote])
+            console_print(f"[dim]Diagnose from this repository: {escape(command)}[/dim]")
+            console_print(
+                "[dim]Raw Git output is omitted because it may contain credentials.[/dim]"
+            )
+        else:
+            if not branches:
+                console_print(
+                    f"\n[yellow]Remote '{escape(remote)}' returned no branch heads; "
+                    "this remote may be empty.[/yellow]"
+                )
+    else:
+        console_print("\n[dim]No source remote is configured.[/dim]")
 
     if not branches:
+        console_print("[dim]Using manual source branch entry. Type 'cancel' to stop.[/dim]")
         return _prompt_for_source_branch_text(path, default_base)
 
     default_branch = (default_base or "").removeprefix("refs/remotes/")

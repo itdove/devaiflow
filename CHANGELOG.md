@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Explain source-branch discovery fallback** (#651)
+  - Distinguishes failed Git discovery from a successful remote with no branch heads before manual entry
+  - Names the selected remote and provides actionable timeout, command-exit, and startup diagnostics without exposing raw Git output or remote URLs
+  - Preserves numbered menus, remote-qualified defaults, custom entry, cancellation, and legacy Git utility callers
+  - Adds focused GitLab HTTPS/SSH, discovery failure/empty, credential-safe output, and selection regression coverage plus troubleshooting guidance
 - **Retry cancelled first OpenCode setup safely** (#650)
   - Persists explicit never-launched provenance through setup cancellation/refusal and consumes it before native session creation or agent launch
   - Preserves workspace/repository choices, user work, and existing identities/history while allowing ordinary first-open retries

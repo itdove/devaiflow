@@ -925,6 +925,55 @@ Some GitHub organizations (like `ansible-automation-platform`) have security pol
    glab auth status
    ```
 
+### Source Branch Picker Shows Manual Input
+
+**Problem:** Branch creation asks for `Enter source branch` instead of displaying
+the numbered branch menu, including in a GitLab repository.
+
+The picker lists branches using `git ls-remote --heads <selected-remote>`, not
+the GitLab/GitHub API. Successful `glab` or `gh` authentication does not prove
+that Git's HTTPS credentials or SSH access work. This behavior is not specific
+to GitLab.
+
+The picker explains why manual entry is being used:
+
+- **Discovery timed out after 10 seconds:** Check network/VPN access and whether
+  the selected remote responds from this machine.
+- **Git exited with a nonzero status:** Check that remote's configuration and
+  Git transport authentication/access. The exit code alone does not establish
+  whether authentication, connectivity, or repository configuration caused it.
+- **Git could not start:** Check Git installation/PATH, repository existence,
+  and executable/directory permissions.
+- **Remote returned no branch heads:** The query succeeded, but advertised no
+  branches; the remote may be empty. This is distinct from failed discovery.
+- **No source remote configured:** Manual selection uses local branches.
+
+The selected remote is named in discovery diagnostics. By default, selection
+prefers `upstream`, then `origin`, then other configured remotes alphabetically;
+an explicitly remote-qualified source preserves that remote. Do not assume
+`origin` is the failing remote or silently switch to another remote's branches.
+Manual entry and cancellation remain available; without a resolved default,
+Enter cancels rather than selecting an arbitrary branch.
+
+**Collect diagnostics on the affected computer**, from the same repository and
+user account as the failing workflow:
+
+```bash
+daf --version
+git --version
+git remote
+# Replace upstream with the actual remote named by the picker.
+git ls-remote --heads upstream
+```
+
+Record the exact `daf` invocation, prompt output, selected remote, and command
+outcome. Older installations may fall back silently, so the exact installed
+version matters. Raw Git stdout/stderr, remote URLs, and exception details are
+not displayed by the picker. Review diagnostic output locally and redact
+credentials, private repository details, and sensitive stderr before sharing.
+Do not treat a reported silent fallback as a confirmed authentication or
+GitLab-only failure without this evidence.
+
 ### Checking Authentication Before Operations
 
 **Best Practice:**

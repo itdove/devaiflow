@@ -782,8 +782,15 @@ branch's commits. The selected remote is fetched before branch creation.
 - If the default cannot be resolved or is missing from the menu, Enter selects **Cancel**,
   not the first alphabetical branch. You can still explicitly select another row or enter
   a custom local or remote-qualified branch.
-- If remote branches cannot be listed, the picker falls back to validated text input.
-  Without a resolved default, empty input cancels.
+- If remote branches cannot be listed, the picker explains the failure and names the
+  selected remote before falling back to validated text input. Timeouts, nonzero Git
+  exits, and Git startup failures have actionable messages; raw Git output and remote
+  URLs are not printed because they may contain credentials. A successful lookup with
+  no branch heads is reported separately as a potentially empty remote. The diagnostic
+  command uses the same remote, not an implicit `origin` or a hosting API. See
+  [source-branch picker troubleshooting](../guides/troubleshooting.md#source-branch-picker-shows-manual-input).
+  Manual entry still accepts local and remote-qualified branches, and `cancel` or `q`
+  cancels. Without a resolved default, empty input cancels.
 - With no configured remotes, the local fallback is `main`, `master`, or `develop`, then
   the current attached branch; detached HEAD is not a source default.
 - Automatic/non-interactive modes do not prompt. If no source default can be resolved,
