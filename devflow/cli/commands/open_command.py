@@ -60,8 +60,10 @@ from devflow.utils.context_files import load_hierarchical_context_files
 from devflow.utils.clone_lifecycle import (
     TemporaryDirectoryInUseError,
     assert_session_clones_unused,
+    assert_temp_directory_unused,
     completion_refusal_message,
     temporary_directory_lock,
+    unused_session_clones,
 )
 from devflow.utils.model_provider import get_active_profile, build_env_from_profile, get_profile_display_name
 from devflow.utils.paths import get_claude_config_dir
@@ -420,6 +422,14 @@ def open_session(
             )
             sys.exit(1)
 
+    # Refuse before workspace selection or explicit conversation replacement can
+    # mutate a live creation session. Recovery and launch recheck their own locks.
+    try:
+        assert_session_clones_unused(session)
+    except TemporaryDirectoryInUseError as error:
+        _report_clone_in_use(session, error)
+        raise click.exceptions.Exit(1) from error
+
     # AAP-63377: Workspace selection
     # Select workspace using priority resolution (--workspace flag > session.workspace_name > default > prompt)
     from devflow.cli.utils import select_workspace
@@ -579,24 +589,35 @@ def open_session(
 
         # AAP-63377: Use selected workspace path
         # Create new conversation (this archives the current one)
-        console.print(f"[yellow]Archiving current conversation ({active_conv.message_count} messages)[/yellow]")
-        new_conv = session.create_new_conversation(
-            working_dir=working_dir,
-            project_path=active_conv.project_path,
-            branch=active_conv.branch or "",
-            base_branch=active_conv.base_branch or "main",
-            remote_url=active_conv.remote_url,
-            workspace=workspace_path,
-        )
+        try:
+            with unused_session_clones(session):
+                console.print(
+                    f"[yellow]Archiving current conversation "
+                    f"({active_conv.message_count} messages)[/yellow]"
+                )
+                new_conv = session.create_new_conversation(
+                    working_dir=working_dir,
+                    project_path=active_conv.project_path,
+                    branch=active_conv.branch or "",
+                    base_branch=active_conv.base_branch or "main",
+                    remote_url=active_conv.remote_url,
+                    workspace=workspace_path,
+                )
+                new_conv.temp_directory = active_conv.temp_directory
+                new_conv.original_project_path = active_conv.original_project_path
 
-        # Only this freshly allocated context is proven never launched. Do not
-        # retrofit that proof onto legacy pending records, even with no branch.
-        new_conv.agent_launch_started = False
-        if replacement_backend in ("opencode", "opencode-ai"):
-            from devflow.agent.factory import generate_agent_session_id
+                # Only this freshly allocated context is proven never launched.
+                # Never retrofit that proof onto a legacy pending record.
+                new_conv.agent_launch_started = False
+                if replacement_backend in ("opencode", "opencode-ai"):
+                    from devflow.agent.factory import generate_agent_session_id
 
-            new_conv.ai_agent_session_id = generate_agent_session_id(replacement_backend)
-            new_conv.conversation_history = [new_conv.ai_agent_session_id]
+                    new_conv.ai_agent_session_id = generate_agent_session_id(replacement_backend)
+                    new_conv.conversation_history = [new_conv.ai_agent_session_id]
+                session_manager.update_session(session)
+        except TemporaryDirectoryInUseError as error:
+            _report_clone_in_use(session, error)
+            raise click.exceptions.Exit(1) from error
 
         agent_name = get_agent_display_name(
             resolve_agent_backend(
@@ -608,9 +629,6 @@ def open_session(
         )
         console.print(f"[green]✓[/green] Created new conversation with fresh {agent_name} session")
         console.print(f"[dim]New session ID: {new_conv.ai_agent_session_id}[/dim]")
-
-        # Save session
-        session_manager.update_session(session)
 
     # Multi-project session detection (Issue #149)
     # Check if this is a multi-project session (one conversation, multiple projects)
@@ -3987,6 +4005,29 @@ def _copy_conversation_from_temp(session, temp_dir: str, config=None) -> bool:
         return False
 
 
+def _report_clone_in_use(session: Session, error: TemporaryDirectoryInUseError) -> None:
+    """Report an expected open refusal without treating contention as lost data."""
+    message = (
+        f"Cannot open session '{session.name}': {error}.\n"
+        "The temporary clone is in use or could not safely be checked; "
+        "this is not a missing-clone recovery failure.\n"
+        "Exit the owning agent and move terminals outside the clone before retrying "
+        f"'daf open {session.name}'. Do not stop shared services or remove lock files.\n"
+        "Clone contents, session recovery metadata, and native identity were preserved."
+    )
+    if console._json_override or is_json_mode():
+        details: Dict[str, Any] = {
+            "code": "SESSION_IN_USE",
+            "message": message,
+            "session": session.name,
+        }
+        if error.holder is not None:
+            details["holder"] = error.holder
+        emit_json(success=False, error=details)
+    else:
+        console.print(f"[red]✗[/red] {escape(message)}")
+
+
 def _restore_session_clone(
     session: Session, session_manager: SessionManager, config: Optional[Config] = None
 ) -> bool:
@@ -4011,6 +4052,7 @@ def _restore_session_clone(
             detail = "The recorded path is redirected by a symlink; restore the original directory first."
         else:
             with temporary_directory_lock(cache.lock_path(recorded)):
+                assert_temp_directory_unused(str(recorded))
                 if (
                     not cache.pending_recovery(recorded)
                     and recorded.is_dir()
@@ -4046,7 +4088,10 @@ def _restore_session_clone(
                     restored = True
                 else:
                     detail = "No saved remote is available. Manually restore the checkout at the recorded path."
-    except (OSError, TemporaryDirectoryInUseError) as error:
+    except TemporaryDirectoryInUseError as error:
+        _report_clone_in_use(session, error)
+        return False
+    except OSError as error:
         detail = str(error)
     if not restored:
         message = f"Cannot restore cached clone at {recorded}. {detail} Session recovery metadata was preserved."

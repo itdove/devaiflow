@@ -6,18 +6,87 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from devflow.cli.utils import output_json as json_output, require_outside_claude, serialize_session, console_print
 from devflow.config.loader import ConfigLoader
+from devflow.config.models import Session
 from devflow.jira import JiraClient
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.issue_tracker.factory import create_issue_tracker_client
 from devflow.issue_tracker.exceptions import IssueTrackerError, IssueTrackerAuthError, IssueTrackerApiError
 from devflow.utils.git_remote import GitRemoteDetector
 from devflow.session.manager import SessionManager
+from devflow.utils.clone_lifecycle import TemporaryDirectoryInUseError, unused_session_clones
 
 console = Console()
+
+
+def _convert_creation_session(
+    session: Session,
+    session_manager: SessionManager,
+    ticket: Dict[str, Any],
+    backend: str,
+    deferred_sessions: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Session]:
+    """Convert an unused creation session without replacing its conversations.
+
+    Args:
+        session: Existing ticket-creation session.
+        session_manager: Manager used to persist the transition under clone locks.
+        ticket: Issue data returned by the selected tracker.
+        backend: Issue tracker backend name.
+        deferred_sessions: Optional destination for structured refusal details.
+
+    Returns:
+        Converted session, or None if the transition could not safely proceed.
+    """
+    try:
+        with unused_session_clones(session):
+            # The launcher may have saved its final native ID after sync loaded
+            # its snapshot but before we acquired the lock. Never overwrite it.
+            current = session_manager.storage.load_index().get_session(session.name)
+            if current is None or current.session_type != "ticket_creation":
+                return None
+            if current.conversations != session.conversations:
+                raise TemporaryDirectoryInUseError(
+                    "The creation conversation changed during sync; retry with its latest metadata"
+                )
+            session = current
+            session.session_type = "development"
+            session.issue_tracker = backend
+            session.issue_key = ticket["key"]
+            session.issue_updated = ticket.get("updated")
+            session.issue_metadata = {
+                k: v for k, v in ticket.items()
+                if k not in ("key", "updated") and v is not None
+            }
+            session_manager.update_session(session)
+    except TemporaryDirectoryInUseError as error:
+        message = (
+            f"Deferred conversion of ticket_creation session '{session.name}': {error}. "
+            "Exit the owning agent and move terminals outside the clone, then retry 'daf sync'. "
+            "The creation session, workspace, native identity, and history were not changed."
+        )
+        details: Dict[str, Any] = {
+            "code": "SESSION_IN_USE",
+            "session": session.name,
+            "issue_key": ticket["key"],
+            "message": message,
+        }
+        if error.holder is not None:
+            details["holder"] = error.holder
+        if deferred_sessions is not None:
+            deferred_sessions.append(details)
+        console_print(f"[yellow]⚠[/yellow] {escape(message)}")
+        return None
+
+    console_print(
+        "[cyan]↻[/cyan] Converting ticket_creation session to development: "
+        f"{escape(session.name)} ({escape(ticket['key'])})"
+    )
+    return session
 
 
 def render_sync_recap_table(synced_tickets: List[Dict[str, str]]) -> None:
@@ -261,6 +330,7 @@ def sync_jira(
     updated_count = 0
     created_sessions: List[Dict[str, Any]] = []
     updated_sessions: List[Dict[str, Any]] = []
+    deferred_sessions: List[Dict[str, Any]] = []
     synced_tickets: List[Dict[str, str]] = []  # Track all synced tickets for recap
 
     for ticket in tickets:
@@ -278,15 +348,14 @@ def sync_jira(
         if existing_by_name and existing_by_name.session_type != "development":
             # Session exists with non-development type
             if existing_by_name.session_type == "ticket_creation":
-                # Convert ticket_creation session to development session
-                console_print(f"[cyan]↻[/cyan] Converting ticket_creation session to development: {issue_key}")
-                existing_by_name.session_type = "development"
-                existing_by_name.issue_tracker = "jira"
-                existing_by_name.issue_key = issue_key
-                existing_by_name.issue_updated = ticket.get("updated")
-                existing_by_name.issue_metadata = {k: v for k, v in ticket.items() if k not in ('key', 'updated') and v is not None}
-                session_manager.update_session(existing_by_name)
+                converted = _convert_creation_session(
+                    existing_by_name, session_manager, ticket, "jira", deferred_sessions
+                )
+                if converted is None:
+                    continue
                 updated_count += 1
+                if output_json:
+                    updated_sessions.append(serialize_session(converted))
 
                 # Track for recap table
                 issue_summary = ticket.get("summary", issue_key)
@@ -419,6 +488,8 @@ def sync_jira(
                 "updated_sessions": updated_sessions,
                 "created_count": created_count,
                 "updated_count": updated_count,
+                "deferred_sessions": deferred_sessions,
+                "deferred_count": len(deferred_sessions),
             },
             metadata={
                 "filters": filters_metadata
@@ -433,6 +504,8 @@ def sync_jira(
     console_print("[bold]Sync complete[/bold]")
     console_print(f"[green]Created:[/green] {created_count} new sessions")
     console_print(f"[cyan]Updated:[/cyan] {updated_count} existing sessions")
+    if deferred_sessions:
+        console_print(f"[yellow]Deferred:[/yellow] {len(deferred_sessions)} creation sessions")
     console_print()
     console_print(f"[dim]Use 'daf list' to see all sessions[/dim]")
     console_print(f"[dim]Use 'daf open <JIRA-KEY>' to start work[/dim]")
@@ -497,6 +570,7 @@ def sync_github_repository(
     repository_url: Optional[str] = None,
     output_json: bool = False,
     synced_tickets: Optional[List[Dict[str, str]]] = None,
+    deferred_sessions: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, int]:
     """Sync issues from a GitHub repository.
 
@@ -507,6 +581,7 @@ def sync_github_repository(
         repository_url: Optional Git remote URL (to extract hostname for uniqueness)
         output_json: Whether to output JSON
         synced_tickets: Optional list to track synced tickets for recap table
+        deferred_sessions: Optional list to track deferred creation sessions.
 
     Returns:
         Dictionary with created_count and updated_count
@@ -587,17 +662,10 @@ def sync_github_repository(
             if existing_by_name and existing_by_name.session_type != "development":
                 # Session exists with non-development type
                 if existing_by_name.session_type == "ticket_creation":
-                    # Convert ticket_creation session to development session
-                    console_print(f"[cyan]  ↻[/cyan] Converting ticket_creation session to development: {session_name} ({issue_key})")
-                    existing_by_name.session_type = "development"
-                    existing_by_name.issue_tracker = "github"
-                    existing_by_name.issue_key = issue_key
-                    existing_by_name.issue_updated = ticket.get("updated")
-                    existing_by_name.issue_metadata = {
-                        k: v for k, v in ticket.items()
-                        if k not in ('key', 'updated') and v is not None
-                    }
-                    session_manager.update_session(existing_by_name)
+                    if _convert_creation_session(
+                        existing_by_name, session_manager, ticket, "github", deferred_sessions
+                    ) is None:
+                        continue
                     updated_count += 1
 
                     # Track for recap table
@@ -706,6 +774,7 @@ def sync_gitlab_repository(
     repository_url: Optional[str] = None,
     output_json: bool = False,
     synced_tickets: Optional[List[Dict[str, str]]] = None,
+    deferred_sessions: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, int]:
     """Sync issues from a GitLab repository.
 
@@ -716,6 +785,7 @@ def sync_gitlab_repository(
         repository_url: Optional Git remote URL (to extract hostname for uniqueness)
         output_json: Whether to output JSON
         synced_tickets: Optional list to track synced tickets for recap table
+        deferred_sessions: Optional list to track deferred creation sessions.
 
     Returns:
         Dictionary with created_count and updated_count
@@ -812,17 +882,10 @@ def sync_gitlab_repository(
             if existing_by_name and existing_by_name.session_type != "development":
                 # Session exists with non-development type
                 if existing_by_name.session_type == "ticket_creation":
-                    # Convert ticket_creation session to development session
-                    console_print(f"[cyan]  ↻[/cyan] Converting ticket_creation session to development: {session_name} ({issue_key})")
-                    existing_by_name.session_type = "development"
-                    existing_by_name.issue_tracker = "gitlab"
-                    existing_by_name.issue_key = issue_key
-                    existing_by_name.issue_updated = ticket.get("updated")
-                    existing_by_name.issue_metadata = {
-                        k: v for k, v in ticket.items()
-                        if k not in ('key', 'updated') and v is not None
-                    }
-                    session_manager.update_session(existing_by_name)
+                    if _convert_creation_session(
+                        existing_by_name, session_manager, ticket, "gitlab", deferred_sessions
+                    ) is None:
+                        continue
                     updated_count += 1
 
                     # Track for recap table
@@ -964,6 +1027,7 @@ def sync_multi_backend(
     total_updated = 0
     backend_stats = {}
     synced_tickets: List[Dict[str, str]] = []  # Track all synced tickets for recap
+    deferred_sessions: List[Dict[str, Any]] = []
 
     # Phase 1: Sync JIRA (if configured and sync_jira=True)
     if sync_jira and config.jira and config.jira.project and config.jira.url:
@@ -1018,17 +1082,10 @@ def sync_multi_backend(
                     if existing_by_name and existing_by_name.session_type != "development":
                         # Session exists with non-development type
                         if existing_by_name.session_type == "ticket_creation":
-                            # Convert ticket_creation session to development session
-                            console_print(f"[cyan]↻[/cyan] Converting ticket_creation session to development: {issue_key}")
-                            existing_by_name.session_type = "development"
-                            existing_by_name.issue_tracker = "jira"
-                            existing_by_name.issue_key = issue_key
-                            existing_by_name.issue_updated = ticket.get("updated")
-                            existing_by_name.issue_metadata = {
-                                k: v for k, v in ticket.items()
-                                if k not in ('key', 'updated') and v is not None
-                            }
-                            session_manager.update_session(existing_by_name)
+                            if _convert_creation_session(
+                                existing_by_name, session_manager, ticket, "jira", deferred_sessions
+                            ) is None:
+                                continue
                             jira_updated += 1
 
                             # Track for recap table
@@ -1223,7 +1280,8 @@ def sync_multi_backend(
                     config,
                     repository_url=repository_url,
                     output_json=output_json,
-                    synced_tickets=synced_tickets
+                    synced_tickets=synced_tickets,
+                    deferred_sessions=deferred_sessions,
                 )
                 github_created += result['created_count']
                 github_updated += result['updated_count']
@@ -1251,6 +1309,7 @@ def sync_multi_backend(
                     repository_url=repository_url,
                     output_json=output_json,
                     synced_tickets=synced_tickets,
+                    deferred_sessions=deferred_sessions,
                 )
 
                 gitlab_created += result['created_count']
@@ -1260,6 +1319,20 @@ def sync_multi_backend(
             total_created += gitlab_created
             total_updated += gitlab_updated
 
+    if output_json:
+        json_output(
+            success=True,
+            data={
+                "created_count": total_created,
+                "updated_count": total_updated,
+                "deferred_count": len(deferred_sessions),
+                "deferred_sessions": deferred_sessions,
+                "synced_tickets": synced_tickets,
+                "backends": backend_stats,
+            },
+        )
+        return
+
     # Render recap table if there are synced tickets
     render_sync_recap_table(synced_tickets)
 
@@ -1268,6 +1341,8 @@ def sync_multi_backend(
     console_print("[bold]Sync complete[/bold]")
     console_print(f"[green]Total created:[/green] {total_created} sessions")
     console_print(f"[cyan]Total updated:[/cyan] {total_updated} sessions")
+    if deferred_sessions:
+        console_print(f"[yellow]Deferred:[/yellow] {len(deferred_sessions)} creation sessions")
 
     if backend_stats:
         console_print()

@@ -1963,8 +1963,23 @@ clone-local processes have exited.
 
 ### Temporary clone still in use after agent exit
 
-**Problem:** `daf complete` reports `SESSION_IN_USE`, or post-exit completion is
-deferred even though the AI interface is closed.
+**Problem:** `daf open`, `daf delete`, or `daf complete` reports `SESSION_IN_USE`,
+sync defers a ticket-creation conversion, or post-exit completion is deferred even
+though the AI interface is closed.
+
+An existing retained clone can still be protected by a live launcher's lifecycle
+lock. This is not evidence of an evicted/missing clone, and open distinguishes it
+from `CLONE_RECOVERY_FAILED`. Do not remove lock files or clear native identity to
+make the command proceed.
+
+`daf sync` defers a busy creation session without reclassifying or updating it.
+After its owner exits, rerun sync; inactive conversion preserves the workspace,
+conversation history, native ID, and saved branch. A pending native ID remains a
+separate verification requirement even after the clone becomes unused.
+
+Deletion preserves busy sessions' metadata and notes, including with `--force`.
+Batch deletion may succeed for other independent sessions; its nonzero exit and
+text/JSON results identify exactly which sessions were deleted or refused.
 
 Closing an interface does not necessarily stop its backend. OpenCode v2 normally
 connects clients to a shared background service; that service can retain a local
@@ -1975,6 +1990,7 @@ DAF reports the holder's **process name, PID, cwd, parent PID, parent name, and
 parent cwd**, where accessible. Process-exit races and inaccessible attributes
 show unavailable details rather than permitting unsafe completion. JSON refusals
 include the same fields in `error.holder`, without command arguments or environment.
+Sync deferrals carry holder details in `data.deferred_sessions` instead.
 
 1. Move terminals outside the entire `daf-session-*` removal root, including
    sibling repositories, and close agents still using it.
@@ -1988,8 +2004,8 @@ include the same fields in `error.holder`, without command arguments or environm
    can dispose a location's cached services; do not evict an actively shared or
    ambiguously owned location. If safe release cannot be established, preserve
    the clone and report the backend version and sanitized holder details.
-4. Retry `daf complete <session-name>` from the original workspace after the
-   holder has exited. Refusal preserves status, tracking, files, and conversation
+4. Retry the refused open/delete/complete command, or `daf sync`, from the original
+   workspace after the holder has exited. Refusal preserves status, tracking, files, and conversation
    identity. Configured cleanup still rechecks immediately before removal.
 
 New and reopened DAF temporary-clone OpenCode v2 launches use the documented

@@ -1846,6 +1846,13 @@ class Session(BaseModel):
    - Supports explicit archived start-over for legacy pending records without a saved branch; unknown/attempted identities remain fail-closed
    - Adds persisted retry, equivalent-refusal, launch-boundary, and metadata-preservation regression coverage
 
+- ✓ Safe creation-session conversion and deletion (itdove/devaiflow#654)
+   - Defers live ticket-creation conversions across all four sync paths
+   - Guards active and archived clone roots through transition persistence
+   - Distinguishes open contention from recovery failure without weakening native-ID guards
+   - Reports safe single/group/batch deletion refusals and accurate partial outcomes
+   - Adds cross-process owner-exit, retry, branch-setup, and history-preservation coverage
+
 ## Release Management
 
 ### Overview

@@ -498,7 +498,7 @@ def prompt_and_clone_to_temp(
     return (clone_dir, original_path)
 
 
-def cleanup_temp_directory(temp_dir: Optional[str]) -> None:
+def cleanup_temp_directory(temp_dir: Optional[str], *, locked: bool = False) -> None:
     """Clean up a temporary directory.
 
     Handles both nested structure (/tmp/daf-session-xxx/repo-name/)
@@ -509,12 +509,16 @@ def cleanup_temp_directory(temp_dir: Optional[str]) -> None:
 
     Args:
         temp_dir: Path to temporary directory (can be None)
+        locked: Caller already holds the removal root's lifecycle lock, for
+            example through ``unused_session_clones``. Usage is still rechecked.
     """
     if not temp_dir:
         return
 
     try:
-        with temporary_directory_lock(temp_dir):
+        from contextlib import nullcontext
+
+        with nullcontext() if locked else temporary_directory_lock(temp_dir):
             temp_path = get_temp_directory_root(temp_dir)
             if not temp_path.exists():
                 return
