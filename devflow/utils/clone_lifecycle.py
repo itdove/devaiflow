@@ -5,7 +5,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -67,6 +67,39 @@ def assert_session_clones_unused(session: "Session") -> None:
         if temp_directory:
             with temporary_directory_lock(temp_directory):
                 assert_temp_directory_unused(temp_directory)
+
+
+@contextmanager
+def unused_session_clones(session: "Session") -> Iterator[list[str]]:
+    """Guard a lifecycle transition across active and archived clones.
+
+    Hold every distinct removal-root lock until the caller finishes persisting
+    the transition. An unlocked preflight would allow a managed launcher to start
+    between the check and the metadata change.
+
+    Args:
+        session: Session whose recorded clones must be unused.
+
+    Yields:
+        Sorted, locked removal roots, checked for live directory holders.
+
+    Raises:
+        TemporaryDirectoryInUseError: A clone is busy or cannot be checked.
+    """
+    roots = sorted(
+        {
+            str(get_temp_directory_root(conv.temp_directory))
+            for conversation in session.conversations.values()
+            for conv in conversation.get_all_sessions()
+            if conv.temp_directory
+        }
+    )
+    with ExitStack() as locks:
+        for root in roots:
+            locks.enter_context(temporary_directory_lock(root))
+        for root in roots:
+            assert_temp_directory_unused(root)
+        yield roots
 
 
 def completion_refusal_message(session_name: str, error: TemporaryDirectoryInUseError) -> str:
@@ -148,6 +181,9 @@ def temporary_directory_lock(temp_dir: str | None) -> Iterator[None]:
 
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
+            # Diagnostic inspection cannot authorize a failed lock. A launcher
+            # whose cwd is elsewhere still protects this clone for its lifetime.
+            assert_temp_directory_unused(temp_dir)
             raise TemporaryDirectoryInUseError(
                 f"Temporary directory {root} is busy with agent startup or cleanup"
             ) from error

@@ -96,6 +96,19 @@ When sync finds a `ticket_creation` session with the same name as the target dev
 
 Sessions with other types (e.g., `investigation`) are skipped with a clear warning message.
 
+**Running creation sessions:** All sync backends defer conversion while any active or
+archived temporary clone is locked or has a live directory holder. Exit the owning
+agent, move terminals outside the clone, then rerun `daf sync`. Deferral preserves
+the creation session, notes, workspace, native IDs, history, and branch choices;
+it is not counted as an update. JSON output includes `deferred_count` and
+`deferred_sessions`, with `SESSION_IN_USE` and safe holder details when available.
+
+Inactive/completed creation sessions can still convert. Existing conversations
+resume with their saved branch and history; sessions without a conversation use
+normal first-open development/project and branch setup. Conversion does not recover
+a `pending-capture` native ID: ordinary reopen still requires verified ownership or
+an explicit archived start-over with `--new-conversation`.
+
 **Output example:**
 ```
 Would create sessions for:
@@ -1477,6 +1490,18 @@ By default, `daf delete` removes **both** the session index entry and session fi
 - Git branches
 - JIRA tickets
 
+**Live clone protection:** Single-session, legacy group, and `--all` deletion refuse
+busy temporary clones without a traceback. `--force` skips confirmation only; it
+never overrides clone locks or directory-holder checks. A refused session retains
+its index entry, notes, native identity, and history. Exit its owner, move terminals
+outside the clone, then retry from the original workspace.
+
+Batch deletion can remove independent unused sessions while preserving busy ones.
+It exits nonzero if any session is refused and reports the actual partial outcome;
+it does not sweep directories belonging to preserved or unindexed sessions. JSON
+output lists `deleted_sessions`, `refused_sessions`, and their counts, with safe
+holder information when available. JSON deletion requires `--force` for confirmation.
+
 **Using --keep-metadata flag:**
 
 Use `--keep-metadata` when you want to preserve notes for reference while removing the session from your active list. This is useful for:
@@ -1500,7 +1525,7 @@ daf new --name PROJ-59815 --goal "Fresh approach" --jira PROJ-59815
 
 **Exit Codes:**
 - `0` - Session deleted successfully
-- `1` - Session not found or no identifier provided
+- `1` - Session not found, missing confirmation/identifier, or one or more deletions refused
 
 ---
 

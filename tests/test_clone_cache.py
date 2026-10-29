@@ -33,6 +33,26 @@ from devflow.utils.temp_directory import (
 NOW = 2_000_000_000.0
 
 
+@pytest.fixture(scope="module", autouse=True)
+def isolated_git_template(tmp_path_factory):
+    """Give synthetic repositories reproducible, test-owned init metadata.
+
+    Retention correctly protects local-only data from a developer's custom Git
+    template. Those unrelated files must not change these fixtures' baseline;
+    the custom-template protection tests add their own local-only metadata.
+    """
+    template = tmp_path_factory.mktemp("clone-test-template")
+    (template / "hooks").mkdir()
+    (template / "info").mkdir()
+    (template / "info" / "exclude").write_text("# Test-owned exclusion file\n")
+    (template / "description").write_text(
+        "Unnamed repository; edit this file 'description' to name the repository.\n"
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("GIT_TEMPLATE_DIR", str(template))
+        yield
+
+
 def git(path: Path, *args: str, input: str | None = None) -> str:
     """Run local test Git commands without interactive prompts or signing."""
     return subprocess.run(

@@ -208,6 +208,21 @@ Normal exit, pause, and completion preserve the clone by default. An existing
 saved `concurrency.cleanup_on_complete: true` retains immediate cleanup;
 `false` adopts preservation. Explicit session deletion still cleans up clones.
 
+From a regular terminal, `daf sync` defers creation-to-development conversion
+while any active or archived clone is locked or has a directory holder. Exit the
+owner and move terminals outside the clone, then retry sync. Inactive conversion
+preserves workspace, native IDs, history, and saved branches; sessions without a
+conversation use normal first-open development setup. Conversion never proves
+ownership of a `pending-capture` ID.
+
+Open reports clone contention as `SESSION_IN_USE`, not missing-clone recovery.
+Delete refuses busy clones without a traceback, including group/`--all` routes;
+`--force` skips confirmation only. A batch can delete independent unused sessions
+while preserving refused sessions' metadata and notes, reports the partial outcome,
+and exits nonzero. JSON results include safe holder details when available. Never
+unlink lifecycle lock files, stop shared services, or replace native identity to
+make these operations succeed.
+
 OpenCode v2 clone launches/resumes and session-ID polling use its supported
 `--standalone` private-server lifecycle. UI exit is not proof that an older shared
 backend's resources exited. Prompted and automatic completion preflight actual

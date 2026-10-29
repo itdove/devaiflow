@@ -16,13 +16,21 @@ from click.testing import CliRunner
 
 from devflow.cli.main import cli
 from devflow.config.loader import ConfigLoader
-from devflow.config.models import Config, JiraConfig, RepoConfig, WorkSession
+from devflow.config.models import (
+    Config,
+    ConversationContext,
+    JiraConfig,
+    RepoConfig,
+    Session,
+    WorkSession,
+)
 from devflow.session.manager import SessionManager
 from devflow.utils.clone_lifecycle import (
     TemporaryDirectoryInUseError,
     assert_temp_directory_unused,
     get_temp_directory_root,
     temporary_directory_lock,
+    unused_session_clones,
 )
 from devflow.utils.paths import get_cs_state_home
 from devflow.utils.temp_directory import cleanup_temp_directory, get_clone_base_dir
@@ -651,3 +659,541 @@ def test_post_exit_expected_completion_exit_has_no_opaque_secondary_error(
     assert ("retry with" in output) is bool(exit_code)
     assert os.environ["DEVAIFLOW_IN_SESSION"] == "1"
     assert os.environ["AI_AGENT_SESSION_ID"] == "ses_existing"
+
+
+def test_unused_session_clones_deduplicates_and_locks_archived_roots(clone_session):
+    """Transitions protect all history and acquire each shared removal root once."""
+    _, _, session, clone = clone_session
+    sibling = clone.parent / "project-b"
+    sibling.mkdir()
+    session.add_conversation(
+        working_dir="project-b",
+        project_path=str(sibling),
+        ai_agent_session_id="ses_sibling",
+        branch="feature-b",
+        temp_directory=str(sibling),
+    )
+    archived = clone.parent.parent / "daf-session-z" / "project-old"
+    archived.mkdir(parents=True)
+    session.conversations["project-a"].archived_sessions.append(
+        ConversationContext(
+            ai_agent_session_id="ses_archived",
+            project_path=str(archived),
+            temp_directory=str(archived),
+            archived=True,
+        )
+    )
+    before = session.model_dump()
+    with unused_session_clones(session) as roots:
+        assert roots == sorted([str(clone.parent), str(archived.parent)])
+        for path in (clone, sibling, archived):
+            with pytest.raises(TemporaryDirectoryInUseError), temporary_directory_lock(str(path)):
+                pass
+    assert session.model_dump() == before
+    for root in roots:
+        with temporary_directory_lock(root):
+            pass
+
+
+def test_unused_session_clones_releases_earlier_locks_when_archived_clone_is_busy(clone_session):
+    """A cross-process refusal on a later root releases every earlier acquisition."""
+    _, _, session, clone = clone_session
+    archived = clone.parent.parent / "daf-session-z" / "project-old"
+    archived.mkdir(parents=True)
+    session.conversations["project-a"].archived_sessions.append(
+        ConversationContext(
+            ai_agent_session_id="pending-capture",
+            project_path=str(archived),
+            temp_directory=str(archived),
+            archived=True,
+        )
+    )
+    code = (
+        "import sys\n"
+        "from devflow.utils.clone_lifecycle import temporary_directory_lock\n"
+        f"with temporary_directory_lock({str(archived)!r}):\n"
+        "    print('ready', flush=True)\n"
+        "    sys.stdin.read()\n"
+    )
+    with _running_process(Path(__file__).resolve().parents[1], code):
+        with pytest.raises(TemporaryDirectoryInUseError), unused_session_clones(session):
+            pytest.fail("A busy archived clone must block the transition")
+        with temporary_directory_lock(str(clone)):
+            pass
+        assert clone.exists() and archived.exists()
+
+
+def test_unused_session_clones_without_clones():
+    """A not-yet-opened development session needs no filesystem locks."""
+    with unused_session_clones(Session(name="session-a")) as roots:
+        assert roots == []
+
+
+def test_cleanup_under_session_guard_keeps_lock_after_removal(clone_session):
+    """Metadata persistence remains protected after the physical clone is removed."""
+    _, _, session, clone = clone_session
+    with unused_session_clones(session):
+        cleanup_temp_directory(str(clone), locked=True)
+        assert not clone.parent.exists()
+        with pytest.raises(TemporaryDirectoryInUseError), temporary_directory_lock(str(clone)):
+            pass
+    with temporary_directory_lock(str(clone)):
+        pass
+
+
+def test_contended_lock_includes_available_directory_holder(clone_session):
+    """A failed lock reports a real cwd holder without weakening the refusal."""
+    _, _, _, clone = clone_session
+    source = str(Path(__file__).resolve().parents[1])
+    code = (
+        f"import sys; sys.path.insert(0, {source!r})\n"
+        "from devflow.utils.clone_lifecycle import temporary_directory_lock\n"
+        f"with temporary_directory_lock({str(clone)!r}):\n"
+        "    print('ready', flush=True)\n"
+        "    sys.stdin.read()\n"
+    )
+    with _running_process(clone, code) as process:
+        with pytest.raises(TemporaryDirectoryInUseError) as caught:
+            with temporary_directory_lock(str(clone)):
+                pytest.fail("Never proceed after lock contention")
+        assert caught.value.holder["pid"] == process.pid
+        assert caught.value.holder["cwd"] == str(clone)
+        assert process.poll() is None
+        assert clone.exists()
+
+
+@pytest.fixture(params=["jira-legacy", "jira-unified", "github", "gitlab"])
+def creation_sync(clone_session, monkeypatch, request):
+    """Exercise every sync conversion path with real persisted creation history."""
+    from devflow.cli.commands import sync_command
+    from devflow.config.models import JiraFiltersConfig
+
+    loader, manager, session, clone = clone_session
+    backend = request.param.split("-")[0]
+    key = "PROJ-12345" if backend == "jira" else "owner/project-a#42"
+    name = "creation-PROJ-12345" if backend == "jira" else "owner-project-a-42"
+    manager.rename_session(session.name, name)
+    session.session_type = "ticket_creation"
+    session.issue_key = key
+    session.workspace_name = "workspace-1"
+    session.active_conversation.ai_agent_session_id = "ses_creation"
+    session.active_conversation.branch = "creation-source"
+    session.active_conversation.conversation_history = ["ses_previous", "ses_creation"]
+    session.conversations["project-a"].archived_sessions.append(
+        ConversationContext(
+            ai_agent_session_id="ses_previous",
+            project_path=str(clone),
+            temp_directory=str(clone),
+            archived=True,
+            branch="previous-source",
+        )
+    )
+    manager.update_session(session)
+    (loader.get_session_dir(name) / "notes.md").write_text("Preserve creation notes")
+    config = loader.load_config()
+    config.jira.project = "PROJ"
+    config.jira.filters = {"sync": JiraFiltersConfig(required_fields=[])}
+    config.jira.field_cache_auto_refresh = False
+    loader.save_config(config)
+    ticket = {
+        "key": key,
+        "summary": "Implement a generic feature",
+        "type": "Story",
+        "updated": "2026-10-29T12:00:00Z",
+    }
+    client = Mock()
+    client.list_tickets.return_value = [ticket]
+    monkeypatch.setattr(sync_command, "JiraClient", Mock(return_value=client))
+    monkeypatch.setattr("devflow.github.issues_client.GitHubClient", Mock(return_value=client))
+    monkeypatch.setattr("devflow.gitlab.issues_client.GitLabClient", Mock(return_value=client))
+    real_run = subprocess.run
+
+    def fake_username(command, *args, **kwargs):
+        if command and command[0] in ("gh", "glab"):
+            stdout = '{"username": "test-user"}' if command[0] == "glab" else "test-user\n"
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fake_username)
+
+    def sync():
+        if request.param == "jira-legacy":
+            return sync_command.sync_jira()
+        if request.param == "jira-unified":
+            return sync_command.sync_multi_backend(sync_workspaces=False)
+        function = getattr(sync_command, f"sync_{backend}_repository")
+        return function("owner/project-a", SessionManager(loader), loader.load_config())
+
+    return loader, manager, session, clone, sync, ticket
+
+
+def test_live_creation_sync_open_delete_and_retry_preserve_history(creation_sync, capsys):
+    """A live launcher outside the clone blocks transitions until normal owner exit."""
+    loader, _, session, clone, sync, _ = creation_sync
+    before = session.model_dump()
+    original_index = loader.sessions_file.read_bytes()
+    session_dir = loader.get_session_dir(session.name)
+    original_files = {p.name: p.read_bytes() for p in session_dir.iterdir() if p.is_file()}
+    code = (
+        "import sys\n"
+        "from devflow.utils.clone_lifecycle import temporary_directory_lock\n"
+        f"with temporary_directory_lock({str(clone)!r}):\n"
+        "    print('ready', flush=True)\n"
+        "    sys.stdin.read()\n"
+    )
+    with _running_process(Path(__file__).resolve().parents[1], code) as owner:
+        sync()
+        output = capsys.readouterr().out
+        assert "Deferred conversion" in output
+        assert "retry 'daf sync'" in output
+        assert "Converting ticket_creation" not in output
+        assert loader.sessions_file.read_bytes() == original_index
+        for command in (
+            ["open", session.name, "--json"],
+            ["delete", session.name, "--force", "--json"],
+        ):
+            result = CliRunner().invoke(cli, command)
+            assert result.exit_code == 1, result.output
+            assert isinstance(result.exception, SystemExit), repr(result.exception)
+            assert result.output.lstrip().startswith("{"), (command, result.output)
+            data = json.loads(result.output)
+            assert data["success"] is False
+            assert data["error"]["code"] == "SESSION_IN_USE"
+            assert "Traceback" not in result.output
+            assert "CLONE_RECOVERY_FAILED" not in result.output
+            assert loader.sessions_file.read_bytes() == original_index
+        assert owner.poll() is None
+        assert (clone / "work.txt").read_text() == "preserve this work"
+        assert SessionManager(loader).get_session(session.name).model_dump() == before
+        saved_files = {p.name: p.read_bytes() for p in session_dir.iterdir() if p.is_file()}
+        assert saved_files == original_files
+
+    sync()
+    converted = SessionManager(loader).get_session(session.name)
+    assert converted.session_type == "development"
+    assert converted.workspace_name == "workspace-1"
+    assert converted.conversations == session.conversations
+    assert converted.work_sessions == session.work_sessions
+    assert converted.time_tracking_state == session.time_tracking_state
+    assert (session_dir / "notes.md").read_text() == "Preserve creation notes"
+    assert clone.exists()
+    result = CliRunner().invoke(cli, ["delete", session.name, "--force", "--json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["data"]["deleted_sessions"] == [session.name]
+    assert SessionManager(loader).get_session(session.name) is None
+    assert not clone.parent.exists()
+
+
+def test_conversion_never_recovers_an_unverified_pending_identity(creation_sync, monkeypatch):
+    """Releasing a clone lock is not proof of ownership of a missing native ID."""
+    loader, manager, session, _, sync, _ = creation_sync
+    session.active_conversation.ai_agent_session_id = "pending-capture"
+    session.active_conversation.agent_launch_started = None
+    manager.update_session(session)
+    sync()
+    converted = SessionManager(loader).get_session(session.name)
+    assert converted.session_type == "development"
+    monkeypatch.setattr("devflow.cli.utils.select_workspace", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        "devflow.cli.commands.open_command._detect_working_directory_from_cwd", lambda *a: None
+    )
+    monkeypatch.setattr("devflow.cli.commands.open_command._copy_conversation_to_temp", Mock())
+    agent_factory = Mock(side_effect=AssertionError("Never guess or replace native identity"))
+    monkeypatch.setattr("devflow.agent.create_agent_client", agent_factory)
+    result = CliRunner().invoke(cli, ["open", session.name, "--json"])
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit), repr(result.exception)
+    assert result.output.lstrip().startswith("{"), result.output
+    assert json.loads(result.output)["error"]["code"] == "AGENT_SESSION_UNVERIFIED"
+    agent_factory.assert_not_called()
+    saved = SessionManager(loader).get_session(session.name)
+    assert saved.conversations == converted.conversations
+    assert saved.active_conversation.agent_launch_started is None
+
+
+@pytest.mark.parametrize("json_mode", [False, True])
+@pytest.mark.parametrize("extra", [[], ["--new-conversation"], ["--workspace", "workspace-2"]])
+def test_open_live_clone_refuses_before_metadata_options(clone_session, json_mode, extra):
+    """Open reports a real holder before workspace or native-identity replacement."""
+    loader, _, session, clone = clone_session
+    original_index = loader.sessions_file.read_bytes()
+    with _running_process(clone) as owner:
+        result = CliRunner().invoke(
+            cli, ["open", session.name, *extra, *(["--json"] if json_mode else [])]
+        )
+        assert result.exit_code == 1, result.output
+        if json_mode:
+            data = json.loads(result.output)
+            assert data["error"]["code"] == "SESSION_IN_USE"
+            assert data["error"]["holder"]["pid"] == owner.pid
+            assert data["error"]["holder"]["cwd"] == str(clone)
+        else:
+            assert "Cannot open session" in result.output
+            assert str(owner.pid) in result.output
+        assert "CLONE_RECOVERY_FAILED" not in result.output
+        assert loader.sessions_file.read_bytes() == original_index
+        assert (clone / "work.txt").exists()
+
+
+@pytest.mark.parametrize("mode", ["single", "group", "all"])
+@pytest.mark.parametrize("force", [False, True])
+def test_delete_live_clone_is_a_concise_refusal(clone_session, monkeypatch, mode, force):
+    """Every deletion route preserves busy data; force changes confirmation only."""
+    loader, _, session, clone = clone_session
+    original_index = loader.sessions_file.read_bytes()
+    session_dir = loader.get_session_dir(session.name)
+    (session_dir / "notes.md").write_text("Preserve notes")
+    metadata = (session_dir / "metadata.json").read_bytes()
+    if mode == "group":
+        monkeypatch.setattr(
+            "devflow.cli.commands.delete_command.get_session_with_delete_all_option",
+            lambda *args: (session, True),
+        )
+    arguments = ["delete", "--all" if mode == "all" else session.name]
+    if force:
+        arguments.append("--force")
+    with _running_process(clone):
+        result = CliRunner().invoke(cli, arguments, input="y\n")
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert "Cannot delete session" in result.output
+    assert "--force skips confirmation only" in " ".join(result.output.split())
+    assert "Traceback" not in result.output
+    assert "✓" not in result.output
+    assert loader.sessions_file.read_bytes() == original_index
+    assert (session_dir / "metadata.json").read_bytes() == metadata
+    assert (session_dir / "notes.md").read_text() == "Preserve notes"
+    assert (clone / "work.txt").exists()
+
+
+@pytest.mark.parametrize("json_mode", [False, True])
+def test_delete_all_reports_partial_results_and_preserves_busy_metadata(clone_session, json_mode):
+    """A safe batch member can be removed without orphaning a refused member."""
+    loader, manager, session, clone = clone_session
+    safe = manager.create_session(name="session-b", goal="Inactive independent session")
+    safe_dir = loader.get_session_dir(safe.name)
+    (safe_dir / "notes.md").write_text("Safe notes")
+    busy_dir = loader.get_session_dir(session.name)
+    (busy_dir / "notes.md").write_text("Busy notes")
+    before = session.model_dump()
+    metadata = (busy_dir / "metadata.json").read_bytes()
+    unrelated = loader.sessions_dir / "unindexed-user-work"
+    unrelated.mkdir()
+    (unrelated / "work.txt").write_text("Do not sweep unrelated metadata")
+    arguments = ["delete", "--all", "--force", *(["--json"] if json_mode else [])]
+    with _running_process(clone):
+        result = CliRunner().invoke(cli, arguments)
+    assert result.exit_code == 1, result.output
+    if json_mode:
+        data = json.loads(result.output)
+        assert data["success"] is False
+        assert data["data"]["deleted_count"] == data["data"]["refused_count"] == 1
+        assert data["data"]["deleted_sessions"] == [safe.name]
+        assert data["data"]["refused_sessions"][0]["session"] == session.name
+    else:
+        assert "Deleted 1 sessions; preserved 1 refused sessions" in result.output
+        assert "All 2 sessions deleted" not in result.output
+    saved = SessionManager(loader)
+    assert saved.get_session(safe.name) is None
+    assert not safe_dir.exists()
+    assert saved.get_session(session.name).model_dump() == before
+    assert (busy_dir / "metadata.json").read_bytes() == metadata
+    assert (busy_dir / "notes.md").read_text() == "Busy notes"
+    assert (clone / "work.txt").exists()
+    assert (unrelated / "work.txt").exists()
+    retry = CliRunner().invoke(cli, ["delete", "--all", "--force", "--json"])
+    assert retry.exit_code == 0, retry.output
+    assert json.loads(retry.output)["data"]["deleted_sessions"] == [session.name]
+    assert (unrelated / "work.txt").exists()
+
+
+def test_sync_json_reports_deferred_creation_without_false_updates(
+    creation_sync, monkeypatch, request
+):
+    """Unified JSON counts distinguish a protected creation session from an update."""
+    from devflow.config.models import WorkspaceDefinition
+
+    loader, _, session, clone, _, ticket = creation_sync
+    if ticket["key"].startswith("PROJ-"):
+        arguments = ["sync", "--jira", "--json"]
+    else:
+        config = loader.load_config()
+        config.repos.workspaces = [
+            WorkspaceDefinition(name="workspace-1", path=str(clone.parent.parent))
+        ]
+        loader.save_config(config)
+        backend = request.node.callspec.params["creation_sync"]
+        monkeypatch.setattr(
+            "devflow.cli.commands.sync_command.scan_workspace_for_repositories",
+            lambda *a: [{
+                "repository": "owner/project-a", "backend": backend,
+                "path": str(clone), "remote": "origin", "url": None,
+            }],
+        )
+        arguments = ["sync", "--repository", "owner/project-a", "--json"]
+    before = loader.sessions_file.read_bytes()
+    code = (
+        "import sys\n"
+        "from devflow.utils.clone_lifecycle import temporary_directory_lock\n"
+        f"with temporary_directory_lock({str(clone)!r}):\n"
+        "    print('ready', flush=True)\n"
+        "    sys.stdin.read()\n"
+    )
+    with _running_process(Path(__file__).resolve().parents[1], code):
+        result = CliRunner().invoke(cli, arguments)
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["success"] is True
+    assert data["data"]["created_count"] == data["data"]["updated_count"] == 0
+    assert data["data"]["deferred_count"] == 1
+    assert data["data"]["deferred_sessions"][0]["session"] == session.name
+    assert data["data"]["deferred_sessions"][0]["code"] == "SESSION_IN_USE"
+    assert loader.sessions_file.read_bytes() == before
+
+
+@pytest.mark.parametrize("creation_sync", ["jira-legacy"], indirect=True)
+def test_conversion_preserves_native_metadata_saved_after_sync_snapshot(creation_sync):
+    """An owner finishing between snapshot and lock acquisition cannot lose its ID."""
+    from devflow.cli.commands.sync_command import _convert_creation_session
+
+    loader, manager, session, _, _, ticket = creation_sync
+    stale = session.model_copy(deep=True)
+    session.active_conversation.ai_agent_session_id = "ses_final_capture"
+    session.active_conversation.conversation_history.append("ses_final_capture")
+    manager.update_session(session)
+    before = loader.sessions_file.read_bytes()
+    deferred = []
+    assert _convert_creation_session(stale, manager, ticket, "jira", deferred) is None
+    assert "changed during sync" in deferred[0]["message"]
+    assert loader.sessions_file.read_bytes() == before
+    latest = SessionManager(loader).get_session(session.name)
+    converted = _convert_creation_session(latest, manager, ticket, "jira")
+    assert converted.active_conversation.ai_agent_session_id == "ses_final_capture"
+    assert converted.conversations == latest.conversations
+
+
+@pytest.mark.parametrize("creation_sync", ["jira-legacy"], indirect=True)
+def test_conversion_keeps_clone_lock_while_persisting(creation_sync, monkeypatch):
+    """A successful preflight never releases protection before metadata is saved."""
+    from devflow.cli.commands.sync_command import _convert_creation_session
+
+    _, manager, session, clone, _, ticket = creation_sync
+    update = manager.update_session
+
+    def guarded_update(current):
+        with pytest.raises(TemporaryDirectoryInUseError), temporary_directory_lock(str(clone)):
+            pytest.fail("The transition must still hold the clone lock")
+        update(current)
+
+    monkeypatch.setattr(manager, "update_session", guarded_update)
+    assert _convert_creation_session(session, manager, ticket, "jira").session_type == "development"
+
+
+@pytest.mark.parametrize("creation_sync", ["jira-unified"], indirect=True)
+@pytest.mark.parametrize("status", ["paused", "complete"])
+@pytest.mark.parametrize("has_conversation", [False, True])
+def test_inactive_conversion_uses_development_branch_setup(
+    creation_sync, monkeypatch, status, has_conversation
+):
+    """Fresh development uses normal setup; existing history keeps its saved branch."""
+    from devflow.cli.commands.open_command import open_session
+
+    loader, manager, session, clone, sync, _ = creation_sync
+    session.status = status
+    if not has_conversation:
+        session.conversations = {}
+        session.working_directory = None
+    manager.update_session(session)
+    sync()
+    converted = SessionManager(loader).get_session(session.name)
+    assert converted.session_type == "development"
+    assert converted.workspace_name == "workspace-1"
+    prefix = "devflow.cli.commands.open_command."
+    monkeypatch.setattr("devflow.cli.utils.select_workspace", lambda *a, **kw: None)
+    monkeypatch.setattr(prefix + "_detect_working_directory_from_cwd", lambda *a: None)
+    monkeypatch.setattr(prefix + "_copy_conversation_to_temp", Mock())
+    monkeypatch.setattr(prefix + "_display_session_summary", Mock())
+    monkeypatch.setattr(prefix + "_sync_branch_for_import", Mock())
+    monkeypatch.setattr(prefix + "_check_and_sync_with_base_branch", lambda *a, **kw: True)
+    monkeypatch.setattr(prefix + "GitUtils.has_merge_conflicts", lambda *a: False)
+    monkeypatch.setattr(prefix + "should_launch_claude_code", lambda *a, **kw: False)
+    monkeypatch.setattr(
+        prefix + "check_concurrent_session",
+        lambda *a, **kw: SimpleNamespace(safe_to_proceed=True, clone_path=None),
+    )
+    checkout = Mock(return_value=True)
+    monkeypatch.setattr(prefix + "_handle_branch_checkout", checkout)
+    create_branch = Mock(return_value=("feature-a", "origin/trunk"))
+    monkeypatch.setattr("devflow.cli.commands.new_command._handle_branch_creation", create_branch)
+    agent = Mock()
+    agent.get_agent_name.return_value = "OpenCode"
+    agent.session_exists.return_value = True
+    agent.get_session_model_id.return_value = None
+    monkeypatch.setattr("devflow.agent.create_agent_client", lambda *a: agent)
+
+    def select_project(current, config_loader, session_manager, *args, **kwargs):
+        current.working_directory = "project-a"
+        conv = current.add_conversation(
+            working_dir="project-a", project_path=str(clone),
+            ai_agent_session_id="pending-capture", branch=None,
+        )
+        conv.agent_launch_started = False
+        session_manager.update_session(current)
+        return True
+
+    select = Mock(side_effect=select_project)
+    monkeypatch.setattr(prefix + "_prompt_for_working_directory", select)
+    open_session(session.name, skip_jira_transition=True)
+    saved = SessionManager(loader).get_session(session.name)
+    if has_conversation:
+        select.assert_not_called()
+        create_branch.assert_not_called()
+        assert saved.conversations == converted.conversations
+        assert checkout.call_args.args[:2] == (str(clone), "creation-source")
+    else:
+        select.assert_called_once()
+        create_branch.assert_called_once()
+        assert saved.active_conversation.branch == "feature-a"
+        assert saved.active_conversation.base_branch == "origin/trunk"
+    assert (loader.get_session_dir(session.name) / "notes.md").exists()
+
+
+def test_delete_busy_archived_clone_preserves_all_active_clone_contents(clone_session):
+    """Preflight every history root before removing even the first inactive clone."""
+    loader, manager, session, clone = clone_session
+    archived = clone.parent.parent / "daf-session-z" / "project-old"
+    archived.mkdir(parents=True)
+    (archived / "work.txt").write_text("Preserve archived work")
+    session.conversations["project-a"].archived_sessions.append(
+        ConversationContext(
+            ai_agent_session_id="ses_archived", project_path=str(archived),
+            temp_directory=str(archived), archived=True,
+        )
+    )
+    manager.update_session(session)
+    before = loader.sessions_file.read_bytes()
+    with _running_process(archived):
+        result = CliRunner().invoke(cli, ["delete", session.name, "--force", "--json"])
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["error"]["code"] == "SESSION_IN_USE"
+    assert data["error"]["removed_clones"] == []
+    assert loader.sessions_file.read_bytes() == before
+    assert (clone / "work.txt").exists()
+    assert (archived / "work.txt").read_text() == "Preserve archived work"
+
+
+def test_delete_cleanup_failure_keeps_metadata_and_reports_actual_reason(
+    clone_session, monkeypatch
+):
+    """A non-removal must not be reported as a successful session deletion."""
+    loader, _, session, clone = clone_session
+    before = loader.sessions_file.read_bytes()
+    monkeypatch.setattr("devflow.cli.commands.delete_command.cleanup_temp_directory", Mock())
+    result = CliRunner().invoke(cli, ["delete", session.name, "--force", "--json"])
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["error"]["code"] == "CLONE_CLEANUP_FAILED"
+    assert data["data"]["deleted_count"] == 0
+    assert loader.sessions_file.read_bytes() == before
+    assert clone.exists()
