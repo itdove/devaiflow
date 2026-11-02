@@ -555,10 +555,12 @@ def test_check_and_sync_with_base_branch_up_to_date(tmp_path):
 
     # Mock fetch to succeed, commits_behind to return 0
     with patch.object(GitUtils, 'fetch_origin', return_value=(True, None)), \
-         patch.object(GitUtils, 'commits_behind', return_value=0):
+         patch.object(GitUtils, 'commits_behind', return_value=0), \
+         patch('devflow.cli.commands.open_command.Confirm.ask') as mock_confirm:
 
         # Should complete without prompting
         _check_and_sync_with_base_branch(str(tmp_path), current_branch, current_branch, "test-session")
+        mock_confirm.assert_not_called()
 
 
 @pytest.mark.skipif(
@@ -2181,14 +2183,44 @@ class TestOpenCommandOpenCodeResume:
         mock_config.agent_backend = "opencode"
         mock_config.repos = None
         mock_config.gcp_vertex_region = None
+        branch_flow = []
 
-        with patch('devflow.cli.commands.open_command._detect_working_directory_from_cwd', return_value=None), \
-             patch('devflow.cli.commands.open_command.Confirm.ask', return_value=True), \
-             patch('devflow.cli.commands.open_command._handle_branch_checkout', return_value=True), \
-             patch('devflow.cli.commands.open_command._check_and_sync_with_base_branch', return_value=True), \
-             patch('devflow.cli.commands.open_command.ConfigLoader', return_value=config_loader), \
-             patch.object(config_loader, 'load_config', return_value=mock_config), \
-             patch('devflow.agent.create_agent_client') as mock_create_agent:
+        def record_branch_step(step):
+            def record(*args, **kwargs):
+                branch_flow.append(step)
+                return True
+
+            return record
+
+        with (
+            patch(
+                "devflow.cli.commands.open_command._detect_working_directory_from_cwd",
+                return_value=None,
+            ),
+            patch("devflow.cli.commands.open_command.Confirm.ask", return_value=True),
+            patch(
+                "devflow.cli.commands.open_command.GitUtils.branch_exists",
+                return_value=True,
+            ),
+            patch(
+                "devflow.cli.commands.open_command._handle_branch_checkout",
+                side_effect=record_branch_step("checkout"),
+            ),
+            patch(
+                "devflow.cli.commands.open_command._sync_branch_for_import",
+                side_effect=record_branch_step("remote-sync"),
+            ),
+            patch(
+                "devflow.cli.commands.open_command._check_and_sync_with_base_branch",
+                side_effect=record_branch_step("base-sync"),
+            ),
+            patch(
+                "devflow.cli.commands.open_command.ConfigLoader",
+                return_value=config_loader,
+            ),
+            patch.object(config_loader, "load_config", return_value=mock_config),
+            patch("devflow.agent.create_agent_client") as mock_create_agent,
+        ):
 
             mock_agent = Mock()
             mock_agent.resume_session.return_value = mock_process
@@ -2199,6 +2231,7 @@ class TestOpenCommandOpenCodeResume:
             result = runner.invoke(cli, ["open", "oc-resume-test"])
 
         assert result.exit_code == 0, result.output
+        assert branch_flow == ["checkout", "remote-sync", "base-sync"]
         mock_agent.resume_session.assert_called_once()
         call_kwargs = mock_agent.resume_session.call_args
         assert call_kwargs.kwargs["session_id"] == "ses_abc123def"
