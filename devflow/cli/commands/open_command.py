@@ -1094,18 +1094,15 @@ def open_session(
     # Handle git branch sync and checkout if needed
     # Skip for ticket_creation sessions - they use placeholder branches and don't need git operations
     if active_conv and active_conv.project_path and active_conv.branch and session.session_type != "ticket_creation":
-        # Sync branch for imported sessions FIRST (fetch from remote if needed)
-        # This helps with team handoff when importing an exported session
-        # Supports fork workflows by passing remote_url if available
-        # Running this before _handle_branch_checkout ensures branch is fetched from remote
-        # before we prompt to create it locally
         remote_url = active_conv.remote_url if active_conv else None
-        _sync_branch_for_import(active_conv.project_path, active_conv.branch, remote_url)
-
-        # Now handle branch checkout (will find branch if synced above)
-        # Pass base_branch for feature orchestration (creates from correct base)
         base_branch_for_checkout = active_conv.base_branch if active_conv and active_conv.base_branch else None
-        checkout_successful = _handle_branch_checkout(active_conv.project_path, active_conv.branch, config, base_branch=base_branch_for_checkout)
+        checkout_successful = _checkout_and_sync_session_branch(
+            active_conv.project_path,
+            active_conv.branch,
+            config,
+            base_branch_for_checkout,
+            remote_url,
+        )
 
         # Only proceed to sync check if checkout succeeded
         if not checkout_successful:
@@ -2115,7 +2112,12 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
     if branch_exists_remotely:
         # Use git rev-list to count commits behind
         result = subprocess.run(
-            ["git", "rev-list", "--count", f"HEAD..{remote_name}/{branch_name}"],
+            [
+                "git",
+                "rev-list",
+                "--count",
+                f"refs/heads/{branch_name}..refs/remotes/{remote_name}/{branch_name}",
+            ],
             cwd=path,
             capture_output=True,
             text=True,
@@ -2257,6 +2259,48 @@ def _handle_branch_checkout(project_path: str, branch_name: str, config: Optiona
     else:
         # User declined to checkout
         return False
+
+
+def _checkout_and_sync_session_branch(
+    project_path: str,
+    branch_name: str,
+    config: Any | None = None,
+    base_branch: str | None = None,
+    remote_url: str | None = None,
+) -> bool:
+    """Restore the session branch before syncing it with its remote.
+
+    A locally available session branch is checked out first so any remote-sync
+    prompt and comparison apply to the session branch, not the branch that
+    happened to be checked out when ``daf open`` started. If the session branch
+    is missing locally, sync first so imported branches can still be fetched
+    from their remote before the normal checkout/create flow.
+
+    Returns:
+        True if the session branch is checked out, False otherwise.
+    """
+    path = Path(project_path)
+    branch_exists_locally = GitUtils.branch_exists(path, branch_name)
+
+    if not branch_exists_locally:
+        # Preserve imported-session recovery: fetch a remote-only branch before
+        # asking whether to create a new local branch.
+        _sync_branch_for_import(project_path, branch_name, remote_url)
+
+    checkout_successful = _handle_branch_checkout(
+        project_path,
+        branch_name,
+        config,
+        base_branch=base_branch,
+    )
+    if not checkout_successful:
+        return False
+
+    if branch_exists_locally:
+        # Check for remote changes only after the session branch is active.
+        _sync_branch_for_import(project_path, branch_name, remote_url)
+
+    return True
 
 
 def _detect_working_directory_from_path(path: Path, config_loader) -> Optional[str]:

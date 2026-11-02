@@ -759,10 +759,11 @@ Which project? [1-3]: 2
        - `--json` flag is used (non-interactive mode defaults to session workspace)
        - Session doesn't have a saved workspace (old sessions or new sessions)
    - Loads Claude conversation
-   - Checks out git branch
+   - Checks out the session's git branch before checking for remote or base-branch changes
    - **Syncs branch with remote (for imported sessions - PROJ-59820)**
      - Fetches branch from remote if missing locally
-     - Merges remote changes if local branch is behind
+     - If the branch exists locally, prompts to merge remote changes only after switching to it
+     - Merges remote changes if the session branch is behind
      - Handles missing remote branches gracefully
    - **Checks if branch is behind base branch (PROJ-59821, AAP-65177)**
      - Prompts to sync with base branch (merge, rebase, or skip)
@@ -3820,7 +3821,8 @@ When importing a session exported by a teammate:
 4. Run `daf open <SESSION>` to select which conversation to work on
 5. Tool automatically syncs git branch for the selected conversation (PROJ-61023, AAP-65177):
    - **If branch doesn't exist locally**: Automatically fetches and checks out from remote (no prompt to create)
-   - **If branch exists locally but is behind**: Prompts to merge, rebase, or skip sync
+   - **If branch exists locally**: Switches to the session branch before checking whether it is behind
+   - **If branch is behind**: Prompts to merge, rebase, or skip sync; no sync prompt appears when it is up-to-date
    - **If merge conflicts occur**: Aborts operation with clear resolution instructions
    - Only prompts to create new branch if it doesn't exist on remote either
 6. Continue work where teammate left off, with full context from their notes

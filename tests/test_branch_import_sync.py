@@ -1,12 +1,16 @@
 """Tests for PROJ-61023: Branch sync on import workflow."""
 
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from devflow.cli.commands.open_command import _sync_branch_for_import
+from devflow.cli.commands.open_command import (
+    _checkout_and_sync_session_branch,
+    _sync_branch_for_import,
+)
 from devflow.git.utils import GitUtils
 
 
@@ -27,6 +31,127 @@ def mock_git_repo(tmp_path):
     subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_path, capture_output=True, check=True)
 
     return repo_path
+
+
+def _create_remote_session_repo(
+    tmp_path: Path,
+    remote_update: bool = False,
+    delete_local_session_branch: bool = False,
+) -> Path:
+    """Create a local repository and bare origin for reopen branch tests."""
+    repo_path = tmp_path / "project-a"
+    repo_path.mkdir()
+
+    def run_git(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_path,
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+
+    run_git("init", "-b", "main")
+    run_git("config", "user.name", "Test User")
+    run_git("config", "user.email", "test@example.com")
+    (repo_path / "README.md").write_text("# Project A\n")
+    run_git("add", ".")
+    run_git("commit", "-m", "Initial commit")
+
+    remote_path = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", str(remote_path)],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    run_git("remote", "add", "origin", str(remote_path))
+    run_git("push", "-u", "origin", "main")
+    run_git("checkout", "-b", "feature-a")
+    run_git("push", "-u", "origin", "feature-a")
+
+    if remote_update:
+        (repo_path / "remote-change.txt").write_text("Remote update\n")
+        run_git("add", ".")
+        run_git("commit", "-m", "Remote update")
+        run_git("push", "origin", "feature-a")
+        run_git("reset", "--hard", "HEAD^")
+
+    run_git("checkout", "main")
+    if delete_local_session_branch:
+        run_git("branch", "-D", "feature-a")
+
+    return repo_path
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+@pytest.mark.parametrize(
+    ("remote_update", "expected_prompts"),
+    [
+        (
+            True,
+            [
+                "Switch to branch 'feature-a'?",
+                "Merge origin changes into local branch?",
+            ],
+        ),
+        (False, ["Switch to branch 'feature-a'?"]),
+    ],
+)
+def test_checkout_session_branch_before_remote_sync_prompt(
+    tmp_path, monkeypatch, remote_update, expected_prompts
+):
+    """Reopen switches to the session branch before checking its remote state."""
+    from rich.prompt import Confirm
+
+    repo_path = _create_remote_session_repo(tmp_path, remote_update=remote_update)
+    prompts = []
+
+    def confirm(*args, **kwargs):
+        prompt = next(arg for arg in args if isinstance(arg, str))
+        prompts.append(prompt)
+        if prompt.startswith("Merge "):
+            assert GitUtils.get_current_branch(repo_path) == "feature-a"
+        return True
+
+    monkeypatch.setattr(Confirm, "ask", confirm)
+
+    assert (
+        _checkout_and_sync_session_branch(
+            str(repo_path), "feature-a", base_branch="main"
+        )
+        is True
+    )
+
+    assert prompts == expected_prompts
+    assert GitUtils.get_current_branch(repo_path) == "feature-a"
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+def test_checkout_and_sync_fetches_remote_only_session_branch(tmp_path, monkeypatch):
+    """A remote-only imported branch is fetched before the checkout flow."""
+    from rich.prompt import Confirm
+
+    repo_path = _create_remote_session_repo(tmp_path, delete_local_session_branch=True)
+    prompts = []
+
+    def confirm(*args, **kwargs):
+        prompt = next(arg for arg in args if isinstance(arg, str))
+        prompts.append(prompt)
+        return True
+
+    monkeypatch.setattr(Confirm, "ask", confirm)
+
+    assert (
+        _checkout_and_sync_session_branch(
+            str(repo_path), "feature-a", base_branch="main"
+        )
+        is True
+    )
+
+    assert prompts == ["Fetch branch 'feature-a' from origin?"]
+    assert GitUtils.get_current_branch(repo_path) == "feature-a"
 
 
 def test_sync_branch_not_git_repo(tmp_path):
@@ -98,6 +223,8 @@ def test_sync_branch_exists_locally_but_behind_remote(mock_git_repo, monkeypatch
     monkeypatch.setattr(Confirm, "ask", lambda *args, **kwargs: True)
 
     # Mock git commands to simulate branch being behind
+    rev_list_commands = []
+
     def mock_run(cmd, *args, **kwargs):
         # Mock git fetch - success
         if isinstance(cmd, list) and "fetch" in cmd:
@@ -114,6 +241,7 @@ def test_sync_branch_exists_locally_but_behind_remote(mock_git_repo, monkeypatch
 
         # Mock git rev-list to show 3 commits behind
         if isinstance(cmd, list) and "rev-list" in cmd and "--count" in cmd:
+            rev_list_commands.append(cmd)
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_result.stdout = "3"
@@ -135,6 +263,15 @@ def test_sync_branch_exists_locally_but_behind_remote(mock_git_repo, monkeypatch
 
             # Should successfully merge
             assert result is True
+
+    assert rev_list_commands == [
+        [
+            "git",
+            "rev-list",
+            "--count",
+            "refs/heads/test-branch..refs/remotes/origin/test-branch",
+        ]
+    ]
 
 
 def test_sync_branch_merge_conflicts(mock_git_repo, monkeypatch):
