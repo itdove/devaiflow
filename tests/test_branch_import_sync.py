@@ -154,6 +154,80 @@ def test_checkout_and_sync_fetches_remote_only_session_branch(tmp_path, monkeypa
     assert GitUtils.get_current_branch(repo_path) == "feature-a"
 
 
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+def test_checkout_and_sync_uses_local_session_branch_when_remote_query_times_out(
+    tmp_path, monkeypatch, capsys
+):
+    """A remote query timeout doesn't prevent opening an existing local branch."""
+    from rich.prompt import Confirm
+
+    repo_path = _create_remote_session_repo(tmp_path)
+    monkeypatch.setattr(Confirm, "ask", lambda *args, **kwargs: True)
+
+    real_run = subprocess.run
+    commands = []
+
+    def timeout_ls_remote(cmd, *args, **kwargs):
+        commands.append(cmd)
+        if cmd[:3] == ["git", "ls-remote", "--heads"]:
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 10))
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", timeout_ls_remote)
+
+    assert (
+        _checkout_and_sync_session_branch(
+            str(repo_path), "feature-a", base_branch="main"
+        )
+        is True
+    )
+
+    assert GitUtils.get_current_branch(repo_path) == "feature-a"
+    assert ["git", "fetch", "origin"] in commands
+    output = " ".join(capsys.readouterr().out.split())
+    assert "remote query timed out" in output
+    assert "Continuing with the local branch" in output
+    assert "up-to-date" not in output
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+def test_checkout_and_sync_does_not_treat_remote_only_branch_as_missing_on_timeout(
+    tmp_path, monkeypatch, capsys
+):
+    """An inconclusive remote query must not trigger a prompt to create a branch."""
+    from rich.prompt import Confirm
+
+    repo_path = _create_remote_session_repo(tmp_path, delete_local_session_branch=True)
+
+    def unexpected_prompt(*args, **kwargs):
+        pytest.fail("an inconclusive remote query must not prompt to create a branch")
+
+    monkeypatch.setattr(Confirm, "ask", unexpected_prompt)
+
+    real_run = subprocess.run
+
+    def timeout_ls_remote(cmd, *args, **kwargs):
+        if cmd[:3] == ["git", "ls-remote", "--heads"]:
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 10))
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", timeout_ls_remote)
+
+    assert (
+        _checkout_and_sync_session_branch(
+            str(repo_path), "feature-a", base_branch="main"
+        )
+        is False
+    )
+
+    assert GitUtils.get_current_branch(repo_path) == "main"
+    output = " ".join(capsys.readouterr().out.split())
+    assert "remote query timed out" in output
+    assert "Remote state for branch 'feature-a' is unknown" in output
+    assert "does not exist locally or on origin" not in output
+    assert "Branch 'feature-a' does not exist" not in output
+
+
 def test_sync_branch_not_git_repo(tmp_path):
     """Test _sync_branch_for_import when path is not a git repo."""
     non_git_path = tmp_path / "not-a-repo"
