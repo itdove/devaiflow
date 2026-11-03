@@ -3,24 +3,58 @@
 import os
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from devflow.cli.utils import output_json as json_output, require_outside_claude, serialize_session, console_print
+from devflow.cli.utils import (
+    console_print,
+    require_outside_claude,
+    serialize_session,
+)
+from devflow.cli.utils import (
+    output_json as json_output,
+)
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
+from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError
 from devflow.jira import JiraClient
-from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
-from devflow.issue_tracker.factory import create_issue_tracker_client
-from devflow.issue_tracker.exceptions import IssueTrackerError, IssueTrackerAuthError, IssueTrackerApiError
-from devflow.utils.git_remote import GitRemoteDetector
+from devflow.jira.exceptions import JiraApiError, JiraAuthError, JiraConnectionError
 from devflow.session.manager import SessionManager
-from devflow.utils.clone_lifecycle import TemporaryDirectoryInUseError, unused_session_clones
+from devflow.utils.clone_lifecycle import (
+    TemporaryDirectoryInUseError,
+    unused_session_clones,
+)
+from devflow.utils.git_remote import GitRemoteDetector
 
 console = Console()
+
+
+def _format_jira_sync_auth_error(error: JiraAuthError) -> str:
+    """Return actionable, credential-safe guidance for JIRA auth failures.
+
+    Do not include the underlying response or credential values in sync output.
+    """
+    if getattr(error, "token_expired", False):
+        return (
+            "JIRA rejected the configured API token because it is expired. "
+            "Generate a replacement API token in your JIRA profile, update the "
+            "JIRA_API_TOKEN environment variable, then reload your shell or "
+            "restart the terminal."
+        )
+
+    if getattr(error, "status_code", None) == 401 and getattr(error, "jira_url", None):
+        return (
+            "JIRA rejected the configured credentials (the API token may be "
+            "invalid or expired). Verify JIRA_API_TOKEN and your configured "
+            "authentication type. If needed, generate a replacement API token "
+            "in your JIRA profile, update JIRA_API_TOKEN, then reload your "
+            "shell or restart the terminal."
+        )
+
+    return str(error)
 
 
 def _convert_creation_session(
@@ -278,7 +312,17 @@ def sync_jira(
             field_filters=field_filters,
         )
     except JiraAuthError as e:
-        console_print(f"[red]✗[/red] Authentication failed: {e}")
+        error_message = _format_jira_sync_auth_error(e)
+        if output_json:
+            json_output(
+                success=False,
+                error={
+                    "code": "JIRA_AUTHENTICATION_FAILED",
+                    "message": error_message,
+                },
+            )
+        else:
+            console_print(f"[red]✗[/red] Authentication failed: {error_message}")
         return
     except JiraApiError as e:
         console_print(f"[red]✗[/red] JIRA API error: {e}")
@@ -1028,6 +1072,7 @@ def sync_multi_backend(
     backend_stats = {}
     synced_tickets: List[Dict[str, str]] = []  # Track all synced tickets for recap
     deferred_sessions: List[Dict[str, Any]] = []
+    jira_auth_error: dict[str, str] | None = None
 
     # Phase 1: Sync JIRA (if configured and sync_jira=True)
     if sync_jira and config.jira and config.jira.project and config.jira.url:
@@ -1167,7 +1212,16 @@ def sync_multi_backend(
                 total_created += jira_created
                 total_updated += jira_updated
 
-            except (JiraAuthError, JiraApiError, JiraConnectionError) as e:
+            except JiraAuthError as e:
+                jira_auth_error = {
+                    "code": "JIRA_AUTHENTICATION_FAILED",
+                    "message": _format_jira_sync_auth_error(e),
+                }
+                console_print(
+                    f"[red]✗[/red] JIRA authentication failed: "
+                    f"{jira_auth_error['message']}"
+                )
+            except (JiraApiError, JiraConnectionError) as e:
                 console_print(f"[yellow]⚠[/yellow] JIRA sync failed: {e}")
             except Exception as e:
                 console_print(f"[yellow]⚠[/yellow] JIRA sync error: {e}")
@@ -1321,7 +1375,7 @@ def sync_multi_backend(
 
     if output_json:
         json_output(
-            success=True,
+            success=jira_auth_error is None,
             data={
                 "created_count": total_created,
                 "updated_count": total_updated,
@@ -1330,6 +1384,7 @@ def sync_multi_backend(
                 "synced_tickets": synced_tickets,
                 "backends": backend_stats,
             },
+            error=jira_auth_error,
         )
         return
 
@@ -1338,7 +1393,10 @@ def sync_multi_backend(
 
     # Summary
     console_print()
-    console_print("[bold]Sync complete[/bold]")
+    if jira_auth_error:
+        console_print("[bold red]Sync finished with errors[/bold red]")
+    else:
+        console_print("[bold]Sync complete[/bold]")
     console_print(f"[green]Total created:[/green] {total_created} sessions")
     console_print(f"[cyan]Total updated:[/cyan] {total_updated} sessions")
     if deferred_sessions:
