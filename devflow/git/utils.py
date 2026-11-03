@@ -100,17 +100,46 @@ class GitUtils:
         Args:
             path: Repository path
             remote: If provided, resolve only this remote's HEAD, without falling
-                back to other remotes or common local branch names. A URL is
-                accepted when the target repository has no configured remote.
+                back to other remotes or common local branch names. The live
+                remote HEAD is preferred over a potentially stale local
+                remote-tracking symbolic ref. A URL is accepted when the target
+                repository has no configured remote.
 
         Returns:
             Default branch name or None if not found
         """
+
         try:
             if remote is not None:
-                prefix = f"refs/remotes/{remote}/"
+                # The local remote-tracking HEAD can lag behind a remote's
+                # default-branch change. Ask this remote first so a stale local
+                # target cannot hide an available branch from the picker.
+                try:
+                    result = subprocess.run(
+                        ["git", "ls-remote", "--symref", remote, "HEAD"],
+                        cwd=path,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        check=False,
+                    )
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    result = None
+
+                if result is not None and result.returncode == 0:
+                    for line in result.stdout.splitlines():
+                        ref, _, name = line.partition("\t")
+                        symref_prefix = "ref: refs/heads/"
+                        if name == "HEAD" and ref.startswith(symref_prefix):
+                            branch = ref.removeprefix(symref_prefix)
+                            if branch:
+                                return branch
+
+                # Keep working offline when possible, but use the cached value
+                # only when the live remote did not provide a usable HEAD.
+                remote_ref_prefix = f"refs/remotes/{remote}/"
                 result = subprocess.run(
-                    ["git", "symbolic-ref", f"{prefix}HEAD"],
+                    ["git", "symbolic-ref", f"{remote_ref_prefix}HEAD"],
                     cwd=path,
                     capture_output=True,
                     text=True,
@@ -119,25 +148,11 @@ class GitUtils:
                 )
                 if result.returncode == 0:
                     ref = result.stdout.strip()
-                    if ref.startswith(prefix) and ref[len(prefix) :]:
-                        return ref[len(prefix) :]
-
-                # A fork parent may not have a local remote HEAD (or even a
-                # named remote). Ask that repository, never a different remote.
-                result = subprocess.run(
-                    ["git", "ls-remote", "--symref", remote, "HEAD"],
-                    cwd=path,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    check=False,
-                )
-                if result.returncode == 0:
-                    for line in result.stdout.splitlines():
-                        ref, _, name = line.partition("\t")
-                        prefix = "ref: refs/heads/"
-                        if name == "HEAD" and ref.startswith(prefix) and ref[len(prefix) :]:
-                            return ref[len(prefix) :]
+                    if (
+                        ref.startswith(remote_ref_prefix)
+                        and ref[len(remote_ref_prefix) :]
+                    ):
+                        return ref[len(remote_ref_prefix) :]
                 return None
 
             # Priority 1: Try upstream remote (for fork workflows)

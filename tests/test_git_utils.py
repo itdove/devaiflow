@@ -371,20 +371,20 @@ def test_get_default_branch_not_git(tmp_path):
 
 @pytest.mark.parametrize("remote", ["origin", "upstream", "parent"])
 def test_get_default_branch_scoped_to_remote_preserves_branch_path(monkeypatch, tmp_path, remote):
-    """Use the requested remote's HEAD and preserve slashes in its branch name."""
+    """Prefer the requested remote's live HEAD and preserve its branch path."""
     commands = []
 
     def mock_run(command, **kwargs):
         commands.append(command)
         assert kwargs["cwd"] == tmp_path
         return subprocess.CompletedProcess(
-            command, 0, f"refs/remotes/{remote}/release/stable\n", ""
+            command, 0, "ref: refs/heads/release/stable\tHEAD\nabc123\tHEAD\n", ""
         )
 
     monkeypatch.setattr("devflow.git.utils.subprocess.run", mock_run)
 
     assert GitUtils.get_default_branch(tmp_path, remote=remote) == "release/stable"
-    assert commands == [["git", "symbolic-ref", f"refs/remotes/{remote}/HEAD"]]
+    assert commands == [["git", "ls-remote", "--symref", remote, "HEAD"]]
 
 
 @pytest.mark.parametrize("remote", ["parent", "https://example.com/parent/repo.git"])
@@ -414,10 +414,10 @@ def test_get_default_branch_remote_head_without_local_symbolic_ref(
     monkeypatch.setattr("devflow.git.utils.subprocess.run", mock_run)
 
     assert GitUtils.get_default_branch(tmp_path, remote=remote) == expected
-    assert commands == [
-        ["git", "symbolic-ref", f"refs/remotes/{remote}/HEAD"],
-        ["git", "ls-remote", "--symref", remote, "HEAD"],
-    ]
+    expected_commands = [["git", "ls-remote", "--symref", remote, "HEAD"]]
+    if expected is None:
+        expected_commands.append(["git", "symbolic-ref", f"refs/remotes/{remote}/HEAD"])
+    assert commands == expected_commands
 
 
 @pytest.mark.parametrize("failure", ["nonzero", "timeout", "missing_git"])
@@ -438,7 +438,27 @@ def test_get_default_branch_remote_failure_does_not_guess(monkeypatch, tmp_path,
 
     assert GitUtils.get_default_branch(tmp_path, remote="parent") is None
     assert len(commands) == 2
-    assert commands[1] == ["git", "ls-remote", "--symref", "parent", "HEAD"]
+    assert commands == [
+        ["git", "ls-remote", "--symref", "parent", "HEAD"],
+        ["git", "symbolic-ref", "refs/remotes/parent/HEAD"],
+    ]
+
+
+def test_get_default_branch_uses_cached_remote_head_when_live_lookup_fails(
+    monkeypatch, tmp_path
+):
+    """Retain offline support when the remote lookup fails but its cache exists."""
+
+    def mock_run(command, **kwargs):
+        if command[1] == "ls-remote":
+            return subprocess.CompletedProcess(command, 128, "", "")
+        return subprocess.CompletedProcess(
+            command, 0, "refs/remotes/origin/release/stable\n", ""
+        )
+
+    monkeypatch.setattr("devflow.git.utils.subprocess.run", mock_run)
+
+    assert GitUtils.get_default_branch(tmp_path, remote="origin") == "release/stable"
 
 
 def test_branch_exists_not_git(tmp_path):
