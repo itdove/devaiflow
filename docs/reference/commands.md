@@ -786,8 +786,10 @@ Which project? [1-3]: 2
 
 **Default source branch selection:** Initial branch creation in `daf open`, `daf new`,
 and multi-project sessions resolves the source remote's actual default branch, including
-names such as `release/stable`. Remote priority is `upstream`, then `origin`, then other
-configured remotes alphabetically. The numbered menu lists branches from that same remote;
+names such as `release/stable`. It checks the live remote HEAD first, using the cached
+remote-tracking HEAD only when the live lookup cannot provide a usable default. Remote
+priority is `upstream`, then `origin`, then other configured remotes alphabetically. The
+numbered menu lists branches from that same remote;
 the resolved default is marked `(default)` and selected by Enter, even without a local
 branch of that name. Selected remote branches remain remote-qualified (for example,
 `upstream/release/stable`) so they cannot accidentally use another remote's or a local

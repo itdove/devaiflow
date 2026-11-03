@@ -368,6 +368,62 @@ def test_default_discovery_through_selection(monkeypatch, capsys, remote_default
     assert f"{remote_default} (default)" in capsys.readouterr().out
 
 
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+def test_picker_uses_live_remote_head_when_local_remote_head_is_stale(
+    tmp_path, monkeypatch, capsys
+):
+    """A stale cached origin/HEAD must not hide the live, non-first default branch."""
+    remote = tmp_path / "origin.git"
+    path = tmp_path / "repo"
+    subprocess.run(
+        ["git", "init", "--bare", "-b", "devel", str(remote)],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "init", "-b", "work", str(path)], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=path, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=path, check=True)
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "Initial"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(remote)], cwd=path, check=True
+    )
+    for branch in [*(f"branch-{index:02}" for index in range(1, 10)), "devel"]:
+        subprocess.run(
+            ["git", "push", "origin", f"HEAD:refs/heads/{branch}"],
+            cwd=path,
+            check=True,
+            capture_output=True,
+        )
+    subprocess.run(
+        [
+            "git",
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/removed-default",
+        ],
+        cwd=path,
+        check=True,
+    )
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+
+    suggested = _get_default_source_branch(path)
+    selected = _prompt_for_source_branch(path, suggested)
+
+    assert suggested == selected == "origin/devel"
+    output = " ".join(capsys.readouterr().out.split())
+    assert "10. devel (default)" in output
+    assert "unresolved or unavailable" not in output
+
+
 @pytest.mark.parametrize("qualified_default", [None, "upstream/release/stable", "origin/main"])
 def test_fork_defaults_and_menu_use_same_remote(monkeypatch, qualified_default, capsys):
     """Upstream discovery and explicit origin suggestions never match the other remote."""
