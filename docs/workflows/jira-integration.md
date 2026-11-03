@@ -1333,11 +1333,20 @@ Creates single file with all tickets.
 
 **Error:** `401 Unauthorized`, `JIRA_API_TOKEN not set`, or `Authentication failed`
 
+For `daf sync`, a JIRA `401` is reported as an authentication failure, not as a
+successful sync with no matching tickets. With `--json`, the response has
+`success: false` and the error code `JIRA_AUTHENTICATION_FAILED`. The guidance
+does not display the token value.
+
 **Solutions:**
 
-1. **Check token is set:**
+1. **Check whether the token is set without printing it:**
    ```bash
-   echo $JIRA_API_TOKEN
+   if [ -n "${JIRA_API_TOKEN:-}" ]; then
+     echo "JIRA_API_TOKEN is set"
+   else
+     echo "JIRA_API_TOKEN is not set"
+   fi
    ```
 
 2. **For self-hosted JIRA:** Use Personal Access Token, not API token
