@@ -118,7 +118,9 @@ def test_new_multi_project_persists_configured_profile_and_model(temp_daf_home, 
     assert session.model_id == "configured-model"
 
 
-def test_ticket_creation_multi_project_persists_configured_profile_and_model(tmp_path):
+def test_ticket_creation_multi_project_persists_configured_profile_and_model(
+    temp_daf_home, tmp_path
+):
     """Shared ticket-creation sessions retain effective profile metadata."""
     config = ConfigLoader().create_default_config()
     config.model_provider = ModelProviderConfig(
