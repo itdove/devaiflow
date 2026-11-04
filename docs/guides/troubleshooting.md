@@ -974,6 +974,18 @@ credentials, private repository details, and sensitive stderr before sharing.
 Do not treat a reported silent fallback as a confirmed authentication or
 GitLab-only failure without this evidence.
 
+### Temporary-Clone Branch Selection
+
+The interactive temporary-clone picker used by `daf git new`, `daf jira new`,
+and `daf investigate` marks the selected remote's actual default branch when it
+can be resolved and is present in the listed branches. Pressing Enter selects
+that marked branch even when it is not the first option. It does not guess
+`main`/`master` or substitute the first listed branch. If no matching default
+is available, choose a branch by number or name; cancelling leaves the existing
+fallback checkout behavior in place. This only chooses the branch checked out
+inside the analysis clone; it does not create a development branch. Mock and
+JSON modes continue to skip the prompt.
+
 ### Checking Authentication Before Operations
 
 **Best Practice:**

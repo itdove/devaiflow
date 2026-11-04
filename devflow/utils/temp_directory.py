@@ -198,17 +198,15 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
         console_print(f"[yellow]⚠[/yellow] No branches found on remote '{remote}'")
         return None
 
-    # Determine default branch with priority: upstream/main > upstream/master > origin/main > origin/master
-    default_branch = None
-    default_candidates = ["main", "master"]
-    for candidate in default_candidates:
-        if candidate in branches:
-            default_branch = candidate
-            break
+    # Resolve the selected remote's actual default branch. Do not guess based on
+    # common names or branch-list ordering; either can select an unrelated base.
+    default_branch = GitUtils.get_default_branch(repo_path, remote=remote)
+    if default_branch not in branches:
+        default_branch = None
 
-    if not default_branch and branches:
-        # If no main/master, use first available branch
-        default_branch = branches[0]
+    default_selection = (
+        str(branches.index(default_branch) + 1) if default_branch is not None else None
+    )
 
     # Build branch selection menu
     console_print("\nSelect branch to checkout:")
@@ -223,15 +221,25 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
         while True:
             choice = Prompt.ask(
                 "\nEnter selection",
-                default="1" if default_branch else None,
-                show_default=True
+                default=default_selection,
+                show_default=default_selection is not None,
             )
 
             choice_text = choice or ""
 
+            if not choice_text:
+                if default_branch is not None:
+                    console_print(f"[green]✓[/green] Selected branch: {default_branch}")
+                    return default_branch
+                console_print("[red]✗[/red] Please enter a branch number or name")
+                continue
+
             # Allow cancel
-            if choice_text.lower() in ['cancel', 'q']:
-                console_print(f"[dim]Using default branch: {default_branch}[/dim]")
+            if choice_text.lower() in ["cancel", "q"]:
+                if default_branch is not None:
+                    console_print(f"[dim]Using default branch: {default_branch}[/dim]")
+                else:
+                    console_print("[dim]Branch selection cancelled[/dim]")
                 return default_branch
 
             # Parse selection (can be number or branch name)
@@ -244,15 +252,31 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
                     selected_branch = branches[selection_num - 1]
                 else:
                     console_print(f"[red]✗[/red] Invalid selection: {choice_text}")
-                    console_print("[dim]Please try again or type 'cancel' to use default[/dim]")
+                    cancel_hint = (
+                        "use the default branch"
+                        if default_branch is not None
+                        else "cancel selection"
+                    )
+                    console_print(
+                        f"[dim]Please try again or type 'cancel' to {cancel_hint}[/dim]"
+                    )
                     continue
             except ValueError:
                 # Not a number, treat as branch name
                 if choice_text in branches:
                     selected_branch = choice_text
                 else:
-                    console_print(f"[red]✗[/red] Branch '{choice_text}' not found in available branches")
-                    console_print("[dim]Please try again or type 'cancel' to use default[/dim]")
+                    console_print(
+                        f"[red]✗[/red] Branch '{choice_text}' not found in available branches"
+                    )
+                    cancel_hint = (
+                        "use the default branch"
+                        if default_branch is not None
+                        else "cancel selection"
+                    )
+                    console_print(
+                        f"[dim]Please try again or type 'cancel' to {cancel_hint}[/dim]"
+                    )
                     continue
 
             # Valid selection made
@@ -261,7 +285,10 @@ def _prompt_for_branch_selection(repo_path: Path) -> Optional[str]:
                 return selected_branch
 
     except (KeyboardInterrupt, EOFError):
-        console_print("\n[dim]Branch selection cancelled, using default[/dim]")
+        if default_branch is not None:
+            console_print("\n[dim]Branch selection cancelled, using default[/dim]")
+        else:
+            console_print("\n[dim]Branch selection cancelled[/dim]")
         return default_branch
 
 

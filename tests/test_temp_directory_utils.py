@@ -506,6 +506,15 @@ class TestCleanupTempDirectory:
 class TestPromptForBranchSelection:
     """Test the _prompt_for_branch_selection function."""
 
+    @pytest.fixture(autouse=True)
+    def stub_default_branch_lookup(self):
+        """Keep tests independent of live remote lookups unless explicitly mocked."""
+        with patch(
+            "devflow.utils.temp_directory.GitUtils.get_default_branch",
+            return_value=None,
+        ) as mock_get_default_branch:
+            yield mock_get_default_branch
+
     def test_returns_none_in_mock_mode(self, mock_git_repo):
         """Test that function returns None when in mock mode."""
         with patch("devflow.utils.temp_directory.is_mock_mode", return_value=True):
@@ -538,45 +547,148 @@ class TestPromptForBranchSelection:
 
     def test_prefers_upstream_over_origin(self, mock_git_repo):
         """Test that function prefers upstream remote over origin."""
-        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin", "upstream"]), \
-             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop"]) as mock_list_branches, \
-             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+        with (
+            patch("devflow.utils.temp_directory.is_mock_mode", return_value=False),
+            patch("devflow.utils.temp_directory.is_json_mode", return_value=False),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_remote_names",
+                return_value=["origin", "upstream"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.list_remote_branches",
+                return_value=["main", "develop"],
+            ) as mock_list_branches,
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_default_branch",
+                return_value="develop",
+            ) as mock_default_branch,
+            patch("devflow.utils.temp_directory.Prompt.ask", return_value="2"),
+        ):
             result = _prompt_for_branch_selection(mock_git_repo)
             mock_list_branches.assert_called_once_with(mock_git_repo, "upstream")
-            assert result == "main"
+            mock_default_branch.assert_called_once_with(
+                mock_git_repo, remote="upstream"
+            )
+            assert result == "develop"
 
     def test_uses_origin_when_upstream_not_available(self, mock_git_repo):
         """Test that function uses origin when upstream is not available."""
-        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
-             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop"]) as mock_list_branches, \
-             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+        with (
+            patch("devflow.utils.temp_directory.is_mock_mode", return_value=False),
+            patch("devflow.utils.temp_directory.is_json_mode", return_value=False),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_remote_names",
+                return_value=["origin"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.list_remote_branches",
+                return_value=["main", "develop"],
+            ) as mock_list_branches,
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_default_branch",
+                return_value="main",
+            ) as mock_default_branch,
+            patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"),
+        ):
             result = _prompt_for_branch_selection(mock_git_repo)
             mock_list_branches.assert_called_once_with(mock_git_repo, "origin")
+            mock_default_branch.assert_called_once_with(mock_git_repo, remote="origin")
             assert result == "main"
 
-    def test_selects_main_as_default_over_master(self, mock_git_repo):
-        """Test that main is preferred over master as default branch."""
-        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
-             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "master"]), \
-             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+    def test_uses_non_main_remote_default_at_its_menu_position(self, mock_git_repo):
+        """Use the actual default branch and make Enter select its listed position."""
+        with (
+            patch("devflow.utils.temp_directory.is_mock_mode", return_value=False),
+            patch("devflow.utils.temp_directory.is_json_mode", return_value=False),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_remote_names",
+                return_value=["origin"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.list_remote_branches",
+                return_value=["main", "develop", "feature/test"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_default_branch",
+                return_value="develop",
+            ),
+            patch(
+                "devflow.utils.temp_directory.Prompt.ask",
+                side_effect=lambda *_args, **kwargs: kwargs["default"],
+            ) as mock_prompt,
+            patch("devflow.utils.temp_directory.console_print") as mock_console_print,
+        ):
             result = _prompt_for_branch_selection(mock_git_repo)
             assert result == "develop"
+            assert mock_prompt.call_args.kwargs["default"] == "2"
+            assert mock_prompt.call_args.kwargs["show_default"] is True
+            assert any(
+                "develop [cyan](default - from origin)" in str(call.args[0])
+                for call in mock_console_print.call_args_list
+            )
 
-    def test_selects_master_as_default_when_no_main(self, mock_git_repo):
-        """Test that master is used as default when main is not available."""
-        with patch("devflow.utils.temp_directory.is_mock_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
-             patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
-             patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "master", "release/2.5"]), \
-             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+    def test_unresolved_default_requires_explicit_branch_selection(self, mock_git_repo):
+        """Do not silently default to the first listed branch when remote HEAD is unknown."""
+        with (
+            patch("devflow.utils.temp_directory.is_mock_mode", return_value=False),
+            patch("devflow.utils.temp_directory.is_json_mode", return_value=False),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_remote_names",
+                return_value=["origin"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.list_remote_branches",
+                return_value=["main", "develop"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_default_branch",
+                return_value=None,
+            ),
+            patch(
+                "devflow.utils.temp_directory.Prompt.ask", side_effect=["", "2"]
+            ) as mock_prompt,
+            patch("devflow.utils.temp_directory.console_print") as mock_console_print,
+        ):
             result = _prompt_for_branch_selection(mock_git_repo)
             assert result == "develop"
+            assert mock_prompt.call_count == 2
+            assert all(call.kwargs["default"] is None for call in mock_prompt.call_args_list)
+            assert not any(
+                "(default - from origin)" in str(call.args[0])
+                for call in mock_console_print.call_args_list
+            )
+
+    def test_unavailable_remote_default_is_not_presented_as_default(
+        self, mock_git_repo
+    ):
+        """An actual default missing from the listed branches is not substituted."""
+        with (
+            patch("devflow.utils.temp_directory.is_mock_mode", return_value=False),
+            patch("devflow.utils.temp_directory.is_json_mode", return_value=False),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_remote_names",
+                return_value=["origin"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.list_remote_branches",
+                return_value=["main", "develop"],
+            ),
+            patch(
+                "devflow.utils.temp_directory.GitUtils.get_default_branch",
+                return_value="trunk",
+            ),
+            patch(
+                "devflow.utils.temp_directory.Prompt.ask", return_value="2"
+            ) as mock_prompt,
+            patch("devflow.utils.temp_directory.console_print") as mock_console_print,
+        ):
+            result = _prompt_for_branch_selection(mock_git_repo)
+            assert result == "develop"
+            assert mock_prompt.call_args.kwargs["default"] is None
+            assert not any(
+                "(default - from origin)" in str(call.args[0])
+                for call in mock_console_print.call_args_list
+            )
 
     def test_user_can_select_branch_by_number(self, mock_git_repo):
         """Test that user can select a branch by entering its number."""
@@ -624,6 +736,7 @@ class TestPromptForBranchSelection:
              patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
              patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
              patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
              patch("devflow.utils.temp_directory.Prompt.ask", return_value="cancel"):
             result = _prompt_for_branch_selection(mock_git_repo)
             assert result == "main"
@@ -634,6 +747,7 @@ class TestPromptForBranchSelection:
              patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
              patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
              patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
              patch("devflow.utils.temp_directory.Prompt.ask", return_value="q"):
             result = _prompt_for_branch_selection(mock_git_repo)
             assert result == "main"
@@ -644,6 +758,7 @@ class TestPromptForBranchSelection:
              patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
              patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
              patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["develop", "main", "release/2.5"]), \
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
              patch("devflow.utils.temp_directory.Prompt.ask", side_effect=["invalid1", "99", "cancel"]):
             result = _prompt_for_branch_selection(mock_git_repo)
             assert result == "main"
@@ -654,6 +769,7 @@ class TestPromptForBranchSelection:
              patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
              patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
              patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop"]), \
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
              patch("devflow.utils.temp_directory.Prompt.ask", side_effect=KeyboardInterrupt()):
             result = _prompt_for_branch_selection(mock_git_repo)
             assert result == "main"
@@ -664,7 +780,8 @@ class TestPromptForBranchSelection:
              patch("devflow.utils.temp_directory.is_json_mode", return_value=False), \
              patch("devflow.utils.temp_directory.GitUtils.get_remote_names", return_value=["origin"]), \
              patch("devflow.utils.temp_directory.GitUtils.list_remote_branches", return_value=["main", "develop", "release/2.5"]), \
-             patch("devflow.utils.temp_directory.Prompt.ask", return_value="1"):
+             patch("devflow.utils.temp_directory.GitUtils.get_default_branch", return_value="main"), \
+             patch("devflow.utils.temp_directory.Prompt.ask", return_value=""):
             result = _prompt_for_branch_selection(mock_git_repo)
             assert result == "main"
 
