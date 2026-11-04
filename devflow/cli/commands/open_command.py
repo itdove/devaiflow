@@ -2061,13 +2061,31 @@ def _sync_branch_for_import(project_path: str, branch_name: str, remote_url: Opt
     branch_exists_locally = GitUtils.branch_exists(path, branch_name)
 
     # Check if branch exists on remote (use the correct remote name)
-    ls_remote_result = subprocess.run(
-        ["git", "ls-remote", "--heads", remote_name, branch_name],
-        cwd=path,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
+    try:
+        ls_remote_result = subprocess.run(
+            ["git", "ls-remote", "--heads", remote_name, branch_name],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        console.print(
+            f"[yellow]⚠ Could not check remote state for branch '{branch_name}': "
+            "the remote query timed out.[/yellow]"
+        )
+        if branch_exists_locally:
+            console.print(
+                "[yellow]Continuing with the local branch; remote synchronization was skipped.[/yellow]"
+            )
+            return True
+
+        console.print(
+            f"[yellow]Remote state for branch '{branch_name}' is unknown; "
+            "it will not be treated as missing.[/yellow]"
+        )
+        return False
+
     branch_exists_remotely = ls_remote_result.returncode == 0 and bool(ls_remote_result.stdout.strip())
 
     if not branch_exists_locally and not branch_exists_remotely:
@@ -2285,7 +2303,8 @@ def _checkout_and_sync_session_branch(
     if not branch_exists_locally:
         # Preserve imported-session recovery: fetch a remote-only branch before
         # asking whether to create a new local branch.
-        _sync_branch_for_import(project_path, branch_name, remote_url)
+        if not _sync_branch_for_import(project_path, branch_name, remote_url):
+            return False
 
     checkout_successful = _handle_branch_checkout(
         project_path,
