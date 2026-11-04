@@ -140,6 +140,13 @@ daf git new --goal "Add user authentication to API"
 3. Claude helps you understand implementation complexity
 4. You create a detailed issue with accurate acceptance criteria
 
+This is an issue-creation workflow, not a development branch setup. The
+`daf git new` command does not create or select a working branch and does not
+show the development branch picker. A supplied `--branch` is recorded only in
+session metadata; it is not created or checked out. For development work that
+should select a starting branch, including the repository default, use `daf new`
+or `daf open` instead.
+
 **Inside Claude session:**
 
 ```bash

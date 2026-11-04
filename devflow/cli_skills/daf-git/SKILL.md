@@ -189,6 +189,12 @@ daf git new task --goal "Refactor auth module" --parent "#123"
 
 **Purpose:** Analyze the codebase to create a well-informed issue
 
+**Branch behavior:** `daf git new` is an analysis-only issue-creation workflow;
+it does not create or select a working branch or show the development branch
+picker. A supplied `--branch` is recorded only as session metadata and is not
+created or checked out. For development work that should select a starting
+branch, including the repository default, use `daf new` or `daf open` instead.
+
 **Template injection:** The prompt automatically includes issue body templates from config,
 repo `.github/ISSUE_TEMPLATE/` directory, or built-in defaults. Use them to structure
 well-formed issues with acceptance criteria.
