@@ -94,13 +94,15 @@ def first_open(temp_daf_home, tmp_path, monkeypatch):
         "_detect_workspace_from_cwd",
         "get_active_profile",
         "setup_signal_handlers",
-        "_sync_branch_for_import",
         "_display_feature_context",
         "_display_session_summary",
         "_prompt_for_complete_on_exit",
         "_set_terminal_title",
     ):
         monkeypatch.setattr(open_command, name, Mock(return_value=None))
+    monkeypatch.setattr(
+        open_command, "_sync_branch_for_import", Mock(return_value=True)
+    )
     monkeypatch.setattr(open_command, "is_cleanup_done", lambda: False)
     monkeypatch.setattr(
         "devflow.utils.workspace_utils.ensure_workspace_skills_and_commands",
