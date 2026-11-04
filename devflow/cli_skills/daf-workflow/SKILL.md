@@ -278,6 +278,12 @@ conversation. Do not delete local work to resolve retention/recovery warnings.
 
 Analysis-only session for creating a GitHub/GitLab issue.
 
+This workflow does not create or select a working branch and does not show the
+development branch picker. A supplied `--branch` is recorded only in session
+metadata; it is not created or checked out. For development work that should
+select a starting branch, including the repository default, use `daf new` or
+`daf open` instead.
+
 **Temp directory session** — sync before analysis (see Step 5).
 
 **CRITICAL CONSTRAINTS:**

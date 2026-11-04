@@ -1610,7 +1610,10 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str], head
 @click.option("--goal-file", help="Explicit file path or URL for goal input (mutually exclusive with --goal)")
 @click.option("--name", help="Session name (auto-generated from goal if not provided)")
 @click.option("--path", help="Project path (bypasses interactive selection)")
-@click.option("--branch", help="Git branch name (bypasses interactive creation prompt)")
+@click.option(
+    "--branch",
+    help="Branch name to record in session metadata; it is not created or checked out",
+)
 @click.option("--parent", help="Parent issue key (owner/repo#123 or #123)")
 @workspace_option()
 @click.option("--projects", help="Comma-separated list of repository names for multi-project sessions (requires --workspace)")
@@ -1621,10 +1624,16 @@ def git_open(ctx: click.Context, issue_key: str, repository: Optional[str], head
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
 def git_new(ctx: click.Context, issue_type: Optional[str], goal: Optional[str], goal_file: Optional[str], name: str, path: str, branch: str, parent: Optional[str], workspace: str, projects: str, temp_clone: bool, repository: Optional[str], model_profile: str, model: str, headless: bool, auto_approve: bool) -> None:
-    """Create GitHub/GitLab issue with analysis-only session.
+    """Create a GitHub/GitLab issue with an analysis-only session.
+
+    This command does not create or select a working branch and does not show
+    the development branch picker. For a development session that should select
+    a starting branch, including the repository default, use ``daf new`` or
+    ``daf open`` instead. A supplied ``--branch`` is only recorded in session
+    metadata; it is not created or checked out.
 
     Creates a session with session_type="ticket_creation" that:
-    - Skips branch creation automatically
+    - Skips branch creation and checkout automatically
     - Provides analysis-only constraints in the initial prompt
     - Persists the session type for reopening
 

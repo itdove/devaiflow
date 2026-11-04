@@ -2,20 +2,39 @@
 
 from pathlib import Path
 
+from click.testing import CliRunner
+
+from devflow.cli.main import cli
+
 SOURCE_ROOT = Path(__file__).parents[1] / "devflow"
 GIT_SKILL = SOURCE_ROOT / "cli_skills" / "daf-git" / "SKILL.md"
 CLI_SKILL = SOURCE_ROOT / "cli_skills" / "daf-cli" / "SKILL.md"
 WORKFLOW_SKILL = SOURCE_ROOT / "cli_skills" / "daf-workflow" / "SKILL.md"
 
 
+def test_git_new_help_explains_branch_behavior(temp_daf_home):
+    """The command help distinguishes issue creation from development branch setup."""
+    result = CliRunner().invoke(cli, ["git", "new", "--help"])
+
+    assert result.exit_code == 0
+    output = " ".join(result.output.split())
+    assert "does not create or select a working branch" in output
+    assert "does not show the development branch picker" in output
+    assert "daf new" in output
+    assert "daf open" in output
+    assert "record in session metadata" in output
+
+
 def test_git_skill_does_not_describe_jira_linking_for_git_issues():
     """The GitHub/GitLab skill must document the supported post-creation flow."""
-    content = GIT_SKILL.read_text(encoding="utf-8")
+    content = " ".join(GIT_SKILL.read_text(encoding="utf-8").split())
 
     assert "daf link" not in content
     assert "issue URL and key" in content
     assert "supported" in content
     assert "daf open <session-name>" in content
+    assert "development branch picker" in content
+    assert "daf new" in content
 
 
 def test_cli_skill_keeps_jira_linking_separate_from_git_issue_creation():
@@ -29,7 +48,7 @@ def test_cli_skill_keeps_jira_linking_separate_from_git_issue_creation():
 
 def test_workflow_skill_documents_git_issue_session_behavior():
     """The workflow skill must not promise an unsupported automatic rename."""
-    content = WORKFLOW_SKILL.read_text(encoding="utf-8")
+    content = " ".join(WORKFLOW_SKILL.read_text(encoding="utf-8").split())
     start = content.index("## GitHub/GitLab Issue Creation")
     end = content.index("## JIRA Ticket Creation", start)
     section = content[start:end]
@@ -37,3 +56,6 @@ def test_workflow_skill_documents_git_issue_session_behavior():
     assert "issue URL and key" in section
     assert "daf open <session-name>" in section
     assert "automatically renamed" not in section
+    assert "does not create or select a working branch" in section
+    assert "daf new" in section
+    assert "daf open" in section
