@@ -747,7 +747,14 @@ def launch_and_capture(
             CloneCache(config).use(Path(managed_path))
         with temporary_directory_lock(managed_path):
             if managed_path and not Path(managed_path).is_dir():
-                raise FileNotFoundError("Managed workspace disappeared; retry daf open to restore it")
+                workspace_kind = (
+                    "Managed worktree"
+                    if getattr(active_conversation, "worktree_path", None)
+                    else "Cached clone"
+                )
+                raise FileNotFoundError(
+                    f"{workspace_kind} disappeared; retry daf open to restore it"
+                )
             if "on_launch" not in launch_kwargs:
                 begin_launch()
             process = agent.launch_with_prompt(**launch_kwargs)

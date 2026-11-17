@@ -1630,7 +1630,12 @@ def open_session(
                 CloneCache(config).use(Path(managed_path))
             clone_locks.enter_context(temporary_directory_lock(managed_path))
             if managed_path and not Path(managed_path).is_dir():
-                raise FileNotFoundError("Managed workspace disappeared; retry daf open to restore it")
+                workspace_kind = (
+                    "Managed worktree" if active_conv.worktree_path else "Cached clone"
+                )
+                raise FileNotFoundError(
+                    f"{workspace_kind} disappeared; retry daf open to restore it"
+                )
 
             if agent_backend in ("claude", "ollama", "ollama-claude"):
                 # Build resume command with --model flag if using alternative provider
