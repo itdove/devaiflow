@@ -241,6 +241,7 @@ def test_open_worktree_prompt_is_skipped_when_non_interactive(monkeypatch):
 def test_explicit_worktree_override_skips_prompt(monkeypatch):
     session, conversation = _session_and_conversation(launch_started=False)
     ask = Mock()
+    monkeypatch.setattr(open_command, "is_non_interactive", lambda: False)
     monkeypatch.setattr(open_command, "Confirm", SimpleNamespace(ask=ask))
     monkeypatch.setattr(
         "devflow.utils.session_worktree.worktree_source_fingerprint",
@@ -284,6 +285,7 @@ def test_worktree_setup_continues_on_saved_session_branch_by_default(monkeypatch
     manager = Mock()
     prompt_calls = []
     printed = []
+    monkeypatch.setattr(open_command, "is_non_interactive", lambda: False)
     create = Mock(
         return_value=("/cache/daf-session-a/project-a", conversation.branch, "main")
     )
@@ -332,6 +334,7 @@ def test_worktree_setup_can_create_new_branch_from_selected_remote_ref(monkeypat
     manager = Mock()
     prompt_calls = []
     printed = []
+    monkeypatch.setattr(open_command, "is_non_interactive", lambda: False)
     create = Mock(
         return_value=("/cache/daf-session-a/project-a", "TEST-42-wt", "upstream/main")
     )
