@@ -732,20 +732,29 @@ def launch_and_capture(
             launch_kwargs["reasoning_effort"] = reasoning_effort
         if model_override:
             launch_kwargs["model_override"] = model_override
-        temp_directory = getattr(active_conversation, "temp_directory", None)
-        if not isinstance(temp_directory, str):
-            temp_directory = None
-        if temp_directory and _resolve_alias(agent_backend) == "opencode":
+        managed_path = getattr(active_conversation, "worktree_path", None) or getattr(
+            active_conversation, "temp_directory", None
+        )
+        if not isinstance(managed_path, str):
+            managed_path = None
+        if managed_path and _resolve_alias(agent_backend) == "opencode":
             # A v2 UI can exit while the shared service retains clone-local MCP
             # processes. Let OpenCode own and dispose a private server instead.
             launch_kwargs["isolated_workspace"] = True
-        if temp_directory:
+        if managed_path:
             from devflow.utils.clone_cache import CloneCache
 
-            CloneCache(config).use(Path(temp_directory))
-        with temporary_directory_lock(temp_directory):
-            if temp_directory and not Path(temp_directory).is_dir():
-                raise FileNotFoundError("Cached clone disappeared; retry daf open to restore it")
+            CloneCache(config).use(Path(managed_path))
+        with temporary_directory_lock(managed_path):
+            if managed_path and not Path(managed_path).is_dir():
+                workspace_kind = (
+                    "Managed worktree"
+                    if getattr(active_conversation, "worktree_path", None)
+                    else "Cached clone"
+                )
+                raise FileNotFoundError(
+                    f"{workspace_kind} disappeared; retry daf open to restore it"
+                )
             if "on_launch" not in launch_kwargs:
                 begin_launch()
             process = agent.launch_with_prompt(**launch_kwargs)
@@ -771,9 +780,9 @@ def launch_and_capture(
         launch_failed = True
         raise
     finally:
-        if launch_attempted and temp_directory:
+        if launch_attempted and managed_path:
             try:
-                CloneCache(config).use(Path(temp_directory))
+                CloneCache(config).use(Path(managed_path))
             except (OSError, TemporaryDirectoryInUseError):
                 logging.getLogger(__name__).warning("Could not refresh clone cache activity")
         if launch_attempted:

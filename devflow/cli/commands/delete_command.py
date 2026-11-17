@@ -23,7 +23,15 @@ from devflow.cli.utils import (
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Session
 from devflow.session.manager import SessionManager
-from devflow.utils.clone_lifecycle import TemporaryDirectoryInUseError, unused_session_clones
+from devflow.utils.clone_lifecycle import (
+    TemporaryDirectoryInUseError,
+    get_temp_directory_root,
+    unused_session_clones,
+)
+from devflow.utils.session_worktree import (
+    SessionWorktreeCleanupError,
+    cleanup_session_worktree,
+)
 from devflow.utils.temp_directory import cleanup_temp_directory
 
 console = Console()
@@ -168,15 +176,42 @@ def _delete_selected_sessions(
                     raise TemporaryDirectoryInUseError(
                         "Session conversations changed during deletion; "
                         "retry with the latest metadata"
-                    )
+                )
                 for root in roots:
                     existed = Path(root).exists()
-                    cleanup_temp_directory(root, locked=True)
+                    worktree = next(
+                        (
+                            conv
+                            for conversation in session.conversations.values()
+                            for conv in conversation.get_all_sessions()
+                            if conv.worktree_path
+                            and str(get_temp_directory_root(conv.worktree_path)) == root
+                        ),
+                        None,
+                    )
+                    if worktree:
+                        if not worktree.worktree_path or not worktree.original_project_path:
+                            raise SessionWorktreeCleanupError(
+                                "The worktree or source repository path is missing; worktree was preserved"
+                            )
+                        cleanup_session_worktree(
+                            Path(worktree.worktree_path),
+                            Path(worktree.original_project_path),
+                            locked=True,
+                            expected_source_fingerprint=worktree.worktree_source_fingerprint,
+                            config=config_loader.load_config(),
+                        )
+                    else:
+                        cleanup_temp_directory(root, locked=True)
                     if Path(root).exists():
-                        raise OSError(f"Temporary directory was not removed: {root}")
+                        raise OSError(f"Managed workspace was not removed: {root}")
                     if existed:
                         removed_clones.append(root)
-            except (TemporaryDirectoryInUseError, OSError) as error:
+            except (
+                TemporaryDirectoryInUseError,
+                SessionWorktreeCleanupError,
+                OSError,
+            ) as error:
                 message = (
                     f"Cannot delete session '{session.name}': {error}. "
                     "Exit the owning agent and move terminals outside the clone, then retry "
@@ -187,8 +222,13 @@ def _delete_selected_sessions(
                     message += f" Clone roots already removed: {', '.join(removed_clones)}."
                 details: dict[str, Any] = {
                     "code": (
-                        "SESSION_IN_USE" if isinstance(error, TemporaryDirectoryInUseError)
-                        else "CLONE_CLEANUP_FAILED"
+                        "SESSION_IN_USE"
+                        if isinstance(error, TemporaryDirectoryInUseError)
+                        else (
+                            "WORKTREE_CLEANUP_FAILED"
+                            if isinstance(error, SessionWorktreeCleanupError)
+                            else "CLONE_CLEANUP_FAILED"
+                        )
                     ),
                     "session": session.name,
                     "message": message,

@@ -496,20 +496,32 @@ def test_multi_project_setup_launch_decline_then_retry(first_open, monkeypatch):
     case.spawn.assert_called_once()
 
 
-def test_clone_preflight_failure_does_not_consume_launch_proof(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("workspace_attribute", "expected_message"),
+    [
+        ("temp_directory", "Cached clone disappeared"),
+        ("worktree_path", "Managed worktree disappeared"),
+    ],
+)
+def test_managed_workspace_preflight_failure_does_not_consume_launch_proof(
+    tmp_path, monkeypatch, workspace_attribute, expected_message
+):
     agent = Mock()
-    clone = tmp_path / "missing-clone"
-    conv = SimpleNamespace(ai_agent_session_id="initial-id", temp_directory=str(clone))
+    workspace = tmp_path / "missing-workspace"
+    conv = SimpleNamespace(
+        ai_agent_session_id="initial-id", temp_directory=None, worktree_path=None
+    )
+    setattr(conv, workspace_attribute, str(workspace))
     callback = Mock()
     monkeypatch.setattr("devflow.utils.clone_cache.CloneCache.use", Mock())
     monkeypatch.setattr(
         "devflow.agent.factory.temporary_directory_lock", lambda *args: nullcontext()
     )
-    with pytest.raises(FileNotFoundError, match="Cached clone disappeared"):
+    with pytest.raises(FileNotFoundError, match=expected_message):
         launch_and_capture(
             agent,
             "claude",
-            str(clone),
+            str(workspace),
             conv,
             initial_prompt="Read",
             session_id=conv.ai_agent_session_id,

@@ -458,8 +458,9 @@ def new(ctx: click.Context, name: str, goal: str, goal_file: str, jira: str, wor
 @click.option("--sync-strategy", type=click.Choice(['merge', 'rebase', 'skip'], case_sensitive=False), help="Strategy for syncing with upstream (merge/rebase/skip)")
 @click.option("--headless", is_flag=True, help="Run agent in headless mode (no interactive UI, exits after completion)")
 @click.option("--auto-approve", is_flag=True, help="Auto-approve all agent tool permissions (file edits, commands)")
+@click.option("--worktree/--no-worktree", default=None, help="Use an isolated Git worktree instead of the existing checkout")
 @json_option
-def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, model: str, reasoning_effort: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str, headless: bool, auto_approve: bool) -> None:
+def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str, workspace: str, projects: str, new_conversation: bool, conversation_id: str, model_profile: str, model: str, reasoning_effort: str, create_branch: bool, source_branch: str, on_branch_exists: str, allow_uncommitted: bool, sync_upstream: bool, auto_workspace: bool, sync_strategy: str, headless: bool, auto_approve: bool, worktree: Optional[bool]) -> None:
     """Open/resume an existing session.
 
     IDENTIFIER can be either a session group name or issue tracker key.
@@ -557,6 +558,7 @@ def open(ctx: click.Context, identifier: str, edit: bool, status: str, path: str
         sync_strategy=sync_strategy,
         headless=headless,
         auto_approve=auto_approve,
+        worktree=worktree,
     )
 
 

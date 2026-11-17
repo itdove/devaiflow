@@ -53,6 +53,10 @@ from devflow.utils.clone_lifecycle import (
     assert_session_clones_unused,
     completion_refusal_message,
 )
+from devflow.utils.session_worktree import (
+    SessionWorktreeCleanupError,
+    cleanup_session_worktree,
+)
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -1012,21 +1016,47 @@ def complete_session(
         # Save updated session (status may have changed)
         session_manager.update_session(session)
 
-    # Clean up temporary directory AFTER all commit/push/PR operations
-    if session.active_conversation and session.active_conversation.temp_directory:
+    # Clean up isolated clones/worktrees AFTER all commit/push/PR operations.
+    active_conv = session.active_conversation
+    managed_path = (
+        active_conv.worktree_path or active_conv.temp_directory
+        if active_conv
+        else None
+    )
+    if active_conv and managed_path:
         should_cleanup = bool(config and config.concurrency.cleanup_on_complete)
         if not should_cleanup:
-            console.print(f"[dim]Auto-clone preserved at: {session.active_conversation.temp_directory}[/dim]")
+            workspace_kind = "Worktree" if active_conv.worktree_path else "Auto-clone"
+            console.print(f"[dim]{workspace_kind} preserved at: {managed_path}[/dim]")
             console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
         if should_cleanup:
             try:
-                _cleanup_temp_directory(session.active_conversation.temp_directory)
-            except TemporaryDirectoryInUseError as error:
+                if active_conv.worktree_path:
+                    if not active_conv.original_project_path:
+                        raise OSError("The worktree source repository path is missing")
+                    cleanup_session_worktree(
+                        Path(active_conv.worktree_path),
+                        Path(active_conv.original_project_path),
+                        expected_source_fingerprint=active_conv.worktree_source_fingerprint,
+                        config=config,
+                    )
+                else:
+                    _cleanup_temp_directory(managed_path)
+            except (
+                TemporaryDirectoryInUseError,
+                SessionWorktreeCleanupError,
+                OSError,
+            ) as error:
+                workspace_kind = "worktree" if active_conv.worktree_path else "temporary clone"
+                local_work_note = (
+                    " Local or ignored work was preserved."
+                    if active_conv.worktree_path
+                    else ""
+                )
                 console_print(
-                    f"[yellow]⚠[/yellow] Session '{session.name}' is complete, but temporary "
-                    f"directory cleanup was deferred: {error}. Exit the agent and move "
-                    f"terminals out of the clone, then run 'daf complete {session.name}' "
-                    "again to clean it up safely."
+                    f"[yellow]⚠[/yellow] Session '{session.name}' is complete, but {workspace_kind} "
+                    f"cleanup was deferred: {error}.{local_work_note} Exit the agent and move terminals "
+                    f"out of the workspace, then rerun 'daf complete {session.name}' to retry safely."
                 )
 
 

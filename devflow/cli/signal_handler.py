@@ -125,9 +125,16 @@ def _cleanup_on_signal(signum, frame):
             console.print(f"[dim]Resume anytime with: daf open {session_to_update.name}[/dim]")
 
             # Save conversation file to stable location before cleaning up temp directory
-            if session_to_update.active_conversation and session_to_update.active_conversation.temp_directory:
+            if session_to_update.active_conversation and (
+                session_to_update.active_conversation.temp_directory
+                or session_to_update.active_conversation.worktree_path
+            ):
                 from devflow.cli.commands.open_command import _copy_conversation_from_temp
-                _copy_conversation_from_temp(session_to_update, session_to_update.active_conversation.temp_directory)
+                managed_path = (
+                    session_to_update.active_conversation.worktree_path
+                    or session_to_update.active_conversation.temp_directory
+                )
+                _copy_conversation_from_temp(session_to_update, managed_path)
 
             # Prompt before returning. Temporary directories remain available
             # unless the user explicitly completes or deletes the session.

@@ -54,7 +54,7 @@ Each session is an **isolated workspace** with its own:
 - Progress notes
 - Optional JIRA link
 
-**Named workspaces** enable concurrent multi-branch development - work on the same project in different workspaces (e.g., main branch + experimental feature) without conflicts.
+**Named workspaces** enable concurrent multi-branch development in separate locations. For parallel sessions that share one checkout, `daf open --worktree` creates a per-session Git worktree without switching the source directory.
 
 ### Why Use This Tool?
 
@@ -87,6 +87,7 @@ Each session is an **isolated workspace** with its own:
 - 💰 **Alternative Model Providers** - Run Claude Code with **local models** (llama.cpp) or **cheaper cloud providers** (OpenRouter, Vertex AI) - **save up to 98% on costs** or run **completely offline**
 - 📂 **Multi-Repository Workflows** - Work on one ticket across multiple repositories with shared context - Claude can coordinate changes across all projects in a single conversation
 - 🏢 **Named Workspaces** - Multiple workspaces for concurrent multi-branch development
+- 🌳 **Per-Session Worktrees** - Isolate parallel `daf open` sessions with separate checkouts and branches
 - 🎫 **Optional Issue Tracker** - GitHub Issues, GitLab Issues, or JIRA (your choice, or none at all)
 - ⏱️ **Time Tracking** - Automatic tracking with pause/resume
 - 🔄 **Context Loading** - Automatically reads AGENTS.md, CLAUDE.md, and issue tracker tickets

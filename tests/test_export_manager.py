@@ -398,6 +398,40 @@ def test_create_export_data(temp_daf_home):
     assert "test2" in export_data["sessions"]
 
 
+def test_create_export_data_uses_source_path_for_machine_local_worktree(temp_daf_home):
+    """Worktree paths are not portable and must not escape in session archives."""
+    from devflow.config.loader import ConfigLoader
+    from devflow.export.manager import ExportManager
+    from devflow.session.manager import SessionManager
+
+    session_manager = SessionManager(ConfigLoader())
+    session = session_manager.create_session(
+        name="worktree-export",
+        goal="Test portable worktree export",
+        working_directory="project-a",
+        project_path="/workspace/project-a",
+        ai_agent_session_id="conversation-id",
+        branch="feature-a",
+    )
+    conv = session.active_conversation
+    assert conv is not None
+    conv.original_project_path = "/workspace/project-a"
+    conv.project_path = "/cache/clones/daf-session-a/project-a"
+    conv.worktree_path = conv.project_path
+    conv.worktree_source_fingerprint = "machine-local-fingerprint"
+
+    exported = ExportManager()._create_export_data({session.name: session})["sessions"][
+        session.name
+    ]["conversations"][session.working_directory]["active_session"]
+
+    assert exported["project_path"] == "/workspace/project-a"
+    assert exported["worktree_path"] is None
+    assert exported["original_project_path"] is None
+    assert exported["worktree_source_fingerprint"] is None
+    assert conv.project_path == "/cache/clones/daf-session-a/project-a"
+    assert conv.worktree_path == "/cache/clones/daf-session-a/project-a"
+
+
 def test_export_excludes_diagnostic_logs(temp_daf_home):
     """Test that export EXCLUDES diagnostic logs for privacy (PROJ-60802).
 

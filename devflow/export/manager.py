@@ -496,10 +496,35 @@ class ExportManager(ArchiveManagerBase):
                 "agent_backend": self._get_agent_backend(),
             },
             "sessions": {
-                session_name: session.model_dump(mode='json', exclude={'workspace_name'})
+                session_name: self._session_export_data(session)
                 for session_name, session in sessions.items()
             }
         }
+
+    @staticmethod
+    def _session_export_data(session: Session) -> Dict:
+        """Remove machine-local worktree paths from a portable session export."""
+        data = session.model_dump(mode="json", exclude={"workspace_name"})
+        for working_dir, conversation in session.conversations.items():
+            conversation_data = data.get("conversations", {}).get(working_dir)
+            if not conversation_data:
+                continue
+            contexts = [
+                *zip(
+                    conversation.archived_sessions,
+                    conversation_data.get("archived_sessions", []),
+                ),
+                (conversation.active_session, conversation_data.get("active_session", {})),
+            ]
+            for context, context_data in contexts:
+                if context.worktree_path:
+                    context_data["project_path"] = (
+                        context.original_project_path or context.project_path
+                    )
+                    context_data["worktree_path"] = None
+                    context_data["original_project_path"] = None
+                    context_data["worktree_source_fingerprint"] = None
+        return data
 
 
     def _migrate_session_paths(self, session: Session) -> None:
@@ -512,6 +537,17 @@ class ExportManager(ArchiveManagerBase):
         Args:
             session: Session to migrate
         """
+        for working_dir, conversation in session.conversations.items():
+            # Process all sessions (active + archived) in this Conversation
+            for conv in conversation.get_all_sessions():
+                # Worktrees belong to the exporting machine. Imported sessions
+                # resume from the portable source checkout instead.
+                if conv.worktree_path:
+                    conv.project_path = conv.original_project_path or conv.project_path
+                    conv.worktree_path = None
+                    conv.original_project_path = None
+                    conv.worktree_source_fingerprint = None
+
         config = self.config_loader.load_config()
         if not config:
             return
@@ -519,7 +555,6 @@ class ExportManager(ArchiveManagerBase):
         workspace = config.repos.get_default_workspace_path() if config.repos else None
 
         for working_dir, conversation in session.conversations.items():
-            # Process all sessions (active + archived) in this Conversation
             for conv in conversation.get_all_sessions():
                 # If conversation has relative_path, reconstruct project_path from workspace
                 if conv.relative_path and workspace:
