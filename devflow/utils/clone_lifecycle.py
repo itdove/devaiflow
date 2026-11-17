@@ -58,20 +58,21 @@ def _directory_holder(process: psutil.Process, cwd: str) -> dict[str, Any]:
 
 
 def assert_session_clones_unused(session: "Session") -> None:
-    """Preflight every conversation before offering or performing completion.
+    """Preflight every managed clone/worktree before completion.
 
     This is not permission to delete later: removal must recheck under its lock.
     """
     for conversation in session.conversations.values():
-        temp_directory = conversation.active_session.temp_directory
-        if temp_directory:
-            with temporary_directory_lock(temp_directory):
-                assert_temp_directory_unused(temp_directory)
+        conv = conversation.active_session
+        for path in (conv.temp_directory, conv.worktree_path):
+            if path:
+                with temporary_directory_lock(path):
+                    assert_temp_directory_unused(path)
 
 
 @contextmanager
 def unused_session_clones(session: "Session") -> Iterator[list[str]]:
-    """Guard a lifecycle transition across active and archived clones.
+    """Guard a lifecycle transition across active and archived isolated paths.
 
     Hold every distinct removal-root lock until the caller finishes persisting
     the transition. An unlocked preflight would allow a managed launcher to start
@@ -92,6 +93,12 @@ def unused_session_clones(session: "Session") -> Iterator[list[str]]:
             for conversation in session.conversations.values()
             for conv in conversation.get_all_sessions()
             if conv.temp_directory
+        }
+        | {
+            str(get_temp_directory_root(conv.worktree_path))
+            for conversation in session.conversations.values()
+            for conv in conversation.get_all_sessions()
+            if conv.worktree_path
         }
     )
     with ExitStack() as locks:

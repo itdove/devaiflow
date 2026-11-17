@@ -88,6 +88,32 @@ A partial previous recovery is not accepted on the wrong default branch: inspect
 the recorded checkout and restore its saved branch before retrying. Do not remove
 local work to resolve a cache warning without first reviewing/backing it up.
 
+### Per-session Git worktrees
+
+For parallel development in one checkout, `daf open` can use a linked Git
+worktree instead of changing branches in the source directory. DAF offers this
+choice when it detects another active session in the same project; answer Yes,
+or choose explicitly with `daf open <session> --worktree`. Use
+`--no-worktree` to retain the existing concurrency behavior. Explicit selection
+is available only on an eligible first launch, not when resuming an agent
+conversation already bound to another project path. A saved worktree conversation
+cannot be moved back to the source checkout with `--no-worktree`.
+
+Each worktree has its own files and Git index but shares the source repository's
+objects and refs. Uncommitted source changes are not copied or modified. DAF
+persists the worktree's exact path and source repository so `daf open` can
+validate or restore the same branch and directory; a missing source repository,
+changed repository identity, or unavailable branch fails closed rather than
+switching to a different checkout. If the requested branch is already checked
+out by another worktree, DAF creates a session-specific branch from it.
+
+Worktrees are retained on completion by default. With
+`concurrency.cleanup_on_complete: true`, completion removes only a clean,
+unused worktree; dirty or ignored files and live process holders cause cleanup to
+be deferred. `daf delete` applies the same protection. Automatic clone-cache
+retention does not evict linked worktrees because their Git metadata is shared
+with the source repository.
+
 ## Workspaces: Concurrent Multi-Branch Development
 
 **Workspaces** enable you to work on the same project with different branches in parallel without conflicts. Each workspace is a named location (like VSCode workspaces) that can have its own active sessions.

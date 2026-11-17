@@ -466,10 +466,15 @@ class CloneCache:
             console_print(f"[dim]Clone cache retention removed: {root}[/dim]")
             return True
 
-    def prune(self) -> None:
+    def prune(self, *, exclude_paths: set[Path] | None = None) -> None:
         """Expire idle entries, then remove reproducible LRU entries until within budget."""
         if not self.base.is_dir() or not (self.policy.max_idle_days or self.policy.max_size_mb):
             return
+        excluded_roots = {
+            root
+            for path in exclude_paths or set()
+            if (root := self._root(path) or self._recorded_root(path)) is not None
+        }
         try:
             with temporary_directory_lock(
                 str(clone_cache_record_path(self.base).with_suffix(".maintenance"))
@@ -483,7 +488,12 @@ class CloneCache:
                         size = _size(root)
                         total += size
                         entry = self._read(root) if self._root(root) == root else None
-                        if entry and root.is_dir() and not root.is_symlink():
+                        if (
+                            entry
+                            and root not in excluded_roots
+                            and root.is_dir()
+                            and not root.is_symlink()
+                        ):
                             candidates.append((entry.last_used, root.name, root, size))
                     except OSError:
                         unknown_size = True

@@ -830,7 +830,12 @@ class ConversationContext(BaseModel):
 
     # Temporary directory support for ticket_creation sessions
     temp_directory: Optional[str] = Field(default=None)  # Path to temporary directory (if using temp clone)
-    original_project_path: Optional[str] = Field(default=None)  # Original project path (before temp clone)
+    original_project_path: Optional[str] = Field(default=None)  # Source project path before a managed clone/worktree
+    worktree_path: Optional[str] = Field(default=None)  # Managed Git worktree used by this conversation
+    worktree_source_fingerprint: Optional[str] = Field(
+        default=None,
+        description="Fingerprint used to verify the source Git repository before worktree recovery",
+    )
 
     # Multi-project support (Issue #149)
     # When is_multi_project=True, use projects dict instead of single project fields
@@ -850,7 +855,11 @@ class ConversationContext(BaseModel):
         Raises:
             ValueError: If no path information is available
         """
-        # Prefer relative_path if available and workspace is provided
+        # Worktree paths are session-local; relative_path still identifies the
+        # source checkout for portability and export/import.
+        if self.worktree_path:
+            return self.worktree_path
+
         if self.relative_path and workspace:
             from pathlib import Path
             return str(Path(workspace).expanduser().resolve() / self.relative_path)

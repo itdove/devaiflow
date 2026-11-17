@@ -26,6 +26,7 @@ from devflow.cli.utils import (
     get_status_display,
     get_workspace_path,
     is_json_mode,
+    is_non_interactive,
     output_json as emit_json,
     require_outside_claude,
     scan_workspace_repositories,
@@ -305,6 +306,115 @@ def _set_terminal_title(session) -> None:
     sys.stdout.flush()
 
 
+def _prepare_session_worktree(
+    session: Session,
+    active_conv: Any,
+    session_manager: SessionManager,
+    config: Optional[Config],
+    *,
+    requested: Optional[bool],
+    first_launch: bool,
+    identity_preexisting: bool,
+    offer_for_conflict: bool,
+    output_json: bool,
+) -> bool:
+    """Offer or create an isolated worktree without re-homing agent identity."""
+    def refuse(message: str) -> bool:
+        if output_json:
+            emit_json(
+                success=False,
+                error={"code": "WORKTREE_UNAVAILABLE", "message": message, "session": session.name},
+            )
+        else:
+            console.print(f"[red]{escape(message)}[/red]")
+        return False
+
+    if active_conv and active_conv.worktree_path:
+        if requested is False:
+            return refuse(
+                "This conversation is already bound to its recorded worktree. "
+                "It cannot be moved to the source checkout; omit --no-worktree to resume it."
+            )
+        return True
+
+    can_create = bool(
+        active_conv
+        and active_conv.project_path
+        and session.session_type == "development"
+        and not active_conv.is_multi_project
+        and not active_conv.temp_directory
+        and first_launch
+        and (
+            not identity_preexisting
+            or active_conv.agent_launch_started is False
+        )
+    )
+    if requested is True and not can_create:
+        if active_conv and active_conv.ai_agent_session_id:
+            return refuse(
+                "Cannot move this conversation to a worktree after its agent identity has been launched. "
+                "Open it in its recorded checkout, or create a new conversation first."
+            )
+        return refuse(
+            "Worktrees require first launch of a single-project development session with a Git checkout."
+        )
+
+    use_worktree = bool(requested)
+    if (
+        requested is None
+        and offer_for_conflict
+        and can_create
+        and not output_json
+        and not is_non_interactive()
+    ):
+        use_worktree = Confirm.ask(
+            "Use an isolated Git worktree for this session? "
+            "Uncommitted files in the source checkout are not copied",
+            default=False,
+        )
+    if not use_worktree:
+        return True
+
+    from devflow.utils.session_worktree import (
+        SessionWorktreeError,
+        create_session_worktree,
+        worktree_source_fingerprint,
+    )
+
+    prompts = config.prompts if config and config.prompts else None
+    branch_prefix = GitUtils.generate_branch_name(
+        session.issue_key or session.name,
+        session.goal,
+        use_issue_key_only=prompts.use_issue_key_as_branch if prompts else True,
+        backend=get_issue_tracker_backend(session, config),
+    )
+    source_path = Path(active_conv.project_path).expanduser().resolve()
+    try:
+        source_fingerprint = worktree_source_fingerprint(source_path)
+        worktree_path, worktree_branch, worktree_base_branch = create_session_worktree(
+            source_path,
+            session_name=session.name,
+            branch=active_conv.branch,
+            base_branch=active_conv.base_branch,
+            branch_prefix=branch_prefix,
+            config=config,
+        )
+    except (OSError, SessionWorktreeError) as error:
+        return refuse(f"Could not create session worktree: {error}")
+
+    active_conv.original_project_path = str(source_path)
+    active_conv.project_path = str(worktree_path)
+    active_conv.worktree_path = str(worktree_path)
+    active_conv.worktree_source_fingerprint = source_fingerprint
+    active_conv.branch = worktree_branch
+    active_conv.base_branch = worktree_base_branch
+    if not active_conv.remote_url:
+        active_conv.remote_url = GitUtils.get_remote_url(source_path)
+    session_manager.update_session(session)
+    console_print(f"[green]✓[/green] Session worktree: {worktree_path}")
+    return True
+
+
 
 
 @require_outside_claude
@@ -332,6 +442,7 @@ def open_session(
     headless: bool = False,
     auto_approve: bool = False,
     agent: Optional[str] = None,
+    worktree: Optional[bool] = None,
 ) -> None:
     """Open/resume an existing session.
 
@@ -353,6 +464,7 @@ def open_session(
         sync_upstream: Sync with upstream when opening session (None = prompt)
         auto_workspace: Auto-select workspace without prompting
         sync_strategy: Strategy for syncing with upstream (merge/rebase/skip)
+        worktree: Whether to use a managed Git worktree instead of the existing checkout
     """
     config_loader = ConfigLoader()
     session_manager = SessionManager(config_loader)
@@ -605,6 +717,8 @@ def open_session(
                 )
                 new_conv.temp_directory = active_conv.temp_directory
                 new_conv.original_project_path = active_conv.original_project_path
+                new_conv.worktree_path = active_conv.worktree_path
+                new_conv.worktree_source_fingerprint = active_conv.worktree_source_fingerprint
 
                 # Only this freshly allocated context is proven never launched.
                 # Never retrofit that proof onto a legacy pending record.
@@ -714,6 +828,7 @@ def open_session(
     # Use conversation-based API
     from devflow.agent.factory import is_pending_capture
     active_conv = session.active_conversation
+    identity_preexisting = bool(active_conv and active_conv.ai_agent_session_id)
     has_real_session_id = (
         active_conv
         and active_conv.ai_agent_session_id
@@ -746,7 +861,10 @@ def open_session(
 
     # Recover before testing agent-session existence or replacing a native ID.
     # A missing clone must never cause a different repository/conversation launch.
-    if active_conv and active_conv.temp_directory:
+    if active_conv and active_conv.worktree_path:
+        if not _restore_session_worktree(session, session_manager, config):
+            raise click.exceptions.Exit(1)
+    elif active_conv and active_conv.temp_directory:
         if not _restore_session_clone(session, session_manager, config):
             raise click.exceptions.Exit(1)
 
@@ -899,10 +1017,40 @@ def open_session(
                 session_manager.update_session(session)
                 console.print(f"[dim]Generated new session ID: {new_session_id}[/dim]")
 
+    # Offer worktree isolation when another session actually owns the same
+    # checkout. Explicit --worktree remains available on any eligible first launch.
+    offer_worktree_for_conflict = False
+    if (
+        worktree is None
+        and active_conv
+        and active_conv.project_path
+        and not active_conv.worktree_path
+    ):
+        other_session = session_manager.get_active_session_for_project(
+            active_conv.project_path,
+            workspace_name=selected_workspace_name,
+        )
+        offer_worktree_for_conflict = bool(
+            other_session and other_session.name != session.name
+        )
+
+    # Isolated paths do not contend for the source checkout's branch or index;
+    # declining preserves the current clone/strict-mode conflict behavior.
+    if not _prepare_session_worktree(
+        session,
+        active_conv,
+        session_manager,
+        config,
+        requested=worktree,
+        first_launch=is_first_launch,
+        identity_preexisting=identity_preexisting,
+        offer_for_conflict=offer_worktree_for_conflict,
+        output_json=output_json,
+    ):
+        return
+
     # Check for concurrent active sessions in the same project BEFORE any git operations
-    # This prevents branch switching before warning user about concurrent sessions
-    # AAP-63377: Pass workspace_name to enable workspace-aware concurrent session checking
-    # #518: Enhanced with concurrency modes (strict/analyze/permissive) and auto-clone support
+    # This preserves the legacy shared-checkout behavior when the user declines worktrees.
     if active_conv and active_conv.project_path:
         concurrency_result = check_concurrent_session(session_manager, active_conv.project_path, session.name, selected_workspace_name, action="open", config=config)
         if not concurrency_result.safe_to_proceed:
@@ -1222,6 +1370,7 @@ def open_session(
                 or current_conv.project_path != active_conv.project_path
                 or current_conv.workspace_path != active_conv.workspace_path
                 or current_conv.temp_directory != active_conv.temp_directory
+                or current_conv.worktree_path != active_conv.worktree_path
                 or current_conv.branch != active_conv.branch
                 or current_conv.agent_launch_started is not False
             ):
@@ -1442,8 +1591,16 @@ def open_session(
                     console.print(f"[dim]Resume anytime with: daf open {current_session.name}[/dim]")
 
                     # Save conversation file to stable location before cleaning up temp directory
-                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
-                        _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory, config)
+                    if current_session.active_conversation and (
+                        current_session.active_conversation.temp_directory
+                        or current_session.active_conversation.worktree_path
+                    ):
+                        managed_path = (
+                            current_session.active_conversation.worktree_path
+                            or current_session.active_conversation.temp_directory
+                        )
+                        if managed_path:
+                            _copy_conversation_from_temp(current_session, managed_path, config)
 
                     # Offer explicit completion while the clone remains available.
                     _prompt_for_complete_on_exit(current_session, config)
@@ -1466,13 +1623,14 @@ def open_session(
             if active_conv is None:
                 raise RuntimeError("Session has no active conversation to launch")
 
-            if active_conv.temp_directory:
+            managed_path = active_conv.worktree_path or active_conv.temp_directory
+            if managed_path:
                 from devflow.utils.clone_cache import CloneCache
 
-                CloneCache(config).use(Path(active_conv.temp_directory))
-            clone_locks.enter_context(temporary_directory_lock(active_conv.temp_directory))
-            if active_conv.temp_directory and not Path(active_conv.temp_directory).is_dir():
-                raise FileNotFoundError("Cached clone disappeared; retry daf open to restore it")
+                CloneCache(config).use(Path(managed_path))
+            clone_locks.enter_context(temporary_directory_lock(managed_path))
+            if managed_path and not Path(managed_path).is_dir():
+                raise FileNotFoundError("Managed workspace disappeared; retry daf open to restore it")
 
             if agent_backend in ("claude", "ollama", "ollama-claude"):
                 # Build resume command with --model flag if using alternative provider
@@ -1572,7 +1730,7 @@ def open_session(
                             "env": env,
                             "model_provider_profile": model_provider_profile,
                         }
-                        if active_conv.temp_directory and agent_backend in (
+                        if (active_conv.temp_directory or active_conv.worktree_path) and agent_backend in (
                             "opencode",
                             "opencode-ai",
                         ):
@@ -1595,7 +1753,7 @@ def open_session(
                             "env": env,
                             "model_provider_profile": model_provider_profile,
                         }
-                        if active_conv.temp_directory and agent_backend in (
+                        if (active_conv.temp_directory or active_conv.worktree_path) and agent_backend in (
                             "opencode",
                             "opencode-ai",
                         ):
@@ -1724,8 +1882,16 @@ def open_session(
                     console.print(f"[dim]Resume anytime with: daf open {current_session.name}[/dim]")
 
                     # Save conversation file to stable location before cleaning up temp directory
-                    if current_session.active_conversation and current_session.active_conversation.temp_directory:
-                        _copy_conversation_from_temp(current_session, current_session.active_conversation.temp_directory, config)
+                    if current_session.active_conversation and (
+                        current_session.active_conversation.temp_directory
+                        or current_session.active_conversation.worktree_path
+                    ):
+                        managed_path = (
+                            current_session.active_conversation.worktree_path
+                            or current_session.active_conversation.temp_directory
+                        )
+                        if managed_path:
+                            _copy_conversation_from_temp(current_session, managed_path, config)
 
                     # Offer explicit completion while the clone remains available.
                     _prompt_for_complete_on_exit(current_session, config)
@@ -1784,11 +1950,16 @@ def open_session(
             console.print(f"  {resume_cmd}")
     finally:
         clone_locks.close()
-        if active_conv and active_conv.temp_directory:
+        managed_path = (
+            active_conv.worktree_path or active_conv.temp_directory
+            if active_conv
+            else None
+        )
+        if managed_path:
             from devflow.utils.clone_cache import CloneCache
 
             try:
-                CloneCache(config).use(Path(active_conv.temp_directory))
+                CloneCache(config).use(Path(managed_path))
             except (OSError, TemporaryDirectoryInUseError):
                 console.print("[yellow]⚠[/yellow] Could not refresh clone cache activity")
 
@@ -3964,7 +4135,7 @@ def _copy_conversation_to_temp(session, temp_dir: str, config=None, old_temp_dir
 
     if not stable_conversation_file.exists():
         console.print(f"[dim]Conversation file not found at stable location[/dim]")
-        fallback_temp = old_temp_dir or conv.temp_directory
+        fallback_temp = old_temp_dir or conv.worktree_path or conv.temp_directory
         if fallback_temp:
             old_temp_resolved = str(Path(fallback_temp).resolve())
             old_temp_file = agent.get_session_file_path(
@@ -4072,11 +4243,11 @@ def _report_clone_in_use(session: Session, error: TemporaryDirectoryInUseError) 
     """Report an expected open refusal without treating contention as lost data."""
     message = (
         f"Cannot open session '{session.name}': {error}.\n"
-        "The temporary clone is in use or could not safely be checked; "
+        "The managed clone or worktree is in use or could not safely be checked; "
         "this is not a missing-clone recovery failure.\n"
         "Exit the owning agent and move terminals outside the clone before retrying "
         f"'daf open {session.name}'. Do not stop shared services or remove lock files.\n"
-        "Clone contents, session recovery metadata, and native identity were preserved."
+        "Workspace contents, session recovery metadata, and native identity were preserved."
     )
     if console._json_override or is_json_mode():
         details: Dict[str, Any] = {
@@ -4167,6 +4338,70 @@ def _restore_session_clone(
     # Persist the source even if the original workspace disappears later.
     if remote and not conv.remote_url:
         conv.remote_url = remote
+    session_manager.update_session(session)
+    if conv.ai_agent_session_id:
+        _copy_conversation_to_temp(session, str(recorded), config)
+    return True
+
+
+def _restore_session_worktree(
+    session: Session, session_manager: SessionManager, config: Optional[Config] = None
+) -> bool:
+    """Verify or restore a recorded worktree without changing agent identity."""
+    conv = session.active_conversation
+    if not conv or not conv.worktree_path:
+        return True
+    if not conv.original_project_path:
+        message = (
+            f"Cannot restore worktree at {conv.worktree_path}: the source repository path is missing. "
+            "Recovery metadata and native conversation identity were preserved."
+        )
+        if console._json_override or is_json_mode():
+            emit_json(
+                success=False,
+                error={"code": "WORKTREE_RECOVERY_FAILED", "message": message},
+            )
+        else:
+            console.print(f"[red]✗[/red] {message}")
+        return False
+
+    from devflow.utils.session_worktree import (
+        SessionWorktreeError,
+        restore_session_worktree,
+        worktree_source_fingerprint,
+    )
+
+    recorded = Path(conv.worktree_path).expanduser()
+    source_path = Path(conv.original_project_path)
+    try:
+        source_fingerprint = worktree_source_fingerprint(source_path)
+        restore_session_worktree(
+            source_path,
+            recorded,
+            conv.branch,
+            config=config,
+            expected_source_fingerprint=conv.worktree_source_fingerprint,
+        )
+    except TemporaryDirectoryInUseError as error:
+        _report_clone_in_use(session, error)
+        return False
+    except (OSError, SessionWorktreeError) as error:
+        message = (
+            f"Cannot restore the recorded worktree at {recorded}: {error}. "
+            "The source checkout, recovery metadata, and native conversation identity were preserved."
+        )
+        if console._json_override or is_json_mode():
+            emit_json(
+                success=False,
+                error={"code": "WORKTREE_RECOVERY_FAILED", "message": message},
+            )
+        else:
+            console.print(f"[red]✗[/red] {message}")
+        return False
+
+    conv.project_path = str(recorded)
+    if not conv.worktree_source_fingerprint:
+        conv.worktree_source_fingerprint = source_fingerprint
     session_manager.update_session(session)
     if conv.ai_agent_session_id:
         _copy_conversation_to_temp(session, str(recorded), config)
