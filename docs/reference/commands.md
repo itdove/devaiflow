@@ -725,6 +725,19 @@ untracked, and ignored files are summarized and preserved; running agents also
 prevent removal. See
 [Temporary Clones and Safe Recovery](../guides/session-management.md#temporary-clones-and-safe-recovery).
 
+When a synced session has a saved branch but no working directory, opting into a
+worktree explicitly offers to continue that saved branch or create a new session
+branch. The new-branch source picker includes local branches and remote-qualified
+refs such as `origin/main`, and defaults to the detected default branch of the
+preferred remote (`upstream`, then `origin`). Choosing a new source does not
+replace or discard the saved branch. A worktree is only a separate checkout;
+branch creation from a source ref and base-branch synchronization are separate
+steps. DAF fetches a selected remote to create the branch at that ref; it does
+not merge or rebase the session branch with later base updates. During
+synchronization, a behind count describes commits present on the fetched base
+ref but absent from the session branch. A local source is compared against the
+selected local ref.
+
 Use the cleanup-only command to retry without repeating commits, pushes, PR/MR
 creation, or issue transitions:
 

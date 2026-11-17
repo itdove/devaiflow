@@ -123,6 +123,82 @@ def test_commits_behind_when_head_differs_from_branch(tmp_path):
     )
 
 
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+def test_commits_behind_uses_remote_qualified_base_ref(tmp_path):
+    """Remote-qualified sources compare against the exact configured remote ref."""
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=tmp_path, capture_output=True, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    (tmp_path / "initial.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+
+    bare_repo = tmp_path.parent / "upstream.git"
+    subprocess.run(
+        ["git", "init", "--bare", str(bare_repo)], capture_output=True, check=True
+    )
+    subprocess.run(
+        ["git", "remote", "add", "upstream", str(bare_repo)],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "push", "upstream", "main"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "-b", "feature"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "main"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    (tmp_path / "later.txt").write_text("later")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Advance base"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "push", "upstream", "main"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "fetch", "upstream"], cwd=tmp_path, capture_output=True, check=True
+    )
+
+    assert GitUtils.commits_behind(tmp_path, "feature", "upstream/main") == 1
+
+
 def test_handle_branch_checkout_returns_true_when_already_on_branch(tmp_path):
     """Test that _handle_branch_checkout returns True when already on the correct branch.
 

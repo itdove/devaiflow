@@ -1,5 +1,6 @@
 """Focused tests for worktree selection during daf open."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -66,6 +67,11 @@ def test_open_worktree_prompt_persists_source_and_worktree_paths(monkeypatch):
     manager = Mock()
     monkeypatch.setattr(open_command, "is_non_interactive", lambda: False)
     monkeypatch.setattr(open_command.Confirm, "ask", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        open_command,
+        "_prompt_for_worktree_source_branch",
+        lambda _path: "origin/main",
+    )
     monkeypatch.setattr(
         open_command, "get_issue_tracker_backend", lambda *_args: "github"
     )
@@ -241,6 +247,11 @@ def test_explicit_worktree_override_skips_prompt(monkeypatch):
         lambda _source: "fingerprint",
     )
     monkeypatch.setattr(
+        open_command,
+        "_prompt_for_worktree_source_branch",
+        lambda _path: "origin/main",
+    )
+    monkeypatch.setattr(
         "devflow.utils.session_worktree.create_session_worktree",
         lambda *_args, **_kwargs: (
             "/cache/daf-session-a/project-a",
@@ -264,6 +275,161 @@ def test_explicit_worktree_override_skips_prompt(monkeypatch):
     )
 
     ask.assert_not_called()
+
+
+def test_worktree_setup_continues_on_saved_session_branch_by_default(monkeypatch):
+    session, conversation = _session_and_conversation(launch_started=False)
+    conversation.branch = "feature/saved-session"
+    conversation.base_branch = "main"
+    manager = Mock()
+    prompt_calls = []
+    printed = []
+    create = Mock(
+        return_value=("/cache/daf-session-a/project-a", conversation.branch, "main")
+    )
+
+    def choose_branch_setup(prompt, *, choices, default):
+        prompt_calls.append((prompt, choices, default))
+        return default
+
+    monkeypatch.setattr(open_command.Prompt, "ask", choose_branch_setup)
+    monkeypatch.setattr(open_command, "console_print", printed.append)
+    monkeypatch.setattr(
+        "devflow.utils.session_worktree.worktree_source_fingerprint",
+        lambda _source: "fingerprint",
+    )
+    monkeypatch.setattr(
+        "devflow.utils.session_worktree.create_session_worktree", create
+    )
+    monkeypatch.setattr(
+        open_command, "get_issue_tracker_backend", lambda *_args: "github"
+    )
+
+    assert open_command._prepare_session_worktree(
+        session,
+        conversation,
+        manager,
+        None,
+        requested=True,
+        first_launch=True,
+        identity_preexisting=True,
+        output_json=False,
+    )
+
+    assert create.call_args.kwargs["branch"] == "feature/saved-session"
+    assert create.call_args.kwargs["base_branch"] == "main"
+    assert conversation.branch == "feature/saved-session"
+    assert prompt_calls == [("Select worktree branch setup", ["1", "2"], "1")]
+    assert any(
+        "Continuing on saved session branch 'feature/saved-session'" in line
+        for line in printed
+    )
+
+
+def test_worktree_setup_can_create_new_branch_from_selected_remote_ref(monkeypatch):
+    session, conversation = _session_and_conversation(launch_started=False)
+    conversation.branch = "feature/saved-session"
+    manager = Mock()
+    prompt_calls = []
+    printed = []
+    create = Mock(
+        return_value=("/cache/daf-session-a/project-a", "TEST-42-wt", "upstream/main")
+    )
+
+    def choose_new_branch(prompt, *, choices, default):
+        prompt_calls.append((prompt, choices, default))
+        return "2"
+
+    monkeypatch.setattr(open_command.Prompt, "ask", choose_new_branch)
+    monkeypatch.setattr(open_command, "console_print", printed.append)
+    monkeypatch.setattr(
+        open_command,
+        "_prompt_for_worktree_source_branch",
+        lambda _path: "upstream/main",
+    )
+    monkeypatch.setattr(
+        open_command.GitUtils, "get_remote_names", lambda _path: ["upstream"]
+    )
+    fetch_remote = Mock(return_value=(True, None))
+    monkeypatch.setattr(open_command.GitUtils, "fetch_remote", fetch_remote)
+    monkeypatch.setattr(
+        "devflow.utils.session_worktree.worktree_source_fingerprint",
+        lambda _source: "fingerprint",
+    )
+    monkeypatch.setattr(
+        "devflow.utils.session_worktree.create_session_worktree", create
+    )
+    monkeypatch.setattr(
+        open_command, "get_issue_tracker_backend", lambda *_args: "github"
+    )
+
+    assert open_command._prepare_session_worktree(
+        session,
+        conversation,
+        manager,
+        None,
+        requested=True,
+        first_launch=True,
+        identity_preexisting=True,
+        output_json=False,
+    )
+
+    assert create.call_args.kwargs["branch"] is None
+    assert create.call_args.kwargs["base_branch"] == "upstream/main"
+    assert conversation.branch == "TEST-42-wt"
+    assert prompt_calls == [("Select worktree branch setup", ["1", "2"], "1")]
+    assert any(
+        "Created worktree branch 'TEST-42-wt' from source ref 'upstream/main'" in line
+        for line in printed
+    )
+    fetch_remote.assert_called_once_with(Path("/workspace/project-a"), "upstream")
+
+
+def test_worktree_source_picker_lists_local_and_remote_refs_and_defaults_to_remote_head(
+    monkeypatch,
+):
+    printed = []
+    prompt_calls = []
+    monkeypatch.setattr(open_command, "console_print", printed.append)
+    monkeypatch.setattr(
+        open_command.GitUtils,
+        "list_local_branches",
+        lambda _path: ["local/topic", "main"],
+    )
+    monkeypatch.setattr(
+        open_command.GitUtils,
+        "get_remote_names",
+        lambda _path: ["origin", "upstream"],
+    )
+
+    def default_branch(_path, remote=None):
+        return "release/stable" if remote == "upstream" else "main"
+
+    def remote_branches(_path, remote, *, raise_on_error=False):
+        assert raise_on_error is True
+        return (
+            ["main", "release/stable"]
+            if remote == "upstream"
+            else ["main", "topic/api"]
+        )
+
+    monkeypatch.setattr(open_command.GitUtils, "get_default_branch", default_branch)
+    monkeypatch.setattr(open_command.GitUtils, "list_remote_branches", remote_branches)
+
+    def choose_default(prompt, *, choices, default):
+        prompt_calls.append((prompt, choices, default))
+        return default
+
+    monkeypatch.setattr(open_command.Prompt, "ask", choose_default)
+
+    selected = open_command._prompt_for_worktree_source_branch(Path("/repo"))
+
+    assert selected == "upstream/release/stable"
+    assert prompt_calls[0][2] == "4"
+    display = "\n".join(printed)
+    assert "local/topic" in display
+    assert "origin/topic/api" in display
+    assert "upstream/release/stable" in display
 
 
 def test_open_worktree_prompt_is_skipped_for_ineligible_sessions(monkeypatch):
