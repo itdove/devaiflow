@@ -790,6 +790,74 @@ def test_check_and_sync_with_base_branch_fetch_fails(tmp_path):
         mock_commits.assert_not_called()
 
 
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+def test_check_and_sync_with_base_branch_uses_exact_remote_ref_and_explains_count(
+    tmp_path,
+):
+    from devflow.cli.commands import open_command
+
+    subprocess.run(
+        ["git", "init", "-b", "feature"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    (tmp_path / "test.txt").write_text("test")
+    subprocess.run(
+        ["git", "add", "."], cwd=tmp_path, capture_output=True, check=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+
+    with (
+        patch.object(
+            GitUtils, "get_remote_names", return_value=["upstream"]
+        ),
+        patch.object(
+            GitUtils, "fetch_remote", return_value=(True, None)
+        ) as fetch_remote,
+        patch.object(
+            GitUtils, "commits_behind", return_value=2
+        ) as commits_behind,
+        patch.object(
+            GitUtils, "merge_branch", return_value=(True, None)
+        ) as merge_branch,
+        patch.object(open_command.console, "print") as console_print,
+    ):
+        assert open_command._check_and_sync_with_base_branch(
+            str(tmp_path),
+            "feature",
+            "upstream/release/stable",
+            "test-session",
+            sync_upstream=True,
+            sync_strategy="merge",
+        )
+
+    fetch_remote.assert_called_once_with(tmp_path, "upstream")
+    commits_behind.assert_called_once_with(
+        tmp_path, "feature", "upstream/release/stable"
+    )
+    merge_branch.assert_called_once_with(tmp_path, "upstream/release/stable")
+    output = "\n".join(str(call.args[0]) for call in console_print.call_args_list)
+    assert "2 commits are on 'upstream/release/stable' but not on 'feature'" in output
+
+
 def test_open_sync_fallback_detects_repo_default_branch(tmp_path):
     """Test that sync fallback uses detected default branch instead of hardcoded 'main'."""
     # The fix at open_command.py line 895 replaces hardcoded "main" with

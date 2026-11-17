@@ -960,16 +960,28 @@ class GitUtils:
         Args:
             path: Repository path
             branch: Current branch name
-            base_branch: Base branch to compare against (e.g., 'main')
+            base_branch: Base branch/ref to compare against. A legacy unqualified
+                name (e.g., 'main') is compared with origin/main; remote-qualified
+                and fully qualified refs are compared exactly as provided.
 
         Returns:
             Number of commits behind (0 if up-to-date or error)
         """
         try:
-            # Use origin/{base_branch} to check against remote
+            base_ref = base_branch
+            if not base_ref.startswith("refs/"):
+                remotes = GitUtils.get_remote_names(path)
+                if (
+                    not any(base_ref.startswith(f"{remote}/") for remote in remotes)
+                    and not base_ref.startswith(("origin/", "upstream/"))
+                ):
+                    base_ref = f"origin/{base_ref}"
+
+            # Compare the saved or selected ref exactly; legacy names retain the
+            # previous origin/<branch> behavior.
             # IMPORTANT: Use branch parameter instead of HEAD to get accurate count
             result = subprocess.run(
-                ["git", "rev-list", "--count", f"{branch}..origin/{base_branch}"],
+                ["git", "rev-list", "--count", f"{branch}..{base_ref}"],
                 cwd=path,
                 capture_output=True,
                 text=True,

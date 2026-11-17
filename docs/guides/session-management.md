@@ -110,6 +110,20 @@ changed repository identity, or unavailable branch fails closed rather than
 switching to a different checkout. If the requested branch is already checked
 out by another worktree, DAF creates a session-specific branch from it.
 
+For a newly synced session that already records a branch, choosing a worktree
+asks whether to continue that branch or create a new session branch. The new
+branch source picker lists local branches and remote branches with their remote
+names (for example, `origin/main` or `upstream/release/stable`). Its default is
+the detected default branch of the preferred remote (`upstream`, then `origin`);
+if that default cannot be resolved or listed, Enter cancels instead of choosing
+an unrelated ref. Creating a new branch leaves the recorded branch untouched.
+For a remote source, DAF fetches that remote to create the branch at the selected
+ref; this does not merge or rebase the session branch with later base updates.
+Worktree creation, branch source selection, and base-branch synchronization are
+separate decisions. During synchronization, a behind count means those commits
+are on the displayed fetched base ref and not on the session branch; a local
+source is compared against the selected local ref.
+
 Worktrees are retained on completion by default. With
 `concurrency.cleanup_on_complete: true`, `daf complete` removes a worktree only
 after you approve closure (or enable an explicit backend auto-close/closure

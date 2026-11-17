@@ -14,7 +14,7 @@ from typing import Any, Dict, NoReturn, Optional, Set
 import click
 from rich.console import Console
 from rich.markup import escape
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from devflow.cli.commands.new_command import _generate_initial_prompt
@@ -37,7 +37,7 @@ from devflow.cli.utils import (
 from devflow.config.loader import ConfigLoader
 from devflow.config.models import Config, Session, WorkspaceDefinition
 from devflow.agent.interface import AgentInterface
-from devflow.git.utils import GitUtils
+from devflow.git.utils import GitUtils, RemoteBranchDiscoveryError
 from devflow.jira import transition_on_start as jira_transition_on_start
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.github import transition_on_start as github_transition_on_start
@@ -93,6 +93,96 @@ class _JsonAwareConsole:
 
 
 console = _JsonAwareConsole()
+
+
+def _display_worktree_git_ref(ref: str) -> str:
+    """Return a readable source-ref label without changing its Git identity."""
+    return ref.removeprefix("refs/remotes/").removeprefix("refs/heads/")
+
+
+def _worktree_source_refs(path: Path) -> tuple[list[tuple[str, str]], str | None]:
+    """List local and remote refs, retaining unambiguous Git ref identities."""
+    from devflow.cli.commands.new_command import _get_default_source_branch
+
+    options: list[tuple[str, str]] = []
+    for branch in GitUtils.list_local_branches(path):
+        options.append((branch, f"refs/heads/{branch}"))
+
+    remotes = GitUtils.get_remote_names(path)
+    remote_order: list[str] = [
+        remote for remote in ("upstream", "origin") if remote in remotes
+    ]
+    remote_order.extend(
+        sorted(remote for remote in remotes if remote not in remote_order)
+    )
+    for remote in remote_order:
+        try:
+            branches = GitUtils.list_remote_branches(
+                path, remote, raise_on_error=True
+            )
+        except RemoteBranchDiscoveryError as error:
+            console_print(
+                f"[yellow]Could not list source branches on remote '{escape(remote)}': "
+                f"{escape(str(error))}[/yellow]"
+            )
+            continue
+        options.extend(
+            (f"{remote}/{branch}", f"{remote}/{branch}") for branch in branches
+        )
+
+    default_source = _get_default_source_branch(path)
+    if default_source:
+        default_source = default_source.removeprefix("refs/remotes/")
+        remotes = GitUtils.get_remote_names(path)
+        if not any(default_source.startswith(f"{remote}/") for remote in remotes):
+            default_source = f"refs/heads/{default_source.removeprefix('refs/heads/')}"
+    return options, default_source
+
+
+def _prompt_for_worktree_source_branch(path: Path) -> str | None:
+    """Prompt for a new worktree branch source, defaulting to the preferred remote."""
+    options, default_source = _worktree_source_refs(path)
+    if not options:
+        console_print(
+            "[yellow]No local or remote branch refs are available for this worktree.[/yellow]"
+        )
+        return None
+
+    console_print(
+        "\n[cyan]Create a new session branch from which source ref?[/cyan]"
+    )
+    console_print(
+        "[dim]A worktree is a separate checkout; choosing its branch source does not "
+        "merge or rebase the session branch with a later base update. Remote source "
+        "refs are fetched before branch creation.[/dim]"
+    )
+    cancel_choice = len(options) + 1
+    default_choice = str(cancel_choice)
+    for index, (label, ref) in enumerate(options, 1):
+        if ref == default_source:
+            console_print(f"  {index}. {escape(label)} [green](default)[/green]")
+            default_choice = str(index)
+        else:
+            console_print(f"  {index}. {escape(label)}")
+    console_print(f"  {cancel_choice}. Cancel")
+    if default_choice == str(cancel_choice):
+        console_print(
+            "[yellow]The default source ref is unresolved or unavailable. "
+            "Select a source explicitly; Enter cancels.[/yellow]"
+        )
+
+    choice = Prompt.ask(
+        "Select source ref",
+        choices=[str(index) for index in range(1, cancel_choice + 1)],
+        default=default_choice,
+    )
+    selected_index = int(choice)
+    if selected_index == cancel_choice:
+        return None
+
+    label, source_ref = options[selected_index - 1]
+    console_print(f"[green]✓[/green] Selected source ref '{escape(label)}'")
+    return source_ref
 
 
 def _json_output_scope(function):
@@ -375,6 +465,7 @@ def _prepare_session_worktree(
     if not use_worktree:
         return True
 
+    from devflow.cli.commands.new_command import _get_default_source_branch
     from devflow.utils.session_worktree import (
         SessionWorktreeError,
         create_session_worktree,
@@ -389,13 +480,95 @@ def _prepare_session_worktree(
         backend=get_issue_tracker_backend(session, config),
     )
     source_path = Path(active_conv.project_path).expanduser().resolve()
+    saved_branch = active_conv.branch
+    worktree_branch_source: str | None = None
+    worktree_branch = saved_branch
+    worktree_base_branch = active_conv.base_branch
+    interactive = not output_json and not is_non_interactive()
+
+    console_print(
+        "[dim]A worktree is a separate checkout. Branch selection and base-branch "
+        "synchronization are separate decisions.[/dim]"
+    )
+    if saved_branch and interactive:
+        console_print(f"\n[bold]Saved session branch:[/bold] {escape(saved_branch)}")
+        console_print("  1. Continue on the saved session branch")
+        console_print("  2. Create a new session branch from a source ref")
+        branch_choice = Prompt.ask(
+            "Select worktree branch setup",
+            choices=["1", "2"],
+            default="1",
+        )
+        if branch_choice == "2":
+            console_print(
+                f"[dim]The saved branch '{escape(saved_branch)}' will remain unchanged.[/dim]"
+            )
+            worktree_branch_source = _prompt_for_worktree_source_branch(source_path)
+            if not worktree_branch_source:
+                console_print(
+                    "[yellow]Worktree setup cancelled; no branch was changed.[/yellow]"
+                )
+                return False
+            worktree_branch = None
+            worktree_base_branch = worktree_branch_source
+        else:
+            console_print(
+                f"[green]✓[/green] Continuing on saved branch '{escape(saved_branch)}'"
+            )
+    elif not saved_branch:
+        if interactive:
+            worktree_branch_source = _prompt_for_worktree_source_branch(source_path)
+        else:
+            worktree_branch_source = _get_default_source_branch(source_path)
+            if worktree_branch_source and not worktree_branch_source.startswith(
+                "refs/"
+            ):
+                remotes = GitUtils.get_remote_names(source_path)
+                if not any(
+                    worktree_branch_source.startswith(f"{remote}/")
+                    for remote in remotes
+                ):
+                    worktree_branch_source = f"refs/heads/{worktree_branch_source}"
+
+        if not worktree_branch_source:
+            return refuse(
+                "Could not determine a source branch for the worktree. "
+                "Select a source ref interactively or configure the repository's "
+                "default branch."
+            )
+        worktree_branch = None
+        worktree_base_branch = worktree_branch_source
+
+    if saved_branch and not worktree_branch_source and not worktree_base_branch:
+        worktree_base_branch = _get_default_source_branch(source_path)
+
+    if worktree_branch_source:
+        source_ref = worktree_branch_source.removeprefix("refs/remotes/")
+        remotes = GitUtils.get_remote_names(source_path)
+        source_remote = next(
+            (
+                remote
+                for remote in sorted(remotes, key=len, reverse=True)
+                if source_ref.startswith(f"{remote}/")
+            ),
+            None,
+        )
+        if source_remote:
+            fetched, _error = GitUtils.fetch_remote(source_path, source_remote)
+            if not fetched:
+                return refuse(
+                    f"Could not fetch worktree source ref "
+                    f"'{_display_worktree_git_ref(worktree_branch_source)}' from "
+                    f"remote '{source_remote}'; no worktree was created."
+                )
+
     try:
         source_fingerprint = worktree_source_fingerprint(source_path)
         worktree_path, worktree_branch, worktree_base_branch = create_session_worktree(
             source_path,
             session_name=session.name,
-            branch=active_conv.branch,
-            base_branch=active_conv.base_branch,
+            branch=worktree_branch,
+            base_branch=worktree_base_branch,
             branch_prefix=branch_prefix,
             config=config,
         )
@@ -411,6 +584,24 @@ def _prepare_session_worktree(
     if not active_conv.remote_url:
         active_conv.remote_url = GitUtils.get_remote_url(source_path)
     session_manager.update_session(session)
+    if worktree_branch_source:
+        console_print(
+            f"[green]✓[/green] Created worktree branch '{escape(worktree_branch)}' from "
+            f"source ref '{escape(_display_worktree_git_ref(worktree_branch_source))}'"
+        )
+    elif saved_branch and worktree_branch == saved_branch:
+        console_print(
+            f"[green]✓[/green] Continuing on saved session branch '{escape(saved_branch)}'"
+        )
+    elif saved_branch:
+        console_print(
+            f"[green]✓[/green] Saved branch '{escape(saved_branch)}' is already checked out; "
+            f"using worktree branch '{escape(worktree_branch)}' based on it"
+        )
+    console_print(
+        f"[dim]Base synchronization will be checked separately against "
+        f"'{escape(_display_worktree_git_ref(worktree_base_branch))}'.[/dim]"
+    )
     console_print(f"[green]✓[/green] Session worktree: {worktree_path}")
     return True
 
@@ -3661,6 +3852,29 @@ def _prompt_for_working_directory(
     return True
 
 
+def _resolve_base_sync_ref(path: Path, base_branch: str) -> tuple[str, str | None]:
+    """Resolve a saved base-branch name to the exact ref and remote to fetch."""
+    from devflow.cli.commands.new_command import _get_source_remote
+
+    base_ref = base_branch.removeprefix("refs/remotes/")
+    if base_ref.startswith("refs/heads/"):
+        return base_ref, None
+
+    remotes = GitUtils.get_remote_names(path)
+    for remote in sorted(remotes, key=len, reverse=True):
+        if base_ref.startswith(f"{remote}/"):
+            return base_ref, remote
+    if base_ref.startswith(("origin/", "upstream/")):
+        return base_ref, base_ref.split("/", 1)[0]
+
+    # Keep older saved refs such as "main" working with the historical origin
+    # convention, while honoring the preferred remote when one is configured.
+    remote = _get_source_remote(path)
+    if remote:
+        return f"{remote}/{base_ref}", remote
+    return f"origin/{base_ref}", "origin"
+
+
 def _check_and_sync_with_base_branch(
     project_path: str,
     branch: str,
@@ -3675,7 +3889,7 @@ def _check_and_sync_with_base_branch(
     Args:
         project_path: Project directory path
         branch: Current branch name
-        base_branch: Base branch to check against (e.g., 'main')
+        base_branch: Base branch/ref to check against (for example, 'main' or 'origin/main')
         identifier: Session identifier (session name or JIRA key) for resume command
         config: Configuration object (optional)
         sync_upstream: Whether to sync with upstream (None = prompt)
@@ -3700,24 +3914,45 @@ def _check_and_sync_with_base_branch(
         console.print(f"[yellow]Cannot sync - please checkout the correct branch first[/yellow]")
         return False
 
-    # Fetch latest from remote to get up-to-date comparison
-    console.print(f"[dim]Fetching latest changes from remote...[/dim]")
-    success, error_msg = GitUtils.fetch_origin(path)
-    if not success:
-        console.print(f"[yellow]Warning: Could not fetch from remote - skipping branch sync check[/yellow]")
-        if error_msg:
-            console.print(f"[dim]Fetch error: {error_msg}[/dim]")
-        return True
+    base_ref, fetch_remote = _resolve_base_sync_ref(path, base_branch)
+    display_base_ref = _display_worktree_git_ref(base_ref)
+
+    # Fetch the selected base's remote, not an implicitly prefixed origin ref.
+    if fetch_remote:
+        console.print(
+            f"[dim]Fetching latest changes from remote '{fetch_remote}'...[/dim]"
+        )
+        if fetch_remote == "origin":
+            success, error_msg = GitUtils.fetch_origin(path)
+        else:
+            success, error_msg = GitUtils.fetch_remote(path, fetch_remote)
+        if not success:
+            console.print(
+                f"[yellow]Warning: Could not fetch from remote '{fetch_remote}' - "
+                "skipping branch sync check[/yellow]"
+            )
+            if error_msg:
+                console.print(f"[dim]Fetch error: {error_msg}[/dim]")
+            return True
 
     # Check how many commits behind
-    commits_behind = GitUtils.commits_behind(path, branch, base_branch)
+    commits_behind = GitUtils.commits_behind(path, branch, base_ref)
 
     if commits_behind == 0:
-        console.print(f"[dim]Branch '{branch}' is up-to-date with '{base_branch}'[/dim]")
+        console.print(
+            f"[dim]Branch '{branch}' is up-to-date with '{display_base_ref}'[/dim]"
+        )
         return True
 
     # Branch is behind - check configured behavior
-    console.print(f"\n[yellow]⚠ Your branch '{branch}' is {commits_behind} commits behind '{base_branch}'[/yellow]")
+    ref_description = "fetched base ref" if fetch_remote else "local base ref"
+    commit_word = "commit" if commits_behind == 1 else "commits"
+    verb = "is" if commits_behind == 1 else "are"
+    console.print(
+        f"\n[yellow]⚠ Your branch '{branch}' is {commits_behind} {commit_word} behind "
+        f"{ref_description} '{display_base_ref}' ({commits_behind} {commit_word} {verb} on "
+        f"'{display_base_ref}' but not on '{branch}')[/yellow]"
+    )
 
     should_sync = True
 
@@ -3740,9 +3975,15 @@ def _check_and_sync_with_base_branch(
             console.print(f"[dim]Continuing with current branch state[/dim]")
             return True
         else:  # "prompt" or anything else
-            should_sync = Confirm.ask(f"Update your branch with latest changes from {base_branch}?", default=True)
+            should_sync = Confirm.ask(
+                f"Update your branch with latest changes from {display_base_ref}?",
+                default=True,
+            )
     else:
-        should_sync = Confirm.ask(f"Update your branch with latest changes from {base_branch}?", default=True)
+        should_sync = Confirm.ask(
+            f"Update your branch with latest changes from {display_base_ref}?",
+            default=True,
+        )
 
     if not should_sync:
         console.print(f"[dim]Continuing with current branch state[/dim]")
@@ -3754,7 +3995,9 @@ def _check_and_sync_with_base_branch(
         # CLI parameter provided - convert to single character
         strategy_map = {"merge": "m", "rebase": "r", "skip": "s"}
         strategy = strategy_map.get(sync_strategy.lower(), "m")
-        console.print(f"[dim]Using sync strategy: {sync_strategy} (--sync-strategy flag set)[/dim]")
+        console.print(
+            f"[dim]Using sync strategy: {sync_strategy} (--sync-strategy flag set)[/dim]"
+        )
     else:
         # Prompt for sync strategy
         console.print(f"\n[bold]Sync strategy:[/bold]")
@@ -3768,10 +4011,12 @@ def _check_and_sync_with_base_branch(
         console.print(f"[dim]Continuing with current branch state[/dim]")
         return True
     elif strategy == "m":
-        console.print(f"\n[cyan]Merging {base_branch} into {branch}...[/cyan]")
-        success, error_msg = GitUtils.merge_branch(path, f"origin/{base_branch}")
+        console.print(f"\n[cyan]Merging {display_base_ref} into {branch}...[/cyan]")
+        success, error_msg = GitUtils.merge_branch(path, base_ref)
         if success:
-            console.print(f"[green]✓[/green] Successfully merged {base_branch} into {branch}")
+            console.print(
+                f"[green]✓[/green] Successfully merged {display_base_ref} into {branch}"
+            )
             return True
         else:
             console.print(f"[red]✗[/red] Merge conflicts detected")
@@ -3785,10 +4030,12 @@ def _check_and_sync_with_base_branch(
             console.print(f"  4. Run: daf open {identifier} (to resume session after resolving conflicts)")
             return False
     else:
-        console.print(f"\n[cyan]Rebasing {branch} onto {base_branch}...[/cyan]")
-        success, error_msg = GitUtils.rebase_branch(path, f"origin/{base_branch}")
+        console.print(f"\n[cyan]Rebasing {branch} onto {display_base_ref}...[/cyan]")
+        success, error_msg = GitUtils.rebase_branch(path, base_ref)
         if success:
-            console.print(f"[green]✓[/green] Successfully rebased {branch} onto {base_branch}")
+            console.print(
+                f"[green]✓[/green] Successfully rebased {branch} onto {display_base_ref}"
+            )
             return True
         else:
             console.print(f"[red]✗[/red] Rebase conflicts detected")

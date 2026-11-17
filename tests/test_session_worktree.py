@@ -176,6 +176,45 @@ def test_worktree_without_saved_branch_creates_branch_from_base(
     assert _git(source, "branch", "--show-current") == "main"
 
 
+def test_new_worktree_branch_uses_qualified_remote_source_and_preserves_saved_branch(
+    tmp_path, worktree_config
+):
+    source = _repository(tmp_path / "source")
+    _git(source, "checkout", "-b", "saved-feature")
+    (source / "saved.txt").write_text("saved work\n")
+    _git(source, "add", "saved.txt")
+    _git(source, "commit", "-m", "Save existing branch work")
+    saved_branch_sha = _git(source, "rev-parse", "saved-feature")
+    _git(source, "checkout", "main")
+
+    bare = tmp_path / "remote.git"
+    subprocess.run(
+        ["git", "init", "--bare", "--initial-branch=main", str(bare)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    _git(source, "remote", "add", "origin", str(bare))
+    _git(source, "push", "origin", "main")
+    _git(source, "remote", "set-head", "origin", "main")
+
+    worktree_path, branch, base_branch = create_session_worktree(
+        source,
+        session_name="session-new",
+        branch=None,
+        base_branch="origin/main",
+        branch_prefix="feature-new",
+        config=worktree_config,
+    )
+
+    assert branch == "feature-new"
+    assert base_branch == "origin/main"
+    assert _git(worktree_path, "rev-parse", "HEAD") == _git(
+        source, "rev-parse", "origin/main"
+    )
+    assert _git(source, "rev-parse", "saved-feature") == saved_branch_sha
+
+
 def test_worktree_uses_remote_default_when_saved_base_is_default_placeholder(
     tmp_path, worktree_config
 ):
