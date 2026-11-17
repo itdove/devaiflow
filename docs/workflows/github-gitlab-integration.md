@@ -528,6 +528,7 @@ GitHub uses a simpler state model than JIRA:
 1. Keep issue open
 2. Add label: `status: completed` (if `add_status_labels: true`)
 3. Remove label: `status: in-progress`
+4. If closure is declined while `add_status_labels: false`, no labels are changed and the completion output says the issue remains open.
 
 When a linked worktree is configured for cleanup, `daf complete` removes it only
 after closure is approved (or explicitly configured) and a fresh tracker lookup

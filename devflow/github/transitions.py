@@ -220,7 +220,11 @@ def transition_on_complete(
                     except Exception as e:
                         console.print(f"[yellow]⚠[/yellow] Could not update labels: {e}")
             else:
-                console.print(f"[dim]Status labels disabled (set config.github.add_status_labels=true to enable)[/dim]")
+                console.print(
+                    f"[dim]Issue {session.issue_key} remains open; no labels were changed "
+                    "(status labels are disabled; set "
+                    "config.github.add_status_labels=true to enable)[/dim]"
+                )
 
         return True
 
