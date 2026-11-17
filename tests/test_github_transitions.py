@@ -93,7 +93,9 @@ class TestTransitionOnCompleteAutoClose:
 
     def test_auto_close_false_prompts_user_no(self, session, config_no_auto_close, mock_github_client):
         """Test that auto_close_on_complete=False prompts user (user says no)."""
-        with patch('rich.prompt.Confirm') as mock_confirm:
+        with patch('rich.prompt.Confirm') as mock_confirm, patch(
+            'devflow.github.transitions.console.print'
+        ) as mock_print:
             mock_confirm.ask.return_value = False
 
             # Act
@@ -105,6 +107,12 @@ class TestTransitionOnCompleteAutoClose:
             mock_confirm.ask.assert_called_once()
             # Should NOT close the issue since user said no
             mock_github_client.transition_ticket.assert_not_called()
+            mock_github_client.update_issue.assert_not_called()
+
+            output = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+            assert "Issue owner/repo#123 remains open" in output
+            assert "no labels were changed" in output
+            assert "status labels are disabled" in output
 
     def test_no_github_config_prompts_user(self, session, config_no_github, mock_github_client):
         """Test that missing GitHub config prompts user."""
