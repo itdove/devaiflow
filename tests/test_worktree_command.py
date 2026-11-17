@@ -262,7 +262,7 @@ def test_clean_worktree_reports_cleanup_identity_refusal_without_traceback(
     result = CliRunner().invoke(worktree, ["clean", ISSUE_KEY])
 
     assert result.exit_code == 1
-    assert "managed worktree path is invalid" in result.output
+    assert "managed worktree path is invalid" in " ".join(result.output.split())
     assert "Traceback" not in result.output
 
 

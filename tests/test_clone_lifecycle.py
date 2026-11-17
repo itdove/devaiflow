@@ -390,7 +390,7 @@ def test_complete_defers_cleanup_if_agent_starts_after_preflight(clone_session, 
         result = _complete()
         assert result.exit_code == 0, result.output
         assert "cleanup was deferred" in result.output
-        assert "daf complete session-a" in result.output
+        assert "daf complete session-a" in " ".join(result.output.split())
         assert clone.exists()
 
     monkeypatch.setattr(
