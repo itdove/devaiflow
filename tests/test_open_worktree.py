@@ -28,11 +28,15 @@ def _session_and_conversation(*, launch_started=False, session_id="new-id"):
     return session, conversation
 
 
-def test_open_worktree_prompt_is_limited_to_detected_conflicts(monkeypatch):
+def test_open_worktree_prompt_defaults_to_existing_checkout_without_conflict(
+    monkeypatch,
+):
     session, conversation = _session_and_conversation(launch_started=False)
     manager = Mock()
     create = Mock()
-    monkeypatch.setattr(open_command, "Confirm", SimpleNamespace(ask=Mock()))
+    ask = Mock(return_value=False)
+    monkeypatch.setattr(open_command, "Confirm", SimpleNamespace(ask=ask))
+    monkeypatch.setattr(open_command, "is_non_interactive", lambda: False)
     monkeypatch.setattr(
         "devflow.utils.session_worktree.create_session_worktree", create
     )
@@ -45,16 +49,19 @@ def test_open_worktree_prompt_is_limited_to_detected_conflicts(monkeypatch):
         requested=None,
         first_launch=True,
         identity_preexisting=True,
-        offer_for_conflict=False,
         output_json=False,
     )
 
-    open_command.Confirm.ask.assert_not_called()
+    ask.assert_called_once_with(
+        "Use a managed Git worktree instead of the existing checkout? "
+        "Uncommitted files in the source checkout are not copied",
+        default=False,
+    )
     create.assert_not_called()
     manager.update_session.assert_not_called()
 
 
-def test_open_worktree_conflict_prompt_persists_source_and_worktree_paths(monkeypatch):
+def test_open_worktree_prompt_persists_source_and_worktree_paths(monkeypatch):
     session, conversation = _session_and_conversation(launch_started=False)
     manager = Mock()
     monkeypatch.setattr(open_command, "is_non_interactive", lambda: False)
@@ -83,7 +90,6 @@ def test_open_worktree_conflict_prompt_persists_source_and_worktree_paths(monkey
         requested=None,
         first_launch=True,
         identity_preexisting=True,
-        offer_for_conflict=True,
         output_json=False,
     )
 
@@ -112,7 +118,6 @@ def test_open_worktree_refuses_to_move_a_launched_conversation(monkeypatch):
         requested=True,
         first_launch=True,
         identity_preexisting=True,
-        offer_for_conflict=False,
         output_json=False,
     )
 
@@ -134,7 +139,6 @@ def test_open_worktree_refusal_has_structured_json_error(monkeypatch):
         requested=True,
         first_launch=True,
         identity_preexisting=True,
-        offer_for_conflict=False,
         output_json=True,
     )
 
@@ -158,7 +162,6 @@ def test_no_worktree_choice_keeps_the_existing_checkout_unchanged(monkeypatch):
         requested=False,
         first_launch=True,
         identity_preexisting=True,
-        offer_for_conflict=True,
         output_json=False,
     )
 
@@ -183,9 +186,112 @@ def test_no_worktree_cannot_rehome_a_saved_worktree_conversation(monkeypatch):
         requested=False,
         first_launch=False,
         identity_preexisting=True,
-        offer_for_conflict=False,
         output_json=False,
     )
 
     console.print.assert_called_once()
     manager.update_session.assert_not_called()
+
+
+def test_open_worktree_prompt_is_skipped_for_json_output(monkeypatch):
+    session, conversation = _session_and_conversation(launch_started=False)
+    ask = Mock()
+    monkeypatch.setattr(open_command, "Confirm", SimpleNamespace(ask=ask))
+
+    assert open_command._prepare_session_worktree(
+        session,
+        conversation,
+        Mock(),
+        None,
+        requested=None,
+        first_launch=True,
+        identity_preexisting=True,
+        output_json=True,
+    )
+
+    ask.assert_not_called()
+
+
+def test_open_worktree_prompt_is_skipped_when_non_interactive(monkeypatch):
+    session, conversation = _session_and_conversation(launch_started=False)
+    ask = Mock()
+    monkeypatch.setattr(open_command, "Confirm", SimpleNamespace(ask=ask))
+    monkeypatch.setattr(open_command, "is_non_interactive", lambda: True)
+
+    assert open_command._prepare_session_worktree(
+        session,
+        conversation,
+        Mock(),
+        None,
+        requested=None,
+        first_launch=True,
+        identity_preexisting=True,
+        output_json=False,
+    )
+
+    ask.assert_not_called()
+
+
+def test_explicit_worktree_override_skips_prompt(monkeypatch):
+    session, conversation = _session_and_conversation(launch_started=False)
+    ask = Mock()
+    monkeypatch.setattr(open_command, "Confirm", SimpleNamespace(ask=ask))
+    monkeypatch.setattr(
+        "devflow.utils.session_worktree.worktree_source_fingerprint",
+        lambda _source: "fingerprint",
+    )
+    monkeypatch.setattr(
+        "devflow.utils.session_worktree.create_session_worktree",
+        lambda *_args, **_kwargs: (
+            "/cache/daf-session-a/project-a",
+            "feature-a",
+            "main",
+        ),
+    )
+    monkeypatch.setattr(
+        open_command, "get_issue_tracker_backend", lambda *_args: "github"
+    )
+
+    assert open_command._prepare_session_worktree(
+        session,
+        conversation,
+        Mock(),
+        None,
+        requested=True,
+        first_launch=True,
+        identity_preexisting=True,
+        output_json=False,
+    )
+
+    ask.assert_not_called()
+
+
+def test_open_worktree_prompt_is_skipped_for_ineligible_sessions(monkeypatch):
+    ask = Mock()
+    monkeypatch.setattr(open_command, "Confirm", SimpleNamespace(ask=ask))
+    monkeypatch.setattr(open_command, "is_non_interactive", lambda: False)
+
+    for session_type, multi_project, temp_directory, first_launch in (
+        ("development", False, None, False),
+        ("ticket_creation", False, None, True),
+        ("investigation", False, None, True),
+        ("development", True, None, True),
+        ("development", False, "/tmp/session-clone", True),
+    ):
+        session, conversation = _session_and_conversation(launch_started=False)
+        session.session_type = session_type
+        conversation.is_multi_project = multi_project
+        conversation.temp_directory = temp_directory
+
+        assert open_command._prepare_session_worktree(
+            session,
+            conversation,
+            Mock(),
+            None,
+            requested=None,
+            first_launch=first_launch,
+            identity_preexisting=True,
+            output_json=False,
+        )
+
+    ask.assert_not_called()

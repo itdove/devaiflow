@@ -315,15 +315,19 @@ def _prepare_session_worktree(
     requested: Optional[bool],
     first_launch: bool,
     identity_preexisting: bool,
-    offer_for_conflict: bool,
     output_json: bool,
 ) -> bool:
     """Offer or create an isolated worktree without re-homing agent identity."""
+
     def refuse(message: str) -> bool:
         if output_json:
             emit_json(
                 success=False,
-                error={"code": "WORKTREE_UNAVAILABLE", "message": message, "session": session.name},
+                error={
+                    "code": "WORKTREE_UNAVAILABLE",
+                    "message": message,
+                    "session": session.name,
+                },
             )
         else:
             console.print(f"[red]{escape(message)}[/red]")
@@ -344,10 +348,7 @@ def _prepare_session_worktree(
         and not active_conv.is_multi_project
         and not active_conv.temp_directory
         and first_launch
-        and (
-            not identity_preexisting
-            or active_conv.agent_launch_started is False
-        )
+        and (not identity_preexisting or active_conv.agent_launch_started is False)
     )
     if requested is True and not can_create:
         if active_conv and active_conv.ai_agent_session_id:
@@ -362,13 +363,12 @@ def _prepare_session_worktree(
     use_worktree = bool(requested)
     if (
         requested is None
-        and offer_for_conflict
         and can_create
         and not output_json
         and not is_non_interactive()
     ):
         use_worktree = Confirm.ask(
-            "Use an isolated Git worktree for this session? "
+            "Use a managed Git worktree instead of the existing checkout? "
             "Uncommitted files in the source checkout are not copied",
             default=False,
         )
@@ -1017,25 +1017,9 @@ def open_session(
                 session_manager.update_session(session)
                 console.print(f"[dim]Generated new session ID: {new_session_id}[/dim]")
 
-    # Offer worktree isolation when another session actually owns the same
-    # checkout. Explicit --worktree remains available on any eligible first launch.
-    offer_worktree_for_conflict = False
-    if (
-        worktree is None
-        and active_conv
-        and active_conv.project_path
-        and not active_conv.worktree_path
-    ):
-        other_session = session_manager.get_active_session_for_project(
-            active_conv.project_path,
-            workspace_name=selected_workspace_name,
-        )
-        offer_worktree_for_conflict = bool(
-            other_session and other_session.name != session.name
-        )
-
-    # Isolated paths do not contend for the source checkout's branch or index;
-    # declining preserves the current clone/strict-mode conflict behavior.
+    # Offer worktree isolation on every eligible interactive first launch. Isolated
+    # paths do not contend for the source checkout's branch or index; declining
+    # preserves the current clone/strict-mode conflict behavior.
     if not _prepare_session_worktree(
         session,
         active_conv,
@@ -1044,7 +1028,6 @@ def open_session(
         requested=worktree,
         first_launch=is_first_launch,
         identity_preexisting=identity_preexisting,
-        offer_for_conflict=offer_worktree_for_conflict,
         output_json=output_json,
     ):
         return

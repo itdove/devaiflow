@@ -91,13 +91,16 @@ local work to resolve a cache warning without first reviewing/backing it up.
 ### Per-session Git worktrees
 
 For parallel development in one checkout, `daf open` can use a linked Git
-worktree instead of changing branches in the source directory. DAF offers this
-choice when it detects another active session in the same project; answer Yes,
-or choose explicitly with `daf open <session> --worktree`. Use
-`--no-worktree` to retain the existing concurrency behavior. Explicit selection
-is available only on an eligible first launch, not when resuming an agent
-conversation already bound to another project path. A saved worktree conversation
-cannot be moved back to the source checkout with `--no-worktree`.
+worktree instead of changing branches in the source directory. On an eligible
+interactive first launch, DAF offers this choice even when no other active session
+uses the project. The existing checkout is the default; answer Yes to use a
+worktree, or choose explicitly with `daf open <session> --worktree`. Use
+`--no-worktree` to keep the session in the existing checkout. JSON and other
+non-interactive opens do not prompt and use the existing checkout unless an
+explicit flag is provided. The choice is available only for single-project
+development sessions with a Git checkout, not for resumptions, multi-project
+sessions, or temporary-directory sessions. A saved worktree conversation cannot
+be moved back to the source checkout with `--no-worktree`.
 
 Each worktree has its own files and Git index but shares the source repository's
 objects and refs. Uncommitted source changes are not copied or modified. DAF

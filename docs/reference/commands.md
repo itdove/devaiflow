@@ -657,7 +657,7 @@ daf open <NAME-or-JIRA> [OPTIONS]
 - `--path` - Specific project path to open (selects conversation for that project)
 - `--projects` - Comma-separated list of projects to add to session (e.g., "backend,frontend"; mutually exclusive with `--path`; requires `-w`)
 - `--new-conversation` - Archive current Claude Code conversation and start fresh with a new one
-- `--worktree` / `--no-worktree` - Use (or decline) a per-session Git worktree instead of the selected checkout. Without either flag, DAF offers a worktree only when another active session uses the same project and only for an eligible first launch.
+- `--worktree` / `--no-worktree` - Use (or decline) a per-session Git worktree instead of the selected checkout. Without either flag, eligible interactive first launches offer the choice even when no other active session uses the project; the existing checkout is the default.
 - `--model-profile` - Model provider profile to use (overrides session default; stored in session for future use)
 - `--json` - Return JSON output (non-interactive mode). Suppresses all interactive prompts (branch creation, branch strategy selection, etc.) and uses sensible defaults. Suitable for automation, CI/CD pipelines, and integration tests.
 
@@ -700,12 +700,16 @@ daf open PROJ-12345 --no-worktree
 
 **Per-session Git worktrees:** A worktree shares Git objects with the selected
 repository but has its own checkout, index, and branch, so concurrent sessions
-can avoid switching the source checkout. The default worktree prompt appears
-only when another active session uses that project; its default is **No**.
-`--worktree` opts in directly and `--no-worktree` keeps the existing strict,
-analyze, or permissive concurrency behavior. Worktrees are offered only before
-the native agent conversation has been launched; a resumed conversation cannot
-be moved because agents scope native history to its original project path.
+can avoid switching the source checkout. On an eligible interactive first launch,
+DAF offers the choice even if no other active session uses the project. The
+existing checkout is the default (**No**). JSON and other non-interactive opens
+do not prompt and use the existing checkout unless `--worktree` or `--no-worktree`
+is specified. `--worktree` opts in directly and `--no-worktree` keeps the existing
+strict, analyze, or permissive concurrency behavior. Worktrees are offered only
+for single-project development sessions with a Git checkout, before the native
+agent conversation has been launched; resumed, multi-project, and temporary-clone
+sessions are not offered a worktree move because agents scope native history to
+its original project path.
 These selection flags apply to first-launch setup; once a conversation is saved
 in a worktree, `--no-worktree` is rejected rather than silently moving it.
 
