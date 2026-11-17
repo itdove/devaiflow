@@ -1853,6 +1853,12 @@ class Session(BaseModel):
    - Reports safe single/group/batch deletion refusals and accurate partial outcomes
    - Adds cross-process owner-exit, retry, branch-setup, and history-preservation coverage
 
+- ✓ Issue-aware cleanup for completed worktrees (itdove/devaiflow#675)
+   - Requires explicit issue-closure approval and a fresh tracker-confirmed closed status before completion cleanup
+   - Adds `daf worktree clean <issue-key>` to retry cleanup without repeating commits, pushes, or issue transitions
+   - Reports tracked, untracked, and ignored worktree data and requires separate confirmation before deleting it
+   - Revalidates session/worktree/source identity and active process use before removal
+
 ## Release Management
 
 ### Overview

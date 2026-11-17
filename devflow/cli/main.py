@@ -3557,6 +3557,10 @@ cli.add_command(assets)
 from devflow.cli.commands.skills_discovery_command import skills
 cli.add_command(skills)
 
+# Cleanup-only session worktree management.
+from devflow.cli.commands.worktree_command import worktree
+cli.add_command(worktree)
+
 
 
 # Note: 'import' is a Python keyword, so we name the function import_cmd

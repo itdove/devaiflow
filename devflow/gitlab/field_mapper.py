@@ -273,10 +273,17 @@ class GitLabFieldMapper:
         else:
             issue_key = f"#{issue_number}"
 
-        # Map GitLab state to standard status
-        # GitLab states: 'opened', 'closed'
-        gitlab_state = issue_data.get('state', 'opened')
-        status = 'open' if gitlab_state == 'opened' else 'closed'
+        # Map only known GitLab states to a standard status. Unknown API values
+        # must not be treated as closed for safety-sensitive cleanup decisions.
+        gitlab_state = issue_data.get('state')
+        status = (
+            {
+                'opened': 'open',
+                'closed': 'closed',
+            }.get(gitlab_state, 'unknown')
+            if isinstance(gitlab_state, str)
+            else 'unknown'
+        )
 
         # Map to interface format
         return {

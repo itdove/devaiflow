@@ -603,11 +603,13 @@ class JiraClient(IssueTrackerClient):
 
             data = response.json()
             fields = data.get("fields", {})
+            status_fields = fields.get("status") or {}
 
             ticket_data = {
                 "key": issue_key,
                 "type": fields.get("issuetype", {}).get("name"),
-                "status": fields.get("status", {}).get("name"),
+                "status": status_fields.get("name"),
+                "status_category": (status_fields.get("statusCategory") or {}).get("key"),
                 "summary": fields.get("summary"),
                 "assignee": (
                     fields.get("assignee", {}).get("displayName")

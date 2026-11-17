@@ -14,7 +14,10 @@ def test_get_ticket_basic_fields(mock_jira_cli):
         "key": "PROJ-12345",
         "fields": {
             "summary": "Implement customer backup feature",
-            "status": {"name": "In Progress"},
+            "status": {
+                "name": "In Progress",
+                "statusCategory": {"key": "indeterminate"},
+            },
             "issuetype": {"name": "Story"},
         }
     })
@@ -26,6 +29,7 @@ def test_get_ticket_basic_fields(mock_jira_cli):
     assert ticket["key"] == "PROJ-12345"
     assert ticket["summary"] == "Implement customer backup feature"
     assert ticket["status"] == "In Progress"
+    assert ticket["status_category"] == "indeterminate"
     assert ticket["type"] == "Story"
 
 
