@@ -75,6 +75,40 @@ class TestTransitionOnCompleteAutoClose:
         # Should update labels (remove status labels)
         mock_github_client.update_issue.assert_called_once()
 
+    @pytest.mark.parametrize("approved", [False, True])
+    def test_close_approval_callback_tracks_explicit_user_choice(
+        self, session, config_no_auto_close, mock_github_client, approved
+    ):
+        callback = Mock()
+        with patch("rich.prompt.Confirm") as mock_confirm:
+            mock_confirm.ask.return_value = approved
+            transition_on_complete(
+                session,
+                config_no_auto_close,
+                client=mock_github_client,
+                on_close_approved=callback,
+            )
+
+        if approved:
+            callback.assert_called_once_with()
+        else:
+            callback.assert_not_called()
+
+    def test_already_closed_issue_does_not_count_as_new_closure_approval(
+        self, session, config_no_auto_close, mock_github_client
+    ):
+        mock_github_client.get_ticket.return_value = {"status": "closed", "labels": []}
+        callback = Mock()
+
+        transition_on_complete(
+            session,
+            config_no_auto_close,
+            client=mock_github_client,
+            on_close_approved=callback,
+        )
+
+        callback.assert_not_called()
+
     def test_auto_close_false_prompts_user_yes(self, session, config_no_auto_close, mock_github_client):
         """Test that auto_close_on_complete=False prompts user (user says yes)."""
         with patch('rich.prompt.Confirm') as mock_confirm:

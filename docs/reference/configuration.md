@@ -1330,7 +1330,7 @@ configuration accepts the same fields. They are not overridden by enterprise/tea
 | --- | --- | --- |
 | `clone_retention.max_idle_days` | `30` | Evict eligible clones idle for **at least** this many 24-hour days. |
 | `clone_retention.max_size_mb` | `10240` | Aggregate apparent-byte budget in **MiB** (1,048,576 bytes): 10 GiB by default. Includes repository contents and `.git`. |
-| `concurrency.cleanup_on_complete` | `false` | Preserve clones on completion; `true` explicitly opts into immediate cleanup. |
+| `concurrency.cleanup_on_complete` | `false` | Preserve temporary clones on completion; `true` opts into their cleanup. Linked worktrees additionally require explicit issue-closure approval and tracker-confirmed closed status. |
 
 Limits must be non-negative integers (not strings, fractions, booleans, or null).
 `0` disables that limit independently; setting both to `0` disables automatic

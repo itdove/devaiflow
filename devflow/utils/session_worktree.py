@@ -5,8 +5,10 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from devflow.config.models import Config
@@ -23,6 +25,96 @@ class SessionWorktreeError(RuntimeError):
 
 class SessionWorktreeCleanupError(SessionWorktreeError):
     """A worktree could not be removed without risking local work."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        changes: "WorktreeChanges | None" = None,
+    ) -> None:
+        super().__init__(message)
+        self.changes = changes
+
+
+@dataclass(frozen=True)
+class WorktreeChanges:
+    """A safe summary of local data that would be removed with a worktree."""
+
+    path: Path
+    tracked: int
+    untracked: int
+    ignored: int
+    status_output: str = field(repr=False)
+    filesystem_snapshot: str = field(default="", repr=False)
+
+    @property
+    def has_changes(self) -> bool:
+        """Whether the worktree contains any local, untracked, or ignored files."""
+        return bool(self.status_output)
+
+    def summary(self) -> str:
+        """Return counts without exposing file contents or an unbounded path list."""
+        return (
+            f"tracked changes: {self.tracked}, untracked files: {self.untracked}, "
+            f"ignored paths: {self.ignored}"
+        )
+
+
+def _summarize_worktree_status(path: Path, output: str) -> WorktreeChanges:
+    """Summarize porcelain status while retaining its exact value for rechecks."""
+    tracked = untracked = ignored = 0
+    for line in output.splitlines():
+        if line.startswith("!!"):
+            # Git collapses fully ignored directories into a single status entry.
+            ignored += 1
+        elif line.startswith("??"):
+            untracked += 1
+        else:
+            tracked += 1
+    return WorktreeChanges(
+        path=path,
+        tracked=tracked,
+        untracked=untracked,
+        ignored=ignored,
+        status_output=output,
+        filesystem_snapshot=_worktree_filesystem_snapshot(path) if output else "",
+    )
+
+
+def _worktree_filesystem_snapshot(path: Path) -> str:
+    """Fingerprint paths and metadata so ignored-directory edits are rechecked."""
+    entries: list[tuple[object, ...]] = []
+    root = path.resolve()
+    pending = [root]
+
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as iterator:
+            children = sorted(iterator, key=lambda entry: entry.name)
+        for entry in children:
+            child = Path(entry.path)
+            info = entry.stat(follow_symlinks=False)
+            mode = info.st_mode
+            relative = child.relative_to(root).as_posix()
+            link_target = os.readlink(child) if stat.S_ISLNK(mode) else None
+            entries.append(
+                (
+                    relative,
+                    stat.S_IFMT(mode),
+                    stat.S_IMODE(mode),
+                    info.st_size,
+                    info.st_mtime_ns,
+                    info.st_ctime_ns,
+                    info.st_dev,
+                    info.st_ino,
+                    link_target,
+                )
+            )
+            if stat.S_ISDIR(mode):
+                pending.append(child)
+
+    payload = json.dumps(entries, ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _run_git(
@@ -502,9 +594,18 @@ def cleanup_session_worktree(
     *,
     locked: bool = False,
     expected_source_fingerprint: str | None = None,
+    expected_branch: str | None = None,
+    delete_local_files: bool = False,
+    expected_changes: WorktreeChanges | None = None,
     config: Config | None = None,
 ) -> None:
-    """Remove a clean, unused worktree without force or discarding local files."""
+    """Safely remove a session worktree, preserving unreviewed local data.
+
+    ``delete_local_files`` is only accepted when ``expected_changes`` contains
+    the exact status snapshot the user reviewed. The worktree is inspected again
+    under its lifecycle lock before removal, so changes made after confirmation
+    cause a safe refusal.
+    """
     path = worktree_path.expanduser()
     source = source_path.expanduser().resolve()
     root = _managed_worktree_root(path, config)
@@ -518,9 +619,6 @@ def cleanup_session_worktree(
         if not root.exists():
             return
         assert_temp_directory_unused(str(path))
-        if not path.exists():
-            _remove_empty_worktree_root(root)
-            return
         try:
             if (
                 expected_source_fingerprint
@@ -529,10 +627,18 @@ def cleanup_session_worktree(
                 raise SessionWorktreeError(
                     "The source repository no longer matches the repository recorded for this worktree"
                 )
-            _verify_worktree(source, path, GitUtils.get_current_branch(path))
+            if not path.exists():
+                _remove_empty_worktree_root(root)
+                return
+            actual_branch = GitUtils.get_current_branch(path)
+            if expected_branch and actual_branch != expected_branch:
+                raise SessionWorktreeError(
+                    "The worktree is no longer on the branch recorded for its session"
+                )
+            _verify_worktree(source, path, expected_branch or actual_branch)
         except (OSError, SessionWorktreeError) as error:
             raise SessionWorktreeCleanupError(
-                "Cannot verify that the recorded worktree still belongs to its source repository; it was preserved"
+                f"Cannot verify the recorded worktree and source repository at {path}; it was preserved"
             ) from error
 
         try:
@@ -548,19 +654,46 @@ def cleanup_session_worktree(
             raise SessionWorktreeCleanupError(
                 "Cannot inspect the worktree safely; it was preserved"
             ) from error
-        if status.returncode != 0 or status.stdout:
+        if status.returncode != 0:
             raise SessionWorktreeCleanupError(
-                "The worktree contains local or ignored files and was preserved; commit or back up that work before deleting it"
+                f"Cannot inspect the worktree at {path} safely; it was preserved"
+            )
+
+        changes = _summarize_worktree_status(path, status.stdout)
+        if expected_changes and (
+            changes.status_output != expected_changes.status_output
+            or changes.filesystem_snapshot != expected_changes.filesystem_snapshot
+        ):
+            raise SessionWorktreeCleanupError(
+                f"The worktree at {path} changed after its contents were reviewed; it was preserved. "
+                f"Current contents: {changes.summary()}. Review them and retry cleanup.",
+                changes=changes,
+            )
+        if changes.has_changes:
+            if not delete_local_files:
+                raise SessionWorktreeCleanupError(
+                    f"The worktree at {path} contains local data ({changes.summary()}) and was preserved. "
+                    "Back up or review this data before deleting it.",
+                    changes=changes,
+                )
+            if expected_changes is None:
+                raise SessionWorktreeCleanupError(
+                    f"The worktree at {path} contains local data ({changes.summary()}); "
+                    "a reviewed status snapshot is required before deleting it.",
+                    changes=changes,
+                )
+        elif expected_changes and expected_changes.has_changes:
+            raise SessionWorktreeCleanupError(
+                f"The worktree at {path} changed after its contents were reviewed; it was preserved. "
+                "Review it and retry cleanup."
             )
 
         try:
-            result = _run_git(
-                source,
-                "worktree",
-                "remove",
-                str(path.resolve()),
-                check=False,
-            )
+            remove_args = ["worktree", "remove"]
+            if delete_local_files and changes.has_changes:
+                remove_args.append("--force")
+            remove_args.append(str(path.resolve()))
+            result = _run_git(source, *remove_args, check=False)
         except (OSError, SessionWorktreeError) as error:
             raise SessionWorktreeCleanupError(
                 "Git worktree removal could not be verified; it was preserved"

@@ -334,6 +334,200 @@ def test_cleanup_preserves_worktree_with_uncommitted_files(tmp_path, worktree_co
     assert worktree_path.is_dir()
 
 
+def test_cleanup_reports_tracked_untracked_and_ignored_worktree_data(
+    tmp_path, worktree_config
+):
+    source = _repository(tmp_path / "source")
+    (source / ".gitignore").write_text("generated/\n")
+    _git(source, "add", ".gitignore")
+    _git(source, "commit", "-m", "Ignore generated files")
+    _git(source, "branch", "feature-a")
+    worktree_path, branch, _base_branch = create_session_worktree(
+        source,
+        session_name="session-a",
+        branch="feature-a",
+        base_branch="main",
+        branch_prefix="session-a",
+        config=worktree_config,
+    )
+    (worktree_path / "README.md").write_text("modified tracked data\n")
+    (worktree_path / "local-work.txt").write_text("untracked data\n")
+    ignored_file = worktree_path / "generated" / "output.txt"
+    ignored_file.parent.mkdir()
+    ignored_file.write_text("ignored data\n")
+
+    with pytest.raises(SessionWorktreeCleanupError) as caught:
+        cleanup_session_worktree(
+            worktree_path,
+            source,
+            expected_branch=branch,
+        )
+
+    changes = caught.value.changes
+    assert changes is not None
+    assert changes.path == worktree_path
+    assert (changes.tracked, changes.untracked, changes.ignored) == (1, 1, 1)
+    assert "tracked changes: 1" in str(caught.value)
+    assert str(worktree_path) in str(caught.value)
+    assert worktree_path.is_dir()
+    assert ignored_file.read_text() == "ignored data\n"
+
+
+def test_cleanup_deletes_dirty_worktree_only_with_reviewed_status_snapshot(
+    tmp_path, worktree_config
+):
+    source = _repository(tmp_path / "source")
+    _git(source, "branch", "feature-a")
+    worktree_path, branch, _base_branch = create_session_worktree(
+        source,
+        session_name="session-a",
+        branch="feature-a",
+        base_branch="main",
+        branch_prefix="session-a",
+        config=worktree_config,
+    )
+    local_file = worktree_path / "local-work.txt"
+    local_file.write_text("reviewed local data\n")
+
+    with pytest.raises(SessionWorktreeCleanupError) as caught:
+        cleanup_session_worktree(worktree_path, source, expected_branch=branch)
+    changes = caught.value.changes
+    assert changes is not None
+
+    with pytest.raises(SessionWorktreeCleanupError, match="reviewed status snapshot"):
+        cleanup_session_worktree(
+            worktree_path,
+            source,
+            expected_branch=branch,
+            delete_local_files=True,
+        )
+    assert local_file.exists()
+
+    cleanup_session_worktree(
+        worktree_path,
+        source,
+        expected_branch=branch,
+        delete_local_files=True,
+        expected_changes=changes,
+    )
+
+    assert not worktree_path.exists()
+
+
+def test_cleanup_refuses_dirty_worktree_changed_after_review(tmp_path, worktree_config):
+    source = _repository(tmp_path / "source")
+    _git(source, "branch", "feature-a")
+    worktree_path, branch, _base_branch = create_session_worktree(
+        source,
+        session_name="session-a",
+        branch="feature-a",
+        base_branch="main",
+        branch_prefix="session-a",
+        config=worktree_config,
+    )
+    reviewed_file = worktree_path / "reviewed.txt"
+    reviewed_file.write_text("reviewed\n")
+
+    with pytest.raises(SessionWorktreeCleanupError) as caught:
+        cleanup_session_worktree(worktree_path, source, expected_branch=branch)
+    changes = caught.value.changes
+    assert changes is not None
+    added_after_review = worktree_path / "added-after-review.txt"
+    added_after_review.write_text("new data\n")
+
+    with pytest.raises(
+        SessionWorktreeCleanupError, match="changed after its contents were reviewed"
+    ):
+        cleanup_session_worktree(
+            worktree_path,
+            source,
+            expected_branch=branch,
+            delete_local_files=True,
+            expected_changes=changes,
+        )
+
+    assert reviewed_file.exists()
+    assert added_after_review.exists()
+
+
+def test_cleanup_refuses_ignored_file_changes_after_review(tmp_path, worktree_config):
+    source = _repository(tmp_path / "source")
+    (source / ".gitignore").write_text("generated/\n")
+    _git(source, "add", ".gitignore")
+    _git(source, "commit", "-m", "Ignore generated files")
+    _git(source, "branch", "feature-a")
+    worktree_path, branch, _base_branch = create_session_worktree(
+        source,
+        session_name="session-a",
+        branch="feature-a",
+        base_branch="main",
+        branch_prefix="session-a",
+        config=worktree_config,
+    )
+    ignored_file = worktree_path / "generated" / "output.txt"
+    ignored_file.parent.mkdir()
+    ignored_file.write_text("reviewed data\n")
+
+    with pytest.raises(SessionWorktreeCleanupError) as caught:
+        cleanup_session_worktree(worktree_path, source, expected_branch=branch)
+    changes = caught.value.changes
+    assert changes is not None
+    original_status = _git(
+        worktree_path,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignored=matching",
+    )
+
+    ignored_file.write_text("changed after review\n")
+    changed_status = _git(
+        worktree_path,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignored=matching",
+    )
+    assert changed_status == original_status
+
+    with pytest.raises(
+        SessionWorktreeCleanupError, match="changed after its contents were reviewed"
+    ):
+        cleanup_session_worktree(
+            worktree_path,
+            source,
+            expected_branch=branch,
+            delete_local_files=True,
+            expected_changes=changes,
+        )
+
+    assert ignored_file.read_text() == "changed after review\n"
+
+
+def test_cleanup_refuses_worktree_on_branch_different_from_session_record(
+    tmp_path, worktree_config
+):
+    source = _repository(tmp_path / "source")
+    _git(source, "branch", "feature-a")
+    worktree_path, _branch, _base_branch = create_session_worktree(
+        source,
+        session_name="session-a",
+        branch="feature-a",
+        base_branch="main",
+        branch_prefix="session-a",
+        config=worktree_config,
+    )
+
+    with pytest.raises(SessionWorktreeCleanupError, match="Cannot verify"):
+        cleanup_session_worktree(
+            worktree_path,
+            source,
+            expected_branch="different-branch",
+        )
+
+    assert worktree_path.is_dir()
+
+
 def test_cleanup_preserves_ignored_worktree_files(tmp_path, worktree_config):
     source = _repository(tmp_path / "source")
     (source / ".gitignore").write_text("generated/\n")

@@ -40,6 +40,7 @@ class IssueTrackerClient(ABC):
                 - description: Full description
                 - type: Issue type (bug, story, task, etc.)
                 - status: Current status
+                - status_category: Optional normalized status category (for example, JIRA's "done")
                 - assignee: Assigned user (optional)
                 - reporter: Reporter user (optional)
                 - priority: Priority level (optional)

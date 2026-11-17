@@ -717,10 +717,28 @@ Uncommitted source-checkout files are **not copied** to the worktree and remain
 untouched in the source. If the session branch is already checked out elsewhere,
 DAF creates a session-specific branch from it. The exact worktree path and source
 repository are saved for reopen/recovery. Worktrees are preserved on completion
-by default; `concurrency.cleanup_on_complete: true` requests removal after
-completion, but cleanup and `daf delete` preserve worktrees containing local or
-ignored files, or worktrees used by a running process. See
+by default. With `concurrency.cleanup_on_complete: true`, `daf complete` only
+removes a worktree after you approve closure (or enable an explicit backend
+auto-close/closure transition) and the configured tracker confirms that it is
+closed. Open, unknown, or unverifiable issue status preserves the worktree. Local,
+untracked, and ignored files are summarized and preserved; running agents also
+prevent removal. See
 [Temporary Clones and Safe Recovery](../guides/session-management.md#temporary-clones-and-safe-recovery).
+
+Use the cleanup-only command to retry without repeating commits, pushes, PR/MR
+creation, or issue transitions:
+
+```bash
+daf worktree clean <ISSUE-KEY>
+```
+
+The command requires a completed session and a fresh closed-status check from its
+configured issue tracker (JIRA, GitHub Issues, or GitLab Issues). It verifies the
+recorded session/worktree/source-repository association and refuses while a process
+uses the worktree. If local data is present, review or back it up first. To request
+deletion, use `--delete-local-files`; DAF displays the data counts and path and then
+requires a separate interactive confirmation. JSON/non-interactive runs never
+delete local data.
 
 **Multi-Repository Workflow Example:**
 

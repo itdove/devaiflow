@@ -6,12 +6,15 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from devflow.cli.commands.complete_command import complete_session, _update_issue_pr_field
-from devflow.config.loader import ConfigLoader
-from devflow.session.manager import SessionManager
-from devflow.jira.exceptions import JiraApiError, JiraNotFoundError, JiraValidationError
-from devflow.git.utils import GitUtils
 from devflow.agent.factory import resolve_agent_backend
+from devflow.cli.commands.complete_command import (
+    _confirm_closed_issue_for_worktree,
+    _update_issue_pr_field,
+    _worktree_session_association_is_valid,
+    complete_session,
+)
+from devflow.config.loader import ConfigLoader
+from devflow.git.utils import GitUtils
 from devflow.github.issues_client import GitHubClient
 from devflow.issue_tracker.exceptions import (
     IssueTrackerApiError,
@@ -19,6 +22,143 @@ from devflow.issue_tracker.exceptions import (
     IssueTrackerConnectionError,
     IssueTrackerNotFoundError,
 )
+from devflow.jira.exceptions import JiraApiError, JiraNotFoundError, JiraValidationError
+from devflow.session.manager import SessionManager
+
+
+@pytest.mark.parametrize("status", ["open", None])
+def test_worktree_cleanup_requires_tracker_confirmed_github_closure(
+    monkeypatch, capsys, status
+):
+    session = Mock(issue_key="owner/repo#42")
+    config = Mock()
+    client = Mock()
+    client.get_ticket.return_value = {"status": status}
+    factory = Mock(return_value=client)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.get_issue_tracker_backend",
+        lambda *_args: "github",
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.create_issue_tracker_client", factory
+    )
+
+    result = _confirm_closed_issue_for_worktree(
+        session,
+        config,
+        Path("/managed/worktree"),
+        closure_approved=True,
+        requested_status=None,
+    )
+
+    assert result is False
+    assert "Worktree preserved" in capsys.readouterr().out
+    factory.assert_called_once_with(backend="github")
+
+
+def test_worktree_cleanup_does_not_query_tracker_without_closure_approval(
+    monkeypatch, capsys
+):
+    session = Mock(issue_key="owner/repo#42")
+    config = Mock()
+    factory = Mock()
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.create_issue_tracker_client", factory
+    )
+
+    assert not _confirm_closed_issue_for_worktree(
+        session,
+        config,
+        Path("/managed/worktree"),
+        closure_approved=False,
+        requested_status=None,
+    )
+    factory.assert_not_called()
+    assert "not explicitly" in capsys.readouterr().out
+
+
+def test_worktree_cleanup_requires_jira_status_to_match_approved_target(monkeypatch):
+    session = Mock(issue_key="PROJ-42")
+    config = Mock()
+    client = Mock()
+    client.get_ticket.return_value = {
+        "status": "Done",
+        "status_category": "done",
+    }
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.get_issue_tracker_backend",
+        lambda *_args: "jira",
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.create_issue_tracker_client",
+        lambda **_kwargs: client,
+    )
+
+    assert _confirm_closed_issue_for_worktree(
+        session,
+        config,
+        Path("/managed/worktree"),
+        closure_approved=True,
+        requested_status="Done",
+    )
+    assert not _confirm_closed_issue_for_worktree(
+        session,
+        config,
+        Path("/managed/worktree"),
+        closure_approved=True,
+        requested_status="Closed",
+    )
+
+
+@pytest.mark.parametrize(
+    "ticket",
+    [None, [], {"status": None}],
+)
+def test_worktree_cleanup_preserves_malformed_tracker_status(
+    monkeypatch, capsys, ticket
+):
+    session = Mock(issue_key="owner/repo#42")
+    client = Mock()
+    client.get_ticket.return_value = ticket
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.get_issue_tracker_backend",
+        lambda *_args: "github",
+    )
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.create_issue_tracker_client",
+        lambda **_kwargs: client,
+    )
+
+    assert not _confirm_closed_issue_for_worktree(
+        session,
+        Mock(),
+        Path("/managed/worktree"),
+        closure_approved=True,
+        requested_status=None,
+    )
+    assert "Worktree preserved" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "project_path,worktree_path,source_path,branch,expected",
+    [
+        ("/managed/worktree", "/managed/worktree", "/source", "feature-a", True),
+        ("/source", "/managed/worktree", "/source", "feature-a", False),
+        ("/managed/worktree", "/managed/worktree", None, "feature-a", False),
+        ("/managed/worktree", "/managed/worktree", "/source", None, False),
+    ],
+)
+def test_worktree_session_association_requires_matching_path_source_and_branch(
+    project_path, worktree_path, source_path, branch, expected
+):
+    active_conv = Mock(
+        project_path=project_path,
+        worktree_path=worktree_path,
+        original_project_path=source_path,
+        branch=branch,
+    )
+
+    assert _worktree_session_association_is_valid(active_conv) is expected
 
 
 @pytest.fixture

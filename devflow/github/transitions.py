@@ -5,7 +5,7 @@ Unlike JIRA's complex workflow states, GitHub has binary state (open/closed) wit
 optional status labels for intermediate states.
 """
 
-from typing import Optional
+from typing import Callable, Optional
 
 from rich.console import Console
 
@@ -105,7 +105,13 @@ def transition_on_start(session: Session, config: Config, client: Optional[GitHu
         return True  # Don't block session start
 
 
-def transition_on_complete(session: Session, config: Config, client: Optional[GitHubClient] = None, no_issue_update: bool = False) -> bool:
+def transition_on_complete(
+    session: Session,
+    config: Config,
+    client: Optional[GitHubClient] = None,
+    no_issue_update: bool = False,
+    on_close_approved: Optional[Callable[[], None]] = None,
+) -> bool:
     """Transition GitHub issue when completing work on a session.
 
     This function:
@@ -177,6 +183,8 @@ def transition_on_complete(session: Session, config: Config, client: Optional[Gi
 
         # Close issue if requested
         if should_close and current_state == 'open':
+            if on_close_approved:
+                on_close_approved()
             console.print(f"[cyan]Closing issue {session.issue_key}...[/cyan]")
             try:
                 # Remove all status labels when closing

@@ -441,6 +441,11 @@ daf complete owner-repo-60
 - Prompts: `Close GitHub issue owner/repo#60? (y/N)`
 - Configure auto-close: `config.github.auto_close_on_complete = true`
 
+GitLab follows the same explicit closure choice. It prompts by default; set
+`config.gitlab.auto_close_on_complete = true` to opt into automatic closure.
+For either backend, worktree cleanup still requires a fresh tracker lookup that
+confirms the issue is closed.
+
 ## Configuration Options
 
 ### GitHub Configuration
@@ -523,6 +528,12 @@ GitHub uses a simpler state model than JIRA:
 1. Keep issue open
 2. Add label: `status: completed` (if `add_status_labels: true`)
 3. Remove label: `status: in-progress`
+
+When a linked worktree is configured for cleanup, `daf complete` removes it only
+after closure is approved (or explicitly configured) and a fresh tracker lookup
+confirms the closed state. If the issue stays open or its state cannot be
+verified, the worktree is preserved. Use `daf worktree clean <issue-key>` to
+retry cleanup later; the command supports JIRA, GitHub Issues, and GitLab Issues.
 
 ## Migration from JIRA
 

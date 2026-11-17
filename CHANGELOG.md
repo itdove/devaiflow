@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Issue-aware completed worktree cleanup** (#675)
+  - Requires explicit issue-closure approval and a fresh tracker-confirmed closed status before `daf complete` removes a worktree
+  - Adds `daf worktree clean <issue-key>` to retry cleanup for completed sessions without repeating completion operations
+  - Reports tracked, untracked, and ignored local data and preserves it unless deletion is separately confirmed
+  - Revalidates the saved session branch/source identity, worktree status, and process use before removal
 - **Bounded session clone cache and safe reopen recovery** (#640)
   - Shares validated 30-day idle/10-GiB defaults across clone allocation and recovery, with independent disable settings and deterministic LRU eviction
   - Protects live/in-progress clones, unknown paths, symlinks, and local-only Git/worktree data; warns when safety prevents meeting the budget

@@ -40,8 +40,10 @@ from devflow.jira.client import JiraClient
 from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, JiraNotFoundError, JiraValidationError, JiraConnectionError
 from devflow.jira.utils import merge_pr_urls
 from devflow.github import transition_on_complete as github_transition_on_complete
+from devflow.gitlab import transition_on_complete as gitlab_transition_on_complete
 from devflow.github.issues_client import GitHubClient
 from devflow.issue_tracker.factory import create_issue_tracker_client
+from devflow.issue_tracker.status import ticket_matches_closed_transition
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError, IssueTrackerValidationError
 from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.utils.model_provider import get_co_authored_by_line
@@ -988,6 +990,15 @@ def complete_session(
     # Feature orchestration: run verification FIRST (before JIRA transition)
     # This ensures tickets don't get marked as complete if verification fails
     verification_passed = True  # Default for non-feature sessions
+    requested_issue_close_status: str | None = None
+    issue_close_approved = False
+
+    def remember_issue_close_approval() -> None:
+        nonlocal issue_close_approved
+        issue_close_approved = True
+
+    previous_issue_status = (session.issue_metadata or {}).get("status")
+
     if feature_context:
         verification_passed = _handle_feature_completion(
             session=session,
@@ -1009,12 +1020,35 @@ def complete_session(
         if backend == "jira":
             jira_transition_on_complete(session, config)
         elif backend == "github":
-            github_transition_on_complete(session, config, no_issue_update=no_issue_update)
+            github_transition_on_complete(
+                session,
+                config,
+                no_issue_update=no_issue_update,
+                on_close_approved=remember_issue_close_approval,
+            )
+        elif backend == "gitlab":
+            gitlab_transition_on_complete(
+                session,
+                config,
+                no_issue_update=no_issue_update,
+                on_close_approved=remember_issue_close_approval,
+            )
         else:
             console.print(f"[dim]Skipping transition for unknown backend: {backend}[/dim]")
 
         # Save updated session (status may have changed)
         session_manager.update_session(session)
+
+    current_issue_status = (session.issue_metadata or {}).get("status")
+    if (
+        current_issue_status
+        and current_issue_status != previous_issue_status
+        and get_issue_tracker_backend(session, config) == "jira"
+    ):
+        # Jira's transition handler updates this cached status only after a
+        # configured or user-selected transition succeeds. The subsequent fresh
+        # tracker read still decides whether the status is actually closed.
+        requested_issue_close_status = current_issue_status
 
     # Clean up isolated clones/worktrees AFTER all commit/push/PR operations.
     active_conv = session.active_conversation
@@ -1030,6 +1064,25 @@ def complete_session(
             console.print(f"[dim]{workspace_kind} preserved at: {managed_path}[/dim]")
             console.print(f"[dim](concurrency.cleanup_on_complete is disabled)[/dim]")
         if should_cleanup:
+            if active_conv.worktree_path:
+                if not _worktree_session_association_is_valid(active_conv):
+                    console_print(
+                        f"[yellow]⚠[/yellow] Worktree preserved at {managed_path}: "
+                        "the recorded session path, source repository, or branch is missing "
+                        "or does not identify this worktree."
+                    )
+                    return
+                close_was_approved = issue_close_approved or bool(
+                    requested_issue_close_status
+                )
+                if not _confirm_closed_issue_for_worktree(
+                    session,
+                    config,
+                    Path(managed_path),
+                    closure_approved=close_was_approved,
+                    requested_status=requested_issue_close_status,
+                ):
+                    return
             try:
                 if active_conv.worktree_path:
                     if not active_conv.original_project_path:
@@ -1038,6 +1091,7 @@ def complete_session(
                         Path(active_conv.worktree_path),
                         Path(active_conv.original_project_path),
                         expected_source_fingerprint=active_conv.worktree_source_fingerprint,
+                        expected_branch=active_conv.branch,
                         config=config,
                     )
                 else:
@@ -1055,9 +1109,91 @@ def complete_session(
                 )
                 console_print(
                     f"[yellow]⚠[/yellow] Session '{session.name}' is complete, but {workspace_kind} "
-                    f"cleanup was deferred: {error}.{local_work_note} Exit the agent and move terminals "
-                    f"out of the workspace, then rerun 'daf complete {session.name}' to retry safely."
+                    f"cleanup was deferred: {error}.{local_work_note}"
                 )
+                if active_conv.worktree_path:
+                    retry = f"daf worktree clean {session.issue_key}"
+                    if isinstance(error, SessionWorktreeCleanupError) and error.changes:
+                        retry += " --delete-local-files"
+                        console_print(
+                            "Review or back up the reported local data before using this option; "
+                            "it requires a separate confirmation."
+                        )
+                    console_print(
+                        f"Exit the agent and move terminals out of the workspace, then retry with '{retry}'."
+                    )
+                else:
+                    console_print(
+                        f"Exit the agent and move terminals out of the workspace, then rerun "
+                        f"'daf complete {session.name}' to retry safely."
+                    )
+
+
+def _worktree_session_association_is_valid(active_conv: Any) -> bool:
+    """Require the session's project path and branch to identify its worktree."""
+    if (
+        not active_conv
+        or not active_conv.project_path
+        or not active_conv.worktree_path
+        or not active_conv.original_project_path
+        or not active_conv.branch
+    ):
+        return False
+    try:
+        project_path = Path(active_conv.project_path).expanduser().resolve(strict=False)
+        worktree_path = Path(active_conv.worktree_path).expanduser()
+    except (OSError, RuntimeError):
+        return False
+    try:
+        return project_path == worktree_path.resolve(strict=False)
+    except (OSError, RuntimeError):
+        return False
+
+
+def _confirm_closed_issue_for_worktree(
+    session: Session,
+    config: Config | None,
+    worktree_path: Path,
+    *,
+    closure_approved: bool,
+    requested_status: str | None,
+) -> bool:
+    """Require explicit closure intent and fresh tracker confirmation before cleanup."""
+    if not session.issue_key or not closure_approved:
+        console_print(
+            f"[dim]Worktree preserved at {worktree_path}: issue closure was not explicitly approved.[/dim]"
+        )
+        return False
+
+    backend = get_issue_tracker_backend(session, config)
+    try:
+        tracker = create_issue_tracker_client(backend=backend)
+        ticket = tracker.get_ticket(session.issue_key)
+    except Exception as error:  # noqa: BLE001 - fail closed on tracker errors
+        console_print(
+            f"[yellow]⚠[/yellow] Worktree preserved at {worktree_path}: "
+            f"could not verify that {session.issue_key} is closed ({error})."
+        )
+        return False
+
+    if not isinstance(ticket, dict) or not ticket_matches_closed_transition(
+        ticket,
+        backend,
+        requested_status=requested_status if backend == "jira" else None,
+    ):
+        current_status = ticket.get("status") if isinstance(ticket, dict) else None
+        console_print(
+            f"[yellow]⚠[/yellow] Worktree preserved at {worktree_path}: "
+            f"the tracker did not confirm {session.issue_key} closed "
+            f"(reported status: {current_status or 'unknown'})."
+        )
+        return False
+
+    console_print(
+        f"[dim]Issue {session.issue_key} closure confirmed by {backend}; "
+        "attempting safe worktree cleanup.[/dim]"
+    )
+    return True
 
 
 def _handle_feature_completion(

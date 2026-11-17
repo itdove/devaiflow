@@ -113,7 +113,9 @@ def transition_on_start(
 
 
 def transition_on_complete(
-    session: Session, config: Config, jira_client: Optional[JiraClient] = None
+    session: Session,
+    config: Config,
+    jira_client: Optional[JiraClient] = None,
 ) -> bool:
     """Transition issue tracker ticket when completing a session.
 

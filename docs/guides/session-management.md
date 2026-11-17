@@ -111,9 +111,27 @@ switching to a different checkout. If the requested branch is already checked
 out by another worktree, DAF creates a session-specific branch from it.
 
 Worktrees are retained on completion by default. With
-`concurrency.cleanup_on_complete: true`, completion removes only a clean,
-unused worktree; dirty or ignored files and live process holders cause cleanup to
-be deferred. `daf delete` applies the same protection. Automatic clone-cache
+`concurrency.cleanup_on_complete: true`, `daf complete` removes a worktree only
+after you approve closure (or enable an explicit backend auto-close/closure
+transition) and the configured tracker confirms the issue is closed. A declined
+closure, failed transition, open issue, or unknown status preserves the worktree.
+Dirty/ignored files and live process holders also prevent removal; DAF reports the
+worktree path and counts for tracked changes, untracked files, and ignored paths.
+
+Retry cleanup without repeating the completion workflow:
+
+```bash
+daf worktree clean <ISSUE-KEY>
+```
+
+This cleanup-only command requires a completed session and verifies the issue is
+currently closed, then validates the saved session, worktree, branch, and source
+repository identity before checking for active processes. Local data is never
+deleted silently. To request removal of dirty, untracked, or ignored files, add
+`--delete-local-files`; DAF shows the summary and path and asks for a separate
+interactive confirmation. Git status and the worktree filesystem snapshot are
+checked again before any deletion, and JSON/non-interactive use preserves local
+data. `daf delete` retains its existing protections. Automatic clone-cache
 retention does not evict linked worktrees because their Git metadata is shared
 with the source repository.
 
