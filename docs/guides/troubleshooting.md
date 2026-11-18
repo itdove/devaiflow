@@ -1998,6 +1998,21 @@ connects clients to a shared background service; that service can retain a local
 MCP process whose working directory is the clone. This is a real directory holder,
 not a stale session-ID or time-tracking warning.
 
+The holder is not necessarily OpenCode: an idle terminal or an independently
+started daemon can also retain its cwd. A process name alone is not evidence that
+an agent is active or idle. For **completion without deletion**, manual interactive
+`daf complete` now offers a default-No confirmation when all lifecycle locks are
+available: confirm that no agent or task is editing the workspaces and finish the
+commit/push/session workflow while preserving every clone/worktree. This works
+from a terminal inside the checkout and does not stop any processes, change
+security settings, or evict shared services. Do not confirm while editing is
+still active. `--yes`, JSON, automatic post-exit completion, and non-interactive
+mode do not implicitly approve a directory holder; live launch locks and process
+inspection failures still refuse before any session changes.
+
+The following resource-release steps are needed for **directory cleanup**, not
+for owner-confirmed completion that preserves the checkout:
+
 DAF reports the holder's **process name, PID, cwd, parent PID, parent name, and
 parent cwd**, where accessible. Process-exit races and inaccessible attributes
 show unavailable details rather than permitting unsafe completion. JSON refusals

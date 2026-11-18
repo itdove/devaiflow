@@ -1,6 +1,7 @@
 """Regression coverage for live-agent clone protection (issue #643)."""
 
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -28,12 +29,16 @@ from devflow.session.manager import SessionManager
 from devflow.utils.clone_lifecycle import (
     TemporaryDirectoryInUseError,
     assert_temp_directory_unused,
+    completion_session_workspaces,
     get_temp_directory_root,
     temporary_directory_lock,
     unused_session_clones,
 )
 from devflow.utils.paths import get_cs_state_home
 from devflow.utils.temp_directory import cleanup_temp_directory, get_clone_base_dir
+
+
+_CloneSession = tuple[ConfigLoader, SessionManager, Session, Path]
 
 
 @contextmanager
@@ -306,6 +311,288 @@ def test_complete_preserves_clones_by_default_and_explicit_delete_cleans_up(clon
 
 
 @pytest.mark.parametrize("cleanup_enabled", [False, True])
+@pytest.mark.parametrize("workspace_kind", ["clone", "worktree"])
+def test_complete_from_workspace_can_confirm_preservation(
+    clone_session: _CloneSession,
+    monkeypatch: pytest.MonkeyPatch,
+    cleanup_enabled: bool,
+    workspace_kind: str,
+) -> None:
+    """The invoking process's cwd requires approval, not a change of directories."""
+    loader, manager, session, clone = clone_session
+    config = loader.load_config()
+    config.concurrency.cleanup_on_complete = cleanup_enabled
+    loader.save_config(config)
+    if workspace_kind == "worktree":
+        session.active_conversation.temp_directory = None
+        session.active_conversation.worktree_path = str(clone)
+        manager.update_session(session)
+    monkeypatch.chdir(clone)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    cleanup = Mock(side_effect=AssertionError("Confirmed busy workspaces must be preserved"))
+    monkeypatch.setattr("devflow.cli.commands.complete_command._cleanup_temp_directory", cleanup)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.cleanup_session_worktree", cleanup)
+
+    result = CliRunner().invoke(
+        cli,
+        ["complete", "session-a", "--no-commit", "--no-pr", "--no-issue-update"],
+        input="y\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "without cleanup?" in " ".join(result.output.split())
+    assert "cleanup was deferred" in result.output
+    completed = SessionManager(loader).get_session(session.name)
+    assert completed.status == "complete"
+    assert completed.work_sessions[-1].end is not None
+    assert completed.active_conversation.ai_agent_session_id == "pending-capture"
+    assert clone.exists()
+    cleanup.assert_not_called()
+    # Approval is completion-only; even its own caller still prevents deletion.
+    with pytest.raises(TemporaryDirectoryInUseError):
+        cleanup_temp_directory(str(clone))
+
+
+@pytest.mark.parametrize("answer", ["n\n", "\n"])
+def test_complete_busy_workspace_decline_preserves_metadata(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    """Neither Enter nor an explicit refusal changes status, tracking, or files."""
+    loader, _, _, clone = clone_session
+    monkeypatch.chdir(clone)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    original_index = loader.sessions_file.read_bytes()
+    result = CliRunner().invoke(
+        cli,
+        ["complete", "session-a", "--no-commit", "--no-pr", "--no-issue-update"],
+        input=answer,
+    )
+    assert result.exit_code == 1, result.output
+    assert loader.sessions_file.read_bytes() == original_index
+    assert (clone / "work.txt").read_text() == "preserve this work"
+    with temporary_directory_lock(str(clone)):
+        pass
+
+
+def test_complete_confirmation_does_not_release_other_workspace_holders(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner-confirmed idle holders survive completion without exemptions by name."""
+    loader, _, _, clone = clone_session
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    with _running_process(clone) as worker:
+        result = CliRunner().invoke(
+            cli,
+            ["complete", "session-a", "--no-commit", "--no-pr", "--no-issue-update"],
+            input="y\n",
+        )
+        assert result.exit_code == 0, result.output
+        assert worker.poll() is None
+        assert clone.exists()
+    assert SessionManager(loader).get_session("session-a").status == "complete"
+
+
+def test_complete_live_launcher_cannot_be_confirmed_away(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A held lifecycle lock refuses before offering any completion-only override."""
+    loader, _, _, clone = clone_session
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    confirm = Mock(side_effect=AssertionError("A live launch cannot be overridden"))
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", confirm)
+    code = (
+        "import sys\n"
+        "from devflow.utils.clone_lifecycle import temporary_directory_lock\n"
+        f"with temporary_directory_lock({str(clone)!r}):\n"
+        "    print('ready', flush=True)\n"
+        "    sys.stdin.read()\n"
+    )
+    original_index = loader.sessions_file.read_bytes()
+    with _running_process(Path(__file__).resolve().parents[1], code):
+        result = CliRunner().invoke(cli, ["complete", "session-a"], input="y\n")
+    assert result.exit_code == 1, result.output
+    assert loader.sessions_file.read_bytes() == original_index
+    confirm.assert_not_called()
+
+
+def test_complete_usage_inspection_failure_cannot_be_confirmed_away(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unavailable process scan is not evidence of an idle, preservable holder."""
+    loader, _, _, _ = clone_session
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    monkeypatch.setattr("psutil.process_iter", Mock(side_effect=OSError("listing failed")))
+    confirm = Mock(side_effect=AssertionError("Inspection errors cannot be overridden"))
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", confirm)
+    original_index = loader.sessions_file.read_bytes()
+    result = CliRunner().invoke(cli, ["complete", "session-a"], input="y\n")
+    assert result.exit_code == 1, result.output
+    assert "Cannot verify" in result.output
+    assert loader.sessions_file.read_bytes() == original_index
+    confirm.assert_not_called()
+
+
+@pytest.mark.parametrize("mode", ["yes", "json", "noninteractive"])
+def test_complete_busy_workspace_requires_explicit_interactive_approval(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Ordinary automatic approval flags cannot authorize an unknown directory holder."""
+    loader, _, _, clone = clone_session
+    monkeypatch.chdir(clone)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command.is_non_interactive",
+        lambda: mode == "noninteractive",
+    )
+    confirm = Mock(side_effect=AssertionError("No implicit holder approval"))
+    monkeypatch.setattr("devflow.cli.commands.complete_command.Confirm.ask", confirm)
+    original_index = loader.sessions_file.read_bytes()
+    options = [f"--{mode}"] if mode != "noninteractive" else []
+    result = CliRunner().invoke(cli, ["complete", "session-a", *options], input="y\n")
+    assert result.exit_code == 1, result.output
+    assert loader.sessions_file.read_bytes() == original_index
+    if mode == "json":
+        data = json.loads(result.output)
+        assert data["error"]["code"] == "SESSION_IN_USE"
+        assert data["error"]["holder"]["pid"] == os.getpid()
+    confirm.assert_not_called()
+
+
+def test_complete_busy_other_conversation_preserves_all_workspaces(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Approving one busy conversation must not clean up the otherwise unused active clone."""
+    loader, manager, session, clone = clone_session
+    other = clone.parent.parent / "daf-session-b" / "project-b"
+    other.mkdir(parents=True)
+    session.add_conversation(
+        working_dir="project-b",
+        ai_agent_session_id="ses_other",
+        project_path=str(other),
+        branch="feature-b",
+        temp_directory=str(other),
+    )
+    session.working_directory = "project-a"
+    manager.update_session(session)
+    config = loader.load_config()
+    config.concurrency.cleanup_on_complete = True
+    loader.save_config(config)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    with _running_process(other):
+        result = CliRunner().invoke(
+            cli,
+            ["complete", "session-a", "--no-commit", "--no-pr", "--no-issue-update"],
+            input="y\n",
+        )
+    assert result.exit_code == 0, result.output
+    assert clone.exists() and other.exists()
+    assert SessionManager(loader).get_session(session.name).status == "complete"
+
+
+def test_completion_guard_holds_deduplicated_roots_and_reports_own_cwd(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Completion keeps its locks until exit without treating caller cwd as an agent."""
+    _, _, session, clone = clone_session
+    session.active_conversation.worktree_path = str(clone)
+    monkeypatch.chdir(clone)
+    with completion_session_workspaces(session) as holders:
+        assert len(holders) == 1
+        assert holders[0].holder["pid"] == os.getpid()
+        with pytest.raises(TemporaryDirectoryInUseError), temporary_directory_lock(str(clone)):
+            pass
+    with temporary_directory_lock(str(clone)):
+        pass
+
+
+def test_completion_workflow_holds_launch_lock_until_finished(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A managed launcher cannot enter between preflight and status/Git operations."""
+    _, _, _, clone = clone_session
+
+    def check_lock(*_args: object) -> None:
+        with pytest.raises(TemporaryDirectoryInUseError), temporary_directory_lock(str(clone)):
+            pass
+
+    monkeypatch.setattr(
+        "devflow.orchestration.feature.FeatureManager.get_session_context", check_lock
+    )
+    result = _complete()
+    assert result.exit_code == 0, result.output
+    with temporary_directory_lock(str(clone)):
+        pass
+
+
+def test_completion_workflow_failure_releases_launch_lock(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exceptions in completion do not leave a permanent launch lock."""
+    _, _, _, clone = clone_session
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._complete_session_workflow",
+        Mock(side_effect=RuntimeError("workflow failed")),
+    )
+    result = _complete()
+    assert result.exit_code != 0
+    assert isinstance(result.exception, RuntimeError)
+    with temporary_directory_lock(str(clone)):
+        pass
+
+
+def test_complete_inside_clone_commits_and_pushes_after_preservation_approval(
+    clone_session: _CloneSession, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The original Git workflow remains reachable from a busy retained checkout."""
+    loader, manager, session, clone = clone_session
+    remote = tmp_path / "remote.git"
+    commands = [
+        ["init", "--initial-branch=feature-a"],
+        ["config", "user.email", "test@example.com"],
+        ["config", "user.name", "Test User"],
+        ["add", "work.txt"],
+        ["commit", "-m", "Initial sample"],
+        ["init", "--bare", str(remote)],
+        ["remote", "add", "origin", str(remote)],
+        ["push", "-u", "origin", "feature-a"],
+    ]
+    for command in commands:
+        subprocess.run(["git", *command], cwd=clone, capture_output=True, check=True)
+    (clone / "work.txt").write_text("completed sample work\n")
+    session.session_type = "development"
+    session.active_conversation.branch = "feature-a"
+    manager.update_session(session)
+    config = loader.load_config()
+    config.prompts.auto_commit_on_complete = True
+    config.prompts.auto_push_to_remote = True
+    config.concurrency.cleanup_on_complete = True
+    loader.save_config(config)
+    monkeypatch.chdir(clone)
+    monkeypatch.setattr("devflow.cli.commands.complete_command.is_non_interactive", lambda: False)
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._generate_commit_message",
+        lambda *_args, **_kwargs: "Complete sample change",
+    )
+    result = CliRunner().invoke(
+        cli,
+        [
+            "complete", "session-a", "--no-pr", "--no-issue-update",
+            "--commit-message", "Complete sample change",
+        ],
+        input="y\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert "Changes committed" in result.output
+    assert "Commits pushed to remote" in result.output
+    assert clone.exists()
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=clone, text=True)
+    remote_head = subprocess.check_output(
+        ["git", "--git-dir", str(remote), "rev-parse", "feature-a"], text=True
+    )
+    assert head == remote_head
+    assert not subprocess.check_output(["git", "status", "--porcelain"], cwd=clone)
+
+
+@pytest.mark.parametrize("cleanup_enabled", [False, True])
 def test_complete_after_exit_respects_config_and_independent_clones(clone_session, cleanup_enabled):
     """Only the completed clone is removed; paused and other live clones survive."""
     loader, manager, session, clone = clone_session
@@ -525,6 +812,7 @@ def test_holder_diagnostics_include_parent_and_escape_rich_markup(clone_session,
     result = _complete()
     assert result.exit_code == 1, result.output
     assert "worker[red]" in result.output
+    assert "OpenCode v2" not in result.output
     assert "parent PID: 456" in result.output
     assert "backend-service" in result.output
     data = json.loads(_complete("session-a", "--json").output)

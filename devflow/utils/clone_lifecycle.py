@@ -71,6 +71,49 @@ def assert_session_clones_unused(session: "Session") -> None:
 
 
 @contextmanager
+def completion_session_workspaces(
+    session: "Session",
+) -> Iterator[list[TemporaryDirectoryInUseError]]:
+    """Lock completion against agent startup and report directory-only holders.
+
+    A launcher holding a lifecycle lock always refuses completion. With all
+    locks acquired, directory holders can instead be presented for explicit
+    interactive confirmation that editing has stopped and cleanup must be
+    deferred. Inspection failures without a verified holder remain refusals.
+    No process is inferred to be idle from its name, ancestry, or session status.
+
+    Yields:
+        Verified directory-use errors, with every workspace lock still held.
+
+    Raises:
+        TemporaryDirectoryInUseError: A lock or usage check could not be completed.
+    """
+    roots = sorted(
+        {
+            str(get_temp_directory_root(path))
+            for conversation in session.conversations.values()
+            for path in (
+                conversation.active_session.temp_directory,
+                conversation.active_session.worktree_path,
+            )
+            if path
+        }
+    )
+    with ExitStack() as locks:
+        for root in roots:
+            locks.enter_context(temporary_directory_lock(root))
+        holders: list[TemporaryDirectoryInUseError] = []
+        for root in roots:
+            try:
+                assert_temp_directory_unused(root)
+            except TemporaryDirectoryInUseError as error:
+                if error.holder is None:
+                    raise
+                holders.append(error)
+        yield holders
+
+
+@contextmanager
 def unused_session_clones(session: "Session") -> Iterator[list[str]]:
     """Guard a lifecycle transition across active and archived isolated paths.
 
@@ -115,11 +158,14 @@ def completion_refusal_message(session_name: str, error: TemporaryDirectoryInUse
         f"Cannot complete session '{session_name}': {error}.\n"
         "Exit active AI agents and move terminals out of the clone.\n"
         "UI exit does not prove that backend workspace services exited.\n"
-        "OpenCode v2's shared server can retain MCP processes.\n"
+        "A shared server or background daemon can retain workspace processes.\n"
         "Check the reported parent/owner and other clients of this workspace before "
-        "releasing its resources through supported backend lifecycle controls.\n"
+        "releasing resources for cleanup through supported backend lifecycle controls.\n"
         "DAF will not stop shared services or assume exclusive ownership.\n"
-        f"Retry from outside the clone:\n  daf complete {session_name}\n"
+        "With no live launch lock or inspection failure, interactive completion can "
+        "separately confirm editing has stopped and preserve busy workspaces.\n"
+        f"For cleanup, release all directory holders and retry from outside the clone:\n"
+        f"  daf complete {session_name}\n"
         "Session status and time tracking were not changed.\n"
         "See docs/guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit."
     )

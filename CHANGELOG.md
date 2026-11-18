@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Complete sessions without deleting busy checkouts**
+  - Separates explicit interactive completion from cleanup when an idle terminal or daemon retains a workspace cwd
+  - Requires default-No owner confirmation that editing has stopped, preserves every managed checkout, and never infers inactivity from process names
+  - Keeps live launch locks and inspection failures non-overridable, holds lifecycle locks through completion, and retains strict deletion checks
+  - Keeps automatic, JSON, and `--yes` completion fail-closed for unresolved holders and makes refusal diagnostics backend-neutral
 - **Explain source-branch discovery fallback** (#651)
   - Distinguishes failed Git discovery from a successful remote with no branch heads before manual entry
   - Names the selected remote and provides actionable timeout, command-exit, and startup diagnostics without exposing raw Git output or remote URLs

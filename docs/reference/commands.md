@@ -1177,15 +1177,27 @@ Select [1-4]: 1
 
 **What `daf complete` does:**
 
-Before changing session status or ending time tracking, checks that no running
-agent or terminal is using any of the session's temporary clones. This also
-protects the enclosing `daf-session-*` directory and sibling repositories.
-Native IDs such as `pending-capture`, paused time tracking, and session status
-are not evidence that an agent has exited. A rejected completion exits nonzero
-(`SESSION_IN_USE` in JSON mode) without modifying session state.
+Before changing session status or ending time tracking, acquires the lifecycle
+locks for every active clone/worktree and checks their enclosing removal roots,
+including sibling repositories. A live DAF launch lock always refuses completion;
+locks remain held through the completion workflow to prevent concurrent startup.
+Native IDs such as `pending-capture`, paused tracking, and session status are not
+evidence that an agent has exited.
 
-The post-exit prompt and automatic-completion path run the same preflight before
-offering completion. A refusal reports the holder's name, PID, working directory,
+A terminal or background daemon can retain its working directory after editing
+has stopped. When locks are available but a directory holder remains, interactive
+`daf complete` reports it and offers a separate, default-No confirmation: confirm
+that no agent or task is editing these workspaces and complete **without cleanup**.
+This allows the ordinary commit/push/PR workflow even from inside the checkout,
+while preserving **all** managed workspaces regardless of `cleanup_on_complete`.
+Do not approve while an agent or editing task is still active. No process is
+assumed idle from its name, and DAF does not stop services or evict backend resources.
+`--yes`, JSON, and non-interactive modes do not authorize this confirmation;
+they still refuse unresolved holders. Lock/inspection failures cannot be
+overridden. Refusal exits nonzero (`SESSION_IN_USE` in JSON) without changing state.
+
+The post-exit prompt and automatic-completion path remain conservative about
+directory holders before offering completion. A refusal reports the holder's name, PID, working directory,
 and parent PID/name/directory when accessible (`error.holder` in JSON). Missing
 details are marked unavailable; process arguments and environment are not printed.
 Expected refusals do not produce a secondary `Failed to complete session: 1` error.
@@ -1216,12 +1228,13 @@ ordinary `daf open`. Legacy pending records are not inferred safe from an empty
 branch or zero messages. See [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
 See [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
 
-Exit the agent, move terminals out of its clone, and run completion from the
-original workspace. Startup and removal share a cross-process directory lock;
-cleanup checks again immediately before deletion. If an agent starts during
-completion, the session can be marked complete while **clone cleanup is deferred**
-with an explicit warning. Cleanup is not automatically scheduled: exit the agent
-and run `daf complete <session-name>` again to remove the clone safely.
+Exit editing agents before completion. To permit configured directory removal,
+move terminals outside the clone and complete from the original workspace.
+Cleanup rechecks every process immediately before deletion, even while completion
+holds the lifecycle lock. A late unmanaged directory holder defers cleanup with
+an explicit warning rather than deleting a busy checkout. Cleanup is not
+automatically scheduled; worktree cleanup can be retried with `daf worktree clean`,
+and clone cleanup with `daf complete`, once the workspace is unused.
 
 Normal completion after agent exit **preserves** the clone by default, as do
 ordinary exit, interrupt, and pause. `concurrency.cleanup_on_complete: true`
