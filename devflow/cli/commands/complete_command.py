@@ -3,6 +3,7 @@
 import logging
 import subprocess
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -52,7 +53,7 @@ from devflow.utils import strip_code_fences
 from devflow.utils.dependencies import require_tool
 from devflow.utils.clone_lifecycle import (
     TemporaryDirectoryInUseError,
-    assert_session_clones_unused,
+    completion_session_workspaces,
     completion_refusal_message,
 )
 from devflow.utils.session_worktree import (
@@ -211,27 +212,84 @@ def complete_session(
         if not session:
             return
 
-    # A separate terminal can complete a session whose agent is still running.
-    # Reject that operation before changing time tracking, branches, or status.
-    try:
-        assert_session_clones_unused(session)
-    except TemporaryDirectoryInUseError as error:
-        message = completion_refusal_message(session.name, error)
-        if is_json_mode():
-            details: Dict[str, Any] = {
-                "code": "SESSION_IN_USE",
-                "message": message,
-                "session": session.name,
-            }
-            if error.holder is not None:
-                details["holder"] = error.holder
-            output_json(
-                success=False,
-                error=details,
-            )
-        else:
-            console_print(f"[red]✗[/red] {escape(message)}")
-        raise click.exceptions.Exit(1) from error
+    # Keep launch/removal locks through the workflow, not just its preflight.
+    # An idle terminal's cwd does not justify deleting it or silently completing
+    # around it: require explicit confirmation and preserve every workspace.
+    with ExitStack() as workspaces:
+        try:
+            holders = workspaces.enter_context(completion_session_workspaces(session))
+            if holders:
+                if yes or is_non_interactive() or is_json_mode():
+                    raise holders[0]
+                for holder in holders:
+                    console_print(f"[yellow]⚠[/yellow] {escape(str(holder))}")
+                console_print(
+                    "[yellow]A working-directory holder is not necessarily an active agent. "
+                    "Completion can commit, push, and update the session, but all managed "
+                    "clones/worktrees will be preserved, regardless of cleanup settings. "
+                    "No processes or services will be stopped.[/yellow]"
+                )
+                if not Confirm.ask(
+                    "Confirm no agent or task is editing these workspaces and complete "
+                    "without cleanup?",
+                    default=False,
+                ):
+                    raise holders[0]
+        except TemporaryDirectoryInUseError as error:
+            message = completion_refusal_message(session.name, error)
+            if is_json_mode():
+                details: Dict[str, Any] = {
+                    "code": "SESSION_IN_USE",
+                    "message": message,
+                    "session": session.name,
+                }
+                if error.holder is not None:
+                    details["holder"] = error.holder
+                output_json(success=False, error=details)
+            else:
+                console_print(f"[red]✗[/red] {escape(message)}")
+            raise click.exceptions.Exit(1) from error
+
+        _complete_session_workflow(
+            session,
+            session_manager,
+            config_loader,
+            identifier=identifier,
+            status=status,
+            attach_to_issue=attach_to_issue,
+            latest=latest,
+            no_commit=no_commit,
+            no_pr=no_pr,
+            no_issue_update=no_issue_update,
+            yes=yes,
+            commit_message=commit_message,
+            export_commit=export_commit,
+            pr_template_url=pr_template_url,
+            no_retry=no_retry,
+            preserve_workspaces=bool(holders),
+        )
+
+
+def _complete_session_workflow(
+    session: Session,
+    session_manager: SessionManager,
+    config_loader: ConfigLoader,
+    *,
+    identifier: Optional[str],
+    status: Optional[str],
+    attach_to_issue: bool,
+    latest: bool,
+    no_commit: bool,
+    no_pr: bool,
+    no_issue_update: bool,
+    yes: bool,
+    commit_message: Optional[str],
+    export_commit: Optional[bool],
+    pr_template_url: Optional[str],
+    no_retry: bool,
+    preserve_workspaces: bool,
+) -> None:
+    """Run completion while the caller holds every managed workspace's lifecycle lock."""
 
     # End current work session (use session.name if we got it via --latest)
     session_identifier = session.name if latest else (identifier or session.name)
@@ -1057,6 +1115,13 @@ def complete_session(
         if active_conv
         else None
     )
+    if preserve_workspaces:
+        console_print(
+            f"[yellow]Session '{session.name}' is complete; workspace cleanup was deferred "
+            "because completion was explicitly approved with directory holders present. "
+            "All managed clones/worktrees were preserved.[/yellow]"
+        )
+        return
     if active_conv and managed_path:
         should_cleanup = bool(config and config.concurrency.cleanup_on_complete)
         if not should_cleanup:
@@ -1090,12 +1155,13 @@ def complete_session(
                     cleanup_session_worktree(
                         Path(active_conv.worktree_path),
                         Path(active_conv.original_project_path),
+                        locked=True,
                         expected_source_fingerprint=active_conv.worktree_source_fingerprint,
                         expected_branch=active_conv.branch,
                         config=config,
                     )
                 else:
-                    _cleanup_temp_directory(managed_path)
+                    _cleanup_temp_directory(managed_path, locked=True)
             except (
                 TemporaryDirectoryInUseError,
                 SessionWorktreeCleanupError,
@@ -4744,7 +4810,7 @@ def _update_issue_pr_field_by_key(issue_key: str, config, pr_url: str) -> None:
         console.print(f"[dim]PR linking not implemented for backend: {backend}[/dim]")
 
 
-def _cleanup_temp_directory(temp_dir: Optional[str]) -> None:
+def _cleanup_temp_directory(temp_dir: Optional[str], *, locked: bool = False) -> None:
     """Clean up a temporary directory."""
     from devflow.utils.temp_directory import cleanup_temp_directory
-    cleanup_temp_directory(temp_dir)
+    cleanup_temp_directory(temp_dir, locked=locked)

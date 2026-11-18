@@ -198,12 +198,16 @@ provided source. Multi-project creation cancels if any project has no selected b
 
 **When work is complete**, inform the user that all acceptance criteria are met and the session is ready for completion. The user runs `daf complete` outside the active agent session to commit, create PR/MR, and close.
 
-For sessions using temporary clones, the user must first **exit the agent** and
-move any terminals out of the clone. Completion from another terminal refuses
-to change session status or time tracking while the clone is in use, even if
-the native ID is `pending-capture` or time tracking is paused. If an agent starts
-during completion and cleanup is deferred, exit the agent and rerun completion
-from the original workspace; deferred cleanup is not automatically scheduled.
+For sessions using temporary clones/worktrees, the user must first **exit editing
+agents**. A live DAF launch lock always refuses completion. When only cwd holders
+remain and locks are available, manual interactive completion offers a separate,
+default-No confirmation that no agent/task is editing and all workspaces must be
+preserved. This allows commits/pushes from a terminal inside the checkout without
+deleting it. Do not approve on the user's behalf or infer inactivity from a
+process name, paused tracking, or `pending-capture`. `--yes`, JSON, and automatic
+completion do not authorize directory holders; inspection failures stay fail-closed.
+To actually clean up a directory, its agents and terminals must release it.
+Deferred cleanup is not automatically scheduled.
 Normal exit, pause, and completion preserve the clone by default. An existing
 saved `concurrency.cleanup_on_complete: true` retains immediate cleanup;
 `false` adopts preservation. Explicit session deletion still cleans up clones.
@@ -227,9 +231,10 @@ OpenCode v2 clone launches/resumes and session-ID polling use its supported
 `--standalone` private-server lifecycle. UI exit is not proof that an older shared
 backend's resources exited. Prompted and automatic completion preflight actual
 directory holders and report their PID/name/cwd and parent details when accessible.
-If shared workspace resources remain, preserve the clone, check ownership and other
-clients, and release only an exclusively owned inactive workspace through supported
-backend controls before retrying. Do not stop shared services, exempt MCP/security
+If shared workspace resources remain, preserve the clone and check ownership and
+other clients. Owner-confirmed interactive completion can preserve those resources;
+directory removal still requires release of an exclusively owned inactive workspace
+through supported backend controls. Do not stop shared services, exempt MCP/security
 processes by name, or change security settings. Native conversation identity and
 session metadata are preserved on refusal.
 
