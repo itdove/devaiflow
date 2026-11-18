@@ -154,19 +154,33 @@ def unused_session_clones(session: "Session") -> Iterator[list[str]]:
 
 def completion_refusal_message(session_name: str, error: TemporaryDirectoryInUseError) -> str:
     """Explain live holders, including resources outliving a backend's UI."""
-    return (
+    message = (
         f"Cannot complete session '{session_name}': {error}.\n"
-        "Exit active AI agents and move terminals out of the clone.\n"
-        "UI exit does not prove that backend workspace services exited.\n"
-        "A shared server or background daemon can retain workspace processes.\n"
-        "Check the reported parent/owner and other clients of this workspace before "
-        "releasing resources for cleanup through supported backend lifecycle controls.\n"
-        "DAF will not stop shared services or assume exclusive ownership.\n"
-        "With no live launch lock or inspection failure, interactive completion can "
-        "separately confirm editing has stopped and preserve busy workspaces.\n"
-        f"For cleanup, release all directory holders and retry from outside the clone:\n"
-        f"  daf complete {session_name}\n"
         "Session status and time tracking were not changed.\n"
+    )
+    if error.holder is None:
+        return (
+            message + "A lock or process-inspection failure cannot be approved interactively. "
+            "Resolve it before retrying.\n"
+            "See docs/guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit."
+        )
+
+    return (
+        message + "UI exit does not prove that backend workspace services exited. "
+        "A shared server or background daemon can retain workspace processes.\n"
+        + "To complete now and preserve all managed workspaces:\n"
+        + f"  Run the plain interactive command: daf complete {session_name}\n"
+        + "  Confirm only after verifying that no agent or task is editing. "
+        "Confirmation completes the session and preserves every managed clone/worktree, "
+        "regardless of cleanup settings. No processes or services are stopped.\n"
+        "To clean up a workspace instead:\n"
+        "  Review the reported holder and parent. Release all directory holders only "
+        "through their supported owner/backend lifecycle after verifying no other clients "
+        "use any managed workspace. Move terminals outside every managed workspace, "
+        "then run the command from outside the clone:\n"
+        f"  daf complete {session_name}\n"
+        "  Cleanup remains subject to configuration and the usual worktree/issue safeguards.\n"
+        "DAF will not stop shared services or assume exclusive ownership.\n"
         "See docs/guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit."
     )
 

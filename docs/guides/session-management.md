@@ -124,14 +124,15 @@ separate decisions. During synchronization, a behind count means those commits
 are on the displayed fetched base ref and not on the session branch; a local
 source is compared against the selected local ref.
 
-Interactive `daf complete` can also finish the commit/push workflow while keeping
-a busy checkout: when no DAF launcher holds its lifecycle lock, DAF reports cwd
-holders and asks you to confirm that editing has stopped and cleanup must be
+Interactive `daf complete <session>` can also finish the commit/push workflow while
+keeping a busy checkout: when no DAF launcher holds its lifecycle lock, DAF reports
+cwd holders and asks you to confirm that editing has stopped and cleanup must be
 deferred. Enter declines. Approval preserves every managed checkout, even with
 cleanup enabled; it does not stop any processes or infer inactivity from their
-names. Automatic/JSON/`--yes` completion remains fail-closed for unresolved holders.
-The launch locks remain held through completion, and all deletion paths retain
-their strict directory-use checks.
+names. To clean up instead, release all directory holders, move terminals outside
+the workspaces, and verify no other clients use them before retrying. Automatic/JSON/`--yes`
+completion remains fail-closed for unresolved holders. The launch locks remain held
+through completion, and all deletion paths retain their strict directory-use checks.
 
 Worktrees are retained on completion by default. With
 `concurrency.cleanup_on_complete: true`, `daf complete` removes a worktree only

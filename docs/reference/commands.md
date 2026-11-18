@@ -1211,13 +1211,14 @@ Native IDs such as `pending-capture`, paused tracking, and session status are no
 evidence that an agent has exited.
 
 A terminal or background daemon can retain its working directory after editing
-has stopped. When locks are available but a directory holder remains, interactive
-`daf complete` reports it and offers a separate, default-No confirmation: confirm
-that no agent or task is editing these workspaces and complete **without cleanup**.
-This allows the ordinary commit/push/PR workflow even from inside the checkout,
-while preserving **all** managed workspaces regardless of `cleanup_on_complete`.
-Do not approve while an agent or editing task is still active. No process is
-assumed idle from its name, and DAF does not stop services or evict backend resources.
+has stopped. When locks are available but a directory holder remains, run the
+plain interactive command `daf complete <session>`. DAF reports the holder and
+offers a separate, default-No confirmation: confirm that no agent or task is
+editing these workspaces and complete **without cleanup**. Confirmation runs the
+completion workflow while preserving **all** managed workspaces regardless of
+`cleanup_on_complete`. Do not approve while an agent or editing task is still
+active. No process is assumed idle from its name, and DAF does not stop services
+or evict backend resources.
 `--yes`, JSON, and non-interactive modes do not authorize this confirmation;
 they still refuse unresolved holders. Lock/inspection failures cannot be
 overridden. Refusal exits nonzero (`SESSION_IN_USE` in JSON) without changing state.
@@ -1254,13 +1255,14 @@ ordinary `daf open`. Legacy pending records are not inferred safe from an empty
 branch or zero messages. See [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
 See [capture troubleshooting](../guides/troubleshooting.md#opencode-session-id-is-unverified).
 
-Exit editing agents before completion. To permit configured directory removal,
-move terminals outside the clone and complete from the original workspace.
-Cleanup rechecks every process immediately before deletion, even while completion
-holds the lifecycle lock. A late unmanaged directory holder defers cleanup with
-an explicit warning rather than deleting a busy checkout. Cleanup is not
-automatically scheduled; worktree cleanup can be retried with `daf worktree clean`,
-and clone cleanup with `daf complete`, once the workspace is unused.
+For cleanup instead, release all directory holders, move terminals outside every
+managed workspace, and verify no other clients use them before retrying from the
+original workspace. Cleanup rechecks every process immediately before deletion,
+even while completion holds the lifecycle lock. A late unmanaged directory holder
+defers cleanup with an explicit warning rather than deleting a busy checkout.
+Cleanup is not automatically scheduled; worktree cleanup can be retried with
+`daf worktree clean`, and clone cleanup with `daf complete`, once the workspace is
+unused.
 
 Normal completion after agent exit **preserves** the clone by default, as do
 ordinary exit, interrupt, and pause. `concurrency.cleanup_on_complete: true`
