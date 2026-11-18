@@ -2010,6 +2010,12 @@ still active. `--yes`, JSON, automatic post-exit completion, and non-interactive
 mode do not implicitly approve a directory holder; live launch locks and process
 inspection failures still refuse before any session changes.
 
+When automatic post-exit completion is refused, use the plain interactive
+`daf complete <session>` command to choose this completion-and-preservation path.
+Confirmation completes the session and preserves all managed workspaces. To clean
+up instead, release every holder and verify no other clients use the workspaces
+before retrying completion from outside the clone.
+
 The following resource-release steps are needed for **directory cleanup**, not
 for owner-confirmed completion that preserves the checkout:
 

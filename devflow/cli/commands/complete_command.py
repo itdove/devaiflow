@@ -225,13 +225,13 @@ def complete_session(
                     console_print(f"[yellow]⚠[/yellow] {escape(str(holder))}")
                 console_print(
                     "[yellow]A working-directory holder is not necessarily an active agent. "
-                    "Completion can commit, push, and update the session, but all managed "
-                    "clones/worktrees will be preserved, regardless of cleanup settings. "
+                    "If you confirm, DAF runs the completion workflow and preserves all "
+                    "managed clones/worktrees, regardless of cleanup settings. "
                     "No processes or services will be stopped.[/yellow]"
                 )
                 if not Confirm.ask(
                     "Confirm no agent or task is editing these workspaces and complete "
-                    "without cleanup?",
+                    "while preserving them?",
                     default=False,
                 ):
                     raise holders[0]

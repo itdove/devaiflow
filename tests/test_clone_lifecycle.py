@@ -29,6 +29,7 @@ from devflow.session.manager import SessionManager
 from devflow.utils.clone_lifecycle import (
     TemporaryDirectoryInUseError,
     assert_temp_directory_unused,
+    completion_refusal_message,
     completion_session_workspaces,
     get_temp_directory_root,
     temporary_directory_lock,
@@ -340,7 +341,8 @@ def test_complete_from_workspace_can_confirm_preservation(
     )
 
     assert result.exit_code == 0, result.output
-    assert "without cleanup?" in " ".join(result.output.split())
+    assert "while preserving them?" in " ".join(result.output.split())
+    assert "preserves all managed clones/worktrees" in result.output
     assert "cleanup was deferred" in result.output
     completed = SessionManager(loader).get_session(session.name)
     assert completed.status == "complete"
@@ -368,6 +370,7 @@ def test_complete_busy_workspace_decline_preserves_metadata(
         input=answer,
     )
     assert result.exit_code == 1, result.output
+    assert "Session status and time tracking were not changed." in result.output
     assert loader.sessions_file.read_bytes() == original_index
     assert (clone / "work.txt").read_text() == "preserve this work"
     with temporary_directory_lock(str(clone)):
@@ -389,6 +392,7 @@ def test_complete_confirmation_does_not_release_other_workspace_holders(
         assert result.exit_code == 0, result.output
         assert worker.poll() is None
         assert clone.exists()
+        assert "preserves all managed clones/worktrees" in result.output
     assert SessionManager(loader).get_session("session-a").status == "complete"
 
 
@@ -893,6 +897,21 @@ def test_exited_ui_with_shared_service_worker_refuses_until_resources_released(
             output = capsys.readouterr().out
             assert "Cannot complete session" in output
             assert "shared server" in output
+            normalized = " ".join(output.split())
+            assert "To complete now and preserve all managed workspaces" in normalized
+            assert "plain interactive command: daf complete session-a" in normalized
+            assert "Confirm only after verifying that no agent or task is editing" in normalized
+            assert (
+                "Confirmation completes the session and preserves every managed clone/worktree"
+                in normalized
+            )
+            assert "To clean up a workspace instead" in normalized
+            assert "Review the reported holder and parent" in normalized
+            assert "supported owner/backend lifecycle" in normalized
+            assert "no other clients use any managed workspace" in normalized
+            assert normalized.index("To complete now") < normalized.index(
+                "To clean up a workspace instead"
+            )
             assert "Failed to complete session: 1" not in output
             confirm.assert_not_called()
             result = _complete("session-a", "--json")
@@ -917,6 +936,17 @@ def test_exited_ui_with_shared_service_worker_refuses_until_resources_released(
     assert completed.status == "complete"
     assert completed.active_conversation.ai_agent_session_id == "ses_existing"
     assert clone.exists() is not cleanup_enabled
+
+
+def test_completion_refusal_does_not_offer_confirmation_for_inspection_failure():
+    """An unverifiable workspace cannot use the explicit-holder completion path."""
+    error = TemporaryDirectoryInUseError("Cannot verify whether the workspace is in use")
+
+    message = completion_refusal_message("session-a", error)
+
+    assert "cannot be approved interactively" in message
+    assert "daf complete session-a" not in message
+    assert "Session status and time tracking were not changed." in message
 
 
 @pytest.mark.parametrize("auto_complete", [None, True])
@@ -1399,6 +1429,8 @@ def test_inactive_conversion_uses_development_branch_setup(
     prefix = "devflow.cli.commands.open_command."
     monkeypatch.setattr("devflow.cli.utils.select_workspace", lambda *a, **kw: None)
     monkeypatch.setattr(prefix + "_detect_working_directory_from_cwd", lambda *a: None)
+    # This test covers session conversion and branch setup, not the optional worktree UI.
+    monkeypatch.setattr(prefix + "Confirm.ask", lambda *a, **kw: False)
     monkeypatch.setattr(prefix + "_copy_conversation_to_temp", Mock())
     monkeypatch.setattr(prefix + "_display_session_summary", Mock())
     monkeypatch.setattr(prefix + "_sync_branch_for_import", Mock())
