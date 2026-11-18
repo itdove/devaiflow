@@ -9,13 +9,17 @@ from types import SimpleNamespace
 import pytest
 
 from devflow.config.models import CloneRetentionConfig
+from devflow.git.utils import GitUtils
 from devflow.utils.clone_cache import CloneCache
 from devflow.utils.clone_lifecycle import TemporaryDirectoryInUseError
 from devflow.utils.session_worktree import (
+    SessionWorktreeBranchUnmergedError,
     SessionWorktreeCleanupError,
     SessionWorktreeError,
     cleanup_session_worktree,
     create_session_worktree,
+    delete_local_session_branch,
+    inspect_local_session_branch,
     restore_session_worktree,
     worktree_source_fingerprint,
 )
@@ -85,6 +89,59 @@ def test_multiple_worktrees_keep_source_checkout_and_branches_independent(
     assert _git(source, "branch", "--show-current") == "main"
     assert _git(first_path, "branch", "--show-current") == first_branch
     assert _git(second_path, "branch", "--show-current") == second_branch
+
+
+def test_delete_local_session_branch_when_merged(tmp_path):
+    source = _repository(tmp_path / "source")
+    _git(source, "branch", "feature-a")
+
+    branch = inspect_local_session_branch(source, "feature-a")
+
+    assert branch is not None
+    assert branch.merged is True
+    assert delete_local_session_branch(
+        source, "feature-a", expected_revision=branch.revision
+    )
+    assert not GitUtils.branch_exists(source, "feature-a")
+
+
+def test_unmerged_local_session_branch_requires_force_approval(tmp_path):
+    source = _repository(tmp_path / "source")
+    _git(source, "checkout", "-b", "feature-a")
+    (source / "feature.txt").write_text("feature work\n")
+    _git(source, "add", "feature.txt")
+    _git(source, "commit", "-m", "Add feature work")
+    _git(source, "checkout", "main")
+    branch = inspect_local_session_branch(source, "feature-a")
+
+    assert branch is not None
+    assert branch.merged is False
+    with pytest.raises(SessionWorktreeBranchUnmergedError, match="not merged"):
+        delete_local_session_branch(
+            source, "feature-a", expected_revision=branch.revision
+        )
+    assert GitUtils.branch_exists(source, "feature-a")
+
+    assert delete_local_session_branch(
+        source,
+        "feature-a",
+        expected_revision=branch.revision,
+        force_unmerged=True,
+    )
+    assert not GitUtils.branch_exists(source, "feature-a")
+
+
+def test_local_session_branch_deletion_refuses_branch_checked_out_elsewhere(tmp_path):
+    source = _repository(tmp_path / "source")
+    _git(source, "branch", "feature-a")
+    linked = tmp_path / "linked"
+    _git(source, "worktree", "add", str(linked), "feature-a")
+
+    with pytest.raises(SessionWorktreeError, match="checked out in another worktree"):
+        inspect_local_session_branch(source, "feature-a")
+
+    assert linked.is_dir()
+    assert _git(linked, "branch", "--show-current") == "feature-a"
 
 
 def test_worktree_allocation_does_not_prune_a_managed_source_under_its_lock(

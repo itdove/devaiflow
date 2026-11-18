@@ -753,6 +753,32 @@ deletion, use `--delete-local-files`; DAF displays the data counts and path and 
 requires a separate interactive confirmation. JSON/non-interactive runs never
 delete local data.
 
+To close the issue and clean its recorded workspaces in one operation, run
+`daf close <ISSUE-KEY>` from a regular terminal (not from inside an agent
+session). It uses the backend recorded for matching sessions, or the configured
+backend/key format when no session exists, and supports JIRA, GitHub Issues, and
+GitLab Issues. JIRA uses an available transition to a status in the Done
+category; `jira.transitions.on_complete.to` selects the target when configured.
+The command verifies the final tracker status before touching workspaces. It
+removes only worktrees and local branches recorded for completed sessions of
+that exact issue. A local branch is eligible only after its associated recorded
+DAF-managed worktree has been removed; branch-only sessions are preserved.
+Remote branches are never deleted.
+
+Local, untracked, and ignored worktree data remains protected unless
+`--delete-local-files` is supplied and separately confirmed. Local branches are
+deleted only after their associated worktrees are removed, and branches checked
+out elsewhere are preserved. Git's safe branch deletion is used by default;
+an unmerged branch requires a separate interactive confirmation before force
+deletion. JSON and non-interactive runs never force-delete unmerged branches.
+Partial cleanup is reported and can be retried safely.
+
+```bash
+daf close PROJ-12345                         # JIRA
+daf close owner/repo#123                     # GitHub or GitLab
+daf close PROJ-12345 --delete-local-files    # separately confirm local data removal
+```
+
 **Multi-Repository Workflow Example:**
 
 When working on a ticket that requires changes in multiple repositories (e.g., backend + frontend):

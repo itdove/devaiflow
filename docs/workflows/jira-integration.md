@@ -332,6 +332,8 @@ Edit backend and organization configuration files:
   - **on_fail** - What to do if transition fails ("warn" or "block")
 - **transitions.on_complete** - Auto-transition when completing session (workflow policy)
   - **prompt** - Ask for target status (true/false)
+  - **to** - Optional target status; `daf close <ISSUE-KEY>` uses it only when
+    JIRA currently offers it as a transition into a status in the Done category.
 - **parent_field_mapping** - Maps issue types to parent field names (hierarchy policy)
 
 **Team Configuration (team.json):**
@@ -339,6 +341,24 @@ Edit backend and organization configuration files:
 - **time_tracking_enabled** - Enable time tracking for JIRA tickets (true/false)
 
 **Note:** To control whether session summaries are automatically added to issue tracker (JIRA, GitHub, GitLab), use `prompts.auto_add_issue_summary` - see [Prompts Configuration](../reference/configuration.md#prompts-configuration)
+
+### Closing an issue and cleaning session workspaces
+
+Run `daf close PROJ-12345` from a regular terminal to close a JIRA issue and
+then clean worktrees and corresponding local branches recorded by its completed
+sessions. A branch is eligible only after its associated managed worktree is
+removed; branches from sessions without worktrees are preserved.
+The command chooses an available transition into a status in JIRA's Done
+category. Set `transitions.on_complete.to` to select a specific available
+closed-status transition; if several are available and none is configured,
+interactive mode asks you to choose, while JSON/non-interactive mode preserves
+the workspaces and reports the configuration needed. The issue must be confirmed
+closed by a fresh JIRA lookup before cleanup begins.
+
+Dirty, untracked, and ignored worktree data is preserved unless
+`--delete-local-files` is supplied and separately confirmed. A local branch
+checked out elsewhere is never deleted, and an unmerged branch requires a
+separate interactive confirmation. Remote branches are never removed.
 
 ### Configuring JIRA Project and Custom Fields
 
