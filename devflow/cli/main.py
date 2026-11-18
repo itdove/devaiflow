@@ -4,15 +4,17 @@ import functools
 import os
 import sys
 from typing import Any, Dict, List, Optional
+
 import click
 from rich.console import Console
 
 from devflow import __version__
+from devflow.cli.commands.worktree_command import close_issue, worktree
 from devflow.cli.completion import (
-    complete_session_identifiers,
-    complete_working_directories,
-    complete_tags,
     complete_file_paths,
+    complete_session_identifiers,
+    complete_tags,
+    complete_working_directories,
     complete_workspace_names,
 )
 
@@ -3558,8 +3560,8 @@ from devflow.cli.commands.skills_discovery_command import skills
 cli.add_command(skills)
 
 # Cleanup-only session worktree management.
-from devflow.cli.commands.worktree_command import worktree
 cli.add_command(worktree)
+cli.add_command(close_issue)
 
 
 

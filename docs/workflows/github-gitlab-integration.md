@@ -536,6 +536,14 @@ confirms the closed state. If the issue stays open or its state cannot be
 verified, the worktree is preserved. Use `daf worktree clean <issue-key>` to
 retry cleanup later; the command supports JIRA, GitHub Issues, and GitLab Issues.
 
+To close an issue and clean its completed-session worktrees and local branches
+in one operation, run `daf close owner/repo#60` (or the repository's issue
+number) from a regular terminal. The command uses the matching session's
+configured backend, verifies the issue is closed before cleanup, preserves local
+worktree data by default, and never deletes remote branches. Unmerged local
+branches require a separate interactive confirmation before force deletion.
+Branches without an associated recorded worktree are preserved.
+
 ## Migration from JIRA
 
 ### Side-by-Side Operation

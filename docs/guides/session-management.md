@@ -158,6 +158,18 @@ data. `daf delete` retains its existing protections. Automatic clone-cache
 retention does not evict linked worktrees because their Git metadata is shared
 with the source repository.
 
+### Closing issues and cleaning workspaces
+To close an issue through its configured tracker and then clean its completed
+session worktrees and local branches, use `daf close <ISSUE-KEY>` from a regular
+terminal. This works with JIRA, GitHub Issues, and GitLab Issues. JIRA closure
+uses a transition into the Done status category; configure
+`jira.transitions.on_complete.to` to choose a specific closed-status transition.
+The command performs a fresh closure check before cleanup, preserves dirty
+worktree data by default, never deletes remote branches, and separately asks
+before force-deleting an unmerged local branch. Busy, ambiguous, or otherwise
+unverifiable workspaces are preserved and reported for a safe retry. A branch
+without an associated recorded worktree is preserved.
+
 ## Workspaces: Concurrent Multi-Branch Development
 
 **Workspaces** enable you to work on the same project with different branches in parallel without conflicts. Each workspace is a named location (like VSCode workspaces) that can have its own active sessions.

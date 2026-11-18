@@ -56,6 +56,11 @@ Each session is an **isolated workspace** with its own:
 
 **Named workspaces** enable concurrent multi-branch development in separate locations. For parallel sessions that share one checkout, `daf open --worktree` creates a per-session Git worktree without switching the source directory.
 
+From a regular terminal, `daf close <issue-key>` closes an issue through its
+configured tracker (JIRA, GitHub, or GitLab), verifies closure, then safely
+cleans the completed sessions' recorded worktrees and local branches. It
+preserves local work by default and never deletes remote branches.
+
 ### Why Use This Tool?
 
 **🎯 Stay Focused**

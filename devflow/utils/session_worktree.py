@@ -36,6 +36,18 @@ class SessionWorktreeCleanupError(SessionWorktreeError):
         self.changes = changes
 
 
+class SessionWorktreeBranchUnmergedError(SessionWorktreeError):
+    """A local session branch is not merged into the source checkout's HEAD."""
+
+
+@dataclass(frozen=True)
+class LocalSessionBranch:
+    """Verified state for a local session branch."""
+
+    revision: str
+    merged: bool
+
+
 @dataclass(frozen=True)
 class WorktreeChanges:
     """A safe summary of local data that would be removed with a worktree."""
@@ -245,6 +257,113 @@ def _reference_exists(source_path: Path, branch: str) -> bool:
         check=False,
     )
     return any(line.endswith(f"/{branch}") for line in remote.stdout.splitlines())
+
+
+def inspect_local_session_branch(
+    source_path: Path, branch: str
+) -> LocalSessionBranch | None:
+    """Inspect a local session branch and refuse if any worktree still checks it out."""
+    source = source_path.expanduser().resolve()
+    if not source.is_dir() or not GitUtils.is_git_repository(source):
+        raise SessionWorktreeError("The recorded source path is not a Git repository")
+    if not _valid_branch(source, branch):
+        raise SessionWorktreeError(
+            "The recorded session branch is not a valid Git branch"
+        )
+
+    reference_result = _run_git(
+        source,
+        "show-ref",
+        "--verify",
+        "--quiet",
+        f"refs/heads/{branch}",
+        check=False,
+    )
+    if reference_result.returncode == 1:
+        return None
+    if reference_result.returncode != 0:
+        raise SessionWorktreeError("Could not verify the recorded local branch")
+    revision_result = _run_git(source, "rev-parse", "--verify", f"refs/heads/{branch}")
+    revision = revision_result.stdout.strip()
+    if not revision:
+        raise SessionWorktreeError(
+            "The recorded local branch has no verifiable revision"
+        )
+
+    if branch in _worktree_records(source).values():
+        raise SessionWorktreeError(
+            "The recorded session branch is checked out in another worktree; it was preserved"
+        )
+
+    merged_result = _run_git(
+        source,
+        "merge-base",
+        "--is-ancestor",
+        f"refs/heads/{branch}",
+        "HEAD",
+        check=False,
+    )
+    if merged_result.returncode not in {0, 1}:
+        raise SessionWorktreeError(
+            "Could not verify whether the session branch is merged"
+        )
+    return LocalSessionBranch(revision=revision, merged=merged_result.returncode == 0)
+
+
+def delete_local_session_branch(
+    source_path: Path,
+    branch: str,
+    *,
+    expected_revision: str,
+    force_unmerged: bool = False,
+) -> bool:
+    """Delete a verified local branch, never a remote or checked-out branch.
+
+    The caller must only invoke this after every associated DAF worktree has been
+    removed. The expected revision prevents a prompt delay from deleting a branch
+    that changed after its status was reviewed.
+    """
+    source = source_path.expanduser().resolve()
+    current = inspect_local_session_branch(source, branch)
+    if current is None:
+        return False
+    if current.revision != expected_revision:
+        raise SessionWorktreeError(
+            "The session branch changed after it was reviewed; it was preserved"
+        )
+    if not current.merged and not force_unmerged:
+        raise SessionWorktreeBranchUnmergedError(
+            "The session branch is not merged into the source checkout; it was preserved"
+        )
+
+    force_delete = force_unmerged and not current.merged
+    result = _run_git(
+        source,
+        "branch",
+        "-D" if force_delete else "-d",
+        "--",
+        branch,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SessionWorktreeError(
+            "Git refused to delete the local session branch; it was preserved"
+        )
+    reference_result = _run_git(
+        source,
+        "show-ref",
+        "--verify",
+        "--quiet",
+        f"refs/heads/{branch}",
+        check=False,
+    )
+    if reference_result.returncode == 0:
+        raise SessionWorktreeError(
+            "The local session branch still exists after deletion; it was preserved"
+        )
+    if reference_result.returncode != 1:
+        raise SessionWorktreeError("Could not verify local session branch deletion")
+    return True
 
 
 def _valid_branch(source_path: Path, branch: str) -> bool:

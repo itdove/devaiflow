@@ -2,11 +2,12 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 from click.testing import CliRunner
 
-from devflow.cli.commands.worktree_command import worktree
+from devflow.cli.commands.worktree_command import close_issue, worktree
 from devflow.config.models import Conversation, ConversationContext, Session
 from devflow.utils.session_worktree import (
     SessionWorktreeCleanupError,
@@ -126,7 +127,9 @@ def test_clean_worktree_refuses_a_worktree_claimed_by_different_sessions(
     result = CliRunner().invoke(worktree, ["clean", ISSUE_KEY])
 
     assert result.exit_code == 1
-    assert "Multiple session conversations claim the same worktree" in result.output
+    assert "Multiple session conversations claim the same worktree" in " ".join(
+        result.output.split()
+    )
     tracker.get_ticket.assert_not_called()
     cleanup.assert_not_called()
 
@@ -295,3 +298,384 @@ def test_json_dirty_cleanup_has_no_mixed_console_output(monkeypatch, tmp_path):
     assert "tracked changes: 1, untracked files: 2, ignored paths: 1" in reason
     assert confirm.call_count == 0
     assert cleanup.call_count == 1
+
+
+def test_close_issue_closes_verifies_then_removes_worktree_and_branch(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    path = tmp_path / "worktree"
+    source = tmp_path / "source"
+    session = _session(path, source)
+    _, _, tracker, factory = _setup_command(
+        monkeypatch, session, ticket={"status": "open"}
+    )
+    tracker.get_ticket.side_effect = [{"status": "open"}, {"status": "closed"}]
+    events = []
+    monkeypatch.setattr(
+        worktree_command,
+        "cleanup_session_worktree",
+        Mock(side_effect=lambda *_args, **_kwargs: events.append("worktree")),
+    )
+    monkeypatch.setattr(
+        worktree_command,
+        "worktree_source_fingerprint",
+        lambda _path: "saved-source-fingerprint",
+    )
+    monkeypatch.setattr(
+        worktree_command,
+        "inspect_local_session_branch",
+        lambda *_args: SimpleNamespace(revision="revision-a", merged=True),
+    )
+
+    def delete_branch(*_args, **_kwargs):
+        events.append("branch")
+        return True
+
+    delete = Mock(side_effect=delete_branch)
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 0, result.output
+    assert events == ["worktree", "branch"]
+    factory.assert_called_once_with(backend="github")
+    tracker.transition_ticket.assert_called_once_with(ISSUE_KEY, "closed")
+    assert tracker.get_ticket.call_count == 2
+    delete.assert_called_once_with(
+        source,
+        "feature-a",
+        expected_revision="revision-a",
+        force_unmerged=False,
+    )
+    assert "Deleted local branch" in result.output
+
+
+def test_close_issue_accepts_already_closed_issue_and_is_idempotent(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    session = _session(tmp_path / "worktree", tmp_path / "source")
+    _, _, tracker, _ = _setup_command(monkeypatch, session)
+    cleanup = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+    monkeypatch.setattr(
+        worktree_command,
+        "inspect_local_session_branch",
+        lambda *_args: SimpleNamespace(revision="revision-a", merged=True),
+    )
+    monkeypatch.setattr(
+        worktree_command, "delete_local_session_branch", Mock(return_value=True)
+    )
+    monkeypatch.setattr(
+        worktree_command,
+        "worktree_source_fingerprint",
+        lambda _path: "saved-source-fingerprint",
+    )
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 0, result.output
+    tracker.transition_ticket.assert_not_called()
+    tracker.get_ticket.assert_called_once_with(ISSUE_KEY)
+    cleanup.assert_called_once()
+
+
+def test_close_preserves_recorded_branch_without_a_worktree(monkeypatch, tmp_path):
+    from devflow.cli.commands import worktree_command
+
+    source = tmp_path / "source"
+    session = _session(source, source)
+    session.active_conversation.worktree_path = None
+    session.active_conversation.original_project_path = None
+    session.active_conversation.worktree_source_fingerprint = None
+    _setup_command(monkeypatch, session)
+    cleanup = Mock()
+    inspect = Mock()
+    delete = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+    monkeypatch.setattr(worktree_command, "inspect_local_session_branch", inspect)
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    cleanup.assert_not_called()
+    inspect.assert_not_called()
+    delete.assert_not_called()
+    assert "no associated DAF-managed worktree was recorded" in result.output
+
+
+def test_close_issue_preserves_workspace_when_tracker_lookup_fails(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    session = _session(tmp_path / "worktree", tmp_path / "source")
+    _setup_command(
+        monkeypatch, session, tracker_error=RuntimeError("tracker unavailable")
+    )
+    cleanup = Mock()
+    inspect = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+    monkeypatch.setattr(worktree_command, "inspect_local_session_branch", inspect)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    assert "tracker unavailable" in result.output
+    cleanup.assert_not_called()
+    inspect.assert_not_called()
+
+
+def test_close_issue_refuses_unverified_closed_status_before_cleanup(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    session = _session(tmp_path / "worktree", tmp_path / "source")
+    _, _, tracker, _ = _setup_command(monkeypatch, session, ticket={"status": "open"})
+    tracker.get_ticket.side_effect = [{"status": "open"}, {"status": "open"}]
+    cleanup = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    assert "did not confirm a closed status" in result.output
+    cleanup.assert_not_called()
+
+
+def test_close_jira_uses_closed_workflow_transition_and_verifies_it(monkeypatch):
+    session = _session(Path("/worktree"), Path("/source"))
+    session.issue_key = "PROJ-42"
+    session.issue_tracker = "jira"
+    session.conversations = {}
+    _, _, tracker, factory = _setup_command(
+        monkeypatch, session, ticket={"status": "Open"}
+    )
+    tracker.get_ticket.side_effect = [
+        {"status": "Open", "status_category": "new"},
+        {"status": "Done", "status_category": "done"},
+    ]
+    response = Mock(status_code=200)
+    response.json.return_value = {
+        "transitions": [
+            {
+                "id": "31",
+                "to": {
+                    "name": "Done",
+                    "statusCategory": {"key": "done", "name": "Done"},
+                },
+            },
+            {
+                "id": "32",
+                "to": {
+                    "name": "In Progress",
+                    "statusCategory": {"key": "indeterminate", "name": "In Progress"},
+                },
+            },
+        ]
+    }
+    tracker._api_request.return_value = response
+
+    result = CliRunner().invoke(close_issue, ["PROJ-42"])
+
+    assert result.exit_code == 0, result.output
+    factory.assert_called_once_with(backend="jira")
+    tracker.transition_ticket.assert_called_once_with("PROJ-42", "Done")
+    assert tracker.get_ticket.call_count == 2
+    assert "JIRA" in result.output
+
+
+def test_close_active_session_worktree_is_preserved(monkeypatch, tmp_path):
+    from devflow.cli.commands import worktree_command
+
+    session = _session(tmp_path / "worktree", tmp_path / "source", status="in_progress")
+    _setup_command(monkeypatch, session)
+    cleanup = Mock()
+    delete = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    assert "not complete" in result.output
+    cleanup.assert_not_called()
+    delete.assert_not_called()
+
+
+def test_close_partial_json_output_contains_outcomes_without_console_text(
+    monkeypatch, tmp_path
+):
+    session = _session(tmp_path / "worktree", tmp_path / "source", status="in_progress")
+    _setup_command(monkeypatch, session)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY, "--json"])
+
+    payload = json.loads(result.output)
+    assert result.exit_code == 1
+    assert payload["success"] is False
+    assert payload["data"]["issue_key"] == ISSUE_KEY
+    assert "not complete" in payload["data"]["worktrees_preserved"][0]["reason"]
+
+
+def test_close_ambiguous_worktree_ownership_preserves_all_workspace_data(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    session = _session(tmp_path / "worktree", tmp_path / "source")
+    _, manager, tracker, _ = _setup_command(monkeypatch, session)
+    other = _session(tmp_path / "worktree", tmp_path / "source")
+    other.name = "session-b"
+    manager.index.sessions[other.name] = other
+    cleanup = Mock()
+    delete = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    assert "Multiple session conversations claim the same worktree" in " ".join(
+        result.output.split()
+    )
+    tracker.get_ticket.assert_called_once_with(ISSUE_KEY)
+    cleanup.assert_not_called()
+    delete.assert_not_called()
+
+
+def test_close_does_not_force_delete_an_unmerged_branch_noninteractively(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    session = _session(tmp_path / "worktree", tmp_path / "source")
+    _setup_command(monkeypatch, session)
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", Mock())
+    monkeypatch.setattr(
+        worktree_command,
+        "worktree_source_fingerprint",
+        lambda _path: "saved-source-fingerprint",
+    )
+    monkeypatch.setattr(
+        worktree_command,
+        "inspect_local_session_branch",
+        lambda *_args: SimpleNamespace(revision="revision-a", merged=False),
+    )
+    delete = Mock()
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+    monkeypatch.setattr(worktree_command, "is_non_interactive", lambda: True)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    assert "requires an interactive confirmation" in result.output
+    delete.assert_not_called()
+
+
+def test_close_force_deletes_unmerged_branch_only_after_confirmation(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    session = _session(tmp_path / "worktree", tmp_path / "source")
+    _setup_command(monkeypatch, session)
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", Mock())
+    monkeypatch.setattr(
+        worktree_command,
+        "worktree_source_fingerprint",
+        lambda _path: "saved-source-fingerprint",
+    )
+    monkeypatch.setattr(
+        worktree_command,
+        "inspect_local_session_branch",
+        lambda *_args: SimpleNamespace(revision="revision-a", merged=False),
+    )
+    monkeypatch.setattr(worktree_command, "is_non_interactive", lambda: False)
+    monkeypatch.setattr(worktree_command.Confirm, "ask", Mock(return_value=True))
+    delete = Mock(return_value=True)
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 0, result.output
+    delete.assert_called_once_with(
+        tmp_path / "source",
+        "feature-a",
+        expected_revision="revision-a",
+        force_unmerged=True,
+    )
+
+
+def test_close_preserves_branch_when_dirty_worktree_is_preserved(monkeypatch, tmp_path):
+    from devflow.cli.commands import worktree_command
+
+    path = tmp_path / "worktree"
+    session = _session(path, tmp_path / "source")
+    _setup_command(monkeypatch, session)
+    changes = WorktreeChanges(
+        path=path,
+        tracked=1,
+        untracked=0,
+        ignored=0,
+        status_output=" M tracked.txt\n",
+    )
+    cleanup = Mock(
+        side_effect=SessionWorktreeCleanupError("dirty worktree", changes=changes)
+    )
+    inspect = Mock()
+    delete = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+    monkeypatch.setattr(worktree_command, "inspect_local_session_branch", inspect)
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    assert "dirty worktree" in " ".join(result.output.split())
+    cleanup.assert_called_once()
+    inspect.assert_not_called()
+    delete.assert_not_called()
+
+
+def test_close_removes_only_exact_issue_worktree_and_preserves_shared_branch(
+    monkeypatch, tmp_path
+):
+    from devflow.cli.commands import worktree_command
+
+    path = tmp_path / "worktree"
+    source = tmp_path / "source"
+    session = _session(path, source)
+    _, manager, _, _ = _setup_command(monkeypatch, session)
+    other_issue = _session(source, source)
+    other_issue.name = "session-other"
+    other_issue.issue_key = "owner/project-a#43"
+    other_issue.active_conversation.worktree_path = None
+    other_issue.active_conversation.original_project_path = None
+    manager.index.sessions[other_issue.name] = other_issue
+    cleanup = Mock()
+    inspect = Mock()
+    delete = Mock()
+    monkeypatch.setattr(worktree_command, "cleanup_session_worktree", cleanup)
+    monkeypatch.setattr(worktree_command, "inspect_local_session_branch", inspect)
+    monkeypatch.setattr(worktree_command, "delete_local_session_branch", delete)
+    monkeypatch.setattr(
+        worktree_command,
+        "worktree_source_fingerprint",
+        lambda _path: "saved-source-fingerprint",
+    )
+
+    result = CliRunner().invoke(close_issue, [ISSUE_KEY])
+
+    assert result.exit_code == 1
+    cleanup.assert_called_once()
+    inspect.assert_not_called()
+    delete.assert_not_called()
+    assert "another issue session records this branch" in " ".join(
+        result.output.split()
+    )

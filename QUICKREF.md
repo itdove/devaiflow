@@ -48,6 +48,7 @@ daf sync --epic PROJ-12345                  # Filter by epic
 # Session lifecycle
 daf open <session>                          # Start work (launches Claude)
 daf complete <session>                      # Finish (commits, PR/MR, transitions)
+daf close <issue-key>                       # Close issue; clean recorded worktrees/branches
 daf pause <session>                         # Pause session (stop time tracking)
 daf resume <session>                        # Resume paused session
 daf delete <session>                        # Delete session
