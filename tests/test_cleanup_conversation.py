@@ -143,6 +143,24 @@ def test_find_conversation_file_not_found(tmp_path, monkeypatch):
     assert result is None
 
 
+def test_find_conversation_file_ignores_database_backed_agent_storage(tmp_path, monkeypatch):
+    """A database path is not an editable per-session transcript."""
+    database = tmp_path / "kilo.db"
+    database.write_bytes(b"sqlite database")
+    agent = MagicMock()
+    agent.uses_file_based_sessions.return_value = False
+    agent.get_session_file_path.return_value = database
+
+    monkeypatch.setattr(
+        "devflow.cli.commands.cleanup_command.create_agent_client",
+        lambda backend: agent,
+    )
+
+    assert _find_conversation_file("ses_kilo123", project_path=str(tmp_path)) is None
+    agent.get_session_file_path.assert_not_called()
+    assert database.read_bytes() == b"sqlite database"
+
+
 
 
 def test_cleanup_conversation_session_not_found(temp_daf_home, monkeypatch, capsys):
@@ -182,5 +200,4 @@ def test_cleanup_conversation_no_ai_agent_session_id(
 
     captured = capsys.readouterr()
     assert "has no agent session ID" in captured.out
-
 

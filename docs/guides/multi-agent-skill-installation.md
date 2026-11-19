@@ -57,6 +57,7 @@ daf skills --agent codex
 | **Codex** | ⚠️ Experimental | `~/.codex/skills/` | `<project>/.codex/skills/` | `$CODEX_HOME` or `$XDG_CONFIG_HOME` |
 | **Pi** | ⚠️ Experimental | `~/.pi/agent/skills/` | `<project>/.pi/skills/` | `$PI_CODING_AGENT_DIR` |
 | **Crush** | ⚠️ Experimental | `~/.local/share/crush/skills/` | `<project>/.crush/skills/` | `$XDG_DATA_HOME` |
+| **Kilo Code** | ⚠️ Experimental | `~/.kilo/skills/` | `<project>/.kilo/skills/` | _(none)_ |
 
 **Notes:**
 - ✅ **Fully Tested**: Claude Code has native skill support and has been thoroughly tested
@@ -219,6 +220,7 @@ DevAIFlow installs skills to agent-specific directories. Here's where they go:
 | Codex | `~/.codex/skills/` | `$CODEX_HOME/skills/` or `$XDG_CONFIG_HOME/codex/skills/` |
 | Pi | `~/.pi/agent/skills/` | `$PI_CODING_AGENT_DIR/skills/` |
 | Crush | `~/.local/share/crush/skills/` | `$XDG_DATA_HOME/crush/skills/` |
+| Kilo Code | `~/.kilo/skills/` | _(none)_ |
 
 ### Project Directories
 
@@ -236,6 +238,7 @@ Project-level installations follow a consistent pattern:
 | Codex | `<project>/.codex/skills/` |
 | Pi | `<project>/.pi/skills/` |
 | Crush | `<project>/.crush/skills/` |
+| Kilo Code | `<project>/.kilo/skills/` |
 
 ### Environment Variables
 
@@ -359,7 +362,7 @@ daf assets --all-agents
 **Problem**: `daf skills --agent cursor` fails with error.
 
 **Possible Causes**:
-1. Agent name misspelled (use `claude`, `codex`, `cursor`, `windsurf`, `copilot`, `aider`, `continue`, `opencode`, `crush`)
+1. Agent name misspelled (use `claude`, `codex`, `cursor`, `windsurf`, `copilot`, `aider`, `continue`, `opencode`, `crush`, `kilo`)
 2. Permission issues with agent's config directory
 3. Agent config directory doesn't exist
 
@@ -423,6 +426,7 @@ rm -rf ~/.claude/skills/daf-* \
        ~/.aider/skills/daf-* \
        ~/.continue/skills/daf-* \
        ~/.config/opencode/skills/daf-* \
+       ~/.kilo/skills/daf-* \
        ~/.codex/skills/daf-* \
        ~/.local/share/crush/skills/daf-*
 

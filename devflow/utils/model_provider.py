@@ -202,6 +202,8 @@ def get_agent_backend_from_profile(profile: Optional[Dict[str, Any]]) -> Optiona
         return "ollama"
     if provider == "pi":
         return "pi"
+    if provider in {"kilo", "kilocode"}:
+        return "kilo"
     if provider in CLAUDE_PROFILE_PROVIDERS:
         return "claude"
     return None
@@ -244,6 +246,8 @@ def _profile_matches_agent(profile_name: str, profile: Dict[str, Any], agent_bac
     profile_key = profile_name.strip().lower()
     aliases = {
         "ollama-claude": "ollama",
+        "kilo": "kilocode",
+        "kilocode": "kilo",
         "llama_cpp": "llama-cpp",
         "llama.cpp": "llama-cpp",
         "mlx-lm": "mlx",
@@ -278,6 +282,8 @@ def get_profile_compatibility_error(
         compatible = backend == "codex"
     elif provider == "ollama":
         compatible = backend == "ollama"
+    elif provider in {"kilo", "kilocode"}:
+        compatible = backend == "kilo"
     elif provider in CLAUDE_PROFILE_PROVIDERS:
         compatible = backend == "claude"
     else:
@@ -381,6 +387,7 @@ def _known_agent_backends() -> set[str]:
             "codex",
             "ollama",
             "opencode",
+            "kilo",
             "pi",
             "github-copilot",
             "cursor",
@@ -797,6 +804,8 @@ def validate_model_provider_profile(
         "codex",
         "openai",
         "pi",
+        "kilo",
+        "kilocode",
     }:
         _add_validation_message(
             result.warnings,
@@ -822,7 +831,7 @@ def validate_model_provider_profile(
             _add_validation_message(result.checks, "Agent / IDE adapter is recognized.")
 
         compatible_backends = _compatible_agent_backends(provider)
-        if compatible_backends and canonical_backend not in {"opencode", "pi"}:
+        if compatible_backends and canonical_backend not in {"opencode", "kilo", "pi"}:
             compatible_canonical = {
                 _canonical_agent_backend(backend) for backend in compatible_backends
             }
@@ -940,14 +949,16 @@ def validate_model_provider_profile(
                 f"Configured {label} contains whitespace; use the provider's exact model identifier.",
             )
 
-    if _canonical_agent_backend(selected_backend) == "opencode":
+    selected_backend_name = _canonical_agent_backend(selected_backend)
+    if selected_backend_name in {"opencode", "kilo"}:
         configured_provider = profile_data.get("provider")
         if not isinstance(configured_provider, str) or not configured_provider.strip():
+            display_name = "Kilo" if selected_backend_name == "kilo" else "OpenCode"
             for label, model in configured_models:
                 if isinstance(model, str) and model.strip() and "/" not in model:
                     _add_validation_message(
                         result.issues,
-                        f"OpenCode requires an explicit provider for unqualified {label} "
+                        f"{display_name} requires an explicit provider for unqualified {label} "
                         f"'{model}'. Set the profile's provider field or use a "
                         "provider-qualified model such as 'openai/gpt-5.6-luna'.",
                     )
@@ -1285,20 +1296,21 @@ def qualify_model_for_agent(
 ) -> Optional[str]:
     """Return the model identifier in the format required by an agent adapter.
 
-    OpenCode requires provider-qualified model identifiers.  Other adapters keep
+    OpenCode and Kilo require provider-qualified model identifiers. Other adapters keep
     receiving the model value exactly as configured because they pass provider
     selection through separate options or environment variables.
 
     Args:
         model: Model identifier selected for the command.
         agent_backend: Agent adapter that will receive the model.
-        profile: Selected provider profile, used to qualify bare OpenCode models.
+        profile: Selected provider profile, used to qualify bare OpenCode/Kilo models.
 
     Raises:
-        ModelProviderCompatibilityError: If OpenCode receives a bare model
+        ModelProviderCompatibilityError: If OpenCode or Kilo receives a bare model
             without an explicit provider in the selected profile.
     """
-    if not model or _canonical_agent_backend(agent_backend) != "opencode":
+    canonical_backend = _canonical_agent_backend(agent_backend)
+    if not model or canonical_backend not in {"opencode", "kilo"}:
         return model
     if not isinstance(model, str):
         return model
@@ -1310,8 +1322,9 @@ def qualify_model_for_agent(
     profile_data = _profile_to_dict(profile) or {}
     configured_provider = profile_data.get("provider")
     if not isinstance(configured_provider, str) or not configured_provider.strip():
+        display_name = "Kilo" if canonical_backend == "kilo" else "OpenCode"
         raise ModelProviderCompatibilityError(
-            f"OpenCode requires an explicit provider for unqualified model '{model}'. "
+            f"{display_name} requires an explicit provider for unqualified model '{model}'. "
             "Set the selected model profile's 'provider' field or use a "
             "provider-qualified model such as 'openai/gpt-5.6-luna'."
         )
@@ -1526,6 +1539,7 @@ def get_co_authored_by_line(config=None, model_profile_override: Optional[str] =
     _AGENT_ATTRIBUTION = {
         "codex": ("Codex", "noreply@openai.com"),
         "opencode": ("OpenCode", "noreply@opencode.ai"),
+        "kilo": ("Kilo Code", "noreply@kilo.ai"),
         "pi": ("Pi", "noreply@pi.dev"),
         "aider": ("Aider", "noreply@aider.chat"),
     }

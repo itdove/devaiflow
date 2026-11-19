@@ -515,10 +515,13 @@ def _get_conversation_file_path(
         agent_backend: Agent backend identifier (e.g., "claude", "opencode")
 
     Returns:
-        Path to the conversation file (format depends on agent backend)
+        Conversation storage location, annotated when the agent uses a database.
     """
     try:
         agent = create_agent_client(agent_backend)
+        if not agent.uses_file_based_sessions():
+            storage_path = agent.get_session_file_path(ai_agent_session_id, project_path)
+            return f"{storage_path} [dim](native database storage; not a transcript file)[/dim]"
         conv_file = agent.get_session_file_path(ai_agent_session_id, project_path)
         if conv_file.exists():
             return str(conv_file)

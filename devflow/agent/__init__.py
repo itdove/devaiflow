@@ -13,6 +13,7 @@ Supported Agents:
 - Continue (experimental)
 - Crush (experimental)
 - OpenCode (experimental)
+- Kilo Code (experimental; separate CLI/backend)
 - Codex (experimental)
 - Pi (experimental)
 
@@ -30,6 +31,7 @@ from devflow.agent.aider_agent import AiderAgent
 from devflow.agent.continue_agent import ContinueAgent
 from devflow.agent.crush_agent import CrushAgent
 from devflow.agent.opencode_agent import OpenCodeAgent
+from devflow.agent.kilo_agent import KiloAgent
 from devflow.agent.codex_agent import CodexAgent
 from devflow.agent.pi_agent import PiAgent
 from devflow.agent.factory import (
@@ -66,6 +68,7 @@ __all__ = [
     "ContinueAgent",
     "CrushAgent",
     "OpenCodeAgent",
+    "KiloAgent",
     "CodexAgent",
     "PiAgent",
     "AGENT_REGISTRY",

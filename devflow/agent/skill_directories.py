@@ -70,6 +70,12 @@ in their official documentation. See the links below for the authoritative sourc
    - Env var: XDG_DATA_HOME
    - Docs: https://crush.ai/
 
+11. Kilo Code (Experimental)
+   - Global: ~/.kilo/skills/
+   - Project: <project>/.kilo/skills/
+   - Env var: None for skill locations
+   - Docs: https://kilo.ai/docs/customize/skills
+
 Note: Paths marked as "Experimental" are based on conventional patterns observed
 in the wild but may not be officially supported by the agent. Always check the
 official documentation before adding a new agent or updating paths.
@@ -101,6 +107,7 @@ def get_agent_global_skills_dir(agent: str) -> Path:
     - Pi: PI_CODING_AGENT_DIR (defaults to ~/.pi/agent/)
     - OpenCode: XDG_CONFIG_HOME (defaults to ~/.config/)
     - Crush: XDG_DATA_HOME (defaults to ~/.local/share/)
+    - Kilo Code: ~/.kilo/skills/ globally and .kilo/skills/ per project
     - Other agents: Use their documented default directories
 
     Args:
@@ -215,6 +222,10 @@ def get_agent_global_skills_dir(agent: str) -> Path:
             base_dir = Path.home() / '.local' / 'share' / 'crush'
         return base_dir / 'skills'
 
+    elif agent == 'kilo':
+        # Kilo documents a separate agent-skills root from its XDG config path.
+        return Path.home() / '.kilo' / 'skills'
+
     else:
         raise ValueError(
             f"Unknown agent: {agent}. "
@@ -273,6 +284,9 @@ def get_agent_project_skills_dir(agent: str, project_path: Path) -> Path:
 
     elif agent == 'crush':
         return project_path / '.crush' / 'skills'
+
+    elif agent == 'kilo':
+        return project_path / '.kilo' / 'skills'
 
     else:
         raise ValueError(
@@ -355,11 +369,12 @@ SUPPORTED_AGENTS = [
     'codex',
     'pi',
     'crush',
+    'kilo',
 ]
 
 _CANONICAL_SKILL_AGENTS = [
     'claude', 'copilot', 'cursor', 'windsurf', 'aider', 'continue',
-    'opencode', 'codex', 'pi', 'crush',
+    'opencode', 'codex', 'pi', 'crush', 'kilo',
 ]
 
 # Only agents with a unique command are detected from PATH. Copilot and Continue
@@ -373,6 +388,7 @@ _AGENT_CLI_COMMANDS = {
     'codex': 'codex',
     'pi': 'pi',
     'crush': 'crush',
+    'kilo': 'kilo',
 }
 
 _AGENT_HOME_ENV_VARS = {

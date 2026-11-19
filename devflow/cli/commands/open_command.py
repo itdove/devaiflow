@@ -45,6 +45,7 @@ from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerA
 from devflow.agent import get_agent_display_name
 from devflow.agent.factory import OPENCODE_CAPTURE_TIMEOUT, resolve_agent_backend
 from devflow.agent.opencode_agent import OpenCodeAgent, OpenCodeSessionQueryError
+from devflow.agent.kilo_agent import KiloAgent, KiloSessionQueryError
 from devflow.utils.backend_detection import get_issue_tracker_backend
 from devflow.session.capture import SessionCapture
 from devflow.session.manager import SessionManager
@@ -355,13 +356,19 @@ def _extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[s
 
 
 def _refuse_unverified_opencode_session(
-    session_name: str, reason: str, output_json: bool
+    session_name: str, reason: str, output_json: bool, backend: str = "opencode"
 ) -> NoReturn:
     """Preserve unresolved native identity instead of silently launching a replacement."""
+    if backend == "kilo":
+        agent_name = "Kilo"
+        list_guidance = "Kilo's `kilo session list --format json --all`"
+    else:
+        agent_name = "OpenCode"
+        list_guidance = "OpenCode's session list"
     message = (
-        f"Cannot safely resume OpenCode: {reason}. No replacement conversation was launched. "
+        f"Cannot safely resume {agent_name}: {reason}. No replacement conversation was launched. "
         "If a native conversation exists, verify its ID and project directory with "
-        "OpenCode's session list, then run "
+        f"{list_guidance}, then run "
         f"`daf update {session_name} --session-id VERIFIED_ID` outside the agent session. "
         "To explicitly archive this record and start over (even without a saved branch), "
         f"use `daf open {session_name} --new-conversation`."
@@ -879,7 +886,7 @@ def open_session(
             model_profile=model_profile or session.model_profile,
         )
         if not active_conv.project_path or (
-            not active_conv.branch and replacement_backend not in ("opencode", "opencode-ai")
+            not active_conv.branch and replacement_backend not in ("opencode", "opencode-ai", "kilo")
         ):
             console.print("[red]Active conversation is missing project or branch information.[/red]")
             return
@@ -914,7 +921,7 @@ def open_session(
                 # Only this freshly allocated context is proven never launched.
                 # Never retrofit that proof onto a legacy pending record.
                 new_conv.agent_launch_started = False
-                if replacement_backend in ("opencode", "opencode-ai"):
+                if replacement_backend in ("opencode", "opencode-ai", "kilo"):
                     from devflow.agent.factory import generate_agent_session_id
 
                     new_conv.ai_agent_session_id = generate_agent_session_id(replacement_backend)
@@ -1037,7 +1044,7 @@ def open_session(
     )
     agent_name = get_agent_display_name(effective_agent_backend)
     is_first_launch = not has_real_session_id or (
-        new_conversation and effective_agent_backend not in ("opencode", "opencode-ai")
+        new_conversation and effective_agent_backend not in ("opencode", "opencode-ai", "kilo")
     )
 
     # Persist command profile/backend overrides for subsequent resumes.
@@ -1060,7 +1067,7 @@ def open_session(
             raise click.exceptions.Exit(1)
 
     if (
-        effective_agent_backend in ("opencode", "opencode-ai")
+        effective_agent_backend in ("opencode", "opencode-ai", "kilo")
         and active_conv
         and (
             not active_conv.ai_agent_session_id
@@ -1073,6 +1080,7 @@ def open_session(
             "the saved ID is missing or pending-capture and there is no verified launch ID "
             "or explicit never-launched provenance; automatic recovery is unavailable",
             output_json,
+            backend=effective_agent_backend,
         )
 
     if (
@@ -1093,18 +1101,31 @@ def open_session(
         check_path = active_conv.temp_directory or active_conv.project_path
         console.print(f"[dim]Checking for existing {agent_name} session...[/dim]")
 
-        if isinstance(agent_client, OpenCodeAgent):
+        if isinstance(agent_client, (OpenCodeAgent, KiloAgent)):
+            query_error = (
+                KiloSessionQueryError
+                if isinstance(agent_client, KiloAgent)
+                else OpenCodeSessionQueryError
+            )
             try:
                 conversation_exists = (
                     active_conv.ai_agent_session_id in agent_client.get_existing_sessions(
                         check_path, timeout=OPENCODE_CAPTURE_TIMEOUT, strict=True
                     )
                 )
-            except OpenCodeSessionQueryError as exc:
-                _refuse_unverified_opencode_session(session.name, str(exc), output_json)
+            except query_error as exc:
+                _refuse_unverified_opencode_session(
+                    session.name,
+                    str(exc),
+                    output_json,
+                    backend=effective_agent_backend,
+                )
             if not conversation_exists:
                 _refuse_unverified_opencode_session(
-                    session.name, "the saved native ID was not found in this project", output_json
+                    session.name,
+                    "the saved native ID was not found in this project",
+                    output_json,
+                    backend=effective_agent_backend,
                 )
         else:
             conversation_exists = agent_client.session_exists(active_conv.ai_agent_session_id, check_path)
@@ -1183,7 +1204,7 @@ def open_session(
             and active_conv
             and active_conv.ai_agent_session_id
             and active_conv.project_path
-            and effective_agent_backend not in ("opencode", "opencode-ai")
+            and effective_agent_backend not in ("opencode", "opencode-ai", "kilo")
         ):
             from devflow.agent import create_agent_client
             agent_client = create_agent_client(effective_agent_backend)
@@ -1884,7 +1905,7 @@ def open_session(
                     hierarchical_files = load_hierarchical_context_files(config)
                     if hierarchical_files:
                         cmd.extend(["--add-dir", str(cs_config)])
-            elif agent_backend in ("opencode", "opencode-ai", "codex", "pi", "pi-coding-agent"):
+            elif agent_backend in ("opencode", "opencode-ai", "kilo", "codex", "pi", "pi-coding-agent"):
                 # Self-identifying agents support session resume.
                 from devflow.agent.factory import (
                     get_agent_metadata,
@@ -1912,6 +1933,7 @@ def open_session(
                         if (active_conv.temp_directory or active_conv.worktree_path) and agent_backend in (
                             "opencode",
                             "opencode-ai",
+                            "kilo",
                         ):
                             resume_kwargs["isolated_workspace"] = True
                         if get_agent_metadata(agent_backend).get(
@@ -1935,9 +1957,10 @@ def open_session(
                         if (active_conv.temp_directory or active_conv.worktree_path) and agent_backend in (
                             "opencode",
                             "opencode-ai",
+                            "kilo",
                         ):
                             launch_kwargs["isolated_workspace"] = True
-                        if agent_backend in ("opencode", "opencode-ai"):
+                        if agent_backend in ("opencode", "opencode-ai", "kilo"):
                             launch_kwargs["on_session_id"] = persist_native_session_id
                         if get_agent_metadata(agent_backend).get(
                             "features", {}
@@ -2118,7 +2141,7 @@ def open_session(
             and active_conv.ai_agent_session_id
             and active_conv.project_path
             and not (
-                effective_agent_backend in ("opencode", "opencode-ai")
+                effective_agent_backend in ("opencode", "opencode-ai", "kilo")
                 and is_pending_capture(active_conv.ai_agent_session_id)
             )
         ):

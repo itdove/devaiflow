@@ -2305,6 +2305,91 @@ class TestOpenCommandOpenCodeResume:
         assert call_kwargs.kwargs["session_id"] == "ses_abc123def"
         assert call_kwargs.kwargs["display_name"] == "oc-resume-test"
 
+    @pytest.mark.parametrize("query_state", ["found", "missing", "error"])
+    def test_open_resume_kilo_with_native_session_id(
+        self, temp_daf_home, tmp_path, query_state
+    ):
+        """Kilo IDs are verified, and query errors refuse to launch replacements."""
+        from devflow.agent.kilo_agent import KiloAgent, KiloSessionQueryError
+
+        config_loader = ConfigLoader()
+        session_manager = SessionManager(config_loader)
+        project_path = str(tmp_path / "kilo-project")
+        Path(project_path).mkdir(parents=True, exist_ok=True)
+        session = session_manager.create_session(
+            name="kilo-resume-test",
+            goal="Test Kilo resume",
+            working_directory="kilo-project",
+            project_path=project_path,
+            ai_agent_session_id="ses_kilo123",
+            branch="feature-branch",
+            agent_backend="kilo",
+        )
+
+        process = Mock()
+        config = Mock()
+        config.agent_backend = "kilo"
+        config.repos = None
+        config.gcp_vertex_region = None
+        agent = KiloAgent()
+        query_result = {"ses_kilo123"} if query_state == "found" else set()
+        agent.get_existing_sessions = Mock(return_value=query_result)
+        if query_state == "error":
+            agent.get_existing_sessions.side_effect = KiloSessionQueryError(
+                "session query failed"
+            )
+        agent.get_session_file_path = Mock(return_value=tmp_path / "kilo.db")
+        agent.resume_session = Mock(return_value=process)
+
+        with (
+            patch(
+                "devflow.cli.commands.open_command._detect_working_directory_from_cwd",
+                return_value=None,
+            ),
+            patch("devflow.cli.commands.open_command.Confirm.ask", return_value=True),
+            patch(
+                "devflow.cli.commands.open_command.GitUtils.branch_exists",
+                return_value=True,
+            ),
+            patch(
+                "devflow.cli.commands.open_command._handle_branch_checkout",
+                return_value=True,
+            ),
+            patch(
+                "devflow.cli.commands.open_command._sync_branch_for_import",
+                return_value=True,
+            ),
+            patch(
+                "devflow.cli.commands.open_command._check_and_sync_with_base_branch",
+                return_value=True,
+            ),
+            patch(
+                "devflow.cli.commands.open_command.ConfigLoader",
+                return_value=config_loader,
+            ),
+            patch.object(config_loader, "load_config", return_value=config),
+            patch("devflow.agent.create_agent_client", return_value=agent),
+        ):
+            result = CliRunner().invoke(cli, ["open", "kilo-resume-test"])
+
+        agent.get_existing_sessions.assert_called_once()
+        if query_state != "found":
+            assert result.exit_code == 1
+            assert "Cannot safely resume Kilo" in result.output
+            if query_state == "error":
+                assert "session query failed" in result.output
+            else:
+                assert "not found in this project" in result.output
+            agent.resume_session.assert_not_called()
+        else:
+            assert result.exit_code == 0, result.output
+            agent.resume_session.assert_called_once()
+            assert agent.resume_session.call_args.kwargs["session_id"] == "ses_kilo123"
+            assert (
+                agent.resume_session.call_args.kwargs["display_name"]
+                == "kilo-resume-test"
+            )
+
     def test_open_resume_opencode_with_uuid_fallback(self, temp_daf_home, tmp_path):
         """When reopening OpenCode session with UUID (no captured ses_ ID), falls back to launch_session()."""
         config_loader = ConfigLoader()

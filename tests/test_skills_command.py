@@ -49,3 +49,10 @@ def test_assets_explicit_agent_remains_authoritative():
     assert result.exit_code == 0
     assert install.call_args.kwargs["agents"] == ["codex"]
     detect.assert_not_called()
+
+
+def test_assets_help_lists_kilo_as_an_agent_target():
+    result = CliRunner().invoke(assets, ["--help"])
+
+    assert result.exit_code == 0
+    assert "kilo" in result.output

@@ -1959,6 +1959,7 @@ Agents are AI coding assistants that integrate with DevAIFlow. DevAIFlow support
 - **Windsurf** (experimental) - Windsurf (Codeium) editor
 - **Aider** (experimental) - AI pair programming in terminal
 - **Continue** (experimental) - VS Code extension for AI assistance
+- **OpenCode, Kilo Code, Codex, Pi, and Crush** (experimental) - CLI-based agents
 
 **Note:** Only Claude Code and Ollama have been fully tested. Other agents are experimental and may have limitations.
 
@@ -5180,7 +5181,7 @@ daf skills [SKILL_NAME] [OPTIONS]
 - `--available` - Show available bundled skills (use with --list)
 - `--installed` - Show installed skills (use with --list)
 - `--dry-run` - Preview what would be changed without making changes
-- `--agent TEXT` - AI agent to target (claude, codex, cursor, windsurf, copilot, aider, continue, opencode, crush)
+- `--agent TEXT` - AI agent to target (claude, codex, pi, cursor, windsurf, copilot, aider, continue, opencode, crush, kilo)
 - `--level [global|project|both]` - Installation level (default: global)
 - `--all-agents` - Target all supported agents
 - `--project-path PATH` - Project directory for project-level operations
@@ -5191,7 +5192,7 @@ The `daf assets` command manages bundled skills that provide helpful prompts and
 - **Installs** skills if they don't exist yet
 - **Upgrades** skills if they're outdated
 - **Skips** skills that are already up-to-date
-- **Supports multiple AI agents** - Install to Claude, Cursor, Windsurf, Copilot, Aider, Continue, OpenCode, Codex, and Crush
+- **Supports multiple AI agents** - Install to Claude, Cursor, Windsurf, Copilot, Aider, Continue, OpenCode, Kilo Code, Codex, Pi, and Crush
 
 When no agent is specified, initialization, workspace upgrades, and `daf assets`
 detect configured agent backends, agent home directories, and unique agent CLIs.
@@ -5340,6 +5341,7 @@ When no agent is specified, `daf assets` detects configured agent backends, agen
 - Aider: `~/.aider/skills/` or `<project>/.aider/skills/`
 - Continue: `~/.continue/skills/` or `<project>/.continue/skills/`
 - OpenCode: `~/.config/opencode/skills/` or `<project>/.opencode/skills/`
+- Kilo Code: `~/.kilo/skills/` or `<project>/.kilo/skills/`
 - Codex: `~/.codex/skills/` or `<project>/.codex/skills/`
 - Crush: `~/.local/share/crush/skills/` or `<project>/.crush/skills/`
 
@@ -5354,7 +5356,7 @@ rm -rf ~/.claude/skills/daf-* ~/.claude/skills/gh-cli ~/.claude/skills/glab-cli
 rm -rf ~/.cursor/skills/daf-*
 
 # Remove from all agents
-rm -rf ~/.claude/skills/daf-* ~/.copilot/skills/daf-* ~/.cursor/skills/daf-* ~/.codeium/windsurf/skills/daf-* ~/.aider/skills/daf-* ~/.continue/skills/daf-* ~/.config/opencode/skills/daf-* ~/.codex/skills/daf-* ~/.local/share/crush/skills/daf-*
+rm -rf ~/.claude/skills/daf-* ~/.copilot/skills/daf-* ~/.cursor/skills/daf-* ~/.codeium/windsurf/skills/daf-* ~/.aider/skills/daf-* ~/.continue/skills/daf-* ~/.config/opencode/skills/daf-* ~/.kilo/skills/daf-* ~/.codex/skills/daf-* ~/.local/share/crush/skills/daf-*
 ```
 
 **Custom Skills:**

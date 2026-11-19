@@ -115,7 +115,7 @@ class ModelProviderProfile(BaseModel):
         default="claude",
         description=(
             "Agent/IDE adapter used with this profile (for example claude, codex, "
-            "ollama, opencode, or pi)"
+            "ollama, opencode, kilo, or pi)"
         ),
     )
     base_url: Optional[str] = Field(
@@ -197,6 +197,8 @@ class ModelProviderProfile(BaseModel):
                 "openai": "codex",
                 "ollama": "ollama",
                 "pi": "pi",
+                "kilo": "kilo",
+                "kilocode": "kilo",
             }.get(provider, "claude")
         return values
 
@@ -731,7 +733,7 @@ class Config(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)  # Storage backend config
     backend_config_source: str = "local"  # "local" or "central_db" (future) - NEW in PROJ-62719
     issue_tracker_backend: str = "jira"  # Issue tracker backend: "jira", "github", "gitlab", etc. - NEW in PROJ-63197
-    agent_backend: str = "claude"  # AI agent backend: "claude", "ollama", "copilot", "opencode", "pi", etc. - NEW in PROJ-63294
+    agent_backend: str = "claude"  # AI agent backend: "claude", "ollama", "copilot", "opencode", "kilo", "pi", etc. - NEW in PROJ-63294
     ollama: Optional[OllamaConfig] = None  # Ollama configuration for local models - NEW in itdove/devaiflow#241
     mock_services: Optional[MockServicesConfig] = None  # Reserved for future use (mock mode uses DAF_MOCK_MODE env var)
     gcp_vertex_region: Optional[str] = None  # GCP Vertex AI region (e.g., "us-central1", "europe-west4") - DEPRECATED: use model_provider instead
@@ -1076,7 +1078,7 @@ class Session(BaseModel):
 
     # Agent backend used to create this session (persisted for correct resume behavior)
     # When None, falls back to config.agent_backend (backward compatible with existing sessions)
-    agent_backend: Optional[str] = None  # "claude" | "opencode" | "ollama" | "github-copilot" | etc.
+    agent_backend: Optional[str] = None  # "claude" | "opencode" | "kilo" | "ollama" | "github-copilot" | etc.
 
     # Actual model ID used for this session (e.g., "claude-opus-4-6", "claude-sonnet-5", "Qwen3-Coder-25B")
     # Distinct from model_profile (the profile name) — this is the specific model identifier

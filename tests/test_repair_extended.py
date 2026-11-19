@@ -63,6 +63,23 @@ def test_get_conversation_file_path_skips_non_directories(tmp_path, monkeypatch)
     assert result is None
 
 
+def test_database_backed_backend_does_not_fall_back_to_claude_transcript(
+    tmp_path, monkeypatch
+):
+    """A database session is not repaired from a same-ID Claude JSONL file."""
+    from devflow.agent.kilo_agent import KiloAgent
+
+    projects_dir = tmp_path / ".claude" / "projects" / "project"
+    projects_dir.mkdir(parents=True)
+    (projects_dir / "ses_shared_id.jsonl").write_text('{"messages":[]}')
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(
+        "devflow.session.repair.create_agent_client", lambda _backend: KiloAgent()
+    )
+
+    assert get_conversation_file_path("ses_shared_id", "kilo", "/project") is None
+
+
 def test_is_valid_uuid_valid():
     """Test is_valid_uuid with valid UUIDs."""
     assert is_valid_uuid("550e8400-e29b-41d4-a716-446655440000") is True

@@ -696,6 +696,41 @@ def test_find_conversation_file_nonexistent_file():
     assert result is None
 
 
+def test_find_conversation_file_does_not_fall_back_to_claude_for_kilo(
+    tmp_path, monkeypatch
+):
+    """A Kilo session must not match an unrelated Claude transcript by ID."""
+    from types import SimpleNamespace
+
+    from devflow.agent.kilo_agent import KiloAgent
+    from devflow.session.summary import find_conversation_file
+
+    project_path = tmp_path / "project"
+    session_id = "ses_shared_id"
+    encoded_path = str(project_path).replace("/", "-").replace("_", "-")
+    claude_file = tmp_path / ".claude" / "projects" / encoded_path / f"{session_id}.jsonl"
+    claude_file.parent.mkdir(parents=True)
+    claude_file.write_text('{"type":"assistant","message":"not Kilo"}')
+
+    session = SimpleNamespace(
+        agent_backend="kilo",
+        model_profile=None,
+        active_conversation=SimpleNamespace(
+            project_path=str(project_path),
+            ai_agent_session_id=session_id,
+        ),
+    )
+    monkeypatch.setattr(
+        "devflow.session.summary.create_agent_client", lambda _backend: KiloAgent()
+    )
+    monkeypatch.setattr(
+        "devflow.session.summary.get_claude_config_dir",
+        lambda: tmp_path / ".claude",
+    )
+
+    assert find_conversation_file(session) is None
+
+
 def test_generate_ai_summary_no_api_key(monkeypatch):
     """Test generate_ai_summary returns None when API key is not set."""
     from devflow.session.summary import generate_ai_summary, SessionSummary

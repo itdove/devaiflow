@@ -290,6 +290,12 @@ def _find_conversation_file(
     agent_backend = resolve_agent_backend(config=config)
     agent = create_agent_client(agent_backend)
 
+    # Database-backed agents return their storage database from
+    # get_session_file_path(); it is not a transcript and must never be passed
+    # to the JSONL cleaner.
+    if not agent.uses_file_based_sessions():
+        return None
+
     # If we have a project_path, try the direct path first
     if project_path:
         session_file = agent.get_session_file_path(ai_agent_session_id, project_path)
