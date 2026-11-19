@@ -545,9 +545,13 @@ class FeatureManager:
 
             # Parse agent's session to check verification results
             # Look for checked boxes [x] in the conversation
-            session_file = agent.get_session_file_path(verification_session_id, project_path)
+            session_file: Optional[Path] = None
+            if agent.uses_file_based_sessions():
+                session_file = agent.get_session_file_path(
+                    verification_session_id, project_path
+                )
 
-            if session_file.exists():
+            if session_file and session_file.exists():
                 # Count how many criteria were checked
                 content = session_file.read_text()
                 raw_count = content.count("[x]") + content.count("[X]")
@@ -596,6 +600,14 @@ class FeatureManager:
             total_criteria=len(criteria),
             verified_criteria=0,
             unverified_criteria=criteria,
+            suggestions=(
+                [
+                    "The selected agent stores sessions outside transcript files, so "
+                    "acceptance-criteria parsing is unavailable."
+                ]
+                if not agent.uses_file_based_sessions()
+                else []
+            ),
         )
 
     def _get_next_session(self, feature: FeatureOrchestration, current_session: str) -> Optional[str]:

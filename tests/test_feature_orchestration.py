@@ -337,11 +337,11 @@ class TestVerificationResult:
 
 
 @pytest.mark.parametrize(
-    ("agent_backend", "expected_title"),
-    [("opencode", "verify-session"), ("codex", None)],
+    ("agent_backend", "expected_title", "file_backed"),
+    [("opencode", "verify-session", False), ("codex", None, True), ("kilo", "verify-session", False)],
 )
 def test_ai_verification_uses_daf_title_only_for_native_title_backends(
-    agent_backend, expected_title, tmp_path, monkeypatch
+    agent_backend, expected_title, file_backed, tmp_path, monkeypatch
 ):
     """Feature verification uses the DAF session name when titles are supported."""
     from types import SimpleNamespace
@@ -368,12 +368,13 @@ def test_ai_verification_uses_daf_title_only_for_native_title_backends(
 
     agent = Mock()
     agent.launch_with_prompt.return_value = Mock()
+    agent.uses_file_based_sessions.return_value = file_backed
     agent.get_session_file_path.return_value = tmp_path / "missing-session.jsonl"
     monkeypatch.setattr(
         "devflow.agent.factory.create_agent_client", lambda _backend: agent
     )
 
-    manager._run_ai_verification(
+    result = manager._run_ai_verification(
         feature=Mock(),
         session_name="verify-session",
         project_path=str(tmp_path),
@@ -384,6 +385,12 @@ def test_ai_verification_uses_daf_title_only_for_native_title_backends(
         assert launch_kwargs["display_name"] == expected_title
     else:
         assert "display_name" not in launch_kwargs
+    if file_backed:
+        agent.get_session_file_path.assert_called_once()
+    else:
+        agent.get_session_file_path.assert_not_called()
+    if agent_backend == "kilo":
+        assert "parsing is unavailable" in result.suggestions[0]
 
 
 if __name__ == "__main__":

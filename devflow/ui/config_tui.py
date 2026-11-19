@@ -2425,6 +2425,7 @@ class ConfigTUI(App):
                     "ollama": "Ollama + Claude Code",
                     "codex": "Codex",
                     "opencode": "OpenCode",
+                    "kilo": "Kilo Code",
                 }.get(profile_agent_backend, profile_agent_backend)
                 yield Static(
                     f"[bold]Profile-selected adapter:[/bold] {agent_display_name}\n"

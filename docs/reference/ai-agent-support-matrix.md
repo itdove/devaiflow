@@ -193,6 +193,7 @@ This is why token tracking is currently **Claude Code only** - it's the only age
 | **Continue** | `continue` | ⚠️  Experimental | `continue` (VS Code ext) | Limited | ✅ Experimental |
 | **Crush** | `crush` | ⚠️  Experimental | `crush` | Limited | ✅ Experimental |
 | **OpenCode** | `opencode`, `opencode-ai` | ⚠️  Experimental | `opencode` | Full CLI support | ✅ Experimental |
+| **Kilo Code** | `kilo` | ⚠️  Experimental | `kilo run` | CLI sessions/resume; token stats unavailable | ✅ Experimental |
 | **Codex** | `codex` | ⚠️  Experimental | `codex` | Full CLI support | ✅ Experimental |
 
 ## Configuration
@@ -210,11 +211,12 @@ daf config set agent_backend aider
 daf config set agent_backend continue
 daf config set agent_backend crush
 daf config set agent_backend opencode
+daf config set agent_backend kilo
 daf config set agent_backend codex
 
 # Or manually edit $DEVAIFLOW_HOME/config.json
 {
-  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "codex"
+  "agent_backend": "claude",  // or "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "kilo", "codex"
   "ollama": {
     "default_model": "qwen3-coder"  // optional, only for ollama backend
   }
@@ -259,9 +261,10 @@ Each agent has its own skills directory where DevAIFlow installs bundled skills:
 | **Continue** | `~/.continue/skills/` | `<project>/.continue/skills/` | _(none)_ |
 | **Crush** | `~/.local/share/crush/skills/` | `<project>/.crush/skills/` | `$XDG_DATA_HOME` |
 | **OpenCode** | `~/.config/opencode/skills/` | `<project>/.opencode/skills/` | `$XDG_CONFIG_HOME` |
+| **Kilo Code** | `~/.kilo/skills/` | `<project>/.kilo/skills/` | _(none)_ |
 | **Codex** | `~/.codex/skills/` | `<project>/.codex/skills/` | `$CODEX_HOME` or `$XDG_CONFIG_HOME` |
 
-**Note:** Claude Code, GitHub Copilot, Crush, OpenCode, and Codex support environment variables to override the default config/data directory. Crush also checks its XDG config directory when detecting an existing installation.
+**Note:** Claude Code, GitHub Copilot, Crush, OpenCode, and Codex support environment variables to override the default config/data directory. Crush also checks its XDG config directory when detecting an existing installation. Kilo's documented skill locations do not use an environment override.
 
 ### Automatic Agent Selection
 
@@ -325,9 +328,10 @@ daf assets --agent cursor
 - ⚠️  Continue - Skills may work as context files
 - ⚠️  Crush - Skills may work as context files
 - ⚠️  OpenCode - Skills may work as context files
+- ⚠️  Kilo Code - Kilo CLI documents native Agent Skills support; DAF installation remains experimental
 - ⚠️  Codex - Skills may work as context files
 
-**Note:** Only Claude Code and Ollama have native skill support. Other agents may be able to use the skill files as context/documentation, but functionality is not guaranteed.
+**Note:** Claude Code and Ollama have been fully tested. Kilo CLI documents native Agent Skills support at the paths above, but DAF's Kilo integration remains experimental. Other agents may be able to use skill files as context/documentation, but functionality is not guaranteed.
 
 ## DAF-Derived Conversation Titles
 
@@ -341,6 +345,7 @@ synchronizes the title where the agent supports it.
 | Claude Code | `--name` on new-session launches and `daf open` resumes |
 | Pi | `--name` on new-session launches and resumes |
 | OpenCode | Version-compatible session create/update API; `run --title` for headless launches |
+| Kilo Code | Session create/update API; `kilo run --title` fallback for new sessions |
 
 Other adapters (including Ollama, Codex, Aider, Crush, Continue, Copilot,
 Cursor, and Windsurf) do not currently expose a stable title-setting mechanism
@@ -914,6 +919,53 @@ curl -fsSL https://opencode.ai/install | bash
 
 ---
 
+### Kilo CLI (Experimental; Distinct Backend)
+
+**Decision:** Kilo is registered as a distinct `kilo` backend. It is not an
+OpenCode alias: session identity, executable/version handling, configuration,
+database lookup, and daemon isolation remain Kilo-specific. This implementation
+is experimental; interactive/headless DAF clone lifecycle has not yet been
+validated end to end with a real model-backed run.
+
+This assessment checked the installed Kilo CLI **7.8.27** and Kilo's published
+CLI documentation and current CLI source on 2026-11-19. The projects share
+OpenCode ancestry, but DAF's OpenCode adapter relies on OpenCode-specific
+version detection, commands, database locations, and clone-isolation behavior.
+
+| DAF integration | Kilo CLI contract | Impact on the existing OpenCode adapter |
+| --- | --- | --- |
+| Launch and resume | Kilo 7.8.27 supports `kilo run [message..]`, `--interactive`, `--session`, `--model provider/model`, `--variant`, `--format json`, `--title`, and `--auto`. | The adapter invokes `kilo` directly, applies Kilo flags, validates Kilo's independent version, and uses the saved Kilo backend identity for resume. |
+| Session listing and capture | `kilo session list --format json --all` returns records with IDs and directory metadata; on a successful empty result it may print no JSON. | Kilo queries are parsed independently, scoped by canonical project directory, and treat successful empty output as empty only after a zero exit code. Query errors and ambiguous new sessions fail closed. |
+| Interactive titles | `kilo run --interactive --title <name>` supports new-session titles. Kilo's local HTTP API supports session create/update; the DAF adapter uses a short-lived `kilo serve` process with `KILO_NO_DAEMON=1`. Create and rename were smoke-tested on Kilo 7.8.27. | DAF persists the native ID returned by creation before launching the interactive child and updates titles on resume. Title API failure falls back to the CLI's supported `--title` for creation; rename remains best-effort. |
+| Managed-clone isolation | Kilo documents `KILO_NO_DAEMON` to disable automatic attachment to its persistent local daemon. Its CLI does not expose OpenCode v2's `--standalone`. | The adapter sets `KILO_NO_DAEMON=1` for managed-clone interactive/headless launches, resumes, session queries, exports, and its private title API server. DAF's generic live-holder completion guards remain in force; real model-backed clone process-tree behavior still needs end-to-end validation. Never stop or evict a shared Kilo daemon. |
+| Export and message counts | `kilo export <sessionID>` emits JSON by default and has no `--format` option; tested output contains a `messages` array. | DAF counts exported messages using Kilo's actual command/output. Portable DAF transcript backup/import remains unavailable because Kilo stores sessions in a shared database rather than per-session transcript files. |
+| Token statistics | `kilo stats` is human-readable and has no JSON format option in the evaluated CLI. | Structured token usage remains unavailable; the adapter reports `None` rather than parsing display text or reusing OpenCode's `stats --format json`. |
+| Configuration and persistence | Kilo uses its own config/data roots (`~/.config/kilo`, `~/.local/share/kilo`); `kilo db path` resolves the active database, including `KILO_DB` overrides. | The adapter uses Kilo's config root and queries `kilo db path`; it never assumes OpenCode's config tree or `opencode.db`. |
+
+**Implementation and remaining validation:**
+
+- Implemented and unit-tested a dedicated `KiloAgent`, backend registration,
+  model-profile qualification, skill paths, Kilo launch/resume flags, headless
+  JSON mode, `--auto`, project-scoped session capture, export-based message
+  counts, and fail-closed handling of session-list errors.
+- Added protection so database-backed agent storage is never passed to DAF's
+  JSONL transcript cleaner.
+- Real Kilo 7.8.27 smoke checks verified session creation/title, title update,
+  canonical project-scoped listing, empty-result handling, database path lookup,
+  and export/message parsing without invoking a model.
+- Remaining before broader support claims: exercise real interactive and
+  headless model-backed launches in a managed clone, verify their full process
+  trees release clone holders after exit, and test completion refusal/success
+  against those Kilo processes. Do not stop or evict a shared daemon.
+
+**References:** [Kilo CLI](https://kilo.ai/docs/code-with-ai/platforms/cli),
+[CLI reference](https://kilo.ai/docs/code-with-ai/platforms/cli-reference),
+[CLI runtime architecture](https://kilo.ai/docs/contributing/architecture/cli-runtime),
+[session history](https://kilo.ai/docs/code-with-ai/agents/session-history),
+and Kilo CLI source for [`session`](https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/cli/cmd/session.ts), [`export`](https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/cli/cmd/export.ts), and [`stats`](https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/cli/cmd/stats.ts).
+
+---
+
 ## Testing Status
 
 ⚠️  **IMPORTANT**: Only Claude Code has been fully tested with comprehensive integration tests and real-world usage. Other agents are experimental implementations based on their documented CLI interfaces.
@@ -928,6 +980,7 @@ curl -fsSL https://opencode.ai/install | bash
 - **Continue**: ⚠️  Unit tests only, no real-world testing
 - **Crush**: ⚠️  Unit tests only, no real-world testing
 - **OpenCode**: ⚠️  Unit tests only, no real-world testing
+- **Kilo Code**: ⚠️  Adapter tests plus non-model CLI/API smoke checks on 7.8.27; managed-clone model-backed lifecycle validation remains
 
 **Test Results:**
 - All 2039 unit tests pass (3 skipped)

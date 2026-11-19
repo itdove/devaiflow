@@ -24,6 +24,7 @@ from devflow.agent.cursor_agent import CursorAgent
 from devflow.agent.diagnostics import AgentLaunchError, failure_from_process
 from devflow.agent.github_copilot_agent import GitHubCopilotAgent
 from devflow.agent.interface import AgentInterface
+from devflow.agent.kilo_agent import KiloAgent, KiloSessionQueryError
 from devflow.agent.ollama_claude_agent import OllamaClaudeAgent
 from devflow.agent.opencode_agent import OpenCodeAgent, OpenCodeSessionQueryError
 from devflow.agent.pi_agent import PiAgent
@@ -221,6 +222,29 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
             "session_title": True,
         },
         "profile_arguments": "pass-through",
+    },
+    "kilo": {
+        "display_name": "Kilo Code",
+        "description": "Kilo CLI coding agent with multi-provider support",
+        "cli_binary": "kilo",
+        "cli_command": "kilo",
+        "project_url": "https://kilo.ai",
+        "install_url": "https://kilo.ai/docs/code-with-ai/platforms/cli",
+        "status": "experimental",
+        "self_id": True,
+        "features": {
+            "session_management": True,
+            "conversation_export": False,
+            "message_counting": True,
+            "resume_support": True,
+            "skills_support": True,
+            "session_title": True,
+        },
+        "profile_arguments": "pass-through",
+        "notes": (
+            "Kilo-specific session and daemon lifecycle; portable DAF transcript backup "
+            "and structured token statistics are unavailable"
+        ),
     },
     "codex": {
         "display_name": "Codex",
@@ -420,6 +444,17 @@ def is_self_id_backend(backend: str) -> bool:
     return backend.lower() in SELF_ID_BACKENDS
 
 
+def _is_valid_native_session_id(backend: str, session_id: Any) -> bool:
+    """Validate native IDs without conflating independent agent databases."""
+    canonical_backend = _resolve_alias(backend)
+    if canonical_backend == "kilo":
+        return KiloAgent._valid_session_id(session_id)
+    if canonical_backend == "opencode":
+        # Preserve OpenCode's historical acceptance of its ``ses`` IDs.
+        return isinstance(session_id, str) and session_id.startswith("ses")
+    return False
+
+
 def generate_agent_session_id(agent_backend: str) -> str:
     """Generate a session ID appropriate for the agent backend.
 
@@ -480,12 +515,19 @@ def snapshot_agent_sessions(
             return agent.get_existing_sessions(
                 launch_dir, timeout=OPENCODE_CAPTURE_TIMEOUT, strict=True
             )
+        if isinstance(agent, KiloAgent):
+            return agent.get_existing_sessions(
+                launch_dir, timeout=OPENCODE_CAPTURE_TIMEOUT, strict=True
+            )
         return agent.get_existing_sessions(launch_dir)
-    except OpenCodeSessionQueryError as exc:
+    except (OpenCodeSessionQueryError, KiloSessionQueryError) as exc:
         return _FailedSessionSnapshot(str(exc))
     except Exception:
-        if _resolve_alias(agent_backend) == "opencode":
-            return _FailedSessionSnapshot("OpenCode pre-launch session query failed")
+        canonical_backend = _resolve_alias(agent_backend)
+        if canonical_backend in {"opencode", "kilo"}:
+            return _FailedSessionSnapshot(
+                f"{get_agent_display_name(canonical_backend)} pre-launch session query failed"
+            )
         return set()
 
 
@@ -520,9 +562,12 @@ def capture_agent_session_id(
     """
     if not is_self_id_backend(agent_backend) or not launch_dir or not active_conv:
         return False
-    opencode_backend = _resolve_alias(agent_backend) == "opencode"
+    canonical_backend = _resolve_alias(agent_backend)
+    opencode_backend = canonical_backend == "opencode"
+    kilo_backend = canonical_backend == "kilo"
+    database_backend = opencode_backend or kilo_backend
     existing_id = active_conv.ai_agent_session_id
-    if opencode_backend and isinstance(existing_id, str) and existing_id.startswith("ses"):
+    if database_backend and _is_valid_native_session_id(agent_backend, existing_id):
         # Explicit/pre-created native identity is stronger evidence than a list
         # difference. Never rediscover it, overwrite it, or warn about capture.
         return True
@@ -534,7 +579,7 @@ def capture_agent_session_id(
     # session list can show the same delay.  Keep the grace period scoped to
     # those backends so other self-ID adapters retain their existing lifecycle.
     file_backed = agent.uses_file_based_sessions() is True
-    attempts = _SESSION_CAPTURE_POLL_ATTEMPTS if file_backed or opencode_backend else 1
+    attempts = _SESSION_CAPTURE_POLL_ATTEMPTS if file_backed or database_backend else 1
     new_sessions: Set[str] = set()
     observations = 0
     started = time.monotonic()
@@ -548,33 +593,37 @@ def capture_agent_session_id(
             )
         for attempt in range(attempts):
             remaining = deadline - time.monotonic()
-            if opencode_backend and remaining <= 0:
+            if database_backend and remaining <= 0:
                 break
             if isinstance(agent, OpenCodeAgent):
                 sessions_after = agent.get_existing_sessions(
                     launch_dir, timeout=remaining, strict=True
                 )
+            elif isinstance(agent, KiloAgent):
+                sessions_after = agent.get_existing_sessions(
+                    launch_dir, timeout=remaining, strict=True
+                )
             else:
                 sessions_after = agent.get_existing_sessions(launch_dir)
-            if opencode_backend and time.monotonic() > deadline:
-                raise OpenCodeSessionQueryError(
-                    "OpenCode session query exceeded the capture budget"
+            if database_backend and time.monotonic() > deadline:
+                raise RuntimeError(
+                    f"{get_agent_display_name(canonical_backend)} session query exceeded the capture budget"
                 )
             observations += 1
             current_new_sessions = sessions_after - sessions_before
-            if opencode_backend:
+            if database_backend:
                 # Keep scanning the short grace period so a second concurrent
                 # session cannot arrive after the first candidate is seen.
                 new_sessions.update(current_new_sessions)
             else:
                 new_sessions = current_new_sessions
 
-            if (opencode_backend and len(new_sessions) > 1) or (
-                not opencode_backend and new_sessions
+            if (database_backend and len(new_sessions) > 1) or (
+                not database_backend and new_sessions
             ):
                 break
 
-            if opencode_backend and attempt >= 1 and time.monotonic() >= observation_deadline:
+            if database_backend and attempt >= 1 and time.monotonic() >= observation_deadline:
                 # Query execution counts toward the ambiguity grace period too.
                 # Two slow successful observations can cover it without starting
                 # another expensive CLI just to reach a fixed query count.
@@ -583,7 +632,7 @@ def capture_agent_session_id(
             if attempt < attempts - 1:
                 # Agents may flush their session after the process exits.
                 interval = _SESSION_CAPTURE_POLL_INTERVAL
-                if opencode_backend:
+                if database_backend:
                     interval = min(interval, max(0, deadline - time.monotonic()))
                 if interval:
                     time.sleep(interval)
@@ -599,9 +648,10 @@ def capture_agent_session_id(
                     )
                 return False
 
-            if opencode_backend and observations < 2:
-                raise OpenCodeSessionQueryError(
-                    "OpenCode capture budget expired before a second observation could verify identity"
+            if database_backend and observations < 2:
+                raise RuntimeError(
+                    f"{get_agent_display_name(canonical_backend)} capture budget expired "
+                    "before a second observation could verify identity"
                 )
             real_session_id = next(iter(new_sessions))
             active_conv.ai_agent_session_id = real_session_id
@@ -621,8 +671,13 @@ def capture_agent_session_id(
     except Exception as e:
         if not quiet:
             detail = str(e)
-            if opencode_backend and not isinstance(e, OpenCodeSessionQueryError):
-                detail = "OpenCode session query failed; verify the session-list command"
+            if database_backend and not isinstance(
+                e, (OpenCodeSessionQueryError, KiloSessionQueryError)
+            ):
+                detail = (
+                    f"{get_agent_display_name(canonical_backend)} session query failed; "
+                    "verify the session-list command"
+                )
             console.print(
                 f"[yellow]Warning: Failed to capture {agent.get_agent_name()} session ID: "
                 f"{detail}. Native identity was not changed.[/yellow]"
@@ -666,13 +721,9 @@ def launch_and_capture(
     or child startup. OpenCode defers it past read-only adapter validation. A
     callback failure aborts launch.
     """
-    known_opencode_id = (
-        _resolve_alias(agent_backend) == "opencode"
-        and isinstance(session_id, str)
-        and session_id.startswith("ses")
-    )
+    known_native_id = _is_valid_native_session_id(agent_backend, session_id)
     sessions_before = (
-        set() if known_opencode_id else snapshot_agent_sessions(agent, agent_backend, project_path)
+        set() if known_native_id else snapshot_agent_sessions(agent, agent_backend, project_path)
     )
     launch_failed = False
     launch_attempted = False
@@ -705,26 +756,30 @@ def launch_and_capture(
             auto_approve=auto_approve,
             display_name=launch_display_name,
         )
-        if _resolve_alias(agent_backend) == "opencode":
+        if _resolve_alias(agent_backend) in {"opencode", "kilo"}:
 
             def remember_session_id(native_id: str) -> None:
                 """Associate only the ID explicitly used by this launch."""
-                if not isinstance(native_id, str) or not native_id.startswith("ses"):
-                    raise ValueError("Refusing an invalid OpenCode launch session ID")
+                if not _is_valid_native_session_id(agent_backend, native_id):
+                    raise ValueError(
+                        f"Refusing an invalid {get_agent_display_name(agent_backend)} launch session ID"
+                    )
                 if active_conversation:
                     current_id = active_conversation.ai_agent_session_id
                     if (
                         isinstance(current_id, str)
-                        and current_id.startswith("ses")
+                        and _is_valid_native_session_id(agent_backend, current_id)
                         and current_id != native_id
                     ):
-                        raise ValueError("Refusing to replace an already-known OpenCode session ID")
+                        raise ValueError(
+                            f"Refusing to replace an already-known {get_agent_display_name(agent_backend)} session ID"
+                        )
                     active_conversation.ai_agent_session_id = native_id
                 if on_session_id:
                     on_session_id(native_id)
 
             launch_kwargs["on_session_id"] = remember_session_id
-            if isinstance(agent, OpenCodeAgent):
+            if isinstance(agent, (OpenCodeAgent, KiloAgent)):
                 launch_kwargs["on_launch"] = begin_launch
         if not reasoning_effort and model_provider_profile:
             reasoning_effort = model_provider_profile.get("reasoning_effort")
@@ -737,9 +792,9 @@ def launch_and_capture(
         )
         if not isinstance(managed_path, str):
             managed_path = None
-        if managed_path and _resolve_alias(agent_backend) == "opencode":
-            # A v2 UI can exit while the shared service retains clone-local MCP
-            # processes. Let OpenCode own and dispose a private server instead.
+        if managed_path and _resolve_alias(agent_backend) in {"opencode", "kilo"}:
+            # These CLIs can attach to persistent shared services. Their adapters
+            # must keep managed workspaces on a private process lifecycle.
             launch_kwargs["isolated_workspace"] = True
         if managed_path:
             from devflow.utils.clone_cache import CloneCache
@@ -857,7 +912,7 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
     """Create an agent client for the specified backend.
 
     Args:
-        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "codex")
+        backend: Agent backend to use ("claude", "ollama", "github-copilot", "cursor", "windsurf", "aider", "continue", "crush", "opencode", "kilo", "codex")
         agent_home: Optional custom home directory for the agent
 
     Returns:
@@ -922,7 +977,7 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
 
     Note:
         Only Claude Code and Ollama have been fully tested. Other agents (GitHub Copilot,
-        Cursor, Windsurf, Aider, Continue, Crush, OpenCode, Codex, and Pi) are experimental and may have
+        Cursor, Windsurf, Aider, Continue, Crush, OpenCode, Kilo, Codex, and Pi) are experimental and may have
         limitations in session management, conversation export, and message counting capabilities.
     """
     backend = backend.lower()
@@ -945,6 +1000,8 @@ def create_agent_client(backend: str = "claude", agent_home: Optional[Path] = No
         return CrushAgent(crush_dir=agent_home)
     elif backend in ("opencode", "opencode-ai"):
         return OpenCodeAgent(opencode_dir=agent_home)
+    elif backend == "kilo":
+        return KiloAgent(kilo_dir=agent_home)
     elif backend == "codex":
         from devflow.agent.codex_agent import CodexAgent
         return CodexAgent(codex_dir=agent_home)

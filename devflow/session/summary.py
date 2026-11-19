@@ -458,13 +458,16 @@ def find_conversation_file(session: Session) -> Optional[Path]:
     backend = resolve_agent_backend(session=session)
     try:
         agent = create_agent_client(backend)
-        if agent.uses_file_based_sessions():
-            conversation_file = agent.get_session_file_path(
-                active_conv.ai_agent_session_id,
-                active_conv.project_path,
-            )
-            if conversation_file.exists():
-                return conversation_file
+        if not agent.uses_file_based_sessions():
+            # Database IDs can share a shape with unrelated Claude transcript
+            # filenames. Never parse another backend's JSONL as this session.
+            return None
+        conversation_file = agent.get_session_file_path(
+            active_conv.ai_agent_session_id,
+            active_conv.project_path,
+        )
+        if conversation_file.exists():
+            return conversation_file
     except (OSError, ValueError, TypeError):
         pass
 

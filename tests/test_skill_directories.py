@@ -145,6 +145,12 @@ class TestGetAgentGlobalSkillsDir:
             path = get_agent_global_skills_dir('crush')
             assert path == tmp_path / 'data' / 'crush' / 'skills'
 
+    def test_kilo_global_path(self, tmp_path, monkeypatch):
+        """Kilo's global skill directory is ~/.kilo/skills, not its XDG config dir."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        with patch.dict(os.environ, {'XDG_CONFIG_HOME': str(tmp_path / 'config')}, clear=True):
+            assert get_agent_global_skills_dir('kilo') == tmp_path / '.kilo' / 'skills'
+
     def test_case_insensitive(self):
         """Test agent names are case-insensitive."""
         assert get_agent_global_skills_dir('CLAUDE') == get_agent_global_skills_dir('claude')
@@ -218,6 +224,13 @@ class TestGetAgentProjectSkillsDir:
         project_path = Path('/my/project')
         path = get_agent_project_skills_dir('crush', project_path)
         assert path == Path('/my/project/.crush/skills')
+
+    def test_kilo_project_path(self):
+        """Kilo project skills are stored below .kilo/skills."""
+        project_path = Path('/my/project')
+        assert get_agent_project_skills_dir('kilo', project_path) == (
+            Path('/my/project/.kilo/skills')
+        )
 
     def test_path_resolution(self):
         """Test project path is resolved to absolute path."""
@@ -441,11 +454,11 @@ class TestSupportedAgents:
         """Test SUPPORTED_AGENTS contains expected agents."""
         expected_agents = [
             'claude', 'copilot', 'github-copilot', 'cursor', 'windsurf',
-            'aider', 'continue', 'opencode', 'codex', 'pi', 'crush'
+            'aider', 'continue', 'opencode', 'codex', 'pi', 'crush', 'kilo'
         ]
         assert set(SUPPORTED_AGENTS) == set(expected_agents)
 
     def test_supported_agents_count(self):
         """Test SUPPORTED_AGENTS has the expected count."""
-        # 10 unique agents + 1 alias (github-copilot -> copilot)
-        assert len(SUPPORTED_AGENTS) == 11
+        # 11 unique agents + 1 alias (github-copilot -> copilot)
+        assert len(SUPPORTED_AGENTS) == 12

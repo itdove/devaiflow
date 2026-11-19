@@ -87,6 +87,29 @@ DevAIFlow detects the installed OpenCode major version: v1 receives the model
 on the root command, while v2 uses `opencode mini --model ...` for interactive
 sessions and `opencode run --model ...` for headless sessions.
 
+## Kilo provider-qualified models
+
+Kilo CLI also expects models in `provider/model` format. Select the dedicated
+`kilo` adapter in the profile; DevAIFlow qualifies configured session and
+utility models using the profile's provider:
+
+```json
+{
+  "name": "kilo-openai",
+  "provider": "openai",
+  "agent_backend": "kilo",
+  "models": {
+    "open": "sample-model",
+    "commit_message": "sample-utility-model"
+  }
+}
+```
+
+This passes `openai/sample-model` to Kilo. Already-qualified models are kept as
+configured, and bare models without a provider are rejected before launch.
+Kilo-specific CLI flags, session identity, database storage, and daemon
+isolation are handled independently from OpenCode.
+
 ## Adapter arguments
 
 Profiles may include adapter-specific command-line options in `arguments`. Each
@@ -132,7 +155,7 @@ Supported adapter behavior:
 | Adapter | Profile `arguments` behavior |
 |---|---|
 | Claude Code, Ollama + Claude Code | Passed through to the launcher |
-| Codex, OpenCode, Pi | Passed through to the launcher and utility commands |
+| Codex, OpenCode, Kilo, Pi | Passed through to the launcher and utility commands |
 | Aider, Crush | Passed through to the launcher |
 | GitHub Copilot, Cursor, Windsurf, Continue | Rejected with an actionable error because these IDE integrations do not expose a supported agent-argument pass-through |
 

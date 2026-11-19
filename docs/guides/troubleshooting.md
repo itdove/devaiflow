@@ -1973,6 +1973,32 @@ Do not edit OpenCode storage, stop shared services, or weaken completion guards
 to resolve a capture warning. A successful native-ID save does not prove that
 clone-local processes have exited.
 
+### Kilo session ID is unverified
+
+**Problem:** Kilo exit reports a capture warning, or `daf open` refuses with
+`AGENT_SESSION_UNVERIFIED` (`--json`).
+
+DAF keeps Kilo session identity separate from OpenCode. Capture and resume use
+Kilo's own `kilo session list --format json --all` results and require matching
+canonical project-directory metadata. A failed query, missing ID, or ambiguous
+capture stays unverified; DAF will not guess from another agent's database or
+launch a replacement during resume.
+
+From a regular terminal, after exiting the agent:
+
+1. Inspect `kilo session list --format json --all` and verify the intended ID
+   belongs to the exact project directory.
+2. Restore a verified association with
+   `daf update <session-name> --session-id <verified-native-id>`, then reopen.
+3. To deliberately start fresh, run
+   `daf open <session-name> --new-conversation`; this archives the previous
+   conversation identity and history rather than recovering it.
+
+Do not edit Kilo's database or stop its shared daemon to resolve an identity
+warning. For managed clones, DAF requests daemon isolation, but model-backed
+Kilo process-tree cleanup remains experimental; preserve a clone if a holder is
+still reported.
+
 ### Temporary clone still in use after agent exit
 
 **Problem:** `daf open`, `daf delete`, or `daf complete` reports `SESSION_IN_USE`,

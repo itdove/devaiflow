@@ -37,13 +37,14 @@ def get_conversation_file_path(
     """
     try:
         agent = create_agent_client(agent_backend)
-        if agent.uses_file_based_sessions():
-            conversation_file = agent.get_session_file_path(
-                ai_agent_session_id,
-                project_path or "",
-            )
-            if conversation_file.exists():
-                return conversation_file
+        if not agent.uses_file_based_sessions():
+            return None
+        conversation_file = agent.get_session_file_path(
+            ai_agent_session_id,
+            project_path or "",
+        )
+        if conversation_file.exists():
+            return conversation_file
     except (OSError, TypeError, ValueError):
         pass
 

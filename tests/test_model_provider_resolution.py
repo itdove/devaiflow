@@ -8,19 +8,20 @@ import pytest
 from devflow.agent.factory import resolve_agent_backend
 from devflow.config.models import ModelProviderConfig, ModelProviderProfile
 from devflow.utils.model_provider import (
+    ModelProviderCompatibilityError,
+    ModelProviderProfileNotFoundError,
+    ModelProviderValidationResult,
     build_env_from_profile,
     get_active_profile,
     get_active_profile_name,
     get_default_profile_name,
-    get_profile_arguments,
-    get_profile_agent_backend,
     get_model_for_command,
     get_model_name_from_profile,
+    get_profile_agent_backend,
+    get_profile_arguments,
     get_profile_compatibility_error,
     get_reasoning_for_command,
-    ModelProviderCompatibilityError,
-    ModelProviderValidationResult,
-    ModelProviderProfileNotFoundError,
+    qualify_model_for_agent,
     validate_model_provider_profile,
 )
 
@@ -473,3 +474,33 @@ def test_selected_session_profile_supersedes_stored_agent_backend():
     session = SimpleNamespace(model_profile="openai", agent_backend="claude")
 
     assert resolve_agent_backend(session=session, config=config) == "codex"
+
+
+def test_kilo_profile_keeps_backend_identity_and_provider_qualifies_model():
+    profile = ModelProviderProfile(
+        name="openai-kilo",
+        provider="openai",
+        agent_backend="kilo",
+        model_name="model-a",
+    )
+    config = _config({"openai-kilo": profile}, "openai-kilo")
+
+    assert get_profile_agent_backend(config) == "kilo"
+    assert resolve_agent_backend(config=config) == "kilo"
+    assert get_profile_compatibility_error(profile.model_dump(), "kilo") is None
+    assert qualify_model_for_agent("model-a", "kilo", profile.model_dump()) == "openai/model-a"
+
+
+def test_kilo_rejects_bare_model_without_provider():
+    with pytest.raises(ModelProviderCompatibilityError, match="Kilo requires an explicit provider"):
+        qualify_model_for_agent("model-a", "kilo", {"model_name": "model-a"})
+
+    result = validate_model_provider_profile(
+        {
+            "name": "openai",
+            "agent_backend": "kilo",
+            "model_name": "model-a",
+        },
+        environ={},
+    )
+    assert any("Kilo requires an explicit provider" in issue for issue in result.issues)
