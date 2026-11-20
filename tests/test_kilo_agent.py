@@ -76,7 +76,7 @@ def test_kilo_version_rejects_nonzero_cli(monkeypatch):
         KiloAgent().get_kilo_version()
 
 
-def test_launch_session_uses_kilo_run_title_and_persists_precreated_id(
+def test_launch_session_uses_full_tui_and_persists_precreated_id(
     agent, monkeypatch, tmp_path
 ):
     process = Mock()
@@ -101,13 +101,15 @@ def test_launch_session_uses_kilo_run_title_and_persists_precreated_id(
     )
 
     args, kwargs = popen.call_args
-    assert args[0] == ["kilo", "run", "--interactive", "--session", "ses_created"]
+    assert args[0] == ["kilo", "--session", "ses_created"]
     assert kwargs["cwd"] == str(tmp_path)
     assert kwargs["env"] == {"KILO_TEST": "present"}
     assert captured == ["ses_created"]
 
 
-def test_launch_session_falls_back_to_supported_cli_title(agent, monkeypatch, tmp_path):
+def test_launch_session_uses_full_tui_when_title_precreation_fails(
+    agent, monkeypatch, tmp_path
+):
     popen = Mock(return_value=Mock())
     monkeypatch.setattr("devflow.agent.kilo_agent.require_tool", lambda *args: None)
     monkeypatch.setattr("devflow.agent.kilo_agent.subprocess.Popen", popen)
@@ -115,13 +117,80 @@ def test_launch_session_falls_back_to_supported_cli_title(agent, monkeypatch, tm
 
     agent.launch_session(str(tmp_path), env={}, display_name="daf-session")
 
-    assert popen.call_args.args[0] == [
+    assert popen.call_args.args[0] == ["kilo"]
+
+
+def test_launch_session_uses_provider_model_with_full_tui(agent, monkeypatch, tmp_path):
+    popen = Mock(return_value=Mock())
+    monkeypatch.setattr("devflow.agent.kilo_agent.require_tool", lambda *args: None)
+    monkeypatch.setattr("devflow.agent.kilo_agent.subprocess.Popen", popen)
+
+    agent.launch_session(
+        str(tmp_path),
+        model_provider_profile={
+            "name": "provider-profile",
+            "provider": "openai",
+            "agent_backend": "kilo",
+            "model_name": "model-a",
+        },
+    )
+
+    assert popen.call_args.args[0] == ["kilo", "--model", "openai/model-a"]
+
+
+def test_interactive_launch_uses_full_tui_with_prompt_and_profile(
+    agent, monkeypatch, tmp_path, caplog
+):
+    popen = Mock(return_value=Mock())
+    monkeypatch.setattr("devflow.agent.kilo_agent.require_tool", lambda *args: None)
+    monkeypatch.setattr("devflow.agent.kilo_agent.subprocess.Popen", popen)
+    monkeypatch.setattr(
+        "devflow.agent.model_config.get_agent_model_config",
+        lambda *args, **kwargs: {"model": None, "reasoning_effort": "high"},
+    )
+    monkeypatch.setattr(
+        agent,
+        "_create_session_with_title",
+        lambda title, path, env, callback: callback("ses_created") or "ses_created",
+    )
+    captured = []
+
+    agent.launch_with_prompt(
+        str(tmp_path),
+        "initial prompt",
+        "pending-capture",
+        model_provider_profile={
+            "name": "provider-profile",
+            "provider": "openai",
+            "agent_backend": "kilo",
+            "model_name": "model-a",
+        },
+        env={"EXISTING": "yes"},
+        auto_approve=True,
+        display_name="daf-session",
+        isolated_workspace=True,
+        on_session_id=captured.append,
+    )
+
+    command = popen.call_args.args[0]
+    assert command == [
         "kilo",
-        "run",
-        "--interactive",
-        "--title",
-        "daf-session",
+        "--session",
+        "ses_created",
+        "--model",
+        "openai/model-a",
+        "--auto",
+        "--prompt",
+        "initial prompt",
     ]
+    assert "run" not in command
+    assert "--interactive" not in command
+    assert popen.call_args.kwargs["env"] == {
+        "EXISTING": "yes",
+        "KILO_NO_DAEMON": "1",
+    }
+    assert captured == ["ses_created"]
+    assert "does not support a launch-time reasoning variant" in caplog.text
 
 
 def test_headless_launch_uses_json_events_and_qualified_model(
@@ -241,14 +310,19 @@ def test_resume_session_uses_kilo_session_flag_and_updates_title(
         "ses_existing",
         str(tmp_path),
         env={},
+        model_provider_profile={
+            "provider": "openai",
+            "agent_backend": "kilo",
+            "model_name": "model-a",
+        },
         display_name="daf-session",
         isolated_workspace=True,
     )
 
     assert popen.call_args.args[0] == [
         "kilo",
-        "run",
-        "--interactive",
+        "--model",
+        "openai/model-a",
         "--session",
         "ses_existing",
     ]
@@ -444,7 +518,7 @@ def test_kilo_storage_paths_and_unsupported_statistics(agent, monkeypatch, tmp_p
     assert agent.uses_tui() is True
     assert agent.supports_permission_prompts() is True
     assert agent.get_manual_resume_command("ses_id", str(tmp_path)) == (
-        "kilo run --interactive --session ses_id"
+        "kilo --session ses_id"
     )
 
 

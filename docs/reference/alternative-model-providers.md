@@ -110,6 +110,20 @@ configured, and bare models without a provider are rejected before launch.
 Kilo-specific CLI flags, session identity, database storage, and daemon
 isolation are handled independently from OpenCode.
 
+Interactive DAF sessions use Kilo's root command to open the full TUI and pass
+the initial context with `--prompt`. Do not use `kilo run --interactive` for
+this workflow: that flag selects Kilo's split-footer interface. Headless DAF
+launches continue to use `kilo run --format json`; configured reasoning variants
+are passed to headless runs. Kilo's full TUI currently has no launch-time
+`--variant` option, so choose interactive reasoning variants inside Kilo.
+
+The full-TUI command shapes on Kilo 7.8.27 are:
+
+```bash
+kilo --model openai/sample-model --prompt "initial context"
+kilo --model openai/sample-model --session <session-id>
+```
+
 ## Adapter arguments
 
 Profiles may include adapter-specific command-line options in `arguments`. Each

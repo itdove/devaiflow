@@ -319,7 +319,9 @@ class KiloAgent(AgentInterface):
         )
         from devflow.utils.model_provider import get_profile_arguments
 
-        command = ["kilo", "run", "--interactive"]
+        # The root command starts Kilo's full TUI. `kilo run --interactive`
+        # starts the compact split-footer interface instead.
+        command = ["kilo"]
         command.extend(
             get_profile_arguments(model_provider_profile, self.get_agent_name())
         )
@@ -335,7 +337,10 @@ class KiloAgent(AgentInterface):
         if session_id:
             command.extend(["--session", session_id])
         elif display_name:
-            command.extend(["--title", display_name])
+            logger.warning(
+                "Kilo's full TUI has no CLI title fallback; session title "
+                "pre-creation failed"
+            )
 
         if model_name:
             command.extend(["--model", model_name])
@@ -421,25 +426,41 @@ class KiloAgent(AgentInterface):
             if created_session:
                 existing_session = created_session
 
-        command = ["kilo", "run", *profile_arguments]
         if headless:
+            command = ["kilo", "run", *profile_arguments]
             command.extend(["--format", "json"])
         else:
-            command.append("--interactive")
+            # The root command opens the full TUI; `kilo run --interactive`
+            # uses Kilo's compact split-footer mode.
+            command = ["kilo", *profile_arguments]
 
         if existing_session:
             command.extend(["--session", existing_session])
         elif display_name:
-            command.extend(["--title", display_name])
+            if headless:
+                command.extend(["--title", display_name])
+            else:
+                logger.warning(
+                    "Kilo's full TUI has no CLI title fallback; session title "
+                    "pre-creation failed"
+                )
         if model_name:
             command.extend(["--model", model_name])
         variant = self._reasoning_variant(effective_reasoning)
-        if variant:
+        if variant and headless:
             command.extend(["--variant", variant])
+        elif variant:
+            logger.warning(
+                "Kilo's full TUI does not support a launch-time reasoning "
+                "variant; select it in the TUI"
+            )
         if auto_approve:
             command.append("--auto")
         if initial_prompt:
-            command.append(initial_prompt)
+            if headless:
+                command.append(initial_prompt)
+            else:
+                command.extend(["--prompt", initial_prompt])
 
         return subprocess.Popen(command, cwd=project_path, env=final_env)
 
@@ -464,7 +485,7 @@ class KiloAgent(AgentInterface):
         )
         from devflow.utils.model_provider import get_profile_arguments
 
-        command = ["kilo", "run", "--interactive"]
+        command = ["kilo"]
         command.extend(
             get_profile_arguments(model_provider_profile, self.get_agent_name())
         )
@@ -684,7 +705,7 @@ class KiloAgent(AgentInterface):
             raise ValueError(
                 "Refusing to build a resume command for an invalid Kilo session ID"
             )
-        return f"kilo run --interactive --session {session_id}"
+        return f"kilo --session {session_id}"
 
     def uses_file_based_sessions(self) -> bool:
         return False
