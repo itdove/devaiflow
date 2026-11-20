@@ -1228,6 +1228,11 @@ directory holders before offering completion. A refusal reports the holder's nam
 and parent PID/name/directory when accessible (`error.holder` in JSON). Missing
 details are marked unavailable; process arguments and environment are not printed.
 Expected refusals do not produce a secondary `Failed to complete session: 1` error.
+Manual Git commits or pushes do not complete the DAF session or update its status
+or time tracking. To reopen after a refusal, move terminals outside every managed
+workspace, release remaining holders only through their supported owner/backend
+lifecycle after verifying no other clients use the workspaces, then retry
+`daf open <session>`.
 
 For OpenCode v2, DAF launches and resumes temporary-clone sessions with
 `--standalone`: OpenCode owns a private server and its resource teardown rather

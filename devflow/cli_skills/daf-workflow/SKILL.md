@@ -206,8 +206,11 @@ preserved. This allows commits/pushes from a terminal inside the checkout withou
 deleting it. Do not approve on the user's behalf or infer inactivity from a
 process name, paused tracking, or `pending-capture`. `--yes`, JSON, and automatic
 completion do not authorize directory holders; inspection failures stay fail-closed.
-To actually clean up a directory, its agents and terminals must release it.
-Deferred cleanup is not automatically scheduled.
+Manual Git commits or pushes do not complete the DAF session or update its
+status/time tracking. To reopen instead, move terminals outside every managed
+workspace, release remaining holders through their supported owner/backend lifecycle,
+then retry `daf open <session>`. To actually clean up a directory, its agents and
+terminals must release it. Deferred cleanup is not automatically scheduled.
 Normal exit, pause, and completion preserve the clone by default. An existing
 saved `concurrency.cleanup_on_complete: true` retains immediate cleanup;
 `false` adopts preservation. Explicit session deletion still cleans up clones.
