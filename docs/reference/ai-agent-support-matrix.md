@@ -193,7 +193,7 @@ This is why token tracking is currently **Claude Code only** - it's the only age
 | **Continue** | `continue` | ⚠️  Experimental | `continue` (VS Code ext) | Limited | ✅ Experimental |
 | **Crush** | `crush` | ⚠️  Experimental | `crush` | Limited | ✅ Experimental |
 | **OpenCode** | `opencode`, `opencode-ai` | ⚠️  Experimental | `opencode` | Full CLI support | ✅ Experimental |
-| **Kilo Code** | `kilo` | ⚠️  Experimental | `kilo run` | CLI sessions/resume; token stats unavailable | ✅ Experimental |
+| **Kilo Code** | `kilo` | ⚠️  Experimental | `kilo` (full TUI); `kilo run --format json` (headless) | CLI sessions/resume; token stats unavailable | ✅ Experimental |
 | **Codex** | `codex` | ⚠️  Experimental | `codex` | Full CLI support | ✅ Experimental |
 
 ## Configuration
@@ -934,9 +934,9 @@ version detection, commands, database locations, and clone-isolation behavior.
 
 | DAF integration | Kilo CLI contract | Impact on the existing OpenCode adapter |
 | --- | --- | --- |
-| Launch and resume | Kilo 7.8.27 supports `kilo run [message..]`, `--interactive`, `--session`, `--model provider/model`, `--variant`, `--format json`, `--title`, and `--auto`. | The adapter invokes `kilo` directly, applies Kilo flags, validates Kilo's independent version, and uses the saved Kilo backend identity for resume. |
+| Launch and resume | Kilo 7.8.27's root command `kilo [project]` starts the full TUI and supports `--session`, `--model provider/model`, `--prompt`, and `--auto`. `kilo run --interactive` is the direct split-footer interface; `kilo run --format json` is headless and supports `--variant`. The root TUI has no launch-time `--variant` option. | The adapter uses the root command for interactive launch/resume and the `run` command for headless JSON launches. Provider/model, prompt, session, auto-approval, and managed-clone settings are retained; headless variants remain passed through. Interactive reasoning variants must be selected in Kilo's TUI. |
 | Session listing and capture | `kilo session list --format json --all` returns records with IDs and directory metadata; on a successful empty result it may print no JSON. | Kilo queries are parsed independently, scoped by canonical project directory, and treat successful empty output as empty only after a zero exit code. Query errors and ambiguous new sessions fail closed. |
-| Interactive titles | `kilo run --interactive --title <name>` supports new-session titles. Kilo's local HTTP API supports session create/update; the DAF adapter uses a short-lived `kilo serve` process with `KILO_NO_DAEMON=1`. Create and rename were smoke-tested on Kilo 7.8.27. | DAF persists the native ID returned by creation before launching the interactive child and updates titles on resume. Title API failure falls back to the CLI's supported `--title` for creation; rename remains best-effort. |
+| Interactive titles | The root TUI has no CLI `--title` option. Kilo's local HTTP API supports session create/update; the DAF adapter uses a short-lived `kilo serve` process with `KILO_NO_DAEMON=1`. Create and rename were smoke-tested on Kilo 7.8.27. | DAF persists the native ID returned by API-based title creation before launching the interactive child and updates titles on resume. If title pre-creation fails, DAF still starts the full TUI; Kilo chooses its default title. Rename remains best-effort. |
 | Managed-clone isolation | Kilo documents `KILO_NO_DAEMON` to disable automatic attachment to its persistent local daemon. Its CLI does not expose OpenCode v2's `--standalone`. | The adapter sets `KILO_NO_DAEMON=1` for managed-clone interactive/headless launches, resumes, session queries, exports, and its private title API server. DAF's generic live-holder completion guards remain in force; real model-backed clone process-tree behavior still needs end-to-end validation. Never stop or evict a shared Kilo daemon. |
 | Export and message counts | `kilo export <sessionID>` emits JSON by default and has no `--format` option; tested output contains a `messages` array. | DAF counts exported messages using Kilo's actual command/output. Portable DAF transcript backup/import remains unavailable because Kilo stores sessions in a shared database rather than per-session transcript files. |
 | Token statistics | `kilo stats` is human-readable and has no JSON format option in the evaluated CLI. | Structured token usage remains unavailable; the adapter reports `None` rather than parsing display text or reusing OpenCode's `stats --format json`. |
@@ -948,6 +948,13 @@ version detection, commands, database locations, and clone-isolation behavior.
   model-profile qualification, skill paths, Kilo launch/resume flags, headless
   JSON mode, `--auto`, project-scoped session capture, export-based message
   counts, and fail-closed handling of session-list errors.
+- Confirmed with the installed Kilo CLI **7.8.27** and its CLI reference that
+  `kilo` starts the full TUI, while `kilo run --interactive` selects the
+  split-footer interface. Interactive DAF launches now use `kilo --prompt`;
+  headless launches remain on `kilo run --format json`.
+- The full TUI has no launch-time `--variant` option. DAF continues applying
+  variants to headless launches; interactive users select reasoning variants
+  in Kilo. No model-backed launch was made during this verification.
 - Added protection so database-backed agent storage is never passed to DAF's
   JSONL transcript cleaner.
 - Real Kilo 7.8.27 smoke checks verified session creation/title, title update,
