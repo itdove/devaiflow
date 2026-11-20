@@ -898,6 +898,10 @@ def test_exited_ui_with_shared_service_worker_refuses_until_resources_released(
             assert "Cannot complete session" in output
             assert "shared server" in output
             normalized = " ".join(output.split())
+            assert (
+                "Manual Git commits or pushes do not complete the DAF session or update its "
+                "status or time tracking."
+            ) in normalized
             assert "To complete now and preserve all managed workspaces" in normalized
             assert "plain interactive command: daf complete session-a" in normalized
             assert "Confirm only after verifying that no agent or task is editing" in normalized
@@ -905,12 +909,23 @@ def test_exited_ui_with_shared_service_worker_refuses_until_resources_released(
                 "Confirmation completes the session and preserves every managed clone/worktree"
                 in normalized
             )
+            assert "To reopen this session instead" in normalized
+            assert "Move terminals outside every managed workspace" in normalized
+            assert "supported owner/backend lifecycle" in normalized
+            assert "daf open session-a" in normalized
             assert "To clean up a workspace instead" in normalized
             assert "Review the reported holder and parent" in normalized
-            assert "supported owner/backend lifecycle" in normalized
             assert "no other clients use any managed workspace" in normalized
-            assert normalized.index("To complete now") < normalized.index(
-                "To clean up a workspace instead"
+            assert normalized.index("Move terminals outside") < normalized.index(
+                "daf open session-a"
+            )
+            assert normalized.index("Release any remaining directory holders") < (
+                normalized.index("daf open session-a")
+            )
+            assert (
+                normalized.index("To complete now")
+                < normalized.index("To reopen this session instead")
+                < normalized.index("To clean up a workspace instead")
             )
             assert "Failed to complete session: 1" not in output
             confirm.assert_not_called()

@@ -2042,6 +2042,12 @@ Confirmation completes the session and preserves all managed workspaces. To clea
 up instead, release every holder and verify no other clients use the workspaces
 before retrying completion from outside the clone.
 
+Manual Git commits or pushes do not complete the DAF session or update its status
+or time tracking. To reopen the session instead, move terminals outside every
+managed workspace, release any remaining holders only through their supported
+owner/backend lifecycle after verifying no other clients use those workspaces, and
+then retry `daf open <session>`.
+
 The following resource-release steps are needed for **directory cleanup**, not
 for owner-confirmed completion that preserves the checkout:
 

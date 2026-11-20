@@ -133,6 +133,10 @@ names. To clean up instead, release all directory holders, move terminals outsid
 the workspaces, and verify no other clients use them before retrying. Automatic/JSON/`--yes`
 completion remains fail-closed for unresolved holders. The launch locks remain held
 through completion, and all deletion paths retain their strict directory-use checks.
+Manual Git commits or pushes alone do not complete the DAF session or update its
+status/time tracking. To reopen a session, move terminals outside every managed
+workspace, verify no other clients use the workspaces, release remaining holders
+through their supported owner/backend lifecycle, then retry `daf open <session>`.
 
 Worktrees are retained on completion by default. With
 `concurrency.cleanup_on_complete: true`, `daf complete` removes a worktree only

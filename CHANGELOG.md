@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Clarify recovery after busy-clone completion refusal** (#686)
+  - Distinguishes manual Git commits/pushes from DAF session completion and time tracking
+  - Gives ordered, safe completion-preservation and reopen steps without weakening holder checks
 - **Complete sessions without deleting busy checkouts**
   - Separates explicit interactive completion from cleanup when an idle terminal or daemon retains a workspace cwd
   - Requires default-No owner confirmation that editing has stopped, preserves every managed checkout, and never infers inactivity from process names
