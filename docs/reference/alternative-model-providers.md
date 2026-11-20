@@ -111,11 +111,16 @@ Kilo-specific CLI flags, session identity, database storage, and daemon
 isolation are handled independently from OpenCode.
 
 Interactive DAF sessions use Kilo's root command to open the full TUI and pass
-the initial context with `--prompt`. Do not use `kilo run --interactive` for
-this workflow: that flag selects Kilo's split-footer interface. Headless DAF
-launches continue to use `kilo run --format json`; configured reasoning variants
-are passed to headless runs. Kilo's full TUI currently has no launch-time
-`--variant` option, so choose interactive reasoning variants inside Kilo.
+the initial context with `--prompt`. Kilo 7.8.27 auto-submits that option from
+the new-session home route; adding `--session` routes directly to the existing
+session and skips that submission. DAF therefore lets Kilo create the initial
+prompted session, captures its unique project-scoped ID after the TUI exits, and
+then best-effort applies the DAF session title. Do not use
+`kilo run --interactive` for this workflow: that flag selects Kilo's split-footer
+interface. Headless DAF launches continue to use `kilo run --format json`;
+configured reasoning variants are passed to headless runs. Kilo's full TUI
+currently has no launch-time `--variant` option, so choose interactive reasoning
+variants inside Kilo.
 
 The full-TUI command shapes on Kilo 7.8.27 are:
 
@@ -123,6 +128,9 @@ The full-TUI command shapes on Kilo 7.8.27 are:
 kilo --model openai/sample-model --prompt "initial context"
 kilo --model openai/sample-model --session <session-id>
 ```
+
+The full-TUI `--prompt` and `--session` options should not be combined when the
+prompt must be auto-submitted.
 
 ## Adapter arguments
 

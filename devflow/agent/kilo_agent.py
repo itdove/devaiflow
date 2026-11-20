@@ -408,6 +408,14 @@ class KiloAgent(AgentInterface):
             isolated_workspace,
         )
         existing_session = session_id if self._valid_session_id(session_id) else None
+        interactive_prompt = not headless and bool(initial_prompt)
+        if interactive_prompt and existing_session:
+            raise KiloCompatibilityError(
+                "Kilo's full TUI only auto-submits --prompt when starting a new "
+                "session; it ignores the initial prompt when --session is used. "
+                "Resume the existing session without an initial prompt or start "
+                "a new DAF conversation."
+            )
 
         if on_launch:
             on_launch()
@@ -416,7 +424,7 @@ class KiloAgent(AgentInterface):
             self.update_session_title(
                 existing_session, display_name, project_path, final_env
             )
-        elif display_name:
+        elif display_name and not interactive_prompt:
             created_session = self._create_session_with_title(
                 display_name,
                 project_path,
