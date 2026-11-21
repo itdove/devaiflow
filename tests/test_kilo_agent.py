@@ -148,11 +148,8 @@ def test_interactive_launch_uses_full_tui_with_prompt_and_profile(
         "devflow.agent.model_config.get_agent_model_config",
         lambda *args, **kwargs: {"model": None, "reasoning_effort": "high"},
     )
-    monkeypatch.setattr(
-        agent,
-        "_create_session_with_title",
-        lambda title, path, env, callback: callback("ses_created") or "ses_created",
-    )
+    create_session = Mock()
+    monkeypatch.setattr(agent, "_create_session_with_title", create_session)
     captured = []
 
     agent.launch_with_prompt(
@@ -175,22 +172,42 @@ def test_interactive_launch_uses_full_tui_with_prompt_and_profile(
     command = popen.call_args.args[0]
     assert command == [
         "kilo",
-        "--session",
-        "ses_created",
         "--model",
         "openai/model-a",
         "--auto",
         "--prompt",
         "initial prompt",
     ]
+    create_session.assert_not_called()
     assert "run" not in command
     assert "--interactive" not in command
     assert popen.call_args.kwargs["env"] == {
         "EXISTING": "yes",
         "KILO_NO_DAEMON": "1",
     }
-    assert captured == ["ses_created"]
+    assert captured == []
     assert "does not support a launch-time reasoning variant" in caplog.text
+
+
+def test_interactive_launch_refuses_prompt_for_existing_session(
+    agent, monkeypatch, tmp_path
+):
+    popen = Mock()
+    on_launch = Mock()
+    monkeypatch.setattr("devflow.agent.kilo_agent.require_tool", lambda *args: None)
+    monkeypatch.setattr("devflow.agent.kilo_agent.subprocess.Popen", popen)
+
+    with pytest.raises(KiloCompatibilityError, match="only auto-submits --prompt"):
+        agent.launch_with_prompt(
+            str(tmp_path),
+            "initial prompt",
+            "ses_existing",
+            display_name="daf-session",
+            on_launch=on_launch,
+        )
+
+    on_launch.assert_not_called()
+    popen.assert_not_called()
 
 
 def test_headless_launch_uses_json_events_and_qualified_model(
@@ -295,6 +312,67 @@ def test_managed_clone_launch_isolated_and_persists_launch_proven_kilo_id(
     assert conversation.ai_agent_session_id == "ses_launch"
     assert calls == ["launch", "id"]
     agent.wait_for_exit.assert_called_once_with(process, False)
+
+
+def test_interactive_kilo_prompt_captures_and_titles_tui_created_session(
+    agent, monkeypatch, tmp_path
+):
+    process = Mock(returncode=0)
+    session_queries = []
+
+    def list_sessions(*args, **kwargs):
+        session_queries.append((args, kwargs))
+        return set() if len(session_queries) == 1 else {"ses_created"}
+
+    agent.get_existing_sessions = Mock(side_effect=list_sessions)
+    agent.wait_for_exit = Mock()
+    update_title = Mock(return_value=True)
+    agent.update_session_title = update_title
+    launch_kwargs = {}
+
+    def fake_launch(project_path, **kwargs):
+        launch_kwargs.update(kwargs)
+        kwargs["on_launch"]()
+        return process
+
+    agent.launch_with_prompt = fake_launch
+    monkeypatch.setattr(
+        "devflow.agent.factory.temporary_directory_lock",
+        lambda path: nullcontext(),
+    )
+    monkeypatch.setattr(
+        "devflow.utils.clone_cache.CloneCache",
+        lambda config: SimpleNamespace(use=Mock()),
+    )
+    conversation = SimpleNamespace(
+        ai_agent_session_id="pending-capture",
+        temp_directory=str(tmp_path),
+        worktree_path=None,
+    )
+    persisted_ids = []
+
+    launch_and_capture(
+        agent,
+        "kilo",
+        str(tmp_path),
+        conversation,
+        initial_prompt="initial prompt",
+        session_id="pending-capture",
+        env={"EXISTING": "yes"},
+        display_name="daf-session",
+        on_session_id=persisted_ids.append,
+    )
+
+    assert launch_kwargs["initial_prompt"] == "initial prompt"
+    assert launch_kwargs["isolated_workspace"] is True
+    assert conversation.ai_agent_session_id == "ses_created"
+    assert persisted_ids == ["ses_created"]
+    update_title.assert_called_once_with(
+        "ses_created",
+        "daf-session",
+        str(tmp_path),
+        {"EXISTING": "yes", "KILO_NO_DAEMON": "1"},
+    )
 
 
 def test_resume_session_uses_kilo_session_flag_and_updates_title(

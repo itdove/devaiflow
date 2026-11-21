@@ -841,10 +841,41 @@ def launch_and_capture(
             except (OSError, TemporaryDirectoryInUseError):
                 logging.getLogger(__name__).warning("Could not refresh clone cache activity")
         if launch_attempted:
-            capture_agent_session_id(
-                agent, agent_backend, project_path,
-                active_conversation, sessions_before, quiet=launch_failed,
+            previous_native_id = getattr(
+                active_conversation, "ai_agent_session_id", None
             )
+            captured = capture_agent_session_id(
+                agent,
+                agent_backend,
+                project_path,
+                active_conversation,
+                sessions_before,
+                quiet=launch_failed,
+            )
+            captured_native_id = getattr(
+                active_conversation, "ai_agent_session_id", None
+            )
+            if (
+                captured
+                and isinstance(agent, KiloAgent)
+                and captured_native_id
+                and captured_native_id != previous_native_id
+            ):
+                if on_session_id:
+                    on_session_id(captured_native_id)
+                if not headless and display_name:
+                    # Kilo's full TUI auto-submits --prompt only from its home
+                    # route. Starting with a pre-created --session bypasses
+                    # that route, so title prompted sessions after capture.
+                    title_env = dict(env or {})
+                    if managed_path:
+                        title_env["KILO_NO_DAEMON"] = "1"
+                    agent.update_session_title(
+                        captured_native_id,
+                        display_name,
+                        project_path,
+                        title_env,
+                    )
         if (
             not launch_failed
             and session

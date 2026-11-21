@@ -41,7 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Launch Kilo sessions in the full interactive TUI** (#689)
-  - Uses Kilo's root command for interactive launch and resume, passing initial context with `--prompt`
+  - Uses Kilo's root command for interactive launch and resume, passing initial context with `--prompt` from the new-session route so Kilo auto-submits it
+  - Lets Kilo create prompted sessions before DAF captures the project-scoped ID and applies the DAF title; refuses to silently ignore an initial prompt for a known session
   - Preserves model selection, session identity, title API updates, auto-approval, and managed-clone daemon isolation
   - Keeps headless JSON launches and their `--variant` handling unchanged
   - Documents that Kilo's full TUI has no launch-time `--variant` flag; interactive reasoning variants are selected in Kilo
