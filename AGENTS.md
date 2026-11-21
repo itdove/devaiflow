@@ -1864,6 +1864,12 @@ class Session(BaseModel):
    - Preserves exact project-scoped ID capture, post-exit DAF title updates, and fail-closed timeout/ambiguity handling
    - Adds slow-query, timeout, title, project-scope, and reopen-budget regression coverage
 
+- ✓ Immediate model provider persistence in `daf config edit` (itdove/devaiflow#688)
+   - Saves newly added model provider profiles as soon as the add flow completes
+   - Saves default profile selections immediately while preserving enforcement restrictions
+   - Keeps failed immediate saves dirty and retryable through `Ctrl+S`
+   - Adds focused regression coverage and documents the save behavior
+
 ## Release Management
 
 ### Overview

@@ -5652,6 +5652,7 @@ daf config edit
 - Tri-state prompt controls (Always/Never/Prompt each time) for workflow automation
 - Preview mode before saving (Ctrl+P)
 - Automatic backup creation
+- Adding a model provider profile and setting the default profile save immediately
 - Help screen (press `?`)
 - Keyboard shortcuts (Ctrl+S to save)
 
@@ -5668,10 +5669,11 @@ daf config edit
 - `Enter` - Activate button/select dropdown option
 - `Space` - Toggle checkbox
 - `Escape` - Cancel/close modal or dropdown
+- Adding a model provider or changing its default persists immediately
 - `Ctrl+S` - Save configuration
 - `Ctrl+P` - Preview changes before saving
 - `?` - Show help screen
-- `Q/Ctrl+C` - Quit without saving
+- `Q/Ctrl+C` - Quit without saving remaining changes
 
 **When to use:**
 - First-time configuration
