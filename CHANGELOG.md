@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Persist model provider changes immediately** (#688)
+  - `daf config edit` now saves a newly added model provider profile as soon as the add flow completes
+  - Setting a model provider profile as the default is persisted immediately
+  - Failed immediate saves remain dirty so the user can retry with `Ctrl+S`
 - **Launch Kilo sessions in the full interactive TUI** (#689)
   - Uses Kilo's root command for interactive launch and resume, passing initial context with `--prompt` from the new-session route so Kilo auto-submits it
   - Lets Kilo create prompted sessions before DAF captures the project-scoped ID and applies the DAF title; refuses to silently ignore an initial prompt for a known session

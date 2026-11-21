@@ -1859,6 +1859,12 @@ class Session(BaseModel):
    - Reports tracked, untracked, and ignored worktree data and requires separate confirmation before deleting it
    - Revalidates session/worktree/source identity and active process use before removal
 
+- ✓ Immediate model provider persistence in `daf config edit` (itdove/devaiflow#688)
+   - Saves newly added model provider profiles as soon as the add flow completes
+   - Saves default profile selections immediately while preserving enforcement restrictions
+   - Keeps failed immediate saves dirty and retryable through `Ctrl+S`
+   - Adds focused regression coverage and documents the save behavior
+
 ## Release Management
 
 ### Overview
