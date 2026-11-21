@@ -43,7 +43,11 @@ from devflow.jira.exceptions import JiraError, JiraAuthError, JiraApiError, Jira
 from devflow.github import transition_on_start as github_transition_on_start
 from devflow.issue_tracker.exceptions import IssueTrackerApiError, IssueTrackerAuthError, IssueTrackerNotFoundError
 from devflow.agent import get_agent_display_name
-from devflow.agent.factory import OPENCODE_CAPTURE_TIMEOUT, resolve_agent_backend
+from devflow.agent.factory import (
+    KILO_CAPTURE_TIMEOUT,
+    OPENCODE_CAPTURE_TIMEOUT,
+    resolve_agent_backend,
+)
 from devflow.agent.opencode_agent import OpenCodeAgent, OpenCodeSessionQueryError
 from devflow.agent.kilo_agent import KiloAgent, KiloSessionQueryError
 from devflow.utils.backend_detection import get_issue_tracker_backend
@@ -1108,9 +1112,14 @@ def open_session(
                 else OpenCodeSessionQueryError
             )
             try:
+                capture_timeout = (
+                    KILO_CAPTURE_TIMEOUT
+                    if isinstance(agent_client, KiloAgent)
+                    else OPENCODE_CAPTURE_TIMEOUT
+                )
                 conversation_exists = (
                     active_conv.ai_agent_session_id in agent_client.get_existing_sessions(
-                        check_path, timeout=OPENCODE_CAPTURE_TIMEOUT, strict=True
+                        check_path, timeout=capture_timeout, strict=True
                     )
                 )
             except query_error as exc:

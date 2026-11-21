@@ -317,6 +317,10 @@ PENDING_CAPTURE_PLACEHOLDER = "pending-capture"
 _SESSION_CAPTURE_POLL_ATTEMPTS = 10
 _SESSION_CAPTURE_POLL_INTERVAL = 0.1
 OPENCODE_CAPTURE_TIMEOUT = 2.0
+# Kilo session queries include version detection and a fresh CLI startup. Keep
+# that backend-specific startup allowance separate from OpenCode's tighter
+# fallback-capture budget.
+KILO_CAPTURE_TIMEOUT = 10.0
 
 
 class _FailedSessionSnapshot(set[str]):
@@ -330,6 +334,13 @@ class _FailedSessionSnapshot(set[str]):
 def _resolve_alias(backend: str) -> str:
     """Resolve an alias to its canonical backend name."""
     return AGENT_ALIASES.get(backend.lower(), backend.lower())
+
+
+def _capture_timeout(agent_backend: str) -> float:
+    """Return the bounded native-session capture budget for a backend."""
+    if _resolve_alias(agent_backend) == "kilo":
+        return KILO_CAPTURE_TIMEOUT
+    return OPENCODE_CAPTURE_TIMEOUT
 
 
 def get_agent_metadata(backend: str) -> Dict[str, Any]:
@@ -517,7 +528,7 @@ def snapshot_agent_sessions(
             )
         if isinstance(agent, KiloAgent):
             return agent.get_existing_sessions(
-                launch_dir, timeout=OPENCODE_CAPTURE_TIMEOUT, strict=True
+                launch_dir, timeout=KILO_CAPTURE_TIMEOUT, strict=True
             )
         return agent.get_existing_sessions(launch_dir)
     except (OpenCodeSessionQueryError, KiloSessionQueryError) as exc:
@@ -538,7 +549,7 @@ def capture_agent_session_id(
     active_conv,
     sessions_before: Set[str],
     quiet: bool = False,
-    timeout: float = OPENCODE_CAPTURE_TIMEOUT,
+    timeout: Optional[float] = None,
 ) -> bool:
     """Capture the real session ID after agent launch.
 
@@ -555,7 +566,8 @@ def capture_agent_session_id(
         active_conv: Active conversation object to update
         sessions_before: Session snapshot taken before launch
         quiet: Suppress capture messages when the agent launch already failed
-        timeout: Total OpenCode discovery budget, including query execution
+        timeout: Optional total native-session discovery budget, including query
+            execution. Defaults to the backend-specific bounded budget.
 
     Returns:
         True if a new session ID was captured and stored
@@ -566,6 +578,8 @@ def capture_agent_session_id(
     opencode_backend = canonical_backend == "opencode"
     kilo_backend = canonical_backend == "kilo"
     database_backend = opencode_backend or kilo_backend
+    if timeout is None:
+        timeout = _capture_timeout(agent_backend)
     existing_id = active_conv.ai_agent_session_id
     if database_backend and _is_valid_native_session_id(agent_backend, existing_id):
         # Explicit/pre-created native identity is stronger evidence than a list
@@ -588,7 +602,10 @@ def capture_agent_session_id(
     observation_deadline = started + observation_window
     try:
         if isinstance(sessions_before, _FailedSessionSnapshot):
-            raise OpenCodeSessionQueryError(
+            query_error = (
+                KiloSessionQueryError if kilo_backend else OpenCodeSessionQueryError
+            )
+            raise query_error(
                 f"Pre-launch snapshot unavailable: {sessions_before.error}"
             )
         for attempt in range(attempts):

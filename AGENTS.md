@@ -1859,6 +1859,11 @@ class Session(BaseModel):
    - Reports tracked, untracked, and ignored worktree data and requires separate confirmation before deleting it
    - Revalidates session/worktree/source identity and active process use before removal
 
+- ✓ Kilo interactive native session capture budget (itdove/devaiflow#693)
+   - Gives Kilo version detection and session-list startup a bounded 10-second budget independent of OpenCode's 2-second budget
+   - Preserves exact project-scoped ID capture, post-exit DAF title updates, and fail-closed timeout/ambiguity handling
+   - Adds slow-query, timeout, title, project-scope, and reopen-budget regression coverage
+
 - ✓ Immediate model provider persistence in `daf config edit` (itdove/devaiflow#688)
    - Saves newly added model provider profiles as soon as the add flow completes
    - Saves default profile selections immediately while preserving enforcement restrictions
