@@ -2310,6 +2310,7 @@ class TestOpenCommandOpenCodeResume:
         self, temp_daf_home, tmp_path, query_state
     ):
         """Kilo IDs are verified, and query errors refuse to launch replacements."""
+        from devflow.agent.factory import KILO_CAPTURE_TIMEOUT
         from devflow.agent.kilo_agent import KiloAgent, KiloSessionQueryError
 
         config_loader = ConfigLoader()
@@ -2373,6 +2374,11 @@ class TestOpenCommandOpenCodeResume:
             result = CliRunner().invoke(cli, ["open", "kilo-resume-test"])
 
         agent.get_existing_sessions.assert_called_once()
+        assert (
+            agent.get_existing_sessions.call_args.kwargs["timeout"]
+            == KILO_CAPTURE_TIMEOUT
+        )
+        assert agent.get_existing_sessions.call_args.kwargs["strict"] is True
         if query_state != "found":
             assert result.exit_code == 1
             assert "Cannot safely resume Kilo" in result.output

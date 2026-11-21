@@ -1984,6 +1984,10 @@ canonical project-directory metadata. A failed query, missing ID, or ambiguous
 capture stays unverified; DAF will not guess from another agent's database or
 launch a replacement during resume.
 
+Kilo session discovery has a bounded 10-second budget that includes version
+detection and CLI startup. A slow but successful query can therefore complete
+capture, while a timeout still leaves the native ID pending rather than guessing.
+
 From a regular terminal, after exiting the agent:
 
 1. Inspect `kilo session list --format json --all` and verify the intended ID
