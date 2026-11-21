@@ -27,6 +27,14 @@ def _title_policy_section() -> str:
     return " ".join(content[start:end].split())
 
 
+def _development_section() -> str:
+    """Return the managed development-session guidance."""
+    content = SKILL_PATH.read_text(encoding="utf-8")
+    start = content.index("## Development Sessions")
+    end = content.index("## GitHub/GitLab Issue Creation", start)
+    return " ".join(content[start:end].split())
+
+
 def test_github_issue_lookup_is_repo_qualified_and_structured() -> None:
     """Require one deterministic GitHub lookup when metadata includes a repo."""
     section = _issue_lookup_section()
@@ -83,6 +91,35 @@ def test_title_policy_preserves_backend_capabilities_and_reports_mismatches() ->
     assert "```" not in section
 
 
+def test_development_guidance_allows_explicit_git_operations() -> None:
+    """Development sessions distinguish requested Git work from DAF lifecycle work."""
+    section = _development_section()
+
+    assert (
+        "perform repository Git operations when the user explicitly requests them"
+        in section
+    )
+    assert "staging and committing changes" in section
+    assert "fetching or synchronizing the active session branch" in section
+    assert "pushing that branch to its remote" in section
+    assert "never commit directly to `main`" in section
+    assert "do not make Git changes automatically" in section
+    assert "Manual Git commits or pushes change the repository only" in section
+    assert "do not mark the DAF session complete" in section
+    assert "Create git commits (handled by `daf complete`)" not in section
+
+
+def test_development_guidance_keeps_daf_lifecycle_outside_agent_session() -> None:
+    """Explicit Git permission must not allow DAF metadata mutations in-session."""
+    section = _development_section()
+
+    assert "Run DAF lifecycle and metadata commands" in section
+    for command in ("daf complete", "daf open", "daf new", "daf update"):
+        assert command in section
+    assert "skips redundant commit/push work" in section
+    assert "Create pull/merge requests from inside the active agent session" in section
+
+
 @pytest.mark.parametrize(
     "command", ["daf new", "daf open", "daf git new", "daf jira new", "daf investigate"]
 )
@@ -112,6 +149,7 @@ def test_title_policy_preserves_analysis_only_workflow_constraints(
     section = content[start:end]
 
     assert "DO NOT modify any code or create/checkout git branches" in section
+    assert "DO NOT create git commits or push changes" in section
     assert "DO NOT make any file changes — only READ and ANALYZE" in section
 
 

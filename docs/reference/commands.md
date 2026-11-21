@@ -1233,6 +1233,13 @@ or time tracking. To reopen after a refusal, move terminals outside every manage
 workspace, release remaining holders only through their supported owner/backend
 lifecycle after verifying no other clients use the workspaces, then retry
 `daf open <session>`.
+During a normal `daf open` or `daf new` development session, explicitly requested
+Git operations on the active feature branch are permitted, including staging,
+committing, fetching/synchronizing, and pushing. They do not replace DAF
+lifecycle or metadata commands, which remain outside the active agent session.
+If the work is already committed or the branch is already synchronized with its
+remote, `daf complete` does not require a redundant commit or push; its existing
+PR/MR and session-metadata behavior remains available.
 
 For OpenCode v2, DAF launches and resumes temporary-clone sessions with
 `--standalone`: OpenCode owns a private server and its resource teardown rather

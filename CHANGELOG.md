@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All internal references updated from `daf upgrade` to `daf skills`
 
 ### Fixed
+- **Allow explicit Git operations in `daf open`/`daf new` sessions** (#695)
+  - Permits user-requested staging, commits, fetch/sync, and pushes on the active feature branch
+  - Keeps DAF lifecycle and metadata commands outside active agent sessions
+  - Documents that manual Git operations do not complete sessions or update status/time tracking
+  - Preserves read-only restrictions for issue-creation and investigation sessions
+  - Verifies completion skips redundant commit/push work for pre-committed and pre-pushed changes
 - **Use a Kilo-specific native session capture budget** (#693)
   - Gives Kilo's version detection and session-list startup a bounded 10-second budget instead of OpenCode's 2-second budget
   - Preserves exact project-scoped ID capture and post-exit DAF title updates for full-TUI launches

@@ -4344,6 +4344,203 @@ def test_complete_no_pr_prompt_when_no_commits(temp_daf_home, tmp_path, monkeypa
             "No new commits - skipping PR creation" in captured.out)
 
 
+def test_complete_skips_redundant_git_operations_for_precommitted_changes(
+    temp_daf_home, tmp_path, monkeypatch
+):
+    """Completion accepts user-created commits without committing or pushing again."""
+    import subprocess
+
+    repo_dir = tmp_path / "test-precommitted"
+    repo_dir.mkdir()
+    subprocess.run(
+        ["git", "init", "-b", "main"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    (repo_dir / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "-b", "feature-precommitted"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    (repo_dir / "feature.txt").write_text("precommitted work")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add precommitted work"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    session_manager.create_session(
+        name="precommitted-test",
+        goal="Test precommitted changes",
+        working_directory="test-precommitted",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-precommitted",
+        branch="feature-precommitted",
+    )
+    session_manager.start_work_session("precommitted-test")
+    session_manager.end_work_session("precommitted-test")
+
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._get_pr_for_branch",
+        lambda _working_dir, _branch: None,
+    )
+    commit = Mock()
+    push = Mock()
+    monkeypatch.setattr(GitUtils, "commit_all", commit)
+    monkeypatch.setattr(GitUtils, "push_branch", push)
+
+    complete_session(
+        "precommitted-test",
+        no_pr=True,
+        no_issue_update=True,
+        yes=True,
+    )
+
+    commit.assert_not_called()
+    push.assert_not_called()
+    completed = SessionManager(config_loader).get_session("precommitted-test")
+    assert completed.status == "complete"
+    assert completed.active_conversation.branch == "feature-precommitted"
+
+
+def test_complete_skips_push_for_pre_pushed_branch_with_open_pr(
+    temp_daf_home, tmp_path, monkeypatch, capsys
+):
+    """Completion does not push again when a user-pushed branch backs an open PR."""
+    import subprocess
+
+    repo_dir = tmp_path / "test-pre-pushed"
+    repo_dir.mkdir()
+    remote_dir = tmp_path / "remote-pre-pushed.git"
+    remote_dir.mkdir()
+    subprocess.run(
+        ["git", "init", "--bare"], cwd=remote_dir, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "init", "-b", "main"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(remote_dir)],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    (repo_dir / "test.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "-b", "feature-pre-pushed"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    (repo_dir / "feature.txt").write_text("pushed work")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add pushed work"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "feature-pre-pushed"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+
+    config_loader = ConfigLoader()
+    session_manager = SessionManager(config_loader)
+    session_manager.create_session(
+        name="pre-pushed-test",
+        goal="Test pre-pushed changes",
+        working_directory="test-pre-pushed",
+        project_path=str(repo_dir),
+        ai_agent_session_id="uuid-pre-pushed",
+        branch="feature-pre-pushed",
+    )
+    session_manager.start_work_session("pre-pushed-test")
+    session_manager.end_work_session("pre-pushed-test")
+
+    pr_url = "https://example.com/pull/1"
+    monkeypatch.setattr(
+        "devflow.cli.commands.complete_command._get_pr_for_branch",
+        lambda _working_dir, _branch: {"state": "open", "url": pr_url},
+    )
+    commit = Mock()
+    push = Mock()
+    monkeypatch.setattr(GitUtils, "commit_all", commit)
+    monkeypatch.setattr(GitUtils, "push_branch", push)
+
+    complete_session(
+        "pre-pushed-test",
+        no_pr=True,
+        no_issue_update=True,
+        yes=True,
+    )
+
+    commit.assert_not_called()
+    push.assert_not_called()
+    assert (
+        "Branch is up to date with remote - no push needed"
+        in capsys.readouterr().out
+    )
+    completed = SessionManager(config_loader).get_session("pre-pushed-test")
+    assert completed.status == "complete"
+
+
 def test_complete_prompts_pr_when_commit_made(temp_daf_home, tmp_path, monkeypatch, capsys, clean_ci_env):
     """Test that daf complete DOES prompt for PR when a commit was made this cycle."""
     # Ensure interactive mode for this test
