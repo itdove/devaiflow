@@ -137,6 +137,12 @@ Manual Git commits or pushes alone do not complete the DAF session or update its
 status/time tracking. To reopen a session, move terminals outside every managed
 workspace, verify no other clients use the workspaces, release remaining holders
 through their supported owner/backend lifecycle, then retry `daf open <session>`.
+In a normal `daf open` or `daf new` development session, an agent may run
+explicitly requested Git operations on the active feature branch, including
+`git add`, `git commit`, fetch/sync, and `git push`. DAF lifecycle and metadata
+commands still belong outside the agent session; when `daf complete` runs, it
+skips commit and push steps that are already satisfied and retains its existing
+PR/MR and session-metadata workflow.
 
 Worktrees are retained on completion by default. With
 `concurrency.cleanup_on_complete: true`, `daf complete` removes a worktree only

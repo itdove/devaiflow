@@ -1870,6 +1870,12 @@ class Session(BaseModel):
    - Keeps failed immediate saves dirty and retryable through `Ctrl+S`
    - Adds focused regression coverage and documents the save behavior
 
+- ✓ Explicit Git operations in development sessions (itdove/devaiflow#695)
+   - Permits explicitly requested staging, commits, fetch/sync, and pushes on the active feature branch
+   - Keeps DAF lifecycle and metadata commands outside active agent sessions
+   - Documents that manual Git operations do not complete sessions or update status/time tracking
+   - Verifies completion skips redundant commit/push work for pre-committed and pre-pushed changes
+
 ## Release Management
 
 ### Overview

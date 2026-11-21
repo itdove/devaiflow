@@ -185,6 +185,23 @@ provided source. Multi-project creation cancels if any project has no selected b
    gh issue comment <number> --body "Progress update"  # or: glab issue note <number> -m "Progress update"
    ```
 
+**Git and DAF command boundaries:**
+- In a development session, perform repository Git operations when the user
+  explicitly requests them. This includes staging and committing changes,
+  fetching or synchronizing the active session branch, and pushing that branch
+  to its remote.
+- Keep branch safety rules in force: never commit directly to `main` or another
+  protected/default branch, never force-push without explicit direction, and do
+  not make Git changes automatically just because a session is active.
+- Manual Git commits or pushes change the repository only. They do not mark the
+  DAF session complete, stop time tracking, update DAF metadata, or replace
+  `daf complete`.
+- Run DAF lifecycle and metadata commands such as `daf complete`, `daf open`,
+  `daf new`, and `daf update` outside the active agent session. `daf complete`
+  retains its optional PR/MR and issue-update workflow and skips redundant
+  commit/push work when changes are already committed or the branch is already
+  synchronized with its remote.
+
 **Testing Requirements:**
 - Identify the project's testing framework from the codebase
 - Run the project's test suite after making code changes
@@ -196,7 +213,7 @@ provided source. Multi-project creation cancels if any project has no selected b
 - Verify your current working directory before making changes
 - Each project has its own git repository and branch
 
-**When work is complete**, inform the user that all acceptance criteria are met and the session is ready for completion. The user runs `daf complete` outside the active agent session to commit, create PR/MR, and close.
+**When work is complete**, inform the user that all acceptance criteria are met and the session is ready for completion. The user runs `daf complete` outside the active agent session to update DAF metadata, optionally create a PR/MR, and close; it does not require another commit or push when the repository is already up to date.
 
 For sessions using temporary clones/worktrees, the user must first **exit editing
 agents**. A live DAF launch lock always refuses completion. When only cwd holders
@@ -276,9 +293,11 @@ recovery metadata, and never silently switch repositories or replace a recoverab
 conversation. Do not delete local work to resolve retention/recovery warnings.
 
 **Do NOT:**
-- Create git commits (handled by `daf complete`)
-- Create pull/merge requests (handled by `daf complete`)
-- Run user-facing daf commands (new, open, complete, config, init, upgrade)
+- Run DAF lifecycle or metadata commands (`daf new`, `daf open`, `daf complete`,
+  `daf update`, `daf config`, `daf init`, or `daf upgrade`) from inside the
+  active agent session
+- Create pull/merge requests from inside the active agent session; let
+  `daf complete` handle its optional PR/MR workflow
 
 ---
 
@@ -296,6 +315,7 @@ select a starting branch, including the repository default, use `daf new` or
 
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
+- DO NOT create git commits or push changes
 - DO NOT make any file changes — only READ and ANALYZE
 - Focus on understanding the codebase to write a good issue
 
@@ -330,6 +350,7 @@ Analysis-only session for creating a JIRA ticket.
 
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
+- DO NOT create git commits or push changes
 - DO NOT make any file changes — only READ and ANALYZE
 - Focus on understanding the codebase to write a good JIRA ticket
 
@@ -362,6 +383,7 @@ Read-only investigation and analysis session.
 
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any code or create/checkout git branches
+- DO NOT create git commits or push changes
 - DO NOT make any file changes — only READ and ANALYZE
 - Focus on understanding the codebase and documenting findings
 
@@ -431,7 +453,9 @@ daf config refresh-jira-fields  # Refresh from JIRA API
 3. Use `daf note` for local implementation details
 4. Verify work meets acceptance criteria before exiting
 5. Run `daf active` before making changes in multi-project sessions
-6. Defer git commits and PR/MR creation to `daf complete`
+6. In development sessions, make Git commits or pushes only when explicitly
+   requested; defer DAF lifecycle/metadata updates and PR/MR creation to
+   `daf complete`
 
 **For detailed command syntax:** See **daf-cli skill**
 **For JIRA field rules:** See **daf-jira-fields skill**
