@@ -375,6 +375,132 @@ def test_interactive_kilo_prompt_captures_and_titles_tui_created_session(
     )
 
 
+def test_kilo_title_sync_retries_after_transient_update_failure(
+    agent, monkeypatch, tmp_path
+):
+    process = Mock(returncode=0)
+    session_queries = []
+
+    def list_sessions(*args, **kwargs):
+        session_queries.append((args, kwargs))
+        return set() if len(session_queries) == 1 else {"ses_created"}
+
+    agent.get_existing_sessions = Mock(side_effect=list_sessions)
+    agent.wait_for_exit = Mock()
+    update_title = Mock(side_effect=[False, True])
+    agent.update_session_title = update_title
+
+    def fake_launch(project_path, **kwargs):
+        kwargs["on_launch"]()
+        return process
+
+    agent.launch_with_prompt = fake_launch
+    monkeypatch.setattr("devflow.agent.factory.time.sleep", lambda _seconds: None)
+    conversation = SimpleNamespace(
+        ai_agent_session_id="pending-capture",
+        temp_directory=None,
+        worktree_path=None,
+    )
+
+    launch_and_capture(
+        agent,
+        "kilo",
+        str(tmp_path),
+        conversation,
+        initial_prompt="initial prompt",
+        session_id="pending-capture",
+        env={"EXISTING": "yes"},
+        display_name="daf-session",
+    )
+
+    assert conversation.ai_agent_session_id == "ses_created"
+    assert update_title.call_count == 2
+    assert all(
+        call.args
+        == (
+            "ses_created",
+            "daf-session",
+            str(tmp_path),
+            {"EXISTING": "yes"},
+        )
+        for call in update_title.call_args_list
+    )
+
+
+def test_kilo_title_sync_recovers_when_precreation_fails(agent, monkeypatch, tmp_path):
+    process = Mock(returncode=0)
+    popen = Mock(return_value=process)
+    session_queries = []
+
+    def list_sessions(*args, **kwargs):
+        session_queries.append((args, kwargs))
+        return set() if len(session_queries) == 1 else {"ses_created"}
+
+    monkeypatch.setattr("devflow.agent.kilo_agent.require_tool", lambda *args: None)
+    monkeypatch.setattr("devflow.agent.kilo_agent.subprocess.Popen", popen)
+    monkeypatch.setattr("devflow.agent.factory.time.sleep", lambda _seconds: None)
+    agent._create_session_with_title = Mock(return_value=None)
+    agent.get_existing_sessions = Mock(side_effect=list_sessions)
+    agent.wait_for_exit = Mock()
+    agent.update_session_title = Mock(return_value=True)
+    conversation = SimpleNamespace(
+        ai_agent_session_id="pending-capture",
+        temp_directory=None,
+        worktree_path=None,
+    )
+
+    launch_and_capture(
+        agent,
+        "kilo",
+        str(tmp_path),
+        conversation,
+        initial_prompt="",
+        session_id="pending-capture",
+        env={"EXISTING": "yes"},
+        display_name="daf-session",
+    )
+
+    assert popen.call_args.args[0] == ["kilo"]
+    agent._create_session_with_title.assert_called_once()
+    agent.update_session_title.assert_called_once_with(
+        "ses_created", "daf-session", str(tmp_path), {"EXISTING": "yes"}
+    )
+
+
+def test_kilo_title_sync_skips_when_native_id_cannot_be_captured(
+    agent, monkeypatch, tmp_path
+):
+    process = Mock(returncode=0)
+    agent.get_existing_sessions = Mock(return_value=set())
+    agent.wait_for_exit = Mock()
+    agent.update_session_title = Mock(return_value=True)
+
+    def fake_launch(project_path, **kwargs):
+        kwargs["on_launch"]()
+        return process
+
+    agent.launch_with_prompt = fake_launch
+    monkeypatch.setattr("devflow.agent.factory.time.sleep", lambda _seconds: None)
+    conversation = SimpleNamespace(
+        ai_agent_session_id="pending-capture",
+        temp_directory=None,
+        worktree_path=None,
+    )
+
+    launch_and_capture(
+        agent,
+        "kilo",
+        str(tmp_path),
+        conversation,
+        initial_prompt="initial prompt",
+        session_id="pending-capture",
+        display_name="daf-session",
+    )
+
+    assert conversation.ai_agent_session_id == "pending-capture"
+    agent.update_session_title.assert_not_called()
+
+
 def test_resume_session_uses_kilo_session_flag_and_updates_title(
     agent, monkeypatch, tmp_path
 ):

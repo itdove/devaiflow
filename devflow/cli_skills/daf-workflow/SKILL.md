@@ -47,11 +47,14 @@ The **DAF session name** (`Name` in `daf info`) identifies the session; the
 **goal** (`--goal`) describes the work; the backend's **LLM conversation title**
 is separate display metadata.
 
-For **Claude Code, Pi, and OpenCode**, DAF manages native title setting at launch
-and on supported resume paths. The title is the **exact current DAF session
-name** from metadata, not the goal, issue summary, or an agent-generated task
-summary. This applies to `daf new`, `daf open`, `daf git new`, `daf jira new`,
-and `daf investigate`; read-only and ticket-creation constraints still apply.
+For **Claude Code, Pi, OpenCode, and Kilo**, DAF manages native title setting at
+launch and on supported resume paths. The title is the **exact current DAF
+session name** from metadata, not the goal, issue summary, or an agent-generated
+task summary. Kilo full-TUI launches may apply the title after a verified,
+project-scoped session capture and retry that update once if the title API is
+temporarily unavailable. This applies to `daf new`, `daf open`, `daf git new`,
+`daf jira new`, and `daf investigate`; read-only and ticket-creation constraints
+still apply.
 
 Do not independently rename the conversation from `--goal`, rename the DAF
 session, or duplicate DAF's launch/resume title-setting operations. Other

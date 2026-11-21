@@ -115,7 +115,7 @@ the initial context with `--prompt`. Kilo 7.8.27 auto-submits that option from
 the new-session home route; adding `--session` routes directly to the existing
 session and skips that submission. DAF therefore lets Kilo create the initial
 prompted session, captures its unique project-scoped ID after the TUI exits, and
-then best-effort applies the DAF session title. Do not use
+applies the DAF session title with one bounded retry. Do not use
 `kilo run --interactive` for this workflow: that flag selects Kilo's split-footer
 interface. Headless DAF launches continue to use `kilo run --format json`;
 configured reasoning variants are passed to headless runs. Kilo's full TUI

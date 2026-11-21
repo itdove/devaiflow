@@ -79,7 +79,7 @@ def test_title_policy_preserves_backend_capabilities_and_reports_mismatches() ->
     """Keep unsupported titles agent-managed and report failures without fallbacks."""
     section = _title_policy_section()
 
-    assert "For **Claude Code, Pi, and OpenCode**" in section
+    assert "For **Claude Code, Pi, OpenCode, and Kilo**" in section
     assert "Other backends retain their normal agent-managed titles" in section
     assert (
         "If a supported backend's title does not match, report a **title-propagation problem**"
