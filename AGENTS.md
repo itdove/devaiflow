@@ -1864,6 +1864,11 @@ class Session(BaseModel):
    - Preserves exact project-scoped ID capture, post-exit DAF title updates, and fail-closed timeout/ambiguity handling
    - Adds slow-query, timeout, title, project-scope, and reopen-budget regression coverage
 
+- ✓ Kilo interactive title recovery (itdove/devaiflow#692)
+   - Retries project-scoped post-capture title synchronization once after a transient API failure
+   - Preserves exact DAF session names after title pre-creation failures without guessing when native identity is unavailable
+   - Adds recovery, retry, scoping, resume, and no-ID regression coverage
+
 - ✓ Immediate model provider persistence in `daf config edit` (itdove/devaiflow#688)
    - Saves newly added model provider profiles as soon as the add flow completes
    - Saves default profile selections immediately while preserving enforcement restrictions

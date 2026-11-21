@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Gives Kilo's version detection and session-list startup a bounded 10-second budget instead of OpenCode's 2-second budget
   - Preserves exact project-scoped ID capture and post-exit DAF title updates for full-TUI launches
   - Keeps query failures, timeouts, and ambiguous candidates fail-closed without guessing a native identity
+- **Recover Kilo interactive session titles after transient API failures** (#692)
+  - Retries the project-scoped post-capture title update once before reporting that synchronization was unavailable
+  - Captures and persists the exact DAF session name when pre-creation fails, without guessing when no native ID is verified
 - **Persist model provider changes immediately** (#688)
   - `daf config edit` now saves a newly added model provider profile as soon as the add flow completes
   - Setting a model provider profile as the default is persisted immediately

@@ -887,12 +887,29 @@ def launch_and_capture(
                     title_env = dict(env or {})
                     if managed_path:
                         title_env["KILO_NO_DAEMON"] = "1"
-                    agent.update_session_title(
-                        captured_native_id,
-                        display_name,
-                        project_path,
-                        title_env,
-                    )
+                    title_updated = False
+                    for attempt in range(2):
+                        try:
+                            title_updated = agent.update_session_title(
+                                captured_native_id,
+                                display_name,
+                                project_path,
+                                title_env,
+                            )
+                        except (OSError, RuntimeError, ValueError):
+                            logging.getLogger(__name__).debug(
+                                "Unable to synchronize the captured Kilo session title",
+                                exc_info=True,
+                            )
+                        if title_updated:
+                            break
+                        if attempt == 0:
+                            time.sleep(0.1)
+                    if not title_updated:
+                        logging.getLogger(__name__).warning(
+                            "Unable to synchronize the captured Kilo session title; "
+                            "the native session remains available"
+                        )
         if (
             not launch_failed
             and session
