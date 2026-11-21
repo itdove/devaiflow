@@ -2823,6 +2823,27 @@ class ConfigTUI(App):
         self._collect_values()
         self.push_screen(PreviewScreen(self.config))
 
+    def _save_config(self, success_message: str, failure_message: str) -> bool:
+        """Persist the current configuration and update the dirty-state snapshot."""
+        try:
+            if self._pending_config_files:
+                self.config_loader.save_config(
+                    self.config,
+                    additional_files=self._pending_config_files,
+                )
+            else:
+                self.config_loader.save_config(self.config)
+        except Exception as e:
+            self.notify(f"{failure_message}: {e}", severity="error")
+            self.modified = True
+            return False
+
+        self.notify(success_message, severity="information")
+        self._pending_config_files.clear()
+        self.modified = False
+        self.original_config = self.config.model_copy(deep=True)
+        return True
+
     def action_save(self) -> None:
         """Save configuration changes."""
         # Collect all values from inputs
@@ -2835,21 +2856,10 @@ class ConfigTUI(App):
             self.notify(error_msg, severity="error", timeout=10)
             return
 
-        # Save
-        try:
-            if self._pending_config_files:
-                self.config_loader.save_config(
-                    self.config,
-                    additional_files=self._pending_config_files,
-                )
-            else:
-                self.config_loader.save_config(self.config)
-            self.notify("Configuration saved successfully!", severity="information")
-            self._pending_config_files.clear()
-            self.modified = False
-            self.original_config = self.config.model_copy(deep=True)
-        except Exception as e:
-            self.notify(f"Failed to save configuration: {e}", severity="error")
+        self._save_config(
+            "Configuration saved successfully!",
+            "Failed to save configuration",
+        )
 
     def action_toggle_mode(self) -> None:
         """Toggle between Simple and Advanced mode."""
@@ -2858,20 +2868,10 @@ class ConfigTUI(App):
             self._collect_values()
 
             # Save current config if modified
-            if self.modified:
-                try:
-                    if self._pending_config_files:
-                        self.config_loader.save_config(
-                            self.config,
-                            additional_files=self._pending_config_files,
-                        )
-                    else:
-                        self.config_loader.save_config(self.config)
-                    self.notify("Configuration saved", severity="information")
-                    self._pending_config_files.clear()
-                except Exception as e:
-                    self.notify(f"Failed to save before mode switch: {e}", severity="error")
-                    return
+            if self.modified and not self._save_config(
+                "Configuration saved", "Failed to save before mode switch"
+            ):
+                return
 
             # Exit with return value to indicate mode to restart in
             new_mode = not self.advanced_mode
@@ -3118,6 +3118,10 @@ class ConfigTUI(App):
             self._refresh_profiles_list()
             self.notify(f"Set '{message.profile_name}' as default profile", severity="information")
             self.modified = True
+            self._save_config(
+                "Model provider default saved",
+                "Failed to save model provider default",
+            )
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input change events.
@@ -3304,6 +3308,10 @@ class ConfigTUI(App):
                             self._refresh_profiles_list()
                             self.notify(f"Added profile: {profile_name}", severity="information")
                             self.modified = True
+                            self._save_config(
+                                "Model provider profile saved",
+                                "Failed to save model provider profile",
+                            )
 
                     # Show profile form with selected template
                     self.push_screen(AddEditProfileScreen(template_id=template_id), handle_add_profile_result)

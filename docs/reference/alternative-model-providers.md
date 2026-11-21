@@ -635,7 +635,7 @@ daf model remove old-profile
 daf config edit
 # Navigate to "Model Providers" tab
 # Add/Edit/Delete profiles with visual interface
-# Press Ctrl+S to save
+# Adding a profile or setting the default saves immediately; press Ctrl+S for other edits
 ```
 
 The TUI provides:

@@ -924,3 +924,92 @@ def test_model_providers_tab_scrolls_when_profiles_overflow(mock_config):
                 assert scroll.max_scroll_y > 0
 
     asyncio.run(assert_scrollable_layout())
+
+
+# ============================================================================
+# Immediate Model Provider Persistence Tests
+# ============================================================================
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+def test_adding_model_provider_saves_immediately(mock_config_loader, mock_config):
+    """Adding a provider persists it without requiring Ctrl+S."""
+    mock_loader = Mock()
+    mock_loader.load_config.return_value = mock_config
+    mock_loader.session_home = Path("/tmp/test")
+    mock_loader._load_enterprise_config.return_value = None
+    mock_loader._load_organization_config.return_value = None
+    mock_loader._load_team_config.return_value = None
+    mock_config_loader.return_value = mock_loader
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+    tui.push_screen = Mock()
+
+    event = Mock()
+    event.button.id = "add_profile"
+    tui.on_button_pressed(event)
+
+    select_template = tui.push_screen.call_args.args[1]
+    select_template("anthropic")
+    add_profile = tui.push_screen.call_args.args[1]
+    profile = ModelProviderProfile(
+        name="local-profile",
+        provider="anthropic",
+        agent_backend="claude",
+        model_name="model-a",
+    )
+    add_profile(("local-profile", profile.model_dump()))
+
+    mock_loader.save_config.assert_called_once_with(mock_config)
+    assert mock_config.model_provider.default_profile == "local-profile"
+    assert "local-profile" in mock_config.model_provider.profiles
+    assert tui.modified is False
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+def test_setting_default_model_provider_saves_immediately(mock_config_loader, mock_config):
+    """Changing the default provider persists it without requiring Ctrl+S."""
+    first_profile = ModelProviderProfile(name="first", provider="anthropic")
+    second_profile = ModelProviderProfile(name="second", provider="anthropic")
+    mock_config.model_provider = ModelProviderConfig(
+        default_profile="first",
+        profiles={"first": first_profile, "second": second_profile},
+    )
+    mock_loader = Mock()
+    mock_loader.load_config.return_value = mock_config
+    mock_loader.session_home = Path("/tmp/test")
+    mock_loader._load_enterprise_config.return_value = None
+    mock_loader._load_organization_config.return_value = None
+    mock_loader._load_team_config.return_value = None
+    mock_config_loader.return_value = mock_loader
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+    tui._refresh_profiles_list = Mock()
+
+    tui.on_model_provider_profile_entry_set_as_default_pressed(
+        ModelProviderProfileEntry.SetAsDefaultPressed("second")
+    )
+
+    mock_loader.save_config.assert_called_once_with(mock_config)
+    assert mock_config.model_provider.default_profile == "second"
+    assert tui.modified is False
+
+
+@patch("devflow.ui.config_tui.ConfigLoader")
+def test_immediate_model_provider_save_failure_keeps_dirty_state(mock_config_loader, mock_config):
+    """A failed immediate save remains retryable from the main Save action."""
+    mock_loader = Mock()
+    mock_loader.load_config.return_value = mock_config
+    mock_loader.session_home = Path("/tmp/test")
+    mock_loader.save_config.side_effect = RuntimeError("write failed")
+    mock_config_loader.return_value = mock_loader
+
+    tui = ConfigTUI()
+    tui.notify = Mock()
+    tui.modified = True
+
+    assert tui._save_config("saved", "failed") is False
+    assert tui.modified is True
+    assert any("failed: write failed" in str(call) for call in tui.notify.call_args_list)
