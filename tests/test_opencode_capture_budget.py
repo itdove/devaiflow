@@ -47,7 +47,9 @@ def native_agent(monkeypatch):
     return agent
 
 
-def test_slow_queries_share_one_wall_clock_budget(native_agent, monkeypatch, clock, capsys):
+def test_slow_queries_share_one_wall_clock_budget(
+    native_agent, monkeypatch, clock, capsys
+):
     """Even a visible candidate is not accepted after a later query times out."""
     timeouts = []
 
@@ -61,29 +63,35 @@ def test_slow_queries_share_one_wall_clock_budget(native_agent, monkeypatch, clo
 
     monkeypatch.setattr("devflow.agent.opencode_agent.subprocess.run", query)
     conversation = SimpleNamespace(ai_agent_session_id=PENDING_CAPTURE_PLACEHOLDER)
-    assert not capture_agent_session_id(native_agent, "opencode", "/project", conversation, set())
-    assert clock.now == pytest.approx(OPENCODE_CAPTURE_TIMEOUT)
+    assert not capture_agent_session_id(
+        native_agent, "opencode", "/project", conversation, set(), timeout=2
+    )
+    assert clock.now == pytest.approx(2)
     assert len(timeouts) == 2
     assert timeouts == sorted(timeouts, reverse=True)
     assert conversation.ai_agent_session_id == PENDING_CAPTURE_PLACEHOLDER
     assert "timed out" in capsys.readouterr().out
 
 
-def test_slow_successful_queries_cover_grace_without_ten_commands(native_agent, monkeypatch, clock):
-    """Ordinary half-second CLI starts count as observation time, not extra latency."""
+def test_slow_successful_queries_exceed_old_budget_without_ten_commands(
+    native_agent, monkeypatch, clock
+):
+    """Slow successful CLI starts fit the extended bound and count as observation time."""
     calls = []
 
     def query(command, **kwargs):
         calls.append(kwargs["timeout"])
-        assert kwargs["timeout"] >= 0.65
-        clock.now += 0.65
+        assert kwargs["timeout"] >= 1.25
+        clock.now += 1.25
         return Mock(returncode=0, stdout='[{"id":"ses_new","directory":"/project"}]')
 
     monkeypatch.setattr("devflow.agent.opencode_agent.subprocess.run", query)
     conversation = SimpleNamespace(ai_agent_session_id=PENDING_CAPTURE_PLACEHOLDER)
-    assert capture_agent_session_id(native_agent, "opencode", "/project", conversation, set())
+    assert capture_agent_session_id(
+        native_agent, "opencode", "/project", conversation, set()
+    )
     assert len(calls) == 2
-    assert clock.now == pytest.approx(1.4)
+    assert clock.now == pytest.approx(2.6)
     assert conversation.ai_agent_session_id == "ses_new"
 
 
@@ -132,7 +140,9 @@ def test_exhausted_query_budget_does_not_start_process(native_agent, monkeypatch
     run.assert_not_called()
 
 
-@pytest.mark.parametrize("duration", [2.0, 2.1])
+@pytest.mark.parametrize(
+    "duration", [OPENCODE_CAPTURE_TIMEOUT, OPENCODE_CAPTURE_TIMEOUT + 0.1]
+)
 def test_one_expensive_observation_is_not_enough_to_accept_identity(
     native_agent, monkeypatch, clock, duration
 ):
@@ -144,7 +154,9 @@ def test_one_expensive_observation_is_not_enough_to_accept_identity(
 
     monkeypatch.setattr(native_agent, "get_existing_sessions", query)
     conversation = SimpleNamespace(ai_agent_session_id=PENDING_CAPTURE_PLACEHOLDER)
-    assert not capture_agent_session_id(native_agent, "opencode", "/project", conversation, set())
+    assert not capture_agent_session_id(
+        native_agent, "opencode", "/project", conversation, set()
+    )
     assert conversation.ai_agent_session_id == PENDING_CAPTURE_PLACEHOLDER
 
 
@@ -278,7 +290,9 @@ def test_version_failure_diagnostics_do_not_repeat_cli_contents(native_agent, mo
         "devflow.agent.opencode_agent.subprocess.run",
         Mock(return_value=Mock(returncode=1, stdout="private session text", stderr="")),
     )
-    with pytest.raises(OpenCodeSessionQueryError, match="version detection failed") as caught:
+    with pytest.raises(
+        OpenCodeSessionQueryError, match="version detection failed"
+    ) as caught:
         native_agent.get_existing_sessions("/project", strict=True)
     assert "private session text" not in str(caught.value)
 
@@ -290,7 +304,9 @@ def open_session_case(temp_daf_home, tmp_path, native_agent, monkeypatch):
     loader = ConfigLoader()
     loader.save_config(
         Config(
-            jira=JiraConfig(url="https://jira.example.com", user="test-user", transitions={}),
+            jira=JiraConfig(
+                url="https://jira.example.com", user="test-user", transitions={}
+            ),
             repos=RepoConfig(),
             agent_backend="opencode",
         )
@@ -318,7 +334,10 @@ def open_session_case(temp_daf_home, tmp_path, native_agent, monkeypatch):
         "should_launch_claude_code",
     ):
         monkeypatch.setattr(prefix + name, lambda *args, **kwargs: True)
-    monkeypatch.setattr(prefix + "_detect_working_directory_from_cwd", lambda *args: None)
+    monkeypatch.setattr(prefix + "Confirm.ask", Mock(return_value=False))
+    monkeypatch.setattr(
+        prefix + "_detect_working_directory_from_cwd", lambda *args: None
+    )
     monkeypatch.setattr(prefix + "get_active_profile", lambda *args, **kwargs: None)
     monkeypatch.setattr(prefix + "setup_signal_handlers", lambda *args: None)
     monkeypatch.setattr(prefix + "is_cleanup_done", lambda: False)
@@ -364,7 +383,9 @@ def test_open_persists_precreated_id_before_child_and_resumes_it(open_session_ca
     assert agent.get_existing_sessions.call_count == 2
 
 
-def test_fallback_capture_finishes_before_completion_prompt(open_session_case, monkeypatch, clock):
+def test_fallback_capture_finishes_before_completion_prompt(
+    open_session_case, monkeypatch, clock
+):
     """Actual CLI query duration counts toward the bounded post-exit observation window."""
     loader, _, session, agent = open_session_case
     events = []
@@ -381,7 +402,12 @@ def test_fallback_capture_finishes_before_completion_prompt(open_session_case, m
         sessions = (
             []
             if not exited
-            else [{"id": "ses_captured", "directory": session.active_conversation.project_path}]
+            else [
+                {
+                    "id": "ses_captured",
+                    "directory": session.active_conversation.project_path,
+                }
+            ]
         )
         return Mock(returncode=0, stdout=json.dumps(sessions))
 
@@ -399,7 +425,9 @@ def test_fallback_capture_finishes_before_completion_prompt(open_session_case, m
         events.append("prompt")
         assert clock.now - exited[0] <= OPENCODE_CAPTURE_TIMEOUT
         assert (
-            SessionManager(loader).get_session(session.name).active_conversation.ai_agent_session_id
+            SessionManager(loader)
+            .get_session(session.name)
+            .active_conversation.ai_agent_session_id
             == "ses_captured"
         )
 
@@ -407,12 +435,65 @@ def test_fallback_capture_finishes_before_completion_prompt(open_session_case, m
     monkeypatch.setattr("devflow.agent.opencode_agent.subprocess.Popen", spawn)
     monkeypatch.setattr(agent, "wait_for_exit", wait)
     monkeypatch.setattr(
-        "devflow.cli.commands.open_command._prompt_for_complete_on_exit", complete_prompt
+        "devflow.cli.commands.open_command._prompt_for_complete_on_exit",
+        complete_prompt,
     )
     result = CliRunner().invoke(cli, ["open", session.name])
     assert result.exit_code == 0, result.output
     assert events == ["query", "spawn", "exit", "query", "query", "prompt"]
     assert "Warning" not in result.output
+
+
+def test_slow_successful_reopen_resumes_saved_opencode_identity(
+    open_session_case, monkeypatch, clock
+):
+    """A lookup slower than the former bound can still verify and resume the saved ID."""
+    loader, manager, session, agent = open_session_case
+    conversation = session.active_conversation
+    conversation.ai_agent_session_id = "ses_existing"
+    conversation.agent_launch_started = True
+    manager.update_session(session)
+    query_calls = []
+
+    def slow_query(project_path, *, timeout, strict):
+        query_calls.append((project_path, timeout, strict))
+        clock.now += 2.5
+        return {"ses_existing"}
+
+    monkeypatch.setattr(agent, "get_existing_sessions", slow_query)
+    real_popen = subprocess.Popen
+    spawned_commands = []
+
+    def spawn(command, **kwargs):
+        if command[0] != "opencode":
+            return real_popen(command, **kwargs)
+        spawned_commands.append(command)
+        return Mock(returncode=0)
+
+    monkeypatch.setattr("devflow.agent.opencode_agent.subprocess.Popen", spawn)
+    monkeypatch.setattr(agent, "wait_for_exit", Mock())
+    monkeypatch.setattr(agent, "update_session_title", Mock(return_value=True))
+    monkeypatch.setattr(
+        "devflow.cli.commands.open_command._prompt_for_complete_on_exit", Mock()
+    )
+
+    result = CliRunner().invoke(cli, ["open", session.name])
+
+    assert result.exit_code == 0, result.output
+    assert clock.now == pytest.approx(2.5)
+    assert query_calls == [(conversation.project_path, OPENCODE_CAPTURE_TIMEOUT, True)]
+    assert OPENCODE_CAPTURE_TIMEOUT > 2
+    assert len(spawned_commands) == 1
+    assert (
+        spawned_commands[0][spawned_commands[0].index("--session") + 1]
+        == "ses_existing"
+    )
+    assert (
+        SessionManager(loader)
+        .get_session(session.name)
+        .active_conversation.ai_agent_session_id
+        == "ses_existing"
+    )
 
 
 @pytest.mark.parametrize("invalid_id", ["ses_different", "not-a-native-id"])
@@ -439,7 +520,9 @@ def test_launch_callback_cannot_replace_known_native_identity(
 
 
 @pytest.mark.parametrize("json_mode", [False, True])
-@pytest.mark.parametrize("state", ["pending", "missing", "query-failure"])
+@pytest.mark.parametrize(
+    "state", ["pending", "missing", "query-failure", "query-timeout"]
+)
 def test_unverified_reopen_never_replaces_identity(
     open_session_case, monkeypatch, json_mode, state
 ):
@@ -451,15 +534,29 @@ def test_unverified_reopen_never_replaces_identity(
     manager.update_session(session)
     query = Mock(return_value=set())
     if state == "query-failure":
-        query.side_effect = OpenCodeSessionQueryError("OpenCode session list returned invalid JSON")
+        query.side_effect = OpenCodeSessionQueryError(
+            "OpenCode session list returned invalid JSON"
+        )
+    elif state == "query-timeout":
+        query.side_effect = OpenCodeSessionQueryError(
+            "OpenCode session query timed out within its time budget"
+        )
     monkeypatch.setattr(agent, "get_existing_sessions", query)
     spawn = Mock()
     monkeypatch.setattr("devflow.agent.opencode_agent.subprocess.Popen", spawn)
     original = SessionManager(loader).get_session(session.name).model_dump()
-    result = CliRunner().invoke(cli, ["open", session.name, *(["--json"] if json_mode else [])])
+    result = CliRunner().invoke(
+        cli, ["open", session.name, *(["--json"] if json_mode else [])]
+    )
     assert result.exit_code == 1, result.output
     assert "No replacement conversation was launched" in " ".join(result.output.split())
     assert "--new-conversation" in result.output
+    assert str(session.active_conversation.project_path) in result.output
+    assert "opencode session list --format json" in result.output
+    assert f"daf open {session.name}" in result.output
+    if state == "query-timeout":
+        assert "timed out" in result.output
+        assert query.call_args.kwargs["timeout"] == OPENCODE_CAPTURE_TIMEOUT
     if json_mode:
         assert json.loads(result.output)["error"]["code"] == "AGENT_SESSION_UNVERIFIED"
     spawn.assert_not_called()

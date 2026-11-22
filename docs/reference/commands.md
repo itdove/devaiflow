@@ -1252,13 +1252,16 @@ inactive sessions alone do not prove exclusive workspace ownership. See
 [temporary-clone troubleshooting](../guides/troubleshooting.md#temporary-clone-still-in-use-after-agent-exit).
 
 OpenCode launch-proven native IDs are retained rather than rediscovered on exit;
-`daf open` saves them before starting the child. Fallback post-exit capture has a
-two-second total query deadline and distinguishes query failure, no new sessions,
-and ambiguous same-project candidates. Legacy `pending-capture` reopen, missing
+`daf open` saves them before starting the child. Fallback capture and saved-ID
+reopen verification use a bounded 10-second total query deadline, distinguishing
+query failures, no new sessions, and ambiguous same-project candidates. Legacy `pending-capture` reopen, missing
 native IDs, and failed verification stop without selecting a replacement
-(`AGENT_SESSION_UNVERIFIED` in JSON). Verify the ID and directory before using
+(`AGENT_SESSION_UNVERIFIED` in JSON). Verify the ID and directory in the recorded
+project/worktree path, then use
 `daf update <session-name> --session-id <verified-native-id>` outside the agent,
-or explicitly archive/start fresh with `daf open <session-name> --new-conversation`.
+and retry `daf open <session-name>`. Use `--standalone` to inspect the session list
+on OpenCode v2. Alternatively, explicitly archive/start fresh with
+`daf open <session-name> --new-conversation`.
 This explicit start-over also supports OpenCode records without a saved branch;
 the old identity/history is archived and initial branch setup runs for the new
 conversation. New first-open setup records carry explicit never-launched

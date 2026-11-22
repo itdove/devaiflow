@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Bounded OpenCode session lookup and verified reopen recovery** (#699)
+  - Extends fallback capture and reopen verification to a bounded 10-second query budget
+  - Keeps timeouts and failed/ambiguous verification fail-closed without replacing saved identity
+  - Shows recovery guidance using the recorded project/worktree path and verified `daf update` flow
 - **Issue-aware completed worktree cleanup** (#675)
   - Requires explicit issue-closure approval and a fresh tracker-confirmed closed status before `daf complete` removes a worktree
   - Adds `daf worktree clean <issue-key>` to retry cleanup for completed sessions without repeating completion operations

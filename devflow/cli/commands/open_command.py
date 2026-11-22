@@ -81,7 +81,6 @@ from devflow.utils.daf_agents_validation import (
 )
 
 
-
 class _JsonAwareConsole:
     """Suppress Rich output while a command is producing JSON."""
 
@@ -360,25 +359,40 @@ def _extract_repository_from_issue_key(issue_key: str, issue_tracker: Optional[s
 
 
 def _refuse_unverified_opencode_session(
-    session_name: str, reason: str, output_json: bool, backend: str = "opencode"
+    session_name: str,
+    reason: str,
+    output_json: bool,
+    backend: str = "opencode",
+    project_path: Optional[str] = None,
 ) -> NoReturn:
     """Preserve unresolved native identity instead of silently launching a replacement."""
     if backend == "kilo":
         agent_name = "Kilo"
-        list_guidance = "Kilo's `kilo session list --format json --all`"
+        list_guidance = "`kilo session list --format json --all`"
     else:
         agent_name = "OpenCode"
-        list_guidance = "OpenCode's session list"
+        list_guidance = (
+            "`opencode session list --format json` (add `--standalone` on v2)"
+        )
+    recorded_location = (
+        f"the recorded project/worktree `{project_path}`"
+        if project_path
+        else "the recorded project/worktree"
+    )
     message = (
         f"Cannot safely resume {agent_name}: {reason}. No replacement conversation was launched. "
-        "If a native conversation exists, verify its ID and project directory with "
-        f"{list_guidance}, then run "
-        f"`daf update {session_name} --session-id VERIFIED_ID` outside the agent session. "
+        f"If a native conversation exists, from a regular terminal in {recorded_location}, "
+        f"inspect {list_guidance} and verify its ID and project directory. Then run "
+        f"`daf update {session_name} --session-id VERIFIED_ID` outside the agent session "
+        f"and retry `daf open {session_name}`. "
         "To explicitly archive this record and start over (even without a saved branch), "
         f"use `daf open {session_name} --new-conversation`."
     )
     if output_json:
-        emit_json(success=False, error={"code": "AGENT_SESSION_UNVERIFIED", "message": message})
+        emit_json(
+            success=False,
+            error={"code": "AGENT_SESSION_UNVERIFIED", "message": message},
+        )
     else:
         console.print(f"[yellow]{escape(message)}[/yellow]")
     raise click.exceptions.Exit(1)
@@ -615,8 +629,6 @@ def _prepare_session_worktree(
     )
     console_print(f"[green]✓[/green] Session worktree: {worktree_path}")
     return True
-
-
 
 
 @require_outside_claude
@@ -1085,6 +1097,11 @@ def open_session(
             "or explicit never-launched provenance; automatic recovery is unavailable",
             output_json,
             backend=effective_agent_backend,
+            project_path=(
+                active_conv.temp_directory
+                or active_conv.worktree_path
+                or active_conv.project_path
+            ),
         )
 
     if (
@@ -1096,6 +1113,7 @@ def open_session(
         # Check if the session exists using the agent-aware check
         # This handles both Claude (.jsonl file) and OpenCode (database query) correctly
         from devflow.agent import create_agent_client
+
         agent_client = create_agent_client(effective_agent_backend)
         agent_name = agent_client.get_agent_name()
 
@@ -1118,7 +1136,8 @@ def open_session(
                     else OPENCODE_CAPTURE_TIMEOUT
                 )
                 conversation_exists = (
-                    active_conv.ai_agent_session_id in agent_client.get_existing_sessions(
+                    active_conv.ai_agent_session_id
+                    in agent_client.get_existing_sessions(
                         check_path, timeout=capture_timeout, strict=True
                     )
                 )
@@ -1128,6 +1147,7 @@ def open_session(
                     str(exc),
                     output_json,
                     backend=effective_agent_backend,
+                    project_path=check_path,
                 )
             if not conversation_exists:
                 _refuse_unverified_opencode_session(
@@ -1135,6 +1155,7 @@ def open_session(
                     "the saved native ID was not found in this project",
                     output_json,
                     backend=effective_agent_backend,
+                    project_path=check_path,
                 )
         else:
             conversation_exists = agent_client.session_exists(active_conv.ai_agent_session_id, check_path)
@@ -4760,8 +4781,6 @@ def _handle_temp_directory_for_ticket_creation(session, session_manager, config=
         session_manager.update_session(session)
         console.print(f"[green]✓[/green] Using temporary clone: {clone_dir}")
     return True
-
-
 
 
 def _display_conflict_resolution_help(project_path: str, session_name: str, agent_name: str = "Claude Code") -> None:
