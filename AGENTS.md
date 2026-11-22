@@ -1837,7 +1837,7 @@ class Session(BaseModel):
 
 - ✓ Bounded OpenCode capture and launch-proven native identity (itdove/devaiflow#648)
    - Retains created IDs and persists them before `daf open` starts the child, avoiding post-exit rediscovery of known IDs
-   - Shares a two-second fallback query deadline across polling, version detection, and subprocess execution, with content-free failure diagnostics
+   - Shares a bounded fallback query deadline across polling, version detection, and subprocess execution, with content-free failure diagnostics
    - Refuses unresolved pending/missing-ID reopen instead of silently replacing conversations; preserves project scoping, ambiguity, and clone guards
 
 - ✓ Retry cancelled first OpenCode setup without weakening identity guards (itdove/devaiflow#650)
@@ -1860,7 +1860,7 @@ class Session(BaseModel):
    - Revalidates session/worktree/source identity and active process use before removal
 
 - ✓ Kilo interactive native session capture budget (itdove/devaiflow#693)
-   - Gives Kilo version detection and session-list startup a bounded 10-second budget independent of OpenCode's 2-second budget
+   - Gives Kilo version detection and session-list startup its own bounded 10-second budget
    - Preserves exact project-scoped ID capture, post-exit DAF title updates, and fail-closed timeout/ambiguity handling
    - Adds slow-query, timeout, title, project-scope, and reopen-budget regression coverage
 
@@ -1880,6 +1880,12 @@ class Session(BaseModel):
    - Keeps DAF lifecycle and metadata commands outside active agent sessions
    - Documents that manual Git operations do not complete sessions or update status/time tracking
    - Verifies completion skips redundant commit/push work for pre-committed and pre-pushed changes
+
+- ✓ Bounded OpenCode lookup and verified reopen recovery (itdove/devaiflow#699)
+   - Gives fallback capture and reopen verification a bounded 10-second budget for slow successful queries
+   - Preserves saved identity and metadata on timeout or failed/ambiguous verification; never launches a replacement
+   - Shows recovery steps tied to the recorded project/worktree path and verified native ID
+   - Adds slow-reopen, timeout, and metadata-preservation regression coverage
 
 ## Release Management
 

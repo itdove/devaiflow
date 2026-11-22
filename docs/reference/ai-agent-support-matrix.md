@@ -852,8 +852,9 @@ ID after their title is synchronized to the current DAF session name.
 Native IDs returned by titled creation are retained instead of being rediscovered
 after exit. `daf open` persists that launch-proven ID before starting the child.
 Known IDs are never replaced by polling results. Fallback discovery has a
-two-second total deadline, including CLI execution and lazy version detection;
-query errors, empty results, and ambiguity have different content-free diagnostics.
+bounded 10-second total deadline, including CLI execution and lazy version
+detection; query errors, empty results, and ambiguity have different content-free
+diagnostics.
 An unavailable pre-launch snapshot cannot be treated as an empty baseline.
 
 Commit-message generation also adapts the `run` flags by major version: v1

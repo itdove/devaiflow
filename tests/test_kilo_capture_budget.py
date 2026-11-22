@@ -34,7 +34,7 @@ def clock(monkeypatch):
 def test_slow_kilo_queries_capture_project_session_with_backend_budget(
     monkeypatch, clock
 ):
-    """Version detection and slow listing stay within Kilo's larger bounded budget."""
+    """Version detection and slow listing stay within Kilo's bounded budget."""
     agent = KiloAgent()
     list_calls = 0
     list_timeouts = []
@@ -91,7 +91,8 @@ def test_slow_kilo_queries_capture_project_session_with_backend_budget(
     )
     assert list_calls == 3
     assert list_timeouts[1] == pytest.approx(KILO_CAPTURE_TIMEOUT)
-    assert KILO_CAPTURE_TIMEOUT > OPENCODE_CAPTURE_TIMEOUT
+    assert KILO_CAPTURE_TIMEOUT == 10.0
+    assert KILO_CAPTURE_TIMEOUT >= OPENCODE_CAPTURE_TIMEOUT
     assert clock.now < KILO_CAPTURE_TIMEOUT + 1
 
 

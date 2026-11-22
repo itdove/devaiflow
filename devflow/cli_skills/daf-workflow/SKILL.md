@@ -263,12 +263,15 @@ session metadata are preserved on refusal.
 
 OpenCode retains native IDs returned by titled launch rather than rediscovering
 them on exit; `daf open` saves that identity before starting the child. Fallback
-capture has a two-second total query deadline and fails closed on query errors or
-same-project ambiguity. A legacy `pending-capture` reopen cannot prove ownership
+capture and saved-ID reopen verification use a bounded 10-second total query
+deadline and fail closed on query errors or same-project ambiguity. A legacy
+`pending-capture` reopen cannot prove ownership
 without a saved launch ID/baseline, so it stops with verification guidance rather
 than silently replacing the conversation. The user can verify the native ID and
-canonical directory, then run `daf update <session-name> --session-id <verified-id>`
-outside the agent, or deliberately use `daf open <session-name> --new-conversation`.
+canonical directory from the recorded project/worktree path, then run
+`daf update <session-name> --session-id <verified-id>` outside the agent and retry
+`daf open <session-name>`, or deliberately use
+`daf open <session-name> --new-conversation`.
 Do not guess an ID from ordering/titles or edit backend storage to recover it.
 
 Cancelled first-open setup is retryable with ordinary `daf open` when DAF saved

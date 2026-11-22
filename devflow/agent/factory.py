@@ -316,10 +316,9 @@ SELF_ID_BACKENDS: tuple = tuple(
 PENDING_CAPTURE_PLACEHOLDER = "pending-capture"
 _SESSION_CAPTURE_POLL_ATTEMPTS = 10
 _SESSION_CAPTURE_POLL_INTERVAL = 0.1
-OPENCODE_CAPTURE_TIMEOUT = 2.0
-# Kilo session queries include version detection and a fresh CLI startup. Keep
-# that backend-specific startup allowance separate from OpenCode's tighter
-# fallback-capture budget.
+OPENCODE_CAPTURE_TIMEOUT = 10.0
+# Keep separate backend budgets so startup-latency changes for one CLI do not
+# silently change the other adapter's bounded session-capture behavior.
 KILO_CAPTURE_TIMEOUT = 10.0
 
 

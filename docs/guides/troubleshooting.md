@@ -1928,9 +1928,10 @@ If you can't resolve the issue:
 
 DAF retains IDs returned by titled creation and `daf open` saves them before
 starting OpenCode. Known IDs are not rediscovered after exit. When fallback
-discovery is necessary, a two-second deadline covers queries, version detection,
-and polling sleeps, rather than allowing ten independent ten-second queries.
-This deadline does not bypass completion's directory-holder checks.
+discovery or saved-ID reopen verification is necessary, a bounded 10-second
+deadline covers queries, version detection, and polling sleeps, rather than
+allowing ten independent queries. This deadline does not bypass completion's
+directory-holder checks.
 
 Warnings distinguish a failed query (timeout, CLI exit, invalid JSON, or version
 detection), no new project-scoped sessions, and multiple new candidates. A failed
@@ -1954,11 +1955,14 @@ a replacement. A missing saved native ID or failed verification also stops safel
 
 From a regular terminal, after exiting the agent:
 
-1. If a native conversation exists, inspect `opencode session list --format json --standalone` on v2 (omit
-   `--standalone` on v1). Verify the intended ID and canonical project directory;
-   do not infer ownership from timestamps or titles alone.
+1. A timeout is not proof that the saved session is missing. In the exact
+   project/worktree path recorded for the DAF conversation, inspect
+   `opencode session list --format json --standalone` on v2 (omit `--standalone`
+   on v1). Verify the intended ID and canonical project directory; do not infer
+   ownership from timestamps or titles alone.
 2. Restore a verified association with
-   `daf update <session-name> --session-id <verified-native-id>`, then reopen.
+   `daf update <session-name> --session-id <verified-native-id>`, then retry
+   `daf open <session-name>`.
 3. If you deliberately want a fresh conversation instead, run
    `daf open <session-name> --new-conversation`. This archives the previous
    conversation and its identity/history metadata; it is not recovery of the
