@@ -32,5 +32,8 @@ def create_header(title: str = "DevAIFlow Dashboard") -> None:
             ui.link("Workspaces", "/workspaces").classes(
                 "text-white no-underline hover:text-blue-200"
             )
+            ui.link("Retained Clones", "/clones").classes(
+                "text-white no-underline hover:text-blue-200"
+            )
         with ui.row().classes("items-center gap-2"):
             ui.label(f"v{devflow.__version__}").classes("text-xs text-blue-300")

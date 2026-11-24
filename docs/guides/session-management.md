@@ -66,6 +66,16 @@ in-progress creation/recovery/reopen, terminals inside clones, and local-only wo
 are protected independently of persisted session status. If safe eviction cannot
 meet the budget, DAF warns rather than discarding work.
 
+Use `daf maintenance cleanup-clones` from a regular terminal to review retained
+managed entries. The command shows session association, path, size, last
+activity, and the safety reason for each entry. Select entries by number or
+exact path, use `--all` for entries currently proven removable, and use
+`--dry-run` to preview the result. `--json` reports candidates, deletions, and
+refusals without bypassing lifecycle locks, process-holder checks, ownership
+markers, or Git reproducibility validation. The dashboard exposes the same
+review flow at **Retained Clones** with per-entry and select-all controls.
+Session metadata and native conversation storage are never removed.
+
 **Existing cleanup settings are respected:** an explicitly stored
 `concurrency.cleanup_on_complete: true` still requests immediate cleanup, including
 values previously saved as the old default. Set it to `false` to adopt preservation;

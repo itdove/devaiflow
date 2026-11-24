@@ -225,6 +225,12 @@ class DashboardApp:
 
             create_workspaces_page(self.bridge)
 
+        @ui.page("/clones")
+        def clone_cache_page() -> None:
+            from devflow.web.pages.clone_cache import create_clone_cache_page
+
+            create_clone_cache_page()
+
     def run(
         self,
         host: str = "127.0.0.1",

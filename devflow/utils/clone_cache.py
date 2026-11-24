@@ -17,6 +17,7 @@ import tempfile
 import time
 import uuid
 from contextlib import nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 from urllib.parse import unquote, urlparse
@@ -53,6 +54,23 @@ class _Entry(BaseModel):
     leases: dict[str, float] = Field(default_factory=dict)
     evicted_at: float | None = Field(default=None, allow_inf_nan=False, ge=0)
     restore_pending: bool = False
+
+
+@dataclass(frozen=True)
+class CloneCacheEntry:
+    """A user-facing snapshot of one managed clone-cache root."""
+
+    root: Path
+    last_used: float | None
+    size: int | None
+    status: str
+    reason: str
+    repositories: tuple[str, ...] = ()
+
+    @property
+    def eligible(self) -> bool:
+        """Whether explicit cleanup may remove this entry."""
+        return self.status == "eligible"
 
 
 def _write(path: Path, text: str) -> None:
@@ -434,6 +452,82 @@ class CloneCache:
             return None, None, False
         repo = entry.repositories.get(path.name, _Repository())
         return repo.remote_url, repo.branch, entry.evicted_at is not None
+
+    def inspect(self) -> list[CloneCacheEntry]:
+        """List managed and unmanaged roots with conservative protection reasons.
+
+        Inspection never changes cache state. A root is eligible only when the
+        same checks used by automatic eviction prove that it can be recreated.
+        """
+        if not self.base.is_dir():
+            return []
+        entries: list[CloneCacheEntry] = []
+        for root in sorted(self.base.iterdir(), key=lambda item: item.name):
+            size: int | None
+            try:
+                size = _size(root)
+            except OSError:
+                size = None
+            if self._root(root) != root or not root.is_dir():
+                entries.append(
+                    CloneCacheEntry(root, None, size, "protected", "outside managed clone layout")
+                )
+                continue
+            entry = self._read(root)
+            if entry is None:
+                entries.append(
+                    CloneCacheEntry(root, None, size, "protected", "unknown or corrupt ownership record")
+                )
+                continue
+            repositories = tuple(sorted(entry.repositories))
+            reason = self._protection_reason(root, entry)
+            entries.append(
+                CloneCacheEntry(
+                    root,
+                    entry.last_used,
+                    size,
+                    "eligible" if reason is None else "protected",
+                    "ready for explicit removal" if reason is None else reason,
+                    repositories,
+                )
+            )
+        return sorted(entries, key=lambda item: (item.last_used is None, item.last_used or 0, str(item.root)))
+
+    def _protection_reason(self, root: Path, entry: _Entry) -> str | None:
+        """Return the first conservative reason a root cannot be removed."""
+        if entry.restore_pending:
+            return "recovery is incomplete"
+        if _live_leases(entry):
+            return "an active lease is present"
+        marker = root / MARKER
+        try:
+            if self._root(root) != root or marker.is_symlink() or marker.read_text() != entry.token:
+                return "ownership marker is missing or changed"
+            if {child.name for child in root.iterdir()} != {MARKER, *entry.repositories}:
+                return "unexpected files are present"
+            assert_temp_directory_unused(str(root))
+            for name, repository in entry.repositories.items():
+                project = root / name
+                if project.is_symlink() or not _reproducible(project, repository):
+                    return "local or unreproducible repository data is present"
+        except TemporaryDirectoryInUseError as error:
+            return str(error)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return "contents could not be safely verified"
+        return None
+
+    def remove(self, root: Path) -> tuple[bool, str | None]:
+        """Remove one explicitly selected root using eviction safeguards."""
+        root = Path(os.path.abspath(root.expanduser()))
+        if self._root(root) != root:
+            return False, "path is outside managed clone storage"
+        try:
+            if self._evict(root, now=time.time(), size_pressure=True):
+                return True, None
+        except (OSError, subprocess.SubprocessError, TemporaryDirectoryInUseError, ValueError) as error:
+            return False, str(error)
+        inspected = next((item for item in self.inspect() if item.root == root), None)
+        return False, inspected.reason if inspected else "entry disappeared or could not be verified"
 
     def _evict(self, root: Path, *, now: float, size_pressure: bool) -> bool:
         with temporary_directory_lock(str(root)):

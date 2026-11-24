@@ -93,7 +93,14 @@ fall back to Claude Code when no supported agent is detected. Codex skills use
 - `daf export`, `daf import`, `daf backup`, `daf restore`
 
 **Maintenance operations** (run from regular terminal):
-- `daf maintenance` group: `cleanup-conversation`, `cleanup-sessions`, `discover`, `rebuild-index`, `repair-conversation`
+- `daf maintenance` group: `cleanup-conversation`, `cleanup-sessions`, `cleanup-clones`, `discover`, `rebuild-index`, `repair-conversation`
+
+`daf maintenance cleanup-clones` reviews retained managed clone/worktree roots
+and reports session, path, size, last activity, and protection reason. Select
+entries with `--select`, select all currently eligible entries with `--all`,
+preview with `--dry-run`, or request machine-readable output with `--json`.
+It never bypasses lifecycle locks, process-holder checks, ownership markers, or
+reproducibility validation.
 
 **Configuration changes** (run from regular terminal):
 - `daf context add/remove/reset`

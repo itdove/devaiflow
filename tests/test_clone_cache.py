@@ -143,6 +143,7 @@ def test_split_config_round_trip_preserves_policy_root_and_explicit_cleanup(cach
 def test_age_boundary_and_retention_tombstone(cache, remote, days, evicted):
     store, _ = cache
     repo = managed(store, remote)
+    idle(repo, 0)
     idle(repo, days)
     store.prune()
     assert repo.exists() is not evicted
@@ -153,6 +154,7 @@ def test_age_boundary_and_retention_tombstone(cache, remote, days, evicted):
 def test_activity_refresh_does_not_use_directory_mtime(cache, remote):
     store, _ = cache
     repo = managed(store, remote)
+    idle(repo, 0)
     idle(repo, 31)
     os.utime(repo.parent, (1, 1))
     store.use(repo)
@@ -160,6 +162,45 @@ def test_activity_refresh_does_not_use_directory_mtime(cache, remote):
     store.prune()
     assert repo.exists()
     assert json.loads(clone_cache_record_path(repo.parent).read_text())["last_used"] == NOW
+
+
+def test_inspect_lists_eligible_entry_with_retention_details(cache, remote):
+    store, _ = cache
+    repo = managed(store, remote)
+    idle(repo, 0)
+
+    entries = store.inspect()
+
+    assert len(entries) == 1
+    assert entries[0].root == repo.parent
+    assert entries[0].eligible
+    assert entries[0].repositories == (repo.name,)
+    assert entries[0].size is not None
+
+
+def test_explicit_remove_reuses_reproducibility_safeguards(cache, remote):
+    store, _ = cache
+    repo = managed(store, remote)
+    idle(repo, 0)
+
+    removed, reason = store.remove(repo.parent)
+
+    assert removed is True
+    assert reason is None
+    assert not repo.parent.exists()
+
+
+def test_inspect_reports_dirty_entry_as_protected(cache, remote):
+    store, _ = cache
+    repo = managed(store, remote)
+    idle(repo, 0)
+    (repo / "README.md").write_text("local change\n")
+
+    entries = store.inspect()
+
+    assert entries[0].status == "protected"
+    assert "unreproducible" in entries[0].reason
+    assert repo.parent.exists()
 
 
 def test_size_lru_and_equal_time_name_tiebreak(cache, remote, monkeypatch):
