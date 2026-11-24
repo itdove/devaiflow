@@ -760,6 +760,35 @@ def maintenance_cleanup_conversation_cmd(ctx: click.Context, identifier: str, ol
     )
 
 
+@maintenance.command(name="cleanup-clones")
+@click.option(
+    "--select",
+    multiple=True,
+    help="Select an eligible entry by list number or exact path; repeat for multiple entries.",
+)
+@click.option("--all", "all_entries", is_flag=True, help="Select all eligible entries")
+@click.option("--dry-run", is_flag=True, help="Preview selected entries without removing them")
+@click.option("--force", is_flag=True, help="Skip destructive confirmation")
+@json_option
+def maintenance_cleanup_clones_cmd(
+    ctx: click.Context,
+    select: tuple[str, ...],
+    all_entries: bool,
+    dry_run: bool,
+    force: bool,
+) -> None:
+    """Review and explicitly remove retained managed session clones."""
+    from devflow.cli.commands.cleanup_clones_command import cleanup_clones
+
+    cleanup_clones(
+        select=select,
+        all_entries=all_entries,
+        dry_run=dry_run,
+        force=force,
+        output_json_mode=ctx.obj.get("output_json", False),
+    )
+
+
 @maintenance.command(name="discover")
 @json_option
 def maintenance_discover_cmd(ctx: click.Context) -> None:

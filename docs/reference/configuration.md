@@ -1364,6 +1364,9 @@ be met. A single oversized new clone is preserved with the same warning.
 Paused/completed session metadata does **not** permanently pin reproducible clones.
 All cached roots/repositories are considered, not just the active conversation.
 Session metadata and agent conversation storage are never cache-eviction targets.
+To review retained entries explicitly, run `daf maintenance cleanup-clones` or
+use the dashboard's **Retained Clones** page. Protected, busy, dirty, unknown,
+and unreproducible entries remain in place and are reported with a reason.
 See [session management](../guides/session-management.md#temporary-clones-and-safe-recovery)
 for reopen behavior and explicit cleanup compatibility.
 
