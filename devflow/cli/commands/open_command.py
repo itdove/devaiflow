@@ -368,7 +368,7 @@ def _refuse_unverified_opencode_session(
     """Preserve unresolved native identity instead of silently launching a replacement."""
     if backend == "kilo":
         agent_name = "Kilo"
-        list_guidance = "`kilo session list --format json --all`"
+        list_guidance = "Kilo's `kilo session list --format json --all`"
     else:
         agent_name = "OpenCode"
         list_guidance = (
