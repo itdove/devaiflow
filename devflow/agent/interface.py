@@ -261,6 +261,25 @@ class AgentInterface(ABC):
         if self.uses_tui():
             clear_screen_after_tui()
 
+    def release_workspace(
+        self, project_path: str, env: Optional[Dict[str, str]] = None
+    ) -> bool:
+        """Release backend-owned workspace resources when safely supported.
+
+        Backends must only release resources they can prove are owned by this
+        workspace. Shared services and ambiguous holders must remain untouched.
+        The default implementation is deliberately conservative.
+
+        Args:
+            project_path: Managed workspace path to release.
+            env: Optional environment for backend lifecycle commands.
+
+        Returns:
+            True when the backend confirmed release, otherwise False.
+        """
+        del project_path, env
+        return False
+
     def wait_for_exit(self, process: subprocess.Popen, headless: bool = False) -> None:
         """Wait for the agent process to exit, then immediately clean up.
 

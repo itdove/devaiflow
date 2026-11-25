@@ -1835,6 +1835,10 @@ class TestUsesTui:
 class TestWaitForExit:
     """Test wait_for_exit() and cleanup_after_exit() (#461)."""
 
+    def test_release_workspace_is_conservative_by_default(self):
+        """Backends do not release shared resources without an override."""
+        assert ClaudeAgent().release_workspace("/tmp/project-a") is False
+
     def test_wait_for_exit_calls_process_wait_then_cleanup(self):
         """wait_for_exit() calls process.wait() then cleanup."""
         agent = ClaudeAgent()
