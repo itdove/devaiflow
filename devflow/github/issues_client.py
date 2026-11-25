@@ -13,7 +13,7 @@ Key differences from JIRA:
 import json
 import re
 import subprocess
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
 
 from devflow.issue_tracker.interface import IssueTrackerClient
@@ -803,6 +803,128 @@ class GitHubClient(IssueTrackerClient):
             state = status_lower
 
         self.update_issue(issue_key, {'state': state})
+
+    def get_project_statuses(self, issue_key: str) -> List[Dict[str, Any]]:
+        """Discover Project v2 Status options attached to a GitHub issue.
+
+        Status option IDs are project-specific and must never be hard-coded. The
+        GraphQL response includes the current value and every available option so
+        callers can resolve a human-readable status safely.
+        """
+        repo, number = self._parse_issue_number(issue_key)
+        owner, name = self._get_repository(repo).split("/", 1)
+        query = """
+        query($owner: String!, $name: String!, $number: Int!) {
+          repository(owner: $owner, name: $name) {
+            issue(number: $number) {
+              projectItems(first: 100) {
+                nodes {
+                  id
+                  project { id number title }
+                  fieldValueByName(name: "Status") {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                      name
+                      optionId
+                      field {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+        output = self._run_gh_command([
+            "api", "graphql", "-f", f"query={query}",
+            "-F", f"owner={owner}", "-F", f"name={name}", "-F", f"number={number}",
+        ])
+        try:
+            payload = json.loads(output)
+            if payload.get("errors"):
+                raise ValueError(payload["errors"])
+            nodes = payload["data"]["repository"]["issue"]["projectItems"]["nodes"]
+            statuses: List[Dict[str, Any]] = []
+            for node in nodes:
+                value = node.get("fieldValueByName")
+                project = node.get("project") or {}
+                field = (value or {}).get("field") or {}
+                options = field.get("options") or []
+                if project and field.get("id") and options:
+                    statuses.append({
+                        "item_id": node.get("id"),
+                        "project_id": project.get("id"),
+                        "project_number": project.get("number"),
+                        "project_title": project.get("title"),
+                        "field_id": field.get("id"),
+                        "current": (value or {}).get("name"),
+                        "options": options,
+                    })
+            return statuses
+        except (KeyError, TypeError, ValueError) as exc:
+            raise IssueTrackerApiError(
+                f"Could not parse GitHub Projects statuses for {issue_key}"
+            ) from exc
+
+    def update_project_status(
+        self,
+        issue_key: str,
+        status: str,
+        project: Optional[str] = None,
+    ) -> None:
+        """Set a discovered Project v2 Status option by its display name."""
+        statuses = self.get_project_statuses(issue_key)
+        if project:
+            selector = project.casefold()
+            statuses = [
+                item for item in statuses
+                if str(item.get("project_number", "")).casefold() == selector
+                or str(item.get("project_title", "")).casefold() == selector
+            ]
+        if len(statuses) != 1:
+            raise IssueTrackerValidationError(
+                "GitHub issue belongs to "
+                f"{len(statuses)} matching project(s); configure a unique project number or title"
+            )
+        item = statuses[0]
+        option = next(
+            (candidate for candidate in item["options"]
+             if str(candidate.get("name", "")).casefold() == status.casefold()),
+            None,
+        )
+        if not option:
+            available = ", ".join(str(candidate.get("name", "")) for candidate in item["options"])
+            raise IssueTrackerValidationError(
+                f"GitHub Project '{item.get('project_title')}' has no Status '{status}'. "
+                f"Available statuses: {available}"
+            )
+        mutation = """
+        mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+          updateProjectV2ItemFieldValue(input: {
+            projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+            value: { singleSelectOptionId: $optionId }
+          }) { projectV2Item { id } }
+        }
+        """
+        output = self._run_gh_command([
+            "api", "graphql", "-f", f"query={mutation}",
+            "-F", f"projectId={item['project_id']}", "-F", f"itemId={item['item_id']}",
+            "-F", f"fieldId={item['field_id']}", "-F", f"optionId={option['id']}",
+        ])
+        try:
+            payload = json.loads(output)
+            if payload.get("errors"):
+                raise ValueError(payload["errors"])
+            if not payload.get("data", {}).get("updateProjectV2ItemFieldValue", {}).get("projectV2Item"):
+                raise ValueError("mutation returned no project item")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise IssueTrackerApiError(
+                f"Could not update GitHub Project status for {issue_key}"
+            ) from exc
 
     def attach_file(self, issue_key: str, file_path: str) -> None:
         """Attach a file to a GitHub issue.

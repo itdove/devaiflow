@@ -5,7 +5,7 @@ Unlike JIRA's complex workflow states, GitHub has binary state (open/closed) wit
 optional status labels for intermediate states.
 """
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, Sequence
 
 from rich.console import Console
 
@@ -18,6 +18,54 @@ from devflow.issue_tracker.exceptions import (
 )
 
 console = Console()
+
+
+def _sync_project_status(
+    session: Session,
+    config: Config,
+    client: Any,
+    aliases: Sequence[str],
+    phase: str,
+) -> None:
+    """Discover and update a Project v2 status without guessing."""
+    github = config.github
+    if not github or not getattr(github, "projects_status_enabled", False):
+        return
+    issue_key = session.issue_key
+    if not issue_key:
+        return
+    try:
+        project = getattr(github, "projects_status_project", None)
+        statuses = client.get_project_statuses(issue_key)
+        if project:
+            selector = project.casefold()
+            statuses = [
+                item for item in statuses
+                if str(item.get("project_number", "")).casefold() == selector
+                or str(item.get("project_title", "")).casefold() == selector
+            ]
+        if len(statuses) != 1:
+            console.print(
+                f"[yellow]⚠[/yellow] Could not update GitHub Project status on {phase}: "
+                f"found {len(statuses)} matching project status fields; configure a unique project"
+            )
+            return
+        item = statuses[0]
+        available = [str(option.get("name", "")) for option in item.get("options", [])]
+        target = next(
+            (name for alias in aliases for name in available if name.casefold() == alias),
+            None,
+        )
+        if target is None:
+            console.print(
+                f"[yellow]⚠[/yellow] Could not update GitHub Project status on {phase}: "
+                f"available statuses are {', '.join(available) or 'none'}"
+            )
+            return
+        client.update_project_status(issue_key, target, project=project)
+        console.print(f"[green]✓[/green] GitHub Project status set to '{target}'")
+    except Exception as exc:
+        console.print(f"[yellow]⚠[/yellow] Could not update GitHub Project status on {phase}: {exc}")
 
 
 def transition_on_start(session: Session, config: Config, client: Optional[GitHubClient] = None) -> bool:
@@ -87,6 +135,12 @@ def transition_on_start(session: Session, config: Config, client: Optional[GitHu
                     console.print(f"[yellow]⚠[/yellow] Could not update labels: {e}")
         else:
             console.print(f"[dim]Status labels disabled (set config.github.add_status_labels=true to enable)[/dim]")
+
+        _sync_project_status(
+            session, config, client,
+            ("in progress", "in-progress", "doing", "started", "active"),
+            "session start",
+        )
 
         return True
 
@@ -225,6 +279,13 @@ def transition_on_complete(
                     "(status labels are disabled; set "
                     "config.github.add_status_labels=true to enable)[/dim]"
                 )
+
+        completion_aliases = (
+            ("done", "completed", "complete", "closed")
+            if should_close
+            else ("in review", "in-review", "review", "done", "completed", "complete")
+        )
+        _sync_project_status(session, config, client, completion_aliases, "session completion")
 
         return True
 
