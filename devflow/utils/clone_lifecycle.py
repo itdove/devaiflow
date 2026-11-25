@@ -7,7 +7,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import psutil
 
@@ -23,6 +23,54 @@ class TemporaryDirectoryInUseError(RuntimeError):
     def __init__(self, message: str, *, holder: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.holder = holder
+
+
+HolderOwnership = Literal["session-owned", "backend-owned", "shared/unknown"]
+
+
+def _is_within(path: str | None, root: Path) -> bool:
+    """Return whether a safely resolved path is inside the managed root."""
+    if not path:
+        return False
+    try:
+        candidate = Path(path).resolve()
+    except (OSError, TypeError):
+        return False
+    return candidate == root or root in candidate.parents
+
+
+def _classify_holder(
+    process: psutil.Process,
+    cwd: str,
+    parent: psutil.Process | None,
+) -> tuple[HolderOwnership, str]:
+    """Classify a holder using only process ancestry and working directories.
+
+    A user-systemd ancestor indicates a backend service, but is not proof that
+    the service is safe to stop. All other cases remain shared/unknown unless
+    the immediate parent is itself working in the managed workspace.
+    """
+    root = get_temp_directory_root(cwd)
+    if parent is not None:
+        try:
+            parent_cwd = parent.cwd()
+        except (psutil.Error, OSError):
+            parent_cwd = None
+        if _is_within(parent_cwd, root):
+            return "session-owned", "immediate parent works in the managed workspace"
+
+    try:
+        ancestors = list(process.parents())
+    except (psutil.Error, OSError, TypeError):
+        ancestors = []
+    for ancestor in ancestors:
+        try:
+            name = ancestor.name().lower()
+        except (psutil.Error, OSError):
+            continue
+        if name in {"systemd", "init"}:
+            return "backend-owned", "process has a user service manager ancestor"
+    return "shared/unknown", "ownership could not be established from safe metadata"
 
 
 def _directory_holder(process: psutil.Process, cwd: str) -> dict[str, Any]:
@@ -54,6 +102,9 @@ def _directory_holder(process: psutil.Process, cwd: str) -> dict[str, Any]:
                 holder[key] = getter()
             except (psutil.Error, OSError):
                 pass
+    ownership, ownership_reason = _classify_holder(process, cwd, parent)
+    holder["ownership"] = ownership
+    holder["ownership_reason"] = ownership_reason
     return holder
 
 
@@ -168,6 +219,8 @@ def completion_refusal_message(session_name: str, error: TemporaryDirectoryInUse
     return (
         message + "UI exit does not prove that backend workspace services exited. "
         "A shared server or background daemon can retain workspace processes.\n"
+        f"Holder ownership: {error.holder.get('ownership', 'shared/unknown')} ("
+        f"{error.holder.get('ownership_reason', 'not established')}).\n"
         "Manual Git commits or pushes do not complete the DAF session or update its status "
         "or time tracking.\n"
         + "To complete now and preserve all managed workspaces:\n"

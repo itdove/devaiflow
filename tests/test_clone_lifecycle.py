@@ -794,6 +794,8 @@ def test_holder_diagnostics_preserve_verified_pid_and_cwd_on_detail_errors(
         "parent_pid": None,
         "parent_name": None,
         "parent_cwd": None,
+        "ownership": "shared/unknown",
+        "ownership_reason": "ownership could not be established from safe metadata",
     }
     assert "unavailable" in str(caught.value)
     holder.cmdline.assert_not_called()
@@ -827,6 +829,8 @@ def test_holder_diagnostics_include_parent_and_escape_rich_markup(clone_session,
         "parent_pid": 456,
         "parent_name": "backend-service",
         "parent_cwd": str(clone.parent.parent),
+        "ownership": "shared/unknown",
+        "ownership_reason": "ownership could not be established from safe metadata",
     }
     assert loader.sessions_file.read_bytes() == original_index
 
@@ -851,6 +855,32 @@ def test_holder_diagnostics_keep_parent_pid_when_parent_details_disappear(
     assert caught.value.holder["parent_name"] is None
     assert caught.value.holder["parent_cwd"] is None
     assert caught.value.holder["name"] == "worker"
+
+
+def test_systemd_backend_holder_is_classified_without_being_releasable(
+    clone_session, monkeypatch
+):
+    """A user-systemd service is reported as backend-owned, never stopped."""
+    _, _, _, clone = clone_session
+    holder = Mock(pid=123)
+    holder.cwd.return_value = str(clone)
+    holder.name.return_value = "python3"
+    holder.ppid.return_value = 456
+    service = Mock()
+    service.name.return_value = "ai-guardian"
+    service.cwd.return_value = "/home/test/.config/ai-guardian"
+    systemd = Mock()
+    systemd.name.return_value = "systemd"
+    holder.parent.return_value = service
+    holder.parents.return_value = [service, systemd]
+    monkeypatch.setattr("psutil.process_iter", lambda: iter([holder]))
+
+    with pytest.raises(TemporaryDirectoryInUseError) as caught:
+        assert_temp_directory_unused(str(clone))
+
+    assert caught.value.holder["ownership"] == "backend-owned"
+    assert "service manager ancestor" in caught.value.holder["ownership_reason"]
+    assert caught.value.holder["parent_name"] == "ai-guardian"
 
 
 @pytest.mark.parametrize("auto_complete", [None, True])

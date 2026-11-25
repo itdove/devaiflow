@@ -2063,16 +2063,28 @@ DAF reports the holder's **process name, PID, cwd, parent PID, parent name, and
 parent cwd**, where accessible. Process-exit races and inaccessible attributes
 show unavailable details rather than permitting unsafe completion. JSON refusals
 include the same fields in `error.holder`, without command arguments or environment.
+The holder also includes conservative `ownership` metadata: `session-owned` when
+the immediate parent works in the managed workspace, `backend-owned` when a
+service-manager ancestor is visible, or `shared/unknown` when safe metadata cannot
+establish ownership. This classification is diagnostic only and never authorizes
+stopping a process.
 Sync deferrals carry holder details in `data.deferred_sessions` instead.
 
 1. Move terminals outside the entire `daf-session-*` removal root, including
    sibling repositories, and close agents still using it.
-2. If the UI is already closed, inspect the reported parent/owner. Verify whether
+2. If the UI is already closed, inspect the reported parent/owner and ownership
+   classification. A `backend-owned` holder under a user systemd service must be
+   released through that backend's documented lifecycle or service owner, never by
+   killing the PID. Verify whether
    other clients or running tasks use **that workspace**; other OpenCode projects
    can legitimately share the same service. An inactive session list alone does
    not establish exclusive ownership.
 3. Release an inactive workspace only through lifecycle controls supported by
-   your backend/version, after establishing ownership. V2 versions exposing
+   your backend/version, after establishing ownership. Backends may implement
+   DAF's `AgentInterface.release_workspace()` hook, which must return success only
+   after releasing resources proven to belong to the requested workspace. The
+   default hook is a no-op, so unsupported or shared services remain protected.
+   V2 versions exposing
    `debug.location.evict` in their [API reference](https://opencode.ai/v2/docs/api)
    can dispose a location's cached services; do not evict an actively shared or
    ambiguously owned location. If safe release cannot be established, preserve
