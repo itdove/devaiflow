@@ -426,6 +426,15 @@ def _build_github_tab(config: Any) -> Dict[str, Any]:
         "Add status labels",
         gh.add_status_labels if gh else False,
     )
+    widgets["github_projects_status_enabled"] = _bool_select(
+        "Sync GitHub Projects status",
+        gh.projects_status_enabled if gh else False,
+    )
+    widgets["github_projects_status_project"] = _text_input(
+        "GitHub Project (optional)",
+        gh.projects_status_project if gh and gh.projects_status_project else "",
+        "Project number or title when multiple projects match",
+    )
     widgets["github_completion_label"] = _text_input(
         "Completion Label",
         gh.completion_label if gh else "status: in-review",
@@ -1326,6 +1335,10 @@ def _collect_values(config: Any, all_widgets: Dict[str, Dict[str, Any]]) -> None
         gh.auto_close_on_complete = _strict_bool(gh_w["github_auto_close"].value)
     if "github_add_status_labels" in gh_w:
         gh.add_status_labels = _strict_bool(gh_w["github_add_status_labels"].value)
+    if "github_projects_status_enabled" in gh_w:
+        gh.projects_status_enabled = _strict_bool(gh_w["github_projects_status_enabled"].value)
+    if "github_projects_status_project" in gh_w:
+        gh.projects_status_project = gh_w["github_projects_status_project"].value.strip() or None
     if "github_completion_label" in gh_w:
         gh.completion_label = gh_w["github_completion_label"].value.strip()
 

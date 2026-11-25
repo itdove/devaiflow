@@ -277,6 +277,31 @@ Or in `config.json`:
 }
 ```
 
+### GitHub Projects v2 Status Synchronization
+
+GitHub issue state (`open`/`closed`), labels, and GitHub Projects status are
+separate values. To synchronize the Projects v2 `Status` field during `daf open`
+and `daf complete`, enable it in the organization configuration:
+
+```json
+{
+  "github_projects_status_enabled": true,
+  "github_projects_status_project": "Engineering Board"
+}
+```
+
+The client queries the issue's project items and retrieves the available
+single-select Status options dynamically. It never stores or guesses
+project-specific option IDs. `github_projects_status_project` is optional when
+the issue belongs to exactly one project; set it to the project number or title
+when multiple projects match. If no compatible Status field, matching workflow
+status, permissions, or unique project is available, DAF emits a warning and
+continues without changing issue state or labels.
+
+Start and completion use the first dynamically discovered conventional option
+(`In Progress`/`Doing`/`Started`, then `In Review`/`Done`/`Completed`). Custom
+status names are reported in the warning rather than guessed.
+
 **When enabled:**
 - Opening session → Adds `status: in-progress` label
 - Completing session → Adds `status: in-review` label

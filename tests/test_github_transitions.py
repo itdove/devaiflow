@@ -361,3 +361,37 @@ class TestLabelManagement:
             assert 'status: in-progress' not in updated_labels
             assert 'status: in-review' in updated_labels
             assert 'bug' in updated_labels
+
+
+class TestProjectStatusSync:
+    """Tests for dynamic Project v2 status synchronization."""
+
+    def test_start_uses_discovered_in_progress_status(self, session, mock_github_client):
+        config = Mock(spec=Config)
+        config.github = Mock(spec=GitHubConfig)
+        config.github.add_status_labels = False
+        config.github.projects_status_enabled = True
+        config.github.projects_status_project = None
+        mock_github_client.get_project_statuses.return_value = [{
+            "project_title": "Board", "project_number": 7,
+            "options": [{"name": "Todo"}, {"name": "In Progress"}],
+        }]
+        transition_on_start(session, config, client=mock_github_client)
+        mock_github_client.update_project_status.assert_called_once_with(
+            "owner/repo#123", "In Progress", project=None
+        )
+
+    def test_completion_warns_and_skips_when_status_is_unavailable(self, session, mock_github_client):
+        config = Mock(spec=Config)
+        config.github = Mock(spec=GitHubConfig)
+        config.github.auto_close_on_complete = False
+        config.github.add_status_labels = False
+        config.github.projects_status_enabled = True
+        config.github.projects_status_project = None
+        mock_github_client.get_project_statuses.return_value = [{
+            "project_title": "Board", "project_number": 7,
+            "options": [{"name": "Todo"}],
+        }]
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            transition_on_complete(session, config, client=mock_github_client)
+        mock_github_client.update_project_status.assert_not_called()

@@ -99,6 +99,51 @@ class TestGetRepository:
         repo = github_client._get_repository()
         assert repo == "owner/repo"
 
+
+class TestProjectStatuses:
+    """Tests for dynamic GitHub Projects v2 status discovery and updates."""
+
+    def test_get_project_statuses_discovers_options(self, github_client, mock_subprocess_run, mock_gh_auth_check):
+        mock_subprocess_run.return_value.returncode = 0
+        mock_subprocess_run.return_value.stdout = json.dumps({
+            "data": {"repository": {"issue": {"projectItems": {"nodes": [{
+                "id": "item-1",
+                "project": {"id": "project-1", "number": 7, "title": "Board"},
+                "fieldValueByName": {
+                    "name": "Todo", "optionId": "todo-id",
+                    "field": {"id": "field-1", "options": [
+                        {"id": "todo-id", "name": "Todo"},
+                        {"id": "progress-id", "name": "In Progress"},
+                    ]},
+                },
+            }]}}}}
+        })
+        statuses = github_client.get_project_statuses("owner/repo#123")
+        assert statuses[0]["project_title"] == "Board"
+        assert [option["name"] for option in statuses[0]["options"]] == ["Todo", "In Progress"]
+
+    def test_update_project_status_uses_discovered_option_id(self, github_client, mock_subprocess_run, mock_gh_auth_check):
+        discovery = {
+            "data": {"repository": {"issue": {"projectItems": {"nodes": [{
+                "id": "item-1", "project": {"id": "project-1", "number": 7, "title": "Board"},
+                "fieldValueByName": {"name": "Todo", "field": {"id": "field-1", "options": [
+                    {"id": "done-id", "name": "Done"},
+                ]}},
+            }]}}}}
+        }
+        mutation = {"data": {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "item-1"}}}}
+        mock_subprocess_run.side_effect = [
+            Mock(returncode=0, stdout=json.dumps(discovery), stderr=""),
+            Mock(returncode=0, stdout=json.dumps(mutation), stderr=""),
+        ]
+        github_client.update_project_status("owner/repo#123", "Done")
+        assert "optionId=done-id" in " ".join(mock_subprocess_run.call_args_list[1].args[0])
+
+    def test_update_project_status_rejects_ambiguous_projects(self, github_client, monkeypatch):
+        monkeypatch.setattr(github_client, "get_project_statuses", lambda _: [{}, {}])
+        with pytest.raises(IssueTrackerValidationError, match="2 matching"):
+            github_client.update_project_status("owner/repo#123", "Done")
+
     @patch('devflow.github.issues_client.GitRemoteDetector')
     def test_get_repository_auto_detect(self, mock_detector_class):
         """Test auto-detecting repository from git remote."""

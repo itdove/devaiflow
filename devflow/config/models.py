@@ -317,6 +317,8 @@ class OrganizationConfig(BaseModel):
     github_repository: Optional[str] = None  # GitHub repository in owner/repo format (e.g., "ansible-saas/devaiflow")
     github_auto_close_on_complete: bool = False  # Auto-close GitHub issues when session completes
     github_default_labels: List[str] = Field(default_factory=list)  # Organization-level default labels for GitHub issues
+    github_projects_status_enabled: bool = False  # Synchronize GitHub Projects v2 Status fields
+    github_projects_status_project: Optional[str] = None  # Optional project number or title
     github_issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
     github_issue_types: Optional[List[str]] = None  # Override enterprise-level GitHub/GitLab issue types (e.g., ["bug", "enhancement", "documentation"])
 
@@ -398,6 +400,8 @@ class GitHubConfig(BaseModel):
     auto_close_on_complete: bool = False  # Auto-close issues when session completes
     add_status_labels: bool = False  # Add status labels (status: in-progress, status: in-review) when starting/completing sessions
     completion_label: str = "status: in-review"  # Label to add when completing a session (only if add_status_labels=true)
+    projects_status_enabled: bool = False  # Synchronize GitHub Projects v2 Status fields
+    projects_status_project: Optional[str] = None  # Optional project number or title when an issue belongs to multiple projects
     label_conventions: Optional[Dict[str, str]] = None  # Custom label conventions (e.g., {"bug": "type:bug", "priority_high": "priority:high"})
     issue_templates: Optional[Dict[str, str]] = None  # Issue templates for different issue types (e.g., {"Bug": "...", "Story": "..."})
     issue_types: List[str] = Field(default_factory=lambda: ["bug", "enhancement", "task", "spike", "epic"])  # Allowed issue types from configuration hierarchy

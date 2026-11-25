@@ -1241,6 +1241,8 @@ class ConfigLoader:
             repository=org.github_repository,
             default_labels=merged_labels,
             auto_close_on_complete=org.github_auto_close_on_complete,
+            projects_status_enabled=getattr(org, "github_projects_status_enabled", False),
+            projects_status_project=getattr(org, "github_projects_status_project", None),
             issue_templates=merged_templates if merged_templates else None,
             issue_types=issue_types,
         )
