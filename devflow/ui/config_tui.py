@@ -2196,20 +2196,6 @@ class ConfigTUI(App):
                 help_text="Add status labels (status: in-progress, status: in-review) when starting/completing sessions",
             )
 
-            yield ConfigCheckbox(
-                "Sync GitHub Projects status",
-                "github.projects_status_enabled",
-                value=self.config.github.projects_status_enabled if self.config.github else False,
-                help_text="Discover and update the GitHub Projects v2 Status field on open/complete",
-            )
-
-            yield ConfigInput(
-                "GitHub Project (optional)",
-                "github.projects_status_project",
-                value=(self.config.github.projects_status_project or "") if self.config.github else "",
-                help_text="Project number or title; only needed when an issue belongs to multiple projects",
-            )
-
             yield ConfigInput(
                 "Completion Label",
                 "github.completion_label",
@@ -3606,15 +3592,6 @@ class ConfigTUI(App):
 
                 # Add status labels
                 self.config.github.add_status_labels = self.query_one(key_to_id("checkbox", "github.add_status_labels"), Checkbox).value
-
-                # GitHub Projects v2 status synchronization
-                self.config.github.projects_status_enabled = self.query_one(
-                    key_to_id("checkbox", "github.projects_status_enabled"), Checkbox
-                ).value
-                project_val = self.query_one(
-                    key_to_id("input", "github.projects_status_project"), Input
-                ).value.strip()
-                self.config.github.projects_status_project = project_val or None
 
                 # Completion label
                 completion_label_val = self.query_one(key_to_id("input", "github.completion_label"), Input).value.strip()

@@ -5,7 +5,7 @@ Unlike JIRA's complex workflow states, GitHub has binary state (open/closed) wit
 optional status labels for intermediate states.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Any
 
 from rich.console import Console
@@ -44,96 +44,11 @@ def _prompt_status(
     return selected
 
 
-def _project_status_item(
-    session: Session,
-    config: Config,
-    client: Any,
-    allow_disabled: bool = False,
-) -> dict[str, Any] | None:
-    """Return the uniquely selected Project v2 status field, if available."""
-    github = config.github
-    if (
-        not github
-        or (
-            not allow_disabled and not getattr(github, "projects_status_enabled", False)
-        )
-        or not session.issue_key
-    ):
-        return None
-    project = getattr(github, "projects_status_project", None)
-    statuses = client.get_project_statuses(session.issue_key)
-    if project:
-        selector = project.casefold()
-        statuses = [
-            item
-            for item in statuses
-            if str(item.get("project_number", "")).casefold() == selector
-            or str(item.get("project_title", "")).casefold() == selector
-        ]
-    if not statuses and allow_disabled:
-        return None
-    if len(statuses) != 1:
-        console.print(
-            f"[yellow]⚠[/yellow] Could not select GitHub Project status: "
-            f"found {len(statuses)} matching project status fields; configure a unique project"
-        )
-        return None
-    return statuses[0]
-
-
 def _completion_transition(config: Config) -> Any:
     """Return the shared ``on_complete`` workflow rule when configured."""
     jira = getattr(config, "jira", None)
     transitions = getattr(jira, "transitions", None) if jira else None
     return transitions.get("on_complete") if isinstance(transitions, dict) else None
-
-
-def _sync_project_status(
-    session: Session,
-    config: Config,
-    client: Any,
-    aliases: Sequence[str],
-    phase: str,
-    allow_disabled: bool = False,
-) -> None:
-    """Discover and update a Project v2 status without guessing."""
-    github = config.github
-    if not github or (
-        not allow_disabled and not getattr(github, "projects_status_enabled", False)
-    ):
-        return
-    issue_key = session.issue_key
-    if not issue_key:
-        return
-    try:
-        project = getattr(github, "projects_status_project", None)
-        item = _project_status_item(
-            session, config, client, allow_disabled=allow_disabled
-        )
-        if item is None:
-            return
-        available = [str(option.get("name", "")) for option in item.get("options", [])]
-        target = next(
-            (
-                name
-                for alias in aliases
-                for name in available
-                if name.casefold() == alias.casefold()
-            ),
-            None,
-        )
-        if target is None:
-            console.print(
-                f"[yellow]⚠[/yellow] Could not update GitHub Project status on {phase}: "
-                f"available statuses are {', '.join(available) or 'none'}"
-            )
-            return
-        client.update_project_status(issue_key, target, project=project)
-        console.print(f"[green]✓[/green] GitHub Project status set to '{target}'")
-    except Exception as exc:
-        console.print(
-            f"[yellow]⚠[/yellow] Could not update GitHub Project status on {phase}: {exc}"
-        )
 
 
 def transition_on_start(
@@ -211,14 +126,6 @@ def transition_on_start(
             console.print(
                 f"[dim]Status labels disabled (set config.github.add_status_labels=true to enable)[/dim]"
             )
-
-        _sync_project_status(
-            session,
-            config,
-            client,
-            ("in progress", "in-progress", "doing", "started", "active"),
-            "session start",
-        )
 
         return True
 
@@ -315,14 +222,13 @@ def transition_on_complete(
         elif transition_config and not configured_prompt:
             target = configured_target.casefold()
             should_close = target in {
-                "closed",
-                "close",
-                "done",
-                "completed",
-                "complete",
-                "resolved",
+                "closed", "close"
             }
-            selected_status = (configured_target, "closed" if should_close else "open")
+            selected_status = (
+                (configured_target, "closed")
+                if should_close
+                else (configured_target, f"native:{configured_target}")
+            )
             console.print(
                 f"[dim]Automatically selecting GitHub status '{configured_target}'[/dim]"
             )
@@ -342,25 +248,21 @@ def transition_on_complete(
             )
         elif configured_prompt or not transition_config:
             if current_state == "open":
-                project_item = None
-                project_options: list[tuple[str, str]] = []
+                native_options: list[tuple[str, str]] = []
                 if config.github:
                     try:
-                        project_item = _project_status_item(
-                            session, config, client, allow_disabled=True
-                        )
-                        if project_item:
-                            project_options = [
-                                (
-                                    f"Project: {option.get('name', '')}",
-                                    f"project:{option.get('name', '')}",
-                                )
-                                for option in project_item.get("options", [])
-                                if option.get("name")
-                            ]
+                        native = client.get_issue_statuses(session.issue_key)
+                        native_options = [
+                            (
+                                str(option.get("name", "")),
+                                f"native:{option.get('name', '')}",
+                            )
+                            for option in native.get("statuses", [])
+                            if option.get("name")
+                        ]
                     except Exception as exc:
                         console.print(
-                            f"[yellow]⚠[/yellow] Could not discover GitHub Project statuses: {exc}"
+                            f"[yellow]⚠[/yellow] Could not discover GitHub Issue Statuses: {exc}"
                         )
                 label_options = (
                     [(completion_label, f"label:{completion_label}")]
@@ -371,10 +273,8 @@ def transition_on_complete(
                     session.issue_key,
                     current_state,
                     [
-                        ("Open", "open"),
-                        ("Closed", "closed"),
+                        *(native_options or [("Open", "open"), ("Closed", "closed")]),
                         *label_options,
-                        *project_options,
                     ],
                 )
                 should_close = selected_status == ("Closed", "closed")
@@ -405,7 +305,17 @@ def transition_on_complete(
         # Apply the selected non-closing representation while preserving labels.
         elif current_state == "open" and not should_close and selected_status:
             selected_value = selected_status[1]
-            if add_status_label:
+            if selected_value.startswith("native:"):
+                try:
+                    client.update_issue_status(
+                        session.issue_key, selected_value.removeprefix("native:")
+                    )
+                    console.print(
+                        f"[green]✓[/green] Updated GitHub status to '{selected_status[0]}'"
+                    )
+                except Exception as exc:
+                    console.print(f"[yellow]⚠[/yellow] Could not update GitHub status: {exc}")
+            elif add_status_label:
                 new_labels = [
                     label for label in current_labels if not label.startswith("status:")
                 ]
@@ -428,32 +338,6 @@ def transition_on_complete(
                     "(status labels are disabled; set "
                     "config.github.add_status_labels=true to enable)[/dim]"
                 )
-
-        if selected_status and selected_status[1].startswith("project:"):
-            _sync_project_status(
-                session,
-                config,
-                client,
-                (selected_status[1].removeprefix("project:"),),
-                "session completion",
-                allow_disabled=True,
-            )
-        elif selected_status and selected_status[1] == "open":
-            _sync_project_status(
-                session,
-                config,
-                client,
-                ("in review", "in-review", "review"),
-                "session completion",
-            )
-        elif should_close:
-            _sync_project_status(
-                session,
-                config,
-                client,
-                ("done", "completed", "complete", "closed"),
-                "session completion",
-            )
 
         return True
 

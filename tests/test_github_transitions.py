@@ -410,132 +410,26 @@ class TestLabelManagement:
             # Should replace status: in-progress with status: in-review
             call_args = mock_github_client.update_issue.call_args
             updated_labels = call_args[0][1]["labels"]
-            assert "status: in-progress" not in updated_labels
-            assert "status: in-review" in updated_labels
-            assert "bug" in updated_labels
+        assert "status: in-progress" not in updated_labels
+        assert "status: in-review" in updated_labels
+        assert "bug" in updated_labels
 
 
-class TestProjectStatusSync:
-    """Tests for dynamic Project v2 status synchronization."""
-
-    def test_start_uses_discovered_in_progress_status(
-        self, session, mock_github_client
-    ):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.add_status_labels = False
-        config.github.projects_status_enabled = True
-        config.github.projects_status_project = None
-        mock_github_client.get_project_statuses.return_value = [
-            {
-                "project_title": "Board",
-                "project_number": 7,
-                "options": [{"name": "Todo"}, {"name": "In Progress"}],
-            }
-        ]
-        transition_on_start(session, config, client=mock_github_client)
-        mock_github_client.update_project_status.assert_called_once_with(
-            "owner/repo#123", "In Progress", project=None
-        )
-
-    def test_completion_warns_and_skips_when_status_is_unavailable(
-        self, session, mock_github_client
-    ):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.auto_close_on_complete = False
-        config.github.add_status_labels = False
-        config.github.projects_status_enabled = True
-        config.github.projects_status_project = None
-        mock_github_client.get_project_statuses.return_value = [
-            {
-                "project_title": "Board",
-                "project_number": 7,
-                "options": [{"name": "Todo"}],
-            }
-        ]
-        with patch("devflow.github.transitions.Prompt.ask", return_value="1"):
-            transition_on_complete(session, config, client=mock_github_client)
-        mock_github_client.update_project_status.assert_not_called()
-
-    def test_completion_selects_discovered_project_status(
-        self, session, mock_github_client
-    ):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.auto_close_on_complete = False
-        config.github.add_status_labels = False
-        config.github.projects_status_enabled = True
-        config.github.projects_status_project = None
-        mock_github_client.get_project_statuses.return_value = [
-            {
-                "project_title": "Board",
-                "project_number": 7,
-                "options": [{"name": "Todo"}, {"name": "In Review"}],
-            }
-        ]
-        with patch("devflow.github.transitions.Prompt.ask", return_value="5"):
-            transition_on_complete(session, config, client=mock_github_client)
-        mock_github_client.update_project_status.assert_called_once_with(
-            "owner/repo#123", "In Review", project=None
-        )
-
-    def test_completion_skip_preserves_issue_and_project(
-        self, session, mock_github_client
-    ):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.auto_close_on_complete = False
-        config.github.add_status_labels = False
-        config.github.projects_status_enabled = True
-        config.github.projects_status_project = None
-        mock_github_client.get_project_statuses.return_value = [
-            {
-                "project_title": "Board",
-                "project_number": 7,
-                "options": [{"name": "Todo"}, {"name": "In Review"}],
-            }
-        ]
-        with patch("devflow.github.transitions.Prompt.ask", return_value="1"):
-            transition_on_complete(session, config, client=mock_github_client)
-        mock_github_client.transition_ticket.assert_not_called()
-        mock_github_client.update_issue.assert_not_called()
-        mock_github_client.update_project_status.assert_not_called()
-
-    def test_configured_non_prompt_transition_skips_picker(
-        self, session, mock_github_client
-    ):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.auto_close_on_complete = False
-        config.github.add_status_labels = False
-        config.jira = Mock()
-        config.jira.transitions = {"on_complete": Mock(prompt=False, to="Done")}
-        with patch("devflow.github.transitions.Prompt.ask") as prompt:
-            transition_on_complete(session, config, client=mock_github_client)
-        prompt.assert_not_called()
-        mock_github_client.transition_ticket.assert_called_once_with(
-            session.issue_key, "closed"
-        )
-
-    def test_interactive_picker_discovers_project_status_when_sync_is_disabled(
-        self, session, mock_github_client
-    ):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.auto_close_on_complete = False
-        config.github.add_status_labels = False
-        config.github.projects_status_enabled = False
-        config.github.projects_status_project = None
-        mock_github_client.get_project_statuses.return_value = [
-            {
-                "project_title": "Board",
-                "project_number": 7,
-                "options": [{"name": "Todo"}, {"name": "Review"}],
-            }
-        ]
-        with patch("devflow.github.transitions.Prompt.ask", return_value="5"):
-            transition_on_complete(session, config, client=mock_github_client)
-        mock_github_client.update_project_status.assert_called_once_with(
-            session.issue_key, "Review", project=None
-        )
+def test_completion_selects_native_issue_status(session, mock_github_client):
+    config = Mock(spec=Config)
+    config.github = Mock(spec=GitHubConfig)
+    config.github.auto_close_on_complete = False
+    config.github.add_status_labels = False
+    mock_github_client.get_issue_statuses.return_value = {
+        "statuses": [
+            {"id": "backlog-id", "name": "Backlog"},
+            {"id": "review-id", "name": "In review"},
+        ],
+        "current": {"id": "backlog-id", "name": "Backlog"},
+        "viewer_can_set_status": True,
+    }
+    with patch("devflow.github.transitions.Prompt.ask", return_value="3"):
+        transition_on_complete(session, config, client=mock_github_client)
+    mock_github_client.update_issue_status.assert_called_once_with(
+        session.issue_key, "In review"
+    )

@@ -120,15 +120,6 @@
       "description": "Organization-level default labels for GitHub issues",
       "default": []
     },
-    "github_projects_status_enabled": {
-      "type": "boolean",
-      "description": "Synchronize the issue's GitHub Projects v2 Status field",
-      "default": false
-    },
-    "github_projects_status_project": {
-      "type": ["string", "null"],
-      "description": "Optional GitHub Project number or title used when an issue belongs to multiple projects"
-    },
     "github_issue_templates": {
       "type": ["object", "null"],
       "description": "Issue templates for different issue types (e.g., {\"Bug\": \"...\", \"Story\": \"...\"})",

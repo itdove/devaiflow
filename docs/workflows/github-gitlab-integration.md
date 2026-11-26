@@ -277,34 +277,20 @@ Or in `config.json`:
 }
 ```
 
-### GitHub Projects v2 Status Synchronization
+### GitHub Issue Statuses
 
-GitHub issue state (`open`/`closed`), labels, and GitHub Projects status are
-separate values. To synchronize the Projects v2 `Status` field during `daf open`
-and `daf complete`, enable it in the organization configuration:
-
-```json
-{
-  "github_projects_status_enabled": true,
-  "github_projects_status_project": "Engineering Board"
-}
-```
-
-The client queries the issue's project items and retrieves the available
-single-select Status options dynamically. It never stores or guesses
-project-specific option IDs. `github_projects_status_project` is optional when
-the issue belongs to exactly one project; set it to the project number or title
-when multiple projects match. If no compatible Status field, matching workflow
-status, permissions, or unique project is available, DAF emits a warning and
-continues without changing issue state or labels.
+GitHub native Issue Statuses (`Backlog`, `Todo`, `In progress`, `In review`,
+`Done`, and organization-defined statuses) are separate from issue state and
+labels. DAF queries the repository's available planning statuses and the issue's
+current status dynamically, then updates the selected status by its API ID.
+Status IDs are never hard-coded.
 
 Session completion presents a numbered status picker in interactive mode. It
 always includes `Skip (keep current status)`, the native `Open` and `Closed`
 states, and the configured completion label when status labels are enabled.
-When Projects v2 synchronization is enabled, uniquely discovered project
-Status options are included in the picker and are updated by their display
-name; project-specific option IDs are never guessed. Ambiguous projects or
-failed discovery leave the project status unchanged and report a warning.
+The picker includes all accessible native Issue Statuses. If native status
+discovery or mutation is unavailable, DAF reports a warning and preserves the
+existing issue state and labels.
 
 Automatic closure (`auto_close_on_complete: true`) and non-interactive runs
 retain their existing behavior and do not prompt.
@@ -475,8 +461,8 @@ daf complete owner-repo-60
 
 **Closing behavior:**
 - By default, issues remain open (close via PR or manually)
-- Interactive prompt: choose `Open`, `Closed`, a configured status label, a
-  discovered GitHub Projects v2 status, or `Skip (keep current status)`
+- Interactive prompt: choose a native GitHub Issue Status, a configured status
+  label, or `Skip (keep current status)`
 - Configure auto-close: `config.github.auto_close_on_complete = true`
 
 GitLab offers the same numbered native-state/label picker. It prompts by

@@ -756,7 +756,7 @@
         },
         "agent_backend": {
           "default": "claude",
-          "description": "Agent/IDE adapter used with this profile (for example claude, codex, ollama, opencode, or pi)",
+          "description": "Agent/IDE adapter used with this profile (for example claude, codex, ollama, opencode, kilo, or pi)",
           "title": "Agent Backend",
           "type": "string"
         },

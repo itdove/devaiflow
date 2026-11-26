@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Interactive GitHub/GitLab completion status selection** (#707)
   - Offers numbered native-state, configured-label, and explicit skip choices during interactive `daf complete`
-  - Includes uniquely discovered GitHub Projects v2 Status options without guessing project-specific IDs
+  - Includes native GitHub Issue Status options discovered from the repository API
   - Preserves non-status labels and keeps automatic, non-interactive, and `--no-issue-update` workflows compatible
 - **Bounded OpenCode session lookup and verified reopen recovery** (#699)
   - Extends fallback capture and reopen verification to a bounded 10-second query budget

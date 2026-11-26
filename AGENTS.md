@@ -1889,7 +1889,7 @@ class Session(BaseModel):
 
  - ✓ Interactive GitHub/GitLab completion status selection (itdove/devaiflow#707)
     - Offers numbered native-state, configured-label, and explicit skip choices during interactive completion
-    - Presents uniquely discovered GitHub Projects v2 Status options without guessing project-specific IDs
+    - Presents native GitHub Issue Status options discovered from the repository API
     - Preserves non-status labels and keeps automatic, non-interactive, and no-update workflows compatible
     - Adds GitHub/GitLab selection, skip, label-preservation, and project-status regression coverage
 
