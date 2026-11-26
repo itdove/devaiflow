@@ -1881,11 +1881,17 @@ class Session(BaseModel):
    - Documents that manual Git operations do not complete sessions or update status/time tracking
    - Verifies completion skips redundant commit/push work for pre-committed and pre-pushed changes
 
-- ✓ Bounded OpenCode lookup and verified reopen recovery (itdove/devaiflow#699)
+ - ✓ Bounded OpenCode lookup and verified reopen recovery (itdove/devaiflow#699)
    - Gives fallback capture and reopen verification a bounded 10-second budget for slow successful queries
    - Preserves saved identity and metadata on timeout or failed/ambiguous verification; never launches a replacement
    - Shows recovery steps tied to the recorded project/worktree path and verified native ID
-   - Adds slow-reopen, timeout, and metadata-preservation regression coverage
+    - Adds slow-reopen, timeout, and metadata-preservation regression coverage
+
+ - ✓ Interactive GitHub/GitLab completion status selection (itdove/devaiflow#707)
+    - Offers numbered native-state, configured-label, and explicit skip choices during interactive completion
+    - Presents uniquely discovered GitHub Projects v2 Status options without guessing project-specific IDs
+    - Preserves non-status labels and keeps automatic, non-interactive, and no-update workflows compatible
+    - Adds GitHub/GitLab selection, skip, label-preservation, and project-status regression coverage
 
 ## Release Management
 

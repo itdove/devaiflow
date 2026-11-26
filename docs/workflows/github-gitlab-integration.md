@@ -298,9 +298,21 @@ when multiple projects match. If no compatible Status field, matching workflow
 status, permissions, or unique project is available, DAF emits a warning and
 continues without changing issue state or labels.
 
-Start and completion use the first dynamically discovered conventional option
-(`In Progress`/`Doing`/`Started`, then `In Review`/`Done`/`Completed`). Custom
-status names are reported in the warning rather than guessed.
+Session completion presents a numbered status picker in interactive mode. It
+always includes `Skip (keep current status)`, the native `Open` and `Closed`
+states, and the configured completion label when status labels are enabled.
+When Projects v2 synchronization is enabled, uniquely discovered project
+Status options are included in the picker and are updated by their display
+name; project-specific option IDs are never guessed. Ambiguous projects or
+failed discovery leave the project status unchanged and report a warning.
+
+Automatic closure (`auto_close_on_complete: true`) and non-interactive runs
+retain their existing behavior and do not prompt.
+
+The shared `transitions.on_complete` workflow rule follows the JIRA convention:
+set `prompt: true` to show the picker, or set `prompt: false` with a `to` value
+to select a status automatically. An empty automatic `to` value skips the
+update. The legacy backend-specific auto-close setting remains supported.
 
 **When enabled:**
 - Opening session → Adds `status: in-progress` label
@@ -457,17 +469,19 @@ daf complete owner-repo-60
 **The completion flow:**
 1. ✅ Prompt to commit changes
 2. ✅ Prompt to create PR
-3. ✅ Prompt to close issue (default: No)
+3. ✅ Offer a numbered status selection (including Skip)
 4. ✅ Generate AI summary
 5. ✅ Add summary as GitHub comment
 
 **Closing behavior:**
 - By default, issues remain open (close via PR or manually)
-- Prompts: `Close GitHub issue owner/repo#60? (y/N)`
+- Interactive prompt: choose `Open`, `Closed`, a configured status label, a
+  discovered GitHub Projects v2 status, or `Skip (keep current status)`
 - Configure auto-close: `config.github.auto_close_on_complete = true`
 
-GitLab follows the same explicit closure choice. It prompts by default; set
-`config.gitlab.auto_close_on_complete = true` to opt into automatic closure.
+GitLab offers the same numbered native-state/label picker. It prompts by
+default; set `config.gitlab.auto_close_on_complete = true` to opt into
+automatic closure.
 For either backend, worktree cleanup still requires a fresh tracker lookup that
 confirms the issue is closed.
 
@@ -550,10 +564,9 @@ GitHub uses a simpler state model than JIRA:
 2. Add label: `status: completed`
 
 **If `auto_close_on_complete: false` (default):**
-1. Keep issue open
-2. Add label: `status: completed` (if `add_status_labels: true`)
-3. Remove label: `status: in-progress`
-4. If closure is declined while `add_status_labels: false`, no labels are changed and the completion output says the issue remains open.
+1. Prompt for `Open`, `Closed`, a configured completion label, or Skip
+2. Preserve non-status labels when replacing a status label
+3. Leave both state and labels unchanged when Skip is selected
 
 When a linked worktree is configured for cleanup, `daf complete` removes it only
 after closure is approved (or explicitly configured) and a fresh tracker lookup

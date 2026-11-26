@@ -105,3 +105,50 @@ def test_no_issue_update_skips_lookup_and_approval(session, config, client):
 
     client.get_ticket.assert_not_called()
     callback.assert_not_called()
+
+
+def test_status_selection_updates_only_status_label(
+    monkeypatch, session, config, client
+):
+    client.get_ticket.return_value = {
+        "status": "open",
+        "labels": ["team-a", "status: in-progress"],
+    }
+    config.gitlab.add_status_labels = True
+    config.gitlab.completion_label = "status: in-review"
+    monkeypatch.setattr(
+        "devflow.gitlab.transitions.Prompt.ask", lambda *_args, **_kwargs: "4"
+    )
+
+    transition_on_complete(session, config, client=client)
+
+    client.update_issue.assert_called_once_with(
+        session.issue_key,
+        {"labels": ["team-a", "status: in-review"]},
+    )
+    client.transition_ticket.assert_not_called()
+
+
+def test_status_selection_skip_preserves_labels(monkeypatch, session, config, client):
+    client.get_ticket.return_value = {
+        "status": "open",
+        "labels": ["team-a", "status: in-progress"],
+    }
+    config.gitlab.add_status_labels = True
+    monkeypatch.setattr(
+        "devflow.gitlab.transitions.Prompt.ask", lambda *_args, **_kwargs: "1"
+    )
+
+    transition_on_complete(session, config, client=client)
+
+    client.update_issue.assert_not_called()
+    client.transition_ticket.assert_not_called()
+
+
+def test_configured_non_prompt_transition_skips_picker(session, config, client):
+    config.jira = Mock()
+    config.jira.transitions = {"on_complete": Mock(prompt=False, to="Done")}
+
+    transition_on_complete(session, config, client=client)
+
+    client.transition_ticket.assert_called_once_with(session.issue_key, "closed")
