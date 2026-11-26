@@ -277,30 +277,28 @@ Or in `config.json`:
 }
 ```
 
-### GitHub Projects v2 Status Synchronization
+### GitHub Issue Statuses
 
-GitHub issue state (`open`/`closed`), labels, and GitHub Projects status are
-separate values. To synchronize the Projects v2 `Status` field during `daf open`
-and `daf complete`, enable it in the organization configuration:
+GitHub native Issue Statuses (`Backlog`, `Todo`, `In progress`, `In review`,
+`Done`, and organization-defined statuses) are separate from issue state and
+labels. DAF queries the repository's available planning statuses and the issue's
+current status dynamically, then updates the selected status by its API ID.
+Status IDs are never hard-coded.
 
-```json
-{
-  "github_projects_status_enabled": true,
-  "github_projects_status_project": "Engineering Board"
-}
-```
+Session completion presents a numbered status picker in interactive mode. It
+always includes `Skip (keep current status)`, the native `Open` and `Closed`
+states, and the configured completion label when status labels are enabled.
+The picker includes all accessible native Issue Statuses. If native status
+discovery or mutation is unavailable, DAF reports a warning and preserves the
+existing issue state and labels.
 
-The client queries the issue's project items and retrieves the available
-single-select Status options dynamically. It never stores or guesses
-project-specific option IDs. `github_projects_status_project` is optional when
-the issue belongs to exactly one project; set it to the project number or title
-when multiple projects match. If no compatible Status field, matching workflow
-status, permissions, or unique project is available, DAF emits a warning and
-continues without changing issue state or labels.
+Automatic closure (`auto_close_on_complete: true`) and non-interactive runs
+retain their existing behavior and do not prompt.
 
-Start and completion use the first dynamically discovered conventional option
-(`In Progress`/`Doing`/`Started`, then `In Review`/`Done`/`Completed`). Custom
-status names are reported in the warning rather than guessed.
+The shared `transitions.on_complete` workflow rule follows the JIRA convention:
+set `prompt: true` to show the picker, or set `prompt: false` with a `to` value
+to select a status automatically. An empty automatic `to` value skips the
+update. The legacy backend-specific auto-close setting remains supported.
 
 **When enabled:**
 - Opening session → Adds `status: in-progress` label
@@ -457,17 +455,19 @@ daf complete owner-repo-60
 **The completion flow:**
 1. ✅ Prompt to commit changes
 2. ✅ Prompt to create PR
-3. ✅ Prompt to close issue (default: No)
+3. ✅ Offer a numbered status selection (including Skip)
 4. ✅ Generate AI summary
 5. ✅ Add summary as GitHub comment
 
 **Closing behavior:**
 - By default, issues remain open (close via PR or manually)
-- Prompts: `Close GitHub issue owner/repo#60? (y/N)`
+- Interactive prompt: choose a native GitHub Issue Status, a configured status
+  label, or `Skip (keep current status)`
 - Configure auto-close: `config.github.auto_close_on_complete = true`
 
-GitLab follows the same explicit closure choice. It prompts by default; set
-`config.gitlab.auto_close_on_complete = true` to opt into automatic closure.
+GitLab offers the same numbered native-state/label picker. It prompts by
+default; set `config.gitlab.auto_close_on_complete = true` to opt into
+automatic closure.
 For either backend, worktree cleanup still requires a fresh tracker lookup that
 confirms the issue is closed.
 
@@ -550,10 +550,9 @@ GitHub uses a simpler state model than JIRA:
 2. Add label: `status: completed`
 
 **If `auto_close_on_complete: false` (default):**
-1. Keep issue open
-2. Add label: `status: completed` (if `add_status_labels: true`)
-3. Remove label: `status: in-progress`
-4. If closure is declined while `add_status_labels: false`, no labels are changed and the completion output says the issue remains open.
+1. Prompt for `Open`, `Closed`, a configured completion label, or Skip
+2. Preserve non-status labels when replacing a status label
+3. Leave both state and labels unchanged when Skip is selected
 
 When a linked worktree is configured for cleanup, `daf complete` removes it only
 after closure is approved (or explicitly configured) and a fresh tracker lookup

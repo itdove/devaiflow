@@ -1,6 +1,6 @@
 """Tests for GitHub transitions module."""
 
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -13,8 +13,8 @@ def mock_github_client():
     """Create a mock GitHub client."""
     client = Mock()
     client.get_ticket.return_value = {
-        'status': 'open',
-        'labels': ['status: in-progress']
+        "status": "open",
+        "labels": ["status: in-progress"],
     }
     client.transition_ticket = Mock()
     client.update_issue = Mock()
@@ -28,7 +28,7 @@ def session():
         name="test-session",
         goal="Test goal",
         working_directory="/test/dir",
-        issue_key="owner/repo#123"
+        issue_key="owner/repo#123",
     )
 
 
@@ -63,15 +63,21 @@ def config_no_github():
 class TestTransitionOnCompleteAutoClose:
     """Tests for transition_on_complete auto-close behavior."""
 
-    def test_auto_close_true_closes_without_prompt(self, session, config_auto_close_true, mock_github_client):
+    def test_auto_close_true_closes_without_prompt(
+        self, session, config_auto_close_true, mock_github_client
+    ):
         """Test that auto_close_on_complete=True closes issue without prompting."""
         # Act
-        result = transition_on_complete(session, config_auto_close_true, client=mock_github_client)
+        result = transition_on_complete(
+            session, config_auto_close_true, client=mock_github_client
+        )
 
         # Assert
         assert result is True
         # Should close the issue
-        mock_github_client.transition_ticket.assert_called_once_with('owner/repo#123', 'closed')
+        mock_github_client.transition_ticket.assert_called_once_with(
+            "owner/repo#123", "closed"
+        )
         # Should update labels (remove status labels)
         mock_github_client.update_issue.assert_called_once()
 
@@ -80,8 +86,8 @@ class TestTransitionOnCompleteAutoClose:
         self, session, config_no_auto_close, mock_github_client, approved
     ):
         callback = Mock()
-        with patch("rich.prompt.Confirm") as mock_confirm:
-            mock_confirm.ask.return_value = approved
+        with patch("devflow.github.transitions.Prompt") as mock_confirm:
+            mock_confirm.ask.return_value = "3" if approved else "1"
             transition_on_complete(
                 session,
                 config_no_auto_close,
@@ -109,31 +115,42 @@ class TestTransitionOnCompleteAutoClose:
 
         callback.assert_not_called()
 
-    def test_auto_close_false_prompts_user_yes(self, session, config_no_auto_close, mock_github_client):
+    def test_auto_close_false_prompts_user_yes(
+        self, session, config_no_auto_close, mock_github_client
+    ):
         """Test that auto_close_on_complete=False prompts user (user says yes)."""
-        with patch('rich.prompt.Confirm') as mock_confirm:
-            mock_confirm.ask.return_value = True
+        with patch("devflow.github.transitions.Prompt") as mock_confirm:
+            mock_confirm.ask.return_value = "3"
 
             # Act
-            result = transition_on_complete(session, config_no_auto_close, client=mock_github_client)
+            result = transition_on_complete(
+                session, config_no_auto_close, client=mock_github_client
+            )
 
             # Assert
             assert result is True
             # Should prompt user
             mock_confirm.ask.assert_called_once()
-            assert "Close GitHub issue owner/repo#123?" in str(mock_confirm.ask.call_args)
+            assert "Select target status" in str(mock_confirm.ask.call_args)
             # Should close the issue since user said yes
-            mock_github_client.transition_ticket.assert_called_once_with('owner/repo#123', 'closed')
+            mock_github_client.transition_ticket.assert_called_once_with(
+                "owner/repo#123", "closed"
+            )
 
-    def test_auto_close_false_prompts_user_no(self, session, config_no_auto_close, mock_github_client):
+    def test_auto_close_false_prompts_user_no(
+        self, session, config_no_auto_close, mock_github_client
+    ):
         """Test that auto_close_on_complete=False prompts user (user says no)."""
-        with patch('rich.prompt.Confirm') as mock_confirm, patch(
-            'devflow.github.transitions.console.print'
-        ) as mock_print:
-            mock_confirm.ask.return_value = False
+        with (
+            patch("devflow.github.transitions.Prompt") as mock_confirm,
+            patch("devflow.github.transitions.console.print") as mock_print,
+        ):
+            mock_confirm.ask.return_value = "1"
 
             # Act
-            result = transition_on_complete(session, config_no_auto_close, client=mock_github_client)
+            result = transition_on_complete(
+                session, config_no_auto_close, client=mock_github_client
+            )
 
             # Assert
             assert result is True
@@ -144,24 +161,28 @@ class TestTransitionOnCompleteAutoClose:
             mock_github_client.update_issue.assert_not_called()
 
             output = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
-            assert "Issue owner/repo#123 remains open" in output
-            assert "no labels were changed" in output
-            assert "status labels are disabled" in output
+            assert "GitHub status update skipped" in output
 
-    def test_no_github_config_prompts_user(self, session, config_no_github, mock_github_client):
+    def test_no_github_config_prompts_user(
+        self, session, config_no_github, mock_github_client
+    ):
         """Test that missing GitHub config prompts user."""
-        with patch('rich.prompt.Confirm') as mock_confirm:
-            mock_confirm.ask.return_value = True
+        with patch("devflow.github.transitions.Prompt") as mock_confirm:
+            mock_confirm.ask.return_value = "3"
 
             # Act
-            result = transition_on_complete(session, config_no_github, client=mock_github_client)
+            result = transition_on_complete(
+                session, config_no_github, client=mock_github_client
+            )
 
             # Assert
             assert result is True
             # Should prompt user when config.github is None
             mock_confirm.ask.assert_called_once()
             # Should close since user said yes
-            mock_github_client.transition_ticket.assert_called_once_with('owner/repo#123', 'closed')
+            mock_github_client.transition_ticket.assert_called_once_with(
+                "owner/repo#123", "closed"
+            )
 
     def test_no_auto_close_attribute_prompts_user(self, session, mock_github_client):
         """Test that missing auto_close_on_complete attribute prompts user."""
@@ -169,10 +190,10 @@ class TestTransitionOnCompleteAutoClose:
         config = Mock(spec=Config)
         config.github = Mock(spec=GitHubConfig)
         # Don't set auto_close_on_complete attribute at all
-        delattr(config.github, 'auto_close_on_complete')
+        delattr(config.github, "auto_close_on_complete")
 
-        with patch('rich.prompt.Confirm') as mock_confirm:
-            mock_confirm.ask.return_value = False
+        with patch("devflow.github.transitions.Prompt") as mock_confirm:
+            mock_confirm.ask.return_value = "1"
 
             # Act
             result = transition_on_complete(session, config, client=mock_github_client)
@@ -194,30 +215,40 @@ class TestTransitionOnCompleteEdgeCases:
             name="test-session",
             goal="Test goal",
             working_directory="/test/dir",
-            issue_key=None
+            issue_key=None,
         )
 
-        result = transition_on_complete(session, config_no_auto_close, client=mock_github_client)
+        result = transition_on_complete(
+            session, config_no_auto_close, client=mock_github_client
+        )
 
         assert result is True
         mock_github_client.get_ticket.assert_not_called()
 
-    def test_no_issue_update_flag_skips_updates(self, session, config_no_auto_close, mock_github_client):
+    def test_no_issue_update_flag_skips_updates(
+        self, session, config_no_auto_close, mock_github_client
+    ):
         """Test that no_issue_update flag skips all updates."""
-        result = transition_on_complete(session, config_no_auto_close, client=mock_github_client, no_issue_update=True)
+        result = transition_on_complete(
+            session,
+            config_no_auto_close,
+            client=mock_github_client,
+            no_issue_update=True,
+        )
 
         assert result is True
         mock_github_client.get_ticket.assert_not_called()
 
-    def test_already_closed_issue_no_prompt(self, session, config_no_auto_close, mock_github_client):
+    def test_already_closed_issue_no_prompt(
+        self, session, config_no_auto_close, mock_github_client
+    ):
         """Test that already closed issue doesn't prompt."""
-        mock_github_client.get_ticket.return_value = {
-            'status': 'closed',
-            'labels': []
-        }
+        mock_github_client.get_ticket.return_value = {"status": "closed", "labels": []}
 
-        with patch('rich.prompt.Confirm') as mock_confirm:
-            result = transition_on_complete(session, config_no_auto_close, client=mock_github_client)
+        with patch("rich.prompt.Confirm") as mock_confirm:
+            result = transition_on_complete(
+                session, config_no_auto_close, client=mock_github_client
+            )
 
             assert result is True
             # Should NOT prompt for already closed issue
@@ -227,19 +258,28 @@ class TestTransitionOnCompleteEdgeCases:
 
     def test_client_initialization_failure(self, session, config_no_auto_close):
         """Test graceful handling of client initialization failure."""
-        with patch('devflow.github.transitions.GitHubClient', side_effect=Exception("Auth failed")):
+        with patch(
+            "devflow.github.transitions.GitHubClient",
+            side_effect=Exception("Auth failed"),
+        ):
             result = transition_on_complete(session, config_no_auto_close)
 
             # Should return True even if client init fails (don't block completion)
             assert result is True
 
-    def test_api_error_during_transition(self, session, config_auto_close_true, mock_github_client):
+    def test_api_error_during_transition(
+        self, session, config_auto_close_true, mock_github_client
+    ):
         """Test graceful handling of API errors during transition."""
         from devflow.issue_tracker.exceptions import IssueTrackerApiError
 
-        mock_github_client.transition_ticket.side_effect = IssueTrackerApiError("API error")
+        mock_github_client.transition_ticket.side_effect = IssueTrackerApiError(
+            "API error"
+        )
 
-        result = transition_on_complete(session, config_auto_close_true, client=mock_github_client)
+        result = transition_on_complete(
+            session, config_auto_close_true, client=mock_github_client
+        )
 
         # Should return True even if transition fails (don't block completion)
         assert result is True
@@ -254,35 +294,41 @@ class TestTransitionOnStart:
             name="test-session",
             goal="Test goal",
             working_directory="/test/dir",
-            issue_key=None
+            issue_key=None,
         )
 
-        result = transition_on_start(session, config_no_auto_close, client=mock_github_client)
+        result = transition_on_start(
+            session, config_no_auto_close, client=mock_github_client
+        )
 
         assert result is True
         mock_github_client.get_ticket.assert_not_called()
 
-    def test_reopens_closed_issue(self, session, config_no_auto_close, mock_github_client):
+    def test_reopens_closed_issue(
+        self, session, config_no_auto_close, mock_github_client
+    ):
         """Test that closed issue is reopened on start."""
-        mock_github_client.get_ticket.return_value = {
-            'status': 'closed',
-            'labels': []
-        }
+        mock_github_client.get_ticket.return_value = {"status": "closed", "labels": []}
 
-        result = transition_on_start(session, config_no_auto_close, client=mock_github_client)
+        result = transition_on_start(
+            session, config_no_auto_close, client=mock_github_client
+        )
 
         assert result is True
         # Should reopen the issue
-        mock_github_client.transition_ticket.assert_called_once_with('owner/repo#123', 'open')
+        mock_github_client.transition_ticket.assert_called_once_with(
+            "owner/repo#123", "open"
+        )
 
-    def test_open_issue_no_status_labels(self, session, config_no_auto_close, mock_github_client):
+    def test_open_issue_no_status_labels(
+        self, session, config_no_auto_close, mock_github_client
+    ):
         """Test that open issue without status labels doesn't update when labels disabled."""
-        mock_github_client.get_ticket.return_value = {
-            'status': 'open',
-            'labels': []
-        }
+        mock_github_client.get_ticket.return_value = {"status": "open", "labels": []}
 
-        result = transition_on_start(session, config_no_auto_close, client=mock_github_client)
+        result = transition_on_start(
+            session, config_no_auto_close, client=mock_github_client
+        )
 
         assert result is True
         # Should NOT update labels when add_status_labels is False
@@ -294,10 +340,7 @@ class TestTransitionOnStart:
         config.github = Mock(spec=GitHubConfig)
         config.github.add_status_labels = True
 
-        mock_github_client.get_ticket.return_value = {
-            'status': 'open',
-            'labels': []
-        }
+        mock_github_client.get_ticket.return_value = {"status": "open", "labels": []}
 
         result = transition_on_start(session, config, client=mock_github_client)
 
@@ -305,11 +348,16 @@ class TestTransitionOnStart:
         # Should add status: in-progress label
         mock_github_client.update_issue.assert_called_once()
         call_args = mock_github_client.update_issue.call_args
-        assert 'status: in-progress' in call_args[0][1]['labels']
+        assert "status: in-progress" in call_args[0][1]["labels"]
 
-    def test_client_initialization_failure_on_start(self, session, config_no_auto_close):
+    def test_client_initialization_failure_on_start(
+        self, session, config_no_auto_close
+    ):
         """Test graceful handling of client initialization failure on start."""
-        with patch('devflow.github.transitions.GitHubClient', side_effect=Exception("Auth failed")):
+        with patch(
+            "devflow.github.transitions.GitHubClient",
+            side_effect=Exception("Auth failed"),
+        ):
             result = transition_on_start(session, config_no_auto_close)
 
             # Should return True even if client init fails (don't block session start)
@@ -319,22 +367,26 @@ class TestTransitionOnStart:
 class TestLabelManagement:
     """Tests for label management in transitions."""
 
-    def test_removes_status_labels_on_close(self, session, config_auto_close_true, mock_github_client):
+    def test_removes_status_labels_on_close(
+        self, session, config_auto_close_true, mock_github_client
+    ):
         """Test that status labels are removed when closing issue."""
         mock_github_client.get_ticket.return_value = {
-            'status': 'open',
-            'labels': ['status: in-progress', 'bug', 'priority: high']
+            "status": "open",
+            "labels": ["status: in-progress", "bug", "priority: high"],
         }
 
-        result = transition_on_complete(session, config_auto_close_true, client=mock_github_client)
+        result = transition_on_complete(
+            session, config_auto_close_true, client=mock_github_client
+        )
 
         assert result is True
         # Should remove status labels but keep other labels
         call_args = mock_github_client.update_issue.call_args
-        updated_labels = call_args[0][1]['labels']
-        assert 'status: in-progress' not in updated_labels
-        assert 'bug' in updated_labels
-        assert 'priority: high' in updated_labels
+        updated_labels = call_args[0][1]["labels"]
+        assert "status: in-progress" not in updated_labels
+        assert "bug" in updated_labels
+        assert "priority: high" in updated_labels
 
     def test_adds_completion_label_when_not_closing(self, session, mock_github_client):
         """Test that completion label is added when not closing issue."""
@@ -342,56 +394,42 @@ class TestLabelManagement:
         config.github = Mock(spec=GitHubConfig)
         config.github.auto_close_on_complete = False
         config.github.add_status_labels = True
-        config.github.completion_label = 'status: in-review'
+        config.github.completion_label = "status: in-review"
 
         mock_github_client.get_ticket.return_value = {
-            'status': 'open',
-            'labels': ['status: in-progress', 'bug']
+            "status": "open",
+            "labels": ["status: in-progress", "bug"],
         }
 
-        with patch('rich.prompt.Confirm') as mock_confirm:
-            mock_confirm.ask.return_value = False  # User says no to closing
+        with patch("devflow.github.transitions.Prompt") as mock_confirm:
+            mock_confirm.ask.return_value = "4"  # Select completion label
 
             result = transition_on_complete(session, config, client=mock_github_client)
 
             assert result is True
             # Should replace status: in-progress with status: in-review
             call_args = mock_github_client.update_issue.call_args
-            updated_labels = call_args[0][1]['labels']
-            assert 'status: in-progress' not in updated_labels
-            assert 'status: in-review' in updated_labels
-            assert 'bug' in updated_labels
+            updated_labels = call_args[0][1]["labels"]
+        assert "status: in-progress" not in updated_labels
+        assert "status: in-review" in updated_labels
+        assert "bug" in updated_labels
 
 
-class TestProjectStatusSync:
-    """Tests for dynamic Project v2 status synchronization."""
-
-    def test_start_uses_discovered_in_progress_status(self, session, mock_github_client):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.add_status_labels = False
-        config.github.projects_status_enabled = True
-        config.github.projects_status_project = None
-        mock_github_client.get_project_statuses.return_value = [{
-            "project_title": "Board", "project_number": 7,
-            "options": [{"name": "Todo"}, {"name": "In Progress"}],
-        }]
-        transition_on_start(session, config, client=mock_github_client)
-        mock_github_client.update_project_status.assert_called_once_with(
-            "owner/repo#123", "In Progress", project=None
-        )
-
-    def test_completion_warns_and_skips_when_status_is_unavailable(self, session, mock_github_client):
-        config = Mock(spec=Config)
-        config.github = Mock(spec=GitHubConfig)
-        config.github.auto_close_on_complete = False
-        config.github.add_status_labels = False
-        config.github.projects_status_enabled = True
-        config.github.projects_status_project = None
-        mock_github_client.get_project_statuses.return_value = [{
-            "project_title": "Board", "project_number": 7,
-            "options": [{"name": "Todo"}],
-        }]
-        with patch("rich.prompt.Confirm.ask", return_value=False):
-            transition_on_complete(session, config, client=mock_github_client)
-        mock_github_client.update_project_status.assert_not_called()
+def test_completion_selects_native_issue_status(session, mock_github_client):
+    config = Mock(spec=Config)
+    config.github = Mock(spec=GitHubConfig)
+    config.github.auto_close_on_complete = False
+    config.github.add_status_labels = False
+    mock_github_client.get_issue_statuses.return_value = {
+        "statuses": [
+            {"id": "backlog-id", "name": "Backlog"},
+            {"id": "review-id", "name": "In review"},
+        ],
+        "current": {"id": "backlog-id", "name": "Backlog"},
+        "viewer_can_set_status": True,
+    }
+    with patch("devflow.github.transitions.Prompt.ask", return_value="3"):
+        transition_on_complete(session, config, client=mock_github_client)
+    mock_github_client.update_issue_status.assert_called_once_with(
+        session.issue_key, "In review"
+    )
